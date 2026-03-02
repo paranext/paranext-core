@@ -94,6 +94,7 @@ import {
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
+import { usfmMarkers } from './platform-scripture-editor-usfm-markers.util';
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
@@ -109,6 +110,9 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...FOOTNOTE_EDITOR_STRING_KEYS,
   ...MARKER_MENU_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
+  ...Object.entries(usfmMarkers)
+    .map((item) => item[1].description)
+    .filter((item) => !!item),
   '%paragraphMenu_misc_markerDescription%',
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
@@ -856,7 +860,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const inlineMarkerMenuItems = useMemo(
     () =>
-      generateInlineMarkerMenuListItems(editorRef, () => setShowMarkersMenu(false), contextMarker),
+      generateInlineMarkerMenuListItems(
+        editorRef,
+        () => setShowMarkersMenu(false),
+        localizedStrings,
+        contextMarker,
+      ),
     [contextMarker],
   );
 

@@ -3,6 +3,8 @@
  * 'https://raw.githubusercontent.com/ubsicap/usfm/refs/heads/master/sty/usfm.sty'
  */
 
+import { LocalizeKey } from 'platform-bible-utils';
+
 export enum CategoryType {
   FileIdentification = 'FileIdentification',
   Headers = 'Headers',
@@ -37,7 +39,7 @@ export enum MarkerType {
 export interface Marker {
   category: CategoryType;
   type: MarkerType;
-  description: string;
+  description: LocalizeKey;
   hasEndMarker: boolean;
   children?: Partial<{ [K in CategoryType]: string[] }>;
 }
@@ -47,7 +49,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   id: {
     category: CategoryType.FileIdentification,
     type: MarkerType.Paragraph,
-    description: 'File identification information (BOOKID, FILENAME, EDITOR, MODIFICATION DATE)',
+    description: '%markerMenu_marker_id_description%',
     hasEndMarker: false,
     children: {
       FileIdentification: ['usfm', 'ide'],
@@ -97,14 +99,14 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   usfm: {
     category: CategoryType.FileIdentification,
     type: MarkerType.Paragraph,
-    description: 'File markup version information',
+    description: '%markerMenu_marker_usfm_description%',
     hasEndMarker: false,
     children: undefined,
   },
   ide: {
     category: CategoryType.FileIdentification,
     type: MarkerType.Paragraph,
-    description: 'File encoding information',
+    description: '%markerMenu_marker_ide_description%',
     hasEndMarker: false,
     children: {
       Remarks: ['rem', 'sts'],
@@ -113,7 +115,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   h: {
     category: CategoryType.Headers,
     type: MarkerType.Paragraph,
-    description: 'Running header text for a book (basic)',
+    description: '%markerMenu_marker_h_description%',
     hasEndMarker: false,
     children: {
       Headers: ['toc1', 'toc2', 'toc3', 'toca1', 'toca2', 'toca3'],
@@ -122,7 +124,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   h1: {
     category: CategoryType.Headers,
     type: MarkerType.Paragraph,
-    description: 'Running header text',
+    description: '%markerMenu_marker_h1_description%',
     hasEndMarker: false,
     children: {
       Headers: ['toc1', 'toc2', 'toc3', 'toca1', 'toca2', 'toca3'],
@@ -131,7 +133,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   h2: {
     category: CategoryType.Headers,
     type: MarkerType.Paragraph,
-    description: 'Running header text, left side of page',
+    description: '%markerMenu_marker_h2_description%',
     hasEndMarker: false,
     children: {
       Headers: ['toc1', 'toc2', 'toc3', 'toca1', 'toca2', 'toca3'],
@@ -140,7 +142,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   h3: {
     category: CategoryType.Headers,
     type: MarkerType.Paragraph,
-    description: 'Running header text, right side of page',
+    description: '%markerMenu_marker_h3_description%',
     hasEndMarker: false,
     children: {
       Headers: ['toc1', 'toc2', 'toc3', 'toca1', 'toca2', 'toca3'],
@@ -149,70 +151,70 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   toc1: {
     category: CategoryType.Headers,
     type: MarkerType.Paragraph,
-    description: 'Long table of contents text',
+    description: '%markerMenu_marker_toc1_description%',
     hasEndMarker: false,
     children: undefined,
   },
   toc2: {
     category: CategoryType.Headers,
     type: MarkerType.Paragraph,
-    description: 'Short table of contents text',
+    description: '%markerMenu_marker_toc2_description%',
     hasEndMarker: false,
     children: undefined,
   },
   toc3: {
     category: CategoryType.Headers,
     type: MarkerType.Paragraph,
-    description: 'Book Abbreviation',
+    description: '%markerMenu_marker_toc3_description%',
     hasEndMarker: false,
     children: undefined,
   },
   toca1: {
     category: CategoryType.Headers,
     type: MarkerType.Paragraph,
-    description: 'Alternative language long table of contents text',
+    description: '%markerMenu_marker_toca1_description%',
     hasEndMarker: false,
     children: undefined,
   },
   toca2: {
     category: CategoryType.Headers,
     type: MarkerType.Paragraph,
-    description: 'Alternative language short table of contents text',
+    description: '%markerMenu_marker_toca2_description%',
     hasEndMarker: false,
     children: undefined,
   },
   toca3: {
     category: CategoryType.Headers,
     type: MarkerType.Paragraph,
-    description: 'Alternative language book Abbreviation',
+    description: '%markerMenu_marker_toca3_description%',
     hasEndMarker: false,
     children: undefined,
   },
   rem: {
     category: CategoryType.Remarks,
     type: MarkerType.Paragraph,
-    description: 'Comments and remarks',
+    description: '%markerMenu_marker_rem_description%',
     hasEndMarker: false,
     children: undefined,
   },
   sts: {
     category: CategoryType.Remarks,
     type: MarkerType.Paragraph,
-    description: 'Status of this file',
+    description: '%markerMenu_marker_sts_description%',
     hasEndMarker: false,
     children: undefined,
   },
   restore: {
     category: CategoryType.Remarks,
     type: MarkerType.Paragraph,
-    description: 'Project restore information',
+    description: '%markerMenu_marker_restore_description%',
     hasEndMarker: false,
     children: undefined,
   },
   imt: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction major title, level 1 (if single level) (basic)',
+    description: '%markerMenu_marker_imt_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -222,7 +224,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   imt1: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction major title, level 1 (if multiple levels)',
+    description: '%markerMenu_marker_imt1_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -232,7 +234,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   imt2: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction major title, level 2',
+    description: '%markerMenu_marker_imt2_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -242,7 +244,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   imt3: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction major title, level 3',
+    description: '%markerMenu_marker_imt3_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -252,7 +254,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   imt4: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction major title, level 4 (usually within parenthesis)',
+    description: '%markerMenu_marker_imt4_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -262,7 +264,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   imte: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction major title at introduction end, level 1 (if single level)',
+    description: '%markerMenu_marker_imte_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -272,7 +274,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   imte1: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction major title at introduction end, level 1 (if multiple levels)',
+    description: '%markerMenu_marker_imte1_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -282,7 +284,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   imte2: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction major title at introduction end, level 2',
+    description: '%markerMenu_marker_imte2_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -292,7 +294,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   is: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction section heading, level 1 (if single level) (basic)',
+    description: '%markerMenu_marker_is_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -303,7 +305,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   is1: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction section heading, level 1 (if multiple levels)',
+    description: '%markerMenu_marker_is1_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -313,7 +315,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   is2: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction section heading, level 2',
+    description: '%markerMenu_marker_is2_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -323,7 +325,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   iot: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction outline title (basic)',
+    description: '%markerMenu_marker_iot_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -333,7 +335,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   io: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction outline text, level 1 (if single level)',
+    description: '%markerMenu_marker_io_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['ior', 'iqt'],
@@ -359,7 +361,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   io1: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction outline text, level 1 (if multiple levels) (basic)',
+    description: '%markerMenu_marker_io1_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['ior', 'iqt'],
@@ -385,7 +387,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   io2: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction outline text, level 2',
+    description: '%markerMenu_marker_io2_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['ior', 'iqt'],
@@ -411,7 +413,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   io3: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction outline text, level 3',
+    description: '%markerMenu_marker_io3_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['ior', 'iqt'],
@@ -437,7 +439,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   io4: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction outline text, level 4',
+    description: '%markerMenu_marker_io4_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['ior', 'iqt'],
@@ -463,15 +465,14 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   ior: {
     category: CategoryType.Introduction,
     type: MarkerType.Character,
-    description:
-      'Introduction references range for outline entry; for marking references separately',
+    description: '%markerMenu_marker_ior_description%',
     hasEndMarker: true,
     children: undefined,
   },
   ip: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction prose paragraph (basic)',
+    description: '%markerMenu_marker_ip_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -498,7 +499,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   im: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction prose paragraph, with no first line indent (may occur after poetry)',
+    description: '%markerMenu_marker_im_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -524,7 +525,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   ipi: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction prose paragraph, indented, with first line indent',
+    description: '%markerMenu_marker_ipi_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -550,7 +551,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   imi: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction prose paragraph text, indented, with no first line indent',
+    description: '%markerMenu_marker_imi_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -576,7 +577,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   ili: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'A list entry, level 1 (if single level)',
+    description: '%markerMenu_marker_ili_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -602,7 +603,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   ili1: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'A list entry, level 1 (if multiple levels)',
+    description: '%markerMenu_marker_ili1_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -628,7 +629,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   ili2: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'A list entry, level 2',
+    description: '%markerMenu_marker_ili2_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -654,7 +655,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   ipq: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction prose paragraph, quote from the body text',
+    description: '%markerMenu_marker_ipq_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -680,8 +681,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   imq: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description:
-      'Introduction prose paragraph, quote from the body text, with no first line indent',
+    description: '%markerMenu_marker_imq_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -707,7 +707,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   ipr: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction prose paragraph, right aligned',
+    description: '%markerMenu_marker_ipr_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -733,7 +733,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   ib: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction blank line',
+    description: '%markerMenu_marker_ib_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -742,7 +742,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   iq: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction poetry text, level 1 (if single level)',
+    description: '%markerMenu_marker_iq_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -768,7 +768,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   iq1: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction poetry text, level 1 (if multiple levels)',
+    description: '%markerMenu_marker_iq1_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -794,7 +794,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   iq2: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction poetry text, level 2',
+    description: '%markerMenu_marker_iq2_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -820,7 +820,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   iq3: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction poetry text, level 3',
+    description: '%markerMenu_marker_iq3_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -846,8 +846,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   iex: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description:
-      'Introduction explanatory or bridge text (e.g. explanation of missing book in Short Old Testament)',
+    description: '%markerMenu_marker_iex_description%',
     hasEndMarker: false,
     children: {
       Introduction: ['iqt'],
@@ -857,37 +856,35 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   iqt: {
     category: CategoryType.Introduction,
     type: MarkerType.Character,
-    description: 'For quoted scripture text appearing in the introduction',
+    description: '%markerMenu_marker_iqt_description%',
     hasEndMarker: true,
     children: undefined,
   },
   ie: {
     category: CategoryType.Introduction,
     type: MarkerType.Paragraph,
-    description: 'Introduction ending marker',
+    description: '%markerMenu_marker_ie_description%',
     hasEndMarker: false,
     children: undefined,
   },
   c: {
     category: CategoryType.DivisionMarks,
     type: MarkerType.Paragraph,
-    description: 'Chapter number',
+    description: '%markerMenu_marker_c_description%',
     hasEndMarker: false,
     children: undefined,
   },
   ca: {
     category: CategoryType.DivisionMarks,
     type: MarkerType.Character,
-    description:
-      'Second (alternate) chapter number (for coding dual versification; useful for places where different traditions of chapter breaks need to be supported in the same translation)',
+    description: '%markerMenu_marker_ca_description%',
     hasEndMarker: true,
     children: undefined,
   },
   cp: {
     category: CategoryType.DivisionMarks,
     type: MarkerType.Paragraph,
-    description:
-      'Published chapter number (chapter string that should appear in the published text)',
+    description: '%markerMenu_marker_cp_description%',
     hasEndMarker: false,
     children: {
       Footnotes: ['f'],
@@ -896,15 +893,14 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   cl: {
     category: CategoryType.DivisionMarks,
     type: MarkerType.Paragraph,
-    description:
-      "Chapter label used for translations that add a word such as 'Chapter' before chapter numbers (e.g. Psalms). The subsequent text is the chapter label.",
+    description: '%markerMenu_marker_cl_description%',
     hasEndMarker: false,
     children: undefined,
   },
   cd: {
     category: CategoryType.DivisionMarks,
     type: MarkerType.Paragraph,
-    description: 'Chapter Description (Publishing option D, e.g. in Russian Bibles)',
+    description: '%markerMenu_marker_cd_description%',
     hasEndMarker: false,
     children: {
       DivisionMarks: ['vp'],
@@ -930,29 +926,28 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   v: {
     category: CategoryType.DivisionMarks,
     type: MarkerType.Character,
-    description: 'A verse number',
+    description: '%markerMenu_marker_v_description%',
     hasEndMarker: false,
     children: undefined,
   },
   va: {
     category: CategoryType.DivisionMarks,
     type: MarkerType.Character,
-    description:
-      'Second (alternate) verse number (for coding dual numeration in Psalms; see also NRSV Exo 22.1-4)',
+    description: '%markerMenu_marker_va_description%',
     hasEndMarker: true,
     children: undefined,
   },
   vp: {
     category: CategoryType.DivisionMarks,
     type: MarkerType.Character,
-    description: 'Published verse marker (verse string that should appear in the published text)',
+    description: '%markerMenu_marker_vp_description%',
     hasEndMarker: true,
     children: undefined,
   },
   p: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Paragraph text, with first line indent (basic)',
+    description: '%markerMenu_marker_p_description%',
     hasEndMarker: false,
     children: {
       DivisionMarks: ['v', 'c'],
@@ -1003,7 +998,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   m: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Paragraph text, with no first line indent (may occur after poetry) (basic)',
+    description: '%markerMenu_marker_m_description%',
     hasEndMarker: false,
     children: {
       Paragraphs: ['pmo', 'pm', 'pmc', 'pmr'],
@@ -1033,7 +1028,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   po: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Letter opening',
+    description: '%markerMenu_marker_po_description%',
     hasEndMarker: false,
     children: {
       Paragraphs: ['pmo', 'pm', 'pmc', 'pmr'],
@@ -1062,7 +1057,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   pr: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Text refrain (paragraph text, right aligned)',
+    description: '%markerMenu_marker_pr_description%',
     hasEndMarker: false,
     children: {
       Paragraphs: ['pmo', 'pm', 'pmc', 'pmr'],
@@ -1092,7 +1087,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   cls: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Letter Closing',
+    description: '%markerMenu_marker_cls_description%',
     hasEndMarker: false,
     children: {
       SpecialText: ['tl', 'sig', 'pn', 'png', 'addpn', 'add'],
@@ -1101,7 +1096,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   pmo: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Embedded text opening',
+    description: '%markerMenu_marker_pmo_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mte1'],
@@ -1129,7 +1124,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   pm: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Embedded text paragraph',
+    description: '%markerMenu_marker_pm_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mte1'],
@@ -1157,7 +1152,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   pmc: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Embedded text closing',
+    description: '%markerMenu_marker_pmc_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mte1'],
@@ -1185,7 +1180,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   pmr: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: "Embedded text refrain (e.g. Then all the people shall say, 'Amen!')",
+    description: '%markerMenu_marker_pmr_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mte1'],
@@ -1213,8 +1208,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   pi: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description:
-      'Paragraph text, level 1 indent (if single level), with first line indent; often used for discourse (basic)',
+    description: '%markerMenu_marker_pi_description%',
     hasEndMarker: false,
     children: {
       Poetry: ['qm', 'qm1', 'qm2', 'qm3'],
@@ -1243,8 +1237,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   pi1: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description:
-      'Paragraph text, level 1 indent (if multiple levels), with first line indent; often used for discourse',
+    description: '%markerMenu_marker_pi1_description%',
     hasEndMarker: false,
     children: {
       Poetry: ['qm', 'qm1', 'qm2', 'qm3'],
@@ -1273,7 +1266,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   pi2: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Paragraph text, level 2 indent, with first line indent; often used for discourse',
+    description: '%markerMenu_marker_pi2_description%',
     hasEndMarker: false,
     children: {
       Poetry: ['qm', 'qm1', 'qm2', 'qm3'],
@@ -1302,7 +1295,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   pi3: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Paragraph text, level 3 indent, with first line indent; often used for discourse',
+    description: '%markerMenu_marker_pi3_description%',
     hasEndMarker: false,
     children: {
       Poetry: ['qm', 'qm1', 'qm2', 'qm3'],
@@ -1331,7 +1324,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   pc: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Paragraph text, centered (for Inscription)',
+    description: '%markerMenu_marker_pc_description%',
     hasEndMarker: false,
     children: {
       Poetry: ['qm', 'qm1', 'qm2', 'qm3'],
@@ -1360,7 +1353,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   mi: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description: 'Paragraph text, indented, with no first line indent; often used for discourse',
+    description: '%markerMenu_marker_mi_description%',
     hasEndMarker: false,
     children: {
       Poetry: ['qm', 'qm1', 'qm2', 'qm3'],
@@ -1389,8 +1382,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   nb: {
     category: CategoryType.Paragraphs,
     type: MarkerType.Paragraph,
-    description:
-      'Paragraph text, with no break from previous paragraph text (at chapter boundary) (basic)',
+    description: '%markerMenu_marker_nb_description%',
     hasEndMarker: false,
     children: {
       Poetry: ['qm', 'qm1', 'qm2', 'qm3'],
@@ -1419,7 +1411,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   q: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, level 1 indent (if single level)',
+    description: '%markerMenu_marker_q_description%',
     hasEndMarker: false,
     children: {
       DivisionMarks: ['v', 'c'],
@@ -1470,7 +1462,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   q1: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, level 1 indent (if multiple levels) (basic)',
+    description: '%markerMenu_marker_q1_description%',
     hasEndMarker: false,
     children: {
       DivisionMarks: ['v', 'c'],
@@ -1521,7 +1513,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   q2: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, level 2 indent (basic)',
+    description: '%markerMenu_marker_q2_description%',
     hasEndMarker: false,
     children: {
       DivisionMarks: ['v', 'c'],
@@ -1572,7 +1564,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   q3: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, level 3 indent',
+    description: '%markerMenu_marker_q3_description%',
     hasEndMarker: false,
     children: {
       DivisionMarks: ['v', 'c'],
@@ -1623,7 +1615,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   q4: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, level 4 indent',
+    description: '%markerMenu_marker_q4_description%',
     hasEndMarker: false,
     children: {
       DivisionMarks: ['v', 'c'],
@@ -1674,7 +1666,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   qc: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, centered',
+    description: '%markerMenu_marker_qc_description%',
     hasEndMarker: false,
     children: {
       Poetry: ['qs', 'qac', 'qm', 'qm1', 'qm2', 'qm3'],
@@ -1703,7 +1695,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   qr: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, Right Aligned',
+    description: '%markerMenu_marker_qr_description%',
     hasEndMarker: false,
     children: {
       Poetry: ['qs', 'qac', 'qm', 'qm1', 'qm2', 'qm3'],
@@ -1732,7 +1724,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   qs: {
     category: CategoryType.Poetry,
     type: MarkerType.Character,
-    description: 'Poetry text, Selah',
+    description: '%markerMenu_marker_qs_description%',
     hasEndMarker: true,
     children: {
       Footnotes: ['f'],
@@ -1742,21 +1734,21 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   qa: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, Acrostic marker/heading',
+    description: '%markerMenu_marker_qa_description%',
     hasEndMarker: false,
     children: undefined,
   },
   qac: {
     category: CategoryType.Poetry,
     type: MarkerType.Character,
-    description: 'Poetry text, Acrostic markup of the first character of a line of acrostic poetry',
+    description: '%markerMenu_marker_qac_description%',
     hasEndMarker: true,
     children: undefined,
   },
   qm: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, embedded, level 1 indent (if single level)',
+    description: '%markerMenu_marker_qm_description%',
     hasEndMarker: false,
     children: {
       Paragraphs: ['p'],
@@ -1805,7 +1797,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   qm1: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, embedded, level 1 indent (if multiple levels)',
+    description: '%markerMenu_marker_qm1_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mte1'],
@@ -1833,7 +1825,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   qm2: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, embedded, level 2 indent',
+    description: '%markerMenu_marker_qm2_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mte1'],
@@ -1861,7 +1853,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   qm3: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text, embedded, level 3 indent',
+    description: '%markerMenu_marker_qm3_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mte1'],
@@ -1889,8 +1881,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   qd: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description:
-      'A Hebrew musical performance annotation, similar in content to Hebrew descriptive title.',
+    description: '%markerMenu_marker_qd_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mte1'],
@@ -1918,7 +1909,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   b: {
     category: CategoryType.Poetry,
     type: MarkerType.Paragraph,
-    description: 'Poetry text stanza break (e.g. stanza break) (basic)',
+    description: '%markerMenu_marker_b_description%',
     hasEndMarker: false,
     children: {
       DivisionMarks: ['v', 'c'],
@@ -1949,7 +1940,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   mt: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'The main title of the book (if single level)',
+    description: '%markerMenu_marker_mt_description%',
     hasEndMarker: false,
     children: {
       Footnotes: ['f'],
@@ -1959,7 +1950,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   mt1: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'The main title of the book (if multiple levels) (basic)',
+    description: '%markerMenu_marker_mt1_description%',
     hasEndMarker: false,
     children: {
       Footnotes: ['f'],
@@ -1969,7 +1960,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   mt2: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A secondary title usually occurring before the main title (basic)',
+    description: '%markerMenu_marker_mt2_description%',
     hasEndMarker: false,
     children: {
       Footnotes: ['f'],
@@ -1979,7 +1970,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   mt3: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A secondary title occurring after the main title',
+    description: '%markerMenu_marker_mt3_description%',
     hasEndMarker: false,
     children: {
       Footnotes: ['f'],
@@ -1989,23 +1980,21 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   mt4: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A small secondary title sometimes occurring within parentheses',
+    description: '%markerMenu_marker_mt4_description%',
     hasEndMarker: false,
     children: undefined,
   },
   mte: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description:
-      'The main title of the book repeated at the end of the book, level 1 (if single level)',
+    description: '%markerMenu_marker_mte_description%',
     hasEndMarker: false,
     children: undefined,
   },
   mte1: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description:
-      'The main title of the book repeated at the end of the book, level 1 (if multiple levels)',
+    description: '%markerMenu_marker_mte1_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mte2'],
@@ -2014,14 +2003,14 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   mte2: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: "A secondary title occurring before or after the 'ending' main title",
+    description: '%markerMenu_marker_mte2_description%',
     hasEndMarker: false,
     children: undefined,
   },
   ms: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A major section division heading, level 1 (if single level) (basic)',
+    description: '%markerMenu_marker_ms_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mr'],
@@ -2048,7 +2037,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   ms1: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A major section division heading, level 1 (if multiple levels)',
+    description: '%markerMenu_marker_ms1_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mr'],
@@ -2075,7 +2064,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   ms2: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A major section division heading, level 2',
+    description: '%markerMenu_marker_ms2_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mr'],
@@ -2102,7 +2091,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   ms3: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A major section division heading, level 3',
+    description: '%markerMenu_marker_ms3_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['mr'],
@@ -2112,14 +2101,14 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   mr: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A major section division references range heading (basic)',
+    description: '%markerMenu_marker_mr_description%',
     hasEndMarker: false,
     children: undefined,
   },
   s: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A section heading, level 1 (if single level) (basic)',
+    description: '%markerMenu_marker_s_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['sr', 'r'],
@@ -2146,7 +2135,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   s1: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A section heading, level 1 (if multiple levels)',
+    description: '%markerMenu_marker_s1_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['sr', 'r'],
@@ -2173,7 +2162,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   s2: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A section heading, level 2 (e.g. Proverbs 22-24)',
+    description: '%markerMenu_marker_s2_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['sr', 'r'],
@@ -2200,7 +2189,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   s3: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: "A section heading, level 3 (e.g. Genesis 'The First Day')",
+    description: '%markerMenu_marker_s3_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['sr', 'r'],
@@ -2227,7 +2216,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   s4: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A section heading, level 4',
+    description: '%markerMenu_marker_s4_description%',
     hasEndMarker: false,
     children: {
       TitlesHeadings: ['sr', 'r'],
@@ -2253,21 +2242,21 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   sr: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A section division references range heading',
+    description: '%markerMenu_marker_sr_description%',
     hasEndMarker: false,
     children: undefined,
   },
   r: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'Parallel reference(s) (basic)',
+    description: '%markerMenu_marker_r_description%',
     hasEndMarker: false,
     children: undefined,
   },
   sp: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A heading, to identify the speaker (e.g. Job)',
+    description: '%markerMenu_marker_sp_description%',
     hasEndMarker: false,
     children: {
       Footnotes: ['f', 'fe', 'fm'],
@@ -2294,7 +2283,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   d: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'A Hebrew text heading, to provide description (e.g. Psalms)',
+    description: '%markerMenu_marker_d_description%',
     hasEndMarker: false,
     children: {
       Footnotes: ['f', 'fe', 'fm'],
@@ -2320,43 +2309,42 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   sd: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'Vertical space used to divide the text into sections, level 1 (if single level)',
+    description: '%markerMenu_marker_sd_description%',
     hasEndMarker: false,
     children: undefined,
   },
   sd1: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description:
-      'Vertical space used to divide the text into sections, level 1 (if multiple levels)',
+    description: '%markerMenu_marker_sd1_description%',
     hasEndMarker: false,
     children: undefined,
   },
   sd2: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'Vertical space used to divide the text into sections, level 2',
+    description: '%markerMenu_marker_sd2_description%',
     hasEndMarker: false,
     children: undefined,
   },
   sd3: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'Vertical space used to divide the text into sections, level 3',
+    description: '%markerMenu_marker_sd3_description%',
     hasEndMarker: false,
     children: undefined,
   },
   sd4: {
     category: CategoryType.TitlesHeadings,
     type: MarkerType.Paragraph,
-    description: 'Vertical space used to divide the text into sections, level 4',
+    description: '%markerMenu_marker_sd4_description%',
     hasEndMarker: false,
     children: undefined,
   },
   lh: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'List header (introductory remark)',
+    description: '%markerMenu_marker_lh_description%',
     hasEndMarker: false,
     children: {
       Footnotes: ['f', 'fe', 'fm'],
@@ -2383,7 +2371,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   li: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'A list entry, level 1 (if single level)',
+    description: '%markerMenu_marker_li_description%',
     hasEndMarker: false,
     children: {
       Lists: ['litl', 'lik', 'liv', 'liv1', 'liv2', 'liv3', 'liv4', 'liv5'],
@@ -2411,7 +2399,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   li1: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'A list entry, level 1 (if multiple levels)',
+    description: '%markerMenu_marker_li1_description%',
     hasEndMarker: false,
     children: {
       Lists: ['litl', 'lik', 'liv', 'liv1', 'liv2', 'liv3', 'liv4', 'liv5'],
@@ -2439,7 +2427,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   li2: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'A list entry, level 2',
+    description: '%markerMenu_marker_li2_description%',
     hasEndMarker: false,
     children: {
       Lists: ['litl', 'lik', 'liv', 'liv1', 'liv2', 'liv3', 'liv4', 'liv5'],
@@ -2467,7 +2455,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   li3: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'A list entry, level 3',
+    description: '%markerMenu_marker_li3_description%',
     hasEndMarker: false,
     children: {
       Lists: ['litl', 'lik', 'liv', 'liv1', 'liv2', 'liv3', 'liv4', 'liv5'],
@@ -2495,7 +2483,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   li4: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'A list entry, level 4',
+    description: '%markerMenu_marker_li4_description%',
     hasEndMarker: false,
     children: {
       Lists: ['litl', 'lik', 'liv', 'liv1', 'liv2', 'liv3', 'liv4', 'liv5'],
@@ -2523,7 +2511,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   lf: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'List footer (concluding remark)',
+    description: '%markerMenu_marker_lf_description%',
     hasEndMarker: false,
     children: {
       Footnotes: ['f', 'fe', 'fm'],
@@ -2550,7 +2538,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   lim: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'An embedded list entry, level 1 (if single level)',
+    description: '%markerMenu_marker_lim_description%',
     hasEndMarker: false,
     children: {
       Lists: ['litl', 'lik', 'liv', 'liv1', 'liv2', 'liv3', 'liv4', 'liv5'],
@@ -2578,7 +2566,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   lim1: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'An embedded list entry, level 1 (if multiple levels)',
+    description: '%markerMenu_marker_lim1_description%',
     hasEndMarker: false,
     children: {
       Lists: ['litl', 'lik', 'liv', 'liv1', 'liv2', 'liv3', 'liv4', 'liv5'],
@@ -2606,7 +2594,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   lim2: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'An embedded list entry, level 2',
+    description: '%markerMenu_marker_lim2_description%',
     hasEndMarker: false,
     children: {
       Lists: ['litl', 'lik', 'liv', 'liv1', 'liv2', 'liv3', 'liv4', 'liv5'],
@@ -2634,7 +2622,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   lim3: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'An embedded list item, level 3',
+    description: '%markerMenu_marker_lim3_description%',
     hasEndMarker: false,
     children: {
       Lists: ['litl', 'lik', 'liv', 'liv1', 'liv2', 'liv3', 'liv4', 'liv5'],
@@ -2662,7 +2650,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   lim4: {
     category: CategoryType.Lists,
     type: MarkerType.Paragraph,
-    description: 'An embedded list entry, level 4',
+    description: '%markerMenu_marker_lim4_description%',
     hasEndMarker: false,
     children: {
       Lists: ['litl', 'lik', 'liv', 'liv1', 'liv2', 'liv3', 'liv4', 'liv5'],
@@ -2690,63 +2678,63 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   litl: {
     category: CategoryType.Lists,
     type: MarkerType.Character,
-    description: 'List entry total text',
+    description: '%markerMenu_marker_litl_description%',
     hasEndMarker: true,
     children: undefined,
   },
   lik: {
     category: CategoryType.Lists,
     type: MarkerType.Character,
-    description: 'Structured list entry key text',
+    description: '%markerMenu_marker_lik_description%',
     hasEndMarker: true,
     children: undefined,
   },
   liv: {
     category: CategoryType.Lists,
     type: MarkerType.Character,
-    description: 'Structured list entry value 1 content (if single value)',
+    description: '%markerMenu_marker_liv_description%',
     hasEndMarker: true,
     children: undefined,
   },
   liv1: {
     category: CategoryType.Lists,
     type: MarkerType.Character,
-    description: 'Structured list entry value 1 content (if multiple values)',
+    description: '%markerMenu_marker_liv1_description%',
     hasEndMarker: true,
     children: undefined,
   },
   liv2: {
     category: CategoryType.Lists,
     type: MarkerType.Character,
-    description: 'Structured list entry value 2 content',
+    description: '%markerMenu_marker_liv2_description%',
     hasEndMarker: true,
     children: undefined,
   },
   liv3: {
     category: CategoryType.Lists,
     type: MarkerType.Character,
-    description: 'Structured list entry value 3 content',
+    description: '%markerMenu_marker_liv3_description%',
     hasEndMarker: true,
     children: undefined,
   },
   liv4: {
     category: CategoryType.Lists,
     type: MarkerType.Character,
-    description: 'Structured list entry value 4 content',
+    description: '%markerMenu_marker_liv4_description%',
     hasEndMarker: true,
     children: undefined,
   },
   liv5: {
     category: CategoryType.Lists,
     type: MarkerType.Character,
-    description: 'Structured list entry value 5 content',
+    description: '%markerMenu_marker_liv5_description%',
     hasEndMarker: true,
     children: undefined,
   },
   f: {
     category: CategoryType.Footnotes,
     type: MarkerType.Note,
-    description: 'A Footnote text item (basic)',
+    description: '%markerMenu_marker_f_description%',
     hasEndMarker: true,
     children: {
       Footnotes: ['fr', 'ft', 'fk', 'fq', 'fqa', 'fl', 'fw', 'fp', 'fv', 'fdc'],
@@ -2773,7 +2761,7 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   fe: {
     category: CategoryType.Footnotes,
     type: MarkerType.Note,
-    description: 'An Endnote text item',
+    description: '%markerMenu_marker_fe_description%',
     hasEndMarker: true,
     children: {
       Footnotes: ['fr', 'ft', 'fk', 'fq', 'fqa', 'fl', 'fw', 'fp', 'fv', 'fdc'],
@@ -2800,86 +2788,84 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   fr: {
     category: CategoryType.Footnotes,
     type: MarkerType.Character,
-    description: 'The origin reference for the footnote (basic)',
+    description: '%markerMenu_marker_fr_description%',
     hasEndMarker: true,
     children: undefined,
   },
   ft: {
     category: CategoryType.Footnotes,
     type: MarkerType.Character,
-    description: 'Footnote text, Protocanon (basic)',
+    description: '%markerMenu_marker_ft_description%',
     hasEndMarker: true,
     children: undefined,
   },
   fk: {
     category: CategoryType.Footnotes,
     type: MarkerType.Character,
-    description: 'A footnote keyword (basic)',
+    description: '%markerMenu_marker_fk_description%',
     hasEndMarker: true,
     children: undefined,
   },
   fq: {
     category: CategoryType.Footnotes,
     type: MarkerType.Character,
-    description: 'A footnote scripture quote or alternate rendering (basic)',
+    description: '%markerMenu_marker_fq_description%',
     hasEndMarker: true,
     children: undefined,
   },
   fqa: {
     category: CategoryType.Footnotes,
     type: MarkerType.Character,
-    description: 'A footnote alternate rendering for a portion of scripture text',
+    description: '%markerMenu_marker_fqa_description%',
     hasEndMarker: true,
     children: undefined,
   },
   fl: {
     category: CategoryType.Footnotes,
     type: MarkerType.Character,
-    description:
-      "A footnote label text item, for marking or 'labelling' the type or alternate translation being provided in the note.",
+    description: '%markerMenu_marker_fl_description%',
     hasEndMarker: true,
     children: undefined,
   },
   fw: {
     category: CategoryType.Footnotes,
     type: MarkerType.Character,
-    description:
-      'A footnote witness list, for distinguishing a list of sigla representing witnesses in critical editions.',
+    description: '%markerMenu_marker_fw_description%',
     hasEndMarker: true,
     children: undefined,
   },
   fp: {
     category: CategoryType.Footnotes,
     type: MarkerType.Character,
-    description: 'A Footnote additional paragraph marker',
+    description: '%markerMenu_marker_fp_description%',
     hasEndMarker: true,
     children: undefined,
   },
   fv: {
     category: CategoryType.Footnotes,
     type: MarkerType.Character,
-    description: 'A verse number within the footnote text',
+    description: '%markerMenu_marker_fv_description%',
     hasEndMarker: true,
     children: undefined,
   },
   fdc: {
     category: CategoryType.Footnotes,
     type: MarkerType.Character,
-    description: 'Footnote text, applies to Deuterocanon only',
+    description: '%markerMenu_marker_fdc_description%',
     hasEndMarker: true,
     children: undefined,
   },
   fm: {
     category: CategoryType.Footnotes,
     type: MarkerType.Character,
-    description: 'An additional footnote marker location for a previous footnote',
+    description: '%markerMenu_marker_fm_description%',
     hasEndMarker: true,
     children: undefined,
   },
   x: {
     category: CategoryType.CrossReferences,
     type: MarkerType.Note,
-    description: 'A list of cross references (basic)',
+    description: '%markerMenu_marker_x_description%',
     hasEndMarker: true,
     children: {
       CrossReferences: ['xo', 'xop', 'xt', 'xta', 'xk', 'xq', 'xot', 'xnt', 'xdc'],
@@ -2889,235 +2875,231 @@ export const usfmMarkers: { [marker: string]: Marker } = {
   xo: {
     category: CategoryType.CrossReferences,
     type: MarkerType.Character,
-    description: 'The cross reference origin reference (basic)',
+    description: '%markerMenu_marker_xo_description%',
     hasEndMarker: true,
     children: undefined,
   },
   xop: {
     category: CategoryType.CrossReferences,
     type: MarkerType.Character,
-    description:
-      'Published cross reference origin reference (origin reference that should appear in the published text)',
+    description: '%markerMenu_marker_xop_description%',
     hasEndMarker: true,
     children: undefined,
   },
   xt: {
     category: CategoryType.CrossReferences,
     type: MarkerType.Character,
-    description: 'The cross reference target reference(s), protocanon only (basic)',
+    description: '%markerMenu_marker_xt_description%',
     hasEndMarker: true,
     children: undefined,
   },
   xta: {
     category: CategoryType.CrossReferences,
     type: MarkerType.Character,
-    description: 'Cross reference target references added text',
+    description: '%markerMenu_marker_xta_description%',
     hasEndMarker: true,
     children: undefined,
   },
   xk: {
     category: CategoryType.CrossReferences,
     type: MarkerType.Character,
-    description: 'A cross reference keyword',
+    description: '%markerMenu_marker_xk_description%',
     hasEndMarker: true,
     children: undefined,
   },
   xq: {
     category: CategoryType.CrossReferences,
     type: MarkerType.Character,
-    description: 'A cross-reference quotation from the scripture text',
+    description: '%markerMenu_marker_xq_description%',
     hasEndMarker: true,
     children: undefined,
   },
   xot: {
     category: CategoryType.CrossReferences,
     type: MarkerType.Character,
-    description: 'Cross-reference target reference(s), Old Testament only',
+    description: '%markerMenu_marker_xot_description%',
     hasEndMarker: true,
     children: undefined,
   },
   xnt: {
     category: CategoryType.CrossReferences,
     type: MarkerType.Character,
-    description: 'Cross-reference target reference(s), New Testament only',
+    description: '%markerMenu_marker_xnt_description%',
     hasEndMarker: true,
     children: undefined,
   },
   xdc: {
     category: CategoryType.CrossReferences,
     type: MarkerType.Character,
-    description: 'Cross-reference target reference(s), Deuterocanon only',
+    description: '%markerMenu_marker_xdc_description%',
     hasEndMarker: true,
     children: undefined,
   },
   rq: {
     category: CategoryType.CrossReferences,
     type: MarkerType.Character,
-    description: 'A cross-reference indicating the source text for the preceding quotation.',
+    description: '%markerMenu_marker_rq_description%',
     hasEndMarker: true,
     children: undefined,
   },
   qt: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For Old Testament quoted text appearing in the New Testament (basic)',
+    description: '%markerMenu_marker_qt_description%',
     hasEndMarker: true,
     children: undefined,
   },
   nd: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For name of deity (basic)',
+    description: '%markerMenu_marker_nd_description%',
     hasEndMarker: true,
     children: undefined,
   },
   tl: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For transliterated words',
+    description: '%markerMenu_marker_tl_description%',
     hasEndMarker: true,
     children: undefined,
   },
   dc: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'Deuterocanonical/LXX additions or insertions in the Protocanonical text',
+    description: '%markerMenu_marker_dc_description%',
     hasEndMarker: true,
     children: undefined,
   },
   bk: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For the quoted name of a book',
+    description: '%markerMenu_marker_bk_description%',
     hasEndMarker: true,
     children: undefined,
   },
   sig: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For the signature of the author of an Epistle',
+    description: '%markerMenu_marker_sig_description%',
     hasEndMarker: true,
     children: undefined,
   },
   pn: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For a proper name',
+    description: '%markerMenu_marker_pn_description%',
     hasEndMarker: true,
     children: undefined,
   },
   png: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For a geographic proper name',
+    description: '%markerMenu_marker_png_description%',
     hasEndMarker: true,
     children: undefined,
   },
   addpn: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For chinese words to be dot underline & underline',
+    description: '%markerMenu_marker_addpn_description%',
     hasEndMarker: true,
     children: undefined,
   },
   wj: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For marking the words of Jesus',
+    description: '%markerMenu_marker_wj_description%',
     hasEndMarker: true,
     children: undefined,
   },
   k: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For a keyword',
+    description: '%markerMenu_marker_k_description%',
     hasEndMarker: true,
     children: undefined,
   },
   sls: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description:
-      'To represent where the original text is in a secondary language or from an alternate text source',
+    description: '%markerMenu_marker_sls_description%',
     hasEndMarker: true,
     children: undefined,
   },
   ord: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For the text portion of an ordinal number',
+    description: '%markerMenu_marker_ord_description%',
     hasEndMarker: true,
     children: undefined,
   },
   add: {
     category: CategoryType.SpecialText,
     type: MarkerType.Character,
-    description: 'For a translational addition to the text',
+    description: '%markerMenu_marker_add_description%',
     hasEndMarker: true,
     children: undefined,
   },
   lit: {
     category: CategoryType.SpecialText,
     type: MarkerType.Paragraph,
-    description: 'For a comment or note inserted for liturgical use',
+    description: '%markerMenu_marker_lit_description%',
     hasEndMarker: false,
     children: undefined,
   },
   no: {
     category: CategoryType.CharacterStyling,
     type: MarkerType.Character,
-    description: 'A character style, use normal text',
+    description: '%markerMenu_marker_no_description%',
     hasEndMarker: true,
     children: undefined,
   },
   it: {
     category: CategoryType.CharacterStyling,
     type: MarkerType.Character,
-    description: 'A character style, use italic text',
+    description: '%markerMenu_marker_it_description%',
     hasEndMarker: true,
     children: undefined,
   },
   bd: {
     category: CategoryType.CharacterStyling,
     type: MarkerType.Character,
-    description: 'A character style, use bold text',
+    description: '%markerMenu_marker_bd_description%',
     hasEndMarker: true,
     children: undefined,
   },
   bdit: {
     category: CategoryType.CharacterStyling,
     type: MarkerType.Character,
-    description: 'A character style, use bold + italic text',
+    description: '%markerMenu_marker_bdit_description%',
     hasEndMarker: true,
     children: undefined,
   },
   em: {
     category: CategoryType.CharacterStyling,
     type: MarkerType.Character,
-    description: 'A character style, use emphasized text style',
+    description: '%markerMenu_marker_em_description%',
     hasEndMarker: true,
     children: undefined,
   },
   sc: {
     category: CategoryType.CharacterStyling,
     type: MarkerType.Character,
-    description: 'A character style, for small capitalization text',
+    description: '%markerMenu_marker_sc_description%',
     hasEndMarker: true,
     children: undefined,
   },
   sup: {
     category: CategoryType.CharacterStyling,
     type: MarkerType.Character,
-    description:
-      'A character style, for superscript text. Typically for use in critical edition footnotes.',
+    description: '%markerMenu_marker_sup_description%',
     hasEndMarker: true,
     children: undefined,
   },
   pb: {
     category: CategoryType.Breaks,
     type: MarkerType.Paragraph,
-    description:
-      "Page Break used for new reader portions and children's bibles where content is controlled by the page",
+    description: '%markerMenu_marker_pb_description%',
     hasEndMarker: false,
     children: undefined,
   },
