@@ -235,13 +235,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // eslint-disable-next-line no-null/no-null
   const markerMenuSearchRef = useRef<HTMLInputElement>(null);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   const [canUndo, setCanUndo] = useState(false);
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   const [canRedo, setCanRedo] = useState(false);
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   const [blockMarker, setBlockMarker] = useState<string | undefined>();
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   const [contextMarker, setContextMarker] = useState<string | undefined>();
 
   /**
@@ -867,9 +863,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const showInlineMarkersMenu = useCallback(() => {
     // Only shows the markers menu if there is currently a selection in the editor and there are
     // existing marker menu items to be shown
-    const windowSelection = window.getSelection();
-    if (inlineMarkerMenuItems.length && windowSelection && windowSelection.rangeCount > 0) {
-      const selectionRect = windowSelection.getRangeAt(0).getBoundingClientRect();
+    const currentSelection = window.getSelection();
+    if (inlineMarkerMenuItems.length && currentSelection && currentSelection.rangeCount > 0) {
+      const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
       setMarkersMenuAnchorX(selectionRect.left);
       setMarkersMenuAnchorY(selectionRect.top);
       setMarkersMenuAnchorHeight(selectionRect.height);
@@ -905,6 +901,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     const handleKeyDown = (event: KeyboardEvent) => {
       // Markers menu trigger listener
       if (!showMarkersMenu && event.key === defaultMarkersMenuTrigger) {
+        event.preventDefault();
         showInlineMarkersMenu();
       } else if (showMarkersMenu && event.key === 'Escape') {
         setShowMarkersMenu(false);
