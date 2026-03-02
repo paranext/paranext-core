@@ -385,8 +385,11 @@ async function main() {
     // and restore the maximized or full screen state
     mainWindowState.manage(mainWindow);
 
-    // If --window-size was specified, override any maximized/fullscreen state that manage() restored
+    // If --window-size was specified, override any maximized/fullscreen state that manage() restored.
+    // setSize() is ignored on a maximized/fullscreen window, so explicitly exit those states first.
     if (windowSizeArg && windowWidth && windowHeight) {
+      if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false);
+      if (mainWindow.isMaximized()) mainWindow.unmaximize();
       mainWindow.setSize(windowWidth, windowHeight);
     }
 
