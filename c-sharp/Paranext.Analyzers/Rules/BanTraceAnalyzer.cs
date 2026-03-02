@@ -22,8 +22,7 @@ public sealed class BanTraceAnalyzer : DiagnosticAnalyzer
             category: "Paranext.Logging",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "paranext-core uses Console for logging output. Do NOT use System.Diagnostics.Trace.",
-            helpLinkUri: $"{DiagnosticIds.HelpLinkBase}#logging"
+            description: "paranext-core uses Console for logging output. Do NOT use System.Diagnostics.Trace."
         );
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
