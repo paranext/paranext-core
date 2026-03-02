@@ -22,8 +22,7 @@ public sealed class BanDynamicAnalyzer : DiagnosticAnalyzer
             category: "Paranext.TypeSafety",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
-            description: "The 'dynamic' keyword bypasses compile-time type checking and causes serialization issues. Use concrete types (classes, records, or interfaces) instead.",
-            helpLinkUri: $"{DiagnosticIds.HelpLinkBase}#json-serialization-converters"
+            description: "The 'dynamic' keyword bypasses compile-time type checking and causes serialization issues. Use concrete types (classes, records, or interfaces) instead."
         );
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>

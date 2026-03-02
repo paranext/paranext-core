@@ -37,10 +37,4 @@ public static class DiagnosticIds
     /// See: Paranext-Core-Patterns.md
     /// </summary>
     public const string BanDynamic = "PNX008";
-
-    /// <summary>
-    /// Base URL for help documentation.
-    /// </summary>
-    public const string HelpLinkBase =
-        "https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Paranext-Core-Patterns.md";
 }

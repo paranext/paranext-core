@@ -25,8 +25,7 @@ public sealed class NamespaceDirectoryAnalyzer : DiagnosticAnalyzer
             category: "Paranext.FileOrganization",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "The namespace should follow the pattern 'Paranext.DataProvider.{Directory}' matching the file's location.",
-            helpLinkUri: $"{DiagnosticIds.HelpLinkBase}#namespaces"
+            description: "The namespace should follow the pattern 'Paranext.DataProvider.{Directory}' matching the file's location."
         );
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>

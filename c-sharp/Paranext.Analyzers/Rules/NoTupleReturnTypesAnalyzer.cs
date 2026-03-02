@@ -25,8 +25,7 @@ public sealed class NoTupleReturnTypesAnalyzer : DiagnosticAnalyzer
             category: "Paranext.Serialization",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
-            description: "C# tuples (ValueTuple) serialize as empty objects {} over JSON-RPC, causing data loss. Use record types for structured return values. Only applies to DataProvider/NetworkObject classes.",
-            helpLinkUri: $"{DiagnosticIds.HelpLinkBase}#json-serialization-converters"
+            description: "C# tuples (ValueTuple) serialize as empty objects {} over JSON-RPC, causing data loss. Use record types for structured return values. Only applies to DataProvider/NetworkObject classes."
         );
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>

@@ -22,8 +22,7 @@ public sealed class OneTypePerFileAnalyzer : DiagnosticAnalyzer
             category: "Paranext.FileOrganization",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "Each file should contain only one type, except when a record is exclusively used by another record in the same file.",
-            helpLinkUri: $"{DiagnosticIds.HelpLinkBase}#file-organization-patterns"
+            description: "Each file should contain only one type, except when a record is exclusively used by another record in the same file."
         );
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
