@@ -10,10 +10,19 @@ npm stop 2>/dev/null || true
 echo "Building..."
 npm run build
 
-echo "Starting with CDP enabled (headless via xvfb)..."
-# Maximize when running headless to fill the virtual display
-xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
-    env MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
+# Safety net: Claude Code / VS Code set this, which makes Electron act as plain Node.js
+unset ELECTRON_RUN_AS_NODE
+
+# Start with CDP enabled. On Linux, use xvfb for headless operation.
+# On macOS (and other platforms without xvfb), show the GUI window.
+if command -v xvfb-run >/dev/null 2>&1; then
+  echo "Starting with CDP enabled (headless via xvfb)..."
+  xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+      env MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
+else
+  echo "Starting with CDP enabled (visible window — xvfb not available)..."
+  env MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
+fi
 APP_PID=$!
 
 # Kill the background process on failure/exit
