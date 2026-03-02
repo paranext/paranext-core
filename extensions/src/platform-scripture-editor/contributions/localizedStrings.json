@@ -66,7 +66,7 @@
       "%markerMenu_marker_ide_description%": "File encoding information",
       "%markerMenu_marker_ie_description%": "Introduction ending marker",
       "%markerMenu_marker_iex_description%": "Introduction explanatory or bridge text (e.g. explanation of missing book in Short Old Testament)",
-      "%markerMenu_marker_ilI_description%": "A list entry, level 1 (if single level)",
+      "%markerMenu_marker_ili_description%": "A list entry, level 1 (if single level)",
       "%markerMenu_marker_ili1_description%": "A list entry, level 1 (if multiple levels)",
       "%markerMenu_marker_ili2_description%": "A list entry, level 2",
       "%markerMenu_marker_im_description%": "Introduction prose paragraph, with no first line indent (may occur after poetry)",
