@@ -646,11 +646,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'insertFootnoteAtSelection': {
-          editorRef.current?.insertNote('f');
+          editorRef.current?.insertMarker('f');
           break;
         }
         case 'insertCrossReferenceAtSelection': {
-          editorRef.current?.insertNote('x');
+          editorRef.current?.insertMarker('x');
           break;
         }
         case 'insertCommentAtSelection': {
@@ -1492,7 +1492,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                       >
                         {blockMarker ? `${blockMarker} - ` : ''}
                         {blockMarker &&
-                        Object.entries(blockMarkerToBlockNames).find(
+                        Object.entries(blockMarkerToBlockNames).some(
                           ([marker]) => marker === blockMarker,
                         )
                           ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
