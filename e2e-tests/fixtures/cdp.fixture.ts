@@ -11,6 +11,7 @@
  * Prerequisite: Platform.Bible running with --remote-debugging-port=9223
  */
 import { test as base, chromium, Page } from '@playwright/test';
+export { expect } from '@playwright/test';
 
 const CDP_URL = process.env.CDP_URL || 'http://localhost:9223';
 
@@ -67,5 +68,3 @@ export const test = base.extend<CdpFixtures>({
     // Do NOT close browser — we didn't start the app
   },
 });
-
-export { expect } from '@playwright/test';

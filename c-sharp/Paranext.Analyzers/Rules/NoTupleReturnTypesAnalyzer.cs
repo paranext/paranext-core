@@ -10,7 +10,6 @@ namespace Paranext.Analyzers.Rules;
 /// PNX007: DataProvider/NetworkObject methods should not return tuples - use record types instead.
 /// Tuples (ValueTuple) serialize as empty objects {} over JSON-RPC, causing runtime failures.
 /// Only applies to classes that inherit from DataProvider or NetworkObject (serialization boundaries).
-/// See: phase-3-implementation-backend.md "Smoke Test 3: Serialization &amp; Parameter Alignment Audit"
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class NoTupleReturnTypesAnalyzer : DiagnosticAnalyzer

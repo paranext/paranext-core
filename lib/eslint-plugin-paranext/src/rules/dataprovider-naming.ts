@@ -1,18 +1,13 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 import { isValidExtensionIdentifier, suggestFix } from '../utils/naming-patterns';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
 
 /**
  * ESLint rule: paranext/dataprovider-naming
  *
  * Enforces that DataProvider names follow the pattern: 'extensionName.dataName' where both parts
  * are camelCase.
- *
- * See: .context/standards/Paranext-Core-Patterns.md "Naming Conventions Summary"
  */
 export default createRule({
   name: 'dataprovider-naming',
@@ -64,13 +59,19 @@ export default createRule({
   },
 });
 
-/** Checks if a TSPropertySignature is inside a DataProviders interface. */
+/**
+ * Checks if a TSPropertySignature is inside a DataProviders or ProjectDataProviderInterfaces
+ * interface.
+ */
 function isInDataProvidersInterface(node: TSESTree.TSPropertySignature): boolean {
   // Walk up the tree to find the interface declaration
   let current: TSESTree.Node | undefined = node.parent;
   while (current) {
     if (current.type === TSESTree.AST_NODE_TYPES.TSInterfaceDeclaration) {
-      if (current.id.name === 'DataProviders') {
+      if (
+        current.id.name === 'DataProviders' ||
+        current.id.name === 'ProjectDataProviderInterfaces'
+      ) {
         return true;
       }
     }

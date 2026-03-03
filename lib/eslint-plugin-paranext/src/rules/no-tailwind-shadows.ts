@@ -1,9 +1,6 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Code-Style-Guide.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
 
 /** Pattern to detect shadow classes: tw-shadow, tw-shadow-sm, tw-shadow-lg, etc. */
 const SHADOW_PATTERN = /^tw-shadow(-[a-z]+)?$/;

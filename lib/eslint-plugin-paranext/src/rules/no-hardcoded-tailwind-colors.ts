@@ -1,38 +1,46 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Code-Style-Guide.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
+
+/** CSS built-in color values that are always valid in Tailwind color classes. */
+const CSS_BUILTIN_COLORS = ['transparent', 'current', 'inherit'];
 
 /**
- * Allowed theme tokens for Tailwind colors. These are semantic tokens that adapt to light/dark
- * themes.
+ * Reads theme tokens from src/shared/data/themes.data.json. Collects all cssVariables keys across
+ * every theme and variant so the allowed list stays in sync automatically.
  */
-const ALLOWED_THEME_TOKENS = [
-  'background',
-  'foreground',
-  'muted',
-  'muted-foreground',
-  'popover',
-  'popover-foreground',
-  'card',
-  'card-foreground',
-  'border',
-  'input',
-  'primary',
-  'primary-foreground',
-  'secondary',
-  'secondary-foreground',
-  'accent',
-  'accent-foreground',
-  'destructive',
-  'destructive-foreground',
-  'ring',
-  'transparent',
-  'current',
-  'inherit',
-];
+function loadThemeTokens(): string[] {
+  try {
+    const themesPath = path.resolve(__dirname, '../../../../src/shared/data/themes.data.json');
+    const raw = fs.readFileSync(themesPath, 'utf-8');
+    const themes: Record<
+      string,
+      Record<string, { cssVariables?: Record<string, string> }>
+    > = JSON.parse(raw);
+    const tokens = new Set<string>();
+    for (const theme of Object.values(themes)) {
+      for (const variant of Object.values(theme)) {
+        if (variant.cssVariables) {
+          for (const key of Object.keys(variant.cssVariables)) {
+            tokens.add(key);
+          }
+        }
+      }
+    }
+    return [...tokens];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Allowed theme tokens for Tailwind colors. Loaded from themes.data.json so the list stays in sync
+ * with the actual theme definition. CSS built-in values (transparent, current, inherit) are always
+ * valid.
+ */
+const ALLOWED_THEME_TOKENS = [...loadThemeTokens(), ...CSS_BUILTIN_COLORS];
 
 /**
  * Patterns that indicate hardcoded colors:

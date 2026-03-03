@@ -9,7 +9,6 @@ namespace Paranext.Analyzers.Rules;
 /// <summary>
 /// PNX001: Detects usage of System.Diagnostics.Trace and reports an error.
 /// Use Console.WriteLine for logging instead.
-/// See: Paranext-Core-Patterns.md "Logging" section.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class BanTraceAnalyzer : DiagnosticAnalyzer

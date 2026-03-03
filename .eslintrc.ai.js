@@ -2,7 +2,8 @@
  * AI-specific ESLint configuration
  *
  * This config extends the base .eslintrc.js and adds paranext plugin rules that enforce patterns
- * from Paranext-Core-Patterns.md.
+ * and guardrails for AI-generated code, such as naming conventions, styling rules, localization
+ * requirements, and code quality checks.
  *
  * Used on AI branches (ai/main, ai/feature/*) to provide guardrails for AI-generated code.
  *
@@ -16,27 +17,21 @@ module.exports = {
     // === Naming conventions ===
 
     // Command naming: extensionName.commandName (camelCase)
-    // See: Paranext-Core-Patterns.md "Command Naming"
     'paranext/command-naming': 'error',
 
     // Setting naming: extensionName.settingName (camelCase)
-    // See: Paranext-Core-Patterns.md "Naming Conventions Summary"
     'paranext/setting-naming': 'error',
 
     // DataProvider naming: extensionName.dataName (camelCase)
-    // See: Paranext-Core-Patterns.md "Naming Conventions Summary"
     'paranext/dataprovider-naming': 'error',
 
     // WebView files must end with .web-view.tsx or .web-view.html
-    // See: Paranext-Core-Patterns.md "Extension Structure"
     'paranext/webview-file-naming': 'error',
 
     // Service files must be in *.service.ts in services/ directory
-    // See: Paranext-Core-Patterns.md "Extension Structure"
     'paranext/service-file-naming': 'warn',
 
     // Command registration must include metadata
-    // See: Paranext-Core-Patterns.md "Command Registration"
     'paranext/registration-structure': 'warn',
 
     // === Styling (Tailwind) ===
@@ -71,30 +66,20 @@ module.exports = {
   },
   overrides: [
     {
-      // Extension entry points - strict command naming, registration, and cleanup
+      // Extension entry points - strict registration and cleanup
       files: ['extensions/src/**/main.ts', 'src/extension-host/**/*.ts'],
       rules: {
-        'paranext/command-naming': 'error',
         'paranext/registration-structure': 'error',
         'paranext/registration-cleanup': 'error',
       },
     },
     {
-      // WebView files - strict file naming and localization
+      // WebView files - strict localization
       files: ['**/*.web-view.tsx'],
       rules: {
-        'paranext/webview-file-naming': 'error',
         'paranext/require-localized-strings-array': 'warn',
         'paranext/require-localized-aria': 'error',
         'paranext/no-hardcoded-jsx-strings': 'error',
-      },
-    },
-    {
-      // Type declaration files - strict DataProvider and setting naming
-      files: ['**/*.d.ts'],
-      rules: {
-        'paranext/dataprovider-naming': 'error',
-        'paranext/setting-naming': 'error',
       },
     },
     {

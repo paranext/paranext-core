@@ -1,17 +1,12 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 import * as path from 'path';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
 
 /**
  * ESLint rule: paranext/webview-file-naming
  *
  * Enforces that WebView files end with .web-view.tsx or .web-view.html
- *
- * See: .context/standards/Paranext-Core-Patterns.md "Extension Structure"
  */
 export default createRule({
   name: 'webview-file-naming',

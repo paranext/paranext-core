@@ -1,9 +1,6 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Entry-Point-Guide.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
 
 /** Registration methods that return promises which must be tracked for cleanup. */
 const REGISTRATION_METHODS = [
@@ -27,6 +24,32 @@ const REGISTRATION_OBJECTS = [
   'projectDataProviders',
   'projectSettings',
 ];
+
+/** Check if a call expression is a registration method. */
+function isRegistrationCall(node: TSESTree.CallExpression): boolean {
+  // papi.commands.registerCommand(...)
+  if (node.callee.type === 'MemberExpression') {
+    const callee = node.callee;
+    if (callee.property.type === 'Identifier') {
+      const methodName = callee.property.name;
+      if (!REGISTRATION_METHODS.includes(methodName)) return false;
+
+      // Check if it's on papi.commands, papi.webViewProviders, etc.
+      if (callee.object.type === 'MemberExpression') {
+        const obj = callee.object;
+        if (
+          obj.object.type === 'Identifier' &&
+          obj.object.name === 'papi' &&
+          obj.property.type === 'Identifier' &&
+          REGISTRATION_OBJECTS.includes(obj.property.name)
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 
 /**
  * ESLint rule: paranext/registration-cleanup
@@ -69,32 +92,6 @@ export default createRule({
     const registrationVariables = new Set<string>();
     // Track variables that have been added to context.registrations
     const cleanedUpVariables = new Set<string>();
-
-    /** Check if a call expression is a registration method. */
-    function isRegistrationCall(node: TSESTree.CallExpression): boolean {
-      // papi.commands.registerCommand(...)
-      if (node.callee.type === 'MemberExpression') {
-        const callee = node.callee;
-        if (callee.property.type === 'Identifier') {
-          const methodName = callee.property.name;
-          if (!REGISTRATION_METHODS.includes(methodName)) return false;
-
-          // Check if it's on papi.commands, papi.webViewProviders, etc.
-          if (callee.object.type === 'MemberExpression') {
-            const obj = callee.object;
-            if (
-              obj.object.type === 'Identifier' &&
-              obj.object.name === 'papi' &&
-              obj.property.type === 'Identifier' &&
-              REGISTRATION_OBJECTS.includes(obj.property.name)
-            ) {
-              return true;
-            }
-          }
-        }
-      }
-      return false;
-    }
 
     return {
       // Track variable declarations that store registration results

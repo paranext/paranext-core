@@ -36,10 +36,7 @@ test.describe('UI Interaction', () => {
     await expect(aboutTab).not.toBeVisible({ timeout: 10_000 });
   });
 
-  test('should open the About dialog via PAPI command and show version info', async ({
-    papiClient,
-    mainPage,
-  }) => {
+  test('should open the About dialog via PAPI command', async ({ papiClient, mainPage }) => {
     await waitForAppReady(mainPage);
 
     // Trigger the about dialog via PAPI

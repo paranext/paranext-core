@@ -10,7 +10,6 @@ namespace Paranext.Analyzers.Rules;
 /// <summary>
 /// PNX005: Namespace must match the directory structure.
 /// Expected pattern: Paranext.DataProvider.{Directory}
-/// See: Paranext-Core-Patterns.md "Namespaces" section.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class NamespaceDirectoryAnalyzer : DiagnosticAnalyzer
