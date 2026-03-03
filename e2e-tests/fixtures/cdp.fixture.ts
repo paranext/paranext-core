@@ -11,6 +11,7 @@
  * Prerequisite: Platform.Bible running with --remote-debugging-port=9223
  */
 import { test as base, chromium, Page } from '@playwright/test';
+
 export { expect } from '@playwright/test';
 
 const CDP_URL = process.env.CDP_URL || 'http://localhost:9223';
@@ -20,6 +21,8 @@ export interface CdpFixtures {
 }
 
 export const test = base.extend<CdpFixtures>({
+  // Playwright fixtures require destructured parameter even when no dependencies are needed
+  // eslint-disable-next-line no-empty-pattern
   mainPage: async ({}, use) => {
     let browser;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -28,38 +31,26 @@ export const test = base.extend<CdpFixtures>({
         break;
       } catch (err) {
         if (attempt === 3) throw err;
-        await new Promise((r) => setTimeout(r, 2_000));
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 2_000);
+        });
       }
     }
     if (!browser) throw new Error('Failed to connect to CDP after 3 attempts');
 
     // Find the renderer page (not devtools) — same logic as pw-server.mjs
-    let page: Page | undefined;
-    for (const ctx of browser.contexts()) {
-      for (const p of ctx.pages()) {
-        const url = p.url();
-        if (
-          (url.includes('localhost') || url.includes('index.html') || url.startsWith('file://')) &&
-          !url.includes('devtools://')
-        ) {
-          page = p;
-          break;
-        }
-      }
-      if (page) break;
-    }
+    const allPages = browser.contexts().flatMap((ctx) => ctx.pages());
+    let page: Page | undefined = allPages.find((p) => {
+      const url = p.url();
+      return (
+        (url.includes('localhost') || url.includes('index.html') || url.startsWith('file://')) &&
+        !url.includes('devtools://')
+      );
+    });
 
     // Fallback: pick the first non-devtools page
     if (!page) {
-      for (const ctx of browser.contexts()) {
-        for (const p of ctx.pages()) {
-          if (!p.url().includes('devtools://')) {
-            page = p;
-            break;
-          }
-        }
-        if (page) break;
-      }
+      page = allPages.find((p) => !p.url().includes('devtools://'));
     }
 
     if (!page) throw new Error('No renderer page found via CDP');

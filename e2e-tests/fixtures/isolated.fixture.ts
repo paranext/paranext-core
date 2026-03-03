@@ -17,6 +17,8 @@ export const test = base.extend<IsolatedFixtures>({
   // Test-scoped: a fresh Electron process is launched for every test, then torn
   // down afterward. Use this for tests that mutate state in ways that are hard
   // to clean up (e.g. creating/deleting projects, changing settings).
+  // Playwright fixtures require destructured parameter even when no dependencies are needed
+  // eslint-disable-next-line no-empty-pattern
   electronApp: async ({}, use) => {
     const ctx = await launchElectronApp();
 

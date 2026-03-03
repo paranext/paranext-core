@@ -24,6 +24,8 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
   // Worker-scoped: the Electron process is launched once per worker and shared
   // across all tests, avoiding the process startup/teardown cost per test.
   electronApp: [
+    // Playwright fixtures require destructured parameter even when no dependencies are needed
+    // eslint-disable-next-line no-empty-pattern
     async ({}, use) => {
       const ctx: ElectronAppContext = await launchElectronApp();
 

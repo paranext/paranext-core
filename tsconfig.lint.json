@@ -9,6 +9,7 @@
     ".erb/scripts",
     ".storybook/*.ts",
     "src",
-    "assets"
+    "assets",
+    "e2e-tests"
   ]
 }

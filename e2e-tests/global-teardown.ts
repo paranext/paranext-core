@@ -3,7 +3,9 @@ import { execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
-async function globalTeardown(config: FullConfig): Promise<void> {
+// Playwright global teardown requires this signature even though config is unused
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function globalTeardown(_config: FullConfig): Promise<void> {
   const rootDir = path.resolve(__dirname, '..');
 
   // Kill the renderer dev server if we started it

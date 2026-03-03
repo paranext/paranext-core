@@ -10,9 +10,9 @@
  *   For per-feature E2E tests, import from '../fixtures/cdp.fixture' and navigate via menu clicks.
  *   See e2e-tests/tests/smoke/cdp-example.spec.ts for the correct pattern.
  */
-import { test as appTest, AppFixtures, WorkerAppFixtures } from './app.fixture';
 import WebSocket from 'ws';
 import { JSONRPCClient } from 'json-rpc-2.0';
+import { test as appTest, AppFixtures, WorkerAppFixtures } from './app.fixture';
 
 const WEBSOCKET_PORT = 8876;
 
@@ -29,6 +29,7 @@ export interface PapiClient {
 export type PapiFixtures = AppFixtures & { papiClient: PapiClient };
 
 export const test = appTest.extend<{ papiClient: PapiClient }, WorkerAppFixtures>({
+  // electronApp is destructured to ensure the fixture dependency is established
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   papiClient: async ({ electronApp }, use) => {
     const ws = new WebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
@@ -56,9 +57,13 @@ export const test = appTest.extend<{ papiClient: PapiClient }, WorkerAppFixtures
     const papiClient: PapiClient = {
       async sendCommand<T>(commandName: string, ...args: unknown[]): Promise<T> {
         // PAPI commands are sent as "command:<commandName>"
+        // json-rpc-2.0 returns PromiseLike<unknown>; caller provides T
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         return jsonRpcClient.request(`command:${commandName}`, args) as Promise<T>;
       },
       async request<T>(method: string, params?: unknown): Promise<T> {
+        // json-rpc-2.0 returns PromiseLike<unknown>; caller provides T
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         return jsonRpcClient.request(method, params) as Promise<T>;
       },
       close() {

@@ -41,7 +41,9 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
       });
       return;
     } catch {
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 500);
+      });
     }
   }
   throw new Error(`WebSocket server not ready on port ${port} after ${timeout}ms`);
@@ -59,11 +61,11 @@ export async function launchElectronApp(): Promise<ElectronAppContext> {
   // VSCode/Claude Code set ELECTRON_RUN_AS_NODE=1 which forces the Electron
   // binary to run as plain Node.js. We must remove it.
   // NODE_ENV=development so the renderer loads from the webpack dev server.
-  const env: Record<string, string> = {
+  const env = {
     ...process.env,
     NODE_ENV: 'development',
-  } as Record<string, string>;
-  delete env.ELECTRON_RUN_AS_NODE;
+    ELECTRON_RUN_AS_NODE: undefined,
+  };
 
   // Use an isolated user-data directory so the singleton instance lock does not
   // conflict with any already-running Platform.Bible instance.
@@ -112,11 +114,11 @@ export async function launchElectronApp(): Promise<ElectronAppContext> {
   // Register the close listener BEFORE yielding to tests. The 'close' event
   // fires once — if we registered it after use(), it could already be gone by
   // the time teardown runs.
-  const appClosed = new Promise<void>((resolve) =>
+  const appClosed = new Promise<void>((resolve) => {
     electronApp.once('close', () => {
       resolve();
-    }),
-  );
+    });
+  });
 
   return { electronApp, userDataDir, appClosed };
 }
@@ -154,11 +156,18 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
     }
   };
 
+  // Node.js ChildProcess.exitCode/signalCode are null until the process exits
+  // eslint-disable-next-line no-null/no-null
   if (electronProcess && electronProcess.exitCode === null && electronProcess.signalCode === null) {
     console.log('[teardown] Sending SIGKILL to process group...');
     killGroup('SIGKILL');
     console.log('[teardown] Waiting for appClosed after SIGKILL (up to 3s)...');
-    await Promise.race([appClosed, new Promise<void>((r) => setTimeout(r, 3_000))]);
+    await Promise.race([
+      appClosed,
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, 3_000);
+      }),
+    ]);
     console.log('[teardown] Done waiting after SIGKILL');
   }
 
@@ -170,7 +179,9 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
     fs.rmSync(userDataDir, { recursive: true, force: true });
   } catch {
     console.warn('[teardown] First rmSync attempt failed — retrying in 3s...');
-    await new Promise((r) => setTimeout(r, 3_000));
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 3_000);
+    });
     try {
       fs.rmSync(userDataDir, { recursive: true, force: true });
     } catch (e) {
@@ -227,6 +238,8 @@ export async function sendPapiCommand<T = unknown>(
       if (parsed.error) {
         reject(new Error(`PAPI error: ${JSON.stringify(parsed.error)}`));
       } else {
+        // WebSocket JSON-RPC response `result` is untyped; caller provides T
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
         resolve(parsed.result as T);
       }
     });

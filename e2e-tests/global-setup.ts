@@ -46,7 +46,9 @@ function waitForPort(port: number, timeout: number): Promise<void> {
   });
 }
 
-export default async function globalSetup(config: FullConfig): Promise<void> {
+// Playwright global setup requires this signature even though config is unused
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default async function globalSetup(_config: FullConfig): Promise<void> {
   const rootDir = path.resolve(__dirname, '..');
 
   // Fail fast if Platform.Bible is already running (single-instance lock will
@@ -63,21 +65,22 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   // confirming they are genuinely stale rather than belonging to an instance
   // that is still starting up.
   const os = await import('os');
-  const appSupportDir =
-    process.platform === 'darwin'
-      ? path.join(os.homedir(), 'Library/Application Support')
-      : process.platform === 'linux'
-        ? path.join(os.homedir(), '.config')
-        : process.env.APPDATA || '';
+  let appSupportDir: string;
+  if (process.platform === 'darwin') {
+    appSupportDir = path.join(os.homedir(), 'Library/Application Support');
+  } else if (process.platform === 'linux') {
+    appSupportDir = path.join(os.homedir(), '.config');
+  } else {
+    appSupportDir = process.env.APPDATA || '';
+  }
 
-  const lockDirs = ['Electron', 'paratext-10-studio', 'platform-bible', 'Paranext'];
-  for (const dir of lockDirs) {
+  ['Electron', 'paratext-10-studio', 'platform-bible', 'Paranext'].forEach((dir) => {
     const lockPath = path.join(appSupportDir, dir, 'SingletonLock');
     if (fs.existsSync(lockPath)) {
       console.log(`Removing stale singleton lock: ${lockPath}`);
       fs.unlinkSync(lockPath);
     }
-  }
+  });
 
   // Ensure the dev main bundle exists
   const devMainPath = path.join(rootDir, '.erb/dll/main.bundle.dev.js');

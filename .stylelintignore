@@ -60,3 +60,8 @@ yalc.lock
 
 # Local dev packages checked out for linking during CI or local development
 dev-packages/
+
+# Playwright test output
+e2e-tests/test-results
+e2e-tests/playwright-report
+
