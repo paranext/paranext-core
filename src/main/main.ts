@@ -27,6 +27,7 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
+import { COMMAND_LINE_ARGS, getCommandLineArgument } from '@node/utils/command-line.util';
 import { resolveHtmlPath } from '@node/utils/util';
 import {
   DEFAULT_ZOOM_FACTOR,
@@ -331,12 +332,30 @@ async function main() {
       defaultHeight: 728,
     });
 
+    // If --window-size (or --windowSize) is specified, use those dimensions instead of the saved
+    // window state. Useful for automation/headless runs on Windows where xvfb is unavailable.
+    const windowSizeArg = getCommandLineArgument(COMMAND_LINE_ARGS.WindowSize);
+    let windowWidth = mainWindowState.width;
+    let windowHeight = mainWindowState.height;
+    let sizeMatch: RegExpExecArray | undefined;
+    if (windowSizeArg) {
+      sizeMatch = /^([1-9]\d*)[x,]([1-9]\d*)$/i.exec(windowSizeArg) ?? undefined;
+      if (sizeMatch) {
+        windowWidth = parseInt(sizeMatch[1], 10);
+        windowHeight = parseInt(sizeMatch[2], 10);
+      } else {
+        logger.warn(
+          `Invalid --window-size value "${windowSizeArg}". Expected format: WIDTHxHEIGHT (e.g. 1920x1080)`,
+        );
+      }
+    }
+
     mainWindow = new BrowserWindow({
       show: true,
       x: mainWindowState.x,
       y: mainWindowState.y,
-      width: mainWindowState.width,
-      height: mainWindowState.height,
+      width: windowWidth,
+      height: windowHeight,
       minWidth: 800, // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
       icon: getAssetPath('icon.png'),
       // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
@@ -366,6 +385,14 @@ async function main() {
     // (the listeners will be removed when the window is closed)
     // and restore the maximized or full screen state
     mainWindowState.manage(mainWindow);
+
+    // If a valid window size was specified, override any maximized/fullscreen state that manage() restored.
+    // setSize() is ignored on a maximized/fullscreen window, so explicitly exit those states first.
+    if (windowSizeArg && sizeMatch && windowWidth && windowHeight) {
+      if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false);
+      if (mainWindow.isMaximized()) mainWindow.unmaximize();
+      mainWindow.setSize(windowWidth, windowHeight);
+    }
 
     // Add several listeners to the main window to log events
     mainWindow.webContents.on('unresponsive', () => logger.warn('mainWindow unresponsive'));
