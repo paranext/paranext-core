@@ -18,6 +18,7 @@ ruleTester.run('require-localized-aria', rule, {
     // Non-aria prop is not checked
     { code: `<button title="Close dialog" />` },
     // Template literal with expressions
+    // eslint-disable-next-line no-template-curly-in-string
     { code: '<button aria-label={`${prefix} close`} />' },
     // Conditional expression with localized values
     { code: `<div aria-label={isOpen ? closeLabel : openLabel} />` },

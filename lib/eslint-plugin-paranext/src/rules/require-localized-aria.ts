@@ -3,48 +3,6 @@ import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 const createRule = ESLintUtils.RuleCreator(() => '');
 
 /**
- * Patterns that indicate a localized string reference:
- *
- * - LocalizedStrings['key'] or localizedStrings.key
- * - Variable references (not string literals)
- * - UseMemo results
- * - String formatting functions like formatReplacementString
- */
-function isLocalizedValue(node: TSESTree.Node): boolean {
-  // Variable reference (likely from localizedStrings)
-  if (node.type === 'Identifier') {
-    return true;
-  }
-
-  // Member expression like localizedStrings['key'] or obj.prop — any member expression is likely dynamic
-  if (node.type === 'MemberExpression') {
-    return true;
-  }
-
-  // Call expression (function call result)
-  if (node.type === 'CallExpression') {
-    return true;
-  }
-
-  // Conditional expression: condition ? a : b
-  if (node.type === 'ConditionalExpression') {
-    return isLocalizedValue(node.consequent) && isLocalizedValue(node.alternate);
-  }
-
-  // Logical expression: a || b, a && b
-  if (node.type === 'LogicalExpression') {
-    return true; // Could be fallback pattern
-  }
-
-  // Template literal with expressions
-  if (node.type === 'TemplateLiteral' && node.expressions.length > 0) {
-    return true; // Has dynamic parts
-  }
-
-  return false;
-}
-
-/**
  * ESLint rule: paranext/require-localized-aria
  *
  * Ensures aria-label and aria-describedby props use localized string references, not hardcoded
@@ -82,7 +40,7 @@ export default createRule({
 
         // Check for string literal value: aria-label="Close"
         if (node.value?.type === 'Literal' && typeof node.value.value === 'string') {
-          const value = node.value.value;
+          const { value } = node.value;
           // Allow empty strings and very short strings (single chars)
           if (value.length > 1) {
             context.report({
@@ -134,13 +92,9 @@ export default createRule({
                 value: expr.quasis[0].value.raw,
               },
             });
-            return;
           }
 
-          // If it's a localized value reference, it's fine
-          if (isLocalizedValue(expr)) {
-            return;
-          }
+          // If it's a localized value reference, it's fine - no action needed
         }
       },
     };

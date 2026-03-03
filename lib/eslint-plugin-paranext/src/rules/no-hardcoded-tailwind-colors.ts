@@ -20,15 +20,15 @@ function loadThemeTokens(): string[] {
       Record<string, { cssVariables?: Record<string, string> }>
     > = JSON.parse(raw);
     const tokens = new Set<string>();
-    for (const theme of Object.values(themes)) {
-      for (const variant of Object.values(theme)) {
+    Object.values(themes).forEach((theme) => {
+      Object.values(theme).forEach((variant) => {
         if (variant.cssVariables) {
-          for (const key of Object.keys(variant.cssVariables)) {
+          Object.keys(variant.cssVariables).forEach((key) => {
             tokens.add(key);
-          }
+          });
         }
-      }
-    }
+      });
+    });
     return [...tokens];
   } catch {
     return [];
@@ -58,10 +58,9 @@ const HARDCODED_COLOR_PATTERNS = [
 
 /** Check if a class string contains hardcoded colors */
 function findHardcodedColors(classString: string): string[] {
-  const violations: string[] = [];
   const classes = classString.split(/\s+/);
 
-  for (const cls of classes) {
+  return classes.filter((cls) => {
     // Skip if it's an allowed theme token
     const isThemeToken = ALLOWED_THEME_TOKENS.some(
       (token) =>
@@ -70,18 +69,11 @@ function findHardcodedColors(classString: string): string[] {
         cls === `tw-text-${token}` ||
         cls === `tw-border-${token}`,
     );
-    if (isThemeToken) continue;
+    if (isThemeToken) return false;
 
     // Check against hardcoded patterns
-    for (const pattern of HARDCODED_COLOR_PATTERNS) {
-      if (pattern.test(cls)) {
-        violations.push(cls);
-        break;
-      }
-    }
-  }
-
-  return violations;
+    return HARDCODED_COLOR_PATTERNS.some((pattern) => pattern.test(cls));
+  });
 }
 
 /**
@@ -112,8 +104,7 @@ export default createRule({
 
   create(context) {
     function checkClassValue(node: TSESTree.Node, value: string) {
-      const violations = findHardcodedColors(value);
-      for (const violation of violations) {
+      findHardcodedColors(value).forEach((violation) => {
         context.report({
           node,
           messageId: 'hardcodedColor',
@@ -121,7 +112,7 @@ export default createRule({
             className: violation,
           },
         });
-      }
+      });
     }
 
     return {
@@ -139,9 +130,9 @@ export default createRule({
           node.value?.type === 'JSXExpressionContainer' &&
           node.value.expression.type === 'TemplateLiteral'
         ) {
-          for (const quasi of node.value.expression.quasis) {
+          node.value.expression.quasis.forEach((quasi) => {
             checkClassValue(node, quasi.value.raw);
-          }
+          });
         }
       },
 
@@ -153,16 +144,16 @@ export default createRule({
             node.callee.name === 'clsx' ||
             node.callee.name === 'classNames')
         ) {
-          for (const arg of node.arguments) {
+          node.arguments.forEach((arg) => {
             if (arg.type === 'Literal' && typeof arg.value === 'string') {
               checkClassValue(arg, arg.value);
             }
             if (arg.type === 'TemplateLiteral') {
-              for (const quasi of arg.quasis) {
+              arg.quasis.forEach((quasi) => {
                 checkClassValue(arg, quasi.value.raw);
-              }
+              });
             }
-          }
+          });
         }
       },
     };

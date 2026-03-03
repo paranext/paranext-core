@@ -29,9 +29,9 @@ const REGISTRATION_OBJECTS = [
 function isRegistrationCall(node: TSESTree.CallExpression): boolean {
   // papi.commands.registerCommand(...)
   if (node.callee.type === 'MemberExpression') {
-    const callee = node.callee;
+    const { callee } = node;
     if (callee.property.type === 'Identifier') {
-      const methodName = callee.property.name;
+      const { name: methodName } = callee.property;
       if (!REGISTRATION_METHODS.includes(methodName)) return false;
 
       // Check if it's on papi.commands, papi.webViewProviders, etc.
@@ -120,7 +120,7 @@ export default createRule({
       CallExpression(node: TSESTree.CallExpression) {
         // Check if this is context.registrations.add(...)
         if (node.callee.type === 'MemberExpression') {
-          const callee = node.callee;
+          const { callee } = node;
           if (
             callee.property.type === 'Identifier' &&
             callee.property.name === 'add' &&
@@ -134,7 +134,7 @@ export default createRule({
               obj.object.name === 'context'
             ) {
               // context.registrations.add(something)
-              for (const arg of node.arguments) {
+              node.arguments.forEach((arg) => {
                 // context.registrations.add(varName) or context.registrations.add(await varName)
                 if (arg.type === 'Identifier') {
                   cleanedUpVariables.add(arg.name);
@@ -143,15 +143,15 @@ export default createRule({
                 }
                 // context.registrations.add(await papi.commands.registerCommand(...))
                 // This is fine - registration is inline and cleaned up
-              }
+              });
             }
           }
         }
       },
 
       // At end of file, check for uncleaned registrations
-      'Program:exit'() {
-        for (const varName of registrationVariables) {
+      'Program:exit': function programExit() {
+        registrationVariables.forEach((varName) => {
           if (!cleanedUpVariables.has(varName)) {
             // Find the variable declaration to report on
             // We'll report at program level since we don't track node references
@@ -161,7 +161,7 @@ export default createRule({
               data: { name: varName },
             });
           }
-        }
+        });
       },
     };
   },

@@ -64,7 +64,7 @@ export default createRule<[], MessageIds>({
         if (methodValue.type !== TSESTree.AST_NODE_TYPES.ObjectExpression) return;
 
         const requiredProps = ['summary'];
-        for (const prop of requiredProps) {
+        requiredProps.forEach((prop) => {
           if (!findProperty(methodValue, prop)) {
             context.report({
               node: methodValue,
@@ -72,7 +72,7 @@ export default createRule<[], MessageIds>({
               data: { property: prop },
             });
           }
-        }
+        });
       },
     };
   },
@@ -101,16 +101,12 @@ function isRegisterCommandCall(node: TSESTree.CallExpression): boolean {
 
 /** Finds a property in an ObjectExpression by name. */
 function findProperty(obj: TSESTree.ObjectExpression, name: string): TSESTree.Property | undefined {
-  for (const prop of obj.properties) {
-    if (prop.type === TSESTree.AST_NODE_TYPES.Property) {
-      const { key } = prop;
-      if (key.type === TSESTree.AST_NODE_TYPES.Identifier && key.name === name) {
-        return prop;
-      }
-      if (key.type === TSESTree.AST_NODE_TYPES.Literal && key.value === name) {
-        return prop;
-      }
-    }
-  }
-  return undefined;
+  const found = obj.properties.find((prop) => {
+    if (prop.type !== TSESTree.AST_NODE_TYPES.Property) return false;
+    const { key } = prop;
+    if (key.type === TSESTree.AST_NODE_TYPES.Identifier && key.name === name) return true;
+    if (key.type === TSESTree.AST_NODE_TYPES.Literal && key.value === name) return true;
+    return false;
+  });
+  return found?.type === TSESTree.AST_NODE_TYPES.Property ? found : undefined;
 }

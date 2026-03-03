@@ -118,7 +118,7 @@ export default createRule({
 
       // Check if it's a string literal
       if (node.type === 'Literal' && typeof node.value === 'string') {
-        const value = node.value;
+        const { value } = node;
 
         // Skip short strings
         if (value.length < MIN_STRING_LENGTH) return;

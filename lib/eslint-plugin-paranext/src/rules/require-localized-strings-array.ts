@@ -45,7 +45,7 @@ export default createRule({
       // Check for LOCALIZED_STRINGS variable declaration
       VariableDeclarator(node: TSESTree.VariableDeclarator) {
         if (node.id.type === 'Identifier') {
-          const name = node.id.name;
+          const { name } = node.id;
           // Match LOCALIZED_STRINGS or variants like EDITOR_LOCALIZED_STRINGS
           if (name === 'LOCALIZED_STRINGS' || name.endsWith('_LOCALIZED_STRINGS')) {
             hasLocalizedStringsArray = true;
@@ -61,7 +61,7 @@ export default createRule({
       },
 
       // At end of file, check if we need LOCALIZED_STRINGS
-      'Program:exit'(node: TSESTree.Program) {
+      'Program:exit': function programExit(node: TSESTree.Program) {
         // If the file uses useLocalizedStrings but doesn't have a LOCALIZED_STRINGS array
         if (hasUseLocalizedStrings && !hasLocalizedStringsArray) {
           context.report({

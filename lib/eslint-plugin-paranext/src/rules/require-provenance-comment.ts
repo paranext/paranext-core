@@ -15,15 +15,9 @@ const PROVENANCE_PATTERNS = [
 function hasProvenanceComment(comments: TSESTree.Comment[] | undefined): boolean {
   if (!comments?.length) return false;
 
-  for (const comment of comments) {
-    const text = comment.value;
-    for (const pattern of PROVENANCE_PATTERNS) {
-      if (pattern.test(text)) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return comments.some((comment) =>
+    PROVENANCE_PATTERNS.some((pattern) => pattern.test(comment.value)),
+  );
 }
 
 /**

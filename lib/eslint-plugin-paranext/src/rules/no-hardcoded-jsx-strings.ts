@@ -93,7 +93,7 @@ export default createRule({
     return {
       // JSX text content: <div>Hello World</div>
       JSXText(node: TSESTree.JSXText) {
-        const value = node.value;
+        const { value } = node;
 
         // Skip whitespace-only
         if (!value.trim()) return;

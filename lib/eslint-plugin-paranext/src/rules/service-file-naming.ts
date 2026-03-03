@@ -93,13 +93,13 @@ export default createRule<[], MessageIds>({
 
     return {
       Program(node: TSESTree.Program) {
-        for (const msg of messages) {
+        messages.forEach((msg) => {
           context.report({
             node,
             messageId: msg.messageId,
             data: msg.data,
           });
-        }
+        });
       },
     };
   },

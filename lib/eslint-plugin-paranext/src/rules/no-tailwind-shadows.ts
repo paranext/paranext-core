@@ -7,16 +7,7 @@ const SHADOW_PATTERN = /^tw-shadow(-[a-z]+)?$/;
 
 /** Check if a class string contains shadow classes */
 function findShadowClasses(classString: string): string[] {
-  const violations: string[] = [];
-  const classes = classString.split(/\s+/);
-
-  for (const cls of classes) {
-    if (SHADOW_PATTERN.test(cls)) {
-      violations.push(cls);
-    }
-  }
-
-  return violations;
+  return classString.split(/\s+/).filter((cls) => SHADOW_PATTERN.test(cls));
 }
 
 /**
@@ -47,8 +38,7 @@ export default createRule({
 
   create(context) {
     function checkClassValue(node: TSESTree.Node, value: string) {
-      const violations = findShadowClasses(value);
-      for (const violation of violations) {
+      findShadowClasses(value).forEach((violation) => {
         context.report({
           node,
           messageId: 'shadowClass',
@@ -56,7 +46,7 @@ export default createRule({
             className: violation,
           },
         });
-      }
+      });
     }
 
     return {
@@ -74,9 +64,9 @@ export default createRule({
           node.value?.type === 'JSXExpressionContainer' &&
           node.value.expression.type === 'TemplateLiteral'
         ) {
-          for (const quasi of node.value.expression.quasis) {
+          node.value.expression.quasis.forEach((quasi) => {
             checkClassValue(node, quasi.value.raw);
-          }
+          });
         }
       },
 
@@ -88,16 +78,16 @@ export default createRule({
             node.callee.name === 'clsx' ||
             node.callee.name === 'classNames')
         ) {
-          for (const arg of node.arguments) {
+          node.arguments.forEach((arg) => {
             if (arg.type === 'Literal' && typeof arg.value === 'string') {
               checkClassValue(arg, arg.value);
             }
             if (arg.type === 'TemplateLiteral') {
-              for (const quasi of arg.quasis) {
+              arg.quasis.forEach((quasi) => {
                 checkClassValue(arg, quasi.value.raw);
-              }
+              });
             }
-          }
+          });
         }
       },
     };
