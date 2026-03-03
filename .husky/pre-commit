@@ -1,20 +1,6 @@
 #!/usr/bin/env sh
 
 # ============================================
-# Audit logging helper
-# ============================================
-AUDIT_LOG=".context/audit-logs/pre-commit.log"
-mkdir -p "$(dirname "$AUDIT_LOG")"
-log_hook() {
-  echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ")|pre-commit|$1" >> "$AUDIT_LOG"
-}
-
-BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
-STAGED_TS=$(git diff --cached --name-only --diff-filter=ACMR | grep -cE '\.(ts|tsx)$' || true)
-STAGED_CS=$(git diff --cached --name-only --diff-filter=ACMR | grep -cE '\.cs$' || true)
-log_hook "START|branch=$BRANCH|staged_ts=$STAGED_TS|staged_cs=$STAGED_CS"
-
-# ============================================
 # Standard hooks (ALL branches)
 # ============================================
 echo "Format and stylelint fixes..."
@@ -26,9 +12,21 @@ echo "Format and stylelint fixes finished"
 # Husky runs hooks with sh, so we detect the branch with POSIX shell
 # then delegate to bash for the AI validations.
 # ============================================
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+
 case "$BRANCH" in
   ai/*)
-    log_hook "AI_HOOKS|entering"
+    # Audit logging — only on AI branches where .context exists
+    AUDIT_LOG=".context/audit-logs/pre-commit.log"
+    mkdir -p "$(dirname "$AUDIT_LOG")"
+    log_hook() {
+      echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ")|pre-commit|$1" >> "$AUDIT_LOG"
+    }
+
+    STAGED_TS=$(git diff --cached --name-only --diff-filter=ACMR | grep -cE '\.(ts|tsx)$' || true)
+    STAGED_CS=$(git diff --cached --name-only --diff-filter=ACMR | grep -cE '\.cs$' || true)
+    log_hook "START|branch=$BRANCH|staged_ts=$STAGED_TS|staged_cs=$STAGED_CS"
+
     echo ""
     echo "=========================================="
     echo "AI Branch Detected: $BRANCH"
@@ -44,10 +42,7 @@ case "$BRANCH" in
     if [ "$AI_EXIT" -ne 0 ]; then
       exit $AI_EXIT
     fi
-    ;;
-  *)
-    log_hook "AI_HOOKS|skipped|reason=branch_not_ai"
+
+    log_hook "END|status=success"
     ;;
 esac
-
-log_hook "END|status=success"
