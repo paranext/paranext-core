@@ -127,7 +127,14 @@ const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
 const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async (
   newValue: string,
 ): Promise<boolean> => {
-  return newValue === 'simple' || newValue === 'power';
+  if (newValue !== 'simple' && newValue !== 'power') {
+    throw new Error(
+      await localization.getLocalizedString({
+        localizeKey: '%settings_platform_interfaceMode_invalidValue%',
+      }),
+    );
+  }
+  return true;
 };
 
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
