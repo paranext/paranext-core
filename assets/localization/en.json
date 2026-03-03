@@ -130,6 +130,8 @@
   "%settings_platform_requestTimeout_label%": "Request Timeout",
   "%settings_platform_verseRef_description%": "Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and `useWebViewScrollGroupScrRef`",
   "%settings_platform_verseRef_label%": "Current Verse Reference for Scroll Group A (Deprecated)",
+  "%settings_platform_interfaceMode_description%": "Controls the complexity of features shown. 'Simple' provides a streamlined experience; 'Power' exposes advanced features.",
+  "%settings_platform_interfaceMode_label%": "Interface mode",
   "%settings_platform_zoomFactor_description%": "Applies to the entire application. 1.0 is the default. Allowed range is 0.5 to 3.0.",
   "%settings_platform_zoomFactor_errorMessage%": "Allowed range is {lowerLimit} to {upperLimit}.",
   "%settings_platform_zoomFactor_label%": "Zoom factor",
