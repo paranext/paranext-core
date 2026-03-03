@@ -61,6 +61,30 @@
         "description": "%project_settings_platformScripture_invalidPunctuation_description%",
         "default": "",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.baseCharacterClassRegex": {
+        "label": "%project_settings_platformScripture_baseCharacterClassRegex_label%",
+        "isHidden": true,
+        "default": "\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.diacriticCharacterClassRegex": {
+        "label": "%project_settings_platformScripture_diacriticCharacterClassRegex_label%",
+        "isHidden": true,
+        "default": "\\p{Mn}\\p{Mc}\\p{Lm}",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.wordMedialCharacterRegex": {
+        "label": "%project_settings_platformScripture_wordMedialCharacterRegex_label%",
+        "isHidden": true,
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.allowInvisibleCharacters": {
+        "label": "%project_settings_platformScripture_allowInvisibleCharacters_label%",
+        "isHidden": true,
+        "default": false,
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }
   }
