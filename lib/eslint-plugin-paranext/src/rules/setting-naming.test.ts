@@ -51,7 +51,7 @@ ruleTester.run('setting-naming', rule, {
       output: `
         declare module 'papi-shared-types' {
           interface SettingTypes {
-            'platformscripture.fontsize': number;
+            'platformScripture.fontSize': number;
           }
         }
       `,

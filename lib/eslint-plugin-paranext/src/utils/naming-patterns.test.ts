@@ -77,8 +77,8 @@ describe('suggestFix', () => {
     expect(suggestFix('PlatformScripture.OpenFind')).toBe('platformScripture.openFind');
   });
 
-  it('strips non-alphanumeric characters', () => {
-    expect(suggestFix('platform-scripture.open-find')).toBe('platformscripture.openfind');
+  it('converts kebab-case to camelCase', () => {
+    expect(suggestFix('platform-scripture.open-find')).toBe('platformScripture.openFind');
   });
 
   it('returns input unchanged if no dot separator', () => {

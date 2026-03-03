@@ -71,7 +71,7 @@ ruleTester.run('dataprovider-naming', rule, {
       output: `
         declare module 'papi-shared-types' {
           interface DataProviders {
-            'platformscripture.data': SomeType;
+            'platformScripture.data': SomeType;
           }
         }
       `,

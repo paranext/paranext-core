@@ -71,11 +71,16 @@ export function suggestFix(value: string): string {
 function toCamelCase(value: string): string {
   if (!value) return value;
 
-  // If already starts with lowercase, just remove non-alphanumeric
-  if (/^[a-z]/.test(value)) {
-    return value.replaceAll(/[^a-zA-Z0-9]/g, '');
-  }
+  // Split on non-alphanumeric characters, capitalize first letter of each segment after the first
+  const parts = value.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+  if (parts.length === 0) return value;
 
-  // Convert first character to lowercase
-  return value[0].toLowerCase() + value.slice(1).replaceAll(/[^a-zA-Z0-9]/g, '');
+  return (
+    parts[0][0].toLowerCase() +
+    parts[0].slice(1) +
+    parts
+      .slice(1)
+      .map((p) => p[0].toUpperCase() + p.slice(1))
+      .join('')
+  );
 }

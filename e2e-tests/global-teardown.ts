@@ -13,20 +13,20 @@ async function globalTeardown(config: FullConfig): Promise<void> {
     if (Number.isNaN(pid)) {
       console.warn(`Invalid PID in ${pidFile}, skipping process kill`);
       fs.unlinkSync(pidFile);
-      return;
-    }
-    console.log(`Stopping renderer dev server (PID: ${pid})...`);
-    try {
-      // Kill the process group (negative PID kills the group)
-      process.kill(-pid, 'SIGTERM');
-    } catch {
+    } else {
+      console.log(`Stopping renderer dev server (PID: ${pid})...`);
       try {
-        process.kill(pid, 'SIGTERM');
+        // Kill the process group (negative PID kills the group)
+        process.kill(-pid, 'SIGTERM');
       } catch {
-        // Already stopped
+        try {
+          process.kill(pid, 'SIGTERM');
+        } catch {
+          // Already stopped
+        }
       }
+      fs.unlinkSync(pidFile);
     }
-    fs.unlinkSync(pidFile);
   }
 
   // Run the stop script to ensure all Electron processes are terminated
