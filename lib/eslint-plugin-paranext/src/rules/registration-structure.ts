@@ -1,9 +1,6 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
 
 type MessageIds = 'missingMetadata' | 'missingMethodProperty';
 
@@ -11,8 +8,6 @@ type MessageIds = 'missingMetadata' | 'missingMethodProperty';
  * ESLint rule: paranext/registration-structure
  *
  * Enforces that command registration includes method metadata with summary, params, and result.
- *
- * See: .context/standards/Paranext-Core-Patterns.md "Command Registration"
  */
 export default createRule<[], MessageIds>({
   name: 'registration-structure',

@@ -1,7 +1,4 @@
-/**
- * Utility functions for validating paranext naming conventions. See:
- * .context/standards/Paranext-Core-Patterns.md
- */
+/** Utility functions for validating paranext naming conventions. */
 
 /**
  * Validates that a string follows the pattern: extensionName.identifier Where:
@@ -76,9 +73,9 @@ function toCamelCase(value: string): string {
 
   // If already starts with lowercase, just remove non-alphanumeric
   if (/^[a-z]/.test(value)) {
-    return value.replace(/[^a-zA-Z0-9]/g, '');
+    return value.replaceAll(/[^a-zA-Z0-9]/g, '');
   }
 
   // Convert first character to lowercase
-  return value.charAt(0).toLowerCase() + value.slice(1).replace(/[^a-zA-Z0-9]/g, '');
+  return value[0].toLowerCase() + value.slice(1).replaceAll(/[^a-zA-Z0-9]/g, '');
 }

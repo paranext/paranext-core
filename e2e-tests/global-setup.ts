@@ -46,7 +46,7 @@ function waitForPort(port: number, timeout: number): Promise<void> {
   });
 }
 
-async function globalSetup(config: FullConfig): Promise<void> {
+export default async function globalSetup(config: FullConfig): Promise<void> {
   const rootDir = path.resolve(__dirname, '..');
 
   // Fail fast if Platform.Bible is already running (single-instance lock will
@@ -122,5 +122,3 @@ async function globalSetup(config: FullConfig): Promise<void> {
     console.log('Renderer dev server is ready.');
   }
 }
-
-export default globalSetup;

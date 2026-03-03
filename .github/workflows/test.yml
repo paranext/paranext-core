@@ -151,15 +151,6 @@ jobs:
           npm run build:main
           npm run typecheck
 
-      - name: Validate utility registry
-        if: ${{ matrix.os == env.OS_LINUX }}
-        run: |
-          if [ -d ".context/scripts" ]; then
-            npm run validate:utility-registry
-          else
-            echo "Skipping: .context/scripts directory not found"
-          fi
-
       - name: Build
         run: npm run build
 

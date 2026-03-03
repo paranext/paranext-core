@@ -9,7 +9,6 @@ namespace Paranext.Analyzers.Rules;
 /// <summary>
 /// PNX008: Ban 'dynamic' keyword everywhere — use concrete types instead.
 /// The 'dynamic' keyword bypasses compile-time type checking and causes serialization issues.
-/// See: Paranext-Core-Patterns.md
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class BanDynamicAnalyzer : DiagnosticAnalyzer

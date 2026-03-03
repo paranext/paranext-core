@@ -1,10 +1,7 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 import { isValidExtensionIdentifier, suggestFix } from '../utils/naming-patterns';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
 
 /**
  * ESLint rule: paranext/command-naming
@@ -14,8 +11,6 @@ const createRule = ESLintUtils.RuleCreator(
  *
  * Valid: 'platformScripture.openFind' Invalid: 'PlatformScripture.OpenFind',
  * 'platform-scripture.open-find'
- *
- * See: .context/standards/Paranext-Core-Patterns.md "Command Naming" section
  */
 export default createRule({
   name: 'command-naming',

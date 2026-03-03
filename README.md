@@ -382,6 +382,20 @@ npm test -- <path/to/test-file.test.ts> --watch
 
 You can also use the [recommended VS Code extensions](#vs-code-extension-options) to run tests there.
 
+To run playwright-based UI tests that also run on GitHub PRs, you can run:
+
+```bash
+npm run test:e2e:smoke
+```
+
+All `test:e2e:*` scripts are there for running variations of the playwright end-to-end tests.
+
+- `test:e2e:smoke` runs a single instance of the application, and all tests share that instance
+- `test:e2e:smoke-wsl` runs the same smoke tests using a "hidden UI" on Linux instead of a visible UI
+- `test:e2e:isolated` runs tests that require a separate application instance for each test
+- `test:e2e-cdp` runs tests that require the application UI to be open already
+- `test:e2e:all` runs all configured tests
+
 ## Storybook
 
 To run Storybook locally:

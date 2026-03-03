@@ -9,7 +9,6 @@ namespace Paranext.Analyzers.Rules;
 /// <summary>
 /// PNX004: Only one type per file is allowed, with an exception for records
 /// that are exclusively used by another record in the same file.
-/// See: Paranext-Core-Patterns.md "File Organization Patterns" section.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class OneTypePerFileAnalyzer : DiagnosticAnalyzer

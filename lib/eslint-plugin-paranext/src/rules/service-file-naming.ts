@@ -1,10 +1,7 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 import * as path from 'path';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
 
 type MessageIds = 'serviceNotInServicesDir' | 'serviceModelNotInDir' | 'serviceWrongExtension';
 
@@ -19,8 +16,6 @@ type MessageIds = 'serviceNotInServicesDir' | 'serviceModelNotInDir' | 'serviceW
  *
  * The .service-model.ts pattern is used for files that define models/types associated with a
  * service.
- *
- * See: .context/standards/Paranext-Core-Patterns.md "Extension Structure"
  */
 export default createRule<[], MessageIds>({
   name: 'service-file-naming',

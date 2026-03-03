@@ -1,9 +1,6 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Code-Style-Guide.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
 
 /**
  * Patterns that indicate a localized string reference:
@@ -19,15 +16,9 @@ function isLocalizedValue(node: TSESTree.Node): boolean {
     return true;
   }
 
-  // Member expression like localizedStrings['key'] or localizedStrings.key
+  // Member expression like localizedStrings['key'] or obj.prop — any member expression is likely dynamic
   if (node.type === 'MemberExpression') {
-    if (
-      node.object.type === 'Identifier' &&
-      node.object.name.toLowerCase().includes('localizedstrings')
-    ) {
-      return true;
-    }
-    return true; // Any member expression is likely dynamic
+    return true;
   }
 
   // Call expression (function call result)

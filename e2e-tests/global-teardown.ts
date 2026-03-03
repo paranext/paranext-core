@@ -7,7 +7,7 @@ async function globalTeardown(config: FullConfig): Promise<void> {
   const rootDir = path.resolve(__dirname, '..');
 
   // Kill the renderer dev server if we started it
-  const pidFile = path.join(rootDir, 'e2e-tests/.dev-server.pid');
+  const pidFile = path.join(rootDir, 'e2e-tests', '.dev-server.pid');
   if (fs.existsSync(pidFile)) {
     const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
     if (Number.isNaN(pid)) {

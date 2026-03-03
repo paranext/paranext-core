@@ -1,18 +1,13 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 import { isValidExtensionIdentifier, suggestFix } from '../utils/naming-patterns';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Paranext-Core-Patterns.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
 
 /**
  * ESLint rule: paranext/setting-naming
  *
  * Enforces that setting names follow the pattern: 'extensionName.settingName' where both parts are
  * camelCase.
- *
- * See: .context/standards/Paranext-Core-Patterns.md "Naming Conventions Summary"
  */
 export default createRule({
   name: 'setting-naming',

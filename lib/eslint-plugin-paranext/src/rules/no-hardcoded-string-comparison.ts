@@ -1,9 +1,6 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Code-Style-Guide.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
 
 /**
  * Minimum length for a string to be flagged as potentially hardcoded English. Short strings like
@@ -62,7 +59,7 @@ function isTechnicalString(str: string): boolean {
   if (/^https?:\/\//.test(str)) return true;
 
   // Localization key patterns like %key%
-  if (/^%[\w_]+%$/.test(str)) return true;
+  if (/^%[a-zA-Z0-9_]+%$/.test(str)) return true;
 
   // camelCase or PascalCase identifiers
   if (/^[a-z][a-zA-Z0-9]*$/.test(str) || /^[A-Z][a-zA-Z0-9]*$/.test(str)) {

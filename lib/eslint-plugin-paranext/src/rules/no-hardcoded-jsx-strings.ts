@@ -1,9 +1,6 @@
 import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 
-const createRule = ESLintUtils.RuleCreator(
-  (name) =>
-    `https://github.com/paranext/paranext-core/blob/ai/main/.context/standards/Code-Style-Guide.md#${name}`,
-);
+const createRule = ESLintUtils.RuleCreator(() => '');
 
 /**
  * Minimum length for a string to be considered "content" that should be localized. Strings of 3
@@ -46,9 +43,24 @@ function isTechnicalString(str: string): boolean {
   if (/^[A-Z_]+$/.test(str)) return true;
 
   // Localization keys like %key% or %key_name%
-  if (/^%[\w_]+%$/.test(str)) return true;
+  if (/^%[a-zA-Z0-9_]+%$/.test(str)) return true;
 
   return false;
+}
+
+function shouldReport(value: string): boolean {
+  const trimmed = value.trim();
+
+  // Too short to be meaningful content
+  if (trimmed.length < MIN_CONTENT_LENGTH) return false;
+
+  // Explicitly allowed
+  if (ALLOWED_STRINGS.has(trimmed)) return false;
+
+  // Technical/non-user-facing
+  if (isTechnicalString(trimmed)) return false;
+
+  return true;
 }
 
 /**
@@ -78,21 +90,6 @@ export default createRule({
   defaultOptions: [],
 
   create(context) {
-    function shouldReport(value: string): boolean {
-      const trimmed = value.trim();
-
-      // Too short to be meaningful content
-      if (trimmed.length < MIN_CONTENT_LENGTH) return false;
-
-      // Explicitly allowed
-      if (ALLOWED_STRINGS.has(trimmed)) return false;
-
-      // Technical/non-user-facing
-      if (isTechnicalString(trimmed)) return false;
-
-      return true;
-    }
-
     return {
       // JSX text content: <div>Hello World</div>
       JSXText(node: TSESTree.JSXText) {
