@@ -1,5 +1,5 @@
 import { Usj, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
-import papi, { logger, ProjectDataProviderEngine } from '@papi/backend';
+import { logger, ProjectDataProviderEngine } from '@papi/backend';
 import { IProjectDataProviderEngine } from '@papi/core';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
@@ -30,60 +30,99 @@ import { USFM_VERSE_TEXT_MARKERS_SET } from '../find/usfm-verse-text-markers';
 import { correctUsjVersion } from './scripture.util';
 
 /**
- * Fallback character class matching base (word-forming) characters, used when the project's
- * `CharacterCategorizer` settings cannot be loaded. Mirrors Paratext 9's
- * `CharacterCategorizer.BaseCharacterRegex` (uppercase, lowercase, title-case, and other letters).
- * `\p{Cn}` (unassigned) is intentionally excluded: it is part of P9's definition but is not a valid
- * ECMAScript Unicode property escape and would throw at regex construction time. Extra per-language
- * base characters from the project's `CharacterCategorizer` are not included here; they are fetched
- * from the project settings and used when available. Requires the `u` flag.
+ * Character categorizer settings fetched from the project's `platformScripture.*` settings, used to
+ * build project-specific find/replace regex patterns.
  */
-const BASE_CHAR_CLASS = '\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}';
+type CharacterCategorizer = {
+  /** Content of the character class matching word-forming base characters */
+  baseCharacterClassRegex: string;
+  /** Content of the character class matching diacritic/combining characters */
+  diacriticCharacterClassRegex: string;
+  /**
+   * Full regex alternation pattern for word-medial characters (characters that can appear inside a
+   * word but not at a boundary). May be an empty string.
+   */
+  wordMedialCharacterRegex: string;
+  /**
+   * Whether the project preserves invisible characters (e.g. NBSP, U+00A0) literally in USFM. When
+   * `false` (the Paratext default), NBSP is stored as `~` in USFM, so `~` represents a non-breaking
+   * space and is treated as whitespace during find. When `true`, invisible characters are literal
+   * in USFM, so `~` is just a tilde.
+   */
+  allowInvisibleCharacters: boolean;
+};
 
 /**
- * Content of a character class matching diacritic (combining) characters. Mirrors Paratext 9's
- * `CharacterCategorizer.DiacriticCharacterRegex`: non-spacing marks, spacing combining marks, and
- * modifier letters. Extra per-language diacritics are not included. Requires the `u` flag.
+ * Whitespace/invisible character class string for use inside regex patterns. Standard whitespace
+ * (`\s`), Zero-width Space (U+200B), Zero-width Non-joiner (U+200C), Zero-width Joiner (U+200D),
+ * Left-to-Right Mark (U+200E), Right-to-Left Mark (U+200F), and Word Joiner (U+2060). Does not
+ * include the square brackets that are required to treat it as a character class in a regex
+ * string.
  */
-const DIACRITIC_CLASS = '\\p{Mn}\\p{Mc}\\p{Lm}';
+const WHITESPACE_CLASS = '\\s\\u200B-\\u200F\\u2060';
 
 /**
- * Regex for detecting whitespace and invisible characters. Approximates Paratext 9's
- * `CharacterCategorizer.WhitespaceAndInvisibleRegex`. Tilde (`~`) is handled separately as Paratext
- * treats it as whitespace when `AllowInvisibleChars` is false (the default).
+ * Regex for testing whether a single character is whitespace or invisible. Requires the `u` flag so
+ * that supplementary-plane characters (code points > U+FFFF, represented as two UTF-16 code units)
+ * are treated as a single code point rather than two code units.
  */
-const WHITESPACE_CHAR = /^[\s\u00A0\u00AD\u200B\uFEFF]$/;
+const WHITESPACE_CHAR = new RegExp(`^[${WHITESPACE_CLASS}]$`, 'u');
 
 /**
- * Whitespace/invisible character class string for use inside regex patterns. Paired with `~` to
- * cover Paratext's tilde-as-whitespace behavior.
- */
-const WHITESPACE_CLASS = '[\\s\\u00A0\\u00AD\\u200B\\uFEFF]';
-
-/**
- * Pattern that matches 0–3 USFM markers (or attribute spans) between search characters, allowing a
- * find to succeed across text that has inline markers embedded within it (e.g., Ruby markup).
- * Limited to 3 repetitions to prevent catastrophic backtracking (PT-16898). Matches the pattern in
- * Paratext 9's `CreateSearchRegex`.
- */
-const USFM_MARKER_BETWEEN = String.raw`(?:\s*(\\[\+a-zA-Z0-9\-\\]+[* ])|(\|[^\\]*?\\[\+a-zA-Z0-9\-]+?\*)){0,3}`;
-
-/**
- * Builds a JavaScript {@link RegExp} implementing Paratext 9's find/replace search semantics.
+ * Code-point ranges from Paratext 9's `CharacterCategorizer.singleCharacterWords`. Characters in
+ * these ranges form a word all by themselves (CJK ideographs, Hiragana, Katakana, etc.) and do not
+ * rely on inter word spacing, so standard word-boundary assertions do not apply to them.
  *
- * Mirrors `CreateSearchRegex` in Paratext 9's `FindReplaceText.cs`. The exact Unicode category
- * classes from `CharacterCategorizer` are used (see {@link BASE_CHAR_CLASS} and
- * {@link DIACRITIC_CLASS}). The following simplifications apply vs. the full P9 implementation:
+ * Stored as `[start, end]` inclusive pairs.
+ */
+const SINGLE_CHARACTER_WORD_RANGES: readonly [number, number][] = [
+  [0x2e80, 0x2fd0],
+  [0x3004, 0x3006],
+  [0x3012, 0x3013],
+  [0x3020, 0x302f],
+  [0x3031, 0x303e],
+  [0x3040, 0x30ff], // Hiragana and Katakana (syllabics without inter word space)
+  [0x3200, 0x9ff0],
+  [0xf900, 0xfaf0],
+  [0xfe30, 0xfe40],
+];
+
+/**
+ * Returns true if the given Unicode code point falls within one of the single-character-word ranges
+ * as defined in Paratext 9's `CharacterCategorizer.IsSingleCharacterWord`.
+ */
+function isSingleCharacterWord(codePoint: number): boolean {
+  return SINGLE_CHARACTER_WORD_RANGES.some(
+    ([start, end]) => codePoint >= start && codePoint <= end,
+  );
+}
+
+/**
+ * Builds a JavaScript RegExp that mirrors Paratext 9's find/replace search logic.
  *
- * - No `WordMedialRegex` (equivalent to `emptyWordMedialRegex === true`)
- * - No surrogate-pair-specific lookbehind (the JS `u` flag handles surrogate pairs natively)
- * - `IsSingleCharacterWord` always returns `false` (word boundaries always applied)
- * - `DiacriticsFollowBaseCharacters` assumed `true` (standard Unicode encoding order)
+ * The Unicode category classes from `CharacterCategorizer` are fetched from project settings (with
+ * defaults defined in `projectSettings.json`). The following simplifications apply vs. the full P9
+ * implementation:
+ *
+ * - WordMedialRegex is provided via `characterCategorizer.wordMedialCharacterRegex`; defaults to
+ *   empty string when the project has no word-medial characters. P9's default
+ *   `CharacterCategorizer` constructor uses `"-"` as a word-medial character; this only differs if
+ *   P9 does not export that default to project settings.
+ * - `DiacriticsFollowBaseCharacters` is assumed true (standard Unicode encoding order). P9 supports
+ *   false for legacy hacked fonts where diacritics precede the base character, but that encoding is
+ *   outside the scope of this implementation.
+ * - Case-insensitive search uses the JS regex `i` flag rather than P9's per-character
+ *   `(?:Upper|lower)` alternations built from project-specific case mappings
+ *   (`CharacterCategorizer.CreateCaseInsensitiveRegex`). Custom case mappings only exist for legacy
+ *   hacked fonts, which are outside the scope of this implementation.
  *
  * @param options The find options controlling search behavior
- * @returns A compiled {@link RegExp} ready for use in {@link UsjReaderWriter.search}
+ * @returns A compiled RegExp ready for use in UsjReaderWriter.search
  */
-function buildSearchRegex(options: FindOptions): RegExp {
+function buildSearchRegex(
+  options: FindOptions,
+  characterCategorizer: CharacterCategorizer,
+): RegExp {
   const {
     searchString,
     useRegex,
@@ -91,19 +130,32 @@ function buildSearchRegex(options: FindOptions): RegExp {
     wordRestriction,
     ignoreDiacritics,
     ignoreWhitespaceDifferences: ignoreWhitespace,
-    ignoreUsfmMarkers,
-    characterCategorizer,
   } = options;
 
-  // Resolve character class strings: use project-specific values when provided, otherwise fall
-  // back to the built-in Unicode property approximations.
-  const baseClass = characterCategorizer?.baseCharacterClassRegex ?? BASE_CHAR_CLASS;
-  const diacriticClass = characterCategorizer?.diacriticCharacterClassRegex ?? DIACRITIC_CLASS;
-  const wordMedial = characterCategorizer?.wordMedialCharacterRegex ?? '';
+  const {
+    baseCharacterClassRegex: baseClass,
+    diacriticCharacterClassRegex: diacriticClass,
+    wordMedialCharacterRegex: wordMedial,
+    allowInvisibleCharacters,
+  } = characterCategorizer;
 
-  // Build the word-char pattern used in lookbehind/lookahead.
-  // If WordMedialRegex is non-empty, add it as an alternation: (?<![base][diacritic]|wordMedial)
-  // (mirrors C#'s else branch when emptyWordMedialRegex is false).
+  // Detect if the search string contains supplementary-plane characters (code points > U+FFFF). In
+  // UTF-16 these are encoded as surrogate pairs, so a high surrogate in the string is the
+  // reliable indicator. Mirrors P9's `isSurrogatePairSearch = searchFor.Any(char.IsHighSurrogate)`
+  // in `ScrLanguage.CreateSearchRegex`. When true, word boundaries use the positive-lookaround
+  // surrogate path rather than the negative-lookaround non-surrogate path: surrogate code units
+  // are not word characters, so the standard negative-lookahead/lookbehind boundary logic would
+  // misfire on them; the positive path avoids this by anchoring to whitespace/punctuation instead.
+  const isSurrogatePairSearch = /[\uD800-\uDBFF]/.test(searchString);
+
+  // Surrogate-path word boundaries (positive lookaround): the match must be preceded/followed by
+  // start/end of string, whitespace, or punctuation/symbol characters. Requires u flag.
+  const punctSymbolClass = String.raw`[\s\p{P}\p{S}]`;
+  const surrogateWordLookbehind = `(?:^|(?<=${punctSymbolClass}))`;
+  const surrogateWordLookahead = `(?=$|${punctSymbolClass})`;
+
+  // Build the word-char pattern used in the non-surrogate-path negative lookbehind/lookahead.
+  // If WordMedialRegex is non-empty, add it as an alternation: (?<![base][diacritic]|wordMedial).
   const wordCharClass = `[${baseClass}${diacriticClass}]`;
   const wordBoundaryNegLookbehind = wordMedial
     ? `(?<!${wordCharClass}|${wordMedial})`
@@ -115,26 +167,31 @@ function buildSearchRegex(options: FindOptions): RegExp {
   // Build a RegExp to test individual code points for diacritics (used in ignoreDiacritics loop).
   const isDiacritic = new RegExp(`^[${diacriticClass}]$`, 'u');
 
+  // If any code point in the search string is a single-character-word character (CJK ideograph,
+  // Hiragana, Katakana, etc.), word-boundary assertions are skipped. These scripts do not delimit
+  // words with spaces, so the standard non-word-char lookaround logic does not apply.
+  // Similar to Paratext 9's `IsSingleCharacterWord` check in `CreateSearchRegex`.
+  const containsSingleCharacterWord = [...searchString].some((char) => {
+    const cp = char.codePointAt(0);
+    return cp !== undefined && isSingleCharacterWord(cp);
+  });
+
   let regexStr = '';
 
-  // MatchAtBeginningOfWord: negative lookbehind asserting we are not inside a word.
-  // C# path: emptyWordMedialRegex=true → (?<![BaseCharRegex][DiacriticRegex])
-  if (wordRestriction === 'wholeWord' || wordRestriction === 'startOfWord') {
-    regexStr += wordBoundaryNegLookbehind;
-  }
-
-  // IgnoreUsfmMarkers preamble: prevent matching text that is part of a USFM marker name
-  // (e.g. the 'v' in \v should not be a hit when searching for 'v').
-  if (ignoreUsfmMarkers) {
-    regexStr += String.raw`(?<!\\[a-zA-Z0-9\-\+])`;
+  // MatchAtBeginningOfWord: use positive lookaround (surrogate path) or negative lookbehind
+  // (non-surrogate path) to assert we are at a word boundary.
+  if (
+    !containsSingleCharacterWord &&
+    (wordRestriction === 'wholeWord' || wordRestriction === 'startOfWord')
+  ) {
+    regexStr += isSurrogatePairSearch ? surrogateWordLookbehind : wordBoundaryNegLookbehind;
   }
 
   regexStr += '(';
 
   if (useRegex) {
-    // User-supplied regex: insert as-is (mirrors C#'s "regex:" prefix behavior).
-    // ignoreDiacritics / ignoreWhitespace / per-character ignoreUsfmMarkers do not apply,
-    // as the user's expression is assumed to handle those concerns itself.
+    // User-supplied regex: insert as-is ignoreDiacritics / ignoreWhitespace do not apply, as the
+    // user's expression is assumed to handle those concerns itself.
     regexStr += searchString;
   } else {
     // Normalize to NFD so accented characters (e.g. é → e + combining accent) decompose into
@@ -152,27 +209,25 @@ function buildSearchRegex(options: FindOptions): RegExp {
       // Skip combining marks in the search string when ignoreDiacritics is set.
       if (!ignoreDiacritics || !isDiacritic.test(char)) {
         // Determine whether this code point is whitespace / invisible.
-        // Tilde is treated as whitespace (C#: tildeIsWhitespace defaults to true).
-        const isWhiteSpace = WHITESPACE_CHAR.test(char) || char === '~';
+        // When AllowInvisibleChars is false (the default), NBSP is stored as ~ in USFM, so ~ is
+        // treated as whitespace. When true, ~ is a literal tilde, not a whitespace substitute.
+        const isTildeWhitespace = !allowInvisibleCharacters;
+        const isWhiteSpace = WHITESPACE_CHAR.test(char) || (isTildeWhitespace && char === '~');
 
         // Skip consecutive whitespace code points when ignoreWhitespaceDifferences is set.
         if (!(ignoreWhitespace && prevWasWhiteSpace && isWhiteSpace)) {
           let charPattern: string;
           if (ignoreWhitespace && isWhiteSpace) {
-            // Collapse any whitespace run to a single lazy multi-whitespace pattern (including tilde).
-            charPattern = `(${WHITESPACE_CLASS}|~)+?`;
+            // Collapse any whitespace run to a single lazy multi-whitespace pattern (including ~
+            // when it represents NBSP, i.e., when AllowInvisibleChars is false).
+            charPattern = isTildeWhitespace
+              ? `([${WHITESPACE_CLASS}]|~)+?`
+              : `[${WHITESPACE_CLASS}]+?`;
           } else {
             charPattern = escapeStringRegexp(char);
           }
 
           regexStr += charPattern;
-
-          // Allow 0–3 USFM markers between this character and the next.
-          // C# condition: not after a leading whitespace (!(isWhiteSpace && i == 0)),
-          //               not after the last code point (i < uStr.Length - 1).
-          if (!(isWhiteSpace && i === 0) && ignoreUsfmMarkers && i < chars.length - 1) {
-            regexStr += USFM_MARKER_BETWEEN;
-          }
 
           // Allow diacritics after each base character when ignoreDiacritics is set.
           // C# assumes DiacriticsFollowBaseCharacters=true (standard Unicode), so no leading [M]*
@@ -189,14 +244,26 @@ function buildSearchRegex(options: FindOptions): RegExp {
 
   regexStr += ')';
 
-  // MatchAtEndOfWord: negative lookahead asserting the match does not continue into a word.
-  if (wordRestriction === 'wholeWord' || wordRestriction === 'endOfWord') {
-    regexStr += wordBoundaryNegLookahead;
+  // MatchAtEndOfWord: use positive lookahead (surrogate path) or negative lookahead (non-surrogate
+  // path) to assert the match does not continue into a word.0
+  if (
+    !containsSingleCharacterWord &&
+    (wordRestriction === 'wholeWord' || wordRestriction === 'endOfWord')
+  ) {
+    regexStr += isSurrogatePairSearch ? surrogateWordLookahead : wordBoundaryNegLookahead;
   }
 
-  // The `u` flag is required for \p{} Unicode property escapes used in word boundaries and
-  // the diacritic class.
-  const needsUnicodeFlag = !!(wordRestriction && wordRestriction !== 'none') || !!ignoreDiacritics;
+  // The `u` flag is required for:
+  //  - \p{} Unicode property escapes in word boundaries (both paths: \p{P}/\p{S} for surrogate,
+  //    base/diacritic classes for non-surrogate) and the diacritic class.
+  //  - The whitespace character class ([WHITESPACE_CLASS]) when ignoreWhitespace is active, so
+  //    that the class is evaluated at code-point granularity (supplementary-plane characters are
+  //    treated as single code points, not pairs of code units). Not applied in the useRegex path
+  //    to avoid forcing u-mode onto user-supplied patterns.
+  const needsUnicodeFlag =
+    (!containsSingleCharacterWord && !!(wordRestriction && wordRestriction !== 'none')) ||
+    (!!ignoreDiacritics && !useRegex) ||
+    (!!ignoreWhitespace && !useRegex);
   const flags = `${caseInsensitive ? 'i' : ''}g${needsUnicodeFlag ? 'u' : ''}`;
 
   return new RegExp(regexStr, flags);
@@ -229,11 +296,13 @@ export const SCRIPTURE_FINDER_PROJECT_INTERFACES = [
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
 // needs to be used in ProjectMetadata as not readonly :p
 export const SCRIPTURE_FINDER_OVERLAY_PROJECT_INTERFACES = [
+  'platform.base',
   'platformScripture.USX_Book',
   'platformScripture.USX_Chapter',
   'platformScripture.USFM_Book',
   'platformScripture.USFM_Chapter',
 ] as const satisfies [
+  'platform.base',
   'platformScripture.USX_Book',
   'platformScripture.USX_Chapter',
   'platformScripture.USFM_Book',
@@ -278,9 +347,6 @@ export class ScriptureFinderProjectDataProviderEngine
   extends ProjectDataProviderEngine<typeof SCRIPTURE_FINDER_PROJECT_INTERFACES>
   implements IProjectDataProviderEngine<typeof SCRIPTURE_FINDER_PROJECT_INTERFACES>
 {
-  /** The ID of the project this engine serves, used to fetch project settings */
-  readonly #projectId: string;
-
   /** The PDPs this layering PDP needs to function */
   readonly #pdps: ScriptureFinderOverlayPDPs;
 
@@ -311,14 +377,17 @@ export class ScriptureFinderProjectDataProviderEngine
   /** Flag tracking whether this PDPE has been disposed */
   #isDisposed = false;
 
+  /** Cached character categorizer settings, `undefined` until first fetched. */
+  #cachedCharacterCategorizer: CharacterCategorizer | undefined = undefined;
+
+  /** Mutex to prevent concurrent fetches of the character categorizer settings. */
+  readonly #characterCategorizerMutex = new Mutex();
+
   /**
-   * Promise that resolves to the project's character categorizer settings fetched from
-   * ProjectSettingTypes via the overlay PDP. Resolves to `undefined` if the settings cannot be
-   * fetched (error is logged), in which case buildSearchRegex falls back to the built-in Unicode
-   * property approximations. Kicked off in the constructor so the result is typically available by
-   * the time beginFindJob is first called.
+   * Promise for the character categorizer settings subscription unsubscribers. Resolves to
+   * `undefined` if the subscriptions failed (error is logged in the constructor).
    */
-  #characterCategorizerPromise: Promise<FindOptions['characterCategorizer']>;
+  #characterCategorizerSettingsUnsubscriberPromise: Promise<UnsubscriberAsync[] | undefined>;
 
   /**
    * Promise for the book USX subscription unsubscriber. Resolves to `undefined` if the subscription
@@ -337,14 +406,49 @@ export class ScriptureFinderProjectDataProviderEngine
    *
    * @param pdpsToOverlay - Underlying project data providers that provide book and chapter data.
    */
-  constructor(projectId: string, pdpsToOverlay: ScriptureFinderOverlayPDPs) {
+  constructor(pdpsToOverlay: ScriptureFinderOverlayPDPs) {
     super();
-    this.#projectId = projectId;
     this.#pdps = pdpsToOverlay;
 
-    // Begin fetching character categorizer settings immediately so they're ready (or nearly so)
-    // by the time beginFindJob is first called.
-    this.#characterCategorizerPromise = this.#fetchCharacterCategorizer();
+    // Subscribe to character categorizer settings changes to invalidate the cache when they change
+    this.#characterCategorizerSettingsUnsubscriberPromise = (async () => {
+      const pdp = pdpsToOverlay['platform.base'];
+      return Promise.all([
+        pdp.subscribeSetting(
+          'platformScripture.baseCharacterClassRegex',
+          () => {
+            this.#invalidateCharacterCategorizerCache();
+          },
+          { retrieveDataImmediately: false },
+        ),
+        pdp.subscribeSetting(
+          'platformScripture.diacriticCharacterClassRegex',
+          () => {
+            this.#invalidateCharacterCategorizerCache();
+          },
+          { retrieveDataImmediately: false },
+        ),
+        pdp.subscribeSetting(
+          'platformScripture.wordMedialCharacterRegex',
+          () => {
+            this.#invalidateCharacterCategorizerCache();
+          },
+          { retrieveDataImmediately: false },
+        ),
+        pdp.subscribeSetting(
+          'platformScripture.allowInvisibleCharacters',
+          () => {
+            this.#invalidateCharacterCategorizerCache();
+          },
+          { retrieveDataImmediately: false },
+        ),
+      ]);
+    })().catch((e) => {
+      logger.error(
+        `Scripture Finder PDP failed to subscribe to character categorizer settings for cache invalidation! ${e}`,
+      );
+      return undefined;
+    });
 
     // Subscribe to book-level USX changes for cache invalidation
     this.#bookUsxUnsubscriberPromise = this.#pdps['platformScripture.USX_Book'].subscribeBookUSX(
@@ -401,19 +505,12 @@ export class ScriptureFinderProjectDataProviderEngine
       if (scope.chapter !== undefined && scope.chapter <= 0) throw new Error('Chapter must be > 0');
     });
 
-    // If the caller did not supply characterCategorizer, use the project's own settings so that
-    // word-boundary and diacritic handling use the project-specific character classes rather than
-    // the generic Unicode property approximations.
-    const resolvedOptions: FindOptions = findOptions.characterCategorizer
-      ? findOptions
-      : { ...findOptions, characterCategorizer: await this.#characterCategorizerPromise };
-
     const jobId = newGuid();
     const job: FindJob = {
       jobId,
       status: 'running',
       percentComplete: 0,
-      options: { ...resolvedOptions },
+      options: { ...findOptions },
       results: [],
       totalResultsCount: 0,
       startTime: performance.now(),
@@ -738,62 +835,83 @@ export class ScriptureFinderProjectDataProviderEngine
     // only add the unsubscriber if it exists.
     const bookUnsub = await this.#bookUsxUnsubscriberPromise;
     const chapterUnsub = await this.#chapterUsxUnsubscriberPromise;
+    const settingsUnsubs = await this.#characterCategorizerSettingsUnsubscriberPromise;
     if (bookUnsub) unsubscriberList.add(bookUnsub);
     if (chapterUnsub) unsubscriberList.add(chapterUnsub);
+    if (settingsUnsubs) settingsUnsubs.forEach((u) => unsubscriberList.add(u));
 
     // Clear caches
     this.#bookCache.clear();
     this.#chapterCache.clear();
+    this.#cachedCharacterCategorizer = undefined;
 
     // Dispose of the mutex map to cancel any pending operations
     this.#readerWriterMutexMap.dispose();
 
-    // Cancel the replace mutex to cancel any pending replace operations
+    // Cancel the replace mutex and character categorizer mutex to cancel any pending operations
     this.#replaceMutex.cancel();
+    this.#characterCategorizerMutex.cancel();
 
     return unsubscriberList.runAllUnsubscribers();
   }
 
   /**
-   * Fetches the project's character categorizer settings from the overlay PDP. Called once in the
-   * constructor; the result is cached in characterCategorizerPromise.
+   * Fetches the project's character categorizer settings from the overlay PDP. Called by
+   * `#getOrCreateCachedCharacterCategorizer` on first use (and after cache invalidation).
    *
-   * Returns `undefined` (and logs a warning) if any setting is missing or the fetch fails, so
-   * buildSearchRegex falls back to the built-in Unicode property approximations.
-   *
-   * @returns The project's character categorizer settings, or `undefined` on failure
+   * @returns The project's character categorizer settings
+   * @throws If any required setting could not be retrieved
    */
-  async #fetchCharacterCategorizer(): Promise<FindOptions['characterCategorizer']> {
-    try {
-      // Use the platform.base PDP so getSetting is available with proper TypeScript typing.
-      const pdp = await papi.projectDataProviders.get('platform.base', this.#projectId);
-      const [baseCharacterClassRegex, diacriticCharacterClassRegex, wordMedialCharacterRegex] =
-        await Promise.all([
-          pdp.getSetting('platformScripture.baseCharacterClassRegex'),
-          pdp.getSetting('platformScripture.diacriticCharacterClassRegex'),
-          pdp.getSetting('platformScripture.wordMedialCharacterRegex'),
-        ]);
+  async #fetchCharacterCategorizer(): Promise<CharacterCategorizer> {
+    const pdp = this.#pdps['platform.base'];
+    const [
+      baseCharacterClassRegex,
+      diacriticCharacterClassRegex,
+      wordMedialCharacterRegex,
+      allowInvisibleCharacters,
+    ] = await Promise.all([
+      pdp.getSetting('platformScripture.baseCharacterClassRegex'),
+      pdp.getSetting('platformScripture.diacriticCharacterClassRegex'),
+      pdp.getSetting('platformScripture.wordMedialCharacterRegex'),
+      pdp.getSetting('platformScripture.allowInvisibleCharacters'),
+    ]);
 
-      if (
-        baseCharacterClassRegex === undefined ||
-        diacriticCharacterClassRegex === undefined ||
-        wordMedialCharacterRegex === undefined
-      ) {
-        logger.warn(
-          'Scripture Finder PDPE: one or more character categorizer settings were undefined; ' +
-            'word-boundary and diacritic handling will use Unicode property approximations.',
-        );
-        return undefined;
-      }
+    if (typeof baseCharacterClassRegex !== 'string')
+      throw new Error(`Did not get 'platformScripture.baseCharacterClassRegex' setting`);
+    if (typeof diacriticCharacterClassRegex !== 'string')
+      throw new Error(`Did not get 'platformScripture.diacriticCharacterClassRegex' setting`);
+    if (typeof wordMedialCharacterRegex !== 'string')
+      throw new Error(`Did not get 'platformScripture.wordMedialCharacterRegex' setting`);
+    if (typeof allowInvisibleCharacters !== 'boolean')
+      throw new Error(`Did not get 'platformScripture.allowInvisibleCharacters' setting`);
 
-      return { baseCharacterClassRegex, diacriticCharacterClassRegex, wordMedialCharacterRegex };
-    } catch (e) {
-      logger.warn(
-        `Scripture Finder PDPE failed to fetch character categorizer settings; word-boundary and ` +
-          `diacritic handling will use Unicode property approximations: ${getErrorMessage(e)}`,
-      );
-      return undefined;
-    }
+    return {
+      baseCharacterClassRegex,
+      diacriticCharacterClassRegex,
+      wordMedialCharacterRegex,
+      allowInvisibleCharacters,
+    };
+  }
+
+  /**
+   * Gets or creates the cached character categorizer settings. Fetches settings on first call and
+   * returns the cached value on subsequent calls. The cache is invalidated via
+   * `#invalidateCharacterCategorizerCache` when a subscribed setting changes.
+   *
+   * @returns The project's character categorizer settings
+   */
+  async #getOrCreateCachedCharacterCategorizer(): Promise<CharacterCategorizer> {
+    return this.#characterCategorizerMutex.runExclusive(async () => {
+      if (this.#cachedCharacterCategorizer) return this.#cachedCharacterCategorizer;
+      const result = await this.#fetchCharacterCategorizer();
+      this.#cachedCharacterCategorizer = result;
+      return result;
+    });
+  }
+
+  /** Clears the character categorizer cache so the next call fetches fresh settings. */
+  #invalidateCharacterCategorizerCache(): void {
+    this.#cachedCharacterCategorizer = undefined;
   }
 
   /**
@@ -860,14 +978,20 @@ export class ScriptureFinderProjectDataProviderEngine
 
   /** Find results within a single scope. Stop requests will not stop a scope in progress. */
   async #findInScope(scope: FindScope, job: FindJob): Promise<FindResult[]> {
-    // Get the cached reader writer for this scope
-    const usj = await this.#getOrCreateCachedReaderWriter(scope.bookId, scope.chapter);
+    // Fetch the reader writer and character categorizer in parallel
+    const [usj, characterCategorizer] = await Promise.all([
+      this.#getOrCreateCachedReaderWriter(scope.bookId, scope.chapter),
+      this.#getOrCreateCachedCharacterCategorizer(),
+    ]);
 
     const markerStylesToInclude = job.options.verseTextOnly
       ? USFM_VERSE_TEXT_MARKERS_SET
       : undefined;
 
-    const matches = usj.search(buildSearchRegex(job.options), markerStylesToInclude);
+    const matches = usj.search(
+      buildSearchRegex(job.options, characterCategorizer),
+      markerStylesToInclude,
+    );
 
     return matches.map((match) => {
       return {
