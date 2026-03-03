@@ -504,44 +504,18 @@ declare module 'platform-scripture' {
      * If true, diacritical marks (Unicode combining characters, `\p{M}`) in the search string are
      * ignored, and matches succeed regardless of diacritics present in the document text. Matches
      * Paratext 9's `FindReplaceOptions.IgnoreDiacritics`.
+     *
+     * Has no effect when `useRegex` is true, as the user-supplied pattern is used as-is.
      */
     ignoreDiacritics?: boolean;
     /**
      * If true, any sequence of whitespace or invisible characters in either the search string or
      * the document is treated as equivalent to any other such sequence. Matches Paratext 9's
      * `FindReplaceOptions.IgnoreWhitespaceDifferences`.
+     *
+     * Has no effect when `useRegex` is true, as the user-supplied pattern is used as-is.
      */
     ignoreWhitespaceDifferences?: boolean;
-    /**
-     * If true, USFM markers embedded within the matched text are skipped during the search,
-     * allowing a match to span across inline markers. Also prevents matches that are part of a
-     * marker name. Matches Paratext 9's `FindReplaceOptions.IgnoreUsfmMarkers`.
-     */
-    ignoreUsfmMarkers?: boolean;
-    /**
-     * Project-specific character class strings from Paratext 9's `CharacterCategorizer`. When
-     * provided, these override the built-in Unicode property approximations used for word-boundary
-     * detection (`wordRestriction`) and diacritic handling (`ignoreDiacritics`). Fetch via the
-     * project settings `platformScripture.baseCharacterClassRegex`,
-     * `platformScripture.diacriticCharacterClassRegex`, and
-     * `platformScripture.wordMedialCharacterRegex`.
-     *
-     * `baseCharacterClassRegex` and `diacriticCharacterClassRegex` are regex character class bodies
-     * (content that goes inside `[]`) safe for ECMAScript regex with the `u` flag.
-     * `wordMedialCharacterRegex` is a full alternation pattern (not wrapped in `[]`) and may be an
-     * empty string for scripts with no word-medial characters.
-     */
-    characterCategorizer?: {
-      /** Content of the `[]` character class matching word-forming base characters */
-      baseCharacterClassRegex: string;
-      /** Content of the `[]` character class matching diacritic/combining characters */
-      diacriticCharacterClassRegex: string;
-      /**
-       * Full regex alternation pattern for word-medial characters (characters that can appear
-       * inside a word but not at a boundary). May be an empty string.
-       */
-      wordMedialCharacterRegex: string;
-    };
   };
 
   /** Represents a single result from a find operation. */
@@ -1761,5 +1735,19 @@ declare module 'papi-shared-types' {
      * stored in Settings.xml. May be an empty string for scripts with no word-medial characters.
      */
     'platformScripture.wordMedialCharacterRegex': string;
+
+    /**
+     * Whether the project allows invisible characters such as non-breaking space (U+00A0, NBSP) to
+     * appear literally in USFM text. Corresponds to `ScrText.Settings.AllowInvisibleChars` in
+     * Paratext 9.
+     *
+     * When `false` (the Paratext default), Paratext replaces NBSP with a tilde (`~`) when writing
+     * USFM. In that case, a `~` in USFM text represents a non-breaking space and should be treated
+     * as whitespace during find operations.
+     *
+     * When `true`, invisible characters are preserved literally in USFM. A `~` is then a literal
+     * tilde character, not a whitespace substitute.
+     */
+    'platformScripture.allowInvisibleCharacters': boolean;
   }
 }
