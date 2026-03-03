@@ -81,6 +81,14 @@ describe('suggestFix', () => {
     expect(suggestFix('platform-scripture.open-find')).toBe('platformScripture.openFind');
   });
 
+  it('converts SCREAMING_SNAKE_CASE to camelCase', () => {
+    expect(suggestFix('PLATFORM_SCRIPTURE.OPEN_FIND')).toBe('platformScripture.openFind');
+  });
+
+  it('converts snake_case to camelCase', () => {
+    expect(suggestFix('my_ext.do_thing')).toBe('myExt.doThing');
+  });
+
   it('returns input unchanged if no dot separator', () => {
     expect(suggestFix('noDotHere')).toBe('noDotHere');
   });

@@ -75,10 +75,14 @@ function toCamelCase(value: string): string {
   const parts = value.split(/[^a-zA-Z0-9]+/).filter(Boolean);
   if (parts.length === 0) return value;
 
+  // Normalize all-uppercase parts (SCREAMING_SNAKE_CASE) to lowercase,
+  // but preserve mixed-case parts (PascalCase) as-is
+  const normalized = parts.map((p) => (p === p.toUpperCase() ? p.toLowerCase() : p));
+
   return (
-    parts[0][0].toLowerCase() +
-    parts[0].slice(1) +
-    parts
+    normalized[0][0].toLowerCase() +
+    normalized[0].slice(1) +
+    normalized
       .slice(1)
       .map((p) => p[0].toUpperCase() + p.slice(1))
       .join('')
