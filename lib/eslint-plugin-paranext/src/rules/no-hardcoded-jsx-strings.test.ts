@@ -46,10 +46,10 @@ ruleTester.run('no-hardcoded-jsx-strings', rule, {
       code: `<div title="Close dialog" />`,
       errors: [{ messageId: 'hardcodedString' }],
     },
-    // Expression in user-facing prop (fires from both JSXAttribute and JSXExpressionContainer)
+    // Expression in user-facing prop (reported once by JSXAttribute visitor)
     {
       code: `<img alt={"A beautiful sunset"} />`,
-      errors: [{ messageId: 'hardcodedString' }, { messageId: 'hardcodedString' }],
+      errors: [{ messageId: 'hardcodedString' }],
     },
   ],
 });

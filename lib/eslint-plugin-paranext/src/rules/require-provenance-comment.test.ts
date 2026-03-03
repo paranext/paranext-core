@@ -33,6 +33,41 @@ ruleTester.run('require-provenance-comment', rule, {
       code: `export /* NEW IN PT10 */ function activate() {}`,
       filename: '/extensions/src/my-ext/src/main.ts',
     },
+    // Line comment before export keyword
+    {
+      code: `
+        // PORTED FROM PT9: Paratext/Something.cs
+        export function activate() {}
+      `,
+      filename: '/extensions/src/my-ext/src/main.ts',
+    },
+    // JSDoc comment before export keyword
+    {
+      code: `
+        /** PORTED FROM PT9: Paratext/Something.cs */
+        export function activate() {}
+      `,
+      filename: '/extensions/src/my-ext/src/main.ts',
+    },
+    // Multi-line JSDoc with provenance
+    {
+      code: `
+        /**
+         * Activates the extension.
+         * PORTED FROM PT9: Paratext/Something.cs
+         */
+        export function activate() {}
+      `,
+      filename: '/extensions/src/my-ext/src/main.ts',
+    },
+    // Comment before default export
+    {
+      code: `
+        // NEW IN PT10: Platform-specific implementation
+        export default function activate() {}
+      `,
+      filename: '/extensions/src/my-ext/src/main.ts',
+    },
   ],
   invalid: [
     // Exported function without provenance comment
@@ -44,15 +79,6 @@ ruleTester.run('require-provenance-comment', rule, {
     // Default export without provenance
     {
       code: `export default function activate() {}`,
-      filename: '/extensions/src/my-ext/src/main.ts',
-      errors: [{ messageId: 'missingProvenance' }],
-    },
-    // Comment before export keyword is not detected (rule limitation)
-    {
-      code: `
-        // PORTED FROM PT9: Paratext/Something.cs
-        export function activate() {}
-      `,
       filename: '/extensions/src/my-ext/src/main.ts',
       errors: [{ messageId: 'missingProvenance' }],
     },

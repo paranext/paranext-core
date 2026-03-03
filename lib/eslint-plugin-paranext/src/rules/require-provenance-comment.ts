@@ -70,17 +70,19 @@ export default createRule({
 
     const sourceCode = context.getSourceCode();
 
-    function checkFunction(
-      node: TSESTree.FunctionDeclaration | TSESTree.ArrowFunctionExpression,
-      name: string | null,
-      isExported: boolean,
+    function checkExportedFunction(
+      exportNode: TSESTree.ExportNamedDeclaration | TSESTree.ExportDefaultDeclaration,
+      funcDecl: TSESTree.FunctionDeclaration,
+      name: string,
     ) {
-      if (!isExported || !name) return;
+      // Check comments before the function (between export and function keywords)
+      // AND comments before the export keyword (standard JSDoc position)
+      const commentsBefore = sourceCode.getCommentsBefore(funcDecl);
+      const commentsBeforeExport = sourceCode.getCommentsBefore(exportNode);
 
-      const comments = sourceCode.getCommentsBefore(node);
-      if (!hasProvenanceComment(comments)) {
+      if (!hasProvenanceComment(commentsBefore) && !hasProvenanceComment(commentsBeforeExport)) {
         context.report({
-          node,
+          node: funcDecl,
           messageId: 'missingProvenance',
           data: { name },
         });
@@ -92,7 +94,9 @@ export default createRule({
       ExportNamedDeclaration(node: TSESTree.ExportNamedDeclaration) {
         if (node.declaration?.type === 'FunctionDeclaration') {
           const funcDecl = node.declaration;
-          checkFunction(funcDecl, funcDecl.id?.name ?? null, true);
+          if (funcDecl.id?.name) {
+            checkExportedFunction(node, funcDecl, funcDecl.id.name);
+          }
         }
       },
 
@@ -100,7 +104,7 @@ export default createRule({
       ExportDefaultDeclaration(node: TSESTree.ExportDefaultDeclaration) {
         if (node.declaration.type === 'FunctionDeclaration') {
           const funcDecl = node.declaration;
-          checkFunction(funcDecl, funcDecl.id?.name ?? 'default', true);
+          checkExportedFunction(node, funcDecl, funcDecl.id?.name ?? 'default');
         }
       },
     };

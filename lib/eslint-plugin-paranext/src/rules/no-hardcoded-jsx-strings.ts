@@ -111,6 +111,14 @@ export default createRule({
 
       // JSX expression with string literal: <div>{"Hello"}</div>
       JSXExpressionContainer(node: TSESTree.JSXExpressionContainer) {
+        // Skip if parent is a user-facing JSXAttribute — that visitor already handles it
+        const { parent } = node;
+        if (parent?.type === 'JSXAttribute') {
+          const attrName = parent.name.type === 'JSXIdentifier' ? parent.name.name : null;
+          const userFacingProps = ['title', 'placeholder', 'alt', 'label'];
+          if (attrName && userFacingProps.includes(attrName)) return;
+        }
+
         const expr = node.expression;
 
         // String literal in JSX expression
