@@ -42,9 +42,7 @@ public sealed class ProjectSettingsNames
     /// Content of the character class for base (word-forming) characters, derived from
     /// CharacterCategorizer.BaseCharacterRegex. This is a computed, read-only setting — it
     /// is not stored in Settings.xml. The value is a regex character class body (the content that
-    /// goes inside '[]') and is safe for use in JavaScript/ECMAScript regex with the
-    /// 'u' flag (the non-ECMAScript category '\p{Cn}' is excluded as part of converting
-    /// the C# regex to JavaScript-compatible regex).
+    /// goes inside '[]') and is safe for use in JavaScript/ECMAScript regex with the 'u' flag
     /// </summary>
     public const string PB_BASE_CHARACTER_CLASS_REGEX = "platformScripture.baseCharacterClassRegex";
     public const string PT_BASE_CHARACTER_CLASS_REGEX = "BaseCharacterClassRegex";
@@ -73,6 +71,16 @@ public sealed class ProjectSettingsNames
     public const string PT_WORD_MEDIAL_CHARACTER_REGEX = "WordMedialCharacterRegex";
 
     /// <summary>
+    /// Whether the project allows invisible characters (e.g. NBSP) to appear literally in USFM.
+    /// When false (the default), Paratext replaces NBSP (U+00A0) with tilde (~) when writing USFM,
+    /// so ~ in USFM represents a non-breaking space. When true, the actual invisible character is
+    /// preserved and ~ is a literal tilde.
+    /// </summary>
+    public const string PB_ALLOW_INVISIBLE_CHARACTERS =
+        "platformScripture.allowInvisibleCharacters";
+    public const string PT_ALLOW_INVISIBLE_CHARACTERS = "AllowInvisibleChars";
+
+    /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
     private static readonly HashSet<string> s_ptSettingBooleans =
@@ -81,6 +89,7 @@ public sealed class ProjectSettingsNames
         "MatchBasedOnStems",
         "AllowReadAccess",
         "AllowSharingWithSLDR",
+        "AllowInvisibleChars",
     ];
 
     // Make sure this dictionary gets updated whenever new settings are added
@@ -102,6 +111,7 @@ public sealed class ProjectSettingsNames
             { PB_BASE_CHARACTER_CLASS_REGEX, PT_BASE_CHARACTER_CLASS_REGEX },
             { PB_DIACRITIC_CHARACTER_CLASS_REGEX, PT_DIACRITIC_CHARACTER_CLASS_REGEX },
             { PB_WORD_MEDIAL_CHARACTER_REGEX, PT_WORD_MEDIAL_CHARACTER_REGEX },
+            { PB_ALLOW_INVISIBLE_CHARACTERS, PT_ALLOW_INVISIBLE_CHARACTERS },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =

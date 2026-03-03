@@ -128,6 +128,18 @@ function createMockPdps(): ScriptureFinderOverlayPDPs {
   // We only need this much of the PDPs for these tests
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return {
+    'platform.base': {
+      getSetting: vi.fn().mockImplementation((key: string) => {
+        if (key === 'platformScripture.baseCharacterClassRegex')
+          return Promise.resolve('\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}');
+        if (key === 'platformScripture.diacriticCharacterClassRegex')
+          return Promise.resolve('\\p{Mn}\\p{Mc}\\p{Lm}');
+        if (key === 'platformScripture.wordMedialCharacterRegex') return Promise.resolve('');
+        if (key === 'platformScripture.allowInvisibleCharacters') return Promise.resolve(false);
+        return Promise.resolve(undefined);
+      }),
+      subscribeSetting: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+    },
     'platformScripture.USX_Book': {
       getBookUSX: vi
         .fn()
@@ -199,7 +211,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
 
   beforeEach(() => {
     mockPdps = createMockPdps();
-    engine = new ScriptureFinderProjectDataProviderEngine('test-project-id', mockPdps);
+    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
   });
 
   /** Flush all pending microtasks so lock acquisitions and async operations settle */
@@ -1878,7 +1890,7 @@ describe('ScriptureFinderProjectDataProviderEngine word restriction', () => {
 
   beforeEach(() => {
     mockPdps = createMockPdps();
-    engine = new ScriptureFinderProjectDataProviderEngine('test-project-id', mockPdps);
+    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
   });
 
   /**
@@ -2026,7 +2038,7 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
 
   beforeEach(() => {
     mockPdps = createMockPdps();
-    engine = new ScriptureFinderProjectDataProviderEngine('test-project-id', mockPdps);
+    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
   });
 
   it('should throw when retrieving update for an unknown job ID', async () => {
