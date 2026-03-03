@@ -337,9 +337,9 @@ async function main() {
     const windowSizeArg = getCommandLineArgument(COMMAND_LINE_ARGS.WindowSize);
     let windowWidth = mainWindowState.width;
     let windowHeight = mainWindowState.height;
-    let sizeMatch: RegExpExecArray | null = null;
+    let sizeMatch: RegExpExecArray | undefined;
     if (windowSizeArg) {
-      sizeMatch = /^([1-9]\d*)[x,]([1-9]\d*)$/i.exec(windowSizeArg);
+      sizeMatch = /^([1-9]\d*)[x,]([1-9]\d*)$/i.exec(windowSizeArg) ?? undefined;
       if (sizeMatch) {
         windowWidth = parseInt(sizeMatch[1], 10);
         windowHeight = parseInt(sizeMatch[2], 10);
