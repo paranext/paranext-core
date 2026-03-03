@@ -37,7 +37,7 @@ export default createRule({
 
         // Get the first argument (the command name)
         const firstArg = node.arguments[0];
-        if (!firstArg || firstArg.type !== TSESTree.AST_NODE_TYPES.Literal) return;
+        if (firstArg?.type !== TSESTree.AST_NODE_TYPES.Literal) return;
 
         const commandName = firstArg.value;
         if (typeof commandName !== 'string') return;

@@ -13,7 +13,7 @@ const PROVENANCE_PATTERNS = [
 
 /** Check if a JSDoc comment contains a provenance marker. */
 function hasProvenanceComment(comments: TSESTree.Comment[] | undefined): boolean {
-  if (!comments || comments.length === 0) return false;
+  if (!comments?.length) return false;
 
   for (const comment of comments) {
     const text = comment.value;
