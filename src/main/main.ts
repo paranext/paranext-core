@@ -337,8 +337,9 @@ async function main() {
     const windowSizeArg = getCommandLineArgument(COMMAND_LINE_ARGS.WindowSize);
     let windowWidth = mainWindowState.width;
     let windowHeight = mainWindowState.height;
+    let sizeMatch: RegExpExecArray | null = null;
     if (windowSizeArg) {
-      const sizeMatch = /^(\d+)[x,](\d+)$/i.exec(windowSizeArg);
+      sizeMatch = /^([1-9]\d*)[x,]([1-9]\d*)$/i.exec(windowSizeArg);
       if (sizeMatch) {
         windowWidth = parseInt(sizeMatch[1], 10);
         windowHeight = parseInt(sizeMatch[2], 10);
@@ -385,9 +386,9 @@ async function main() {
     // and restore the maximized or full screen state
     mainWindowState.manage(mainWindow);
 
-    // If --window-size was specified, override any maximized/fullscreen state that manage() restored.
+    // If a valid window size was specified, override any maximized/fullscreen state that manage() restored.
     // setSize() is ignored on a maximized/fullscreen window, so explicitly exit those states first.
-    if (windowSizeArg && windowWidth && windowHeight) {
+    if (windowSizeArg && sizeMatch && windowWidth && windowHeight) {
       if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false);
       if (mainWindow.isMaximized()) mainWindow.unmaximize();
       mainWindow.setSize(windowWidth, windowHeight);
