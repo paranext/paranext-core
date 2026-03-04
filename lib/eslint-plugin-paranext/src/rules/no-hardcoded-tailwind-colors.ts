@@ -1,0 +1,161 @@
+import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const createRule = ESLintUtils.RuleCreator(() => '');
+
+/** CSS built-in color values that are always valid in Tailwind color classes. */
+const CSS_BUILTIN_COLORS = ['transparent', 'current', 'inherit'];
+
+/**
+ * Reads theme tokens from src/shared/data/themes.data.json. Collects all cssVariables keys across
+ * every theme and variant so the allowed list stays in sync automatically.
+ */
+function loadThemeTokens(): string[] {
+  try {
+    const themesPath = path.resolve(__dirname, '../../../../src/shared/data/themes.data.json');
+    const raw = fs.readFileSync(themesPath, 'utf-8');
+    const themes: Record<
+      string,
+      Record<string, { cssVariables?: Record<string, string> }>
+    > = JSON.parse(raw);
+    const tokens = new Set<string>();
+    Object.values(themes).forEach((theme) => {
+      Object.values(theme).forEach((variant) => {
+        if (variant.cssVariables) {
+          Object.keys(variant.cssVariables).forEach((key) => {
+            tokens.add(key);
+          });
+        }
+      });
+    });
+    return [...tokens];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Allowed theme tokens for Tailwind colors. Loaded from themes.data.json so the list stays in sync
+ * with the actual theme definition. CSS built-in values (transparent, current, inherit) are always
+ * valid.
+ */
+const ALLOWED_THEME_TOKENS = [...loadThemeTokens(), ...CSS_BUILTIN_COLORS];
+
+/**
+ * Patterns that indicate hardcoded colors:
+ *
+ * - Tw-bg-black, tw-bg-white, tw-bg-slate-100, tw-text-red-500, etc.
+ * - Tw-*-[color]/[opacity] patterns like tw-bg-black/50
+ * - Hex colors, rgb(), hsl() in className
+ */
+const HARDCODED_COLOR_PATTERNS = [
+  // Named colors: tw-bg-black, tw-text-white, tw-border-gray-500
+  /tw-(bg|text|border|ring|outline|divide|from|via|to|placeholder|caret|fill|stroke)-(black|white|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(-\d+)?(\/\d+)?/,
+  // Opacity modifiers on any color: tw-bg-[color]/50
+  /tw-(bg|text|border)-.+\/\d+/,
+];
+
+/** Check if a class string contains hardcoded colors */
+function findHardcodedColors(classString: string): string[] {
+  const classes = classString.split(/\s+/);
+
+  return classes.filter((cls) => {
+    // Skip if it's an allowed theme token
+    const isThemeToken = ALLOWED_THEME_TOKENS.some(
+      (token) =>
+        cls.includes(`-${token}`) ||
+        cls === `tw-bg-${token}` ||
+        cls === `tw-text-${token}` ||
+        cls === `tw-border-${token}`,
+    );
+    if (isThemeToken) return false;
+
+    // Check against hardcoded patterns
+    return HARDCODED_COLOR_PATTERNS.some((pattern) => pattern.test(cls));
+  });
+}
+
+/**
+ * ESLint rule: paranext/no-hardcoded-tailwind-colors
+ *
+ * Prevents hardcoded colors in Tailwind classes. Use theme tokens instead.
+ *
+ * Bad: tw-bg-black, tw-text-white, tw-bg-slate-500/50 Good: tw-bg-background, tw-text-foreground,
+ * tw-bg-muted
+ *
+ * See: .context/standards/Code-Style-Guide.md "Theming Requirements"
+ */
+export default createRule({
+  name: 'no-hardcoded-tailwind-colors',
+  meta: {
+    type: 'problem',
+    docs: {
+      description: 'Disallow hardcoded colors in Tailwind classes; use theme tokens instead',
+      recommended: 'error',
+    },
+    schema: [],
+    messages: {
+      hardcodedColor:
+        "Hardcoded color '{{className}}' detected. Use theme tokens instead (tw-bg-background, tw-text-foreground, etc.)",
+    },
+  },
+  defaultOptions: [],
+
+  create(context) {
+    function checkClassValue(node: TSESTree.Node, value: string) {
+      findHardcodedColors(value).forEach((violation) => {
+        context.report({
+          node,
+          messageId: 'hardcodedColor',
+          data: {
+            className: violation,
+          },
+        });
+      });
+    }
+
+    return {
+      // Check JSX className attributes
+      JSXAttribute(node: TSESTree.JSXAttribute) {
+        const attrName = node.name.type === 'JSXIdentifier' ? node.name.name : null;
+        if (attrName !== 'className' && attrName !== 'class') return;
+
+        if (node.value?.type === 'Literal' && typeof node.value.value === 'string') {
+          checkClassValue(node, node.value.value);
+        }
+
+        // Check template literals: className={`tw-bg-black ${condition}`}
+        if (
+          node.value?.type === 'JSXExpressionContainer' &&
+          node.value.expression.type === 'TemplateLiteral'
+        ) {
+          node.value.expression.quasis.forEach((quasi) => {
+            checkClassValue(node, quasi.value.raw);
+          });
+        }
+      },
+
+      // Check cn() calls: cn('tw-bg-black', condition && 'tw-text-white')
+      CallExpression(node: TSESTree.CallExpression) {
+        if (
+          node.callee.type === 'Identifier' &&
+          (node.callee.name === 'cn' ||
+            node.callee.name === 'clsx' ||
+            node.callee.name === 'classNames')
+        ) {
+          node.arguments.forEach((arg) => {
+            if (arg.type === 'Literal' && typeof arg.value === 'string') {
+              checkClassValue(arg, arg.value);
+            }
+            if (arg.type === 'TemplateLiteral') {
+              arg.quasis.forEach((quasi) => {
+                checkClassValue(arg, quasi.value.raw);
+              });
+            }
+          });
+        }
+      },
+    };
+  },
+});

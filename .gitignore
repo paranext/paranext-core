@@ -51,9 +51,16 @@ yalc.lock
 # Local dev packages checked out for linking during CI or local development
 dev-packages/
 
+# Playwright E2E tests
+e2e-tests/playwright-report/
+e2e-tests/test-results/
+e2e-tests/.dev-server.pid
+
 #claude
 .claude
-.claude.backup
+.claude.backup/
 .context
+c-sharp/CLAUDE.md
 CLAUDE.md
 CLAUDE.md.backup
+

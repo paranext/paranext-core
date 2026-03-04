@@ -1,0 +1,90 @@
+/** Utility functions for validating paranext naming conventions. */
+
+/**
+ * Validates that a string follows the pattern: extensionName.identifier Where:
+ *
+ * - ExtensionName: camelCase (starts with lowercase, no spaces)
+ * - Identifier: camelCase
+ *
+ * Examples:
+ *
+ * - Valid: 'platformScripture.openFind', 'helloRock3.helloRock3'
+ * - Invalid: 'PlatformScripture.OpenFind', 'platform-scripture.openFind'
+ */
+export function isValidExtensionIdentifier(value: string): boolean {
+  // Must contain exactly one dot
+  const parts = value.split('.');
+  if (parts.length !== 2) return false;
+
+  const [extensionName, identifier] = parts;
+
+  // Extension name must be camelCase (start with lowercase letter)
+  if (!isCamelCase(extensionName)) return false;
+
+  // Identifier must be camelCase
+  if (!isCamelCase(identifier)) return false;
+
+  return true;
+}
+
+/**
+ * Checks if a string is in camelCase format. camelCase starts with a lowercase letter, followed by
+ * any combination of letters, numbers.
+ */
+export function isCamelCase(value: string): boolean {
+  if (!value || value.length === 0) return false;
+
+  // Must start with lowercase letter
+  if (!/^[a-z]/.test(value)) return false;
+
+  // Can only contain letters and numbers
+  if (!/^[a-zA-Z0-9]+$/.test(value)) return false;
+
+  return true;
+}
+
+/**
+ * Extracts the extension name from a compound identifier. Example: 'platformScripture.openFind' ->
+ * 'platformScripture'
+ */
+export function getExtensionName(value: string): string | null {
+  const parts = value.split('.');
+  if (parts.length !== 2) return null;
+  return parts[0];
+}
+
+/** Creates a suggestion for fixing a malformed identifier. */
+export function suggestFix(value: string): string {
+  const parts = value.split('.');
+  if (parts.length !== 2) return value;
+
+  const [ext, id] = parts;
+
+  // Convert extension to camelCase
+  const fixedExt = toCamelCase(ext);
+  const fixedId = toCamelCase(id);
+
+  return `${fixedExt}.${fixedId}`;
+}
+
+/** Converts a string to camelCase. */
+function toCamelCase(value: string): string {
+  if (!value) return value;
+
+  // Split on non-alphanumeric characters, capitalize first letter of each segment after the first
+  const parts = value.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+  if (parts.length === 0) return value;
+
+  // Normalize all-uppercase parts (SCREAMING_SNAKE_CASE) to lowercase,
+  // but preserve mixed-case parts (PascalCase) as-is
+  const normalized = parts.map((p) => (p === p.toUpperCase() ? p.toLowerCase() : p));
+
+  return (
+    normalized[0][0].toLowerCase() +
+    normalized[0].slice(1) +
+    normalized
+      .slice(1)
+      .map((p) => p[0].toUpperCase() + p.slice(1))
+      .join('')
+  );
+}

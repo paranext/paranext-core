@@ -7,6 +7,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ParanextDataProvider", "Par
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "c-sharp-tests", "..\c-sharp-tests\c-sharp-tests.csproj", "{47318C23-C03D-4FE1-9900-9C78CA7E4894}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Paranext.Analyzers", "Paranext.Analyzers\Paranext.Analyzers.csproj", "{133DD933-CA13-437C-A327-1708B0178DC6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Paranext.Analyzers.Tests", "Paranext.Analyzers.Tests\Paranext.Analyzers.Tests.csproj", "{EFCBC741-283D-4978-9481-6C1CCC5A8C78}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +25,14 @@ Global
 		{47318C23-C03D-4FE1-9900-9C78CA7E4894}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{47318C23-C03D-4FE1-9900-9C78CA7E4894}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{47318C23-C03D-4FE1-9900-9C78CA7E4894}.Release|Any CPU.Build.0 = Release|Any CPU
+		{133DD933-CA13-437C-A327-1708B0178DC6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{133DD933-CA13-437C-A327-1708B0178DC6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{133DD933-CA13-437C-A327-1708B0178DC6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{133DD933-CA13-437C-A327-1708B0178DC6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EFCBC741-283D-4978-9481-6C1CCC5A8C78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EFCBC741-283D-4978-9481-6C1CCC5A8C78}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EFCBC741-283D-4978-9481-6C1CCC5A8C78}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EFCBC741-283D-4978-9481-6C1CCC5A8C78}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

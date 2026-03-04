@@ -1,0 +1,38 @@
+<Project>
+  <!--
+    AI branch detection: reads .git/HEAD to determine the current branch.
+    On ai/* branches, enables additional analyzers and severity overrides.
+    On other branches this file is effectively a no-op.
+    Can be overridden by setting PARANEXT_AI_BRANCH=true in the environment.
+  -->
+
+  <PropertyGroup Condition="'$(PARANEXT_AI_BRANCH)' == ''">
+    <_GitHeadFile>$([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', '..', '.git', 'HEAD'))</_GitHeadFile>
+    <_GitHead Condition="Exists('$(_GitHeadFile)')">$([System.IO.File]::ReadAllText('$(_GitHeadFile)').Trim())</_GitHead>
+    <PARANEXT_AI_BRANCH Condition="'$(_GitHead)' != '' AND $(_GitHead.Contains('refs/heads/ai/'))">true</PARANEXT_AI_BRANCH>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PARANEXT_AI_BRANCH)' == 'true'">
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <_SkipUpgradeNetAnalyzersNuGetWarning>true</_SkipUpgradeNetAnalyzersNuGetWarning>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(PARANEXT_AI_BRANCH)' == 'true'">
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="8.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <GlobalAnalyzerConfigFiles Include="$(MSBuildThisFileDirectory)ai-analyzers.globalconfig" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'Paranext.Analyzers' AND '$(MSBuildProjectName)' != 'Paranext.Analyzers.Tests' AND '$(PARANEXT_AI_BRANCH)' == 'true'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)Paranext.Analyzers/Paranext.Analyzers.csproj">
+      <PrivateAssets>all</PrivateAssets>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <OutputItemType>Analyzer</OutputItemType>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

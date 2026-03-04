@@ -44,10 +44,10 @@ dist
 # directories that have separate eslint project
 extensions
 lib/browserslist-config-detect-electron
+lib/eslint-plugin-paranext
 lib/papi-dts
 lib/platform-bible-react
 lib/platform-bible-utils
-lib/papi-dts
 
 # generated files
 package-lock.json
@@ -61,6 +61,10 @@ yalc.lock
 
 # Local dev packages checked out for linking during CI or local development
 dev-packages/
+
+# Playwright test output
+e2e-tests/test-results
+e2e-tests/playwright-report
 
 # Formats not supported by Prettier
 # (no sync with .eslintignore and .stylelintignore)

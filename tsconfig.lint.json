@@ -2,12 +2,14 @@
   "extends": "./tsconfig",
   "include": [
     ".eslintrc.js",
+    ".eslintrc.ai.js",
     "*.ts",
     ".erb/configs",
     ".erb/mocks",
     ".erb/scripts",
     ".storybook/*.ts",
     "src",
-    "assets"
+    "assets",
+    "e2e-tests"
   ]
 }

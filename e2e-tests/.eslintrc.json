@@ -1,0 +1,12 @@
+{
+  "rules": {
+    // E2E tests legitimately use console for test diagnostics
+    "no-console": "off",
+    // E2E tests often need sequential async operations in loops
+    "no-await-in-loop": "off",
+    // `export default defineConfig(...)` is the standard Playwright config pattern
+    "import/no-anonymous-default-export": "off",
+    // TypeScript handles undefined references; ESLint no-undef doesn't know Node.js globals
+    "no-undef": "off"
+  }
+}
