@@ -917,12 +917,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // Listens for the marker menu trigger to open the markers menu
   useEffect(() => {
-    // Assumes query finds an element of type `HTMLDivElement` which might not have loaded in yet
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const editorInput = document.querySelector('.editor-input') as
-      | HTMLDivElement
-      | null
-      | undefined;
+    const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
