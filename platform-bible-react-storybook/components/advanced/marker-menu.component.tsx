@@ -1,4 +1,4 @@
-import { FC, useMemo, useState } from 'react';
+import { FC, LegacyRef, useMemo, useState } from 'react';
 import { Ban } from 'lucide-react';
 import {
   Command,
@@ -61,6 +61,8 @@ export interface MarkerMenuProps {
    * actions
    */
   markerMenuItems: MarkerMenuItem[];
+  /** Optional ref for the command search input to be able to focus it manually */
+  searchRef?: LegacyRef<HTMLInputElement>;
 }
 
 /** Function to format the marker menu icon and size it accordingly */
@@ -70,7 +72,7 @@ function MenuMarkerIcon({ icon, className }: { icon?: FC<MarkerIconProps>; class
 }
 
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
-export function MarkerMenu({ localizedStrings, markerMenuItems }: MarkerMenuProps) {
+export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps) {
   const [commandSearch, setCommandSearch] = useState<string>('');
 
   const filteredMarkerItems = useMemo(() => {
@@ -81,18 +83,19 @@ export function MarkerMenu({ localizedStrings, markerMenuItems }: MarkerMenuProp
 
     return markerMenuItems.filter(
       (markerItem) =>
-        markerItem.marker?.toLowerCase().includes(query) ||
-        markerItem.title.toLowerCase().includes(query),
+        (markerItem.marker && markerItem.marker?.toLowerCase().includes(query)) ||
+        (!markerItem.marker && markerItem.title.toLowerCase().includes(query)),
     );
   }, [commandSearch, markerMenuItems]);
 
   return (
     <Command className="tw-p-1" shouldFilter={false} loop>
       <CommandInput
+        className="marker-menu-search"
+        ref={searchRef}
         value={commandSearch}
         onValueChange={(value) => setCommandSearch(value)}
         placeholder={localizedStrings['%markerMenu_searchPlaceholder%']}
-        autoFocus={false}
       />
       <CommandList>
         <CommandEmpty>{localizedStrings['%markerMenu_noResults%']}</CommandEmpty>
@@ -104,7 +107,7 @@ export function MarkerMenu({ localizedStrings, markerMenuItems }: MarkerMenuProp
               onSelect={item.action}
               key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
             >
-              <div className="tw-w-6">
+              <div className="tw-w-8 tw-min-w-8">
                 {item.marker ? (
                   <span className="tw-text-xs">{item.marker}</span>
                 ) : (

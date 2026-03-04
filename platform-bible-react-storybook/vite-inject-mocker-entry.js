@@ -1856,6 +1856,9 @@ video:where(.pr-twp,.pr-twp *) {
 .tw-min-w-5 {
   min-width: 1.25rem;
 }
+.tw-min-w-8 {
+  min-width: 2rem;
+}
 .tw-min-w-80 {
   min-width: 20rem;
 }
