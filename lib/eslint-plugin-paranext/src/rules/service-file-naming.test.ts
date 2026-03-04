@@ -1,5 +1,5 @@
 import rule from './service-file-naming';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('service-file-naming', rule, {
   valid: [

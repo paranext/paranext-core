@@ -1,5 +1,5 @@
 import rule from './dataprovider-naming';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('dataprovider-naming', rule, {
   valid: [

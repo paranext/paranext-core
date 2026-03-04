@@ -1,5 +1,5 @@
 import rule from './require-provenance-comment';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('require-provenance-comment', rule, {
   valid: [

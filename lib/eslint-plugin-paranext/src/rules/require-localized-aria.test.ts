@@ -1,5 +1,5 @@
 import rule from './require-localized-aria';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('require-localized-aria', rule, {
   valid: [

@@ -1,5 +1,5 @@
 import rule from './require-localized-strings-array';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('require-localized-strings-array', rule, {
   valid: [

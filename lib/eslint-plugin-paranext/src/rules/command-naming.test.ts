@@ -1,5 +1,5 @@
 import rule from './command-naming';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('command-naming', rule, {
   valid: [

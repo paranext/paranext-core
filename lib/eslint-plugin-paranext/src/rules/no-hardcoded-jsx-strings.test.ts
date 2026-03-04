@@ -1,5 +1,5 @@
 import rule from './no-hardcoded-jsx-strings';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('no-hardcoded-jsx-strings', rule, {
   valid: [

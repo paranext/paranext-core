@@ -1,5 +1,5 @@
 import rule from './registration-structure';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('registration-structure', rule, {
   valid: [

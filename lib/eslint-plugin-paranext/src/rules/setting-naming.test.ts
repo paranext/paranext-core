@@ -1,5 +1,5 @@
 import rule from './setting-naming';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('setting-naming', rule, {
   valid: [

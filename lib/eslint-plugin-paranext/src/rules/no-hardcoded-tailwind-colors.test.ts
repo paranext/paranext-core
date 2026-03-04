@@ -1,5 +1,5 @@
 import rule from './no-hardcoded-tailwind-colors';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('no-hardcoded-tailwind-colors', rule, {
   valid: [

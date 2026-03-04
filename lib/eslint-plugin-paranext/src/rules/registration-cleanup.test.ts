@@ -1,5 +1,5 @@
 import rule from './registration-cleanup';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('registration-cleanup', rule, {
   valid: [

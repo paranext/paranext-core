@@ -1,5 +1,5 @@
 import rule from './no-hardcoded-string-comparison';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('no-hardcoded-string-comparison', rule, {
   valid: [
