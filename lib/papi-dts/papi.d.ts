@@ -3597,6 +3597,17 @@ declare module 'papi-shared-types' {
      * 0.5 to 3.0.
      */
     'platform.zoomFactor': number;
+    /**
+     * The interface mode for the application. `simple` provides a streamlined experience, while
+     * `power` exposes advanced features.
+     *
+     * WARNING: This setting is experimental. The default mode may change, available modes may
+     * change, and new modes may be added in the future. Changing the modes available will not be
+     * considered a breaking change until this warning is removed.
+     *
+     * @default `simple`
+     */
+    'platform.interfaceMode': 'simple' | 'power';
   }
   /**
    * Names for each user setting available on the papi.

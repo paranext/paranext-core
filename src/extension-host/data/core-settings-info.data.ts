@@ -42,6 +42,11 @@ export const platformSettings: SettingsContribution = [
         description: '%settings_platform_zoomFactor_description%',
         default: DEFAULT_ZOOM_FACTOR,
       },
+      'platform.interfaceMode': {
+        label: '%settings_platform_interfaceMode_label%',
+        description: '%settings_platform_interfaceMode_description%',
+        default: 'simple',
+      },
     },
   },
 ];
@@ -119,6 +124,19 @@ const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
   return true;
 };
 
+const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async (
+  newValue: string,
+): Promise<boolean> => {
+  if (newValue !== 'simple' && newValue !== 'power') {
+    throw new Error(
+      await localization.getLocalizedString({
+        localizeKey: '%settings_platform_interfaceMode_invalidValue%',
+      }),
+    );
+  }
+  return true;
+};
+
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.verseRef': verseRefSettingsValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
@@ -127,4 +145,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.commentsEnabled': booleanValidator,
   'platform.requestTimeout': requestTimeoutValidator,
   'platform.zoomFactor': zoomFactorValidator,
+  'platform.interfaceMode': interfaceModeValidator,
 };
