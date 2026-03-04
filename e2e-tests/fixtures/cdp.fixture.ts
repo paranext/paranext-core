@@ -59,9 +59,10 @@ export const test = base.extend<CdpFixtures>({
     // Disconnect the CDP session (not close — we didn't start the app).
     // This frees the CDP connection slot so subsequent tests can connect.
     try {
-      browser.close();
+      await browser.close();
     } catch {
       // Ignore disconnect errors during cleanup
+    }
     }
   },
 });
