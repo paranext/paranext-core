@@ -1737,13 +1737,29 @@ declare module 'papi-shared-types' {
     'platformScripture.wordMedialCharacterRegex': string;
 
     /**
-     * Whether the project allows invisible characters such as non-breaking space (U+00A0, NBSP) to
-     * appear literally in USFM text. Corresponds to `ScrText.Settings.AllowInvisibleChars` in
-     * Paratext 9.
+     * Whether the project allows invisible characters to appear literally in USFM text. Corresponds
+     * to `ScrText.Settings.AllowInvisibleChars` in Paratext 9.
+     *
+     * The invisible characters in question are:
+     *
+     * - U+200D Zero-width joiner
+     * - U+2003 Em space
+     * - U+2002 En space
+     * - U+0020 Space
+     * - U+00A0 No-break space (NBSP)
+     * - U+202F Narrow no-break space
+     * - U+2009 Thin space
+     * - U+200A Hair space
+     * - U+3000 Ideographic space
+     * - U+200B Zero-width space
+     * - U+200C Zero-width non-joiner
+     * - U+2060 Word joiner
+     * - U+200E Left-to-right mark
+     * - U+200F Right-to-left mark
      *
      * When `false` (the Paratext default), Paratext replaces NBSP with a tilde (`~`) when writing
      * USFM. In that case, a `~` in USFM text represents a non-breaking space and should be treated
-     * as whitespace during find operations.
+     * as whitespace during operations on the text such as find and replace.
      *
      * When `true`, invisible characters are preserved literally in USFM. A `~` is then a literal
      * tilde character, not a whitespace substitute.
