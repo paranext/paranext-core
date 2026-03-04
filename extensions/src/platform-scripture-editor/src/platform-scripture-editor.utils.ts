@@ -19,6 +19,7 @@ import { ScriptureRange } from 'platform-scripture-editor';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { MarkerMenuItem } from 'platform-bible-react';
+import { usfmMarkers } from './platform-scripture-editor-usfm-markers.util';
 
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
@@ -326,7 +327,7 @@ export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
  * @param localizedStrings The localized strings to use to localize the marker titles
  * @returns List of marker menu items to be used for the paragraph menu
  */
-export function generateMarkerMenuListItems(
+export function generateParagraphMenuListItems(
   editorRef: MutableRefObject<EditorRef | null>,
   localizedStrings: LanguageStrings,
 ): MarkerMenuItem[] {
@@ -340,4 +341,43 @@ export function generateMarkerMenuListItems(
     };
     return markerMenuItem;
   });
+}
+
+/**
+ * Function that generates the inline marker menu items that will update as the cursor location
+ * changes. In the future this function will take data from an `.sty` file so that users can define
+ * their own markers.
+ *
+ * @param editorRef The ref for the editor component to be able to insert markers
+ * @param parentMarker The current parent marker which is used to determine which markers to include
+ * @returns The list of inline marker menu items
+ */
+export function generateInlineMarkerMenuListItems(
+  editorRef: MutableRefObject<EditorRef | null>,
+  closeMarkersMenu: () => void,
+  localizedStrings: LanguageStrings,
+  parentMarker?: string,
+): MarkerMenuItem[] {
+  if (!parentMarker) return [];
+
+  const markerDetails = usfmMarkers[parentMarker];
+  if (!markerDetails?.children) return [];
+
+  const markerMenuItems: MarkerMenuItem[] = [];
+  Object.entries(markerDetails.children).forEach(([, markers]) => {
+    markerMenuItems.push(
+      ...markers.map((marker) => {
+        return {
+          marker,
+          title:
+            localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
+          action: () => {
+            editorRef.current?.insertMarker(marker);
+            closeMarkersMenu();
+          },
+        };
+      }),
+    );
+  });
+  return markerMenuItems.sort((a, b) => (a.marker ?? a.title).localeCompare(b.marker ?? b.title));
 }
