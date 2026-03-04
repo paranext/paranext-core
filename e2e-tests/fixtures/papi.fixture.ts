@@ -14,6 +14,8 @@ import WebSocket from 'ws';
 import { JSONRPCClient } from 'json-rpc-2.0';
 import { test as appTest, AppFixtures, WorkerAppFixtures } from './app.fixture';
 
+export { expect } from '@playwright/test';
+
 const WEBSOCKET_PORT = 8876;
 
 export interface PapiClient {
@@ -76,5 +78,3 @@ export const test = appTest.extend<{ papiClient: PapiClient }, WorkerAppFixtures
     papiClient.close();
   },
 });
-
-export { expect } from '@playwright/test';

@@ -7,6 +7,8 @@ import {
 } from '@playwright/test';
 import { launchElectronApp, teardownElectronApp } from './helpers';
 
+export { expect } from '@playwright/test';
+
 /** Test-scoped fixtures — each test gets a fresh Electron instance. */
 export interface IsolatedFixtures {
   electronApp: ElectronApplication;
@@ -67,5 +69,3 @@ export const test = base.extend<IsolatedFixtures>({
     }
   },
 });
-
-export { expect } from '@playwright/test';

@@ -1,5 +1,5 @@
 import rule from './webview-file-naming';
-import { ruleTester } from '../test-utils';
+import { ruleTester } from '../test.utils';
 
 ruleTester.run('webview-file-naming', rule, {
   valid: [
@@ -11,7 +11,7 @@ ruleTester.run('webview-file-naming', rule, {
     // HTML web-view is valid
     {
       code: `const x = 1;`,
-      filename: '/extensions/src/my-extension/web-views/my-view.web-view.scss',
+      filename: '/extensions/src/my-extension/web-views/my-view.web-view.html',
     },
     // Index file in web-views is allowed
     {

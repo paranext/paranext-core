@@ -7,6 +7,8 @@ import {
 } from '@playwright/test';
 import { launchElectronApp, teardownElectronApp, ElectronAppContext } from './helpers';
 
+export { expect } from '@playwright/test';
+
 /** Worker-scoped fixtures — one instance shared across all tests in a worker. */
 export interface WorkerAppFixtures {
   electronApp: ElectronApplication;
@@ -80,5 +82,3 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
     }
   },
 });
-
-export { expect } from '@playwright/test';

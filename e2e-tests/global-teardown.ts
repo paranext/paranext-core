@@ -5,7 +5,7 @@ import fs from 'fs';
 
 // Playwright global teardown requires this signature even though config is unused
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function globalTeardown(_config: FullConfig): Promise<void> {
+export default async function globalTeardown(_config: FullConfig): Promise<void> {
   const rootDir = path.resolve(__dirname, '..');
 
   // Kill the renderer dev server if we started it
@@ -40,5 +40,3 @@ async function globalTeardown(_config: FullConfig): Promise<void> {
     console.log('Cleanup: No processes to stop or already stopped.');
   }
 }
-
-export default globalTeardown;
