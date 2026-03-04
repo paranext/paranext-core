@@ -364,9 +364,9 @@ export function generateInlineMarkerMenuListItems(
   if (!markerDetails?.children) return [];
 
   const markerMenuItems: MarkerMenuItem[] = [];
-  Object.entries(markerDetails.children).forEach((item) => {
+  Object.entries(markerDetails.children).forEach(([, markers]) => {
     markerMenuItems.push(
-      ...item[1].map((marker) => {
+      ...markers.map((marker) => {
         return {
           marker,
           title:

@@ -235,9 +235,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [markersMenuAnchorY, setMarkersMenuAnchorY] = useState<number>();
   const [markersMenuAnchorHeight, setMarkersMenuAnchorHeight] = useState<number>();
 
-  // The ref needs to start out with null for it to work as a element ref
+  // The refs needs to start out with null for it to work as a element ref
   // eslint-disable-next-line no-null/no-null
   const markerMenuSearchRef = useRef<HTMLInputElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -866,24 +868,34 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         localizedStrings,
         contextMarker,
       ),
-    [contextMarker],
+    [contextMarker, localizedStrings],
   );
 
-  const showInlineMarkersMenu = useCallback(() => {
-    // Only shows the markers menu if there is currently a selection in the editor and there are
-    // existing marker menu items to be shown
-    const currentSelection = window.getSelection();
-    if (inlineMarkerMenuItems.length && currentSelection && currentSelection.rangeCount > 0) {
-      const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
-      setMarkersMenuAnchorX(selectionRect.left);
-      setMarkersMenuAnchorY(selectionRect.top);
-      setMarkersMenuAnchorHeight(selectionRect.height);
-      setShowMarkersMenu(true);
-    }
-  }, [inlineMarkerMenuItems]);
+  const showInlineMarkersMenu = useCallback(
+    (editorInput: HTMLDivElement) => {
+      // Only shows the markers menu if there is currently a selection in the editor and there are
+      // existing marker menu items to be shown
+      const currentSelection = window.getSelection();
+      if (
+        document.activeElement === editorInput &&
+        inlineMarkerMenuItems.length &&
+        currentSelection &&
+        currentSelection.rangeCount > 0
+      ) {
+        const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
+        setMarkersMenuAnchorX(selectionRect.left);
+        setMarkersMenuAnchorY(selectionRect.top);
+        setMarkersMenuAnchorHeight(selectionRect.height);
+        setShowMarkersMenu(true);
+      }
+    },
+    [inlineMarkerMenuItems],
+  );
 
   // Need to add a window listener for click events that will close the markers menu when you click
-  // outside
+  // outside. There is another `onClick` listener for the marker menu that prevents click events
+  // from being passed to this listener if the marker menu is being clicked. Those click events are
+  // handled separately.
   useEffect(() => {
     const clickListener = () => {
       if (showMarkersMenu) setShowMarkersMenu(false);
@@ -903,19 +915,39 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [showMarkersMenu]);
 
-  // Listen for Ctrl+F to open find dialog and the markers menu trigger
+  // Listens for the marker menu trigger to open the markers menu
+  useEffect(() => {
+    // Assumes query finds an element of type `HTMLDivElement` which might not have loaded in yet
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const editorInput = document.querySelector('.editor-input') as
+      | HTMLDivElement
+      | null
+      | undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Shows the marker menu if it isn't already being shown and if the editor is currently selected
+      if (currentSelectionRef.current && editorInput) {
+        if (!showMarkersMenu && event.key === defaultMarkersMenuTrigger) {
+          event.preventDefault();
+          showInlineMarkersMenu(editorInput);
+        } else if (showMarkersMenu && event.key === 'Escape') {
+          setShowMarkersMenu(false);
+        }
+      }
+    };
+
+    editorInput?.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      editorInput?.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showMarkersMenu, showInlineMarkersMenu]);
+
+  // Listen for Ctrl+F to open find dialog
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
     const isMac = /Macintosh/i.test(navigator.userAgent);
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Markers menu trigger listener
-      if (!showMarkersMenu && event.key === defaultMarkersMenuTrigger) {
-        event.preventDefault();
-        showInlineMarkersMenu();
-      } else if (showMarkersMenu && event.key === 'Escape') {
-        setShowMarkersMenu(false);
-      }
-
       // Find dialog trigger listener
       if (event.ctrlKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
@@ -941,7 +973,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [webViewId, insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu]);
+  }, [webViewId, insertCommentAtCurrentSelection]);
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
@@ -1592,7 +1624,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       />
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
-      <div className="tw-h-auto tw-flex-1 tw-min-h-0 tw-overflow-auto" dir={options.textDirection}>
+      <div
+        ref={editorContainerRef}
+        className="tw-h-auto tw-flex-1 tw-min-h-0 tw-overflow-auto"
+        dir={options.textDirection}
+      >
         {/* Containers */}
         {Object.entries(decorations.containers ?? {}).reduce(
           (children, [id, decoration]) => (
