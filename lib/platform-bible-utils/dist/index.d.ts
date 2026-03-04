@@ -1583,6 +1583,62 @@ export declare enum Section {
  */
 export declare const getSectionForBook: (bookId: string) => Section;
 /**
+ * The contents (without surrounding `[` `]`) of a regex character class matching
+ * Paratext-9-selectable invisible characters and white space characters.
+ *
+ * These are the characters listed in [Paratext 9's "Whitespace and invisible characters
+ * drop-down"](https://paratext.myjetbrains.com/youtrack/issue/PTX-23623) that the user can insert
+ * into the text:
+ *
+ * | Code point | Name |
+ * | ---------- | ---- |
+ * | U+200D | Zero-width joiner |
+ * | U+2003 | Em space |
+ * | U+2002 | En space |
+ * | U+0020 | Space |
+ * | U+00A0 | No-break space |
+ * | U+202F | Narrow no-break space |
+ * | U+2009 | Thin space |
+ * | U+200A | Hair space |
+ * | U+3000 | Ideographic space |
+ * | U+200B | Zero-width space |
+ * | U+200C | Zero-width non-joiner |
+ * | U+2060 | Word joiner |
+ * | U+200E | Left-to-right mark |
+ * | U+200F | Right-to-left mark |
+ *
+ * **Usage in regex character classes:** wrap this in `[` `]` to create a character class, e.g.:
+ *
+ * ```ts
+ * const regex = new RegExp(`[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]`);
+ * ```
+ *
+ * Note: Zero-width joiner (U+200D) must remain at the start of the class to avoid ESLint's
+ * `no-misleading-character-class` rule treating it as part of a grapheme-cluster sequence.
+ * See https://eslint.org/docs/latest/rules/no-misleading-character-class
+ *
+ * Note: more white space characters are supported in Paratext 9 but are not listed in this
+ * dropdown. See {@link isWhiteSpace} for more information.
+ *
+ * This corresponds to the character set used by `CharExtensions.IsInvisibleCharOrWhitespace` from
+ * `ParatextData.dll`
+ */
+export declare const SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS = "\u200D\u2003\u2002 \u00A0\u202F\u2009\u200A\u3000\u200B\u200C\u2060\u200E\u200F";
+/**
+ * Determines whether a string contains one or more Paratext-9-selectable invisible characters or
+ * white space characters and no other characters.
+ *
+ * The set of characters tested is {@link SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}.
+ *
+ * This function is a direct translation of `CharExtensions.IsInvisibleCharOrWhitespace` from
+ * `ParatextData.dll`
+ *
+ * @param ch Single character or a string of characters
+ * @returns `true` if the string consists of one or more Paratext-9-selectable invisible characters
+ *   or white space characters and no other characters, `false` otherwise
+ */
+export declare function isSelectableInvisibleCharOrWhiteSpace(ch: string): boolean;
+/**
  * Converts all control characters, carriage returns, and tabs into spaces and then strips duplicate
  * spaces.
  *
