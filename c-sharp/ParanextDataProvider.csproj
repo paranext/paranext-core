@@ -3,6 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/bin/**;**/obj/**</DefaultItemExcludes>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Paranext.DataProvider</RootNamespace>
