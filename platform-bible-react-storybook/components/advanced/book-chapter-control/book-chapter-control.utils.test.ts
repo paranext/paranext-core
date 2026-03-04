@@ -27,9 +27,9 @@ describe('book-chapter-control.utils', () => {
       expect(chapters).toBe(1);
     });
 
-    test('Returns 1 for Deuterocanonical book with unknown chapters', () => {
+    test('Returns 0 for Deuterocanonical book with unknown chapters', () => {
       const chapters = fetchEndChapter('3ES');
-      expect(chapters).toBe(1);
+      expect(chapters).toBe(0);
     });
 
     test('Returns -1 for invalid book ID', () => {
