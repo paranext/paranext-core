@@ -5,9 +5,7 @@ import {
   Editorial,
   EditorOptions,
   EditorRef,
-  GENERATOR_NOTE_CALLER,
   getDefaultViewOptions,
-  HIDDEN_NOTE_CALLER,
   isInsertEmbedOpOfType,
   ViewOptions,
 } from '@eten-tech-foundation/platform-editor';
@@ -192,38 +190,6 @@ export const Annotated: Story = {
   args: {
     defaultUsj: usjWeb,
     scrRef: defaultScrRef,
-  },
-};
-
-const inlineNoteOptions: EditorOptions = {
-  hasExternalUI: true,
-  view: { ...getDefaultViewOptions(), noteMode: 'expandInline' },
-  nodes: {
-    noteCallerOnClick: (_event, _noteNodeKey, isCollapsed, getCaller, setCaller) => {
-      if (isCollapsed) return;
-
-      if (getCaller() === GENERATOR_NOTE_CALLER) setCaller(HIDDEN_NOTE_CALLER);
-      else setCaller(GENERATOR_NOTE_CALLER);
-    },
-  },
-};
-
-export const InlineNoteEditing: Story = {
-  render: (args, context) => renderEditorialWithToolbar(args, context, defaultScrRef),
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'This story demonstrates editing notes inline. Move your cursor to a note caller and ' +
-          'the note will expand and can be edited. Move the cursor out of the note and it will ' +
-          'collapse. Click the expanded note caller to toggle between the auto-generated caller ' +
-          'and the hidden caller.',
-      },
-    },
-  },
-  args: {
-    defaultUsj: usjWeb,
-    options: inlineNoteOptions,
   },
 };
 
