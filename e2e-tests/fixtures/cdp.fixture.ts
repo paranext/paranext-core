@@ -27,10 +27,12 @@ export const test = base.extend<CdpFixtures>({
     let browser;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        browser = await chromium.connectOverCDP(CDP_URL, { timeout: 10_000 });
+        // eslint-disable-next-line no-await-in-loop -- intentional retry loop
+        browser = await chromium.connectOverCDP(CDP_URL, { timeout: 30_000 });
         break;
       } catch (err) {
         if (attempt === 3) throw err;
+        // eslint-disable-next-line no-await-in-loop -- intentional retry delay
         await new Promise<void>((resolve) => {
           setTimeout(resolve, 2_000);
         });
@@ -56,6 +58,13 @@ export const test = base.extend<CdpFixtures>({
     if (!page) throw new Error('No renderer page found via CDP');
 
     await use(page);
-    // Do NOT close browser — we didn't start the app
+    // When connected via connectOverCDP (vs launching), browser.close() only
+    // disconnects the CDP session without terminating the app. This frees the
+    // CDP connection slot so subsequent tests can connect.
+    try {
+      await browser.close();
+    } catch {
+      // Ignore disconnect errors during cleanup
+    }
   },
 });

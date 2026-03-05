@@ -16,6 +16,17 @@ BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD
 
 case "$BRANCH" in
   ai/*)
+    # Audit logging — only on AI branches where .context exists
+    AUDIT_LOG=".context/audit-logs/pre-commit.log"
+    mkdir -p "$(dirname "$AUDIT_LOG")"
+    log_hook() {
+      echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ")|pre-commit|$1" >> "$AUDIT_LOG" 2>/dev/null || true
+    }
+
+    STAGED_TS=$(git diff --cached --name-only --diff-filter=ACMR | grep -cE '\.(ts|tsx)$' || true)
+    STAGED_CS=$(git diff --cached --name-only --diff-filter=ACMR | grep -cE '\.cs$' || true)
+    log_hook "START|branch=$BRANCH|staged_ts=$STAGED_TS|staged_cs=$STAGED_CS"
+
     echo ""
     echo "=========================================="
     echo "AI Branch Detected: $BRANCH"
@@ -24,6 +35,14 @@ case "$BRANCH" in
 
     HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
     # shellcheck source=lib/ai-hooks.sh
+    export AUDIT_LOG
     bash -e -c ". '$HOOK_DIR/lib/ai-hooks.sh' && run_all_ai_checks '$BRANCH'"
+    AI_EXIT=$?
+    log_hook "AI_HOOKS|exit_code=$AI_EXIT"
+    if [ "$AI_EXIT" -ne 0 ]; then
+      exit $AI_EXIT
+    fi
+
+    log_hook "END|status=success"
     ;;
 esac
