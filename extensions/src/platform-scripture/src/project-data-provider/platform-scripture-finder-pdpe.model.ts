@@ -46,6 +46,12 @@ type CharacterCategorizer = {
    */
   wordMedialCharacterRegex: string;
   /**
+   * Full regex pattern matching one or more word-break characters, derived from Paratext 9's
+   * `CharacterCategorizer.WordBreakRegex`. Defaults to `\s+`. For projects with custom word-break
+   * characters the pattern is `(\s|char1|char2|...)+`. Used in surrogate-path word boundaries.
+   */
+  wordBreakRegex: string;
+  /**
    * Whether the project preserves invisible characters (e.g. NBSP, U+00A0) literally in USFM. When
    * `false` (the Paratext default), NBSP is stored as `~` in USFM, so `~` represents a non-breaking
    * space and is treated as whitespace during find. When `true`, invisible characters are literal
@@ -91,9 +97,6 @@ function isSingleCharacterWord(codePoint: number): boolean {
  * defaults defined in `projectSettings.json`). The following simplifications apply vs. the full P9
  * implementation:
  *
- * - WordMedialRegex comes from project settings; empty string means the project has no word-medial
- *   characters. (P9's no-arg CharacterCategorizer defaults to "-", but real projects use the
- *   parameterized constructor, so the effective default is also empty.)
  * - `DiacriticsFollowBaseCharacters` is assumed true (standard Unicode encoding order). P9 supports
  *   false for legacy hacked fonts where diacritics precede the base character, but that encoding is
  *   outside the scope of this implementation. We don't believe there is any case where
@@ -129,6 +132,7 @@ function buildSearchRegex(
     baseCharacterClassRegex: baseClass,
     diacriticCharacterClassRegex: diacriticClass,
     wordMedialCharacterRegex: wordMedial,
+    wordBreakRegex,
     allowInvisibleCharacters,
   } = characterCategorizer;
 
@@ -141,19 +145,25 @@ function buildSearchRegex(
   // misfire on them; the positive path avoids this by anchoring to whitespace/punctuation instead.
   const isSurrogatePairSearch = /[\uD800-\uDBFF]/.test(searchString);
 
-  // Surrogate-path word boundaries (positive lookaround): the match must be preceded/followed by
-  // start/end of string, whitespace, or punctuation/symbol characters. Requires u flag.
-  // Mirrors P9's surrogate path structure: start-of-string (^, equivalent to C#'s \A) is placed
-  // inside the lookbehind alongside WordBreakRegex ([WHITESPACE_CLASS]+, mirrors \s+) and
-  // punctuation/symbol regex ([\p{P}\p{S}], equivalent to P9's UnicodeCategory range ConnectorPunctuation–
-  // OtherSymbol; P9 enumerates subcategories explicitly but the set is identical).
-  const punctSymbolClass = String.raw`[\p{P}\p{S}]`;
-  const surrogateWordLookbehind = `(?<=^|[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]+|${punctSymbolClass})`;
-  const surrogateWordLookahead = `(?=$|[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]|${punctSymbolClass}+)`;
+  // Build the word-forming character class. Used both in non-surrogate-path boundaries and to
+  // exclude project-specific word-forming overrides from the surrogate-path punctuation check.
+  // Mirrors P9's CharacterCategorizer.IsWordFormingCharacter: base characters (Unicode letters,
+  // combining marks, and any extraBaseCharactersSet overrides) plus diacritics.
+  const wordFormingClass = `[${baseClass}${diacriticClass}]`;
+
+  // Surrogate-path word boundaries (requires u flag): match must be preceded/followed by
+  // start/end of string, wordBreakRegex, or non-word-forming \p{P}\p{S} characters.
+  // Mirrors P9's CharacterCategorizer.IsPunctuation: \p{P}\p{S} minus project word-forming
+  // overrides (only matters when a project promotes a punctuation/symbol char to word-forming).
+  // Lookbehind uses two chained assertions (assert \p{P}\p{S}, then assert NOT word-forming)
+  // to avoid a lookahead-inside-lookbehind. Lookahead uses a negative lookahead per \p{P}\p{S}
+  // with + on the outer group so each repeated char re-checks the exclusion.
+  const surrogateWordLookbehind = `(?<=^|${wordBreakRegex}|[\\p{P}\\p{S}])(?<!${wordFormingClass})`;
+  const surrogateWordLookahead = `(?=$|${wordBreakRegex}|(?:(?!${wordFormingClass})[\\p{P}\\p{S}])+)`;
 
   // Build the word-char pattern used in the non-surrogate-path negative lookbehind/lookahead.
   // If WordMedialRegex is non-empty, add it as an alternation: (?<![base][diacritic]|wordMedial).
-  const wordCharClass = `[${baseClass}${diacriticClass}]`;
+  const wordCharClass = wordFormingClass;
   const wordBoundaryNegLookbehind = wordMedial
     ? `(?<!${wordCharClass}|${wordMedial})`
     : `(?<!${wordCharClass})`;
@@ -437,6 +447,13 @@ export class ScriptureFinderProjectDataProviderEngine
         ),
         pdp.subscribeSetting(
           'platformScripture.allowInvisibleCharacters',
+          () => {
+            this.#invalidateCharacterCategorizerCache();
+          },
+          { retrieveDataImmediately: false },
+        ),
+        pdp.subscribeSetting(
+          'platformScripture.wordBreakRegex',
           () => {
             this.#invalidateCharacterCategorizerCache();
           },
@@ -872,11 +889,13 @@ export class ScriptureFinderProjectDataProviderEngine
         baseCharacterClassRegex,
         diacriticCharacterClassRegex,
         wordMedialCharacterRegex,
+        wordBreakRegex,
         allowInvisibleCharacters,
       ] = await Promise.all([
         pdp.getSetting('platformScripture.baseCharacterClassRegex'),
         pdp.getSetting('platformScripture.diacriticCharacterClassRegex'),
         pdp.getSetting('platformScripture.wordMedialCharacterRegex'),
+        pdp.getSetting('platformScripture.wordBreakRegex'),
         pdp.getSetting('platformScripture.allowInvisibleCharacters'),
       ]);
 
@@ -886,6 +905,8 @@ export class ScriptureFinderProjectDataProviderEngine
         throw new Error(`Did not get 'platformScripture.diacriticCharacterClassRegex' setting`);
       if (typeof wordMedialCharacterRegex !== 'string')
         throw new Error(`Did not get 'platformScripture.wordMedialCharacterRegex' setting`);
+      if (typeof wordBreakRegex !== 'string')
+        throw new Error(`Did not get 'platformScripture.wordBreakRegex' setting`);
       if (typeof allowInvisibleCharacters !== 'boolean')
         throw new Error(`Did not get 'platformScripture.allowInvisibleCharacters' setting`);
 
@@ -893,6 +914,7 @@ export class ScriptureFinderProjectDataProviderEngine
         baseCharacterClassRegex,
         diacriticCharacterClassRegex,
         wordMedialCharacterRegex,
+        wordBreakRegex,
         allowInvisibleCharacters,
       };
       return this.#cachedCharacterCategorizer;

@@ -1737,6 +1737,18 @@ declare module 'papi-shared-types' {
     'platformScripture.wordMedialCharacterRegex': string;
 
     /**
+     * Full regex pattern matching one or more word-break characters, derived from Paratext 9's
+     * `CharacterCategorizer.WordBreakRegex`. This is a computed, read-only setting — it is not
+     * stored in Settings.xml.
+     *
+     * Defaults to `\s+` when the project has no custom word-break characters. For projects with
+     * custom word-break characters the pattern is `(\s|char1|char2|...)+`, where each character is
+     * regex-escaped. Used in surrogate-path word boundaries when searching for supplementary-plane
+     * characters (e.g. certain scripts encoded as surrogate pairs in UTF-16).
+     */
+    'platformScripture.wordBreakRegex': string;
+
+    /**
      * Whether the project allows invisible characters to appear literally in USFM text. Corresponds
      * to `ScrText.Settings.AllowInvisibleChars` in Paratext 9.
      *
