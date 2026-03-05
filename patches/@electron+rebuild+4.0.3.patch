@@ -1,0 +1,51 @@
+diff --git a/node_modules/@electron/rebuild/lib/cli.js b/node_modules/@electron/rebuild/lib/cli.js
+index 35e8bc1..2539226 100755
+--- a/node_modules/@electron/rebuild/lib/cli.js
++++ b/node_modules/@electron/rebuild/lib/cli.js
+@@ -7,7 +7,7 @@ import yargs from 'yargs/yargs';
+ import { getProjectRootPath } from './search-module.js';
+ import { locateElectronModule } from './electron-locator.js';
+ import { rebuild } from './rebuild.js';
+-import { pathToFileURL } from 'node:url';
++// pathToFileURL import removed by patch - using fs.readFileSync for Windows compatibility
+ const argv = yargs(process.argv.slice(2)).version(false).options({
+     version: { alias: 'v', type: 'string', description: 'The version of Electron to build against' },
+     force: { alias: 'f', type: 'boolean', description: 'Force rebuilding modules, even if we would skip it otherwise' },
+@@ -36,10 +36,10 @@ const argv = yargs(process.argv.slice(2)).version(false).options({
+     .parseSync();
+ if (process.argv.length === 3 && process.argv[2] === '--version') {
+     try {
+-        console.log('Electron Rebuild Version:', (await import(pathToFileURL(path.resolve(import.meta.dirname, '../../package.json')).toString(), { with: { type: 'json' } })).default.version);
++        console.log('Electron Rebuild Version:', JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../package.json'), 'utf8')).version);
+     }
+     catch (err) {
+-        console.log('Electron Rebuild Version:', (await import(pathToFileURL(path.resolve(import.meta.dirname, '../package.json')).toString(), { with: { type: 'json' } })).default.version);
++        console.log('Electron Rebuild Version:', JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../package.json'), 'utf8')).version);
+     }
+     process.exit(0);
+ }
+@@ -58,8 +58,8 @@ process.on('unhandledRejection', handler);
+         try {
+             if (!electronModulePath)
+                 throw new Error('Prebuilt electron module not found');
+-            const pkgJson = await import(pathToFileURL(path.join(electronModulePath, 'package.json')).toString(), { with: { type: 'json' } });
+-            electronModuleVersion = pkgJson.default.version;
++            const pkgJson = JSON.parse(fs.readFileSync(path.join(electronModulePath, 'package.json'), 'utf8'));
++            electronModuleVersion = pkgJson.version;
+         }
+         catch (e) {
+             throw new Error(`Unable to find electron's version number, either install it or specify an explicit version`);
+diff --git a/node_modules/@electron/rebuild/lib/electron-locator.js b/node_modules/@electron/rebuild/lib/electron-locator.js
+index 9044eea..6b97dde 100644
+--- a/node_modules/@electron/rebuild/lib/electron-locator.js
++++ b/node_modules/@electron/rebuild/lib/electron-locator.js
+@@ -6,7 +6,8 @@ const electronModuleNames = ['electron', 'electron-prebuilt-compile'];
+ async function locateModuleByImport() {
+     for (const moduleName of electronModuleNames) {
+         try {
+-            const modulePath = path.resolve(fileURLToPath(import.meta.resolve(path.join(moduleName, 'package.json'))), '..');
++            // Use forward slashes for module specifiers (path.join uses backslashes on Windows)
++            const modulePath = path.resolve(fileURLToPath(import.meta.resolve(`${moduleName}/package.json`)), '..');
+             if (fs.existsSync(path.join(modulePath, 'package.json'))) {
+                 return modulePath;
+             }
