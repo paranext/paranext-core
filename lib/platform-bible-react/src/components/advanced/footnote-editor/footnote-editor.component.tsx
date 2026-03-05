@@ -11,7 +11,7 @@ import {
   isInsertEmbedOpOfType,
 } from '@eten-tech-foundation/platform-editor';
 import { Check, Copy, X } from 'lucide-react';
-import { createRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -134,11 +134,13 @@ export default function FootnoteEditor({
   defaultMarkerMenuTrigger,
   localizedStrings,
 }: FootnoteEditorProps) {
-  // The editor ref component must be this
+  // These refs must have default values of `null` to be accepted by the React elements as refs
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
-  const editorParentRef = createRef<HTMLDivElement>();
-  const outerBorderRef = createRef<HTMLDivElement>();
+  // eslint-disable-next-line no-null/no-null
+  const editorParentRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const outerBorderRef = useRef<HTMLDivElement>(null);
 
   const [callerType, setCallerType] = useState<FootnoteCallerType>('generated');
   const [customCaller, setCustomCaller] = useState<string>('*');
@@ -309,15 +311,11 @@ export default function FootnoteEditor({
   };
 
   const showInlineMarkersMenu = useCallback(() => {
-    const editorInput =
-      editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
     // Only shows the markers menu if there is currently a selection in the editor and there are
     // existing marker menu items to be shown
     const currentSelection = window.getSelection();
     if (
       outerBorderRef.current &&
-      editorInput &&
-      document.activeElement === editorInput &&
       inlineMarkerMenuItems.length &&
       currentSelection &&
       currentSelection.rangeCount > 0
@@ -329,7 +327,7 @@ export default function FootnoteEditor({
       setMarkersMenuAnchorHeight(selectionRect.height);
       setShowMarkersMenu(true);
     }
-  }, [inlineMarkerMenuItems, editorParentRef, outerBorderRef]);
+  }, [inlineMarkerMenuItems, outerBorderRef]);
 
   // Need to add a window listener for click events that will close the markers menu when you click
   // outside. There is another `onClick` listener for the marker menu that prevents click events
@@ -356,12 +354,20 @@ export default function FootnoteEditor({
 
   // Listens for the marker menu trigger to open the markers menu
   useEffect(() => {
+    const editorInput =
+      editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
     const handleKeyDown = (event: KeyboardEvent) => {
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
-      if (!showMarkersMenu && event.key === defaultMarkerMenuTrigger) {
+      if (
+        !showMarkersMenu &&
+        editorInput &&
+        document.activeElement === editorInput &&
+        event.key === defaultMarkerMenuTrigger
+      ) {
         event.preventDefault();
         showInlineMarkersMenu();
       } else if (showMarkersMenu && event.key === 'Escape') {
+        event.preventDefault();
         setShowMarkersMenu(false);
       }
     };

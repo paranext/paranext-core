@@ -877,18 +877,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [showMarkersMenu]);
 
   const showInlineMarkersMenu = useCallback(() => {
-    const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
-
     // Only shows the markers menu if there is currently a selection in the editor and there are
     // existing marker menu items to be shown
     const currentSelection = window.getSelection();
-    if (
-      editorInput &&
-      document.activeElement === editorInput &&
-      inlineMarkerMenuItems.length &&
-      currentSelection &&
-      currentSelection.rangeCount > 0
-    ) {
+    if (inlineMarkerMenuItems.length && currentSelection && currentSelection.rangeCount > 0) {
       const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
       setMarkersMenuAnchorX(selectionRect.left);
       setMarkersMenuAnchorY(selectionRect.top);
@@ -923,14 +915,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Listen for Ctrl+F to open find dialog and for the marker menu trigger to open the marker menu
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
+    const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
     const isMac = /Macintosh/i.test(navigator.userAgent);
     const handleKeyDown = (event: KeyboardEvent) => {
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
       if (currentSelectionRef.current) {
-        if (!showMarkersMenu && event.key === defaultMarkersMenuTrigger) {
+        if (
+          !showMarkersMenu &&
+          editorInput &&
+          document.activeElement === editorInput &&
+          event.key === defaultMarkersMenuTrigger
+        ) {
           event.preventDefault();
           showInlineMarkersMenu();
         } else if (showMarkersMenu && event.key === 'Escape') {
+          event.preventDefault();
           setShowMarkersMenu(false);
         }
       }
