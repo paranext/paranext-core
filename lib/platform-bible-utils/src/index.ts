@@ -34,6 +34,7 @@ export {
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
+export { usfmMarkers } from './markers/usfm-markers';
 
 // Enums
 export { Section } from './scripture/scripture-util';
@@ -246,3 +247,8 @@ export type {
   LegacyComment,
   LegacyCommentThread,
 } from './comments.types';
+export type {
+  MarkerCategoryType as CategoryType,
+  Marker,
+  MarkerType,
+} from './markers/usfm-marker-types';

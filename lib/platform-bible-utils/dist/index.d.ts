@@ -3135,6 +3135,58 @@ export interface IUsjReaderWriter {
 	usjDocumentLocationToUsfmVerseRefVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
 }
 /**
+ * Generated types using `nx generate markers-data` with
+ * 'https://raw.githubusercontent.com/ubsicap/usfm/refs/heads/master/sty/usfm.sty'
+ */
+/** Enumerator containing the marker category types possible for a given marker */
+declare enum MarkerCategoryType {
+	FileIdentification = "FileIdentification",
+	Headers = "Headers",
+	Remarks = "Remarks",
+	Introduction = "Introduction",
+	DivisionMarks = "DivisionMarks",
+	Paragraphs = "Paragraphs",
+	Poetry = "Poetry",
+	TitlesHeadings = "TitlesHeadings",
+	Tables = "Tables",
+	CenterTables = "CenterTables",
+	RightTables = "RightTables",
+	Lists = "Lists",
+	Footnotes = "Footnotes",
+	CrossReferences = "CrossReferences",
+	SpecialText = "SpecialText",
+	CharacterStyling = "CharacterStyling",
+	Breaks = "Breaks",
+	SpecialFeatures = "SpecialFeatures",
+	PeripheralReferences = "PeripheralReferences",
+	PeripheralMaterials = "PeripheralMaterials",
+	Uncategorized = "Uncategorized"
+}
+/** Enumerator containing the marker types possible for a given marker */
+export declare enum MarkerType {
+	Paragraph = "Paragraph",
+	Character = "Character",
+	Note = "Note",
+	Unknown = "Unknown"
+}
+/** Interface describing the form of a given marker */
+export interface Marker {
+	category: MarkerCategoryType;
+	type: MarkerType;
+	description: `%${string}%`;
+	hasEndMarker: boolean;
+	children?: Partial<{
+		[K in MarkerCategoryType]: string[];
+	}>;
+}
+/**
+ * Constant containing the entire usfm marker data including category, type, description, and
+ * children
+ */
+export declare const usfmMarkers: {
+	[marker: string]: Marker;
+};
+/**
  * Sanitizes HTML content to prevent security risks while preserving safe formatting.
  *
  * @param html - The HTML string to sanitize
@@ -5650,6 +5702,7 @@ export type LegacyCommentThread = {
 };
 
 export {
+	MarkerCategoryType as CategoryType,
 	USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
 	USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
 };
