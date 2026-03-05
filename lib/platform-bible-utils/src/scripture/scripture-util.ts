@@ -575,8 +575,7 @@ function isNonSemanticWhiteSpace(ch: string) {
  * Paratext-9-selectable invisible characters and white space characters.
  *
  * These are the characters listed in [Paratext 9's "Whitespace and invisible characters
- * drop-down"](https://paratext.myjetbrains.com/youtrack/issue/PTX-23623) that the user can insert
- * into the text:
+ * drop-down"](https://vimeo.com/1065977349) that the user can insert into the text:
  *
  * | Code point | Name                  |
  * | ---------- | --------------------- |
@@ -601,18 +600,13 @@ function isNonSemanticWhiteSpace(ch: string) {
  * const regex = new RegExp(`[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]`);
  * ```
  *
- * Note: Zero-width joiner (U+200D) must remain at the start of the class to avoid ESLint's
- * `no-misleading-character-class` rule treating it as part of a grapheme-cluster sequence. See
- * https://eslint.org/docs/latest/rules/no-misleading-character-class
- *
- * Note: more white space characters are supported in Paratext 9 but are not listed in this
- * dropdown. See {@link isWhiteSpace} for more information.
+ * Note: more white space characters are allowed in Paratext 9 but are not selectable in the UI and
+ * are not supported as thoroughly as these characters are. See {@link isWhiteSpace} for more
+ * information.
  *
  * This corresponds to the character set used by `CharExtensions.IsInvisibleCharOrWhitespace` from
  * `ParatextData.dll`
  */
-// Note Zero-width joiner is at the start because eslint thinks we're trying to test for joined
-// characters if it's in the middle.
 export const SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS =
   '\u200d\u2003\u2002\u0020\u00a0\u202f\u2009\u200a\u3000\u200b\u200c\u2060\u200e\u200f';
 
@@ -623,7 +617,11 @@ const invisibleCharOrWhiteSpaceRegex = new RegExp(
  * Determines whether a string contains one or more Paratext-9-selectable invisible characters or
  * white space characters and no other characters.
  *
- * The set of characters tested is `SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS`.
+ * The set of characters tested is {@link SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}.
+ *
+ * Note: more white space characters are allowed in Paratext 9 but are not selectable in the UI and
+ * are not supported as thoroughly as these characters are. See {@link isWhiteSpace} for more
+ * information.
  *
  * This function is a direct translation of `CharExtensions.IsInvisibleCharOrWhitespace` from
  * `ParatextData.dll`

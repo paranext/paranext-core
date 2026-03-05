@@ -85,6 +85,12 @@
         "isHidden": true,
         "default": false,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.wordBreakRegex": {
+        "label": "%project_settings_platformScripture_wordBreakRegex_label%",
+        "isHidden": true,
+        "default": "\\s+",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }
   }
