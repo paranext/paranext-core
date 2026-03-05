@@ -63,6 +63,7 @@ import {
   LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
+  usfmMarkers,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
@@ -94,7 +95,6 @@ import {
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
-import { usfmMarkers } from './platform-scripture-editor-usfm-markers.util';
 
 /**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
@@ -871,26 +871,31 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [contextMarker, localizedStrings],
   );
 
-  const showInlineMarkersMenu = useCallback(
-    (editorInput: HTMLDivElement) => {
-      // Only shows the markers menu if there is currently a selection in the editor and there are
-      // existing marker menu items to be shown
-      const currentSelection = window.getSelection();
-      if (
-        document.activeElement === editorInput &&
-        inlineMarkerMenuItems.length &&
-        currentSelection &&
-        currentSelection.rangeCount > 0
-      ) {
-        const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
-        setMarkersMenuAnchorX(selectionRect.left);
-        setMarkersMenuAnchorY(selectionRect.top);
-        setMarkersMenuAnchorHeight(selectionRect.height);
-        setShowMarkersMenu(true);
-      }
-    },
-    [inlineMarkerMenuItems],
-  );
+  // When the marker menu closes, should refocus the editor
+  useEffect(() => {
+    if (!showMarkersMenu) editorRef.current?.focus();
+  }, [showMarkersMenu]);
+
+  const showInlineMarkersMenu = useCallback(() => {
+    const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
+
+    // Only shows the markers menu if there is currently a selection in the editor and there are
+    // existing marker menu items to be shown
+    const currentSelection = window.getSelection();
+    if (
+      editorInput &&
+      document.activeElement === editorInput &&
+      inlineMarkerMenuItems.length &&
+      currentSelection &&
+      currentSelection.rangeCount > 0
+    ) {
+      const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
+      setMarkersMenuAnchorX(selectionRect.left);
+      setMarkersMenuAnchorY(selectionRect.top);
+      setMarkersMenuAnchorHeight(selectionRect.height);
+      setShowMarkersMenu(true);
+    }
+  }, [inlineMarkerMenuItems]);
 
   // Need to add a window listener for click events that will close the markers menu when you click
   // outside. There is another `onClick` listener for the marker menu that prevents click events
@@ -915,34 +920,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [showMarkersMenu]);
 
-  // Listens for the marker menu trigger to open the markers menu
-  useEffect(() => {
-    const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Shows the marker menu if it isn't already being shown and if the editor is currently selected
-      if (currentSelectionRef.current && editorInput) {
-        if (!showMarkersMenu && event.key === defaultMarkersMenuTrigger) {
-          event.preventDefault();
-          showInlineMarkersMenu(editorInput);
-        } else if (showMarkersMenu && event.key === 'Escape') {
-          setShowMarkersMenu(false);
-        }
-      }
-    };
-
-    editorInput?.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      editorInput?.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showMarkersMenu, showInlineMarkersMenu]);
-
-  // Listen for Ctrl+F to open find dialog
+  // Listen for Ctrl+F to open find dialog and for the marker menu trigger to open the marker menu
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
     const isMac = /Macintosh/i.test(navigator.userAgent);
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Shows the marker menu if it isn't already being shown and if the editor is currently selected
+      if (currentSelectionRef.current) {
+        if (!showMarkersMenu && event.key === defaultMarkersMenuTrigger) {
+          event.preventDefault();
+          showInlineMarkersMenu();
+        } else if (showMarkersMenu && event.key === 'Escape') {
+          setShowMarkersMenu(false);
+        }
+      }
+
       // Find dialog trigger listener
       if (event.ctrlKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
@@ -968,7 +960,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [webViewId, insertCommentAtCurrentSelection]);
+  }, [webViewId, insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu]);
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
@@ -1742,6 +1734,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
             editorOptions={options}
+            defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
             localizedStrings={localizedStrings}
           />
         </PopoverContent>

@@ -11,6 +11,7 @@ import {
   LocalizeKey,
   serialize,
   USFM_MARKERS_MAP_PARATEXT_3_0,
+  usfmMarkers,
   UsjDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
@@ -19,7 +20,6 @@ import { ScriptureRange } from 'platform-scripture-editor';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { MarkerMenuItem } from 'platform-bible-react';
-import { usfmMarkers } from './platform-scripture-editor-usfm-markers.util';
 
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
