@@ -45,11 +45,10 @@
     "test": "vitest",
     "typecheck": "tsc -p ./tsconfig.json"
   },
-  "peerDependencies": {},
   "dependencies": {
     "@eten-tech-foundation/scripture-utilities": "~0.1.6",
     "async-mutex": "^0.5.0",
-    "dompurify": "^3.3.0",
+    "dompurify": "^3.3.2",
     "jsonpath-plus": "^10.3.0",
     "stringz": "^2.1.0"
   },
