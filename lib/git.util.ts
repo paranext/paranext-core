@@ -28,7 +28,10 @@ export async function execCommand(
     });
     if (!quiet && result.stdout) console.log(result.stdout);
     if (!quiet && result.stderr) console.log(result.stderr);
-    return result;
+    return {
+      stdout: result.stdout.toString(),
+      stderr: result.stderr.toString(),
+    };
   } catch (error: unknown) {
     if (error instanceof Error) {
       // Use the more specific type for `exec`.
