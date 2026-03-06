@@ -683,6 +683,11 @@ export interface FootnoteListProps {
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
 export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
+	"%markerMenu_deprecated_label%",
+	"%markerMenu_disallowed_label%",
+	"%markerMenu_noResults%",
+	"%markerMenu_searchPlaceholder%",
+	...`%${string}%`[],
 	"%footnoteEditor_callerDropdown_label%",
 	"%footnoteEditor_callerDropdown_item_generated%",
 	"%footnoteEditor_callerDropdown_item_hidden%",
@@ -698,7 +703,7 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%footnoteEditor_saveButton_tooltip%"
 ];
 export type FootnoteEditorLocalizedStrings = {
-	[localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]?: string;
+	[localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]: string;
 };
 export type FootnoteCallerType = "generated" | "hidden" | "custom";
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
@@ -720,6 +725,8 @@ export interface FootnoteEditorProps {
 	noteKey: string | undefined;
 	/** View options of the parent editor */
 	editorOptions: EditorOptions;
+	/** Trigger key to open the footnote editor marker menu */
+	defaultMarkerMenuTrigger: string;
 	/** Localized strings to be passed to the footnote editor component */
 	localizedStrings: FootnoteEditorLocalizedStrings;
 }
@@ -728,7 +735,7 @@ export interface FootnoteEditorProps {
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onSave, onClose, scrRef, noteKey, editorOptions, localizedStrings, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onSave, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
