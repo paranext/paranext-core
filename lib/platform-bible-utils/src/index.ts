@@ -67,7 +67,9 @@ export {
   formatScrRefRange,
   getLocalizedIdFromBookNumber,
   getSectionForBook,
+  isSelectableInvisibleCharOrWhiteSpace,
   normalizeScriptureSpaces,
+  SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
   scrRefToBBBCCC,
   scrRefToBBBCCCVVV,
 } from './scripture/scripture-util';

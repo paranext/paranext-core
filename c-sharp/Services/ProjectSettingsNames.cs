@@ -39,6 +39,58 @@ public sealed class ProjectSettingsNames
     public const string PT_NONREPEATABLE_WORDS = "NonRepeatableWords";
 
     /// <summary>
+    /// Content of the character class for base (word-forming) characters, derived from
+    /// CharacterCategorizer.BaseCharacterRegex. This is a computed, read-only setting — it
+    /// is not stored in Settings.xml. The value is a regex character class body (the content that
+    /// goes inside '[]') and is safe for use in JavaScript/ECMAScript regex with the 'u' flag
+    /// </summary>
+    public const string PB_BASE_CHARACTER_CLASS_REGEX = "platformScripture.baseCharacterClassRegex";
+    public const string PT_BASE_CHARACTER_CLASS_REGEX = "BaseCharacterClassRegex";
+
+    /// <summary>
+    /// Content of the character class for diacritic (combining/modifier) characters, derived from
+    /// CharacterCategorizer.DiacriticCharacterRegex. This is a computed, read-only setting — it
+    /// is not stored in Settings.xml. The value is a regex character class body safe for use in
+    /// ECMAScript (JavaScript) regex with the 'u' flag.
+    /// </summary>
+    public const string PB_DIACRITIC_CHARACTER_CLASS_REGEX =
+        "platformScripture.diacriticCharacterClassRegex";
+    public const string PT_DIACRITIC_CHARACTER_CLASS_REGEX = "DiacriticCharacterClassRegex";
+
+    /// <summary>
+    /// Regex pattern for word-medial characters (characters that can appear inside a word but not
+    /// at its boundary), derived from CharacterCategorizer.WordMedialRegex. This is a computed,
+    /// read-only setting — it is not stored in Settings.xml. Unlike the base/diacritic class bodies
+    /// above, this is a full regex pattern (not wrapped in '[]') and is used as an alternation in
+    /// word-boundary assertions. May be an empty string for scripts with no word-medial characters.
+    /// The value is safe for use in ECMAScript (JavaScript) regex with the 'u' flag (C#-specific
+    /// identity escapes like '\-' are converted to their hex equivalents, e.g. '\x2D').
+    /// </summary>
+    public const string PB_WORD_MEDIAL_CHARACTER_REGEX =
+        "platformScripture.wordMedialCharacterRegex";
+    public const string PT_WORD_MEDIAL_CHARACTER_REGEX = "WordMedialCharacterRegex";
+
+    /// <summary>
+    /// Regex pattern that matches word-break sequences (whitespace and any project-specified
+    /// word-break characters), derived from CharacterCategorizer.WordBreakRegex. This is a
+    /// computed, read-only setting — it is not stored in Settings.xml. The value is safe for use
+    /// in ECMAScript (JavaScript) regex with the 'u' flag (C#-specific identity escapes like '\-'
+    /// are converted to their hex equivalents, e.g. '\x2D').
+    /// </summary>
+    public const string PB_WORD_BREAK_REGEX = "platformScripture.wordBreakRegex";
+    public const string PT_WORD_BREAK_REGEX = "WordBreakRegex";
+
+    /// <summary>
+    /// Whether the project allows invisible characters (e.g. NBSP) to appear literally in USFM.
+    /// When false (the default), Paratext replaces NBSP (U+00A0) with tilde (~) when writing USFM,
+    /// so ~ in USFM represents a non-breaking space. When true, the actual invisible character is
+    /// preserved and ~ is a literal tilde.
+    /// </summary>
+    public const string PB_ALLOW_INVISIBLE_CHARACTERS =
+        "platformScripture.allowInvisibleCharacters";
+    public const string PT_ALLOW_INVISIBLE_CHARACTERS = "AllowInvisibleChars";
+
+    /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
     private static readonly HashSet<string> s_ptSettingBooleans =
@@ -47,6 +99,7 @@ public sealed class ProjectSettingsNames
         "MatchBasedOnStems",
         "AllowReadAccess",
         "AllowSharingWithSLDR",
+        "AllowInvisibleChars",
     ];
 
     // Make sure this dictionary gets updated whenever new settings are added
@@ -65,6 +118,11 @@ public sealed class ProjectSettingsNames
             { PB_INVALID_CHARACTERS, PT_INVALID_CHARACTERS },
             { PB_REPEATABLE_WORDS, PT_REPEATABLE_WORDS },
             { PB_NONREPEATABLE_WORDS, PT_NONREPEATABLE_WORDS },
+            { PB_BASE_CHARACTER_CLASS_REGEX, PT_BASE_CHARACTER_CLASS_REGEX },
+            { PB_DIACRITIC_CHARACTER_CLASS_REGEX, PT_DIACRITIC_CHARACTER_CLASS_REGEX },
+            { PB_WORD_MEDIAL_CHARACTER_REGEX, PT_WORD_MEDIAL_CHARACTER_REGEX },
+            { PB_WORD_BREAK_REGEX, PT_WORD_BREAK_REGEX },
+            { PB_ALLOW_INVISIBLE_CHARACTERS, PT_ALLOW_INVISIBLE_CHARACTERS },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =

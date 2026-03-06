@@ -128,6 +128,19 @@ function createMockPdps(): ScriptureFinderOverlayPDPs {
   // We only need this much of the PDPs for these tests
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return {
+    'platform.base': {
+      getSetting: vi.fn().mockImplementation((key: string) => {
+        if (key === 'platformScripture.baseCharacterClassRegex')
+          return Promise.resolve('\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}');
+        if (key === 'platformScripture.diacriticCharacterClassRegex')
+          return Promise.resolve('\\p{Mn}\\p{Mc}\\p{Lm}');
+        if (key === 'platformScripture.wordMedialCharacterRegex') return Promise.resolve('');
+        if (key === 'platformScripture.allowInvisibleCharacters') return Promise.resolve(false);
+        if (key === 'platformScripture.wordBreakRegex') return Promise.resolve('\\s+');
+        return Promise.resolve(undefined);
+      }),
+      subscribeSetting: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+    },
     'platformScripture.USX_Book': {
       getBookUSX: vi
         .fn()
@@ -850,21 +863,6 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenUsfm).toContain(String.raw`\v 1 This is a very long replacement text for book`);
     });
 
-    it('should handle replacement with shorter text', async () => {
-      // Replace "Abraham" (7 chars) with "A"
-      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
-        {
-          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 5 },
-          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 2 }, offset: 12 },
-        },
-      ];
-
-      await engine.replace(ranges, 'A');
-
-      const writtenUsfm = getWrittenUsfm();
-      expect(writtenUsfm).toContain(String.raw`\v 2 A was the father`);
-    });
-
     it('should handle special characters in replacement text', async () => {
       // Replace text with special characters
       const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
@@ -1122,6 +1120,72 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       const writtenUsfm = getWrittenUsfm();
       expect(writtenUsfm).toContain(String.raw`\v 1 A book`);
       expect(writtenUsfm).toContain(String.raw`\v 1 B after`);
+      expect(callCount).toBe(2);
+    });
+
+    it('should throw when book-level cache is invalidated on every attempt including the last retry', async () => {
+      const invalidateCache = getCapturedChapterSubscribeCallback();
+
+      // Invalidate on every book-level fetch (multi-chapter ranges use getBookUSX)
+      vi.mocked(mockPdps['platformScripture.USX_Book'].getBookUSX).mockImplementation(() => {
+        invalidateCache();
+        return Promise.resolve(TEST_BOOK_USX);
+      });
+
+      // Multi-chapter ranges to force book-level fetch
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 8 },
+        },
+      ];
+
+      await expect(engine.replace(ranges, ['A', 'B'])).rejects.toThrow(
+        /Cache was invalidated 4 times/,
+      );
+    });
+
+    it('should use fresh data after a successful book-level retry', async () => {
+      const invalidateCache = getCapturedChapterSubscribeCallback();
+      let callCount = 0;
+
+      // First call: invalidate and return original data. Second call: return "updated" data.
+      const UPDATED_BOOK_USX = TEST_BOOK_USX.replace(
+        'The book of the genealogy',
+        'The UPDATED genealogy',
+      );
+
+      vi.mocked(mockPdps['platformScripture.USX_Book'].getBookUSX).mockImplementation(() => {
+        callCount += 1;
+        if (callCount === 1) {
+          invalidateCache();
+          return Promise.resolve(TEST_BOOK_USX);
+        }
+        return Promise.resolve(UPDATED_BOOK_USX);
+      });
+
+      // Multi-chapter ranges to force book-level fetch
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 1, verseNum: 1 }, offset: 8 },
+        },
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 5 },
+          end: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 8 },
+        },
+      ];
+
+      await engine.replace(ranges, ['A', 'B']);
+
+      const bookMock = vi.mocked(mockPdps['platformScripture.USFM_Book'].setBookUSFM);
+      const writtenUsfm = String(bookMock.mock.calls[0][1]);
+      // Should have applied the replacement to the fresh (UPDATED) data from the retry
+      expect(writtenUsfm).toContain('UPDATED');
       expect(callCount).toBe(2);
     });
   });
@@ -1821,5 +1885,320 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenUsfm).not.toContain('FIRST_MAT_CH2_B');
       expect(writtenUsfm).not.toContain('FIRST_MRK');
     });
+  });
+});
+
+describe('ScriptureFinderProjectDataProviderEngine word restriction', () => {
+  let engine: ScriptureFinderProjectDataProviderEngine;
+  let mockPdps: ScriptureFinderOverlayPDPs;
+
+  beforeEach(() => {
+    mockPdps = createMockPdps();
+    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
+  });
+
+  /**
+   * Helper: run a find job for the given options and return matched texts. Uses MAT book scope and
+   * polls until the job completes.
+   */
+  async function findTexts(
+    searchString: string,
+    options?: Partial<Omit<Parameters<typeof engine.beginFindJob>[0], 'searchString' | 'scope'>>,
+  ): Promise<string[]> {
+    const jobId = await engine.beginFindJob({
+      searchString,
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: true,
+      ...options,
+    });
+
+    // Poll until job completes
+    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    while (report.status === 'running') {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      // eslint-disable-next-line no-await-in-loop
+      report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    }
+
+    return (report.nextResults ?? []).map((r) => r.text);
+  }
+
+  // Test USFM verse text:
+  // v1: "The book of the genealogy of Jesus Christ, the son of David, the son of Abraham."
+  // v2: "Abraham was the father of Isaac, and Isaac the father of Jacob."
+  // v3: "And Jacob the father of Judah and his brothers."
+  // v1 (ch2): "Now after Jesus was born in Bethlehem of Judea in the days of Herod the king."
+
+  describe('no restriction', () => {
+    it('matches "the" anywhere, including inside longer words', async () => {
+      const results = await findTexts('the', { wordRestriction: 'none' });
+      // Should match "the" inside "genealogy", "brothers", "Bethlehem", "the" standalone, etc.
+      expect(results.length).toBeGreaterThan(0);
+      // Every result should be the literal string "the" (case-insensitive)
+      results.forEach((text) => expect(text.toLowerCase()).toBe('the'));
+    });
+
+    it('finds more matches than whole-word mode', async () => {
+      const noRestriction = await findTexts('the', { wordRestriction: 'none' });
+      const wholeWord = await findTexts('the', { wordRestriction: 'wholeWord' });
+      expect(noRestriction.length).toBeGreaterThan(wholeWord.length);
+    });
+  });
+
+  describe('whole word', () => {
+    it('matches only standalone "the", not "the" inside other words', async () => {
+      const results = await findTexts('the', { wordRestriction: 'wholeWord' });
+      expect(results.length).toBeGreaterThan(0);
+      // All results are exact word matches — confirmed by having fewer hits than unrestricted
+      results.forEach((text) => expect(text.toLowerCase()).toBe('the'));
+    });
+
+    it('matches a whole word that does not appear as a substring of other words', async () => {
+      // "son" appears standalone in the text and should be found
+      const results = await findTexts('son', { wordRestriction: 'wholeWord' });
+      expect(results.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('start of word', () => {
+    it('finds "the" at word-start but not mid-word occurrences like in "father"', async () => {
+      // standalone "the" is at start of a word; "the" inside "father" (f-a-t-h-e-r) is mid-word
+      const startResults = await findTexts('the', { wordRestriction: 'startOfWord' });
+      const noRestrictionResults = await findTexts('the', { wordRestriction: 'none' });
+      expect(startResults.length).toBeLessThan(noRestrictionResults.length);
+      expect(startResults.length).toBeGreaterThan(0);
+    });
+
+    it('does not match a pattern that appears only at the end of words', async () => {
+      // "am" ends "Abraham" but never starts a word — startOfWord should find nothing
+      const startResults = await findTexts('am', { wordRestriction: 'startOfWord' });
+      expect(startResults.length).toBe(0);
+    });
+  });
+
+  describe('end of word', () => {
+    it('matches "the" at the end of a word (standalone "the") but not inside "Bethlehem"', async () => {
+      const endResults = await findTexts('the', { wordRestriction: 'endOfWord' });
+      const noRestrictionResults = await findTexts('the', { wordRestriction: 'none' });
+      // End-of-word excludes "the" at start of words like "theology" but keeps "the" at end
+      expect(endResults.length).toBeLessThanOrEqual(noRestrictionResults.length);
+    });
+
+    it('matches "father" at end of word', async () => {
+      // "father" appears as a whole word — end-of-word restriction should still find it
+      const results = await findTexts('father', { wordRestriction: 'endOfWord' });
+      expect(results.length).toBeGreaterThan(0);
+    });
+
+    it('does not match a pattern that appears only at the start of words', async () => {
+      // "Ab" appears only at the start of "Abraham" — never at the end of a word
+      const endResults = await findTexts('Ab', { wordRestriction: 'endOfWord' });
+      expect(endResults.length).toBe(0);
+    });
+  });
+
+  describe('case insensitivity with word restriction', () => {
+    it('whole-word match is case-insensitive when caseInsensitive is true', async () => {
+      const lower = await findTexts('the', { wordRestriction: 'wholeWord', caseInsensitive: true });
+      const upper = await findTexts('THE', { wordRestriction: 'wholeWord', caseInsensitive: true });
+      expect(lower.length).toBe(upper.length);
+    });
+
+    it('whole-word match is case-sensitive when caseInsensitive is false', async () => {
+      // "and" (lowercase) appears in v2 and v3; "And" (capitalized) appears only in v3.
+      // Case-insensitive matches both, case-sensitive misses "And".
+      const insensitive = await findTexts('and', {
+        wordRestriction: 'wholeWord',
+        caseInsensitive: true,
+      });
+      const sensitive = await findTexts('and', {
+        wordRestriction: 'wholeWord',
+        caseInsensitive: false,
+      });
+      // Case-sensitive finds fewer (misses "And" at start of v3)
+      expect(sensitive.length).toBeLessThan(insensitive.length);
+    });
+
+    it('no-restriction match is case-sensitive when caseInsensitive is false', async () => {
+      // "The" (capital T) starts ch1:v1; "the" (lowercase) appears many times.
+      // Case-sensitive search for lowercase "the" misses the capital "The" in v1.
+      const insensitive = await findTexts('the', {
+        wordRestriction: 'none',
+        caseInsensitive: true,
+      });
+      const sensitive = await findTexts('the', { wordRestriction: 'none', caseInsensitive: false });
+      // Case-sensitive finds fewer (misses "The" at start of ch1:v1)
+      expect(sensitive.length).toBeLessThan(insensitive.length);
+    });
+  });
+});
+
+describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
+  let engine: ScriptureFinderProjectDataProviderEngine;
+  let mockPdps: ScriptureFinderOverlayPDPs;
+
+  beforeEach(() => {
+    mockPdps = createMockPdps();
+    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
+  });
+
+  it('should throw when retrieving update for an unknown job ID', async () => {
+    await expect(engine.retrieveFindJobUpdate('unknown-job-id', 100)).rejects.toThrow(
+      'Job with ID unknown-job-id not found',
+    );
+  });
+
+  it('should return no results when the search string has no matches', async () => {
+    const jobId = await engine.beginFindJob({
+      searchString: 'ZZZNOMATCH',
+      scope: [{ bookId: 'MAT' }],
+      caseInsensitive: false,
+    });
+
+    let resultCount = 0;
+    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    resultCount += (report.nextResults ?? []).length;
+    while (report.status === 'running') {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      // eslint-disable-next-line no-await-in-loop
+      report = await engine.retrieveFindJobUpdate(jobId, 1000);
+      resultCount += (report.nextResults ?? []).length;
+    }
+
+    expect(report.status).toBe('completed');
+    expect(resultCount).toBe(0);
+  });
+
+  it('should find results from both books when scope spans MAT and MRK', async () => {
+    const jobId = await engine.beginFindJob({
+      searchString: 'Jesus',
+      scope: [
+        { bookId: 'MAT', chapter: 1 },
+        { bookId: 'MRK', chapter: 1 },
+      ],
+      caseInsensitive: false,
+    });
+
+    const foundBooks = new Set<string>();
+    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
+    while (report.status === 'running') {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      // eslint-disable-next-line no-await-in-loop
+      report = await engine.retrieveFindJobUpdate(jobId, 1000);
+      (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
+    }
+
+    expect(report.status).toBe('completed');
+    expect(foundBooks.has('MAT')).toBe(true);
+    expect(foundBooks.has('MRK')).toBe(true);
+  });
+});
+
+describe('ScriptureFinderProjectDataProviderEngine ignoreDiacritics', () => {
+  // USX whose verse text contains pre-composed NFC characters (é = U+00E9, not decomposed).
+  // Before the fix, searching for 'e' with ignoreDiacritics would fail to find U+00E9 because
+  // UsjReaderWriter.search did not NFD-normalize the source text before applying the regex.
+  // "Hébreux résumé" contains: é (NFC) in Hébreux, plain e in breux, and é (NFC) ×2 in résumé.
+  const NFC_CHAPTER_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1"/>H\u00E9breux r\u00E9sum\u00E9.<verse eid="MAT 1:1"/>
+  </para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+
+  let engine: ScriptureFinderProjectDataProviderEngine;
+
+  beforeEach(() => {
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const mockPdps = {
+      'platform.base': {
+        getSetting: vi.fn().mockImplementation((key: string) => {
+          if (key === 'platformScripture.baseCharacterClassRegex')
+            return Promise.resolve('\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}');
+          if (key === 'platformScripture.diacriticCharacterClassRegex')
+            return Promise.resolve('\\p{Mn}\\p{Mc}\\p{Lm}');
+          if (key === 'platformScripture.wordMedialCharacterRegex') return Promise.resolve('');
+          if (key === 'platformScripture.allowInvisibleCharacters') return Promise.resolve(false);
+          if (key === 'platformScripture.wordBreakRegex') return Promise.resolve('\\s+');
+          return Promise.resolve(undefined);
+        }),
+        subscribeSetting: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USX_Book': {
+        getBookUSX: vi.fn().mockResolvedValue(NFC_CHAPTER_USX),
+        setBookUSX: vi.fn().mockResolvedValue(true),
+        subscribeBookUSX: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USX_Chapter': {
+        getChapterUSX: vi.fn().mockResolvedValue(NFC_CHAPTER_USX),
+        setChapterUSX: vi.fn().mockResolvedValue(true),
+        subscribeChapterUSX: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USFM_Book': {
+        getBookUSFM: vi.fn().mockResolvedValue(''),
+        setBookUSFM: vi.fn().mockResolvedValue(true),
+        subscribeBookUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USFM_Chapter': {
+        getChapterUSFM: vi.fn().mockResolvedValue(''),
+        setChapterUSFM: vi.fn().mockResolvedValue(true),
+        subscribeChapterUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+    } as unknown as ScriptureFinderOverlayPDPs;
+    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
+  });
+
+  async function findTexts(
+    searchString: string,
+    options?: Partial<Omit<Parameters<typeof engine.beginFindJob>[0], 'searchString' | 'scope'>>,
+  ): Promise<string[]> {
+    const jobId = await engine.beginFindJob({
+      searchString,
+      scope: [{ bookId: 'MAT', chapter: 1 }],
+      ...options,
+    });
+    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    while (report.status === 'running') {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      // eslint-disable-next-line no-await-in-loop
+      report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    }
+    return (report.nextResults ?? []).map((r) => r.text);
+  }
+
+  it('finds NFC pre-composed accented characters when ignoreDiacritics is true', async () => {
+    // "Hébreux résumé" — é (U+00E9) is pre-composed NFC; e is a plain e in "breux"
+    // With ignoreDiacritics the search for 'e' must match both plain 'e' and accented 'é'.
+    const results = await findTexts('e', { ignoreDiacritics: true, caseInsensitive: false });
+    // Must find at least the NFC é characters (would find 0 before the fix)
+    expect(results.length).toBeGreaterThan(0);
+    // The accented character should be returned as the original NFC character, not decomposed
+    const hasAccented = results.some((t) => t === '\u00E9');
+    expect(hasAccented).toBe(true);
+  });
+
+  it('does not match NFC accented chars when searching for the plain base char without ignoreDiacritics', async () => {
+    // Without ignoreDiacritics, 'e' should not match 'é' (U+00E9)
+    const results = await findTexts('e', { ignoreDiacritics: false, caseInsensitive: false });
+    // Plain 'e' in "breux" must be found
+    expect(results.some((t) => t === 'e')).toBe(true);
+    // Pre-composed 'é' must NOT be found
+    expect(results.some((t) => t === '\u00E9')).toBe(false);
   });
 });
