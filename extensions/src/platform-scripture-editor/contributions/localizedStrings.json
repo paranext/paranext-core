@@ -1,10 +1,35 @@
 {
   "metadata": {
+    "%footnoteEditor_callerDropdown_label%": {
+      "fallbackKey": "%Paratext.Base.ScriptureEditor.NoteCallerForm.NoteCallerForm.Text%"
+    },
+    "%footnoteEditor_closeButton_tooltip%": {
+      "fallbackKey": "%EditScrTextForm_2%"
+    },
+    "%footnoteEditor_noteType_crossReference_label%": {
+      "fallbackKey": "%Paratext.TextForm.crossReferenceToolStripMenuItem.Text%"
+    },
+    "%footnoteEditor_noteType_endNote_label%": {
+      "fallbackKey": "%Paratext.TextForm.endNoteToolStripMenuItem.Text%"
+    },
+    "%footnoteEditor_noteType_footnote_label%": {
+      "fallbackKey": "%Paratext.TextForm.footnoteToolStripMenuItem.Text%"
+    },
+    "%footnoteEditor_undoButton_tooltip%": {
+      "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
+    },
+    "%redoButton_tooltip%": {},
+    "%undoButton_tooltip%": {
+      "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
+    },
     "%webView_footnoteList_header%": {
       "fallbackKey": "%Paratext.ProjectMenu.ProjectPropertiesForm.showInFootnotes.HeaderText%"
     },
     "%webView_platformScriptureEditor_openChecks%": {
       "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%"
+    },
+    "%webView_platformScriptureEditor_insert%": {
+      "fallbackKey": "%Paratext.EditMenu.ListForm.insertToolStripMenuItem.Text%"
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
@@ -18,6 +43,7 @@
       "%footnoteEditor_callerDropdown_label%": "Footnote caller",
       "%footnoteEditor_callerDropdown_tooltip%": "Footnote caller",
       "%footnoteEditor_cancelButton_tooltip%": "Cancel",
+      "%footnoteEditor_closeButton_tooltip%": "Close",
       "%footnoteEditor_copyButton_tooltip%": "Copy footnote",
       "%footnoteEditor_noteType_crossReference_label%": "Cross-reference",
       "%footnoteEditor_noteType_endNote_label%": "Endnote",
@@ -25,12 +51,13 @@
       "%footnoteEditor_noteType_tooltip%": "Change type: Footnote",
       "%footnoteEditor_noteTypeDropdown_label%": "Type",
       "%footnoteEditor_saveButton_tooltip%": "Save",
+      "%footnoteEditor_undoButton_tooltip%": "Undo",
       "%mainMenu_openPlatformResourceViewer%": "Open Resource Viewer",
       "%mainMenu_openPlatformScriptureEditor%": "Open Scripture Editor",
       "%markerMenu_deprecated_label%": "Deprecated",
       "%markerMenu_disallowed_label%": "Disallowed",
       "%markerMenu_marker_add_description%": "For a translational addition to the text",
-      "%markerMenu_marker_addpn_description%": "For chinese words to be dot underline & underline",
+      "%markerMenu_marker_addpn_description%": "For Chinese words to be dot underline & underline",
       "%markerMenu_marker_b_description%": "Poetry text stanza break (e.g. stanza break) (basic)",
       "%markerMenu_marker_bd_description%": "A character style, use bold text",
       "%markerMenu_marker_bdit_description%": "A character style, use bold + italic text",
@@ -249,7 +276,11 @@
       "%platformScriptureEditor_dialog_openResourceViewer_title%": "Open Resource Viewer",
       "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Choose a project to open:",
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",
+      "%platformScriptureEditor_markersView_readonly_message_format%": "The markers view for {projectName} is read-only.",
+      "%platformScriptureEditor_markersView_readonly_dismiss%": "Don't show again today",
+      "%redoButton_tooltip%": "Redo",
       "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Change Footnote Pane Location",
+      "%undoButton_tooltip%": "Undo",
       "%webView_footnoteList_header%": "Footnotes",
       "%webView_platformScriptureEditor_backgroundColor%": "Background Color",
       "%webView_platformScriptureEditor_charactersInventory%": "Inventory: Characters...",
@@ -283,34 +314,29 @@
       "%webView_platformScriptureEditor_title_editable_no_project%": "Scripture Editor",
       "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",
-      "%webView_platformScriptureEditor_tools%": "Tools",
-      "%platformScriptureEditor_dialog_openResourceViewer_title%": "Open Resource Viewer",
-      "%platformScriptureEditor_dialog_openResourceViewer_prompt%": "Choose a resource to open:",
-      "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",
-      "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Choose a project to open:",
-      "%platformScriptureEditor_markersView_readonly_message_format%": "The markers view for {projectName} is read-only.",
-      "%platformScriptureEditor_markersView_readonly_dismiss%": "Don't show again today",
-      "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Change Footnote Pane Location"
+      "%webView_platformScriptureEditor_tools%": "Tools"
     },
     "es": {
-      "%footnoteEditor_callerDropdown_item_custom%": "Costumbre",
-      "%footnoteEditor_callerDropdown_item_generated%": "Generado automáticamente",
-      "%footnoteEditor_callerDropdown_item_hidden%": "Oculta",
-      "%footnoteEditor_callerDropdown_label%": "Nota llamadora",
-      "%footnoteEditor_callerDropdown_tooltip%": "Nota llamadora",
+      "%footnoteEditor_callerDropdown_item_custom%": "personalizado",
+      "%footnoteEditor_callerDropdown_item_generated%": "automáticamente generado",
+      "%footnoteEditor_callerDropdown_item_hidden%": "escondido",
+      "%footnoteEditor_callerDropdown_label%": "Llamador de nota",
+      "%footnoteEditor_callerDropdown_tooltip%": "Llamador de nota",
       "%footnoteEditor_cancelButton_tooltip%": "Cancelar",
+      "%footnoteEditor_closeButton_tooltip%": "Cerrar",
       "%footnoteEditor_copyButton_tooltip%": "Copiar nota al pie",
       "%footnoteEditor_noteType_crossReference_label%": "Referencia cruzada",
-      "%footnoteEditor_noteType_endNote_label%": "Nota final",
-      "%footnoteEditor_noteType_footnote_label%": "Nota",
+      "%footnoteEditor_noteType_endNote_label%": "Nota al final",
+      "%footnoteEditor_noteType_footnote_label%": "Nota a pie de página",
       "%footnoteEditor_noteType_tooltip%": "Tipo de cambio: Nota",
       "%footnoteEditor_noteTypeDropdown_label%": "Tipo",
-      "%footnoteEditor_saveButton_tooltip%": "Ahorrar",
+      "%footnoteEditor_saveButton_tooltip%": "Guardar",
+      "%footnoteEditor_undoButton_tooltip%": "Deshacer",
       "%mainMenu_openPlatformResourceViewer%": "Abrir el visor de recursos",
       "%mainMenu_openPlatformScriptureEditor%": "Abrir el editor de Escrituras",
       "%markerMenu_deprecated_label%": "Obsoleto",
       "%markerMenu_disallowed_label%": "No permitido",
-      "%markerMenu_marker_add_description%": "Para una adición traduccional al texto",
+      "%markerMenu_marker_add_description%": "Para un ajuste de traducción al texto",
       "%markerMenu_marker_addpn_description%": "Para palabras en chino con subrayado punteado y subrayado",
       "%markerMenu_marker_b_description%": "Salto de estrofa en texto poético (por ejemplo, separación de estrofas) (básico)",
       "%markerMenu_marker_bd_description%": "Estilo de carácter, usar texto en negrita",
@@ -530,7 +556,11 @@
       "%platformScriptureEditor_dialog_openResourceViewer_title%": "Abrir el visor de recursos",
       "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Elige un proyecto para abrir:",
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Abrir el editor de Escrituras",
+      "%platformScriptureEditor_markersView_readonly_message_format%": "La vista de marcadores para {projectName} es de solo lectura.",
+      "%platformScriptureEditor_markersView_readonly_dismiss%": "No mostrar de nuevo hoy",
+      "%redoButton_tooltip%": "Rehacer",
       "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Cambiar la ubicación del panel de notas al pie",
+      "%undoButton_tooltip%": "Deshacer",
       "%webView_footnoteList_header%": "Notas al pie",
       "%webView_platformScriptureEditor_backgroundColor%": "Color de fondo",
       "%webView_platformScriptureEditor_charactersInventory%": "Inventario: Caracteres...",
@@ -564,14 +594,7 @@
       "%webView_platformScriptureEditor_title_editable_no_project%": "Editor de Escrituras",
       "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Visor de recursos",
-      "%webView_platformScriptureEditor_tools%": "Herramientas",
-      "%platformScriptureEditor_dialog_openResourceViewer_title%": "Abrir el visor de recursos",
-      "%platformScriptureEditor_dialog_openResourceViewer_prompt%": "Elija un recurso para abrir:",
-      "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Abrir el editor de Escrituras",
-      "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Elige un proyecto para abrir:",
-      "%platformScriptureEditor_markersView_readonly_message_format%": "La vista de marcadores para {projectName} es de solo lectura.",
-      "%platformScriptureEditor_markersView_readonly_dismiss%": "No mostrar de nuevo hoy",
-      "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Cambiar la ubicación del panel de notas al pie"
+      "%webView_platformScriptureEditor_tools%": "Herramientas"
     }
   }
 }
