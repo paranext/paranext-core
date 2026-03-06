@@ -62,6 +62,7 @@ import { ExtensionInfo, getExtensions } from '../webpack/webpack.util';
       extensionsBasedOnTemplate.push(ext);
     } catch (e) {
       if (
+        e instanceof Error &&
         e
           .toString()
           .toLowerCase()
