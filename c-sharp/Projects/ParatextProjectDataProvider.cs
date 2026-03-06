@@ -1009,6 +1009,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             paratextSettingName == ProjectSettingsNames.PT_BASE_CHARACTER_CLASS_REGEX
             || paratextSettingName == ProjectSettingsNames.PT_DIACRITIC_CHARACTER_CLASS_REGEX
             || paratextSettingName == ProjectSettingsNames.PT_WORD_MEDIAL_CHARACTER_REGEX
+            || paratextSettingName == ProjectSettingsNames.PT_WORD_BREAK_REGEX
         )
         {
             var characterCategorizer = scrText.CharacterCategorizer;
@@ -1018,10 +1019,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     characterCategorizer.BaseCharacterRegex,
                 ProjectSettingsNames.PT_DIACRITIC_CHARACTER_CLASS_REGEX =>
                     characterCategorizer.DiacriticCharacterRegex,
-                // \- is a valid identity escape in C# regex but is rejected by ECMAScript Unicode
-                // mode (only SyntaxCharacters may be identity-escaped with `u`). Replace it with
-                // the equivalent hex escape so the value is safe for JavaScript regex with `u`.
-                _ => characterCategorizer.WordMedialRegex.Replace(@"\-", @"\x2D"),
+                // `\-` is accepted by .NET regex, but in ECMAScript `u` mode it is invalid
+                // outside character classes. Use `\x2D` so the pattern is valid in JavaScript
+                // with `u` regardless of where this fragment is inserted.
+                ProjectSettingsNames.PT_WORD_MEDIAL_CHARACTER_REGEX =>
+                    characterCategorizer.WordMedialRegex.Replace(@"\-", @"\x2D"),
+                _ => characterCategorizer.WordBreakRegex.Replace(@"\-", @"\x2D"),
             };
         }
 
@@ -1102,6 +1105,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             paratextSettingName == ProjectSettingsNames.PT_BASE_CHARACTER_CLASS_REGEX
             || paratextSettingName == ProjectSettingsNames.PT_DIACRITIC_CHARACTER_CLASS_REGEX
             || paratextSettingName == ProjectSettingsNames.PT_WORD_MEDIAL_CHARACTER_REGEX
+            || paratextSettingName == ProjectSettingsNames.PT_WORD_BREAK_REGEX
         )
             throw new Exception(
                 "Cannot set character categorizer regex settings. They are computed read-only values."

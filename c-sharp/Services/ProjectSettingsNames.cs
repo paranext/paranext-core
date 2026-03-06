@@ -71,6 +71,16 @@ public sealed class ProjectSettingsNames
     public const string PT_WORD_MEDIAL_CHARACTER_REGEX = "WordMedialCharacterRegex";
 
     /// <summary>
+    /// Regex pattern that matches word-break sequences (whitespace and any project-specified
+    /// word-break characters), derived from CharacterCategorizer.WordBreakRegex. This is a
+    /// computed, read-only setting — it is not stored in Settings.xml. The value is safe for use
+    /// in ECMAScript (JavaScript) regex with the 'u' flag (C#-specific identity escapes like '\-'
+    /// are converted to their hex equivalents, e.g. '\x2D').
+    /// </summary>
+    public const string PB_WORD_BREAK_REGEX = "platformScripture.wordBreakRegex";
+    public const string PT_WORD_BREAK_REGEX = "WordBreakRegex";
+
+    /// <summary>
     /// Whether the project allows invisible characters (e.g. NBSP) to appear literally in USFM.
     /// When false (the default), Paratext replaces NBSP (U+00A0) with tilde (~) when writing USFM,
     /// so ~ in USFM represents a non-breaking space. When true, the actual invisible character is
@@ -111,6 +121,7 @@ public sealed class ProjectSettingsNames
             { PB_BASE_CHARACTER_CLASS_REGEX, PT_BASE_CHARACTER_CLASS_REGEX },
             { PB_DIACRITIC_CHARACTER_CLASS_REGEX, PT_DIACRITIC_CHARACTER_CLASS_REGEX },
             { PB_WORD_MEDIAL_CHARACTER_REGEX, PT_WORD_MEDIAL_CHARACTER_REGEX },
+            { PB_WORD_BREAK_REGEX, PT_WORD_BREAK_REGEX },
             { PB_ALLOW_INVISIBLE_CHARACTERS, PT_ALLOW_INVISIBLE_CHARACTERS },
         };
 

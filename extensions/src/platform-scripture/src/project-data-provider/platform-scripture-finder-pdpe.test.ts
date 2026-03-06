@@ -136,6 +136,7 @@ function createMockPdps(): ScriptureFinderOverlayPDPs {
           return Promise.resolve('\\p{Mn}\\p{Mc}\\p{Lm}');
         if (key === 'platformScripture.wordMedialCharacterRegex') return Promise.resolve('');
         if (key === 'platformScripture.allowInvisibleCharacters') return Promise.resolve(false);
+        if (key === 'platformScripture.wordBreakRegex') return Promise.resolve('\\s+');
         return Promise.resolve(undefined);
       }),
       subscribeSetting: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
@@ -2097,5 +2098,104 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
     expect(report.status).toBe('completed');
     expect(foundBooks.has('MAT')).toBe(true);
     expect(foundBooks.has('MRK')).toBe(true);
+  });
+});
+
+describe('ScriptureFinderProjectDataProviderEngine ignoreDiacritics', () => {
+  // USX whose verse text contains pre-composed NFC characters (é = U+00E9, not decomposed).
+  // Before the fix, searching for 'e' with ignoreDiacritics would fail to find U+00E9 because
+  // UsjReaderWriter.search did not NFD-normalize the source text before applying the regex.
+  // "Hébreux résumé" contains: é (NFC) in Hébreux, plain e in breux, and é (NFC) ×2 in résumé.
+  const NFC_CHAPTER_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1"/>H\u00E9breux r\u00E9sum\u00E9.<verse eid="MAT 1:1"/>
+  </para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+
+  let engine: ScriptureFinderProjectDataProviderEngine;
+
+  beforeEach(() => {
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const mockPdps = {
+      'platform.base': {
+        getSetting: vi.fn().mockImplementation((key: string) => {
+          if (key === 'platformScripture.baseCharacterClassRegex')
+            return Promise.resolve('\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}');
+          if (key === 'platformScripture.diacriticCharacterClassRegex')
+            return Promise.resolve('\\p{Mn}\\p{Mc}\\p{Lm}');
+          if (key === 'platformScripture.wordMedialCharacterRegex') return Promise.resolve('');
+          if (key === 'platformScripture.allowInvisibleCharacters') return Promise.resolve(false);
+          if (key === 'platformScripture.wordBreakRegex') return Promise.resolve('\\s+');
+          return Promise.resolve(undefined);
+        }),
+        subscribeSetting: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USX_Book': {
+        getBookUSX: vi.fn().mockResolvedValue(NFC_CHAPTER_USX),
+        setBookUSX: vi.fn().mockResolvedValue(true),
+        subscribeBookUSX: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USX_Chapter': {
+        getChapterUSX: vi.fn().mockResolvedValue(NFC_CHAPTER_USX),
+        setChapterUSX: vi.fn().mockResolvedValue(true),
+        subscribeChapterUSX: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USFM_Book': {
+        getBookUSFM: vi.fn().mockResolvedValue(''),
+        setBookUSFM: vi.fn().mockResolvedValue(true),
+        subscribeBookUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USFM_Chapter': {
+        getChapterUSFM: vi.fn().mockResolvedValue(''),
+        setChapterUSFM: vi.fn().mockResolvedValue(true),
+        subscribeChapterUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+    } as unknown as ScriptureFinderOverlayPDPs;
+    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
+  });
+
+  async function findTexts(
+    searchString: string,
+    options?: Partial<Omit<Parameters<typeof engine.beginFindJob>[0], 'searchString' | 'scope'>>,
+  ): Promise<string[]> {
+    const jobId = await engine.beginFindJob({
+      searchString,
+      scope: [{ bookId: 'MAT', chapter: 1 }],
+      ...options,
+    });
+    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    while (report.status === 'running') {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      // eslint-disable-next-line no-await-in-loop
+      report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    }
+    return (report.nextResults ?? []).map((r) => r.text);
+  }
+
+  it('finds NFC pre-composed accented characters when ignoreDiacritics is true', async () => {
+    // "Hébreux résumé" — é (U+00E9) is pre-composed NFC; e is a plain e in "breux"
+    // With ignoreDiacritics the search for 'e' must match both plain 'e' and accented 'é'.
+    const results = await findTexts('e', { ignoreDiacritics: true, caseInsensitive: false });
+    // Must find at least the NFC é characters (would find 0 before the fix)
+    expect(results.length).toBeGreaterThan(0);
+    // The accented character should be returned as the original NFC character, not decomposed
+    const hasAccented = results.some((t) => t === '\u00E9');
+    expect(hasAccented).toBe(true);
+  });
+
+  it('does not match NFC accented chars when searching for the plain base char without ignoreDiacritics', async () => {
+    // Without ignoreDiacritics, 'e' should not match 'é' (U+00E9)
+    const results = await findTexts('e', { ignoreDiacritics: false, caseInsensitive: false });
+    // Plain 'e' in "breux" must be found
+    expect(results.some((t) => t === 'e')).toBe(true);
+    // Pre-composed 'é' must NOT be found
+    expect(results.some((t) => t === '\u00E9')).toBe(false);
   });
 });

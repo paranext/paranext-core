@@ -612,6 +612,7 @@ export const SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS =
 
 const invisibleCharOrWhiteSpaceRegex = new RegExp(
   `^[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]+$`,
+  'u',
 );
 /**
  * Determines whether a string contains one or more Paratext-9-selectable invisible characters or
