@@ -475,7 +475,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
     // Tests that verify USFM markers can be inserted via replacement
     // Offsets start at 5 to skip the \v N  marker (5 chars for single-digit verses)
 
-    it(String.raw`should replace plain text with USFM containing \nd marker`, async () => {
+    it('should replace plain text with USFM containing \\nd marker', async () => {
       // Replace "Jesus Christ" with "\nd Jesus Christ\nd*" (without comma)
       // Verse 1: "The book of the genealogy of Jesus Christ, the son..."
       // Counting from offset 5: T(5)h(6)e(7) (8)b(9)o(10)o(11)k(12) (13)o(14)f(15) (16)t(17)h(18)e(19) (20)g(21)e(22)n(23)e(24)a(25)l(26)o(27)g(28)y(29) (30)o(31)f(32) (33)J(34)e(35)s(36)u(37)s(38) (39)C(40)h(41)r(42)i(43)s(44)t(45)
@@ -496,7 +496,7 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenUsfm).toContain(String.raw`\v 1`);
     });
 
-    it(String.raw`should replace text with USFM containing \add marker`, async () => {
+    it('should replace text with USFM containing \\add marker', async () => {
       // Replace "the son of David" with "\add the son of David\add*"
       // Starting after "Jesus Christ, " which is at offset 35+14 = 49
       const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
@@ -512,26 +512,23 @@ describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
       expect(writtenUsfm).toContain(String.raw`\add the son of David\add*`);
     });
 
-    it(
-      String.raw`should replace text with USFM containing \wj marker (words of Jesus)`,
-      async () => {
-        // Replace "after Jesus" in chapter 2 with "\wj Jesus\wj*"
-        // Chapter 2 verse 1: "Now after Jesus was born..."
-        // "after" starts at offset 5+4 = 9 ("Now " = 4 chars)
-        const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
-          {
-            start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 9 },
-            end: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 20 },
-          },
-        ];
+    it('should replace text with USFM containing \\wj marker (words of Jesus)', async () => {
+      // Replace "after Jesus" in chapter 2 with "\wj Jesus\wj*"
+      // Chapter 2 verse 1: "Now after Jesus was born..."
+      // "after" starts at offset 5+4 = 9 ("Now " = 4 chars)
+      const ranges: ScriptureRangeUsjChapterOrUsfmVerseLocation[] = [
+        {
+          start: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 9 },
+          end: { verseRef: { book: 'MAT', chapterNum: 2, verseNum: 1 }, offset: 20 },
+        },
+      ];
 
-        await engine.replace(ranges, String.raw`\wj Jesus\wj*`);
+      await engine.replace(ranges, String.raw`\wj Jesus\wj*`);
 
-        const writtenUsfm = getWrittenUsfm();
-        expect(writtenUsfm).toContain(String.raw`Now \wj Jesus\wj* was`);
-        expect(writtenUsfm).toContain(String.raw`\c 2`);
-      },
-    );
+      const writtenUsfm = getWrittenUsfm();
+      expect(writtenUsfm).toContain(String.raw`Now \wj Jesus\wj* was`);
+      expect(writtenUsfm).toContain(String.raw`\c 2`);
+    });
 
     it('should replace multiple ranges with different USFM markers', async () => {
       // Replace "Jesus Christ" in verse 1 with \nd and "after Jesus" in chapter 2 with \wj

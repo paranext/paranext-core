@@ -191,7 +191,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
         try {
           await wait(REGISTRATION_CHANGE_RESTART_DELAY_MS);
           await papi.commands.sendCommand('platform.restart');
-        } catch (e) {
+        } catch {
           logger.warn(
             `Failed to restart after saving Paratext registration information! The user will need to restart manually`,
           );

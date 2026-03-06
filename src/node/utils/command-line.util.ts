@@ -1,4 +1,4 @@
-﻿import { startsWith } from 'platform-bible-utils';
+import { startsWith } from 'platform-bible-utils';
 
 /** All command line arguments mapped from argument type to array of aliases for the argument */
 type CommandLineArgumentAliases = {

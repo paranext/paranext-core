@@ -149,7 +149,7 @@ export function WebView({
 
         if (contentWindowWithCleanup?.webViewCleanup?.unmountRoot)
           unmountRootFunctionRef.current = contentWindowWithCleanup.webViewCleanup.unmountRoot;
-      } catch (error) {
+      } catch {
         // While closing the WebView, we log a warning if the cleanup function is missing
         // If we log these errors when capturing, it causes noise during startup that isn't important since we try capturing multiple times
       }

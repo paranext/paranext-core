@@ -30,7 +30,7 @@ function isPotentialConnectionToPapiNetwork(url: string | URL): boolean {
   return parseInt(port, 10) === parseInt(`${WEBSOCKET_PORT}`, 10);
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/lines-between-class-members, @typescript-eslint/no-unused-vars, @typescript-eslint/class-methods-use-this, no-dupe-class-members */
+/* eslint-disable @typescript-eslint/no-explicit-any, @stylistic/ts/lines-between-class-members, @typescript-eslint/no-unused-vars, @typescript-eslint/class-methods-use-this, no-dupe-class-members */
 // Copied from ws types
 type BufferLike =
   | string

@@ -486,7 +486,7 @@ function test_UsfmVerseLocationToUsjNodeAndDocumentLocation(
     );
     // Disabling conditional expectations because we need to do different tests based on which
     // kinds of data we're testing
-    /* eslint-disable jest/no-conditional-expect */
+    /* eslint-disable vitest/no-conditional-expect */
     if (UsjReaderWriter.isUsjDocumentLocationForTextContent(testCase.usjContent)) {
       expect(location.node).toBe(testCase.usjContent.node);
     } else {
@@ -548,7 +548,7 @@ function test_JsonPathToUsjNodeAndDocumentLocation(
     );
     // Disabling conditional expectations because we need to do different tests based on which
     // kinds of data we're testing
-    /* eslint-disable jest/no-conditional-expect */
+    /* eslint-disable vitest/no-conditional-expect */
     if (UsjReaderWriter.isUsjDocumentLocationForTextContent(testCase.usjContent)) {
       expect(location.node).toBe(testCase.usjContent.node);
     } else {
@@ -1860,7 +1860,7 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
   // This problem is due to what TJ thinks is a bug in Paratext 9's USFM -> USX translation.
   // See https://discord.com/channels/892072317436448768/902938040362729552/1426247234621804727
   // TODO: link YouTrack case if they agree this is a bug
-  // eslint-disable-next-line jest/no-disabled-tests
+  // eslint-disable-next-line vitest/no-disabled-tests
   test.skip('2SA 3 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh3Usj, usjReaderWriterOptionsParatext3_0);
 

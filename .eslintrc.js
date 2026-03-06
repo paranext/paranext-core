@@ -1,8 +1,10 @@
 module.exports = {
   extends: [
-    // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
-    // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
-    'erb',
+    // https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
+    'airbnb',
+    'airbnb/hooks',
+    'plugin:promise/recommended',
+    'plugin:compat/recommended',
     // https://github.com/import-js/eslint-plugin-import?tab=readme-ov-file#typescript
     'plugin:import/recommended',
     'plugin:import/typescript',
@@ -12,6 +14,10 @@ module.exports = {
     // See https://github.com/prettier/eslint-config-prettier and https://github.com/prettier/eslint-plugin-prettier
     'plugin:prettier/recommended',
   ],
+  env: {
+    browser: true,
+    node: true,
+  },
 
   rules: {
     // #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.eslintrc.cjs and https://github.com/paranext/paranext-extension-template/blob/main/.eslintrc.js
@@ -20,6 +26,7 @@ module.exports = {
 
     // Use `noImplicitReturns` instead. See https://typescript-eslint.io/rules/consistent-return/.
     'consistent-return': 'off',
+    'no-param-reassign': ['error', { props: false }],
     'import/default': 'off',
     'import/extensions': 'off',
     // A temporary hack related to IDE not resolving correct package.json
@@ -44,7 +51,7 @@ module.exports = {
     ],
     '@typescript-eslint/explicit-member-accessibility': ['error', { accessibility: 'no-public' }],
     'lines-between-class-members': 'off',
-    '@typescript-eslint/lines-between-class-members': [
+    '@stylistic/ts/lines-between-class-members': [
       'error',
       'always',
       { exceptAfterSingleLine: true, exceptAfterOverload: true },
@@ -134,15 +141,33 @@ module.exports = {
         // #endregion
       },
     },
+    {
+      // Vitest test rules and globals (replaces eslint-plugin-jest that was previously bundled in erb)
+      files: ['*.test.ts', '*.test.tsx', '*.spec.ts', '*.spec.tsx'],
+      extends: ['plugin:vitest/legacy-recommended'],
+      env: {
+        'vitest/env': true,
+      },
+      rules: {
+        // Rules from jest/recommended not included in vitest/legacy-recommended
+        'vitest/no-alias-methods': 'error',
+        'vitest/no-conditional-expect': 'error',
+        'vitest/no-disabled-tests': 'warn',
+        'vitest/no-focused-tests': 'error',
+        'vitest/no-interpolation-in-snapshots': 'error',
+        'vitest/no-standalone-expect': 'error',
+        'vitest/no-test-prefixes': 'error',
+      },
+    },
   ],
+  parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 2022,
     sourceType: 'module',
     project: './tsconfig.lint.json',
     tsconfigRootDir: __dirname,
-    createDefaultProgram: true,
   },
-  plugins: ['@typescript-eslint', 'no-type-assertion', 'no-null'],
+  plugins: ['@typescript-eslint', '@stylistic/ts', 'no-type-assertion', 'no-null'],
   settings: {
     'import/resolver': {
       // See https://github.com/benmosher/eslint-plugin-import/issues/1396#issuecomment-575727774 for line below

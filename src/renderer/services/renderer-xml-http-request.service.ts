@@ -7,7 +7,7 @@
  */
 export class PapiRendererXMLHttpRequest implements XMLHttpRequest {
   // Use "any" to match the XMLHttpRequest interface
-  /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/lines-between-class-members */
+  /* eslint-disable @typescript-eslint/no-explicit-any, @stylistic/ts/lines-between-class-members */
   readonly DONE!: 4;
   readonly HEADERS_RECEIVED!: 2;
   readonly LOADING!: 3;

@@ -179,7 +179,7 @@ export function PlatformDockLayout() {
                       });
                     } catch (e) {
                       throw new Error(
-                        `platform-dock-layout.component error: Opening Home web view failed!`,
+                        `platform-dock-layout.component error: Opening Home web view failed! ${e}`,
                       );
                     }
                   })();
@@ -206,7 +206,7 @@ export function PlatformDockLayout() {
               await onLayoutChangeRef.current(...args, webViewDefinition);
             } catch (e) {
               throw new Error(
-                `platform-dock-layout.component error: Failed to run onLayoutChangeRef.current! currentTabId: ${currentTabId}, direction: ${direction}`,
+                `platform-dock-layout.component error: Failed to run onLayoutChangeRef.current! currentTabId: ${currentTabId}, direction: ${direction}, error: ${e}`,
               );
             }
           }

@@ -102,7 +102,7 @@ export function isSerializable(value: unknown): boolean {
   try {
     const serializedValue = serialize(value);
     return serializedValue === serialize(deserialize(serializedValue));
-  } catch (e) {
+  } catch {
     return false;
   }
 }
