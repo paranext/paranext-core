@@ -145,31 +145,28 @@ function buildSearchRegex(
   // misfire on them; the positive path avoids this by anchoring to whitespace/punctuation instead.
   const isSurrogatePairSearch = /[\uD800-\uDBFF]/.test(searchString);
 
-  // Build the word-forming character class. Used both in non-surrogate-path boundaries and to
-  // exclude project-specific word-forming overrides from the surrogate-path punctuation check.
-  // Mirrors P9's CharacterCategorizer.IsWordFormingCharacter: base characters (Unicode letters,
-  // combining marks, and any extraBaseCharactersSet overrides) plus diacritics.
+  // Build the word-forming character class used in non-surrogate-path boundaries.
   const wordFormingClass = `[${baseClass}${diacriticClass}]`;
 
-  // Surrogate-path word boundaries (requires u flag): match must be preceded/followed by
-  // start/end of string, wordBreakRegex, or non-word-forming \p{P}\p{S} characters.
-  // Mirrors P9's CharacterCategorizer.IsPunctuation: \p{P}\p{S} minus project word-forming
-  // overrides (only matters when a project promotes a punctuation/symbol char to word-forming).
-  // Lookbehind uses two chained assertions (assert \p{P}\p{S}, then assert NOT word-forming)
-  // to avoid a lookahead-inside-lookbehind. Lookahead uses a negative lookahead per \p{P}\p{S}
-  // with + on the outer group so each repeated char re-checks the exclusion.
-  const surrogateWordLookbehind = `(?<=^|${wordBreakRegex}|[\\p{P}\\p{S}])(?<!${wordFormingClass})`;
-  const surrogateWordLookahead = `(?=$|${wordBreakRegex}|(?:(?!${wordFormingClass})[\\p{P}\\p{S}])+)`;
+  // Punctuation/symbol class mirroring P9's `punctRegex` in `ScrLanguage.CreateSearchRegex`.
+  // Uses the same explicit category list: all Punctuation (Pc Pd Ps Pe Pi Pf Po) and Symbol
+  // (Sm Sc Sk So) general categories, with + to match runs — identical to P9's regex literal.
+  const punctuationRegex = `[\\p{Pc}\\p{Pd}\\p{Ps}\\p{Pe}\\p{Pi}\\p{Pf}\\p{Po}\\p{Sm}\\p{Sc}\\p{Sk}\\p{So}]+`;
 
-  // Build the word-char pattern used in the non-surrogate-path negative lookbehind/lookahead.
-  // If WordMedialRegex is non-empty, add it as an alternation: (?<![base][diacritic]|wordMedial).
-  const wordCharClass = wordFormingClass;
+  // Surrogate-path word boundaries mirror P9's regex.AppendFormat calls inside isSurrogatePairSearch:
+  //   start: (?<=^|WordBreakRegex|punctuationRegex)
+  //   end:   (?=$|WordBreakRegex|punctuationRegex)
+  const surrogateWordLookbehind = `(?<=^|${wordBreakRegex}|${punctuationRegex})`;
+  const surrogateWordLookahead = `(?=$|${wordBreakRegex}|${punctuationRegex})`;
+
+  // Non-surrogate-path word boundaries: negative lookbehind/lookahead asserting the adjacent
+  // character is not a word-forming character (or word-medial if applicable).
   const wordBoundaryNegLookbehind = wordMedial
-    ? `(?<!${wordCharClass}|${wordMedial})`
-    : `(?<!${wordCharClass})`;
+    ? `(?<!${wordFormingClass}|${wordMedial})`
+    : `(?<!${wordFormingClass})`;
   const wordBoundaryNegLookahead = wordMedial
-    ? `(?!${wordCharClass}|${wordMedial})`
-    : `(?!${wordCharClass})`;
+    ? `(?!${wordFormingClass}|${wordMedial})`
+    : `(?!${wordFormingClass})`;
 
   // Build a RegExp to test individual code points for diacritics (used in ignoreDiacritics loop).
   const isDiacritic = new RegExp(`^[${diacriticClass}]$`, 'u');
@@ -263,17 +260,14 @@ function buildSearchRegex(
     regexStr += isSurrogatePairSearch ? surrogateWordLookahead : wordBoundaryNegLookahead;
   }
 
-  // The `u` flag is required for:
-  //  - \p{} Unicode property escapes in word boundaries (both paths: \p{P}/\p{S} for surrogate,
-  //    base/diacritic classes for non-surrogate) and the diacritic class.
-  //  - The whitespace character class ([WHITESPACE_CLASS]) when ignoreWhitespace is active, so
-  //    that the class is evaluated at code-point granularity (supplementary-plane characters are
-  //    treated as single code points, not pairs of code units). Not applied in the useRegex path
-  //    to avoid forcing u-mode onto user-supplied patterns.
+  // The `u` flag enables \p{} Unicode property escapes, which are used in word-boundary patterns
+  // (for letter/diacritic classes like \p{Lu}, \p{Mn}) and diacritic-ignore suffixes. It is NOT
+  // needed for the whitespace class (SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS), since that is
+  // just a literal list of BMP characters with no \p{} escapes. Skipped in the useRegex path to
+  // avoid silently breaking user-supplied patterns that may not be u-mode compatible.
   const needsUnicodeFlag =
     (!containsSingleCharacterWord && !!(wordRestriction && wordRestriction !== 'none')) ||
-    (!!ignoreDiacritics && !useRegex) ||
-    (!!ignoreWhitespace && !useRegex);
+    (!!ignoreDiacritics && !useRegex);
   const flags = `${caseInsensitive ? 'i' : ''}g${needsUnicodeFlag ? 'u' : ''}`;
 
   return new RegExp(regexStr, flags);
@@ -1003,6 +997,7 @@ export class ScriptureFinderProjectDataProviderEngine
     const matches = usj.search(
       buildSearchRegex(job.options, characterCategorizer),
       markerStylesToInclude,
+      job.options.ignoreDiacritics ? { normalizationForm: 'NFD' } : undefined,
     );
 
     return matches.map((match) => {

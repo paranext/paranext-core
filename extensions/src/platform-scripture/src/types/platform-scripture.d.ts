@@ -1716,15 +1716,15 @@ declare module 'papi-shared-types' {
     /**
      * Content of the `[]` character class for base (word-forming) characters, derived from Paratext
      * 9's `CharacterCategorizer.BaseCharacterRegex`. This is a computed, read-only setting — it is
-     * not stored in Settings.xml. Safe for use in ECMAScript regex with the `u` flag.
+     * not stored in Settings.xml. Must be used in an ECMAScript regex with the `u` flag.
      */
     'platformScripture.baseCharacterClassRegex': string;
 
     /**
      * Content of the `[]` character class for diacritic (combining/modifier) characters, derived
      * from Paratext 9's `CharacterCategorizer.DiacriticCharacterRegex`. This is a computed,
-     * read-only setting — it is not stored in Settings.xml. Safe for use in ECMAScript regex with
-     * the `u` flag.
+     * read-only setting — it is not stored in Settings.xml. Must be used in an ECMAScript regex
+     * with the `u` flag.
      */
     'platformScripture.diacriticCharacterClassRegex': string;
 
@@ -1743,8 +1743,7 @@ declare module 'papi-shared-types' {
      *
      * Defaults to `\s+` when the project has no custom word-break characters. For projects with
      * custom word-break characters the pattern is `(\s|char1|char2|...)+`, where each character is
-     * regex-escaped. Used in surrogate-path word boundaries when searching for supplementary-plane
-     * characters (e.g. certain scripts encoded as surrogate pairs in UTF-16).
+     * regex-escaped.
      */
     'platformScripture.wordBreakRegex': string;
 
