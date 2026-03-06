@@ -9,14 +9,16 @@ export const FOOTNOTE_EDITOR_STRING_KEYS = Object.freeze([
   '%footnoteEditor_callerDropdown_item_hidden%',
   '%footnoteEditor_callerDropdown_item_custom%',
   '%footnoteEditor_callerDropdown_tooltip%',
-  '%footnoteEditor_cancelButton_tooltip%',
+  '%footnoteEditor_closeButton_tooltip%',
   '%footnoteEditor_copyButton_tooltip%',
   '%footnoteEditor_noteType_crossReference_label%',
   '%footnoteEditor_noteType_endNote_label%',
   '%footnoteEditor_noteType_footnote_label%',
   '%footnoteEditor_noteType_tooltip%',
   '%footnoteEditor_noteTypeDropdown_label%',
-  '%footnoteEditor_saveButton_tooltip%',
+  '%footnoteEditor_undoButton_tooltip%',
+  '%undoButton_tooltip%',
+  '%redoButton_tooltip%',
 ] as const);
 
 export type FootnoteEditorLocalizedStrings = {

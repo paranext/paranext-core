@@ -284,14 +284,16 @@ const sampleFootnoteEditorLocalizedStrings: FootnoteEditorLocalizedStrings = {
   '%footnoteEditor_callerDropdown_item_hidden%': 'Hidden',
   '%footnoteEditor_callerDropdown_item_custom%': 'Custom',
   '%footnoteEditor_callerDropdown_tooltip%': 'Footnote caller',
-  '%footnoteEditor_cancelButton_tooltip%': 'Cancel',
+  '%footnoteEditor_closeButton_tooltip%': 'Close',
   '%footnoteEditor_copyButton_tooltip%': 'Copy footnote',
   '%footnoteEditor_noteType_crossReference_label%': 'Cross reference',
   '%footnoteEditor_noteType_endNote_label%': 'Endnote',
   '%footnoteEditor_noteType_footnote_label%': 'Footnote',
   '%footnoteEditor_noteType_tooltip%': 'Change type: Footnote',
   '%footnoteEditor_noteTypeDropdown_label%': 'Type',
-  '%footnoteEditor_saveButton_tooltip%': 'Save',
+  '%footnoteEditor_undoButton_tooltip%': 'Undo',
+  '%undoButton_tooltip%': 'Undo',
+  '%redoButton_tooltip%': 'Redo',
 };
 
 export const FootnoteEditorView: Story = {
@@ -382,17 +384,12 @@ export const FootnoteEditorView: Story = {
       [noteKey],
     );
 
+    // FootnoteEditor applies changes to the parent editor via parentEditorRef before calling
+    // onClose, so nothing extra is needed here beyond resetting the popover state.
     const onEditorClose = () => {
       noteKey.current = undefined;
       noteOps.current = undefined;
       setShowFootnoteEditor(false);
-    };
-
-    const onEditorSave = (newNoteOps: DeltaOp[]) => {
-      if (noteKey.current) {
-        editorRef.current?.replaceEmbedUpdate(noteKey.current, newNoteOps);
-      }
-      onEditorClose();
     };
 
     return (
@@ -420,11 +417,11 @@ export const FootnoteEditorView: Story = {
             <FootnoteEditor
               noteKey={noteKey.current}
               noteOps={noteOps.current}
-              onSave={onEditorSave}
               onClose={onEditorClose}
               scrRef={args.scrRef ?? defaultScrRef}
               editorOptions={mergedOptions}
               localizedStrings={sampleFootnoteEditorLocalizedStrings}
+              parentEditorRef={editorRef}
             />
           </PopoverContent>
         </Popover>

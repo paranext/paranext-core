@@ -49,6 +49,7 @@ import {
   SelectMenuItemHandler,
   Spinner,
   TabToolbar,
+  UndoRedoButtons,
   usePromise,
 } from 'platform-bible-react';
 import {
@@ -75,7 +76,6 @@ import {
 } from 'platform-scripture-editor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
-import { Redo, Undo } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import {
   getLocalizeKeysFromDecorations,
@@ -1323,13 +1323,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setShowFootnoteEditor(false);
   }, []);
 
-  const onFootnoteEditorSave = (newNoteOps: DeltaOp[]) => {
-    if (editingNoteKey.current) {
-      editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, newNoteOps);
-    }
-    onFootnoteEditorClose();
-  };
-
   const onCommentEditorCancel = useCallback(() => {
     // Remove the pending annotation if one was created
     if (pendingCommentAnnotationRange.current) {
@@ -1558,26 +1551,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             />
             {!isReadOnlyEffective && (
               <>
-                <Button
-                  aria-label="Undo"
-                  title="Undo"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => editorRef.current?.undo()}
-                  disabled={!canUndo}
-                >
-                  <Undo />
-                </Button>
-                <Button
-                  aria-label="Redo"
-                  title="Redo"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => editorRef.current?.redo()}
-                  disabled={!canRedo}
-                >
-                  <Redo />
-                </Button>
+                <UndoRedoButtons
+                  onUndoClick={() => editorRef.current?.undo()}
+                  onRedoClick={() => editorRef.current?.redo()}
+                  canUndo={canUndo}
+                  canRedo={canRedo}
+                />
                 {blockMarker !== undefined && (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1738,11 +1717,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             classNameForEditor="scripture-font"
             noteOps={editingNoteOps.current}
             noteKey={editingNoteKey.current}
-            onSave={onFootnoteEditorSave}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
             editorOptions={options}
             localizedStrings={localizedStrings}
+            parentEditorRef={editorRef}
           />
         </PopoverContent>
       </Popover>
