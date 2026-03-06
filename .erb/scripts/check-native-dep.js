@@ -43,6 +43,6 @@ ${chalk.bold(
       process.exit(1);
     }
   } catch (e) {
-    console.log('Native dependencies could not be checked');
+    console.error('Error checking native dependencies', e);
   }
 }

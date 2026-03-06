@@ -1,4 +1,4 @@
-﻿/** Service that runs the extension-host process from the main file */
+/** Service that runs the extension-host process from the main file */
 
 import {
   getCommandLineArgumentsGroup,
