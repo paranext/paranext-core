@@ -63,6 +63,7 @@ import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webp
       extensionsBasedOnTemplate.push(ext);
     } catch (e) {
       if (
+        e instanceof Error &&
         includes(
           e.toString().toLowerCase(),
           ERROR_STRINGS.subtreeNeverAdded.replace('{0}', ext.dirPathOSIndependent).toLowerCase(),

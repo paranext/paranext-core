@@ -232,7 +232,7 @@ async function tryImports() {
     // This will be blocked and will suggest the papi.storage api.
     const fs = require('fs');
     logger.error(`Evil: <<BAD>> Successfully imported fs! fs.readFileSync = ${fs.readFileSync}`);
-  } catch (e) {
+  } catch {
     // No need to log good stuff unless we're testing
     // logger.info(`Evil: Good error on require fs: ${e.message}`);
   }
@@ -241,7 +241,7 @@ async function tryImports() {
     // This will be blocked and will suggest the papi.fetch api.
     const https = require('https');
     logger.error(`Evil: <<BAD>> Successfully imported https! ${JSON.stringify(https)}`);
-  } catch (e) {
+  } catch {
     // No need to log good stuff unless we're testing
     // logger.info(`Evil: Good error on require https: ${e.message}`);
   }
@@ -260,7 +260,7 @@ async function tryImports() {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const xhr = new XMLHttpRequest();
     logger.error(`Evil: <<BAD>> Successfully created an XMLHttpRequest!`);
-  } catch (e) {
+  } catch {
     // No need to log good stuff unless we're testing
     // logger.info(`Evil: Good error on XMLHttpRequest! ${e}`);
   }
@@ -270,7 +270,7 @@ async function tryImports() {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const webSocket = new WebSocket();
     logger.error(`Evil: <<BAD>> Successfully created a WebSocket!`);
-  } catch (e) {
+  } catch {
     // No need to log good stuff unless we're testing
     // logger.info(`Evil: Good error on WebSocket! ${e}`);
   }
@@ -281,7 +281,7 @@ async function tryImports() {
     logger.error(
       `Evil: <<BAD>> Successfully dynamically imported fs! fs.readFileSync = ${fs.readFileSync}`,
     );
-  } catch (e) {
+  } catch {
     // No need to log good stuff unless we're testing
     // logger.info(`Evil: Good error on dynamic import! ${e.message}`);
   }

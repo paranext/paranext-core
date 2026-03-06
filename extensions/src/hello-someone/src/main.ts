@@ -308,7 +308,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       context.executionToken,
       peopleWebViewIdKey,
     );
-  } catch (e) {
+  } catch {
     existingPeopleWebViewId = undefined;
   }
 

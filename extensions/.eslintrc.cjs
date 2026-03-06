@@ -2,9 +2,11 @@
 
 module.exports = {
   extends: [
-    // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
-    // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
-    'erb',
+    // https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
+    'airbnb',
+    'airbnb/hooks',
+    'plugin:promise/recommended',
+    'plugin:compat/recommended',
     // https://github.com/import-js/eslint-plugin-import?tab=readme-ov-file#typescript
     'plugin:import/recommended',
     'plugin:import/typescript',
@@ -12,6 +14,10 @@ module.exports = {
     // See https://github.com/prettier/eslint-config-prettier and https://github.com/prettier/eslint-plugin-prettier
     'plugin:prettier/recommended',
   ],
+  env: {
+    browser: true,
+    node: true,
+  },
 
   rules: {
     // Some rules in this following shared region are not applied since they are overridden in subsequent regions
@@ -21,6 +27,7 @@ module.exports = {
 
     // Use `noImplicitReturns` instead. See https://typescript-eslint.io/rules/consistent-return/.
     'consistent-return': 'off',
+    'no-param-reassign': ['error', { props: false }],
     'import/default': 'off',
     'import/extensions': 'off',
     // A temporary hack related to IDE not resolving correct package.json
@@ -45,7 +52,7 @@ module.exports = {
     ],
     '@typescript-eslint/explicit-member-accessibility': ['error', { accessibility: 'no-public' }],
     'lines-between-class-members': 'off',
-    '@typescript-eslint/lines-between-class-members': [
+    '@stylistic/ts/lines-between-class-members': [
       'error',
       'always',
       { exceptAfterSingleLine: true, exceptAfterOverload: true },
@@ -164,17 +171,17 @@ module.exports = {
       },
     },
   ],
+  parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 2022,
     sourceType: 'module',
     project: './tsconfig.lint.json',
     tsconfigRootDir: __dirname,
-    createDefaultProgram: true,
   },
   // Note: this folder's package.json does not contain these plugins or any other eslint packages
   // because eslint was finding multiple copies of plugins and failing. So we use the packages from
   // repo root instead
-  plugins: ['@typescript-eslint', 'no-type-assertion', 'no-null'],
+  plugins: ['@typescript-eslint', '@stylistic/ts', 'no-type-assertion', 'no-null'],
   settings: {
     'import/resolver': {
       // See https://github.com/benmosher/eslint-plugin-import/issues/1396#issuecomment-575727774 for line below

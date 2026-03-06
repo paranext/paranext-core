@@ -1,4 +1,7 @@
 {
   "extends": "./tsconfig",
+  "compilerOptions": {
+    "allowJs": true
+  },
   "include": [".eslintrc.js", "*.ts", "*.js", "lib", "src", "webpack"]
 }

@@ -55,8 +55,8 @@
   "devDependencies": {
     "@types/dompurify": "^3.0.5",
     "@types/jest": "^29.5.14",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
     "dts-bundle-generator": "^9.5.1",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.0",
