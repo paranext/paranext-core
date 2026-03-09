@@ -24,7 +24,7 @@ import {
 import '@/components/demo/scripture-editor/scripture-editor.stories.css';
 import FootnoteEditor from '@/components/advanced/footnote-editor/footnote-editor.component';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
-import scriptureEditorLocalizedStrings from '../../../../../../extensions/src/platform-scripture-editor/contributions/localizedStrings.json';
+import scriptureEditorLocalizedStrings from 'platform-scripture-editor/contributions/localizedStrings.json';
 
 const defaultScrRef: SerializedVerseRef = { book: 'PSA', chapterNum: 1, verseNum: 1 };
 
