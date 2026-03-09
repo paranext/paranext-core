@@ -104,6 +104,9 @@ class DatabaseService implements IDatabaseService {
   }
 }
 
+/** This is an internal-only export for testing purposes and should not be used in development */
+export const testingDatabaseService = { DatabaseService };
+
 let initializationPromise: Promise<void>;
 let databaseServiceNetworkObject: IDatabaseService;
 export async function initialize(): Promise<void> {
