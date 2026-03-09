@@ -990,15 +990,10 @@ export class ScriptureFinderProjectDataProviderEngine
       this.#getOrCreateCachedCharacterCategorizer(),
     ]);
 
-    const markerStylesToInclude = job.options.verseTextOnly
-      ? USFM_VERSE_TEXT_MARKERS_SET
-      : undefined;
-
-    const matches = usj.search(
-      buildSearchRegex(job.options, characterCategorizer),
-      markerStylesToInclude,
-      job.options.ignoreDiacritics ? { normalizationForm: 'NFD' } : undefined,
-    );
+    const matches = usj.search(buildSearchRegex(job.options, characterCategorizer), {
+      markerStylesToInclude: job.options.verseTextOnly ? USFM_VERSE_TEXT_MARKERS_SET : undefined,
+      normalizationForm: job.options.ignoreDiacritics ? 'NFD' : undefined,
+    });
 
     return matches.map((match) => {
       return {
