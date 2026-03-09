@@ -1,4 +1,4 @@
-import { MarkerCategoryType, Marker, MarkerType } from './usfm-marker-types';
+import { MarkerCategoryType, Marker, MarkerType } from './usfm-marker.model';
 
 // TODO: Incorporate `.sty` files to allow user customization and more standard marker data storage
 /**
