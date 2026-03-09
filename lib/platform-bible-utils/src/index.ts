@@ -248,4 +248,4 @@ export type {
   MarkerCategoryType as CategoryType,
   Marker,
   MarkerType,
-} from './markers/usfm-marker-types';
+} from './markers/usfm-marker.model';

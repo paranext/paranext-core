@@ -9,7 +9,7 @@ import { MARKER_MENU_STRING_KEYS } from '../marker-menu.component';
 export const FOOTNOTE_EDITOR_STRING_KEYS = Object.freeze([
   ...MARKER_MENU_STRING_KEYS,
   ...Object.entries(usfmMarkers)
-    .map((item) => item[1].description)
+    .map(([, markerDetails]) => markerDetails.description)
     .filter((item) => !!item),
   '%footnoteEditor_callerDropdown_label%',
   '%footnoteEditor_callerDropdown_item_generated%',
