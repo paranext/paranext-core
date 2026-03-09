@@ -22,7 +22,11 @@ import {
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
   ScopeSelector,
-  ScrollGroupSelector,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Skeleton,
   Spinner,
   Tooltip,
@@ -40,7 +44,13 @@ import {
   LocalizeKey,
   Mutex,
 } from 'platform-bible-utils';
-import { FindJobStatus, FindJobStatusReport, FindOptions, FindScope } from 'platform-scripture';
+import {
+  FindJobStatus,
+  FindJobStatusReport,
+  FindOptions,
+  FindScope,
+  WordRestriction,
+} from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   HidableFindResult,
@@ -61,7 +71,6 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_showRecentSearches%',
   '%webView_find_recent%',
   '%webView_find_scopeUndetermined%',
-  '%webView_find_scrollGroup%',
   '%webView_find_searchPlaceholder%',
   '%webView_find_result%',
   '%webView_find_showingResults%',
@@ -73,6 +82,11 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_allText%',
   '%webView_find_allText_tooltip%',
   '%webView_find_verseTextOnly%',
+  '%webView_find_restrictions%',
+  '%webView_find_restrictions_none%',
+  '%webView_find_restrictions_wholeWord%',
+  '%webView_find_restrictions_startOfWord%',
+  '%webView_find_restrictions_endOfWord%',
 ];
 
 /** The type of text content to search in */
@@ -82,6 +96,8 @@ const defaultBooksPresent: string = '';
 const defaultProjectName = '';
 const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
+/** Set to true to re-enable the Allow Regex option for advanced users */
+const SHOW_ALLOW_REGEX_OPTION = false;
 
 global.webViewComponent = function FindWebView({
   projectId,
@@ -92,7 +108,6 @@ global.webViewComponent = function FindWebView({
   const [submittedSearchTerm, setSubmittedSearchTerm] = useState<string | undefined>(undefined);
   const [scope, setScope] = useWebViewState<Scope>('findScope', 'book');
   const [submittedScope, setSubmittedScope] = useState<Scope | undefined>();
-  const [submittedScrollGroupId, setSubmittedScrollGroupId] = useState<number | undefined>();
   const [submittedVerseRef, setSubmittedVerseRef] = useState<SerializedVerseRef | undefined>(
     undefined,
   );
@@ -109,10 +124,13 @@ global.webViewComponent = function FindWebView({
   const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
   const [submittedShouldMatchCase, setSubmittedShouldMatchCase] = useState(false);
-  const [isRegexAllowed, setIsRegexAllowed] = useState(false);
-  const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
   const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
   const [submittedSearchTextType, setSubmittedSearchTextType] = useState<SearchTextType>('all');
+  const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
+  const [submittedWordRestriction, setSubmittedWordRestriction] = useState<WordRestriction>('none');
+  // isRegexAllowed is hidden from the UI via SHOW_ALLOW_REGEX_OPTION but kept for future use
+  const [isRegexAllowed, setIsRegexAllowed] = useState(false);
+  const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
 
   const [activeJobId, setActiveJobId] = useState<string>();
   const [searchProgress, setSearchProgress] = useState<number>(0);
@@ -137,8 +155,7 @@ global.webViewComponent = function FindWebView({
     );
   }, [results]);
 
-  const [verseRefSetting, setVerseRefSetting, scrollGroupId, setScrollGroupId] =
-    useWebViewScrollGroupScrRef();
+  const [verseRefSetting, setVerseRefSetting] = useWebViewScrollGroupScrRef();
 
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
 
@@ -372,6 +389,7 @@ global.webViewComponent = function FindWebView({
         caseInsensitive: !shouldMatchCase,
         useRegex: isRegexAllowed,
         verseTextOnly: searchTextType === 'verseOnly',
+        wordRestriction,
       });
       if (!isMountedRef.current) return;
 
@@ -380,12 +398,12 @@ global.webViewComponent = function FindWebView({
 
       setSubmittedSearchTerm(searchTerm);
       setSubmittedScope(scope);
-      setSubmittedScrollGroupId(scrollGroupId);
       setSubmittedVerseRef(verseRefSetting);
       setSubmittedBookIds(selectedBookIds);
       setSubmittedShouldMatchCase(shouldMatchCase);
-      setSubmittedIsRegexAllowed(isRegexAllowed);
       setSubmittedSearchTextType(searchTextType);
+      setSubmittedWordRestriction(wordRestriction);
+      setSubmittedIsRegexAllowed(isRegexAllowed);
       setFocusedResultIndex(undefined);
 
       setResults([]);
@@ -399,7 +417,6 @@ global.webViewComponent = function FindWebView({
 
       setSubmittedSearchTerm('');
       setSubmittedScope(undefined);
-      setSubmittedScrollGroupId(undefined);
       setSubmittedVerseRef(undefined);
     } finally {
       // Clear the flag regardless of success or failure
@@ -414,12 +431,12 @@ global.webViewComponent = function FindWebView({
     isRegexAllowed,
     isSearchQueryValid,
     scope,
-    scrollGroupId,
     searchTerm,
     searchTextType,
     selectedBookIds,
     shouldMatchCase,
     verseRefSetting,
+    wordRestriction,
   ]);
 
   const clearSearchResults = useCallback(async () => {
@@ -436,12 +453,12 @@ global.webViewComponent = function FindWebView({
 
     setSubmittedSearchTerm(undefined);
     setSubmittedScope(undefined);
-    setSubmittedScrollGroupId(undefined);
     setSubmittedVerseRef(undefined);
     setSubmittedBookIds([]);
     setSubmittedShouldMatchCase(false);
-    setSubmittedIsRegexAllowed(false);
     setSubmittedSearchTextType('all');
+    setSubmittedWordRestriction('none');
+    setSubmittedIsRegexAllowed(false);
 
     setFocusedResultIndex(undefined);
   }, [abandonFindJob]);
@@ -463,7 +480,6 @@ global.webViewComponent = function FindWebView({
   const searchQueryChanged = useMemo(() => {
     return (
       searchTerm.trim() !== submittedSearchTerm ||
-      scrollGroupId !== submittedScrollGroupId ||
       scope !== submittedScope ||
       (scope === 'chapter' &&
         (verseRefSetting.book !== submittedVerseRef?.book ||
@@ -472,8 +488,9 @@ global.webViewComponent = function FindWebView({
       (scope === 'selectedBooks' &&
         [...selectedBookIds].sort().join(',') !== [...submittedBookIds].sort().join(',')) ||
       shouldMatchCase !== submittedShouldMatchCase ||
-      isRegexAllowed !== submittedIsRegexAllowed ||
-      searchTextType !== submittedSearchTextType
+      searchTextType !== submittedSearchTextType ||
+      wordRestriction !== submittedWordRestriction ||
+      isRegexAllowed !== submittedIsRegexAllowed
     );
   }, [
     searchTerm,
@@ -482,16 +499,16 @@ global.webViewComponent = function FindWebView({
     submittedVerseRef,
     scope,
     submittedScope,
-    scrollGroupId,
-    submittedScrollGroupId,
     selectedBookIds,
     submittedBookIds,
     shouldMatchCase,
     submittedShouldMatchCase,
-    isRegexAllowed,
-    submittedIsRegexAllowed,
     searchTextType,
     submittedSearchTextType,
+    wordRestriction,
+    submittedWordRestriction,
+    isRegexAllowed,
+    submittedIsRegexAllowed,
   ]);
 
   const loadMoreResults = useCallback(async () => {
@@ -787,21 +804,31 @@ global.webViewComponent = function FindWebView({
                 </RadioGroup>
               </div>
 
-              {(scope === 'chapter' || scope === 'book') && (
-                <div className="tw-flex tw-flex-col tw-gap-4 tw-items-start">
-                  <Label>{localizedStrings['%webView_find_scrollGroup%']}</Label>
-                  <ScrollGroupSelector
-                    // This is kinda hacky, but the real scrollgroup keys are also defined like this
-                    // in the `availableScrollGroupIds` variable in
-                    // `src\renderer\services\scroll-group.service-host.ts`
-                    // Both there and here they are a placeholder to be replaced as part of
-                    // https://paratextstudio.atlassian.net/browse/PT-1514
-                    availableScrollGroupIds={[undefined, ...Array(5).keys()]}
-                    onChangeScrollGroupId={setScrollGroupId}
-                    scrollGroupId={scrollGroupId}
-                  />
-                </div>
-              )}
+              <div className="tw-space-y-2">
+                <Label>{localizedStrings['%webView_find_restrictions%']}</Label>
+                <Select
+                  value={wordRestriction}
+                  onValueChange={(value: WordRestriction) => setWordRestriction(value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {localizedStrings['%webView_find_restrictions_none%']}
+                    </SelectItem>
+                    <SelectItem value="wholeWord">
+                      {localizedStrings['%webView_find_restrictions_wholeWord%']}
+                    </SelectItem>
+                    <SelectItem value="startOfWord">
+                      {localizedStrings['%webView_find_restrictions_startOfWord%']}
+                    </SelectItem>
+                    <SelectItem value="endOfWord">
+                      {localizedStrings['%webView_find_restrictions_endOfWord%']}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
               <div className="tw-flex tw-items-center tw-space-x-2">
                 <Checkbox
@@ -813,17 +840,18 @@ global.webViewComponent = function FindWebView({
                   {localizedStrings['%webView_find_matchCase%']}
                 </Label>
               </div>
-
-              <div className="tw-flex tw-items-center tw-space-x-2">
-                <Checkbox
-                  id="show-context"
-                  checked={isRegexAllowed}
-                  onCheckedChange={(checked) => setIsRegexAllowed(checked === true)}
-                />
-                <Label htmlFor="show-context">
-                  {localizedStrings['%webView_find_allowRegex%']}
-                </Label>
-              </div>
+              {SHOW_ALLOW_REGEX_OPTION && (
+                <div className="tw-flex tw-items-center tw-space-x-2">
+                  <Checkbox
+                    id="allow-regex"
+                    checked={isRegexAllowed}
+                    onCheckedChange={(checked) => setIsRegexAllowed(checked === true)}
+                  />
+                  <Label htmlFor="allow-regex" className="tw-cursor-pointer">
+                    {localizedStrings['%webView_find_allowRegex%']}
+                  </Label>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

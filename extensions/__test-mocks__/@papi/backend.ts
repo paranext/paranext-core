@@ -18,3 +18,13 @@ export const logger = {
 export class ProjectDataProviderEngine {
   notifyUpdate = vi.fn();
 }
+
+const papi = {
+  projectDataProviders: {
+    get: vi.fn().mockResolvedValue({
+      getSetting: vi.fn().mockResolvedValue(undefined),
+    }),
+  },
+};
+
+export default papi;
