@@ -175,7 +175,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
         try {
           await wait(INTERNET_SETTINGS_RESTART_DELAY_MS);
           await papi.commands.sendCommand('platform.restart');
-        } catch (e) {
+        } catch {
           logger.warn(
             `Failed to restart after saving Internet settings! The user will need to restart manually`,
           );

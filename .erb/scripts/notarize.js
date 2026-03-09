@@ -39,7 +39,7 @@ exports.default = async function notarizeMacos(context) {
             console.log(`Detected signing identity from main app: ${identity}`);
           }
         } catch (e) {
-          console.warn('Could not detect identity from signed app, using default');
+          console.warn('Could not detect identity from signed app, using default', e);
         }
 
         // Fallback to finding the identity
@@ -56,7 +56,7 @@ exports.default = async function notarizeMacos(context) {
               console.log(`Found signing identity: ${identity}`);
             }
           } catch (e) {
-            console.error('Could not find Developer ID Application identity in keychain');
+            console.error('Could not find Developer ID Application identity in keychain', e);
             throw new Error('No valid signing identity found');
           }
         }
@@ -132,7 +132,7 @@ exports.default = async function notarizeMacos(context) {
                   );
                   successCount += 1;
                 } catch (e) {
-                  console.warn(`    Failed to sign: ${path.basename(file)}`);
+                  console.warn(`    Failed to sign: ${path.basename(file)}`, e);
                 }
               });
 
@@ -179,7 +179,7 @@ exports.default = async function notarizeMacos(context) {
           });
           console.log('Mercurial bundle signing completed successfully');
         } catch (e) {
-          console.warn('  Verification had warnings (may be acceptable)');
+          console.warn('  Verification had warnings (may be acceptable)', e);
           console.log('Mercurial bundle signing completed');
         }
       } catch (error) {

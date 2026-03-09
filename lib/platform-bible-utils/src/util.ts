@@ -219,7 +219,7 @@ export function getAllObjectFunctionNames(
   Object.getOwnPropertyNames(obj).forEach((property) => {
     try {
       if (typeof obj[property] === 'function') objectFunctionNames.add(property);
-    } catch (error) {
+    } catch {
       // Too noisy - only reenable if you need more details
       // console.trace(`Skipping ${property} on ${objId} due to error: ${error}`);
     }
@@ -232,9 +232,9 @@ export function getAllObjectFunctionNames(
     Object.getOwnPropertyNames(objectPrototype).forEach((property) => {
       try {
         if (typeof obj[property] === 'function') objectFunctionNames.add(property);
-      } catch (error) {
+      } catch {
         // Too noisy - only reenable if you need more details
-        // console.trace(`Skipping ${property} on ${objId}'s prototype due to error: ${error}`);
+        // console.trace(`Skipping ${property} on ${objId}'s prototype due to error`);
       }
     });
     objectPrototype = Object.getPrototypeOf(objectPrototype);

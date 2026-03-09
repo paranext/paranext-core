@@ -1,4 +1,4 @@
-﻿// #region imports
+// #region imports
 
 import * as networkService from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
@@ -77,7 +77,7 @@ const getNetworkObjectRequestType = (id: string, functionName?: string) =>
 const getRemoteNetworkObjectFunctions = async (id: string): Promise<boolean | undefined> => {
   try {
     return await networkService.request<[], boolean>(getNetworkObjectRequestType(id));
-  } catch (e) {
+  } catch {
     // No processes are registered to handle this get request, meaning a network object with this ID does not exist
     // TODO: check the message and throw the error if it is not the right message?
     return undefined;
