@@ -2,7 +2,7 @@
 # Quick app refresh - stops, rebuilds, and restarts Platform.Bible with CDP enabled
 # This is a FAST operation (~30s). Agents should run this freely without optimization concerns.
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 
 echo "Stopping app..."
 npm stop 2>/dev/null || true
