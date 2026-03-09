@@ -232,6 +232,7 @@ export type {
   UsjNodeAndDocumentLocation,
   UsjPropertyValueLocation,
   UsjReaderWriterOptions,
+  UsjSearchOptions,
   UsjSearchResult,
   UsjTextContentLocation,
   UsjVerseRefBookLocation,

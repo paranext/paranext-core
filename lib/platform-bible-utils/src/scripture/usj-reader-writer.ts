@@ -40,6 +40,7 @@ import {
   UsjNodeAndDocumentLocation,
   UsjPropertyValueLocation,
   UsjReaderWriterOptions,
+  UsjSearchOptions,
   UsjSearchResult,
   UsjTextContentLocation,
   UsjVerseRefBookLocation,
@@ -1613,41 +1614,51 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   /**
    * Builds a mapping array where `map[nfdIndex]` gives the corresponding index in the original
    * string. Used to convert regex match positions from NFD-normalized text back to positions in the
-   * original string. The map has length `nfd.length + 1` so that the exclusive end of a match
-   * (which may equal `nfd.length`) is also covered.
+   * original string.
+   *
+   * The map has `nfd.length + 1` entries to handle the end position of a regex match. A regex match
+   * end position points one past the last matched character — so a match covering an entire string
+   * of length N has end position N, not N-1. That means `match.end` can equal `nfd.length`, which
+   * would be out-of-bounds for an array of size `nfd.length`. The extra entry covers this case; it
+   * is pre-filled with `original.length`, which is the correct end position in the original
+   * string.
    */
   private static buildNFDToOriginalPositionMap(original: string): number[] {
-    const nfd = original.normalize('NFD');
+    const normalizedString = original.normalize('NFD');
     // Pre-fill with original.length as a safe sentinel for the end-of-string case
-    const map = new Array<number>(nfd.length + 1).fill(original.length);
-    let npos = 0;
-    let opos = 0;
-    // Iterate by code point so surrogate pairs advance opos by 2
+    const nfdToOriginalPosition = new Array<number>(normalizedString.length + 1).fill(
+      original.length,
+    );
+    let normalizedPosition = 0;
+    let originalPosition = 0;
+    // Iterate by code point so surrogate pairs advance originalPosition by 2
     Array.from(original).forEach((char) => {
-      const charNFD = char.normalize('NFD');
-      // All NFD code units for this original code point map back to opos
-      Array.from({ length: charNFD.length }).forEach((_, k) => {
-        map[npos + k] = opos;
+      const charNormalized = char.normalize('NFD');
+      // All NFD code units for this original code point map back to originalPosition
+      Array.from({ length: charNormalized.length }).forEach((_, k) => {
+        nfdToOriginalPosition[normalizedPosition + k] = originalPosition;
       });
-      npos += charNFD.length;
-      opos += char.length; // 1 for BMP, 2 for surrogate pairs
+      normalizedPosition += charNormalized.length;
+      originalPosition += char.length; // 1 for BMP, 2 for surrogate pairs
     });
-    // map[npos] === map[nfd.length] is already set to original.length by the fill above
-    return map;
+    // nfdToOriginalPosition[normalizedPosition] === nfdToOriginalPosition[normalizedString.length] is already set to original.length by the fill above
+    return nfdToOriginalPosition;
   }
 
-  /**
-   * @param searchOptions.normalizationForm When `'NFD'`, the concatenated text is normalized to NFD
-   *   before the regex is applied, and match positions are mapped back to the original string. This
-   *   is required for correct `ignoreDiacritics` behaviour on NFC source text: a pre-composed
-   *   character such as `é` (U+00E9) will not match `e[combining]*` unless the text is first
-   *   decomposed. Returned `text` values are always slices of the original (non-NFD) string.
-   */
+  search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
+  search(regex: RegExp, searchOptions?: UsjSearchOptions): UsjSearchResult[];
   search(
     regex: RegExp,
-    markerStylesToInclude?: Set<string>,
-    searchOptions?: { normalizationForm?: 'NFD' },
+    markerStylesOrSearchOptions?: Set<string> | UsjSearchOptions,
   ): UsjSearchResult[] {
+    const markerStylesToInclude =
+      markerStylesOrSearchOptions instanceof Set
+        ? markerStylesOrSearchOptions
+        : markerStylesOrSearchOptions?.markerStylesToInclude;
+    const normalizationForm =
+      markerStylesOrSearchOptions instanceof Set
+        ? undefined
+        : markerStylesOrSearchOptions?.normalizationForm;
     const retVal: UsjSearchResult[] = [];
     if (this.usj.content.length === 0) return retVal;
 
@@ -1731,7 +1742,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     // be matched by patterns like `e[\p{Mn}]*`. Build a position map so match indices in the NFD
     // string can be converted back to indices in the original string.
     const nfdToOriginalMap =
-      searchOptions?.normalizationForm === 'NFD'
+      normalizationForm === 'NFD'
         ? UsjReaderWriter.buildNFDToOriginalPositionMap(fullText)
         : undefined;
     const searchText = nfdToOriginalMap ? fullText.normalize('NFD') : fullText;
@@ -1742,22 +1753,22 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       // If the match is empty, then we don't want to include it in the results
       if (match[0].length > 0) {
         // Convert NFD match positions back to original-string positions if normalization was applied
-        const origStart = nfdToOriginalMap ? nfdToOriginalMap[match.index] : match.index;
-        const origEnd = nfdToOriginalMap
+        const originalStart = nfdToOriginalMap ? nfdToOriginalMap[match.index] : match.index;
+        const originalEnd = nfdToOriginalMap
           ? nfdToOriginalMap[match.index + match[0].length]
           : match.index + match[0].length;
 
-        if (origStart < 0 || origStart >= fullText.length)
-          throw new Error(`Match index out of bounds: ${origStart}`);
+        if (originalStart < 0 || originalStart >= fullText.length)
+          throw new Error(`Match index out of bounds: ${originalStart}`);
 
-        const startingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(origStart);
+        const startingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(originalStart);
         if (!startingNodeEntry)
-          throw new Error(`Internal error: no starting node found for index ${origStart}`);
+          throw new Error(`Internal error: no starting node found for index ${originalStart}`);
         const start: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
           node: startingNodeEntry.value.node,
           documentLocation: {
             jsonPath: startingNodeEntry.value.documentLocation.jsonPath,
-            offset: origStart - startingNodeEntry.key,
+            offset: originalStart - startingNodeEntry.key,
           },
         };
 
@@ -1766,20 +1777,22 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         // node. Then do NOT subtract one from the index in the offset since the ending location is
         // exclusive, meaning the last character in the match is the character before the ending
         // location.
-        const endingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(origEnd - 1);
+        const endingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(originalEnd - 1);
         if (!endingNodeEntry)
-          throw new Error(`Internal error: no ending node found for index ${origStart}`);
+          throw new Error(`Internal error: no ending node found for index ${originalStart}`);
         const end: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
           node: endingNodeEntry.value.node,
           documentLocation: {
             jsonPath: endingNodeEntry.value.documentLocation.jsonPath,
-            offset: origEnd - endingNodeEntry.key,
+            offset: originalEnd - endingNodeEntry.key,
           },
         };
 
         // When text was NFD-normalized for search, return the original (non-NFD) text slice so the
         // caller sees the same characters that appear in the source document.
-        const matchText = nfdToOriginalMap ? fullText.substring(origStart, origEnd) : match[0];
+        const matchText = nfdToOriginalMap
+          ? fullText.substring(originalStart, originalEnd)
+          : match[0];
         retVal.push({ text: matchText, start, end });
       }
 

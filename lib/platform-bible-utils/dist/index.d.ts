@@ -2865,6 +2865,24 @@ export type UsjNodeAndDocumentLocation<TDocumentLocation extends UsjDocumentLoca
 	node: TDocumentLocation extends UsjTextContentLocation ? string : MarkerObject | Usj;
 	documentLocation: TDocumentLocation;
 };
+/** Options controlling how {@link IUsjReaderWriter.search} performs its search */
+export type UsjSearchOptions = {
+	/**
+	 * Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include in the search. When provided,
+	 * only text within markers whose style is in this set will be searched. Text inside markers not
+	 * in this set (e.g., footnotes, cross-references) will be excluded. When omitted, all text is
+	 * searched.
+	 */
+	markerStylesToInclude?: Set<string>;
+	/**
+	 * When `'NFD'`, the concatenated text is normalized to NFD before the regex is applied, and match
+	 * positions are mapped back to the original string. This is required for correct
+	 * `ignoreDiacritics` behaviour on NFC source text: a pre-composed character such as `é` (U+00E9)
+	 * will not match `e[combining]*` unless the text is first decomposed. Returned `text` values are
+	 * always slices of the original (non-NFD) string.
+	 */
+	normalizationForm?: "NFD";
+};
 /** Result of a search for text within a USJ object */
 export type UsjSearchResult = {
 	/**
@@ -3035,6 +3053,14 @@ export interface IUsjReaderWriter {
 	 * @returns Array of `UsjSearchResult` objects that match the given regular expression
 	 */
 	search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
+	/**
+	 * Search for matches of a regular expression within this USJ's text data
+	 *
+	 * @param regex Regular expression to search for. Specify the global flag to find all matches.
+	 * @param searchOptions Options controlling how the search is performed
+	 * @returns Array of `UsjSearchResult` objects that match the given regular expression
+	 */
+	search(regex: RegExp, searchOptions?: UsjSearchOptions): UsjSearchResult[];
 	/** Transforms the USJ document into USFM */
 	toUsfm(): string;
 	/**
@@ -5303,20 +5329,18 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	/**
 	 * Builds a mapping array where `map[nfdIndex]` gives the corresponding index in the original
 	 * string. Used to convert regex match positions from NFD-normalized text back to positions in the
-	 * original string. The map has length `nfd.length + 1` so that the exclusive end of a match
-	 * (which may equal `nfd.length`) is also covered.
+	 * original string.
+	 *
+	 * The map has `nfd.length + 1` entries to handle the end position of a regex match. A regex match
+	 * end position points one past the last matched character — so a match covering an entire string
+	 * of length N has end position N, not N-1. That means `match.end` can equal `nfd.length`, which
+	 * would be out-of-bounds for an array of size `nfd.length`. The extra entry covers this case; it
+	 * is pre-filled with `original.length`, which is the correct end position in the original
+	 * string.
 	 */
 	private static buildNFDToOriginalPositionMap;
-	/**
-	 * @param searchOptions.normalizationForm When `'NFD'`, the concatenated text is normalized to NFD
-	 *   before the regex is applied, and match positions are mapped back to the original string. This
-	 *   is required for correct `ignoreDiacritics` behaviour on NFC source text: a pre-composed
-	 *   character such as `é` (U+00E9) will not match `e[combining]*` unless the text is first
-	 *   decomposed. Returned `text` values are always slices of the original (non-NFD) string.
-	 */
-	search(regex: RegExp, markerStylesToInclude?: Set<string>, searchOptions?: {
-		normalizationForm?: "NFD";
-	}): UsjSearchResult[];
+	search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
+	search(regex: RegExp, searchOptions?: UsjSearchOptions): UsjSearchResult[];
 	extractText(start: UsjNodeAndDocumentLocation, desiredLength: number): string;
 	extractTextBetweenPoints(start: UsjNodeAndDocumentLocation, end: UsjNodeAndDocumentLocation, maxLength?: number): string;
 	private static removeContentNodesFromArray;
