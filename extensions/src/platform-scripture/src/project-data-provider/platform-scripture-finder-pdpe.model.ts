@@ -992,7 +992,7 @@ export class ScriptureFinderProjectDataProviderEngine
 
     const matches = usj.search(buildSearchRegex(job.options, characterCategorizer), {
       markerStylesToInclude: job.options.verseTextOnly ? USFM_VERSE_TEXT_MARKERS_SET : undefined,
-      normalizationForm: job.options.ignoreDiacritics ? 'NFD' : undefined,
+      normalizationForm: job.options.ignoreDiacritics && !job.options.useRegex ? 'NFD' : undefined,
     });
 
     return matches.map((match) => {
