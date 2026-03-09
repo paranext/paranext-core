@@ -6708,6 +6708,25 @@ span.read img {
 .banded-row[data-state='selected']:hover {
   cursor: default;
 }
+/* By default the editor is too tall for the footnote editor, even while empty, so this makes it
+   shorter. */
+.footnote-editor .editor-input {
+  min-height: 75px;
+}
+
+.footnote-editor .typeahead-popover {
+  z-index: 300;
+}
+
+.footnote-editor .immutable-note-caller {
+  display: none;
+}
+
+/* Need to be able to override the styles for the editor that happens to have an underscore */
+/* stylelint-disable selector-class-pattern */
+.footnote-editor .text-spacing .usfm_p {
+  text-indent: 0;
+}
 /**
  * This file was automatically generated on installation of the Shadcn/Lexical editor. The default
  * location of this file has been changed to integrate better with our project structure.
@@ -6822,25 +6841,6 @@ span.read img {
 
 .Collapsible__container[open] > .Collapsible__title {
   list-style-type: disclosure-open;
-}
-/* By default the editor is too tall for the footnote editor, even while empty, so this makes it
-   shorter. */
-.footnote-editor .editor-input {
-  min-height: 75px;
-}
-
-.footnote-editor .typeahead-popover {
-  z-index: 300;
-}
-
-.footnote-editor .immutable-note-caller {
-  display: none;
-}
-
-/* Need to be able to override the styles for the editor that happens to have an underscore */
-/* stylelint-disable selector-class-pattern */
-.footnote-editor .text-spacing .usfm_p {
-  text-indent: 0;
 }
 /*
  * WARNING: This CSS file is for DEMO PURPOSES ONLY
