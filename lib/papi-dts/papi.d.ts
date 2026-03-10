@@ -4815,6 +4815,18 @@ declare module 'shared/models/project-lookup.service-model' {
    * Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
    */
   function internalGetMetadata(options?: ProjectMetadataFilterOptions): Promise<ProjectMetadata[]>;
+  /**
+   * Gets project metadata from PDPFs without the startup retry loop. Intended for use by
+   * {@link LayeringProjectDataProviderEngineFactory} so that nested calls from layering PDPFs do not
+   * enter the retry loop and block the parent `Promise.all` for up to 30 seconds.
+   *
+   * Layering PDPFs call back into `getMetadataForAllProjects` from within `internalGetMetadata`'s
+   * `Promise.all`. If those nested calls used the retry-enabled version, empty results would trigger
+   * retries that block the parent call, creating a cascading deadlock during startup.
+   */
+  export function getMetadataForAllProjectsWithoutRetries(
+    options?: ProjectMetadataFilterOptions,
+  ): Promise<ProjectMetadata[]>;
   function transformGetMetadataForProjectParametersToFilter(
     projectId?: string,
     projectInterface?: ProjectInterfaces,

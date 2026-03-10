@@ -1,4 +1,4 @@
-/* eslint-disable no-type-assertion/no-type-assertion */
+/* eslint-disable no-type-assertion/no-type-assertion, max-classes-per-file */
 
 import { vi } from 'vitest';
 import {
@@ -1238,5 +1238,98 @@ describe('Merging metadata filters', () => {
       includeProjectIds: ['thing4', 'thing4.5'],
       includeProjectInterfaces: ['blah5', ['thing5.5', 'thing5.6', 'thing5.7'], 'thing5'],
     });
+  });
+});
+
+describe('Nested retry skip behavior', () => {
+  const testProjectId = 'test-project';
+  const baseProjectInterfaces: ProjectInterfaces[] = ['platform.base', 'platform.placeholder'];
+  const layeringProjectInterfaces: ProjectInterfaces[] = ['platformScripture.USJ_Chapter'];
+
+  // Shared layering PDPF class for tests in this describe block
+  class TestLayeringPDP extends LayeringProjectDataProviderEngineFactory<
+    typeof layeringProjectInterfaces
+  > {
+    projectInterfacesToLayerOver = 'platform.placeholder';
+    providedProjectInterfaces = layeringProjectInterfaces;
+  }
+
+  it('should resolve via top-level retries when base PDPF appears after a delay, without nested retries blocking', async () => {
+    // This test exercises the full retry loop in internalGetMetadataWithRetries. It simulates
+    // real startup: initially only the layering PDPF is registered, and the base PDPF appears
+    // after a short delay. The top-level retry loop should pick it up, while the layering PDPF's
+    // nested call (via getMetadataForAllProjectsWithoutRetries) returns empty immediately without
+    // blocking.
+
+    // Reset fake timers so performance.now() starts at 0 (within the grace period).
+    // The beforeAll advanced past the grace period; we need to be inside it for retries to fire.
+    // Fake both performance (for the grace period check) and setTimeout (for the wait() delay)
+    // so advanceTimersByTimeAsync controls both without waiting in real time.
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['performance', 'setTimeout'] });
+
+    let getAllCallCount = 0;
+
+    const layeringOnlyPdpfInfo: Record<string, Partial<NetworkObjectDetails>> = {
+      [getPDPFactoryNetworkObjectNameFromId('layering')]: {
+        objectType: PDP_FACTORY_OBJECT_TYPE,
+        attributes: { projectInterfaces: layeringProjectInterfaces },
+      },
+    };
+
+    const fullPdpfInfo: Record<string, Partial<NetworkObjectDetails>> = {
+      ...layeringOnlyPdpfInfo,
+      [getPDPFactoryNetworkObjectNameFromId('base')]: {
+        objectType: PDP_FACTORY_OBJECT_TYPE,
+        attributes: { projectInterfaces: baseProjectInterfaces },
+      },
+    };
+
+    const testPDPFs: Record<string, Partial<IProjectDataProviderFactory>> = {
+      [getPDPFactoryNetworkObjectNameFromId('base')]: {
+        async getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]> {
+          return [{ id: testProjectId, projectInterfaces: baseProjectInterfaces }];
+        },
+      },
+      [getPDPFactoryNetworkObjectNameFromId('layering')]: new TestLayeringPDP('layering'),
+    };
+
+    // The first top-level attempt sees only the layering PDPF (call 1). The layering PDPF's
+    // nested call also sees only itself (call 2), finds nothing to layer over, returns empty.
+    // After the top-level retry wait, the base PDPF has appeared: the retry's top-level call
+    // sees both (call 3), and the layering PDPF's nested call finds the base (call 4) → success.
+    const basePdpfAppearsAfterCall = 2;
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() => {
+      getAllCallCount += 1;
+      return getAllCallCount <= basePdpfAppearsAfterCall ? layeringOnlyPdpfInfo : fullPdpfInfo;
+    });
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    networkObjectService.get.mockImplementation(
+      (networkObjectId: string) => testPDPFs[networkObjectId],
+    );
+
+    // Start the call but don't await yet — it will pause at `await wait(1000)` in the retry loop
+    const metadataPromise = projectLookupService.getMetadataForAllProjects();
+
+    // Advance the fake timer to fire the retry loop's wait(1000). This also advances
+    // performance.now() so the while loop condition remains true.
+    // Use advanceTimersByTimeAsync to process the pending microtasks/timers.
+    await vi.advanceTimersByTimeAsync(1000);
+
+    const projectsMetadata = await metadataPromise;
+
+    // Should succeed with combined metadata from both PDPFs
+    expect(projectsMetadata.length).toBe(1);
+    expect(projectsMetadata[0].id).toBe(testProjectId);
+    expect(projectsMetadata[0].projectInterfaces).toContain(layeringProjectInterfaces[0]);
+    expect(projectsMetadata[0].projectInterfaces).toContain(baseProjectInterfaces[0]);
+
+    // Exactly 4 calls: initial top-level (1) + nested from layering (2) → empty, retry fires →
+    // retry top-level (3) + nested from layering (4) → success.
+    expect(getAllCallCount).toBe(4);
+
+    // Restore timer past the grace period for subsequent tests
+    vi.advanceTimersByTime(testingProjectLookupService.LOAD_TIME_GRACE_PERIOD_MS);
   });
 });
