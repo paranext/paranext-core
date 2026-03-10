@@ -477,6 +477,21 @@ async function internalGetMetadata(
 }
 
 /**
+ * Gets project metadata from PDPFs without the startup retry loop. Intended for use by
+ * {@link LayeringProjectDataProviderEngineFactory} so that nested calls from layering PDPFs do not
+ * enter the retry loop and block the parent `Promise.all` for up to 30 seconds.
+ *
+ * Layering PDPFs call back into `getMetadataForAllProjects` from within `internalGetMetadata`'s
+ * `Promise.all`. If those nested calls used the retry-enabled version, empty results would trigger
+ * retries that block the parent call, creating a cascading deadlock during startup.
+ */
+export async function getMetadataForAllProjectsWithoutRetries(
+  options: ProjectMetadataFilterOptions = {},
+): Promise<ProjectMetadata[]> {
+  return internalGetMetadata(options);
+}
+
+/**
  * Gets project metadata from PDPFs filtered down by various filtering options. If this process
  * started recently and this finds no project metadata, waits a bit and tries again because it may
  * be that not all PDPFs have started yet.
