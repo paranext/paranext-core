@@ -24,7 +24,7 @@ import {
 import '@/components/demo/scripture-editor/scripture-editor.stories.css';
 import FootnoteEditor from '@/components/advanced/footnote-editor/footnote-editor.component';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
-import { FootnoteEditorLocalizedStrings } from '@/components/advanced/footnote-editor/footnote-editor.types';
+import scriptureEditorLocalizedStrings from 'platform-scripture-editor/contributions/localizedStrings.json';
 
 const defaultScrRef: SerializedVerseRef = { book: 'PSA', chapterNum: 1, verseNum: 1 };
 
@@ -278,22 +278,6 @@ export const CustomMarkerTrigger: Story = {
   },
 };
 
-const sampleFootnoteEditorLocalizedStrings: FootnoteEditorLocalizedStrings = {
-  '%footnoteEditor_callerDropdown_label%': 'Footnote caller',
-  '%footnoteEditor_callerDropdown_item_generated%': 'Auto-generated',
-  '%footnoteEditor_callerDropdown_item_hidden%': 'Hidden',
-  '%footnoteEditor_callerDropdown_item_custom%': 'Custom',
-  '%footnoteEditor_callerDropdown_tooltip%': 'Footnote caller',
-  '%footnoteEditor_cancelButton_tooltip%': 'Cancel',
-  '%footnoteEditor_copyButton_tooltip%': 'Copy footnote',
-  '%footnoteEditor_noteType_crossReference_label%': 'Cross reference',
-  '%footnoteEditor_noteType_endNote_label%': 'Endnote',
-  '%footnoteEditor_noteType_footnote_label%': 'Footnote',
-  '%footnoteEditor_noteType_tooltip%': 'Change type: Footnote',
-  '%footnoteEditor_noteTypeDropdown_label%': 'Type',
-  '%footnoteEditor_saveButton_tooltip%': 'Save',
-};
-
 export const FootnoteEditorView: Story = {
   render: (args) => {
     // eslint-disable-next-line no-null/no-null
@@ -424,7 +408,8 @@ export const FootnoteEditorView: Story = {
               onClose={onEditorClose}
               scrRef={args.scrRef ?? defaultScrRef}
               editorOptions={mergedOptions}
-              localizedStrings={sampleFootnoteEditorLocalizedStrings}
+              defaultMarkerMenuTrigger={mergedOptions.markerMenuTrigger ?? '\\'}
+              localizedStrings={scriptureEditorLocalizedStrings.localizedStrings.en}
             />
           </PopoverContent>
         </Popover>

@@ -11,7 +11,7 @@ import {
   isInsertEmbedOpOfType,
 } from '@eten-tech-foundation/platform-editor';
 import { Check, Copy, X } from 'lucide-react';
-import { createRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -21,9 +21,12 @@ import {
   TooltipContent,
 } from '@/components/shadcn-ui/tooltip';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
+import { MarkerMenu } from '../marker-menu.component';
+import { generateInlineMarkerMenuListItems } from './footnote-editor.utils';
 
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
@@ -44,6 +47,8 @@ export interface FootnoteEditorProps {
   noteKey: string | undefined;
   /** View options of the parent editor */
   editorOptions: EditorOptions;
+  /** Trigger key to open the footnote editor marker menu */
+  defaultMarkerMenuTrigger: string;
   /** Localized strings to be passed to the footnote editor component */
   localizedStrings: FootnoteEditorLocalizedStrings;
 }
@@ -126,12 +131,16 @@ export default function FootnoteEditor({
   scrRef,
   noteKey,
   editorOptions,
+  defaultMarkerMenuTrigger,
   localizedStrings,
 }: FootnoteEditorProps) {
-  // The editor ref component must be this
+  // These refs must have default values of `null` to be accepted by the React elements as refs
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
-  const editorParentRef = createRef<HTMLDivElement>();
+  // eslint-disable-next-line no-null/no-null
+  const editorParentRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const outerBorderRef = useRef<HTMLDivElement>(null);
 
   const [callerType, setCallerType] = useState<FootnoteCallerType>('generated');
   const [customCaller, setCustomCaller] = useState<string>('*');
@@ -140,22 +149,47 @@ export default function FootnoteEditor({
 
   const [isTypeSwitchable, setIsTypeSwitchable] = useState<boolean>(false);
 
+  // These control the placement of the inline markers menu by setting the location of the anchor
+  const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
+  const [markersMenuAnchorX, setMarkersMenuAnchorX] = useState<number>();
+  const [markersMenuAnchorY, setMarkersMenuAnchorY] = useState<number>();
+  const [markersMenuAnchorHeight, setMarkersMenuAnchorHeight] = useState<number>();
+
+  const [contextMarker, setContextMarker] = useState<string | undefined>();
+
+  // The refs needs to start out with null for it to work as a element ref
+  // eslint-disable-next-line no-null/no-null
+  const markerMenuSearchRef = useRef<HTMLInputElement>(null);
+
   // Options for the editorial component
   const options = useMemo<EditorOptions>(
     () => ({
       ...editorOptions,
-      markerMenuTrigger: editorOptions.markerMenuTrigger ?? '\\',
+      markerMenuTrigger: defaultMarkerMenuTrigger,
       hasExternalUI: true,
       view: { ...(editorOptions.view ?? getDefaultViewOptions()), noteMode: 'expanded' },
     }),
-    [editorOptions],
+    [editorOptions, defaultMarkerMenuTrigger],
+  );
+
+  const inlineMarkerMenuItems = useMemo(
+    () =>
+      generateInlineMarkerMenuListItems(
+        editorRef,
+        () => setShowMarkersMenu(false),
+        localizedStrings,
+        contextMarker,
+      ),
+    [localizedStrings, contextMarker],
   );
 
   // Makes it so that the footnote type change tooltip doesn't automatically focus when the
   // component opens by focusing the editor
   useEffect(() => {
-    editorRef.current?.focus();
-  });
+    // This needs to be run when the marker menu closes to move the focus back to the editor.
+    // The editor shouldn't be focused, however, when the markers menu is first being shown.
+    if (!showMarkersMenu) editorRef.current?.focus();
+  }, [noteType, showMarkersMenu]);
 
   // When the component loads, applies the note ops to the current editor, gets the note ref and caller
   useEffect(() => {
@@ -232,6 +266,8 @@ export default function FootnoteEditor({
   };
 
   const handleUsjChange = (usj: Usj) => {
+    // Makes sure that the editor is focused when the usj changes
+    editorRef.current?.focus();
     const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
       // Prevents adding additional note nodes or other nodes after the main footnote node
@@ -274,85 +310,198 @@ export default function FootnoteEditor({
     }
   };
 
+  const showInlineMarkersMenu = useCallback(() => {
+    // Only shows the markers menu if there is currently a selection in the editor and there are
+    // existing marker menu items to be shown
+    const currentSelection = window.getSelection();
+    if (
+      outerBorderRef.current &&
+      inlineMarkerMenuItems.length &&
+      currentSelection &&
+      currentSelection.rangeCount > 0
+    ) {
+      const selectionRect = currentSelection.getRangeAt(0).getBoundingClientRect();
+      const footnoteEditorRect = outerBorderRef.current.getBoundingClientRect();
+      setMarkersMenuAnchorX(selectionRect.left - footnoteEditorRect.left);
+      setMarkersMenuAnchorY(selectionRect.top - footnoteEditorRect.top);
+      setMarkersMenuAnchorHeight(selectionRect.height);
+      setShowMarkersMenu(true);
+    }
+  }, [inlineMarkerMenuItems, outerBorderRef]);
+
+  // Need to add a window listener for click events that will close the markers menu when you click
+  // outside. There is another `onClick` listener for the marker menu that prevents click events
+  // from being passed to this listener if the marker menu is being clicked. Those click events are
+  // handled separately.
+  useEffect(() => {
+    const clickListener = () => {
+      if (showMarkersMenu) setShowMarkersMenu(false);
+    };
+
+    window.addEventListener('click', clickListener);
+
+    return () => {
+      window.removeEventListener('click', clickListener);
+    };
+  }, [showMarkersMenu]);
+
+  // When the inline markers menu is showed, makes sure the search input is focused
+  useEffect(() => {
+    if (showMarkersMenu) {
+      markerMenuSearchRef.current?.focus();
+    }
+  }, [showMarkersMenu]);
+
+  // Listens for the marker menu trigger to open the markers menu
+  useEffect(() => {
+    const editorInput =
+      editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Shows the marker menu if it isn't already being shown and if the editor is currently selected
+      if (
+        !showMarkersMenu &&
+        editorInput &&
+        document.activeElement === editorInput &&
+        event.key === defaultMarkerMenuTrigger
+      ) {
+        event.preventDefault();
+        showInlineMarkersMenu();
+      } else if (showMarkersMenu && event.key === 'Escape') {
+        event.preventDefault();
+        setShowMarkersMenu(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showMarkersMenu, showInlineMarkersMenu, defaultMarkerMenuTrigger]);
+
   return (
-    <div className="footnote-editor tw-grid tw-gap-[12px]">
-      <div className="tw-flex">
-        <div className="tw-flex tw-gap-4">
-          <FootnoteTypeDropdown
-            isTypeSwitchable={isTypeSwitchable}
-            noteType={noteType}
-            handleNoteTypeChange={handleNoteTypeChange}
-            localizedStrings={localizedStrings}
-          />
-          <FootnoteCallerDropdown
-            callerType={callerType}
-            updateCallerType={setCallerType}
-            customCaller={customCaller}
-            updateCustomCaller={setCustomCaller}
-            localizedStrings={localizedStrings}
-          />
+    <>
+      <div className="footnote-editor tw-grid tw-gap-[12px]">
+        <div className="tw-flex">
+          <div className="tw-flex tw-gap-4">
+            <FootnoteTypeDropdown
+              isTypeSwitchable={isTypeSwitchable}
+              noteType={noteType}
+              handleNoteTypeChange={handleNoteTypeChange}
+              localizedStrings={localizedStrings}
+            />
+            <FootnoteCallerDropdown
+              callerType={callerType}
+              updateCallerType={setCallerType}
+              customCaller={customCaller}
+              updateCustomCaller={setCustomCaller}
+              localizedStrings={localizedStrings}
+            />
+          </div>
+          <div className="tw-flex tw-w-full tw-justify-end tw-gap-4">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={onClose}
+                    className="tw-h-6 tw-w-6"
+                    size="icon"
+                    variant="secondary"
+                  >
+                    <X />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{localizedStrings['%footnoteEditor_cancelButton_tooltip%']}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleSave}
+                    className="tw-h-6 tw-w-6"
+                    size="icon"
+                    variant="default"
+                  >
+                    <Check />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {localizedStrings['%footnoteEditor_saveButton_tooltip%']}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
-        <div className="tw-flex tw-w-full tw-justify-end tw-gap-4">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="secondary">
-                  <X />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{localizedStrings['%footnoteEditor_cancelButton_tooltip%']}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={handleSave}
-                  className="tw-h-6 tw-w-6"
-                  size="icon"
-                  variant="default"
-                >
-                  <Check />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {localizedStrings['%footnoteEditor_saveButton_tooltip%']}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+        <div
+          ref={editorParentRef}
+          className="tw-relative tw-rounded-[6px] tw-border-2 tw-border-ring"
+        >
+          <div className={classNameForEditor}>
+            <Editorial
+              options={options}
+              onStateChange={(state) => setContextMarker(state.contextMarker)}
+              onUsjChange={handleUsjChange}
+              defaultUsj={PARAGRAPH_USJ}
+              onScrRefChange={() => {}}
+              scrRef={scrRef}
+              ref={editorRef}
+            />
+          </div>
+          <div className="tw-absolute tw-bottom-0 tw-right-0">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleCopy}
+                    className="tw-h-6 tw-w-6"
+                    variant="ghost"
+                    size="icon"
+                  >
+                    <Copy />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{localizedStrings['%footnoteEditor_copyButton_tooltip%']}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
       </div>
       <div
-        ref={editorParentRef}
-        className="tw-relative tw-rounded-[6px] tw-border-2 tw-border-ring"
-      >
-        <div className={classNameForEditor}>
-          <Editorial
-            options={options}
-            onUsjChange={handleUsjChange}
-            defaultUsj={PARAGRAPH_USJ}
-            onScrRefChange={() => {}}
-            scrRef={scrRef}
-            ref={editorRef}
+        className="tw-absolute"
+        ref={outerBorderRef}
+        style={{ top: 0, left: 0, height: 0, width: 0 }}
+      />
+      {/** Inline markers menu components */}
+      <Popover open={showMarkersMenu}>
+        <PopoverAnchor
+          className="tw-absolute"
+          style={{
+            top: markersMenuAnchorY,
+            left: markersMenuAnchorX,
+            height: markersMenuAnchorHeight,
+            width: 0,
+            pointerEvents: 'none',
+          }}
+        />
+        <PopoverContent
+          className="tw-w-[500px] tw-p-0"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <MarkerMenu
+            markerMenuItems={inlineMarkerMenuItems}
+            localizedStrings={localizedStrings}
+            searchRef={markerMenuSearchRef}
           />
-        </div>
-        <div className="tw-absolute tw-bottom-0 tw-right-0">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button onClick={handleCopy} className="tw-h-6 tw-w-6" variant="ghost" size="icon">
-                  <Copy />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{localizedStrings['%footnoteEditor_copyButton_tooltip%']}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </div>
-    </div>
+        </PopoverContent>
+      </Popover>
+    </>
   );
 }
