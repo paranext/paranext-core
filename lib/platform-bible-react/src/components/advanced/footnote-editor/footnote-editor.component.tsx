@@ -356,6 +356,7 @@ export default function FootnoteEditor({
   useEffect(() => {
     const editorInput =
       editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
+    const isMac = /Macintosh/i.test(navigator.userAgent);
     const handleKeyDown = (event: KeyboardEvent) => {
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
       if (
@@ -369,6 +370,20 @@ export default function FootnoteEditor({
       } else if (showMarkersMenu && event.key === 'Escape') {
         event.preventDefault();
         setShowMarkersMenu(false);
+      }
+
+      // Listens for the control or if on mac, the meta key
+      if (isMac ? event.metaKey : event.ctrlKey) {
+        // Handles redo
+        if (
+          (event.shiftKey && event.key.toLowerCase() === 'z') ||
+          event.key.toLowerCase() === 'y'
+        ) {
+          editorRef.current?.redo();
+          // Handles undo
+        } else if (event.key.toLowerCase() === 'z') {
+          editorRef.current?.undo();
+        }
       }
     };
 

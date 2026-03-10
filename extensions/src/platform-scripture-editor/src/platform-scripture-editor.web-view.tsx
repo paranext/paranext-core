@@ -912,6 +912,33 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [showMarkersMenu]);
 
+  // Listen for Ctrl+Z and Ctrl+Shift+Z for undo/redo
+  useEffect(() => {
+    const isMac = /Macintosh/i.test(navigator.userAgent);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Listens for the control or if on mac, the meta key
+      if (isMac ? event.metaKey : event.ctrlKey) {
+        // Handles redo
+        if (
+          (event.shiftKey && event.key.toLowerCase() === 'z') ||
+          event.key.toLowerCase() === 'y'
+        ) {
+          editorRef.current?.redo();
+          // Handles undo
+        } else if (event.key.toLowerCase() === 'z') {
+          editorRef.current?.undo();
+        }
+      }
+    };
+
+    const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
+    editorInput?.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      editorInput?.removeEventListener('keydown', handleKeyDown);
+    };
+  });
+
   // Listen for Ctrl+F to open find dialog and for the marker menu trigger to open the marker menu
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
