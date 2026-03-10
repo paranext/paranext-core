@@ -15,13 +15,6 @@
     "%footnoteEditor_noteType_footnote_label%": {
       "fallbackKey": "%Paratext.TextForm.footnoteToolStripMenuItem.Text%"
     },
-    "%footnoteEditor_undoButton_tooltip%": {
-      "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
-    },
-    "%redoButton_tooltip%": {},
-    "%undoButton_tooltip%": {
-      "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
-    },
     "%webView_footnoteList_header%": {
       "fallbackKey": "%Paratext.ProjectMenu.ProjectPropertiesForm.showInFootnotes.HeaderText%"
     },
@@ -51,7 +44,6 @@
       "%footnoteEditor_noteType_tooltip%": "Change type: Footnote",
       "%footnoteEditor_noteTypeDropdown_label%": "Type",
       "%footnoteEditor_saveButton_tooltip%": "Save",
-      "%footnoteEditor_undoButton_tooltip%": "Undo",
       "%mainMenu_openPlatformResourceViewer%": "Open Resource Viewer",
       "%mainMenu_openPlatformScriptureEditor%": "Open Scripture Editor",
       "%markerMenu_deprecated_label%": "Deprecated",
@@ -278,9 +270,7 @@
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",
       "%platformScriptureEditor_markersView_readonly_message_format%": "The markers view for {projectName} is read-only.",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "Don't show again today",
-      "%redoButton_tooltip%": "Redo",
       "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Change Footnote Pane Location",
-      "%undoButton_tooltip%": "Undo",
       "%webView_footnoteList_header%": "Footnotes",
       "%webView_platformScriptureEditor_backgroundColor%": "Background Color",
       "%webView_platformScriptureEditor_charactersInventory%": "Inventory: Characters...",
@@ -331,7 +321,6 @@
       "%footnoteEditor_noteType_tooltip%": "Tipo de cambio: Nota",
       "%footnoteEditor_noteTypeDropdown_label%": "Tipo",
       "%footnoteEditor_saveButton_tooltip%": "Guardar",
-      "%footnoteEditor_undoButton_tooltip%": "Deshacer",
       "%mainMenu_openPlatformResourceViewer%": "Abrir el visor de recursos",
       "%mainMenu_openPlatformScriptureEditor%": "Abrir el editor de Escrituras",
       "%markerMenu_deprecated_label%": "Obsoleto",
@@ -558,9 +547,7 @@
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Abrir el editor de Escrituras",
       "%platformScriptureEditor_markersView_readonly_message_format%": "La vista de marcadores para {projectName} es de solo lectura.",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "No mostrar de nuevo hoy",
-      "%redoButton_tooltip%": "Rehacer",
       "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Cambiar la ubicación del panel de notas al pie",
-      "%undoButton_tooltip%": "Deshacer",
       "%webView_footnoteList_header%": "Notas al pie",
       "%webView_platformScriptureEditor_backgroundColor%": "Color de fondo",
       "%webView_platformScriptureEditor_charactersInventory%": "Inventario: Caracteres...",

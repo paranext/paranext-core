@@ -291,7 +291,6 @@ const sampleFootnoteEditorLocalizedStrings: FootnoteEditorLocalizedStrings = {
   '%footnoteEditor_noteType_footnote_label%': 'Footnote',
   '%footnoteEditor_noteType_tooltip%': 'Change type: Footnote',
   '%footnoteEditor_noteTypeDropdown_label%': 'Type',
-  '%footnoteEditor_undoButton_tooltip%': 'Undo',
   '%undoButton_tooltip%': 'Undo',
   '%redoButton_tooltip%': 'Redo',
 };

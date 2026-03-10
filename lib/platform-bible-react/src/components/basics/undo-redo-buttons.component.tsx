@@ -27,10 +27,13 @@ const localizeString = (
 ) => strings[key] ?? key;
 
 export type UndoRedoButtonsProps = {
+  /** Function to call when Undo is clicked. */
   onUndoClick: () => void;
-  /** When undefined, the Redo button is not rendered. */
+  /** Function to call when Redo is clicked. If undefined, the Redo button is not rendered. */
   onRedoClick?: () => void;
+  /** Whether the Undo button is enabled. */
   canUndo?: boolean;
+  /** Whether the Redo button is enabled. */
   canRedo?: boolean;
   /** Localized strings for button tooltips. Falls back to the key itself if not provided. */
   localizedStrings?: UndoRedoButtonsLocalizedStrings;

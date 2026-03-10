@@ -695,7 +695,6 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%footnoteEditor_noteType_footnote_label%",
 	"%footnoteEditor_noteType_tooltip%",
 	"%footnoteEditor_noteTypeDropdown_label%",
-	"%footnoteEditor_undoButton_tooltip%",
 	"%undoButton_tooltip%",
 	"%redoButton_tooltip%"
 ];
@@ -1700,10 +1699,13 @@ export type UndoRedoButtonsLocalizedStrings = {
 	[key in (typeof UNDO_REDO_BUTTONS_STRING_KEYS)[number]]?: string;
 };
 export type UndoRedoButtonsProps = {
+	/** Function to call when Undo is clicked. */
 	onUndoClick: () => void;
-	/** When undefined, the Redo button is not rendered. */
+	/** Function to call when Redo is clicked. If undefined, the Redo button is not rendered. */
 	onRedoClick?: () => void;
+	/** Whether the Undo button is enabled. */
 	canUndo?: boolean;
+	/** Whether the Redo button is enabled. */
 	canRedo?: boolean;
 	/** Localized strings for button tooltips. Falls back to the key itself if not provided. */
 	localizedStrings?: UndoRedoButtonsLocalizedStrings;

@@ -49,6 +49,7 @@ import {
   SelectMenuItemHandler,
   Spinner,
   TabToolbar,
+  UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   usePromise,
 } from 'platform-bible-react';
@@ -108,6 +109,7 @@ const EDITOR_LOAD_DELAY_TIME = 200;
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
+  ...UNDO_REDO_BUTTONS_STRING_KEYS,
   ...MARKER_MENU_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
@@ -1556,6 +1558,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   onRedoClick={() => editorRef.current?.redo()}
                   canUndo={canUndo}
                   canRedo={canRedo}
+                  localizedStrings={localizedStrings}
                 />
                 {blockMarker !== undefined && (
                   <Popover>

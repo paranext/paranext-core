@@ -1,3 +1,5 @@
+import { UNDO_REDO_BUTTONS_STRING_KEYS } from '@/components/basics/undo-redo-buttons.component';
+
 /**
  * Object containing all keys used for localization in the FootnoteEditor component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -16,9 +18,7 @@ export const FOOTNOTE_EDITOR_STRING_KEYS = Object.freeze([
   '%footnoteEditor_noteType_footnote_label%',
   '%footnoteEditor_noteType_tooltip%',
   '%footnoteEditor_noteTypeDropdown_label%',
-  '%footnoteEditor_undoButton_tooltip%',
-  '%undoButton_tooltip%',
-  '%redoButton_tooltip%',
+  ...UNDO_REDO_BUTTONS_STRING_KEYS,
 ] as const);
 
 export type FootnoteEditorLocalizedStrings = {

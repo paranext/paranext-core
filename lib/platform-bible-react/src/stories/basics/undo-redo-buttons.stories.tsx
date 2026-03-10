@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import UndoRedoButtons, {
+import {
+  UndoRedoButtons,
   type UndoRedoButtonsLocalizedStrings,
 } from '@/components/basics/undo-redo-buttons.component';
 
@@ -111,6 +112,34 @@ export const CustomLocalizedStrings: Story = {
     docs: {
       description: {
         story: 'Example with Spanish localization and Redo disabled.',
+      },
+    },
+  },
+};
+
+export const InOverflowContainer: Story = {
+  argTypes: { onRedoClick: { action: 'redo-clicked' } },
+  render: (args) => (
+    <div
+      style={{
+        overflow: 'hidden',
+        width: 120,
+        border: '1px solid #ccc',
+        padding: '4px',
+      }}
+    >
+      <UndoRedoButtons {...args} />
+    </div>
+  ),
+  args: {
+    canUndo: true,
+    canRedo: true,
+    localizedStrings: defaultLocalizedStrings,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Rendered inside an overflow-hidden container; the tooltip should not be clipped.',
       },
     },
   },
