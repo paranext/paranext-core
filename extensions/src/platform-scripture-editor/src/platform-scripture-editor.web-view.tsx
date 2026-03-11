@@ -1593,7 +1593,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                     </TooltipTrigger>
                     <TooltipContent>
                       {localizedStrings['%webView_platformScriptureEditor_redoButton_tooltip%']} (
-                      {isMac ? '⌘' : 'Ctrl'} + y)
+                      {isMac ? '⌘' : 'Ctrl'} + Shift + y)
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

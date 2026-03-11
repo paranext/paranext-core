@@ -24,9 +24,9 @@ export function EditorKeyboardShortcuts({ children, editorRef }: EditorKeyboardS
     const handleKeyDown = (event: KeyboardEvent) => {
       // Listens for the control or if on mac, the meta key
       if (
-        editorInput && document.activeElement === editorInput && isMac
-          ? event.metaKey
-          : event.ctrlKey
+        editorInput &&
+        document.activeElement === editorInput &&
+        (isMac ? event.metaKey : event.ctrlKey)
       ) {
         // Handles redo
         if (
