@@ -1,7 +1,7 @@
 #!/bin/bash
 # @raycast.schemaVersion 1
 # @raycast.title Run most recently downloaded Paratext 10 Studio or Platform.Bible package
-# @raycast.mode silent
+# @raycast.mode fullOutput
 
 # Script to install and run universal app from app-macos*.zip file
 # Extract, install, codesign, and run the application
