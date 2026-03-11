@@ -1,4 +1,4 @@
-import { Button } from '@/components/shadcn-ui/button';
+import { Button, type ButtonProps } from '@/components/shadcn-ui/button';
 import {
   Tooltip,
   TooltipContent,
@@ -37,6 +37,10 @@ export type UndoRedoButtonsProps = {
   canRedo?: boolean;
   /** Localized strings for button tooltips. Falls back to the key itself if not provided. */
   localizedStrings?: UndoRedoButtonsLocalizedStrings;
+  /** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
+  className?: string;
+  /** Variant for the buttons. Defaults to "ghost". */
+  variant?: ButtonProps['variant'];
 };
 
 /**
@@ -50,6 +54,8 @@ export function UndoRedoButtons({
   canUndo = true,
   canRedo = true,
   localizedStrings = {},
+  className = 'tw-h-6 tw-w-6',
+  variant = 'ghost',
 }: UndoRedoButtonsProps) {
   return (
     <>
@@ -58,10 +64,10 @@ export function UndoRedoButtons({
           <TooltipTrigger asChild>
             <Button
               aria-label="Undo"
+              className={className}
               onClick={onUndoClick}
               disabled={!canUndo}
-              size="icon"
-              variant="ghost"
+              variant={variant}
             >
               <Undo />
             </Button>
@@ -77,10 +83,10 @@ export function UndoRedoButtons({
             <TooltipTrigger asChild>
               <Button
                 aria-label="Redo"
+                className={className}
                 onClick={onRedoClick}
                 disabled={!canRedo}
-                size="icon"
-                variant="ghost"
+                variant={variant}
               >
                 <Redo />
               </Button>

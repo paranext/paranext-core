@@ -136,7 +136,7 @@ export function TestButtonsPanel() {
         // @ts-ignore ts(2339)
         const result = await peopleDataProvider.notifyUpdate();
         logger.error(`Remote notify update succeeded! Bad ${result}`);
-      } catch (e) {
+      } catch {
         // No need to log good stuff unless we're testing
         // logger.info(`Remote notify update failed! Good ${e}`);
       }

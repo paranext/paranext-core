@@ -21,7 +21,7 @@ async function send(notification: PlatformNotification): Promise<string | number
   try {
     notificationString = JSON.stringify(notification);
   } catch (e) {
-    notificationString = '<error stringifying notification>';
+    notificationString = `<error stringifying notification: ${e}>`;
   }
   logger.info(`Notification service host received notification: ${notificationString}`);
 

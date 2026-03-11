@@ -1,4 +1,4 @@
-﻿/** Module to set up globalThis and polyfills in the extension host */
+/** Module to set up globalThis and polyfills in the extension host */
 
 import type { LogLevel } from 'electron-log';
 import { polyfillLocalStorage } from '@node/polyfills/local-storage.polyfill';

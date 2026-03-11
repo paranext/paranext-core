@@ -34,6 +34,7 @@ export {
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
+export { usfmMarkers } from './markers/usfm-markers';
 
 // Enums
 export { Section } from './scripture/scripture-util';
@@ -67,7 +68,9 @@ export {
   formatScrRefRange,
   getLocalizedIdFromBookNumber,
   getSectionForBook,
+  isSelectableInvisibleCharOrWhiteSpace,
   normalizeScriptureSpaces,
+  SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
   scrRefToBBBCCC,
   scrRefToBBBCCCVVV,
 } from './scripture/scripture-util';
@@ -230,6 +233,7 @@ export type {
   UsjNodeAndDocumentLocation,
   UsjPropertyValueLocation,
   UsjReaderWriterOptions,
+  UsjSearchOptions,
   UsjSearchResult,
   UsjTextContentLocation,
   UsjVerseRefBookLocation,
@@ -243,3 +247,8 @@ export type {
   LegacyComment,
   LegacyCommentThread,
 } from './comments.types';
+export type {
+  MarkerCategoryType as CategoryType,
+  Marker,
+  MarkerType,
+} from './markers/usfm-marker.model';

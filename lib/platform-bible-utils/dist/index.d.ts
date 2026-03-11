@@ -1583,6 +1583,62 @@ export declare enum Section {
  */
 export declare const getSectionForBook: (bookId: string) => Section;
 /**
+ * The contents (without surrounding `[` `]`) of a regex character class matching
+ * Paratext-9-selectable invisible characters and white space characters.
+ *
+ * These are the characters listed in [Paratext 9's "Whitespace and invisible characters
+ * drop-down"](https://vimeo.com/1065977349) that the user can insert into the text:
+ *
+ * | Code point | Name                  |
+ * | ---------- | --------------------- |
+ * | U+200D     | Zero-width joiner     |
+ * | U+2003     | Em space              |
+ * | U+2002     | En space              |
+ * | U+0020     | Space                 |
+ * | U+00A0     | No-break space        |
+ * | U+202F     | Narrow no-break space |
+ * | U+2009     | Thin space            |
+ * | U+200A     | Hair space            |
+ * | U+3000     | Ideographic space     |
+ * | U+200B     | Zero-width space      |
+ * | U+200C     | Zero-width non-joiner |
+ * | U+2060     | Word joiner           |
+ * | U+200E     | Left-to-right mark    |
+ * | U+200F     | Right-to-left mark    |
+ *
+ * **Usage in regex character classes:** wrap this in `[` `]` to create a character class, e.g.:
+ *
+ * ```ts
+ * const regex = new RegExp(`[${SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}]`);
+ * ```
+ *
+ * Note: more white space characters are allowed in Paratext 9 but are not selectable in the UI and
+ * are not supported as thoroughly as these characters are. See {@link isWhiteSpace} for more
+ * information.
+ *
+ * This corresponds to the character set used by `CharExtensions.IsInvisibleCharOrWhitespace` from
+ * `ParatextData.dll`
+ */
+export declare const SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS = "\u200D\u2003\u2002 \u00A0\u202F\u2009\u200A\u3000\u200B\u200C\u2060\u200E\u200F";
+/**
+ * Determines whether a string contains one or more Paratext-9-selectable invisible characters or
+ * white space characters and no other characters.
+ *
+ * The set of characters tested is {@link SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS}.
+ *
+ * Note: more white space characters are allowed in Paratext 9 but are not selectable in the UI and
+ * are not supported as thoroughly as these characters are. See {@link isWhiteSpace} for more
+ * information.
+ *
+ * This function is a direct translation of `CharExtensions.IsInvisibleCharOrWhitespace` from
+ * `ParatextData.dll`
+ *
+ * @param ch Single character or a string of characters
+ * @returns `true` if the string consists of one or more Paratext-9-selectable invisible characters
+ *   or white space characters and no other characters, `false` otherwise
+ */
+export declare function isSelectableInvisibleCharOrWhiteSpace(ch: string): boolean;
+/**
  * Converts all control characters, carriage returns, and tabs into spaces and then strips duplicate
  * spaces.
  *
@@ -2809,6 +2865,24 @@ export type UsjNodeAndDocumentLocation<TDocumentLocation extends UsjDocumentLoca
 	node: TDocumentLocation extends UsjTextContentLocation ? string : MarkerObject | Usj;
 	documentLocation: TDocumentLocation;
 };
+/** Options controlling how {@link IUsjReaderWriter.search} performs its search */
+export type UsjSearchOptions = {
+	/**
+	 * Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include in the search. When provided,
+	 * only text within markers whose style is in this set will be searched. Text inside markers not
+	 * in this set (e.g., footnotes, cross-references) will be excluded. When omitted, all text is
+	 * searched.
+	 */
+	markerStylesToInclude?: Set<string>;
+	/**
+	 * When `'NFD'`, the concatenated text is normalized to NFD before the regex is applied, and match
+	 * positions are mapped back to the original string. This is required for correct
+	 * `ignoreDiacritics` behaviour on NFC source text: a pre-composed character such as `é` (U+00E9)
+	 * will not match `e[combining]*` unless the text is first decomposed. Returned `text` values are
+	 * always slices of the original (non-NFD) string.
+	 */
+	normalizationForm?: "NFD";
+};
 /** Result of a search for text within a USJ object */
 export type UsjSearchResult = {
 	/**
@@ -2979,6 +3053,14 @@ export interface IUsjReaderWriter {
 	 * @returns Array of `UsjSearchResult` objects that match the given regular expression
 	 */
 	search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
+	/**
+	 * Search for matches of a regular expression within this USJ's text data
+	 *
+	 * @param regex Regular expression to search for. Specify the global flag to find all matches.
+	 * @param searchOptions Options controlling how the search is performed
+	 * @returns Array of `UsjSearchResult` objects that match the given regular expression
+	 */
+	search(regex: RegExp, searchOptions?: UsjSearchOptions): UsjSearchResult[];
 	/** Transforms the USJ document into USFM */
 	toUsfm(): string;
 	/**
@@ -3052,6 +3134,58 @@ export interface IUsjReaderWriter {
 	 */
 	usjDocumentLocationToUsfmVerseRefVerseLocation(usjLocation: UsjDocumentLocation, bookIdIfNotFound?: string): UsfmVerseRefVerseLocation;
 }
+/**
+ * Generated types using `nx generate markers-data` with
+ * 'https://raw.githubusercontent.com/ubsicap/usfm/refs/heads/master/sty/usfm.sty'
+ */
+/** Enumerator containing the marker category types possible for a given marker */
+declare enum MarkerCategoryType {
+	FileIdentification = "FileIdentification",
+	Headers = "Headers",
+	Remarks = "Remarks",
+	Introduction = "Introduction",
+	DivisionMarks = "DivisionMarks",
+	Paragraphs = "Paragraphs",
+	Poetry = "Poetry",
+	TitlesHeadings = "TitlesHeadings",
+	Tables = "Tables",
+	CenterTables = "CenterTables",
+	RightTables = "RightTables",
+	Lists = "Lists",
+	Footnotes = "Footnotes",
+	CrossReferences = "CrossReferences",
+	SpecialText = "SpecialText",
+	CharacterStyling = "CharacterStyling",
+	Breaks = "Breaks",
+	SpecialFeatures = "SpecialFeatures",
+	PeripheralReferences = "PeripheralReferences",
+	PeripheralMaterials = "PeripheralMaterials",
+	Uncategorized = "Uncategorized"
+}
+/** Enumerator containing the marker types possible for a given marker */
+export declare enum MarkerType {
+	Paragraph = "Paragraph",
+	Character = "Character",
+	Note = "Note",
+	Unknown = "Unknown"
+}
+/** Interface describing the form of a given marker */
+export interface Marker {
+	category: MarkerCategoryType;
+	type: MarkerType;
+	description: `%${string}%`;
+	hasEndMarker: boolean;
+	children?: Partial<{
+		[K in MarkerCategoryType]: string[];
+	}>;
+}
+/**
+ * Constant containing the entire usfm marker data including category, type, description, and
+ * children
+ */
+export declare const usfmMarkers: {
+	[marker: string]: Marker;
+};
 /**
  * Sanitizes HTML content to prevent security risks while preserving safe formatting.
  *
@@ -5244,7 +5378,21 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	static isUsjDocumentLocationForNode(usjNodeAndDocumentLocation: UsjNodeAndDocumentLocation): usjNodeAndDocumentLocation is UsjNodeAndDocumentLocation<UsjMarkerLocation | UsjTextContentLocation>;
 	usfmVerseLocationToNextTextLocation(usfmVerseLocation: UsfmVerseLocation): UsjNodeAndDocumentLocation<UsjTextContentLocation>;
 	findNextLocationOfMatchingText(startingPoint: UsjNodeAndDocumentLocation, text: string, maxTextLengthToSearch?: number): UsjNodeAndDocumentLocation<UsjTextContentLocation> | undefined;
+	/**
+	 * Builds a mapping array where `map[nfdIndex]` gives the corresponding index in the original
+	 * string. Used to convert regex match positions from NFD-normalized text back to positions in the
+	 * original string.
+	 *
+	 * The map has `nfd.length + 1` entries to handle the end position of a regex match. A regex match
+	 * end position points one past the last matched character — so a match covering an entire string
+	 * of length N has end position N, not N-1. That means `match.end` can equal `nfd.length`, which
+	 * would be out-of-bounds for an array of size `nfd.length`. The extra entry covers this case; it
+	 * is pre-filled with `original.length`, which is the correct end position in the original
+	 * string.
+	 */
+	private static buildNFDToOriginalPositionMap;
 	search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
+	search(regex: RegExp, searchOptions?: UsjSearchOptions): UsjSearchResult[];
 	extractText(start: UsjNodeAndDocumentLocation, desiredLength: number): string;
 	extractTextBetweenPoints(start: UsjNodeAndDocumentLocation, end: UsjNodeAndDocumentLocation, maxLength?: number): string;
 	private static removeContentNodesFromArray;
@@ -5554,6 +5702,7 @@ export type LegacyCommentThread = {
 };
 
 export {
+	MarkerCategoryType as CategoryType,
 	USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
 	USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
 };

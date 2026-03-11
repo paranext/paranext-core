@@ -3,6 +3,7 @@ import {
   UndoRedoButtons,
   type UndoRedoButtonsLocalizedStrings,
 } from '@/components/basics/undo-redo-buttons.component';
+import standardStrings from '@/localizedStrings.json';
 
 const meta: Meta<typeof UndoRedoButtons> = {
   title: 'Basics/UndoRedoButtons',
@@ -35,10 +36,8 @@ Undo and (optionally) Redo buttons with tooltips for use in editor toolbars.
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const defaultLocalizedStrings: UndoRedoButtonsLocalizedStrings = {
-  '%undoButton_tooltip%': 'Undo',
-  '%redoButton_tooltip%': 'Redo',
-};
+const defaultLocalizedStrings: UndoRedoButtonsLocalizedStrings =
+  standardStrings.localizedStrings.en;
 
 export const Default: Story = {
   argTypes: { onRedoClick: { action: 'redo-clicked' } },
@@ -103,10 +102,7 @@ export const CustomLocalizedStrings: Story = {
   args: {
     canUndo: true,
     canRedo: true,
-    localizedStrings: {
-      '%undoButton_tooltip%': 'Deshacer',
-      '%redoButton_tooltip%': 'Rehacer',
-    },
+    localizedStrings: standardStrings.localizedStrings.es,
   },
   parameters: {
     docs: {

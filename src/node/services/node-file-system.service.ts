@@ -113,7 +113,7 @@ export async function deleteFile(uri: Uri): Promise<void> {
 export async function getStats(uri: Uri): Promise<BigIntStats | undefined> {
   try {
     return await fs.promises.stat(getPathFromUri(uri), { bigint: true });
-  } catch (error) {
+  } catch {
     return undefined;
   }
 }

@@ -683,6 +683,11 @@ export interface FootnoteListProps {
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
 export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
+	"%markerMenu_deprecated_label%",
+	"%markerMenu_disallowed_label%",
+	"%markerMenu_noResults%",
+	"%markerMenu_searchPlaceholder%",
+	...`%${string}%`[],
 	"%footnoteEditor_callerDropdown_label%",
 	"%footnoteEditor_callerDropdown_item_generated%",
 	"%footnoteEditor_callerDropdown_item_hidden%",
@@ -699,7 +704,7 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%redoButton_tooltip%"
 ];
 export type FootnoteEditorLocalizedStrings = {
-	[localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]?: string;
+	[localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]: string;
 };
 export type FootnoteCallerType = "generated" | "hidden" | "custom";
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
@@ -723,6 +728,8 @@ export interface FootnoteEditorProps {
 	noteKey: string | undefined;
 	/** View options of the parent editor */
 	editorOptions: EditorOptions;
+	/** Trigger key to open the footnote editor marker menu */
+	defaultMarkerMenuTrigger: string;
 	/** Localized strings to be passed to the footnote editor component */
 	localizedStrings: FootnoteEditorLocalizedStrings;
 	/**
@@ -736,7 +743,7 @@ export interface FootnoteEditorProps {
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, localizedStrings, parentEditorRef, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
@@ -1709,13 +1716,17 @@ export type UndoRedoButtonsProps = {
 	canRedo?: boolean;
 	/** Localized strings for button tooltips. Falls back to the key itself if not provided. */
 	localizedStrings?: UndoRedoButtonsLocalizedStrings;
+	/** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
+	className?: string;
+	/** Variant for the buttons. Defaults to "ghost". */
+	variant?: ButtonProps["variant"];
 };
 /**
  * Undo and (optionally) Redo buttons with tooltips. Suitable for use in any editor toolbar. The
  * Redo button is only rendered when `onRedoClick` is provided. Tooltip text defaults to the
  * localization key if no localized strings are provided.
  */
-export declare function UndoRedoButtons({ onUndoClick, onRedoClick, canUndo, canRedo, localizedStrings, }: UndoRedoButtonsProps): import("react/jsx-runtime").JSX.Element;
+export declare function UndoRedoButtons({ onUndoClick, onRedoClick, canUndo, canRedo, localizedStrings, className, variant, }: UndoRedoButtonsProps): import("react/jsx-runtime").JSX.Element;
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;

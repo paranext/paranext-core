@@ -30,7 +30,7 @@ function isPotentialConnectionToPapiNetwork(url: string | URL): boolean {
  */
 export class PapiRendererWebSocket implements WebSocket {
   // Use "any" to match the WebSocket interface
-  /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/lines-between-class-members */
+  /* eslint-disable @typescript-eslint/no-explicit-any, @stylistic/ts/lines-between-class-members */
   readonly CONNECTING!: 0;
   readonly OPEN!: 1;
   readonly CLOSING!: 2;

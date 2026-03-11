@@ -450,6 +450,19 @@ declare module 'platform-scripture' {
   // #region Find Types
 
   /**
+   * Defines how a find operation should restrict matches at word boundaries.
+   *
+   * - `'none'`: match anywhere (default)
+   * - `'wholeWord'`: match only complete words
+   * - `'startOfWord'`: match at the start of a word
+   * - `'endOfWord'`: match at the end of a word
+   *
+   * Word-forming characters are Unicode letters (`\p{L}`) and marks/diacritics (`\p{M}`),
+   * approximating Paratext 9's `BaseCharacterRegex + DiacriticCharacterRegex`.
+   */
+  export type WordRestriction = 'none' | 'wholeWord' | 'startOfWord' | 'endOfWord';
+
+  /**
    * Defines the scope of a find operation. A scope is a book and optionally a chapter within that
    * book. If no chapter is provided, then the find operation should search across all chapters.
    */
@@ -482,6 +495,27 @@ declare module 'platform-scripture' {
      * all text content including notes, figures, sidebars, tables, etc.
      */
     verseTextOnly?: boolean;
+    /**
+     * Controls whether the search matches only at word boundaries. If undefined or `'none'`, match
+     * anywhere. See {@link WordRestriction} for all options.
+     */
+    wordRestriction?: WordRestriction;
+    /**
+     * If true, diacritical marks (Unicode combining characters, `\p{M}`) in the search string are
+     * ignored, and matches succeed regardless of diacritics present in the document text. Matches
+     * Paratext 9's `FindReplaceOptions.IgnoreDiacritics`.
+     *
+     * Has no effect when `useRegex` is true, as the user-supplied pattern is used as-is.
+     */
+    ignoreDiacritics?: boolean;
+    /**
+     * If true, any sequence of whitespace or invisible characters in either the search string or
+     * the document is treated as equivalent to any other such sequence. Matches Paratext 9's
+     * `FindReplaceOptions.IgnoreWhitespaceDifferences`.
+     *
+     * Has no effect when `useRegex` is true, as the user-supplied pattern is used as-is.
+     */
+    ignoreWhitespaceDifferences?: boolean;
   };
 
   /** Represents a single result from a find operation. */
@@ -1678,5 +1712,69 @@ declare module 'papi-shared-types' {
     'platformScripture.validPunctuation': string;
 
     'platformScripture.invalidPunctuation': string;
+
+    /**
+     * Content of the `[]` character class for base (word-forming) characters, derived from Paratext
+     * 9's `CharacterCategorizer.BaseCharacterRegex`. This is a computed, read-only setting — it is
+     * not stored in Settings.xml. Must be used in an ECMAScript regex with the `u` flag.
+     */
+    'platformScripture.baseCharacterClassRegex': string;
+
+    /**
+     * Content of the `[]` character class for diacritic (combining/modifier) characters, derived
+     * from Paratext 9's `CharacterCategorizer.DiacriticCharacterRegex`. This is a computed,
+     * read-only setting — it is not stored in Settings.xml. Must be used in an ECMAScript regex
+     * with the `u` flag.
+     */
+    'platformScripture.diacriticCharacterClassRegex': string;
+
+    /**
+     * Full regex alternation pattern for word-medial characters (characters that can appear inside
+     * a word but not at a boundary), derived from Paratext 9's
+     * `CharacterCategorizer.WordMedialRegex`. This is a computed, read-only setting — it is not
+     * stored in Settings.xml. May be an empty string for scripts with no word-medial characters.
+     */
+    'platformScripture.wordMedialCharacterRegex': string;
+
+    /**
+     * Full regex pattern matching one or more word-break characters, derived from Paratext 9's
+     * `CharacterCategorizer.WordBreakRegex`. This is a computed, read-only setting — it is not
+     * stored in Settings.xml.
+     *
+     * Defaults to `\s+` when the project has no custom word-break characters. For projects with
+     * custom word-break characters the pattern is `(\s|char1|char2|...)+`, where each character is
+     * regex-escaped.
+     */
+    'platformScripture.wordBreakRegex': string;
+
+    /**
+     * Whether the project allows invisible characters to appear literally in USFM text. Corresponds
+     * to `ScrText.Settings.AllowInvisibleChars` in Paratext 9.
+     *
+     * The invisible characters in question are:
+     *
+     * - U+200D Zero-width joiner
+     * - U+2003 Em space
+     * - U+2002 En space
+     * - U+0020 Space
+     * - U+00A0 No-break space (NBSP)
+     * - U+202F Narrow no-break space
+     * - U+2009 Thin space
+     * - U+200A Hair space
+     * - U+3000 Ideographic space
+     * - U+200B Zero-width space
+     * - U+200C Zero-width non-joiner
+     * - U+2060 Word joiner
+     * - U+200E Left-to-right mark
+     * - U+200F Right-to-left mark
+     *
+     * When `false` (the Paratext default), Paratext replaces NBSP with a tilde (`~`) when writing
+     * USFM. In that case, a `~` in USFM text represents a non-breaking space and should be treated
+     * as whitespace during operations on the text such as find and replace.
+     *
+     * When `true`, invisible characters are preserved literally in USFM. A `~` is then a literal
+     * tilde character, not a whitespace substitute.
+     */
+    'platformScripture.allowInvisibleCharacters': boolean;
   }
 }

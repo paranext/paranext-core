@@ -11,14 +11,22 @@ import {
   Scope,
   ScopeSelector,
   ScrollGroupSelector,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Spinner,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { FindJobStatus } from 'platform-scripture';
+import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { SetStateAction, useEffect, useMemo, useState } from 'react';
+
+/** Set to true to re-enable the Allow Regex option for advanced users */
+const SHOW_ALLOW_REGEX_OPTION = false;
 
 export function FindHeaderDemo() {
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -47,6 +55,9 @@ export function FindHeaderDemo() {
   const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
   const [submittedShouldMatchCase, setSubmittedShouldMatchCase] = useState(false);
+  const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
+  const [submittedWordRestriction, setSubmittedWordRestriction] = useState<WordRestriction>('none');
+  // isRegexAllowed is hidden from the UI via SHOW_ALLOW_REGEX_OPTION but kept for future use
   const [isRegexAllowed, setIsRegexAllowed] = useState(false);
   const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
 
@@ -75,6 +86,7 @@ export function FindHeaderDemo() {
       (scope === 'selectedBooks' &&
         selectedBookIds.sort().join(',') !== submittedBookIds.sort().join(',')) ||
       shouldMatchCase !== submittedShouldMatchCase ||
+      wordRestriction !== submittedWordRestriction ||
       isRegexAllowed !== submittedIsRegexAllowed
     );
   }, [
@@ -90,6 +102,8 @@ export function FindHeaderDemo() {
     submittedBookIds,
     shouldMatchCase,
     submittedShouldMatchCase,
+    wordRestriction,
+    submittedWordRestriction,
     isRegexAllowed,
     submittedIsRegexAllowed,
   ]);
@@ -129,6 +143,7 @@ export function FindHeaderDemo() {
     setSubmittedVerseRef(verseRefSetting);
     setSubmittedBookIds(selectedBookIds);
     setSubmittedShouldMatchCase(shouldMatchCase);
+    setSubmittedWordRestriction(wordRestriction);
     setSubmittedIsRegexAllowed(isRegexAllowed);
   };
 
@@ -219,6 +234,26 @@ export function FindHeaderDemo() {
               localizedStrings={{}}
               availableBookInfo={availableBookIds}
             />
+            <div className="tw-space-y-2">
+              <Label>%webView_find_restrictions%</Label>
+              <Select
+                value={wordRestriction}
+                onValueChange={(value: WordRestriction) => setWordRestriction(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">%webView_find_restrictions_none%</SelectItem>
+                  <SelectItem value="wholeWord">%webView_find_restrictions_wholeWord%</SelectItem>
+                  <SelectItem value="startOfWord">
+                    %webView_find_restrictions_startOfWord%
+                  </SelectItem>
+                  <SelectItem value="endOfWord">%webView_find_restrictions_endOfWord%</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {(scope === 'chapter' || scope === 'book') && (
               <div className="tw-flex tw-flex-col tw-items-start tw-gap-4">
                 <Label>%webView_find_scrollGroup%</Label>
@@ -245,15 +280,18 @@ export function FindHeaderDemo() {
                 %webView_find_matchCase%
               </Label>
             </div>
-
-            <div className="tw-flex tw-items-center tw-space-x-2">
-              <Checkbox
-                id="show-context"
-                checked={isRegexAllowed}
-                onCheckedChange={(checked: boolean) => setIsRegexAllowed(checked === true)}
-              />
-              <Label htmlFor="show-context">%webView_find_allowRegex%</Label>
-            </div>
+            {SHOW_ALLOW_REGEX_OPTION && (
+              <div className="tw-flex tw-items-center tw-space-x-2">
+                <Checkbox
+                  id="allow-regex"
+                  checked={isRegexAllowed}
+                  onCheckedChange={(checked: boolean) => setIsRegexAllowed(checked === true)}
+                />
+                <Label htmlFor="allow-regex" className="tw-cursor-pointer">
+                  %webView_find_allowRegex%
+                </Label>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

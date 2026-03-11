@@ -1,4 +1,6 @@
+import { usfmMarkers } from 'platform-bible-utils';
 import { UNDO_REDO_BUTTONS_STRING_KEYS } from '@/components/basics/undo-redo-buttons.component';
+import { MARKER_MENU_STRING_KEYS } from '../marker-menu.component';
 
 /**
  * Object containing all keys used for localization in the FootnoteEditor component. If you're using
@@ -6,6 +8,10 @@ import { UNDO_REDO_BUTTONS_STRING_KEYS } from '@/components/basics/undo-redo-but
  * obtain the localized strings and pass them into the localizedStrings prop of this component
  */
 export const FOOTNOTE_EDITOR_STRING_KEYS = Object.freeze([
+  ...MARKER_MENU_STRING_KEYS,
+  ...Object.entries(usfmMarkers)
+    .map(([, markerDetails]) => markerDetails.description)
+    .filter((item) => !!item),
   '%footnoteEditor_callerDropdown_label%',
   '%footnoteEditor_callerDropdown_item_generated%',
   '%footnoteEditor_callerDropdown_item_hidden%',
@@ -22,7 +28,7 @@ export const FOOTNOTE_EDITOR_STRING_KEYS = Object.freeze([
 ] as const);
 
 export type FootnoteEditorLocalizedStrings = {
-  [localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]?: string;
+  [localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]: string;
 };
 
 export type FootnoteCallerType = 'generated' | 'hidden' | 'custom';

@@ -26,13 +26,21 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    "import": "./dist/index.js",
-    "require": "./dist/index.cjs"
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./localizedStrings.json": "./src/localizedStrings.json"
   },
-  "files": ["dist"],
+  "typesVersions": {
+    "*": {
+      "localizedStrings.json": ["./src/localizedStrings.json"]
+    }
+  },
+  "files": ["dist", "src/localizedStrings.json"],
   "scripts": {
     "start": "npm run storybook",
-    "build:basic": "tsc && cross-env NODE_ENV=production vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
+    "build:basic": "tsc && cross-env NODE_ENV=production vite build && dts-bundle-generator --config ./dts-bundle-generator.config.cts",
     "build:docs": "typedoc",
     "build:storybook": "storybook build",
     "build": "npm run build:basic && npm run lint-fix && typedoc",
@@ -119,8 +127,8 @@
     "@types/jest": "^29.5.14",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
     "@vitejs/plugin-react-swc": "^3.8.0",
     "@vitest/browser": "^3.2.4",
     "@vitest/coverage-v8": "^3.2.4",

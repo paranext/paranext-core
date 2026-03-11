@@ -1,4 +1,4 @@
-﻿import {
+import {
   ILocalizationService,
   localizationServiceProviderName,
   LocalizationData,
@@ -28,6 +28,7 @@ import {
   waitForResyncContributions,
 } from '@extension-host/services/contribution.service';
 import { LanguageInfo } from 'platform-bible-react';
+import platformBibleReactLocalizedStrings from 'platform-bible-react/localizedStrings.json';
 import { Canon } from '@sillsdev/scripture';
 
 /**
@@ -108,7 +109,11 @@ async function getLocalizedFileUris(): Promise<string[]> {
 /** Load the contents of all localization files from disk */
 async function loadAllLocalizationData() {
   const localizeFileUris = await getLocalizedFileUris();
-  const baseLocalizedStringsDoc: LocalizedStringDataContribution = { localizedStrings: {} };
+  // Initialize with platform-bible-react library strings as defaults; platform asset strings take precedence
+  const baseLocalizedStringsDoc: LocalizedStringDataContribution = {
+    localizedStrings: { ...(platformBibleReactLocalizedStrings.localizedStrings ?? {}) },
+    metadata: platformBibleReactLocalizedStrings.metadata,
+  };
 
   await Promise.all(
     localizeFileUris.map(async (uri) => {
@@ -116,16 +121,22 @@ async function loadAllLocalizationData() {
         const localizeFileString = await nodeFS.readFileText(uri);
         const fileName = getFileNameFromUri(uri);
         if (fileName === 'metadata') {
-          baseLocalizedStringsDoc.metadata = convertToLocalizedStringMetadata(localizeFileString);
+          // Platform asset metadata takes precedence over library metadata for the same keys
+          baseLocalizedStringsDoc.metadata = {
+            ...(baseLocalizedStringsDoc.metadata ?? {}),
+            ...convertToLocalizedStringMetadata(localizeFileString),
+          };
           return;
         }
 
+        // Platform asset strings take precedence over library strings for the same keys
         // We just made the `localizedStrings` property above
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        baseLocalizedStringsDoc.localizedStrings![fileName] = convertToLocalizationData(
-          localizeFileString,
-          fileName,
-        );
+        const langStrings = baseLocalizedStringsDoc.localizedStrings!;
+        langStrings[fileName] = {
+          ...(langStrings[fileName] ?? {}),
+          ...convertToLocalizationData(localizeFileString, fileName),
+        };
 
         // ENHANCE: instead of creating a hardcoded languageDetails and using that, see if we can
         // get all the needed info from SLDR.

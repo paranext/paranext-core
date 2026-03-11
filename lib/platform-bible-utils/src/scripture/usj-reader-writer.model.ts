@@ -532,6 +532,25 @@ export type UsjNodeAndDocumentLocation<
   documentLocation: TDocumentLocation;
 };
 
+/** Options controlling how {@link IUsjReaderWriter.search} performs its search */
+export type UsjSearchOptions = {
+  /**
+   * Optional set of marker styles (e.g., 'p', 'q1', 'nd') to include in the search. When provided,
+   * only text within markers whose style is in this set will be searched. Text inside markers not
+   * in this set (e.g., footnotes, cross-references) will be excluded. When omitted, all text is
+   * searched.
+   */
+  markerStylesToInclude?: Set<string>;
+  /**
+   * When `'NFD'`, the concatenated text is normalized to NFD before the regex is applied, and match
+   * positions are mapped back to the original string. This is required for correct
+   * `ignoreDiacritics` behaviour on NFC source text: a pre-composed character such as `é` (U+00E9)
+   * will not match `e[combining]*` unless the text is first decomposed. Returned `text` values are
+   * always slices of the original (non-NFD) string.
+   */
+  normalizationForm?: 'NFD';
+};
+
 /** Result of a search for text within a USJ object */
 export type UsjSearchResult = {
   /**
@@ -731,6 +750,14 @@ export interface IUsjReaderWriter {
    * @returns Array of `UsjSearchResult` objects that match the given regular expression
    */
   search(regex: RegExp, markerStylesToInclude?: Set<string>): UsjSearchResult[];
+  /**
+   * Search for matches of a regular expression within this USJ's text data
+   *
+   * @param regex Regular expression to search for. Specify the global flag to find all matches.
+   * @param searchOptions Options controlling how the search is performed
+   * @returns Array of `UsjSearchResult` objects that match the given regular expression
+   */
+  search(regex: RegExp, searchOptions?: UsjSearchOptions): UsjSearchResult[];
   /** Transforms the USJ document into USFM */
   toUsfm(): string;
   /**

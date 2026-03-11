@@ -27,12 +27,12 @@ beforeAll(() => {
 afterAll(() => {
   try {
     fs.rmSync(extensionsBasePath, { recursive: true });
-  } catch (error) {
+  } catch {
     // do nothing
   }
   try {
     fs.rmSync(thisUserBasePath, { recursive: true });
-  } catch (error) {
+  } catch {
     // do nothing
   }
 });
@@ -40,12 +40,12 @@ afterAll(() => {
 beforeEach(() => {
   try {
     fs.rmSync(path.join(thisExtensionBasePath, '*.*'), { recursive: false });
-  } catch (error) {
+  } catch {
     // do nothing
   }
   try {
     fs.rmSync(path.join(thisUserBasePath, '*.*'), { recursive: false });
-  } catch (error) {
+  } catch {
     // do nothing
   }
 });

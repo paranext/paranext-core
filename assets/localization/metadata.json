@@ -65,14 +65,6 @@
       "message": "This exists to test deprecating localized strings. Do not remove or use."
     }
   },
-  "%undoButton_tooltip%": {
-    "notes": "The tooltip text for the undo button in the common undo/redo control used in various editors.",
-    "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
-  },
-  "%redoButton_tooltip%": {
-    "notes": "The tooltip text for the redo button in the common undo/redo control used in various editors.",
-    "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiRedo.ToolTipText%"
-  },
   "%yes%": {
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
     "fallbackKey": "%confirm%"
