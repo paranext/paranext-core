@@ -22,6 +22,7 @@ import {
 } from '@/components/shadcn-ui/tooltip';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
+import { EditorKeyboardShortcuts } from '@/components/basics/editor-keyboard-shortcuts.component';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
@@ -356,7 +357,6 @@ export default function FootnoteEditor({
   useEffect(() => {
     const editorInput =
       editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
-    const isMac = /Macintosh/i.test(navigator.userAgent);
     const handleKeyDown = (event: KeyboardEvent) => {
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
       if (
@@ -370,20 +370,6 @@ export default function FootnoteEditor({
       } else if (showMarkersMenu && event.key === 'Escape') {
         event.preventDefault();
         setShowMarkersMenu(false);
-      }
-
-      // Listens for the control or if on mac, the meta key
-      if (isMac ? event.metaKey : event.ctrlKey) {
-        // Handles redo
-        if (
-          (event.shiftKey && event.key.toLowerCase() === 'z') ||
-          event.key.toLowerCase() === 'y'
-        ) {
-          editorRef.current?.redo();
-          // Handles undo
-        } else if (event.key.toLowerCase() === 'z') {
-          editorRef.current?.undo();
-        }
       }
     };
 
@@ -455,15 +441,17 @@ export default function FootnoteEditor({
           className="tw-relative tw-rounded-[6px] tw-border-2 tw-border-ring"
         >
           <div className={classNameForEditor}>
-            <Editorial
-              options={options}
-              onStateChange={(state) => setContextMarker(state.contextMarker)}
-              onUsjChange={handleUsjChange}
-              defaultUsj={PARAGRAPH_USJ}
-              onScrRefChange={() => {}}
-              scrRef={scrRef}
-              ref={editorRef}
-            />
+            <EditorKeyboardShortcuts editorRef={editorRef}>
+              <Editorial
+                options={options}
+                onStateChange={(state) => setContextMarker(state.contextMarker)}
+                onUsjChange={handleUsjChange}
+                defaultUsj={PARAGRAPH_USJ}
+                onScrRefChange={() => {}}
+                scrRef={scrRef}
+                ref={editorRef}
+              />
+            </EditorKeyboardShortcuts>
           </div>
           <div className="tw-absolute tw-bottom-0 tw-right-0">
             <TooltipProvider>
