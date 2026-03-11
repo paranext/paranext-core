@@ -243,7 +243,7 @@
       "%footnoteEditor_noteType_crossReference_label%": "Referencia cruzada",
       "%footnoteEditor_noteType_endNote_label%": "Nota al final",
       "%footnoteEditor_noteType_footnote_label%": "Nota a pie de página",
-      "%footnoteEditor_noteType_tooltip%": "Tipo de cambio: Nota",
+      "%footnoteEditor_noteType_tooltip%": "Tipo de nota",
       "%footnoteEditor_noteTypeDropdown_label%": "Tipo",
       "%footnoteEditor_saveButton_tooltip%": "Guardar",
       "%markerMenu_deprecated_label%": "Obsoleto",
