@@ -4661,9 +4661,9 @@ declare module 'shared/models/project-data-provider-factory.interface' {
      * IDs.
      *
      * If this is a Layering PDP Factory, this method should call
-     * `papi.projectLookup.getMetadataForAllProjects` with some set of metadata filters in order to
-     * determine which projects it can layer over. The set of metadata filters relevant to this PDP
-     * Factory **absolutely must** be merged with the `layeringFilters` provided using
+     * `papi.projectLookup.getMetadataForAllProjectsWithoutRetries` with some set of metadata filters
+     * in order to determine which projects it can layer over. The set of metadata filters relevant to
+     * this PDP Factory **absolutely must** be merged with the `layeringFilters` provided using
      * `papi.projectLookup.mergeMetadataFilters`, or it will get into an infinite loop of calling
      * other layering PDPs.
      *
@@ -4674,9 +4674,9 @@ declare module 'shared/models/project-data-provider-factory.interface' {
      * @param layeringFilters If applicable, filters used to prevent this Layering PDP Factory from
      *   entering an infinite loop with another Layering PDP Factory. You **absolutely must** merge
      *   these filters with your own filters using `papi.projectLookup.mergeMetadataFilters` when
-     *   calling `papi.projectLookup.getMetadataForAllProjects` inside this method. If you are not
-     *   calling `getMetadataForAllProjects` inside this method (likely if this is a Base PDPF), you
-     *   can safely ignore this parameter.
+     *   calling `papi.projectLookup.getMetadataForAllProjectsWithoutRetries` inside this method. If
+     *   you are not calling `getMetadataForAllProjectsWithoutRetries` inside this method (likely if
+     *   this is a Base PDPF), you can safely ignore this parameter.
      */
     getAvailableProjects(
       layeringFilters?: ProjectMetadataFilterOptions,
@@ -4729,6 +4729,11 @@ declare module 'shared/models/project-lookup.service-model' {
     /**
      * Provide metadata for all projects that have PDP factories
      *
+     * This method will wait for some metadata to be available, so it may take some time to return. If
+     * you want to get available project metadata without waiting, you can use
+     * {@link ProjectLookupServiceType.getMetadataForAllProjectsWithoutRetries}. However, that might
+     * not provide you with all the metadata you want if it isn't available yet.
+     *
      * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
      * the parameters, their project metadata will all be combined, so all available
      * `projectInterface`s provided by the PDP Factory with the matching ID (or all PDP Factories if
@@ -4739,9 +4744,34 @@ declare module 'shared/models/project-lookup.service-model' {
      *   Factory ID does not match the filter, it will not be contacted at all for this function call.
      *   As a result, a PDP factory that intends to layer over other PDP factories **must** specify
      *   its ID in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.
-     * @returns ProjectMetadata for all projects stored on the local system
+     * @returns ProjectMetadata for all projects that are currently available on the local system
      */
     getMetadataForAllProjects(options?: ProjectMetadataFilterOptions): Promise<ProjectMetadata[]>;
+    /**
+     * Provide metadata for all projects that have currently available PDP factories
+     *
+     * This is intended for use by Layering PDP Factories in their
+     * {@link IProjectDataProviderFactory.getAvailableProjects} implementations to avoid blocking the
+     * parent metadata lookup with nested retry loops during startup.
+     *
+     * For most use cases, consider {@link ProjectLookupServiceType.getMetadataForAllProjects} which
+     * automatically retries during startup to wait for PDP Factories to register.
+     *
+     * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
+     * the parameters, their project metadata will all be combined, so all available
+     * `projectInterface`s provided by the PDP Factory with the matching ID (or all PDP Factories if
+     * no ID is specified) for the project will be returned. If you need `projectInterface`s supported
+     * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
+     *
+     * @param options Options for specifying filters for the project metadata retrieved. If a PDP
+     *   Factory ID does not match the filter, it will not be contacted at all for this function call.
+     *   As a result, a PDP factory that intends to layer over other PDP factories **must** specify
+     *   its ID in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.
+     * @returns ProjectMetadata for all projects that are currently available on the local system
+     */
+    getMetadataForAllProjectsWithoutRetries(
+      options?: ProjectMetadataFilterOptions,
+    ): Promise<ProjectMetadata[]>;
     /**
      * Look up metadata for a specific project ID
      *
@@ -4920,9 +4950,9 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
      * IDs.
      *
      * If this is a Layering PDP Factory, this method should call
-     * `papi.projectLookup.getMetadataForAllProjects` with some set of metadata filters in order to
-     * determine which projects it can layer over. The set of metadata filters relevant to this PDP
-     * Factory **absolutely must** be merged with the `layeringFilters` provided using
+     * `papi.projectLookup.getMetadataForAllProjectsWithoutRetries` with some set of metadata filters
+     * in order to determine which projects it can layer over. The set of metadata filters relevant to
+     * this PDP Factory **absolutely must** be merged with the `layeringFilters` provided using
      * `papi.projectLookup.mergeMetadataFilters`, or it will get into an infinite loop of calling
      * other layering PDPs.
      *
@@ -4933,9 +4963,9 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
      * @param layeringFilters If applicable, filters used to prevent this Layering PDP Factory from
      *   entering an infinite loop with another Layering PDP Factory. You **absolutely must** merge
      *   these filters with your own filters using `papi.projectLookup.mergeMetadataFilters` when
-     *   calling `papi.projectLookup.getMetadataForAllProjects` inside this method. If you are not
-     *   calling `getMetadataForAllProjects` inside this method (likely if this is a Base PDPF), you
-     *   can safely ignore this parameter.
+     *   calling `papi.projectLookup.getMetadataForAllProjectsWithoutRetries` inside this method. If
+     *   you are not calling `getMetadataForAllProjectsWithoutRetries` inside this method (likely if
+     *   this is a Base PDPF), you can safely ignore this parameter.
      */
     getAvailableProjects(
       layeringFilters?: ProjectMetadataFilterOptions,
