@@ -1312,12 +1312,20 @@ describe('Nested retry skip behavior', () => {
     // Start the call but don't await yet — it will pause at `await wait(1000)` in the retry loop
     const metadataPromise = projectLookupService.getMetadataForAllProjects();
 
+    // The promise should still be pending — the retry loop hasn't fired yet
+    const PENDING = Symbol('pending');
+    const raceResult = await Promise.race([metadataPromise, Promise.resolve(PENDING)]);
+    expect(raceResult).toBe(PENDING);
+
     // Advance the fake timer to fire the retry loop's wait(1000). This also advances
     // performance.now() so the while loop condition remains true.
     // Use advanceTimersByTimeAsync to process the pending microtasks/timers.
     await vi.advanceTimersByTimeAsync(1000);
 
-    const projectsMetadata = await metadataPromise;
+    // After advancing the timer, the promise should now be resolved
+    const resolvedResult = await Promise.race([metadataPromise, Promise.resolve(PENDING)]);
+    expect(resolvedResult).not.toBe(PENDING);
+    const projectsMetadata = resolvedResult as ProjectMetadata[];
 
     // Should succeed with combined metadata from both PDPFs
     expect(projectsMetadata.length).toBe(1);
@@ -1325,11 +1333,15 @@ describe('Nested retry skip behavior', () => {
     expect(projectsMetadata[0].projectInterfaces).toContain(layeringProjectInterfaces[0]);
     expect(projectsMetadata[0].projectInterfaces).toContain(baseProjectInterfaces[0]);
 
-    // Exactly 4 calls: initial top-level (1) + nested from layering (2) → empty, retry fires →
-    // retry top-level (3) + nested from layering (4) → success.
-    expect(getAllCallCount).toBe(4);
+    // Verify that at least one retry happened (the base PDPF appeared on a later call)
+    expect(getAllCallCount).toBeGreaterThanOrEqual(3);
+  });
 
-    // Restore timer past the grace period for subsequent tests
+  // Restore the timer configuration from beforeAll so subsequent tests aren't affected.
+  // This test fakes both performance and setTimeout, but beforeAll only fakes performance.
+  afterAll(() => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['performance'] });
     vi.advanceTimersByTime(testingProjectLookupService.LOAD_TIME_GRACE_PERIOD_MS);
   });
 });

@@ -75,6 +75,11 @@ export type ProjectLookupServiceType = {
   /**
    * Provide metadata for all projects that have PDP factories
    *
+   * This method will wait for some metadata to be available, so it may take some time to return. If
+   * you want to get available project metadata without waiting, you can use
+   * {@link ProjectLookupServiceType.getMetadataForAllProjectsWithoutRetries}. However, that might
+   * not provide you with all the metadata you want if it isn't available yet.
+   *
    * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
    * the parameters, their project metadata will all be combined, so all available
    * `projectInterface`s provided by the PDP Factory with the matching ID (or all PDP Factories if
@@ -85,9 +90,34 @@ export type ProjectLookupServiceType = {
    *   Factory ID does not match the filter, it will not be contacted at all for this function call.
    *   As a result, a PDP factory that intends to layer over other PDP factories **must** specify
    *   its ID in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.
-   * @returns ProjectMetadata for all projects stored on the local system
+   * @returns ProjectMetadata for all projects that are currently available on the local system
    */
   getMetadataForAllProjects(options?: ProjectMetadataFilterOptions): Promise<ProjectMetadata[]>;
+  /**
+   * Provide metadata for all projects that have currently available PDP factories
+   *
+   * This is intended for use by Layering PDP Factories in their
+   * {@link IProjectDataProviderFactory.getAvailableProjects} implementations to avoid blocking the
+   * parent metadata lookup with nested retry loops during startup.
+   *
+   * For most use cases, consider {@link ProjectLookupServiceType.getMetadataForAllProjects} which
+   * automatically retries during startup to wait for PDP Factories to register.
+   *
+   * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
+   * the parameters, their project metadata will all be combined, so all available
+   * `projectInterface`s provided by the PDP Factory with the matching ID (or all PDP Factories if
+   * no ID is specified) for the project will be returned. If you need `projectInterface`s supported
+   * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
+   *
+   * @param options Options for specifying filters for the project metadata retrieved. If a PDP
+   *   Factory ID does not match the filter, it will not be contacted at all for this function call.
+   *   As a result, a PDP factory that intends to layer over other PDP factories **must** specify
+   *   its ID in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.
+   * @returns ProjectMetadata for all projects that are currently available on the local system
+   */
+  getMetadataForAllProjectsWithoutRetries(
+    options?: ProjectMetadataFilterOptions,
+  ): Promise<ProjectMetadata[]>;
   /**
    * Look up metadata for a specific project ID
    *
@@ -156,6 +186,11 @@ export const projectLookupServiceBase: ProjectLookupServiceType = {
     options: ProjectMetadataFilterOptions = {},
   ): Promise<ProjectMetadata[]> {
     return internalGetMetadataWithRetries(options);
+  },
+  async getMetadataForAllProjectsWithoutRetries(
+    options: ProjectMetadataFilterOptions = {},
+  ): Promise<ProjectMetadata[]> {
+    return internalGetMetadata(options);
   },
   async getMetadataForProject(
     projectId: string,
@@ -474,21 +509,6 @@ async function internalGetMetadata(
   }
 
   return allProjectsMetadataArray;
-}
-
-/**
- * Gets project metadata from PDPFs without the startup retry loop. Intended for use by
- * {@link LayeringProjectDataProviderEngineFactory} so that nested calls from layering PDPFs do not
- * enter the retry loop and block the parent `Promise.all` for up to 30 seconds.
- *
- * Layering PDPFs call back into `getMetadataForAllProjects` from within `internalGetMetadata`'s
- * `Promise.all`. If those nested calls used the retry-enabled version, empty results would trigger
- * retries that block the parent call, creating a cascading deadlock during startup.
- */
-export async function getMetadataForAllProjectsWithoutRetries(
-  options: ProjectMetadataFilterOptions = {},
-): Promise<ProjectMetadata[]> {
-  return internalGetMetadata(options);
 }
 
 /**

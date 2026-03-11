@@ -2,7 +2,6 @@ import { IProjectDataProviderEngine } from '@shared/models/project-data-provider
 import { ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
 import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
 import { projectLookupService } from '@shared/services/project-lookup.service';
-import { getMetadataForAllProjectsWithoutRetries } from '@shared/models/project-lookup.service-model';
 import { ProjectInterfaces } from 'papi-shared-types';
 import { escapeStringRegexp, getErrorMessage } from 'platform-bible-utils';
 
@@ -144,7 +143,8 @@ export abstract class LayeringProjectDataProviderEngineFactory<
       // Use the non-retrying version to avoid cascading 30-second retry blocks. Layering PDPFs
       // are called from within internalGetMetadata's Promise.all, so nested retries would block
       // the parent call. The outer caller handles retries if needed.
-      const projectsToOverlayMetadata = await getMetadataForAllProjectsWithoutRetries(filters);
+      const projectsToOverlayMetadata =
+        await projectLookupService.getMetadataForAllProjectsWithoutRetries(filters);
       return projectsToOverlayMetadata.map((projectMetadataToOverlay) => {
         projectMetadataToOverlay.projectInterfaces = this.providedProjectInterfaces;
         return projectMetadataToOverlay;

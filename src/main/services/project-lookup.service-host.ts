@@ -50,6 +50,32 @@ export async function startProjectLookupService(): Promise<void> {
             },
           },
         },
+        {
+          name: 'getMetadataForAllProjectsWithoutRetries',
+          summary: 'Provide metadata for all projects without startup retry behavior',
+          description:
+            'Intended for Layering PDP Factories to avoid blocking the parent metadata lookup with nested retry loops. For most use cases, prefer getMetadataForAllProjects.',
+          params: [
+            {
+              name: 'options',
+              required: false,
+              summary:
+                'Options for specifying filters for the project metadata retrieved. If a PDP Factory ID does not match the filter, it will not be contacted at all for this function call. As a result, a PDP factory that intends to layer over other PDP factories **must** specify its ID in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.',
+              schema: {
+                $ref: '#/components/schemas/ProjectMetadataFilterOptions',
+              },
+            },
+          ],
+          result: {
+            name: 'return value',
+            schema: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/ProjectMetadata',
+              },
+            },
+          },
+        },
       ],
       components: {
         schemas: {
