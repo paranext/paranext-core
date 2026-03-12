@@ -32,6 +32,8 @@ type SearchResultsInBookProps = {
   onReplace: (index: number) => void;
   /** Whether the find webview is currently in replace mode */
   isReplaceMode: boolean;
+  /** Whether a replace operation is currently in progress */
+  isReplacing: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -49,6 +51,7 @@ export function SearchResultsInBook({
   onReplace,
   localizedStrings,
   isReplaceMode,
+  isReplacing,
 }: SearchResultsInBookProps) {
   const verseRefForBook = useMemo(() => {
     return {
@@ -100,6 +103,7 @@ export function SearchResultsInBook({
           onReplace={onReplace}
           localizedStrings={localizedStrings}
           isReplaceMode={isReplaceMode}
+          isReplacing={isReplacing}
         />
       ))}
     </>

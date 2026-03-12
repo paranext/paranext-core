@@ -45,6 +45,8 @@ interface SearchResultProps {
   onReplace: (index: number) => void;
   /** Whether the find webview is currently in replace mode */
   isReplaceMode: boolean;
+  /** Whether a replace operation is currently in progress */
+  isReplacing: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -85,6 +87,7 @@ export default function SearchResult({
   onReplace,
   localizedStrings,
   isReplaceMode,
+  isReplacing,
 }: SearchResultProps) {
   // We should avoid calculating context unless this result is selected to improve performance
   const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(isSelected);
@@ -175,6 +178,7 @@ export default function SearchResult({
       className="tw-m-1 tw-h-6 tw-text-foreground"
       variant="outline"
       size="sm"
+      disabled={isReplacing}
       onClick={(e) => {
         e.stopPropagation();
         onReplace(globalResultsIndex);
@@ -235,6 +239,7 @@ export default function SearchResult({
       selectedButtons={isReplaceMode ? replaceButton : undefined}
       hoverButtons={isReplaceMode ? replaceButton : undefined}
       dropdownContent={dropdownContent}
+      showDropdownOnHover
       additionalSelectedContent={additionalSelectedContent}
     >
       {cardContent}
