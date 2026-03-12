@@ -2,7 +2,6 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useLocalizedStrings,
-  useProjectData,
   useProjectDataProvider,
   useProjectSetting,
   useWebViewController,
@@ -54,6 +53,7 @@ import {
   isPlatformError,
   LocalizeKey,
   Mutex,
+  UnsubscriberAsync,
 } from 'platform-bible-utils';
 import {
   FindJobStatus,
@@ -163,7 +163,7 @@ global.webViewComponent = function FindWebView({
     'findSelectedBookIds',
     [],
   );
-  const [, setSubmittedBookIds] = useState<string[]>([]);
+  const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
   const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
   const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
@@ -214,19 +214,12 @@ global.webViewComponent = function FindWebView({
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
   const replacePdp = useProjectDataProvider('platformScripture.replaceWithUsfm', projectId);
 
-  // Subscribe to book-level scripture data in Replace mode to detect external changes.
-  // When another process edits scripture while the user has stale find results, we auto-re-run
-  // find so replace positions are always fresh. Only active in Replace mode to avoid overhead.
-  // Note: for 'selectedBooks' scope this only monitors the primary submitted book (limitation).
-  const changeDetectionVerseRef = useMemo(
-    () => ({ book: submittedVerseRef?.book ?? verseRefSetting.book, chapterNum: 1, verseNum: 0 }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [submittedVerseRef?.book, verseRefSetting.book],
-  );
-  const [scriptureDataForChangeDetection] = useProjectData(
+  // Project data provider for USFM Book data — used in Replace mode to detect external edits.
+  // Only activated in Replace mode to avoid overhead.
+  const usfmBookPdp = useProjectDataProvider(
     'platformScripture.USFM_Book',
     activeMode === 'replace' ? projectId : undefined,
-  ).BookUSFM(changeDetectionVerseRef, undefined);
+  );
 
   const [localizedStrings, isLocalizedStringsLoading] = useLocalizedStrings(
     useMemo(() => LOCALIZED_STRINGS, []),
@@ -596,8 +589,81 @@ global.webViewComponent = function FindWebView({
   // #region External scripture change detection for Replace mode
 
   /**
-   * Baseline scripture data recorded at the time of the last find. `null` means no baseline has
-   * been set yet for the current Replace mode session. Compared against
+   * Combined USFM data string for all monitored books (bookId:usfm pairs joined by '|'). Updated by
+   * subscriptions below. Used to detect external edits while in Replace mode.
+   */
+  const [scriptureDataForChangeDetection, setScriptureDataForChangeDetection] = useState<
+    string | undefined
+  >(undefined);
+
+  // Determine which books to monitor: all selected books for 'selectedBooks' scope, or the single
+  // submitted book for 'book'/'chapter' scope. Only populated after a search has been run.
+  const booksToMonitor = useMemo((): string[] => {
+    if (!submittedScope) return [];
+    if (submittedScope === 'selectedBooks') return submittedBookIds;
+    const book = submittedVerseRef?.book;
+    return book ? [book] : [];
+  }, [submittedScope, submittedBookIds, submittedVerseRef?.book]);
+
+  // Subscribe to USFM data for every monitored book in Replace mode. When any book's data
+  // changes, update `scriptureDataForChangeDetection` so the detection effect below can react.
+  useEffect(() => {
+    if (activeMode !== 'replace' || !usfmBookPdp || booksToMonitor.length === 0) {
+      setScriptureDataForChangeDetection(undefined);
+      return undefined;
+    }
+
+    const bookDataMap = new Map<string, string | undefined>();
+    const unsubscribers: UnsubscriberAsync[] = [];
+    let isEffectActive = true;
+
+    const updateCombined = () => {
+      if (!isEffectActive) return;
+      const combined = booksToMonitor
+        .map((bookId) => `${bookId}:${bookDataMap.get(bookId) ?? ''}`)
+        .join('|');
+      setScriptureDataForChangeDetection(combined);
+    };
+
+    (async () => {
+      for (const bookId of booksToMonitor) {
+        if (!isEffectActive) break;
+        const verseRef = { book: bookId, chapterNum: 1, verseNum: 0 };
+        // eslint-disable-next-line no-await-in-loop
+        const unsubscriber = await usfmBookPdp.subscribeBookUSFM(
+          verseRef,
+          (usfm) => {
+            if (!isEffectActive) return;
+            bookDataMap.set(bookId, isPlatformError(usfm) ? undefined : usfm);
+            updateCombined();
+          },
+          { retrieveDataImmediately: true },
+        );
+        if (!isEffectActive) {
+          unsubscriber().catch((err) =>
+            logger.warn(`Error unsubscribing book USFM: ${getErrorMessage(err)}`),
+          );
+          return;
+        }
+        unsubscribers.push(unsubscriber);
+      }
+    })().catch((err) =>
+      logger.error(`Error subscribing to book USFM for change detection: ${getErrorMessage(err)}`),
+    );
+
+    return () => {
+      isEffectActive = false;
+      unsubscribers.forEach((unsub) =>
+        unsub().catch((err) =>
+          logger.warn(`Error unsubscribing book USFM: ${getErrorMessage(err)}`),
+        ),
+      );
+    };
+  }, [activeMode, usfmBookPdp, booksToMonitor]);
+
+  /**
+   * Baseline scripture data recorded at the time of the last find. `undefined` means no baseline
+   * has been set yet for the current Replace mode session. Compared against
    * `scriptureDataForChangeDetection` to detect external edits.
    */
   const scriptureDataBaselineRef = useRef<string | undefined>(undefined);
@@ -609,7 +675,6 @@ global.webViewComponent = function FindWebView({
       scriptureDataBaselineRef.current = undefined;
       return;
     }
-    if (isPlatformError(scriptureDataForChangeDetection)) return;
     if (scriptureDataBaselineRef.current === undefined || searchStatus === 'running') {
       scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
     }
@@ -626,7 +691,7 @@ global.webViewComponent = function FindWebView({
     if (scriptureDataBaselineRef.current === undefined) return; // No baseline yet
     if (isReplacing || searchStatus === 'running' || searchStatus === undefined) return;
     if (!submittedScope) return; // No previous search to re-run
-    if (isPlatformError(scriptureDataForChangeDetection)) return;
+    if (scriptureDataForChangeDetection === undefined) return;
     if (scriptureDataForChangeDetection === scriptureDataBaselineRef.current) return;
 
     // External change detected — update baseline and re-run find to refresh positions
