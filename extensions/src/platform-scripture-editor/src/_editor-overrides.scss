@@ -26,8 +26,8 @@
 
 // text selection
 :focus ::selection {
-  color: hsl(var(--primary-foreground));
-  background-color: hsl(var(--primary));
+  color: hsl(var(--accent-foreground));
+  background-color: hsl(var(--accent));
 }
 
 ::selection {

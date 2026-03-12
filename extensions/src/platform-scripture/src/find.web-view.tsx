@@ -423,8 +423,10 @@ global.webViewComponent = function FindWebView({
   }, [scope, selectedBookIds, verseRefSetting]);
 
   const isStartingSearchRef = useRef(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const handleStartSearch = useCallback(async () => {
+    clearTimeout(searchDebounceRef.current);
     if (!isSearchQueryValid || !findPdp || isStartingSearchRef.current) return;
 
     // Set the flag to prevent concurrent calls
@@ -590,8 +592,9 @@ global.webViewComponent = function FindWebView({
   // #region External scripture change detection for Replace mode
 
   /**
-   * Combined USFM data string for all monitored books (bookId:usfm pairs joined by '|'). Updated by
-   * subscriptions below. Used to detect external edits while in Replace mode.
+   * Combined version counter string for all monitored books (bookId:version pairs joined by '|').
+   * Updated by subscriptions below. Used to detect external edits while in Replace mode. Uses
+   * version counters instead of raw USFM to avoid storing megabytes of scripture text in state.
    */
   const [scriptureDataForChangeDetection, setScriptureDataForChangeDetection] = useState<
     string | undefined
@@ -607,21 +610,22 @@ global.webViewComponent = function FindWebView({
   }, [submittedScope, submittedBookIds, submittedVerseRef?.book]);
 
   // Subscribe to USFM data for every monitored book in Replace mode. When any book's data
-  // changes, update `scriptureDataForChangeDetection` so the detection effect below can react.
+  // changes, increment that book's version counter and update `scriptureDataForChangeDetection`
+  // so the detection effect below can react. Version counters avoid storing full USFM in state.
   useEffect(() => {
     if (activeMode !== 'replace' || !usfmBookPdp || booksToMonitor.length === 0) {
       setScriptureDataForChangeDetection(undefined);
       return undefined;
     }
 
-    const bookDataMap = new Map<string, string | undefined>();
+    const bookVersionMap = new Map<string, number>();
     const unsubscribers: UnsubscriberAsync[] = [];
     let isEffectActive = true;
 
     const updateCombined = () => {
       if (!isEffectActive) return;
       const combined = booksToMonitor
-        .map((bookId) => `${bookId}:${bookDataMap.get(bookId) ?? ''}`)
+        .map((bookId) => `${bookId}:${bookVersionMap.get(bookId) ?? 0}`)
         .join('|');
       setScriptureDataForChangeDetection(combined);
     };
@@ -636,7 +640,8 @@ global.webViewComponent = function FindWebView({
           verseRef,
           (usfm) => {
             if (!isEffectActive) return;
-            bookDataMap.set(bookId, isPlatformError(usfm) ? undefined : usfm);
+            if (!isPlatformError(usfm))
+              bookVersionMap.set(bookId, (bookVersionMap.get(bookId) ?? 0) + 1);
             updateCombined();
           },
           { retrieveDataImmediately: true },
@@ -689,10 +694,10 @@ global.webViewComponent = function FindWebView({
 
   // Auto-search with debounce when the search term changes
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
+    searchDebounceRef.current = setTimeout(() => {
       handleStartSearchRef.current();
     }, SEARCH_DEBOUNCE_DELAY_MS);
-    return () => clearTimeout(timeoutId);
+    return () => clearTimeout(searchDebounceRef.current);
   }, [searchTerm]);
 
   // When scripture changes externally in Replace mode, auto-re-run find so positions stay fresh.
@@ -781,7 +786,21 @@ global.webViewComponent = function FindWebView({
   const handleReplaceAll = useCallback(async () => {
     if (!replacePdp) return;
 
-    const visibleResultsList = results.filter((r) => !r.isHidden);
+    // Load all remaining results before replacing so we don't miss any
+    let allResults = [...results];
+    while (allResults.length < totalNumberOfResults) {
+      // eslint-disable-next-line no-await-in-loop
+      const update = await retrieveFindJobUpdate(RESULTS_BATCH_SIZE);
+      if (!update || !isMountedRef.current) break;
+      const newBatch = update.nextResults || [];
+      if (newBatch.length === 0) break;
+      allResults = [...allResults, ...newBatch];
+      loadedResultsLengthRef.current += newBatch.length;
+    }
+    // Sync any newly loaded results into state
+    if (allResults.length > results.length) setResults(allResults);
+
+    const visibleResultsList = allResults.filter((r) => !r.isHidden);
     if (visibleResultsList.length === 0) return;
 
     const rangesToReplace = visibleResultsList.map((r) => ({ start: r.start, end: r.end }));
@@ -798,7 +817,16 @@ global.webViewComponent = function FindWebView({
     } finally {
       setIsReplacing(false);
     }
-  }, [handleStartSearch, preserveCase, replacePdp, replaceTerm, results]);
+  }, [
+    handleStartSearch,
+    isMountedRef,
+    preserveCase,
+    replacePdp,
+    replaceTerm,
+    results,
+    retrieveFindJobUpdate,
+    totalNumberOfResults,
+  ]);
 
   const visibleResults = useMemo(
     () =>
@@ -1126,7 +1154,9 @@ global.webViewComponent = function FindWebView({
                 <Button
                   variant="outline"
                   onClick={handleReplaceAll}
-                  disabled={results.length === 0 || searchStatus === 'running' || isReplacing}
+                  disabled={
+                    visibleResults.length === 0 || searchStatus === 'running' || isReplacing
+                  }
                 >
                   <ReplaceAll className="tw-h-4 tw-w-4" />
                   {localizedStrings['%webView_find_replaceAll%']}
@@ -1252,6 +1282,7 @@ global.webViewComponent = function FindWebView({
               }
               localizedStrings={searchResultLocalizedStrings}
               isReplaceMode={activeMode === 'replace'}
+              isReplacing={isReplacing}
             />
           );
         })}
