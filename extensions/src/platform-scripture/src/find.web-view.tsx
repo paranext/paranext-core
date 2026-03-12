@@ -119,6 +119,7 @@ const defaultBooksPresent: string = '';
 const defaultProjectName = '';
 const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
+const SEARCH_DEBOUNCE_DELAY_MS = 500;
 
 /**
  * Applies preserve-case transformation to the replacement text based on the casing of the matched
@@ -684,6 +685,14 @@ global.webViewComponent = function FindWebView({
   // memoized callback identity changed (it has many dependencies).
   const handleStartSearchRef = useRef(handleStartSearch);
   handleStartSearchRef.current = handleStartSearch;
+
+  // Auto-search with debounce when the search term changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      handleStartSearchRef.current();
+    }, SEARCH_DEBOUNCE_DELAY_MS);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
 
   // When scripture changes externally in Replace mode, auto-re-run find so positions stay fresh.
   useEffect(() => {
