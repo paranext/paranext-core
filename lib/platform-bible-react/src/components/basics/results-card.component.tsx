@@ -26,6 +26,8 @@ export interface ResultsCardProps {
   hoverButtons?: ReactNode;
   /** Content to show in the dropdown menu when selected */
   dropdownContent?: ReactNode;
+  /** Whether to show the dropdown menu button on hover even when not selected. Defaults to false */
+  showDropdownOnHover?: boolean;
   /** Additional content to show below the main content when selected */
   additionalSelectedContent?: ReactNode;
   /** Color to use for the card's accent border */
@@ -50,6 +52,7 @@ export function ResultsCard({
   dropdownContent,
   additionalSelectedContent,
   accentColor,
+  showDropdownOnHover = false,
 }: ResultsCardProps) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -82,7 +85,7 @@ export function ResultsCard({
           {!isSelected && hoverButtons && (
             <div className="tw-invisible group-hover:tw-visible">{hoverButtons}</div>
           )}
-          {!isSelected && dropdownContent && (
+          {!isSelected && showDropdownOnHover && dropdownContent && (
             <div className="tw-invisible group-hover:tw-visible">
               <DropdownMenu>
                 <DropdownMenuTrigger className={cn(accentColor && 'tw-me-1')} asChild>
