@@ -1723,6 +1723,8 @@ interface ResultsCardProps {
 	hoverButtons?: React$1.ReactNode;
 	/** Content to show in the dropdown menu when selected */
 	dropdownContent?: React$1.ReactNode;
+	/** Whether to show the dropdown menu button on hover even when not selected. Defaults to false */
+	showDropdownOnHover?: boolean;
 	/** Additional content to show below the main content when selected */
 	additionalSelectedContent?: React$1.ReactNode;
 	/** Color to use for the card's accent border */
@@ -1733,7 +1735,7 @@ interface ResultsCardProps {
  * though it is not based on the Card component. It provides common functionality like selection
  * state, dropdown menus, and expandable content.
  */
-export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, selectedButtons, hoverButtons, dropdownContent, additionalSelectedContent, accentColor, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, selectedButtons, hoverButtons, dropdownContent, additionalSelectedContent, accentColor, showDropdownOnHover, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Search query for the search bar */
