@@ -22,6 +22,7 @@ export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%webView_find_dismiss%',
   '%webView_find_noVerseTextAvailable%',
   '%webView_find_loadingVerseText%',
+  '%webView_find_replace%',
 ];
 
 /** Props interface for the SearchResult component */
@@ -40,6 +41,8 @@ interface SearchResultProps {
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
+  /** Callback function called when the user clicks Replace on this result */
+  onReplace: (index: number) => void;
   /** Whether the find webview is currently in replace mode */
   isReplaceMode: boolean;
   localizedStrings: {
@@ -79,6 +82,7 @@ export default function SearchResult({
   localizedBookData,
   onResultClick,
   onHideResult,
+  onReplace,
   localizedStrings,
   isReplaceMode,
 }: SearchResultProps) {
@@ -166,10 +170,17 @@ export default function SearchResult({
     onHideResult(globalResultsIndex);
   };
 
-  // TODO: Implement replace functionality when wiring up replace in general
   const replaceButton = (
-    <Button className="tw-m-1 tw-h-6 tw-text-foreground" variant="outline" size="sm">
-      Replace
+    <Button
+      className="tw-m-1 tw-h-6 tw-text-foreground"
+      variant="outline"
+      size="sm"
+      onClick={(e) => {
+        e.stopPropagation();
+        onReplace(globalResultsIndex);
+      }}
+    >
+      {localizedStrings['%webView_find_replace%']}
     </Button>
   );
 

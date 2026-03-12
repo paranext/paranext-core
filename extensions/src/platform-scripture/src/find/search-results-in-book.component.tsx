@@ -28,6 +28,8 @@ type SearchResultsInBookProps = {
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss a result */
   onHideResult: (index: number) => void;
+  /** Callback function called when the user clicks Replace on a result */
+  onReplace: (index: number) => void;
   /** Whether the find webview is currently in replace mode */
   isReplaceMode: boolean;
   localizedStrings: {
@@ -44,6 +46,7 @@ export function SearchResultsInBook({
   focusedResultIndex,
   onResultClick,
   onHideResult,
+  onReplace,
   localizedStrings,
   isReplaceMode,
 }: SearchResultsInBookProps) {
@@ -94,6 +97,7 @@ export function SearchResultsInBook({
           localizedBookData={localizedBookData}
           onResultClick={onResultClick}
           onHideResult={onHideResult}
+          onReplace={onReplace}
           localizedStrings={localizedStrings}
           isReplaceMode={isReplaceMode}
         />
