@@ -88,6 +88,13 @@ export default meta;
 
 type Story = StoryObj<typeof Editorial>;
 
+/** Story type that extends Editorial args with a language selector for the footnote editor */
+type FootnoteEditorViewStory = Omit<Story, 'args' | 'argTypes' | 'render'> & {
+  args: NonNullable<Story['args']> & { language: 'en' | 'es' };
+  argTypes: Story['argTypes'] & { language: object };
+  render: (args: NonNullable<Story['args']> & { language: 'en' | 'es' }) => ReactNode;
+};
+
 /** Story type with custom flattened ViewOptions args for the Controls panel */
 type ViewOptionsStory = Omit<Story, 'args' | 'argTypes' | 'render'> & {
   args: ViewOptions;
@@ -278,7 +285,14 @@ export const CustomMarkerTrigger: Story = {
   },
 };
 
-export const FootnoteEditorView: Story = {
+export const FootnoteEditorView: FootnoteEditorViewStory = {
+  argTypes: {
+    language: {
+      control: { type: 'select' },
+      options: ['en', 'es'],
+      description: 'Language for the footnote editor localized strings',
+    },
+  },
   render: (args) => {
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
@@ -403,7 +417,7 @@ export const FootnoteEditorView: Story = {
               scrRef={args.scrRef ?? defaultScrRef}
               editorOptions={mergedOptions}
               defaultMarkerMenuTrigger={mergedOptions.markerMenuTrigger ?? '\\'}
-              localizedStrings={localizedStrings.localizedStrings.en}
+              localizedStrings={localizedStrings.localizedStrings?.[args.language]}
               parentEditorRef={editorRef}
             />
           </PopoverContent>
@@ -423,8 +437,9 @@ export const FootnoteEditorView: Story = {
   args: {
     defaultUsj: usjWeb,
     scrRef: defaultScrRef,
+    language: 'en',
     options: {
-      hasExternalUI: false,
+      hasExternalUI: true,
       markerMenuTrigger: '\\',
     },
   },
