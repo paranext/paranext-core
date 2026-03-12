@@ -167,12 +167,19 @@ export interface RecentSearchesProps<T> {
 	id?: string;
 	/** Class name for styling the `CommandItem` for each recent search result */
 	classNameForItems?: string;
+	/**
+	 * Class name for the trigger button. Defaults to absolute positioning inside an input field. Pass
+	 * a custom value to render the button standalone (e.g. `"tw-h-9 tw-w-9"`)
+	 */
+	buttonClassName?: string;
+	/** Variant for the trigger button. Defaults to `"ghost"` */
+	buttonVariant?: "ghost" | "outline" | "default" | "destructive" | "secondary" | "link";
 }
 /**
  * Generic component that displays a button to show recent searches in a popover. Only renders if
  * there are recent searches available. Works with any data type T.
  */
-export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
+export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, buttonClassName, buttonVariant, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
 /**
@@ -1710,6 +1717,10 @@ interface ResultsCardProps {
 	className?: string;
 	/** Main content to display on the card */
 	children: React$1.ReactNode;
+	/** Additional buttons to show to the end of the card when selected, before the dropdown menu */
+	selectedButtons?: React$1.ReactNode;
+	/** Additional buttons to show when the card is hovered but not selected */
+	hoverButtons?: React$1.ReactNode;
 	/** Content to show in the dropdown menu when selected */
 	dropdownContent?: React$1.ReactNode;
 	/** Additional content to show below the main content when selected */
@@ -1722,7 +1733,7 @@ interface ResultsCardProps {
  * though it is not based on the Card component. It provides common functionality like selection
  * state, dropdown menus, and expandable content.
  */
-export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, dropdownContent, additionalSelectedContent, accentColor, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, selectedButtons, hoverButtons, dropdownContent, additionalSelectedContent, accentColor, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Search query for the search bar */

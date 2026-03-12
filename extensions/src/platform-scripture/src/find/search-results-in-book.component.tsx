@@ -28,6 +28,8 @@ type SearchResultsInBookProps = {
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss a result */
   onHideResult: (index: number) => void;
+  /** Whether the find webview is currently in replace mode */
+  isReplaceMode: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -43,6 +45,7 @@ export function SearchResultsInBook({
   onResultClick,
   onHideResult,
   localizedStrings,
+  isReplaceMode,
 }: SearchResultsInBookProps) {
   const verseRefForBook = useMemo(() => {
     return {
@@ -92,6 +95,7 @@ export function SearchResultsInBook({
           onResultClick={onResultClick}
           onHideResult={onHideResult}
           localizedStrings={localizedStrings}
+          isReplaceMode={isReplaceMode}
         />
       ))}
     </>

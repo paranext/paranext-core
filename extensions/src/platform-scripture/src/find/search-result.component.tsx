@@ -1,6 +1,6 @@
 import { logger } from '@papi/frontend';
 import { Copy, X } from 'lucide-react';
-import { DropdownMenuItem, ResultsCard } from 'platform-bible-react';
+import { Button, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
 import {
   getErrorMessage,
   LocalizedStringValue,
@@ -40,6 +40,8 @@ interface SearchResultProps {
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
+  /** Whether the find webview is currently in replace mode */
+  isReplaceMode: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -78,6 +80,7 @@ export default function SearchResult({
   onResultClick,
   onHideResult,
   localizedStrings,
+  isReplaceMode,
 }: SearchResultProps) {
   // We should avoid calculating context unless this result is selected to improve performance
   const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(isSelected);
@@ -163,6 +166,13 @@ export default function SearchResult({
     onHideResult(globalResultsIndex);
   };
 
+  // TODO: Implement replace functionality when wiring up replace in general
+  const replaceButton = (
+    <Button className="tw-m-1 tw-h-6 tw-text-foreground" variant="outline" size="sm">
+      Replace
+    </Button>
+  );
+
   const dropdownContent = (
     <>
       <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyReference}>
@@ -211,6 +221,8 @@ export default function SearchResult({
         setShouldGetVerseText(true);
         onResultClick(searchResult, globalResultsIndex);
       }}
+      selectedButtons={isReplaceMode ? replaceButton : undefined}
+      hoverButtons={isReplaceMode ? replaceButton : undefined}
       dropdownContent={dropdownContent}
       additionalSelectedContent={additionalSelectedContent}
     >
