@@ -55,11 +55,12 @@ const config: StorybookConfig = {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { devServer, entry, output, ...rendererConfigSanitized } = rendererConfig;
 
-    // Add path mapping for platform-bible-react's @/ alias
+    // Add path mapping for platform-bible-react's @/ alias and resolve the package from source
     if (webpackConfig.resolve) {
       webpackConfig.resolve.alias = {
         ...webpackConfig.resolve.alias,
         '@': join(__dirname, '../lib/platform-bible-react/src'),
+        'platform-bible-react': join(__dirname, '../lib/platform-bible-react/src/index.ts'),
       };
     }
 
