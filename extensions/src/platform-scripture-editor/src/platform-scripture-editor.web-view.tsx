@@ -907,7 +907,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [showMarkersMenu]);
 
-  // When the inline markers menu is showed, makes sure the search input is focused
+  // When the inline markers menu is shown, makes sure the search input is focused
   useEffect(() => {
     if (showMarkersMenu) {
       markerMenuSearchRef.current?.focus();
