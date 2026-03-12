@@ -24,7 +24,7 @@ import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import React$1 from 'react';
-import { ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, PropsWithChildren, ReactNode, RefObject } from 'react';
+import { ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -1693,6 +1693,16 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+type EditorKeyboardShortcutsProps = React$1.PropsWithChildren & {
+	editorRef: React$1.MutableRefObject<EditorRef | null>;
+};
+/**
+ * Component that provides common undo/redo capability for a scripture `Editorial` component. Must
+ * have the `Editorial` component instance as a child of this component.
+ *
+ * @param editorRef The `editorRef` of the editor that this undo/redo plugin is applied to
+ */
+export declare function EditorKeyboardShortcuts({ children, editorRef }: EditorKeyboardShortcutsProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -1716,6 +1726,12 @@ export type UndoRedoButtonsProps = {
 	canRedo?: boolean;
 	/** Localized strings for button tooltips. Falls back to the key itself if not provided. */
 	localizedStrings?: UndoRedoButtonsLocalizedStrings;
+	/**
+	 * Whether to show OS-specific keyboard shortcut hints in the tooltips. Defaults to `true`. If
+	 * being used with an `Editorial` component, wrap it in `EditorKeyboardShortcuts` to make the
+	 * shortcuts functional.
+	 */
+	showKeyboardShortcuts?: boolean;
 	/** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
 	className?: string;
 	/** Variant for the buttons. Defaults to "ghost". */
@@ -1724,9 +1740,11 @@ export type UndoRedoButtonsProps = {
 /**
  * Undo and (optionally) Redo buttons with tooltips. Suitable for use in any editor toolbar. The
  * Redo button is only rendered when `onRedoClick` is provided. Tooltip text defaults to the
- * localization key if no localized strings are provided.
+ * localization key if no localized strings are provided. OS-specific keyboard shortcut hints are
+ * shown in the tooltips by default; wrap the `Editorial` component in `EditorKeyboardShortcuts` to
+ * make those shortcuts functional.
  */
-export declare function UndoRedoButtons({ onUndoClick, onRedoClick, canUndo, canRedo, localizedStrings, className, variant, }: UndoRedoButtonsProps): import("react/jsx-runtime").JSX.Element;
+export declare function UndoRedoButtons({ onUndoClick, onRedoClick, canUndo, canRedo, localizedStrings, showKeyboardShortcuts, className, variant, }: UndoRedoButtonsProps): import("react/jsx-runtime").JSX.Element;
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;

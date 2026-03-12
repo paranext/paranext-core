@@ -140,8 +140,11 @@ export abstract class LayeringProjectDataProviderEngineFactory<
         // did exclude them because they already exist, we would cancel out with
         // duplicate layering PDPs, and neither would serve these interfaces at all
       });
+      // Use the non-retrying version to avoid cascading 30-second retry blocks. Layering PDPFs
+      // are called from within internalGetMetadata's Promise.all, so nested retries would block
+      // the parent call. The outer caller handles retries if needed.
       const projectsToOverlayMetadata =
-        await projectLookupService.getMetadataForAllProjects(filters);
+        await projectLookupService.getMetadataForAllProjectsWithoutRetries(filters);
       return projectsToOverlayMetadata.map((projectMetadataToOverlay) => {
         projectMetadataToOverlay.projectInterfaces = this.providedProjectInterfaces;
         return projectMetadataToOverlay;

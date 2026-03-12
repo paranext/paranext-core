@@ -6,6 +6,7 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { Redo, Undo } from 'lucide-react';
+import { useMemo } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -37,6 +38,12 @@ export type UndoRedoButtonsProps = {
   canRedo?: boolean;
   /** Localized strings for button tooltips. Falls back to the key itself if not provided. */
   localizedStrings?: UndoRedoButtonsLocalizedStrings;
+  /**
+   * Whether to show OS-specific keyboard shortcut hints in the tooltips. Defaults to `true`. If
+   * being used with an `Editorial` component, wrap it in `EditorKeyboardShortcuts` to make the
+   * shortcuts functional.
+   */
+  showKeyboardShortcuts?: boolean;
   /** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
   className?: string;
   /** Variant for the buttons. Defaults to "ghost". */
@@ -46,7 +53,9 @@ export type UndoRedoButtonsProps = {
 /**
  * Undo and (optionally) Redo buttons with tooltips. Suitable for use in any editor toolbar. The
  * Redo button is only rendered when `onRedoClick` is provided. Tooltip text defaults to the
- * localization key if no localized strings are provided.
+ * localization key if no localized strings are provided. OS-specific keyboard shortcut hints are
+ * shown in the tooltips by default; wrap the `Editorial` component in `EditorKeyboardShortcuts` to
+ * make those shortcuts functional.
  */
 export function UndoRedoButtons({
   onUndoClick,
@@ -54,9 +63,12 @@ export function UndoRedoButtons({
   canUndo = true,
   canRedo = true,
   localizedStrings = {},
+  showKeyboardShortcuts = true,
   className = 'tw-h-6 tw-w-6',
   variant = 'ghost',
 }: UndoRedoButtonsProps) {
+  const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
+
   return (
     <>
       <TooltipProvider>
@@ -73,7 +85,10 @@ export function UndoRedoButtons({
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>{localizeString(localizedStrings, '%undoButton_tooltip%')}</p>
+            <p>
+              {localizeString(localizedStrings, '%undoButton_tooltip%')}
+              {showKeyboardShortcuts && ` (${isMac ? '⌘⇧z' : 'Ctrl + Z'})`}
+            </p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -92,7 +107,10 @@ export function UndoRedoButtons({
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>{localizeString(localizedStrings, '%redoButton_tooltip%')}</p>
+              <p>
+                {localizeString(localizedStrings, '%redoButton_tooltip%')}
+                {showKeyboardShortcuts && ` (${isMac ? '⌘⇧Z' : 'Ctrl + Y'})`}
+              </p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

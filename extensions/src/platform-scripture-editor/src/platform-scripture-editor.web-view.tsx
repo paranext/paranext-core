@@ -36,6 +36,7 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
+  EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   MarkdownRenderer,
@@ -122,6 +123,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
+  '%webView_platformScriptureEditor_undoButton_tooltip%',
+  '%webView_platformScriptureEditor_redoButton_tooltip%',
 ];
 
 /** Annotation type used for translator comments (kebab-case to match CSS class naming) */
@@ -247,6 +250,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [canRedo, setCanRedo] = useState(false);
   const [blockMarker, setBlockMarker] = useState<string | undefined>();
   const [contextMarker, setContextMarker] = useState<string | undefined>();
+
+  const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
 
   /**
    * Stores the annotation range for the pending comment being created. This is captured when the
@@ -918,7 +923,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
     const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
-    const isMac = /Macintosh/i.test(navigator.userAgent);
     const handleKeyDown = (event: KeyboardEvent) => {
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
       if (currentSelectionRef.current) {
@@ -961,7 +965,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [webViewId, insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu]);
+  }, [webViewId, insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu, isMac]);
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
@@ -1507,21 +1511,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return (
       <>
         {workaround}
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={setScrRefNoScroll}
-          options={options}
-          logger={logger}
-          onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
-          onSelectionChange={handleSelectionChange}
-          onStateChange={(state) => {
-            setCanUndo(state.canUndo);
-            setCanRedo(state.canRedo);
-            setBlockMarker(state.blockMarker);
-            setContextMarker(state.contextMarker);
-          }}
-        />
+        <EditorKeyboardShortcuts editorRef={editorRef}>
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={setScrRefNoScroll}
+            options={options}
+            logger={logger}
+            onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+            onSelectionChange={handleSelectionChange}
+            onStateChange={(state) => {
+              setCanUndo(state.canUndo);
+              setCanRedo(state.canRedo);
+              setBlockMarker(state.blockMarker);
+              setContextMarker(state.contextMarker);
+            }}
+          />
+        </EditorKeyboardShortcuts>
       </>
     );
   }
@@ -1532,7 +1538,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
         projectMenuData={webViewMenu.topMenu}
-        className="scripture-editor-tab-nav tw-block"
+        className="scripture-editor-tab-nav tw-block tw-z-10"
         startAreaChildren={
           <>
             <BookChapterControl
@@ -1551,6 +1557,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   canRedo={canRedo}
                   localizedStrings={localizedStrings}
                 />
+
                 {blockMarker !== undefined && (
                   <Popover>
                     <PopoverTrigger asChild>

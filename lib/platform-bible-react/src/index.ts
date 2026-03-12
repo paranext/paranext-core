@@ -160,6 +160,7 @@ export type {
   ComboBoxOption,
   ComboBoxGroup,
 } from './components/basics/combo-box.component';
+export { EditorKeyboardShortcuts } from './components/basics/editor-keyboard-shortcuts.component';
 export { ErrorDump } from './components/basics/error-dump.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
 export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';

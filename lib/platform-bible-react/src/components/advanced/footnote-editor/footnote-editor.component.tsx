@@ -24,6 +24,7 @@ import {
 import { UndoRedoButtons } from '@/components/basics/undo-redo-buttons.component';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
+import { EditorKeyboardShortcuts } from '@/components/basics/editor-keyboard-shortcuts.component';
 import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
@@ -518,15 +519,17 @@ export default function FootnoteEditor({
           className="tw-relative tw-rounded-[6px] tw-border-2 tw-border-ring"
         >
           <div className={classNameForEditor}>
-            <Editorial
-              options={options}
-              onStateChange={(state) => handleStateChange(state)}
-              onUsjChange={handleUsjChange}
-              defaultUsj={PARAGRAPH_USJ}
-              onScrRefChange={() => {}}
-              scrRef={scrRef}
-              ref={editorRef}
-            />
+            <EditorKeyboardShortcuts editorRef={editorRef}>
+              <Editorial
+                options={options}
+                onStateChange={(state) => handleStateChange(state)}
+                onUsjChange={handleUsjChange}
+                defaultUsj={PARAGRAPH_USJ}
+                onScrRefChange={() => {}}
+                scrRef={scrRef}
+                ref={editorRef}
+              />
+            </EditorKeyboardShortcuts>
           </div>
           <div className="tw-absolute tw-bottom-0 tw-right-0">
             <TooltipProvider>

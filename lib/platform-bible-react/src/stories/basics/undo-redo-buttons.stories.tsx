@@ -29,6 +29,7 @@ Undo and (optionally) Redo buttons with tooltips for use in editor toolbars.
     // Stories that want the Redo button add onRedoClick to their own argTypes.
     canUndo: { control: 'boolean' },
     canRedo: { control: 'boolean' },
+    showKeyboardShortcuts: { control: 'boolean' },
     localizedStrings: { control: 'object' },
   },
 };
@@ -36,14 +37,17 @@ Undo and (optionally) Redo buttons with tooltips for use in editor toolbars.
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const defaultLocalizedStrings: UndoRedoButtonsLocalizedStrings =
-  standardStrings.localizedStrings.en;
+const defaultLocalizedStrings: UndoRedoButtonsLocalizedStrings = {
+  '%undoButton_tooltip%': standardStrings.localizedStrings.en['%undoButton_tooltip%'],
+  '%redoButton_tooltip%': standardStrings.localizedStrings.en['%redoButton_tooltip%'],
+};
 
 export const Default: Story = {
   argTypes: { onRedoClick: { action: 'redo-clicked' } },
   args: {
     canUndo: true,
     canRedo: true,
+    showKeyboardShortcuts: true,
     localizedStrings: defaultLocalizedStrings,
   },
 };
@@ -102,7 +106,10 @@ export const CustomLocalizedStrings: Story = {
   args: {
     canUndo: true,
     canRedo: true,
-    localizedStrings: standardStrings.localizedStrings.es,
+    localizedStrings: {
+      '%undoButton_tooltip%': standardStrings.localizedStrings.es['%undoButton_tooltip%'],
+      '%redoButton_tooltip%': standardStrings.localizedStrings.es['%redoButton_tooltip%'],
+    },
   },
   parameters: {
     docs: {
