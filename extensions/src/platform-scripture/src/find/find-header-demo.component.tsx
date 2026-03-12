@@ -184,7 +184,7 @@ export function FindHeaderDemo() {
         type="single"
         value={activeMode}
         onValueChange={(value) => {
-          if (value) setActiveMode(value as 'find' | 'replace');
+          if (value === 'find' || value === 'replace') setActiveMode(value);
         }}
         className="tw-w-fit tw-rounded-lg tw-bg-muted tw-p-1"
       >
