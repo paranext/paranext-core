@@ -2,6 +2,7 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useLocalizedStrings,
+  useProjectData,
   useProjectDataProvider,
   useProjectSetting,
   useWebViewController,
@@ -48,7 +49,6 @@ import {
 } from 'platform-bible-react';
 import {
   formatReplacementString,
-  formatReplacementStringToArray,
   getErrorMessage,
   groupBy,
   isPlatformError,
@@ -120,13 +120,35 @@ const defaultProjectName = '';
 const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
 
+/**
+ * Applies preserve-case transformation to the replacement text based on the casing of the matched
+ * text:
+ *
+ * - ALL CAPS match → ALL CAPS replacement
+ * - Title Case match (first letter capital) → Title Case replacement
+ * - Otherwise → replacement as-is
+ */
+function applyPreserveCase(matchedText: string, replacementText: string): string {
+  if (!replacementText || !matchedText) return replacementText;
+  if (matchedText === matchedText.toUpperCase() && matchedText !== matchedText.toLowerCase()) {
+    return replacementText.toUpperCase();
+  }
+  if (
+    matchedText[0] === matchedText[0].toUpperCase() &&
+    matchedText[0] !== matchedText[0].toLowerCase()
+  ) {
+    return replacementText[0].toUpperCase() + replacementText.slice(1);
+  }
+  return replacementText;
+}
+
 global.webViewComponent = function FindWebView({
   projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [searchTerm, setSearchTerm] = useWebViewState<string>('findSearchTerm', '');
-  const [submittedSearchTerm, setSubmittedSearchTerm] = useState<string | undefined>(undefined);
+  const [, setSubmittedSearchTerm] = useState<string | undefined>(undefined);
   const [scope, setScope] = useWebViewState<Scope>('findScope', 'book');
   const [submittedScope, setSubmittedScope] = useState<Scope | undefined>();
   const [submittedVerseRef, setSubmittedVerseRef] = useState<SerializedVerseRef | undefined>(
@@ -141,7 +163,7 @@ global.webViewComponent = function FindWebView({
     'findSelectedBookIds',
     [],
   );
-  const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
+  const [, setSubmittedBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
   const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
   const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
@@ -150,6 +172,12 @@ global.webViewComponent = function FindWebView({
   const [activeMode, setActiveMode] = useWebViewState<'find' | 'replace'>('findActiveMode', 'find');
   const [replaceTerm, setReplaceTerm] = useWebViewState<string>('findReplaceTerm', '');
   const [preserveCase, setPreserveCase] = useState(false);
+  /**
+   * True while a replace operation is executing (including the mandatory re-find afterward). Keeps
+   * replace buttons disabled during the gap between replace() completing and searchStatus becoming
+   * 'running', preventing the user from replacing with already-stale positions.
+   */
+  const [isReplacing, setIsReplacing] = useState(false);
 
   const [activeJobId, setActiveJobId] = useState<string>();
   const [searchProgress, setSearchProgress] = useState<number>(0);
@@ -184,6 +212,21 @@ global.webViewComponent = function FindWebView({
   );
 
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
+  const replacePdp = useProjectDataProvider('platformScripture.replaceWithUsfm', projectId);
+
+  // Subscribe to book-level scripture data in Replace mode to detect external changes.
+  // When another process edits scripture while the user has stale find results, we auto-re-run
+  // find so replace positions are always fresh. Only active in Replace mode to avoid overhead.
+  // Note: for 'selectedBooks' scope this only monitors the primary submitted book (limitation).
+  const changeDetectionVerseRef = useMemo(
+    () => ({ book: submittedVerseRef?.book ?? verseRefSetting.book, chapterNum: 1, verseNum: 0 }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [submittedVerseRef?.book, verseRefSetting.book],
+  );
+  const [scriptureDataForChangeDetection] = useProjectData(
+    'platformScripture.USFM_Book',
+    activeMode === 'replace' ? projectId : undefined,
+  ).BookUSFM(changeDetectionVerseRef, undefined);
 
   const [localizedStrings, isLocalizedStringsLoading] = useLocalizedStrings(
     useMemo(() => LOCALIZED_STRINGS, []),
@@ -550,44 +593,55 @@ global.webViewComponent = function FindWebView({
     };
   }, [abandonFindJob]);
 
+  // #region External scripture change detection for Replace mode
+
+  /**
+   * Baseline scripture data recorded at the time of the last find. `null` means no baseline has
+   * been set yet for the current Replace mode session. Compared against
+   * `scriptureDataForChangeDetection` to detect external edits.
+   */
+  const scriptureDataBaselineRef = useRef<string | undefined>(undefined);
+
+  // Track a baseline snapshot of the scripture data so we can detect external edits during Replace mode.
+  // Reset to undefined when leaving Replace mode, captured on first load or whenever a new search runs.
+  useEffect(() => {
+    if (activeMode !== 'replace') {
+      scriptureDataBaselineRef.current = undefined;
+      return;
+    }
+    if (isPlatformError(scriptureDataForChangeDetection)) return;
+    if (scriptureDataBaselineRef.current === undefined || searchStatus === 'running') {
+      scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
+    }
+  }, [activeMode, searchStatus, scriptureDataForChangeDetection]);
+
+  // Keep handleStartSearch in a ref so the detection effect never re-runs just because the
+  // memoized callback identity changed (it has many dependencies).
+  const handleStartSearchRef = useRef(handleStartSearch);
+  handleStartSearchRef.current = handleStartSearch;
+
+  // When scripture changes externally in Replace mode, auto-re-run find so positions stay fresh.
+  useEffect(() => {
+    if (activeMode !== 'replace') return;
+    if (scriptureDataBaselineRef.current === undefined) return; // No baseline yet
+    if (isReplacing || searchStatus === 'running' || searchStatus === undefined) return;
+    if (!submittedScope) return; // No previous search to re-run
+    if (isPlatformError(scriptureDataForChangeDetection)) return;
+    if (scriptureDataForChangeDetection === scriptureDataBaselineRef.current) return;
+
+    // External change detected — update baseline and re-run find to refresh positions
+    scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
+    handleStartSearchRef.current();
+  }, [scriptureDataForChangeDetection, activeMode, isReplacing, searchStatus, submittedScope]);
+
+  // #endregion
+
   // Auto-select first result when switching to Replace mode
   useEffect(() => {
     if (activeMode === 'replace' && results.length > 0 && focusedResultIndex === undefined) {
       setFocusedResultIndex(0);
     }
   }, [activeMode, focusedResultIndex, results.length]);
-
-  const scopeSummaryText = useMemo(() => {
-    if (!submittedScope || !submittedVerseRef)
-      return localizedStrings['%webView_find_scopeUndetermined%'];
-
-    const localizedBookName =
-      localizedBookData.get(submittedVerseRef.book)?.localizedId ?? submittedVerseRef.book;
-
-    switch (submittedScope) {
-      case 'selectedText':
-        return scopeSelectorLocalizedStrings['%webView_scope_selector_selected_text%'];
-      case 'verse':
-        return `${localizedBookName} ${submittedVerseRef.chapterNum}:${submittedVerseRef.verseNum}`;
-      case 'chapter':
-        return `${localizedBookName} ${submittedVerseRef.chapterNum}`;
-      case 'book':
-        return localizedBookName;
-      case 'selectedBooks':
-        return submittedBookIds
-          .map((bookId) => localizedBookData.get(bookId)?.localizedId)
-          .join(' ');
-      default:
-        return localizedStrings['%webView_find_scopeUndetermined%'];
-    }
-  }, [
-    localizedBookData,
-    localizedStrings,
-    scopeSelectorLocalizedStrings,
-    submittedBookIds,
-    submittedScope,
-    submittedVerseRef,
-  ]);
 
   const handleFocusedResultChange = useCallback(
     (searchResult: HidableFindResult, index: number) => {
@@ -620,6 +674,56 @@ global.webViewComponent = function FindWebView({
     },
     [setFocusedResultIndex, setNumberOfHiddenResults, setResults],
   );
+
+  const handleReplace = useCallback(
+    async (resultIndex?: number) => {
+      const indexToReplace = resultIndex ?? focusedResultIndex;
+      if (indexToReplace === undefined || !replacePdp) return;
+
+      const result = results[indexToReplace];
+      if (!result || result.isHidden) return;
+
+      const usfmToInsert = preserveCase
+        ? applyPreserveCase(result.text ?? '', replaceTerm)
+        : replaceTerm;
+
+      setIsReplacing(true);
+      try {
+        await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
+        // Re-run find immediately after replace so positions are fresh before the user can
+        // click replace again. isReplacing stays true until this completes, closing the gap
+        // between replace() returning and searchStatus becoming 'running'.
+        await handleStartSearch();
+      } catch (error) {
+        logger.error(`Error replacing result: ${getErrorMessage(error)}`);
+      } finally {
+        setIsReplacing(false);
+      }
+    },
+    [focusedResultIndex, handleStartSearch, preserveCase, replacePdp, replaceTerm, results],
+  );
+
+  const handleReplaceAll = useCallback(async () => {
+    if (!replacePdp) return;
+
+    const visibleResultsList = results.filter((r) => !r.isHidden);
+    if (visibleResultsList.length === 0) return;
+
+    const rangesToReplace = visibleResultsList.map((r) => ({ start: r.start, end: r.end }));
+    const usfmToInsert = preserveCase
+      ? visibleResultsList.map((r) => applyPreserveCase(r.text ?? '', replaceTerm))
+      : replaceTerm;
+
+    setIsReplacing(true);
+    try {
+      await replacePdp.replace(rangesToReplace, usfmToInsert);
+      await handleStartSearch();
+    } catch (error) {
+      logger.error(`Error replacing all results: ${getErrorMessage(error)}`);
+    } finally {
+      setIsReplacing(false);
+    }
+  }, [handleStartSearch, preserveCase, replacePdp, replaceTerm, results]);
 
   const visibleResults = useMemo(
     () =>
@@ -705,7 +809,7 @@ global.webViewComponent = function FindWebView({
           type="single"
           value={activeMode}
           onValueChange={(value) => {
-            if (value) setActiveMode(value as 'find' | 'replace');
+            if (value === 'find' || value === 'replace') setActiveMode(value);
           }}
           className="tw-w-fit tw-rounded-lg tw-bg-muted tw-p-1"
         >
@@ -946,19 +1050,17 @@ global.webViewComponent = function FindWebView({
               <div className="tw-flex tw-gap-2">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    // TODO: wire up replacePdp.replace() for Replace All
-                  }}
-                  disabled={results.length === 0}
+                  onClick={handleReplaceAll}
+                  disabled={results.length === 0 || searchStatus === 'running' || isReplacing}
                 >
                   <ReplaceAll className="tw-h-4 tw-w-4" />
                   {localizedStrings['%webView_find_replaceAll%']}
                 </Button>
                 <Button
-                  onClick={() => {
-                    // TODO: wire up replacePdp.replace() for single Replace
-                  }}
-                  disabled={focusedResultIndex === undefined}
+                  onClick={() => handleReplace()}
+                  disabled={
+                    focusedResultIndex === undefined || searchStatus === 'running' || isReplacing
+                  }
                 >
                   <Replace className="tw-h-4 tw-w-4" />
                   {localizedStrings['%webView_find_replace%']}
@@ -1030,26 +1132,6 @@ global.webViewComponent = function FindWebView({
         </div>
       </div>
 
-      {/* Search Query Summary */}
-      <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
-        {submittedScope && submittedSearchTerm ? (
-          <>
-            {formatReplacementStringToArray(
-              localizedStrings['%webView_find_scopeSummary_format%'],
-              {
-                projectName,
-                scope: scopeSummaryText,
-                searchTerm: <span className="scripture-font">{submittedSearchTerm}</span>,
-              },
-            )}
-          </>
-        ) : (
-          formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
-            projectName,
-          })
-        )}
-      </div>
-
       {/* Search Results Placeholder */}
       {results && results.length === 0 && searchStatus === 'running' && (
         <div className="tw-space-y-2">
@@ -1089,6 +1171,9 @@ global.webViewComponent = function FindWebView({
               }
               onHideResult={(indexInBookResults) =>
                 handleHideResult(bookResults[indexInBookResults].originalIndex)
+              }
+              onReplace={(indexInBookResults) =>
+                handleReplace(bookResults[indexInBookResults].originalIndex)
               }
               localizedStrings={searchResultLocalizedStrings}
               isReplaceMode={activeMode === 'replace'}
