@@ -239,7 +239,7 @@
       "%footnoteEditor_callerDropdown_label%": "Llamador de nota",
       "%footnoteEditor_callerDropdown_tooltip%": "Llamador de nota",
       "%footnoteEditor_closeButton_tooltip%": "Cerrar",
-      "%footnoteEditor_copyButton_tooltip%": "Copiar nota al pie",
+      "%footnoteEditor_copyButton_tooltip%": "Copiar nota",
       "%footnoteEditor_noteType_crossReference_label%": "Referencia cruzada",
       "%footnoteEditor_noteType_endNote_label%": "Nota al final",
       "%footnoteEditor_noteType_footnote_label%": "Nota a pie de página",

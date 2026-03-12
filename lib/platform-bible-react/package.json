@@ -34,10 +34,10 @@
   },
   "typesVersions": {
     "*": {
-      "localizedStrings.json": ["./src/localizedStrings.json"]
+      "localizedStrings.json": ["./src/localizedStrings.json.d.ts"]
     }
   },
-  "files": ["dist", "src/localizedStrings.json"],
+  "files": ["dist", "src/localizedStrings.json", "src/localizedStrings.json.d.ts"],
   "scripts": {
     "start": "npm run storybook",
     "build:basic": "tsc && cross-env NODE_ENV=production vite build && dts-bundle-generator --config ./dts-bundle-generator.config.cts",

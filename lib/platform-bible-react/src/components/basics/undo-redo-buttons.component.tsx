@@ -77,6 +77,7 @@ export function UndoRedoButtons({
             <Button
               aria-label="Undo"
               className={className}
+              size="icon"
               onClick={onUndoClick}
               disabled={!canUndo}
               variant={variant}
@@ -99,6 +100,7 @@ export function UndoRedoButtons({
               <Button
                 aria-label="Redo"
                 className={className}
+                size="icon"
                 onClick={onRedoClick}
                 disabled={!canRedo}
                 variant={variant}

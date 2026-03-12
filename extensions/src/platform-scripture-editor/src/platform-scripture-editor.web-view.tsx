@@ -1713,7 +1713,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             pointerEvents: 'none',
           }}
         />
-        <PopoverContent className="tw-w-[500px] tw-p-[10px]">
+        <PopoverContent className="tw-w-max tw-min-w-[500px] tw-p-[10px]">
           <FootnoteEditor
             classNameForEditor="scripture-font"
             noteOps={editingNoteOps.current}
