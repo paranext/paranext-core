@@ -627,8 +627,9 @@ global.webViewComponent = function FindWebView({
     };
 
     (async () => {
-      for (const bookId of booksToMonitor) {
-        if (!isEffectActive) break;
+      await booksToMonitor.reduce(async (prevPromise, bookId) => {
+        await prevPromise;
+        if (!isEffectActive) return;
         const verseRef = { book: bookId, chapterNum: 1, verseNum: 0 };
         // eslint-disable-next-line no-await-in-loop
         const unsubscriber = await usfmBookPdp.subscribeBookUSFM(
@@ -647,7 +648,7 @@ global.webViewComponent = function FindWebView({
           return;
         }
         unsubscribers.push(unsubscriber);
-      }
+      }, Promise.resolve());
     })().catch((err) =>
       logger.error(`Error subscribing to book USFM for change detection: ${getErrorMessage(err)}`),
     );
