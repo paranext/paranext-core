@@ -477,9 +477,3 @@ i.chevron-down {
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chevron-down.svg');
   background-image: none;
 }
-
-// TODO: Remove this once the editor marker menu gets disabled when `hasExternalUi` is `true`
-// Temporarily hides the editor's marker menu
-.autocomplete-menu-container {
-  display: none !important;
-}
