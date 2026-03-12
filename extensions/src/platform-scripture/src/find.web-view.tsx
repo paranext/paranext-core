@@ -7,28 +7,39 @@ import {
   useWebViewController,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { Info, SearchX, SlidersHorizontal } from 'lucide-react';
+import {
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  Replace,
+  ReplaceAll,
+  TextSearch,
+  X,
+  SlidersHorizontal,
+} from 'lucide-react';
 import {
   Button,
   Card,
   CardContent,
   Checkbox,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
   Input,
   Label,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Progress,
-  RadioGroup,
-  RadioGroupItem,
   RecentSearches,
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
   ScopeSelector,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Skeleton,
   Spinner,
+  ToggleGroup,
+  ToggleGroupItem,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -61,7 +72,6 @@ import { SearchResultsInBook } from './find/search-results-in-book.component';
 const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_allowRegex%',
   '%webView_find_cancelSearch%',
-  '%webView_find_clearSearchResults%',
   '%webView_find_errorOccurred%',
   '%webView_find_findButton%',
   '%webView_find_findInProject%',
@@ -87,6 +97,19 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_restrictions_wholeWord%',
   '%webView_find_restrictions_startOfWord%',
   '%webView_find_restrictions_endOfWord%',
+  '%webView_find_findTab%',
+  '%webView_find_replaceTab%',
+  '%webView_find_replace%',
+  '%webView_find_replaceAll%',
+  '%webView_find_preserveCase%',
+  '%webView_find_preserveCase_tooltip%',
+  '%webView_find_replaceTerm_placeholder%',
+  '%webView_find_capitalization%',
+  '%webView_find_pattern%',
+  '%webView_find_showing%',
+  '%webView_find_resultNavigation%',
+  '%webView_find_previousResult%',
+  '%webView_find_nextResult%',
 ];
 
 /** The type of text content to search in */
@@ -96,8 +119,6 @@ const defaultBooksPresent: string = '';
 const defaultProjectName = '';
 const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
-/** Set to true to re-enable the Allow Regex option for advanced users */
-const SHOW_ALLOW_REGEX_OPTION = false;
 
 global.webViewComponent = function FindWebView({
   projectId,
@@ -116,21 +137,19 @@ global.webViewComponent = function FindWebView({
 
   const addRecentSearchItem = useRecentSearches(recentSearches, setRecentSearches);
 
-  const [areFiltersShown, setAreFiltersShown] = useState(false);
   const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
     'findSelectedBookIds',
     [],
   );
   const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
-  const [submittedShouldMatchCase, setSubmittedShouldMatchCase] = useState(false);
   const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
-  const [submittedSearchTextType, setSubmittedSearchTextType] = useState<SearchTextType>('all');
   const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
-  const [submittedWordRestriction, setSubmittedWordRestriction] = useState<WordRestriction>('none');
-  // isRegexAllowed is hidden from the UI via SHOW_ALLOW_REGEX_OPTION but kept for future use
   const [isRegexAllowed, setIsRegexAllowed] = useState(false);
-  const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
+
+  const [activeMode, setActiveMode] = useWebViewState<'find' | 'replace'>('findActiveMode', 'find');
+  const [replaceTerm, setReplaceTerm] = useWebViewState<string>('findReplaceTerm', '');
+  const [preserveCase, setPreserveCase] = useState(false);
 
   const [activeJobId, setActiveJobId] = useState<string>();
   const [searchProgress, setSearchProgress] = useState<number>(0);
@@ -400,10 +419,7 @@ global.webViewComponent = function FindWebView({
       setSubmittedScope(scope);
       setSubmittedVerseRef(verseRefSetting);
       setSubmittedBookIds(selectedBookIds);
-      setSubmittedShouldMatchCase(shouldMatchCase);
-      setSubmittedSearchTextType(searchTextType);
-      setSubmittedWordRestriction(wordRestriction);
-      setSubmittedIsRegexAllowed(isRegexAllowed);
+
       setFocusedResultIndex(undefined);
 
       setResults([]);
@@ -439,30 +455,6 @@ global.webViewComponent = function FindWebView({
     wordRestriction,
   ]);
 
-  const clearSearchResults = useCallback(async () => {
-    await abandonFindJob();
-    if (!isMountedRef.current) return;
-
-    setResults([]);
-    loadedResultsLengthRef.current = 0;
-    setNumberOfHiddenResults(0);
-
-    setSearchStatus(undefined);
-    setSearchProgress(0);
-    setSearchError(undefined);
-
-    setSubmittedSearchTerm(undefined);
-    setSubmittedScope(undefined);
-    setSubmittedVerseRef(undefined);
-    setSubmittedBookIds([]);
-    setSubmittedShouldMatchCase(false);
-    setSubmittedSearchTextType('all');
-    setSubmittedWordRestriction('none');
-    setSubmittedIsRegexAllowed(false);
-
-    setFocusedResultIndex(undefined);
-  }, [abandonFindJob]);
-
   const handleStopSearch = useCallback(
     async (shouldClearResults?: boolean) => {
       if (!isMountedRef.current) return;
@@ -476,40 +468,6 @@ global.webViewComponent = function FindWebView({
     },
     [abandonFindJob, stopFindJob],
   );
-
-  const searchQueryChanged = useMemo(() => {
-    return (
-      searchTerm.trim() !== submittedSearchTerm ||
-      scope !== submittedScope ||
-      (scope === 'chapter' &&
-        (verseRefSetting.book !== submittedVerseRef?.book ||
-          verseRefSetting.chapterNum !== submittedVerseRef?.chapterNum)) ||
-      (scope === 'book' && verseRefSetting.book !== submittedVerseRef?.book) ||
-      (scope === 'selectedBooks' &&
-        [...selectedBookIds].sort().join(',') !== [...submittedBookIds].sort().join(',')) ||
-      shouldMatchCase !== submittedShouldMatchCase ||
-      searchTextType !== submittedSearchTextType ||
-      wordRestriction !== submittedWordRestriction ||
-      isRegexAllowed !== submittedIsRegexAllowed
-    );
-  }, [
-    searchTerm,
-    submittedSearchTerm,
-    verseRefSetting,
-    submittedVerseRef,
-    scope,
-    submittedScope,
-    selectedBookIds,
-    submittedBookIds,
-    shouldMatchCase,
-    submittedShouldMatchCase,
-    searchTextType,
-    submittedSearchTextType,
-    wordRestriction,
-    submittedWordRestriction,
-    isRegexAllowed,
-    submittedIsRegexAllowed,
-  ]);
 
   const loadMoreResults = useCallback(async () => {
     try {
@@ -592,6 +550,13 @@ global.webViewComponent = function FindWebView({
     };
   }, [abandonFindJob]);
 
+  // Auto-select first result when switching to Replace mode
+  useEffect(() => {
+    if (activeMode === 'replace' && results.length > 0 && focusedResultIndex === undefined) {
+      setFocusedResultIndex(0);
+    }
+  }, [activeMode, focusedResultIndex, results.length]);
+
   const scopeSummaryText = useMemo(() => {
     if (!submittedScope || !submittedVerseRef)
       return localizedStrings['%webView_find_scopeUndetermined%'];
@@ -629,14 +594,18 @@ global.webViewComponent = function FindWebView({
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
-        papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        // In Find mode, focus the editor so the user can read in context.
+        // In Replace mode, keep focus in the Find webview so replace term stays editable.
+        if (activeMode === 'find') {
+          papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        }
         editorWebViewController.selectRange({
           start: searchResult.start,
           end: searchResult.end,
         });
       }
     },
-    [editorWebViewController, editorWebViewId, setVerseRefSetting],
+    [activeMode, editorWebViewController, editorWebViewId, setVerseRefSetting],
   );
 
   const handleHideResult = useCallback(
@@ -652,10 +621,46 @@ global.webViewComponent = function FindWebView({
     [setFocusedResultIndex, setNumberOfHiddenResults, setResults],
   );
 
-  const canClearResults = useMemo(
-    () => !searchQueryChanged && searchStatus && searchStatus !== 'running',
-    [searchQueryChanged, searchStatus],
+  const visibleResults = useMemo(
+    () =>
+      results
+        .map((result, index) => ({ result, originalIndex: index }))
+        .filter(({ result }) => !result.isHidden),
+    [results],
   );
+
+  const focusedVisibleIndex = useMemo(
+    () =>
+      focusedResultIndex !== undefined
+        ? visibleResults.findIndex((vr) => vr.originalIndex === focusedResultIndex)
+        : -1,
+    [visibleResults, focusedResultIndex],
+  );
+
+  const handlePreviousResult = useCallback(() => {
+    if (focusedVisibleIndex <= 0) return;
+    const prev = visibleResults[focusedVisibleIndex - 1];
+    handleFocusedResultChange(prev.result, prev.originalIndex);
+  }, [focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
+
+  const handleNextResult = useCallback(() => {
+    if (visibleResults.length === 0) return;
+    if (focusedResultIndex === undefined) {
+      handleFocusedResultChange(visibleResults[0].result, visibleResults[0].originalIndex);
+      return;
+    }
+    if (focusedVisibleIndex < visibleResults.length - 1) {
+      const next = visibleResults[focusedVisibleIndex + 1];
+      handleFocusedResultChange(next.result, next.originalIndex);
+    }
+  }, [focusedResultIndex, focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
+
+  const findButtonText = isLocalizedStringsLoading
+    ? ''
+    : localizedStrings['%webView_find_findButton%'];
+
+  const areFiltersActive =
+    shouldMatchCase || wordRestriction !== 'none' || searchTextType !== 'all' || isRegexAllowed;
 
   const resultsMessage = useMemo(() => {
     if (!results) return '';
@@ -673,90 +678,313 @@ global.webViewComponent = function FindWebView({
     });
   }, [results, numberOfHiddenResults, totalNumberOfResults, searchStatus, localizedStrings]);
 
-  const findButtonText = isLocalizedStringsLoading
-    ? ''
-    : localizedStrings['%webView_find_findButton%'];
+  /** Text shown in the scope popover trigger, e.g. "Genesis 1" or "Genesis, Exodus, John" */
+  const scopeDisplayText = useMemo(() => {
+    switch (scope) {
+      case 'chapter': {
+        const bookName =
+          localizedBookData.get(verseRefSetting.book)?.localizedId ?? verseRefSetting.book;
+        return `${bookName} ${verseRefSetting.chapterNum}`;
+      }
+      case 'book':
+        return localizedBookData.get(verseRefSetting.book)?.localizedId ?? verseRefSetting.book;
+      case 'selectedBooks':
+        if (selectedBookIds.length === 0) return '…';
+        return selectedBookIds.map((id) => localizedBookData.get(id)?.localizedId ?? id).join(', ');
+      default:
+        return '';
+    }
+  }, [scope, selectedBookIds, verseRefSetting, localizedBookData]);
 
   return (
     <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-gap-4 tw-p-4 tw-min-w-[10rem] tw-max-h-screen">
       {/* Header with searchbar and filters */}
-      <Card>
-        <CardContent className="tw-space-y-4 tw-p-6">
-          <div className="tw-flex tw-gap-2 tw-flex-wrap">
-            <div className="tw-relative tw-flex-1">
-              <Input
-                id="search-term"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleStartSearch();
-                  }
-                }}
-                placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-                className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'} scripture-font`}
-              />
-              <RecentSearches
-                classNameForItems="scripture-font"
-                recentSearches={recentSearches}
-                onSearchItemSelect={setSearchTerm}
-                ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
-                groupHeading={localizedStrings['%webView_find_recent%']}
-              />
-            </div>
+      <div className="tw-space-y-3">
+        {/* Find/Replace mode toggle */}
+        <ToggleGroup
+          type="single"
+          value={activeMode}
+          onValueChange={(value) => {
+            if (value) setActiveMode(value as 'find' | 'replace');
+          }}
+          className="tw-w-fit tw-rounded-lg tw-bg-muted tw-p-1"
+        >
+          <ToggleGroupItem
+            value="find"
+            className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
+          >
+            {localizedStrings['%webView_find_findTab%']}
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="replace"
+            className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
+          >
+            {localizedStrings['%webView_find_replaceTab%']}
+          </ToggleGroupItem>
+        </ToggleGroup>
 
+        {/* Find input row */}
+        <div className="tw-flex tw-gap-2 tw-flex-wrap">
+          <div className="tw-relative tw-flex-1">
+            <TextSearch className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
+            <Input
+              id="search-term"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleStartSearch();
+                }
+              }}
+              placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
+              className={`tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 scripture-font ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="tw-absolute tw-end-2 tw-top-1/2 -tw-translate-y-1/2 tw-text-muted-foreground hover:tw-text-foreground tw-bg-transparent tw-border-0 tw-p-0 tw-cursor-pointer"
+              >
+                <X className="tw-h-4 tw-w-4" />
+              </button>
+            )}
+          </div>
+          <RecentSearches
+            classNameForItems="scripture-font"
+            recentSearches={recentSearches}
+            onSearchItemSelect={setSearchTerm}
+            ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
+            groupHeading={localizedStrings['%webView_find_recent%']}
+            buttonClassName="tw-h-10 tw-w-10"
+            buttonVariant="outline"
+          />
+
+          <DropdownMenu>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setAreFiltersShown(!areFiltersShown)}
-                    aria-label={localizedStrings['%webView_find_toggleFilters%']}
-                    className={areFiltersShown ? 'tw-bg-muted' : ''}
-                  >
-                    <SlidersHorizontal className="tw-h-4 tw-w-4" />
-                  </Button>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label={localizedStrings['%webView_find_toggleFilters%']}
+                      className={areFiltersActive ? 'tw-bg-muted' : ''}
+                    >
+                      <SlidersHorizontal className="tw-h-4 tw-w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent>{localizedStrings['%webView_find_toggleFilters%']}</TooltipContent>
               </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  {canClearResults ? (
-                    <Button onClick={() => clearSearchResults()}>
-                      <SearchX />
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={handleStartSearch}
-                      disabled={
-                        !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
-                      }
-                    >
-                      {searchStatus === 'running' ? <Spinner /> : findButtonText}
-                    </Button>
-                  )}
-                </TooltipTrigger>
-                <TooltipContent>
-                  {canClearResults ? (
-                    <p className="tw-font-light">
-                      {localizedStrings['%webView_find_clearSearchResults%']}
-                    </p>
-                  ) : (
-                    <p className="tw-font-light">
-                      {formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
-                        projectName,
-                      })}
-                    </p>
-                  )}
-                </TooltipContent>
-              </Tooltip>
             </TooltipProvider>
-          </div>
+            <DropdownMenuContent align="end" className="tw-w-72 tw-p-3">
+              {/* 1. Match content in */}
+              <div className="tw-mb-3">
+                <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">
+                  {localizedStrings['%webView_find_matchContentIn%']}
+                </p>
+                <div className="tw-flex tw-flex-col tw-gap-1">
+                  {(
+                    [
+                      ['all', localizedStrings['%webView_find_allText%']],
+                      ['verseOnly', localizedStrings['%webView_find_verseTextOnly%']],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setSearchTextType(value)}
+                      className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
+                    >
+                      <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
+                        {searchTextType === value ? '•' : ''}
+                      </span>
+                      <span>{label}</span>
+                      {value === 'all' && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="tw-h-3.5 tw-w-3.5 tw-text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="tw-max-w-xs">
+                                {localizedStrings['%webView_find_allText_tooltip%']}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          {areFiltersShown && (
-            <div className="tw-space-y-4 tw-border-t tw-pt-4">
+              {/* 2. Match boundaries */}
+              <div className="tw-mb-3">
+                <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">
+                  {localizedStrings['%webView_find_restrictions%']}
+                </p>
+                <div className="tw-flex tw-flex-col tw-gap-1">
+                  {(
+                    [
+                      ['none', '%webView_find_restrictions_none%'],
+                      ['wholeWord', '%webView_find_restrictions_wholeWord%'],
+                      ['startOfWord', '%webView_find_restrictions_startOfWord%'],
+                      ['endOfWord', '%webView_find_restrictions_endOfWord%'],
+                    ] as const
+                  ).map(([value, key]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setWordRestriction(value)}
+                      className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
+                    >
+                      <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
+                        {wordRestriction === value ? '•' : ''}
+                      </span>
+                      <span>{localizedStrings[key]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Capitalization */}
+              <div className="tw-mb-3">
+                <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">
+                  {localizedStrings['%webView_find_capitalization%']}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShouldMatchCase(!shouldMatchCase)}
+                  className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
+                >
+                  <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
+                    {shouldMatchCase ? '•' : ''}
+                  </span>
+                  <span>{localizedStrings['%webView_find_matchCase%']}</span>
+                </button>
+              </div>
+
+              {/* 4. Pattern */}
+              <div>
+                <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">
+                  {localizedStrings['%webView_find_pattern%']}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsRegexAllowed(!isRegexAllowed)}
+                  className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
+                >
+                  <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
+                    {isRegexAllowed ? '•' : ''}
+                  </span>
+                  <span>{localizedStrings['%webView_find_allowRegex%']}</span>
+                </button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleStartSearch}
+                  disabled={
+                    !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
+                  }
+                >
+                  {searchStatus === 'running' ? <Spinner /> : findButtonText}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="tw-font-light">
+                  {formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
+                    projectName,
+                  })}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+
+        {/* Replace input row — shown in Replace mode */}
+        {activeMode === 'replace' && (
+          <>
+            <div className="tw-relative tw-flex-1">
+              <ArrowRight className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
+              <Input
+                id="replace-term"
+                value={replaceTerm}
+                onChange={(e) => setReplaceTerm(e.target.value)}
+                placeholder={localizedStrings['%webView_find_replaceTerm_placeholder%']}
+                className="tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4 scripture-font"
+              />
+            </div>
+            <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-flex-wrap">
+              <div className="tw-flex tw-items-center tw-gap-2">
+                <Checkbox
+                  id="preserve-case"
+                  checked={preserveCase}
+                  onCheckedChange={(checked) => setPreserveCase(checked === true)}
+                />
+                <Label htmlFor="preserve-case" className="tw-cursor-pointer">
+                  {localizedStrings['%webView_find_preserveCase%']}
+                </Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="tw-h-3.5 tw-w-3.5 tw-text-muted-foreground tw-cursor-default" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="tw-max-w-xs tw-whitespace-pre-line">
+                        {localizedStrings['%webView_find_preserveCase_tooltip%']}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="tw-flex tw-gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    // TODO: wire up replacePdp.replace() for Replace All
+                  }}
+                  disabled={results.length === 0}
+                >
+                  <ReplaceAll className="tw-h-4 tw-w-4" />
+                  {localizedStrings['%webView_find_replaceAll%']}
+                </Button>
+                <Button
+                  onClick={() => {
+                    // TODO: wire up replacePdp.replace() for single Replace
+                  }}
+                  disabled={focusedResultIndex === undefined}
+                >
+                  <Replace className="tw-h-4 tw-w-4" />
+                  {localizedStrings['%webView_find_replace%']}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Scope selector row */}
+        <div className="tw-flex tw-items-center tw-justify-between">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="tw-h-auto tw-gap-1 tw-px-2 tw-py-1 tw-font-normal"
+              >
+                <span className="tw-text-sm tw-text-muted-foreground">
+                  {localizedStrings['%webView_find_showing%']}
+                </span>
+                <span className="tw-text-sm tw-font-medium">{scopeDisplayText}</span>
+                <ChevronDown className="tw-h-3 tw-w-3 tw-text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="tw-w-auto tw-p-3">
               <ScopeSelector
                 scope={scope}
                 availableScopes={['chapter', 'book', 'selectedBooks']}
@@ -767,95 +995,40 @@ global.webViewComponent = function FindWebView({
                 localizedStrings={scopeSelectorLocalizedStrings}
                 localizedBookNames={localizedBookData}
               />
-
-              <div className="tw-space-y-2">
-                <Label>{localizedStrings['%webView_find_matchContentIn%']}</Label>
-                <RadioGroup
-                  value={searchTextType}
-                  onValueChange={(value: SearchTextType) => setSearchTextType(value)}
-                >
-                  <div className="tw-flex tw-items-center tw-space-x-2">
-                    <RadioGroupItem value="all" id="text-type-all" />
-                    <Label htmlFor="text-type-all" className="tw-cursor-pointer tw-font-normal">
-                      {localizedStrings['%webView_find_allText%']}
-                    </Label>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="tw-h-4 tw-w-4 tw-text-muted-foreground" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="tw-max-w-xs">
-                            {localizedStrings['%webView_find_allText_tooltip%']}
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <div className="tw-flex tw-items-center tw-space-x-2">
-                    <RadioGroupItem value="verseOnly" id="text-type-verse-only" />
-                    <Label
-                      htmlFor="text-type-verse-only"
-                      className="tw-cursor-pointer tw-font-normal"
-                    >
-                      {localizedStrings['%webView_find_verseTextOnly%']}
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="tw-space-y-2">
-                <Label>{localizedStrings['%webView_find_restrictions%']}</Label>
-                <Select
-                  value={wordRestriction}
-                  onValueChange={(value: WordRestriction) => setWordRestriction(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">
-                      {localizedStrings['%webView_find_restrictions_none%']}
-                    </SelectItem>
-                    <SelectItem value="wholeWord">
-                      {localizedStrings['%webView_find_restrictions_wholeWord%']}
-                    </SelectItem>
-                    <SelectItem value="startOfWord">
-                      {localizedStrings['%webView_find_restrictions_startOfWord%']}
-                    </SelectItem>
-                    <SelectItem value="endOfWord">
-                      {localizedStrings['%webView_find_restrictions_endOfWord%']}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="tw-flex tw-items-center tw-space-x-2">
-                <Checkbox
-                  id="match-case"
-                  checked={shouldMatchCase}
-                  onCheckedChange={(checked) => setShouldMatchCase(checked === true)}
-                />
-                <Label htmlFor="match-case" className="tw-cursor-pointer">
-                  {localizedStrings['%webView_find_matchCase%']}
-                </Label>
-              </div>
-              {SHOW_ALLOW_REGEX_OPTION && (
-                <div className="tw-flex tw-items-center tw-space-x-2">
-                  <Checkbox
-                    id="allow-regex"
-                    checked={isRegexAllowed}
-                    onCheckedChange={(checked) => setIsRegexAllowed(checked === true)}
-                  />
-                  <Label htmlFor="allow-regex" className="tw-cursor-pointer">
-                    {localizedStrings['%webView_find_allowRegex%']}
-                  </Label>
-                </div>
-              )}
+            </PopoverContent>
+          </Popover>
+          {visibleResults.length > 0 && (
+            <div className="tw-flex tw-items-center tw-gap-1">
+              <span className="tw-text-sm tw-text-muted-foreground tw-tabular-nums">
+                {formatReplacementString(localizedStrings['%webView_find_resultNavigation%'], {
+                  current: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',
+                  total: String(visibleResults.length),
+                })}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tw-h-7 tw-w-7"
+                disabled={focusedVisibleIndex <= 0}
+                onClick={handlePreviousResult}
+                aria-label={localizedStrings['%webView_find_previousResult%']}
+              >
+                <ChevronUp className="tw-h-4 tw-w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tw-h-7 tw-w-7"
+                disabled={focusedVisibleIndex >= visibleResults.length - 1}
+                onClick={handleNextResult}
+                aria-label={localizedStrings['%webView_find_nextResult%']}
+              >
+                <ChevronDown className="tw-h-4 tw-w-4" />
+              </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Search Query Summary */}
       <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
@@ -918,6 +1091,7 @@ global.webViewComponent = function FindWebView({
                 handleHideResult(bookResults[indexInBookResults].originalIndex)
               }
               localizedStrings={searchResultLocalizedStrings}
+              isReplaceMode={activeMode === 'replace'}
             />
           );
         })}
