@@ -90,3 +90,21 @@ export type {
   SimultaneousProjectSettingsChanges,
   ProjectSettingValidator,
 } from '@shared/services/project-settings.service-model';
+export type {
+  ContextMenuItem,
+  ContextMenuRequest,
+  ContextMenuResult,
+  IOverlayService,
+  ModalDialogOptions,
+  ModalDialogResponse,
+  ModalDialogType,
+  PopoverAction,
+  PopoverContent,
+  PopoverRequest,
+  RichTextRun,
+} from '@shared/models/overlay.service-model';
+export {
+  OverlayNotVisibleError,
+  OverlayReplacedError,
+  OverlayValidationError,
+} from '@shared/models/overlay.service-model';

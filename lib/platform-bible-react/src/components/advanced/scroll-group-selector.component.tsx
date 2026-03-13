@@ -12,6 +12,7 @@ import {
 } from '@/components/shadcn-ui/select';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui.util';
+import { Z_INDEX_ABOVE_DOCK } from '../z-index';
 
 const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS = {
   [getLocalizeKeyForScrollGroupId('undefined')]: 'Ø',
@@ -152,7 +153,7 @@ export function ScrollGroupSelector({
         id={id}
         align={dir === 'rtl' ? 'end' : 'start'}
         // Need to get over the floating web view z-index 200
-        style={{ zIndex: 250 }}
+        style={{ zIndex: Z_INDEX_ABOVE_DOCK }}
       >
         {availableScrollGroupIds.map((scrollGroupOptionId) => (
           <SelectItem key={`${scrollGroupOptionId}`} value={`${scrollGroupOptionId}`}>

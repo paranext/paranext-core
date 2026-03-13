@@ -104,6 +104,25 @@ export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
+export {
+  OverlayContextMenu,
+  type OverlayContextMenuItem,
+  type OverlayContextMenuResult,
+  type OverlayContextMenuProps,
+} from './components/advanced/overlays/overlay-context-menu.component';
+export {
+  OverlayModalDialog,
+  type OverlayModalDialogType,
+  type OverlayModalDialogOptions,
+  type OverlayModalDialogProps,
+} from './components/advanced/overlays/overlay-modal-dialog.component';
+export {
+  OverlayPopover,
+  type OverlayPopoverAction,
+  type OverlayRichTextRun,
+  type OverlayPopoverContent,
+  type OverlayPopoverProps,
+} from './components/advanced/overlays/overlay-popover.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
   default as SettingsSidebar,
@@ -237,6 +256,15 @@ export {
   type UseListboxProps,
   type ListboxOption,
 } from './hooks/listbox-keyboard-navigation.hook';
+
+// Z-index scale
+export {
+  Z_INDEX_ABOVE_DOCK,
+  Z_INDEX_FOOTNOTE_EDITOR,
+  Z_INDEX_OVERLAY,
+  Z_INDEX_MODAL_BACKDROP,
+  Z_INDEX_MODAL,
+} from './components/z-index';
 
 // Utils
 export { cn } from './utils/shadcn-ui.util';
