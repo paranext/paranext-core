@@ -1,4 +1,5 @@
 import { ComboBox } from '@/components/basics/combo-box.component';
+import { Z_INDEX_OVERLAY } from '@/components/z-index';
 import {
   Sidebar,
   SidebarContent,
@@ -123,7 +124,9 @@ export function SettingsSidebar({
                 'tw-bg-sidebar-accent tw-text-sidebar-accent-foreground':
                   selectedSidebarItem?.projectId,
               })}
-              popoverContentClassName="tw-z-[1000]"
+              // TODO: Check if this z-index override is necessary — the PopoverContent default
+              // (Z_INDEX_ABOVE_DOCK = 250) may be sufficient since this dropdown portals to body
+              popoverContentStyle={{ zIndex: Z_INDEX_OVERLAY }}
               options={projectInfo.flatMap((info) => info.projectId)}
               getOptionLabel={getProjectNameFromProjectId}
               buttonPlaceholder={buttonPlaceholderText}
