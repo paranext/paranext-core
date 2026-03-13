@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getOverlays, getOverlayById, clearAllOverlays } from '@renderer/services/overlay-store';
 import {
+  CommandPaletteRequest,
   ModalDialogOptions,
   OverlayReplacedError,
   PopoverContent,
@@ -12,6 +13,7 @@ const DEBOUNCE_COOLDOWN_MS = 50;
 
 // Mock dependencies
 vi.mock('@renderer/services/overlay-validation', () => ({
+  validateCommandPaletteRequest: vi.fn(),
   validateContextMenuRequest: vi.fn(),
   validateModalDialogOptions: vi.fn(),
   validatePopoverRequest: vi.fn(),
@@ -407,6 +409,105 @@ describe('overlay.service-host', () => {
       expect(getOverlayById(overlayId)).toBeUndefined();
 
       vi.useRealTimers();
+    });
+  });
+
+  describe('command palettes', () => {
+    const validRequest: CommandPaletteRequest = {
+      items: [
+        { id: 'ft', label: 'Footnote' },
+        { id: 'xt', label: 'Cross Reference' },
+      ],
+      anchor: { x: 100, y: 200 },
+    };
+
+    it('should create an overlay entry of type commandPalette', () => {
+      const promise = overlayService.showCommandPalette(validRequest, 'test-webview');
+
+      const overlays = getOverlays();
+      expect(overlays).toHaveLength(1);
+      expect(overlays[0].type).toBe('commandPalette');
+
+      // Clean up
+      overlays[0].resolve(undefined);
+      return promise;
+    });
+
+    it('should resolve with selected item ID', async () => {
+      const promise = overlayService.showCommandPalette(validRequest, 'test-webview');
+
+      const overlays = getOverlays();
+      // Only commandPalette overlays exist in this test
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const overlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
+      overlay.resolve('ft');
+
+      const result = await promise;
+      expect(result).toBe('ft');
+    });
+
+    it('should resolve with undefined when dismissed', async () => {
+      const promise = overlayService.showCommandPalette(validRequest, 'test-webview');
+
+      const overlays = getOverlays();
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const overlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
+      overlay.resolve(undefined);
+
+      const result = await promise;
+      expect(result).toBeUndefined();
+    });
+
+    it('should replace existing command palette from same webView', async () => {
+      vi.useFakeTimers();
+
+      const promise1 = overlayService.showCommandPalette(validRequest, 'test-webview');
+
+      vi.advanceTimersByTime(DEBOUNCE_COOLDOWN_MS);
+
+      const request2: CommandPaletteRequest = {
+        items: [{ id: 'p', label: 'Paragraph' }],
+        anchor: { x: 60, y: 110 },
+      };
+      const promise2 = overlayService.showCommandPalette(request2, 'test-webview');
+
+      await expect(promise1).rejects.toThrow(OverlayReplacedError);
+
+      const overlays = getOverlays();
+      const palettes = overlays.filter((o) => o.type === 'commandPalette');
+      expect(palettes).toHaveLength(1);
+
+      palettes[0].resolve(undefined);
+      vi.useRealTimers();
+      return promise2;
+    });
+
+    it('should drop requests within debounce cooldown', async () => {
+      const promise1 = overlayService.showCommandPalette(validRequest, 'test-webview');
+      const result2 = await overlayService.showCommandPalette(validRequest, 'test-webview');
+
+      expect(result2).toBeUndefined();
+      expect(getOverlays()).toHaveLength(1);
+
+      getOverlays()[0].resolve(undefined);
+      return promise1;
+    });
+
+    it('should handle centered mode (no anchor)', () => {
+      const request: CommandPaletteRequest = {
+        items: [{ id: 'ft', label: 'Footnote' }],
+        // no anchor — centered mode
+      };
+      const promise = overlayService.showCommandPalette(request, 'test-webview');
+
+      const overlays = getOverlays();
+      expect(overlays).toHaveLength(1);
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const overlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
+      expect(overlay.position).toBeUndefined();
+
+      overlay.resolve(undefined);
+      return promise;
     });
   });
 });

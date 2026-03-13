@@ -303,13 +303,57 @@ export interface PopoverRequest {
   showArrow?: boolean;
 }
 
+// ── Command Palette Types ──
+
+/**
+ * A single item in a command palette. Items are displayed in a searchable, filterable list. The
+ * user types to filter and selects one item.
+ */
+export type CommandPaletteItem = {
+  /** Unique identifier returned when this item is selected */
+  id: string;
+  /** Primary display text (e.g., marker code like "ft" or command name) */
+  label: string | LocalizeKey;
+  /** Secondary description text displayed below the label */
+  description?: string | LocalizeKey;
+  /** Optional icon displayed to the left of the label */
+  icon?: string;
+  /** Optional badge text (e.g., "Deprecated", "Disallowed") */
+  badge?: string | LocalizeKey;
+  /** Optional group key for visual sectioning with group headers */
+  group?: string;
+  /** Whether the item is grayed out and non-selectable. Defaults to false. */
+  disabled?: boolean;
+};
+
+/** Request payload for {@link IOverlayService.showCommandPalette}. */
+export interface CommandPaletteRequest {
+  /** The selectable items to display */
+  items: CommandPaletteItem[];
+  /**
+   * Anchor position in pixels relative to the requesting WebView's iframe origin. The palette is
+   * positioned adjacent to this point. If omitted, centers in the viewport.
+   */
+  anchor?: { x: number; y: number; width?: number; height?: number };
+  /** Preferred side of the anchor to place the palette. Defaults to 'bottom'. */
+  side?: 'top' | 'bottom' | 'left' | 'right';
+  /** Placeholder text for the search input */
+  placeholder?: string | LocalizeKey;
+  /** Maximum width in pixels. Defaults to 500. */
+  maxWidth?: number;
+  /** Maximum height in pixels. Defaults to 400. */
+  maxHeight?: number;
+  /** Whether clicking outside dismisses the palette. Defaults to true. */
+  dismissOnClickOutside?: boolean;
+}
+
 // ── Service Interface ──
 
 /**
  * JSDOC SOURCE overlayService
  *
- * Service for showing overlays (context menus, modal dialogs, popovers) that render outside iframe
- * boundaries in the renderer's top-level document. Renderer-only service.
+ * Service for showing overlays (context menus, modal dialogs, popovers, command palettes) that
+ * render outside iframe boundaries in the renderer's top-level document. Renderer-only service.
  *
  * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
  * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -317,9 +361,9 @@ export interface PopoverRequest {
  * renderer's React tree. Each method returns a promise that resolves when the user interacts with
  * the overlay or it is dismissed.
  *
- * Only one overlay of each type (context menu, modal dialog, popover) can be active per WebView at
- * a time. Requesting a new overlay of the same type from the same WebView replaces the previous one
- * and rejects its promise with {@link OverlayReplacedError}.
+ * Only one overlay of each type (context menu, modal dialog, popover, command palette) can be
+ * active per WebView at a time. Requesting a new overlay of the same type from the same WebView
+ * replaces the previous one and rejects its promise with {@link OverlayReplacedError}.
  */
 export interface IOverlayService {
   /**
@@ -412,6 +456,20 @@ export interface IOverlayService {
    * @throws {OverlayReplacedError} If the popover was replaced by a new one from the same WebView
    */
   onPopoverDismissed(overlayId: string): Promise<string | undefined>;
+  /**
+   * Shows a command palette with searchable/filterable items. Returns a promise that resolves with
+   * the selected item's `id`, or `undefined` if dismissed.
+   *
+   * @param request The items, optional anchor position, and display options
+   * @param webViewId The ID of the WebView requesting the command palette
+   * @returns The selected item's ID, or `undefined` if dismissed
+   * @throws {OverlayValidationError} If the request is invalid
+   * @throws {OverlayReplacedError} If replaced by another command palette from the same WebView
+   */
+  showCommandPalette(
+    request: CommandPaletteRequest,
+    webViewId: string,
+  ): Promise<string | undefined>;
 }
 
 // ── Internal Overlay Store Types ──
@@ -426,6 +484,7 @@ export interface IOverlayService {
  * - `'contextMenu'` — An active context menu with translated position and menu items.
  * - `'modalDialog'` — An active modal dialog with its type-specific options.
  * - `'popover'` — An active popover with mutable `content` (updatable via `updatePopover`).
+ * - `'commandPalette'` — An active command palette with searchable/filterable items.
  *
  * UI components read entries from the overlay store to render overlays, then call `resolve` or
  * `reject` when the user interacts with or dismisses them.
@@ -482,5 +541,22 @@ export type OverlayEntry =
        */
       resolve: (actionId: string | undefined) => void;
       /** Rejects the caller's promise (e.g., with {@link OverlayReplacedError}) */
+      reject: (error: Error) => void;
+    }
+  | {
+      type: 'commandPalette';
+      /** Unique overlay identifier generated by the service */
+      id: string;
+      /** The WebView that requested this overlay */
+      webViewId: string;
+      /** The original request */
+      request: CommandPaletteRequest;
+      /** Items to render */
+      items: CommandPaletteItem[];
+      /** Document-relative position (translated + clamped), or undefined for centered */
+      position?: { x: number; y: number };
+      /** Settles the caller's promise with the selected item ID, or undefined if dismissed */
+      resolve: (selectedId: string | undefined) => void;
+      /** Rejects the caller's promise */
       reject: (error: Error) => void;
     };

@@ -1166,6 +1166,55 @@ export type OverlayPopoverProps = {
  * rich text, and card content types with optional action buttons and arrow indicator.
  */
 export declare function OverlayPopover({ content, position, anchor, side, maxWidth, showArrow, onAction, onDismiss, }: OverlayPopoverProps): import("react/jsx-runtime").JSX.Element;
+/** A single item in the command palette */
+export type OverlayCommandPaletteItem = {
+	/** Unique identifier returned when this item is selected */
+	id: string;
+	/** Primary display text */
+	label: string | LocalizeKey;
+	/** Secondary description text displayed below the label */
+	description?: string | LocalizeKey;
+	/** Optional icon displayed to the left of the label */
+	icon?: string;
+	/** Optional badge text (e.g., "Deprecated", "Disallowed") */
+	badge?: string | LocalizeKey;
+	/** Optional group key for visual sectioning with group headers */
+	group?: string;
+	/** Whether the item is grayed out and non-selectable. Defaults to false. */
+	disabled?: boolean;
+};
+/** Props for the presentational OverlayCommandPalette component */
+export type OverlayCommandPaletteProps = {
+	/** The selectable items to display */
+	items: OverlayCommandPaletteItem[];
+	/** Document-relative position for the palette anchor. Omit for centered mode. */
+	position?: {
+		x: number;
+		y: number;
+	};
+	/** Optional anchor dimensions */
+	anchor?: {
+		width?: number;
+		height?: number;
+	};
+	/** Preferred side of the anchor. Defaults to 'bottom'. */
+	side?: "top" | "bottom" | "left" | "right";
+	/** Placeholder text for the search input */
+	placeholder?: string;
+	/** Maximum width in pixels. Defaults to 500. */
+	maxWidth?: number;
+	/** Maximum height in pixels. Defaults to 400. */
+	maxHeight?: number;
+	/** Called when the user selects an item */
+	onSelect: (itemId: string) => void;
+	/** Called when the palette is dismissed (Escape, click outside) */
+	onDismiss: () => void;
+};
+/**
+ * Renders a command palette as a searchable list of items. Positioned via a Radix Popover virtual
+ * anchor when `position` is provided, or centered in the viewport when omitted.
+ */
+export declare function OverlayCommandPalette({ items, position, anchor, side, placeholder, maxWidth, maxHeight, onSelect, onDismiss, }: OverlayCommandPaletteProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.

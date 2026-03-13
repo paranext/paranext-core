@@ -4,6 +4,7 @@
  */
 
 import {
+  CommandPaletteRequest,
   ContextMenuRequest,
   ContextMenuItem,
   ModalDialogOptions,
@@ -116,6 +117,50 @@ export function validatePopoverRequest(request: PopoverRequest): void {
 
   if (request.dismissAfterMs !== undefined && request.dismissAfterMs <= 0) {
     throw new OverlayValidationError('dismissAfterMs must be greater than 0');
+  }
+}
+
+const MAX_COMMAND_PALETTE_ITEMS = 200;
+
+/**
+ * Validates a command palette request's items, anchor, and options.
+ *
+ * @param request The command palette request to validate
+ * @throws OverlayValidationError if validation fails
+ */
+export function validateCommandPaletteRequest(request: CommandPaletteRequest): void {
+  if (!request.items || request.items.length === 0) {
+    throw new OverlayValidationError('Items array must not be empty');
+  }
+  if (request.items.length > MAX_COMMAND_PALETTE_ITEMS) {
+    throw new OverlayValidationError(`Too many items (max ${MAX_COMMAND_PALETTE_ITEMS})`);
+  }
+
+  request.items.forEach((item) => {
+    if (!item.id) {
+      throw new OverlayValidationError('Each item must have an id');
+    }
+    validateLabelLength(item.label);
+    if (item.description) validateLabelLength(item.description);
+  });
+
+  // Validate anchor if provided
+  if (request.anchor) {
+    if (
+      typeof request.anchor.x !== 'number' ||
+      typeof request.anchor.y !== 'number' ||
+      Number.isNaN(request.anchor.x) ||
+      Number.isNaN(request.anchor.y)
+    ) {
+      throw new OverlayValidationError('Anchor must have valid x and y coordinates');
+    }
+  }
+
+  if (request.maxWidth !== undefined && request.maxWidth <= 0) {
+    throw new OverlayValidationError('maxWidth must be greater than 0');
+  }
+  if (request.maxHeight !== undefined && request.maxHeight <= 0) {
+    throw new OverlayValidationError('maxHeight must be greater than 0');
   }
 }
 

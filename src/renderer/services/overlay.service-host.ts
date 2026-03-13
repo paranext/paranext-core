@@ -28,11 +28,13 @@ import {
   updateOverlayContent,
 } from '@renderer/services/overlay-store';
 import {
+  validateCommandPaletteRequest,
   validateContextMenuRequest,
   validateModalDialogOptions,
   validatePopoverRequest,
 } from '@renderer/services/overlay-validation';
 import {
+  CommandPaletteRequest,
   ContextMenuRequest,
   ContextMenuResult,
   IOverlayService,
@@ -217,6 +219,18 @@ function dismissAllPopovers(): void {
         pending.resolve(undefined);
         popoverPromises.delete(overlay.id);
       }
+    }
+  });
+}
+
+/** Dismiss all command palettes (called on scroll, tab change, blur) */
+function dismissAllCommandPalettes(): void {
+  const allOverlays = getOverlays();
+  allOverlays.forEach((overlay) => {
+    if (overlay.type === 'commandPalette') {
+      overlay.resolve(undefined);
+      removeOverlay(overlay.id);
+      restoreFocus(overlay.id);
     }
   });
 }
@@ -539,6 +553,73 @@ async function onPopoverDismissed(overlayId: string): Promise<string | undefined
   return undefined;
 }
 
+/**
+ * Shows a command palette overlay with searchable/filterable items. Validates the request, checks
+ * visibility, translates coordinates, and returns the user's selection or undefined if dismissed.
+ *
+ * @param request The command palette request with items and optional anchor
+ * @param webViewId The webViewId that originated the request
+ * @returns The selected item's ID, or undefined if dismissed
+ */
+async function showCommandPalette(
+  request: CommandPaletteRequest,
+  webViewId: string,
+): Promise<string | undefined> {
+  validateCommandPaletteRequest(request);
+
+  // Visibility check (command palettes require visible WebView)
+  if (!isWebViewVisible(webViewId)) {
+    throw new OverlayNotVisibleError();
+  }
+
+  // Leading-edge debounce: drop rapid re-triggers within 50ms
+  if (!debounceCheck('commandPalette', webViewId)) {
+    return undefined;
+  }
+
+  // Replace any existing command palette from this webView
+  const existingOverlays = getOverlaysByWebView(webViewId).filter(
+    (o) => o.type === 'commandPalette',
+  );
+  existingOverlays.forEach((existing) => {
+    existing.reject(new OverlayReplacedError());
+    removeOverlay(existing.id);
+    restoreFocus(existing.id);
+  });
+
+  const overlayId = newGuid();
+
+  // Save focus state from the requesting iframe (fire-and-forget)
+  requestFocusSave(overlayId, webViewId);
+
+  // Translate coordinates from iframe-relative to document-relative (if anchored)
+  let position: { x: number; y: number } | undefined;
+  if (request.anchor) {
+    const translatedPosition = translateCoordinates(webViewId, request.anchor);
+    position = clampToViewport(translatedPosition, 4);
+  }
+
+  announceToScreenReader('Command palette opened');
+
+  lastOverlayCreatedAt = Date.now();
+
+  return new Promise<string | undefined>((resolve, reject) => {
+    addOverlay({
+      type: 'commandPalette',
+      id: overlayId,
+      webViewId,
+      request,
+      items: request.items,
+      position,
+      resolve: (selectedId) => {
+        restoreFocus(overlayId);
+        resolve(selectedId);
+      },
+      reject,
+    });
+  });
+}
+
 /** The overlay service instance exposed on papi */
 export const overlayService: IOverlayService = {
   showContextMenu,
@@ -548,13 +629,15 @@ export const overlayService: IOverlayService = {
   updatePopover,
   dismissPopover,
   onPopoverDismissed,
+  showCommandPalette,
 };
 
 // ── Event Listeners for Auto-Dismiss ──
 
 /** Set up scroll, tab change, and blur listeners */
 function registerAutoDismissListeners(): void {
-  // Dismiss context menus on scroll (capturing phase to catch iframe scrolls too)
+  // Dismiss context menus on scroll (capturing phase to catch iframe scrolls too).
+  // Command palettes are intentionally NOT dismissed on scroll — they contain a scrollable list.
   window.addEventListener(
     'scroll',
     () => {
@@ -564,12 +647,13 @@ function registerAutoDismissListeners(): void {
     { capture: true },
   );
 
-  // Dismiss context menus and popovers on window blur
+  // Dismiss context menus, command palettes, and popovers on window blur
   window.addEventListener('blur', () => {
     // Skip if an overlay was just created — focus shifts from panel activation can trigger blur
     if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
 
     dismissAllContextMenus();
+    dismissAllCommandPalettes();
     // Popovers with dismissOnClickOutside: false may persist across blur
     const allOverlays = getOverlays();
     allOverlays.forEach((overlay) => {
@@ -594,6 +678,7 @@ function registerAutoDismissListeners(): void {
     if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
 
     dismissAllContextMenus();
+    dismissAllCommandPalettes();
     dismissAllPopovers();
   });
 

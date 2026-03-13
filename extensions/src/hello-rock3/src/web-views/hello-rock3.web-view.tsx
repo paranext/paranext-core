@@ -696,6 +696,46 @@ globalThis.webViewComponent = function HelloRock3({
     dismissPersonPopover();
   }, [dismissPersonPopover]);
 
+  // Command palette demo handler
+  const handleCommandPalette = useCallback(async () => {
+    const result = await papi.overlay.showCommandPalette(
+      {
+        items: [
+          { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph', group: 'Paragraphs' },
+          {
+            id: 'q1',
+            label: 'Poetry Line 1 (q1)',
+            description: 'First level poetry',
+            group: 'Poetry',
+          },
+          {
+            id: 'q2',
+            label: 'Poetry Line 2 (q2)',
+            description: 'Second level poetry',
+            group: 'Poetry',
+          },
+          {
+            id: 's',
+            label: 'Section Heading (s)',
+            description: 'Major section heading',
+            group: 'Headings',
+          },
+          { id: 'ft', label: 'Footnote (ft)', description: 'Footnote text', group: 'Notes' },
+          {
+            id: 'xt',
+            label: 'Cross Reference (xt)',
+            description: 'Cross reference text',
+            group: 'Notes',
+          },
+          { id: 'pro', label: 'Pronoun (pro)', badge: 'Deprecated', disabled: true },
+        ],
+        placeholder: 'Type a USFM marker...',
+      },
+      globalThis.webViewId,
+    );
+    logger.debug(`Command palette selected: ${result ?? 'dismissed'}`);
+  }, []);
+
   // #endregion
 
   return (
@@ -764,6 +804,12 @@ globalThis.webViewComponent = function HelloRock3({
           </Button>
         </div>
       )}
+      {/* Overlay service demo: command palette */}
+      <div>
+        <Button data-testid="command-palette-trigger" onClick={handleCommandPalette}>
+          Show Command Palette
+        </Button>
+      </div>
       {/* Overlay service demo: hover to show person details popover */}
       <div
         ref={greetingRef}
