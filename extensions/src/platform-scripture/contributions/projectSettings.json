@@ -65,7 +65,7 @@
       "platformScripture.baseCharacterClassRegex": {
         "label": "%project_settings_platformScripture_baseCharacterClassRegex_label%",
         "isHidden": true,
-        "default": "\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}",
+        "default": "\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}\\u200C\\u200D",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.diacriticCharacterClassRegex": {
