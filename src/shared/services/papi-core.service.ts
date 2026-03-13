@@ -98,3 +98,23 @@ export type {
   SetFocusSubject,
   SetFocusSpecifier,
 } from '@shared/services/window.service-model';
+export type {
+  CommandPaletteItem,
+  CommandPaletteRequest,
+  ContextMenuItem,
+  ContextMenuRequest,
+  ContextMenuResult,
+  IOverlayService,
+  ModalDialogOptions,
+  ModalDialogResponse,
+  ModalDialogType,
+  PopoverAction,
+  PopoverContent,
+  PopoverRequest,
+  RichTextRun,
+} from '@shared/models/overlay.service-model';
+export {
+  OverlayNotVisibleError,
+  OverlayReplacedError,
+  OverlayValidationError,
+} from '@shared/models/overlay.service-model';
