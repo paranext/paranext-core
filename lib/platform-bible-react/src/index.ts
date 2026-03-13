@@ -164,6 +164,12 @@ export { EditorKeyboardShortcuts } from './components/basics/editor-keyboard-sho
 export { ErrorDump } from './components/basics/error-dump.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
 export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
+export { default as UndoRedoButtons } from './components/basics/undo-redo-buttons.component';
+export { UNDO_REDO_BUTTONS_STRING_KEYS } from './components/basics/undo-redo-buttons.component';
+export type {
+  UndoRedoButtonsLocalizedStrings,
+  UndoRedoButtonsProps,
+} from './components/basics/undo-redo-buttons.component';
 export { default as ResultsCard } from './components/basics/results-card.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';

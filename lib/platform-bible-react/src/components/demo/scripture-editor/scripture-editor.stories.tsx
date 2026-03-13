@@ -24,7 +24,7 @@ import {
 import '@/components/demo/scripture-editor/scripture-editor.stories.css';
 import FootnoteEditor from '@/components/advanced/footnote-editor/footnote-editor.component';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
-import scriptureEditorLocalizedStrings from 'platform-scripture-editor/contributions/localizedStrings.json';
+import localizedStrings from '@/localizedStrings.json';
 
 const defaultScrRef: SerializedVerseRef = { book: 'PSA', chapterNum: 1, verseNum: 1 };
 
@@ -87,6 +87,13 @@ This demo version is included in Storybook to showcase the component's functiona
 export default meta;
 
 type Story = StoryObj<typeof Editorial>;
+
+/** Story type that extends Editorial args with a language selector for the footnote editor */
+type FootnoteEditorViewStory = Omit<Story, 'args' | 'argTypes' | 'render'> & {
+  args: NonNullable<Story['args']> & { language: 'en' | 'es' };
+  argTypes: Story['argTypes'] & { language: object };
+  render: (args: NonNullable<Story['args']> & { language: 'en' | 'es' }) => ReactNode;
+};
 
 /** Story type with custom flattened ViewOptions args for the Controls panel */
 type ViewOptionsStory = Omit<Story, 'args' | 'argTypes' | 'render'> & {
@@ -278,7 +285,14 @@ export const CustomMarkerTrigger: Story = {
   },
 };
 
-export const FootnoteEditorView: Story = {
+export const FootnoteEditorView: FootnoteEditorViewStory = {
+  argTypes: {
+    language: {
+      control: { type: 'select' },
+      options: ['en', 'es'],
+      description: 'Language for the footnote editor localized strings',
+    },
+  },
   render: (args) => {
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
@@ -366,17 +380,12 @@ export const FootnoteEditorView: Story = {
       [noteKey],
     );
 
+    // FootnoteEditor applies changes to the parent editor via parentEditorRef before calling
+    // onClose, so nothing extra is needed here beyond resetting the popover state.
     const onEditorClose = () => {
       noteKey.current = undefined;
       noteOps.current = undefined;
       setShowFootnoteEditor(false);
-    };
-
-    const onEditorSave = (newNoteOps: DeltaOp[]) => {
-      if (noteKey.current) {
-        editorRef.current?.replaceEmbedUpdate(noteKey.current, newNoteOps);
-      }
-      onEditorClose();
     };
 
     return (
@@ -400,16 +409,16 @@ export const FootnoteEditorView: Story = {
             className="tw-absolute"
             style={{ top: popoverY ?? 0, left: popoverX ?? 0, height: popoverHeight, width: 0 }}
           />
-          <PopoverContent className="tw-w-[500px] tw-p-[10px]">
+          <PopoverContent className="tw-w-max tw-min-w-[500px] tw-p-[10px]">
             <FootnoteEditor
               noteKey={noteKey.current}
               noteOps={noteOps.current}
-              onSave={onEditorSave}
               onClose={onEditorClose}
               scrRef={args.scrRef ?? defaultScrRef}
               editorOptions={mergedOptions}
               defaultMarkerMenuTrigger={mergedOptions.markerMenuTrigger ?? '\\'}
-              localizedStrings={scriptureEditorLocalizedStrings.localizedStrings.en}
+              localizedStrings={localizedStrings.localizedStrings?.[args.language]}
+              parentEditorRef={editorRef}
             />
           </PopoverContent>
         </Popover>
@@ -428,8 +437,9 @@ export const FootnoteEditorView: Story = {
   args: {
     defaultUsj: usjWeb,
     scrRef: defaultScrRef,
+    language: 'en',
     options: {
-      hasExternalUI: false,
+      hasExternalUI: true,
       markerMenuTrigger: '\\',
     },
   },

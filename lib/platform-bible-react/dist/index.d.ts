@@ -24,7 +24,7 @@ import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import React$1 from 'react';
-import { ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode } from 'react';
+import { ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -693,14 +693,15 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%footnoteEditor_callerDropdown_item_hidden%",
 	"%footnoteEditor_callerDropdown_item_custom%",
 	"%footnoteEditor_callerDropdown_tooltip%",
-	"%footnoteEditor_cancelButton_tooltip%",
+	"%footnoteEditor_closeButton_tooltip%",
 	"%footnoteEditor_copyButton_tooltip%",
 	"%footnoteEditor_noteType_crossReference_label%",
 	"%footnoteEditor_noteType_endNote_label%",
 	"%footnoteEditor_noteType_footnote_label%",
 	"%footnoteEditor_noteType_tooltip%",
 	"%footnoteEditor_noteTypeDropdown_label%",
-	"%footnoteEditor_saveButton_tooltip%"
+	"%undoButton_tooltip%",
+	"%redoButton_tooltip%"
 ];
 export type FootnoteEditorLocalizedStrings = {
 	[localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]: string;
@@ -712,12 +713,14 @@ export interface FootnoteEditorProps {
 	classNameForEditor?: string;
 	/** Delta ops for the current note being edited that are applied to the note editorial */
 	noteOps: DeltaOpInsertNoteEmbed[] | undefined;
-	/** External function to handle saving changes to the footnote */
-	onSave: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
 	/**
-	 * External function to handle closing the footnote editor. Gets called when the editor is closed
-	 * without saving changes
+	 * Called on every change to the footnote with the updated note ops. An implementation of this
+	 * function is required only if the parent does not supply `parentEditorRef` or if some additional
+	 * logic is needed to handle the changes. The note ops passed in this function are the full ops
+	 * for the note, not just the changes since the last call.
 	 */
+	onChange?: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
+	/** External function to handle closing the footnote editor */
 	onClose: () => void;
 	/** The scripture reference for the parent editor */
 	scrRef: SerializedVerseRef;
@@ -729,13 +732,18 @@ export interface FootnoteEditorProps {
 	defaultMarkerMenuTrigger: string;
 	/** Localized strings to be passed to the footnote editor component */
 	localizedStrings: FootnoteEditorLocalizedStrings;
+	/**
+	 * Ref to the parent editor. When provided, the footnote editor will apply changes directly to the
+	 * parent editor, so the client does not need to handle this in the `onChange` callback.
+	 */
+	parentEditorRef?: React$1.RefObject<EditorRef | null>;
 }
 /**
  * Component to edit footnotes from within the editor component
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onSave, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
@@ -1695,6 +1703,48 @@ type EditorKeyboardShortcutsProps = React$1.PropsWithChildren & {
  * @param editorRef The `editorRef` of the editor that this undo/redo plugin is applied to
  */
 export declare function EditorKeyboardShortcuts({ children, editorRef }: EditorKeyboardShortcutsProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component.
+ */
+export declare const UNDO_REDO_BUTTONS_STRING_KEYS: readonly [
+	"%undoButton_tooltip%",
+	"%redoButton_tooltip%"
+];
+export type UndoRedoButtonsLocalizedStrings = {
+	[key in (typeof UNDO_REDO_BUTTONS_STRING_KEYS)[number]]?: string;
+};
+export type UndoRedoButtonsProps = {
+	/** Function to call when Undo is clicked. */
+	onUndoClick: () => void;
+	/** Function to call when Redo is clicked. If undefined, the Redo button is not rendered. */
+	onRedoClick?: () => void;
+	/** Whether the Undo button is enabled. */
+	canUndo?: boolean;
+	/** Whether the Redo button is enabled. */
+	canRedo?: boolean;
+	/** Localized strings for button tooltips. Falls back to the key itself if not provided. */
+	localizedStrings?: UndoRedoButtonsLocalizedStrings;
+	/**
+	 * Whether to show OS-specific keyboard shortcut hints in the tooltips. Defaults to `true`. If
+	 * being used with an `Editorial` component, wrap it in `EditorKeyboardShortcuts` to make the
+	 * shortcuts functional.
+	 */
+	showKeyboardShortcuts?: boolean;
+	/** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
+	className?: string;
+	/** Variant for the buttons. Defaults to "ghost". */
+	variant?: ButtonProps["variant"];
+};
+/**
+ * Undo and (optionally) Redo buttons with tooltips. Suitable for use in any editor toolbar. The
+ * Redo button is only rendered when `onRedoClick` is provided. Tooltip text defaults to the
+ * localization key if no localized strings are provided. OS-specific keyboard shortcut hints are
+ * shown in the tooltips by default; wrap the `Editorial` component in `EditorKeyboardShortcuts` to
+ * make those shortcuts functional.
+ */
+export declare function UndoRedoButtons({ onUndoClick, onRedoClick, canUndo, canRedo, localizedStrings, showKeyboardShortcuts, className, variant, }: UndoRedoButtonsProps): import("react/jsx-runtime").JSX.Element;
 interface ResultsCardProps {
 	/** Unique key for the card */
 	cardKey: string;

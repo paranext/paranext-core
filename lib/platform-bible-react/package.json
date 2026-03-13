@@ -26,10 +26,18 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    "import": "./dist/index.js",
-    "require": "./dist/index.cjs"
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./localizedStrings.json": "./src/localizedStrings.json"
   },
-  "files": ["dist"],
+  "typesVersions": {
+    "*": {
+      "localizedStrings.json": ["./src/localizedStrings.json.d.ts"]
+    }
+  },
+  "files": ["dist", "src/localizedStrings.json", "src/localizedStrings.json.d.ts"],
   "scripts": {
     "start": "npm run storybook",
     "build:basic": "tsc && cross-env NODE_ENV=production vite build && dts-bundle-generator --config ./dts-bundle-generator.config.cts",

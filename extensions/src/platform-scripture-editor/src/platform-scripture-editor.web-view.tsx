@@ -50,10 +50,8 @@ import {
   SelectMenuItemHandler,
   Spinner,
   TabToolbar,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
+  UNDO_REDO_BUTTONS_STRING_KEYS,
+  UndoRedoButtons,
   usePromise,
 } from 'platform-bible-react';
 import {
@@ -81,7 +79,6 @@ import {
 } from 'platform-scripture-editor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
-import { Redo, Undo } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import {
   getLocalizeKeysFromDecorations,
@@ -113,6 +110,7 @@ const EDITOR_LOAD_DELAY_TIME = 200;
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
+  ...UNDO_REDO_BUTTONS_STRING_KEYS,
   ...MARKER_MENU_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
@@ -914,7 +912,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [showMarkersMenu]);
 
-  // When the inline markers menu is showed, makes sure the search input is focused
+  // When the inline markers menu is shown, makes sure the search input is focused
   useEffect(() => {
     if (showMarkersMenu) {
       markerMenuSearchRef.current?.focus();
@@ -1322,13 +1320,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setShowFootnoteEditor(false);
   }, []);
 
-  const onFootnoteEditorSave = (newNoteOps: DeltaOp[]) => {
-    if (editingNoteKey.current) {
-      editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, newNoteOps);
-    }
-    onFootnoteEditorClose();
-  };
-
   const onCommentEditorCancel = useCallback(() => {
     // Remove the pending annotation if one was created
     if (pendingCommentAnnotationRange.current) {
@@ -1559,44 +1550,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             />
             {!isReadOnlyEffective && (
               <>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        aria-label="Undo"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => editorRef.current?.undo()}
-                        disabled={!canUndo}
-                      >
-                        <Undo />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {localizedStrings['%webView_platformScriptureEditor_undoButton_tooltip%']} (
-                      {isMac ? '⌘' : 'Ctrl'} + z)
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        aria-label="Redo"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => editorRef.current?.redo()}
-                        disabled={!canRedo}
-                      >
-                        <Redo />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {localizedStrings['%webView_platformScriptureEditor_redoButton_tooltip%']} (
-                      {isMac ? '⌘' : 'Ctrl'} + Shift + y)
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <UndoRedoButtons
+                  onUndoClick={() => editorRef.current?.undo()}
+                  onRedoClick={() => editorRef.current?.redo()}
+                  canUndo={canUndo}
+                  canRedo={canRedo}
+                  localizedStrings={localizedStrings}
+                />
+
                 {blockMarker !== undefined && (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1752,17 +1713,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             pointerEvents: 'none',
           }}
         />
-        <PopoverContent className="tw-w-[500px] tw-p-[10px]">
+        <PopoverContent className="tw-w-max tw-min-w-[500px] tw-p-[10px]">
           <FootnoteEditor
             classNameForEditor="scripture-font"
             noteOps={editingNoteOps.current}
             noteKey={editingNoteKey.current}
-            onSave={onFootnoteEditorSave}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
             editorOptions={options}
             defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
             localizedStrings={localizedStrings}
+            parentEditorRef={editorRef}
           />
         </PopoverContent>
       </Popover>
