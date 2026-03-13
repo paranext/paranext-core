@@ -79,7 +79,7 @@ export function FindHeaderDemo() {
   const [findButtonText, setFindButtonText] = useState<string>('');
   useEffect(() => {
     setTimeout(() => setFindButtonText('Finden'), 1000);
-  });
+  }, []);
 
   // custom for demo
   const handleStartSearch = () => {
@@ -300,7 +300,7 @@ export function FindHeaderDemo() {
         {demoTotalResults > 0 && (
           <div className="tw-flex tw-items-center tw-gap-1">
             <span className="tw-text-sm tw-text-muted-foreground tw-tabular-nums">
-              {formatReplacementString('%webView_find_resultNavigation%', {
+              {formatReplacementString('{current} of {total}', {
                 current: focusedResultIndex !== undefined ? String(focusedResultIndex + 1) : '–',
                 total: String(demoTotalResults),
               })}
