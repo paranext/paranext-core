@@ -1,4 +1,4 @@
-import { WebViewProps } from '@papi/core';
+import { WebViewProps, ContextMenuItem } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
@@ -24,8 +24,8 @@ import {
   TextField,
   useEvent,
 } from 'platform-bible-react';
-import { debounce, getErrorMessage, isPlatformError } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { debounce, getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CommandNames } from 'papi-shared-types';
 import { HELLO_ROCK_3_REACT_WEBVIEW_TYPE } from '../util';
 import Logo from '../../assets/offline.svg';
@@ -87,6 +87,28 @@ globalThis.webViewComponent = function HelloRock3({
   const testException = '%helloRock3_throw_test_exception%';
   const testMe = '%helloRock3_testMe%';
 
+  // Overlay demo localization keys
+  const overlaySelectProject: LocalizeKey = '%helloRock3_overlay_selectProject%';
+  const overlayOpenEditor: LocalizeKey = '%helloRock3_overlay_openEditor%';
+  const overlayVerboseLogging: LocalizeKey = '%helloRock3_overlay_verboseLogging%';
+  const overlayAutoSave: LocalizeKey = '%helloRock3_overlay_autoSave%';
+  const overlaySizeSmall: LocalizeKey = '%helloRock3_overlay_sizeSmall%';
+  const overlaySizeMedium: LocalizeKey = '%helloRock3_overlay_sizeMedium%';
+  const overlaySizeLarge: LocalizeKey = '%helloRock3_overlay_sizeLarge%';
+  const overlayMoreActions: LocalizeKey = '%helloRock3_overlay_moreActions%';
+  const overlayShowAlert: LocalizeKey = '%helloRock3_overlay_showAlert%';
+  const overlayAlertTitle: LocalizeKey = '%helloRock3_overlay_alertTitle%';
+  const overlayAlertMessage: LocalizeKey = '%helloRock3_overlay_alertMessage%';
+  const overlayDeletePersonTitle: LocalizeKey = '%helloRock3_overlay_deletePerson_title%';
+  const overlayDeletePersonMessage: LocalizeKey = '%helloRock3_overlay_deletePerson_message%';
+  const overlayDeletePersonOkLabel: LocalizeKey = '%helloRock3_overlay_deletePerson_okLabel%';
+  const overlayCancel: LocalizeKey = '%helloRock3_overlay_cancel%';
+  const overlayPopoverAbout: LocalizeKey = '%helloRock3_overlay_popover_about%';
+  const overlayPopoverName: LocalizeKey = '%helloRock3_overlay_popover_name%';
+  const overlayPopoverGreeting: LocalizeKey = '%helloRock3_overlay_popover_greeting%';
+  const overlayPopoverAge: LocalizeKey = '%helloRock3_overlay_popover_age%';
+  const overlayPopoverUnknown: LocalizeKey = '%helloRock3_overlay_popover_unknown%';
+
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
       () => [
@@ -117,6 +139,26 @@ globalThis.webViewComponent = function HelloRock3({
         testDeprecatedString,
         testException,
         testMe,
+        overlaySelectProject,
+        overlayOpenEditor,
+        overlayVerboseLogging,
+        overlayAutoSave,
+        overlaySizeSmall,
+        overlaySizeMedium,
+        overlaySizeLarge,
+        overlayMoreActions,
+        overlayShowAlert,
+        overlayAlertTitle,
+        overlayAlertMessage,
+        overlayDeletePersonTitle,
+        overlayDeletePersonMessage,
+        overlayDeletePersonOkLabel,
+        overlayCancel,
+        overlayPopoverAbout,
+        overlayPopoverName,
+        overlayPopoverGreeting,
+        overlayPopoverAge,
+        overlayPopoverUnknown,
       ],
       [],
     ),
@@ -436,8 +478,269 @@ globalThis.webViewComponent = function HelloRock3({
   );
   // #endregion
 
+  // #region Overlay service demos
+
+  // State for context menu checkbox and radio items so they visually toggle
+  const [verboseLogging, setVerboseLogging] = useWebViewState('verboseLogging', false);
+  const [autoSave, setAutoSave] = useWebViewState('autoSave', true);
+  const [textSize, setTextSize] = useWebViewState('textSize', 'medium');
+
+  // Context menu: right-click handler that shows overlay context menu
+  const handleContextMenu = useCallback(
+    async (e: MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const items: ContextMenuItem[] = [
+        { type: 'item', id: 'selectProject', label: overlaySelectProject },
+        { type: 'item', id: 'openEditor', label: overlayOpenEditor },
+        { type: 'separator' },
+        {
+          type: 'checkbox',
+          id: 'toggleVerbose',
+          label: overlayVerboseLogging,
+          checked: verboseLogging,
+        },
+        { type: 'checkbox', id: 'toggleAutoSave', label: overlayAutoSave, checked: autoSave },
+        { type: 'separator' },
+        {
+          type: 'radio',
+          id: 'sizeSmall',
+          label: overlaySizeSmall,
+          value: 'small',
+          group: 'textSize',
+          checked: textSize === 'small',
+        },
+        {
+          type: 'radio',
+          id: 'sizeMedium',
+          label: overlaySizeMedium,
+          value: 'medium',
+          group: 'textSize',
+          checked: textSize === 'medium',
+        },
+        {
+          type: 'radio',
+          id: 'sizeLarge',
+          label: overlaySizeLarge,
+          value: 'large',
+          group: 'textSize',
+          checked: textSize === 'large',
+        },
+        { type: 'separator' },
+        {
+          type: 'submenu',
+          label: overlayMoreActions,
+          items: [{ type: 'item', id: 'showAlert', label: overlayShowAlert }],
+        },
+        { type: 'separator' },
+        {
+          type: 'item',
+          id: 'deletePerson',
+          label: `${localizedDelete} ${name}`,
+          destructive: true,
+        },
+      ];
+
+      const result = await papi.overlay.showContextMenu(
+        {
+          items,
+          position: { x: e.clientX, y: e.clientY },
+        },
+        globalThis.webViewId,
+      );
+
+      if (!result) return;
+      switch (result.itemId) {
+        case 'selectProject':
+          selectProject();
+          break;
+        case 'openEditor':
+          papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId);
+          break;
+        case 'showAlert':
+          papi.overlay.showModalDialog(
+            'alert',
+            {
+              title: overlayAlertTitle,
+              message: overlayAlertMessage,
+            },
+            globalThis.webViewId,
+          );
+          break;
+        case 'deletePerson':
+          peopleDataProvider?.deletePerson(name);
+          break;
+        case 'toggleVerbose':
+          setVerboseLogging(result.checked ?? !verboseLogging);
+          logger.debug(`Verbose logging: ${result.checked ?? !verboseLogging}`);
+          break;
+        case 'toggleAutoSave':
+          setAutoSave(result.checked ?? !autoSave);
+          logger.debug(`Auto-save: ${result.checked ?? !autoSave}`);
+          break;
+        case 'sizeSmall':
+        case 'sizeMedium':
+        case 'sizeLarge':
+          setTextSize(result.itemId.replace('size', '').toLowerCase());
+          logger.debug(`Text size: ${result.itemId.replace('size', '').toLowerCase()}`);
+          break;
+        default:
+          logger.debug(`Context menu selected: ${result.itemId} (checked: ${result.checked})`);
+      }
+    },
+    [
+      name,
+      projectId,
+      selectProject,
+      peopleDataProvider,
+      verboseLogging,
+      autoSave,
+      textSize,
+      setVerboseLogging,
+      setAutoSave,
+      setTextSize,
+      localizedDelete,
+      overlaySelectProject,
+      overlayOpenEditor,
+      overlayVerboseLogging,
+      overlayAutoSave,
+      overlaySizeSmall,
+      overlaySizeMedium,
+      overlaySizeLarge,
+      overlayMoreActions,
+      overlayShowAlert,
+      overlayAlertTitle,
+      overlayAlertMessage,
+    ],
+  );
+
+  // Popover: hover on greeting to show person details
+  // eslint-disable-next-line no-null/no-null
+  const greetingRef = useRef<HTMLDivElement>(null);
+  const popoverIdRef = useRef<string | undefined>(undefined);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const showPersonPopover = useCallback(async () => {
+    if (popoverIdRef.current || !greetingRef.current) return;
+    const rect = greetingRef.current.getBoundingClientRect();
+    const overlayId = await papi.overlay.showPopover(
+      {
+        anchor: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+        side: 'bottom',
+        content: {
+          type: 'description',
+          title: overlayPopoverAbout,
+          entries: [
+            { term: overlayPopoverName, detail: name },
+            {
+              term: overlayPopoverGreeting,
+              detail: isPlatformError(personGreeting)
+                ? personGreeting.message
+                : (personGreeting ?? overlayPopoverUnknown),
+            },
+            {
+              term: overlayPopoverAge,
+              detail: isPlatformError(personAge)
+                ? personAge.message
+                : String(personAge ?? overlayPopoverUnknown),
+            },
+          ],
+        },
+        dismissOnClickOutside: true,
+        showArrow: true,
+      },
+      globalThis.webViewId,
+    );
+    popoverIdRef.current = overlayId;
+
+    // Clean up when dismissed
+    papi.overlay
+      .onPopoverDismissed(overlayId)
+      .then((actionId) => {
+        logger.debug(`Person popover dismissed (action: ${actionId ?? 'none'})`);
+        popoverIdRef.current = undefined;
+        return undefined;
+      })
+      .catch(() => {
+        popoverIdRef.current = undefined;
+      });
+  }, [
+    name,
+    personGreeting,
+    personAge,
+    overlayPopoverAbout,
+    overlayPopoverName,
+    overlayPopoverGreeting,
+    overlayPopoverAge,
+    overlayPopoverUnknown,
+  ]);
+
+  const dismissPersonPopover = useCallback(async () => {
+    if (popoverIdRef.current) {
+      await papi.overlay.dismissPopover(popoverIdRef.current);
+      popoverIdRef.current = undefined;
+    }
+  }, []);
+
+  const handleGreetingMouseEnter = useCallback(() => {
+    hoverTimerRef.current = setTimeout(() => {
+      hoverTimerRef.current = undefined;
+      showPersonPopover();
+    }, 400);
+  }, [showPersonPopover]);
+
+  const handleGreetingMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = undefined;
+    }
+    dismissPersonPopover();
+  }, [dismissPersonPopover]);
+
+  // Command palette demo handler
+  const handleCommandPalette = useCallback(async () => {
+    const result = await papi.overlay.showCommandPalette(
+      {
+        items: [
+          { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph', group: 'Paragraphs' },
+          {
+            id: 'q1',
+            label: 'Poetry Line 1 (q1)',
+            description: 'First level poetry',
+            group: 'Poetry',
+          },
+          {
+            id: 'q2',
+            label: 'Poetry Line 2 (q2)',
+            description: 'Second level poetry',
+            group: 'Poetry',
+          },
+          {
+            id: 's',
+            label: 'Section Heading (s)',
+            description: 'Major section heading',
+            group: 'Headings',
+          },
+          { id: 'ft', label: 'Footnote (ft)', description: 'Footnote text', group: 'Notes' },
+          {
+            id: 'xt',
+            label: 'Cross Reference (xt)',
+            description: 'Cross reference text',
+            group: 'Notes',
+          },
+          { id: 'pro', label: 'Pronoun (pro)', badge: 'Deprecated', disabled: true },
+        ],
+        placeholder: 'Type a USFM marker...',
+      },
+      globalThis.webViewId,
+    );
+    logger.debug(`Command palette selected: ${result ?? 'dismissed'}`);
+  }, []);
+
+  // #endregion
+
   return (
-    <div>
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div onContextMenu={handleContextMenu}>
       <TabFloatingMenu
         onSelectProjectMenuItem={projectMenuCommandHandler}
         projectMenuData={webViewMenu.topMenu}
@@ -480,12 +783,42 @@ globalThis.webViewComponent = function HelloRock3({
       ) : (
         <div>
           <input value={nameTemp} onChange={(e) => setName(e.target.value)} />
-          <Button onClick={() => peopleDataProvider?.deletePerson(name)}>
+          <Button
+            onClick={async () => {
+              // Overlay service demo: confirm dialog before destructive action
+              const confirmed = await papi.overlay.showModalDialog(
+                'confirm',
+                {
+                  title: overlayDeletePersonTitle,
+                  message: overlayDeletePersonMessage,
+                  okLabel: overlayDeletePersonOkLabel,
+                  cancelLabel: overlayCancel,
+                  destructive: true,
+                },
+                globalThis.webViewId,
+              );
+              if (confirmed) peopleDataProvider?.deletePerson(name);
+            }}
+          >
             {localizedDelete} {name}
           </Button>
         </div>
       )}
-      <div>{isPlatformError(personGreeting) ? personGreeting.message : personGreeting}</div>
+      {/* Overlay service demo: command palette */}
+      <div>
+        <Button data-testid="command-palette-trigger" onClick={handleCommandPalette}>
+          Show Command Palette
+        </Button>
+      </div>
+      {/* Overlay service demo: hover to show person details popover */}
+      <div
+        ref={greetingRef}
+        onMouseEnter={handleGreetingMouseEnter}
+        onMouseLeave={handleGreetingMouseLeave}
+        style={{ cursor: 'help' }}
+      >
+        {isPlatformError(personGreeting) ? personGreeting.message : personGreeting}
+      </div>
       <div>{isPlatformError(personAge) ? personAge.message : personAge}</div>
       <br />
       <div>

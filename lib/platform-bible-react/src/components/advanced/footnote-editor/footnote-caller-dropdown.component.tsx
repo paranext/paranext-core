@@ -17,6 +17,7 @@ import { GENERATOR_NOTE_CALLER, HIDDEN_NOTE_CALLER } from '@eten-tech-foundation
 import { Input } from '@/components/shadcn-ui/input';
 import { KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
+import { Z_INDEX_FOOTNOTE_EDITOR } from '../../z-index';
 
 interface FootnoteCallerDropdownProps {
   /** The caller type value to pass to the dropdown */
@@ -159,7 +160,7 @@ export function FootnoteCallerDropdown({
         </Tooltip>
       </TooltipProvider>
       <DropdownMenuContent
-        className="tw-z-[300]"
+        style={{ zIndex: Z_INDEX_FOOTNOTE_EDITOR }}
         onClick={() => {
           if (isCustomCallerInputFocused.current) isCustomCallerInputFocused.current = false;
         }}

@@ -34,6 +34,17 @@ export const test = base.extend<IsolatedFixtures>({
   mainPage: async ({ electronApp }, use, testInfo: TestInfo) => {
     const page = await electronApp.firstWindow();
 
+    // Ensure the window is large enough for WebView content to be visible.
+    // On headless Linux (xvfb) or WSL2 the default window can be very small,
+    // causing elements inside WebView iframes to be clipped or hidden.
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      if (win) {
+        if (win.isMaximized()) win.unmaximize();
+        win.setSize(1280, 800);
+      }
+    });
+
     console.log(`Window URL: ${page.url()}`);
     const onPageError = (err: Error) => console.error(`Page error: ${err.message}`);
     const onConsoleMsg = (msg: ConsoleMessage) => {

@@ -16,6 +16,13 @@ $space--sm: 8px;
 $space--md: 16px;
 $space--lg: 36px;
 
+/* Z-INDEX — canonical scale lives in platform-bible-react/src/components/z-index.ts */
+$z-index--above-dock: 250;
+$z-index--footnote-editor: 300;
+$z-index--overlay: 400;
+$z-index--modal-backdrop: 450;
+$z-index--modal: 500;
+
 /* OTHER */
 $border-width: 1px;
 $font-family: 'Roboto medium', sans-serif;

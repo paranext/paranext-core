@@ -3,6 +3,7 @@ import { LocalizedStringValue, formatReplacementString } from 'platform-bible-ut
 import { cn } from '@/utils/shadcn-ui.util';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../shadcn-ui/select';
 import { Label } from '../shadcn-ui/label';
+import { Z_INDEX_ABOVE_DOCK } from '../z-index';
 
 /**
  * Immutable array containing all keys used for localization in this component. If you're using this
@@ -151,7 +152,7 @@ export function UiLanguageSelector({
           <SelectValue />
         </SelectTrigger>
         <SelectContent
-          className="tw-z-[250]" // Need to get over the floating web view z-index 200
+          style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
         >
           {Object.keys(knownUiLanguages).map((key) => {
             return (
