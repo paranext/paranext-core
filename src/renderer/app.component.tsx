@@ -3,6 +3,7 @@ import { TestContext } from '@renderer/context/papi-context/test.context';
 import { Route, MemoryRouter as Router, Routes } from 'react-router-dom';
 import './app.component.scss';
 import { NotificationDisplay } from './components/notification-display';
+import { OverlayHost } from './components/overlay-host.component';
 import { PlatformBibleToolbar } from './components/platform-bible-toolbar';
 
 function Main() {
@@ -11,6 +12,7 @@ function Main() {
       <PlatformBibleToolbar />
       <PlatformDockLayout />
       <NotificationDisplay />
+      <OverlayHost />
     </TestContext.Provider>
   );
 }

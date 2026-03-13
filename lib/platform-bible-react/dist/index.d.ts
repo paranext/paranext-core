@@ -994,6 +994,178 @@ export interface MarkerMenuProps {
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
 export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
+type PlatformIconName = string;
+/**
+ * A single item in an overlay context menu. Discriminated union on `type`:
+ *
+ * - `'item'` — A clickable menu item that returns its `id` when selected.
+ * - `'separator'` — A visual divider between groups of items.
+ * - `'submenu'` — A nested menu that expands on hover to show child `items`.
+ * - `'checkbox'` — A toggleable item that reports its new `checked` state when selected.
+ * - `'radio'` — A radio button within a named `group`.
+ */
+export type OverlayContextMenuItem = {
+	type: "item";
+	id: string;
+	label: string | LocalizeKey;
+	icon?: PlatformIconName;
+	shortcut?: string;
+	disabled?: boolean;
+	destructive?: boolean;
+} | {
+	type: "separator";
+} | {
+	type: "submenu";
+	label: string | LocalizeKey;
+	icon?: PlatformIconName;
+	items: OverlayContextMenuItem[];
+} | {
+	type: "checkbox";
+	id: string;
+	label: string | LocalizeKey;
+	checked: boolean;
+} | {
+	type: "radio";
+	id: string;
+	label: string | LocalizeKey;
+	value: string;
+	group: string;
+	checked: boolean;
+};
+/** Result returned when the user selects an item from the context menu */
+export type OverlayContextMenuResult = {
+	itemId: string;
+	checked?: boolean;
+};
+/** Props for the presentational OverlayContextMenu component */
+export type OverlayContextMenuProps = {
+	/** Menu items to display */
+	items: OverlayContextMenuItem[];
+	/** Document-relative position for the menu */
+	position: {
+		x: number;
+		y: number;
+	};
+	/** Called when the user selects a menu item */
+	onSelect: (result: OverlayContextMenuResult) => void;
+	/** Called when the menu is dismissed without a selection */
+	onDismiss: () => void;
+};
+/**
+ * Renders a context menu at a fixed position using Radix DropdownMenu. Supports items, separators,
+ * submenus, checkboxes, and radio groups.
+ */
+export declare function OverlayContextMenu({ items, position, onSelect, onDismiss, }: OverlayContextMenuProps): import("react/jsx-runtime").JSX.Element;
+/** The supported modal dialog types */
+export type OverlayModalDialogType = "alert" | "confirm";
+/** Options for each modal dialog type, keyed by dialog type */
+export interface OverlayModalDialogOptions {
+	alert: {
+		title?: string | LocalizeKey;
+		message: string | LocalizeKey;
+		okLabel?: string | LocalizeKey;
+	};
+	confirm: {
+		title?: string | LocalizeKey;
+		message: string | LocalizeKey;
+		okLabel?: string | LocalizeKey;
+		cancelLabel?: string | LocalizeKey;
+		destructive?: boolean;
+	};
+}
+/** Props for the presentational OverlayModalDialog component */
+export type OverlayModalDialogProps = {
+	/** Which dialog variant to render */
+	dialogType: OverlayModalDialogType;
+	/** Type-specific dialog configuration */
+	options: OverlayModalDialogOptions[OverlayModalDialogType];
+	/** Called when the dialog resolves with a result */
+	onResolve: (result: unknown) => void;
+	/** Called when the dialog is dismissed without a result */
+	onDismiss: () => void;
+};
+/**
+ * Renders a modal dialog using Radix Dialog. Supports alert and confirm dialog types with
+ * appropriate UI elements, keyboard handling, and accessibility attributes.
+ */
+export declare function OverlayModalDialog({ dialogType, options, onResolve, onDismiss, }: OverlayModalDialogProps): import("react/jsx-runtime").JSX.Element;
+/** An action button displayed at the bottom of a card-type popover */
+export type OverlayPopoverAction = {
+	id: string;
+	label: string | LocalizeKey;
+	variant?: "default" | "destructive" | "secondary";
+};
+/** A segment of styled text within rich text content */
+export type OverlayRichTextRun = {
+	text: string | LocalizeKey;
+	bold?: boolean;
+	italic?: boolean;
+	scriptureRef?: boolean;
+};
+/**
+ * The content to display inside a popover. Discriminated union on `type`:
+ *
+ * - `'text'` — Simple text with an optional title and a plain-text body.
+ * - `'list'` — A bulleted list of items with an optional title.
+ * - `'description'` — A term/detail list, useful for metadata or properties.
+ * - `'richText'` — Styled text composed of runs with inline formatting.
+ * - `'card'` — A card with title, body text, and action buttons.
+ */
+export type OverlayPopoverContent = {
+	type: "text";
+	title?: string | LocalizeKey;
+	body: string | LocalizeKey;
+} | {
+	type: "list";
+	title?: string | LocalizeKey;
+	items: (string | LocalizeKey)[];
+} | {
+	type: "description";
+	title?: string | LocalizeKey;
+	entries: {
+		term: string | LocalizeKey;
+		detail: string | LocalizeKey;
+	}[];
+} | {
+	type: "richText";
+	title?: string | LocalizeKey;
+	body: OverlayRichTextRun[];
+} | {
+	type: "card";
+	title?: string | LocalizeKey;
+	body: string | LocalizeKey;
+	actions: OverlayPopoverAction[];
+};
+/** Props for the presentational OverlayPopover component */
+export type OverlayPopoverProps = {
+	/** The content to display inside the popover */
+	content: OverlayPopoverContent;
+	/** Document-relative position for the popover anchor */
+	position: {
+		x: number;
+		y: number;
+	};
+	/** Optional anchor dimensions */
+	anchor?: {
+		width?: number;
+		height?: number;
+	};
+	/** Preferred side of the anchor. Defaults to 'bottom'. */
+	side?: "top" | "bottom" | "left" | "right";
+	/** Maximum width in pixels. Defaults to 320. */
+	maxWidth?: number;
+	/** Whether to display an arrow pointing toward the anchor. Defaults to true. */
+	showArrow?: boolean;
+	/** Called when the user clicks an action button (card content) */
+	onAction?: (actionId: string) => void;
+	/** Called when the popover is dismissed */
+	onDismiss: () => void;
+};
+/**
+ * Renders a popover anchored to a position using Radix Popover. Supports text, list, description,
+ * rich text, and card content types with optional action buttons and arrow indicator.
+ */
+export declare function OverlayPopover({ content, position, anchor, side, maxWidth, showArrow, onAction, onDismiss, }: OverlayPopoverProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
@@ -2623,6 +2795,16 @@ export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCh
 	/** Focus an option by its ID */
 	focusOption: (id: string) => void;
 };
+/** Z-index for elements that need to appear above rc-dock floating tabs (~200) */
+export declare const Z_INDEX_ABOVE_DOCK = 250;
+/** Z-index for the footnote editor layer */
+export declare const Z_INDEX_FOOTNOTE_EDITOR = 300;
+/** Z-index for overlay popovers and context menus */
+export declare const Z_INDEX_OVERLAY = 400;
+/** Z-index for the semi-transparent backdrop behind modal dialogs */
+export declare const Z_INDEX_MODAL_BACKDROP = 450;
+/** Z-index for modal dialog content */
+export declare const Z_INDEX_MODAL = 500;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

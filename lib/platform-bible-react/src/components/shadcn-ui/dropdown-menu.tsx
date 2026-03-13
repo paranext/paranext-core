@@ -150,16 +150,21 @@ DropdownMenuSubTrigger.displayName = DropdownMenuPrimitive.SubTrigger.displayNam
 export const DropdownMenuSubContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
   DropdownMenuSubContentProps
->(({ className, ...props }, ref) => (
-  <DropdownMenuPrimitive.SubContent
-    ref={ref}
-    className={cn(
-      'pr-twp tw-z-50 tw-min-w-[8rem] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground tw-shadow-lg data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
-      className,
-    )}
-    {...props}
-  />
-));
+>(({ className, children, ...props }, ref) => {
+  const dir: Direction = readDirection();
+  return (
+    <DropdownMenuPrimitive.SubContent
+      ref={ref}
+      className={cn(
+        'pr-twp tw-z-50 tw-min-w-[8rem] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground tw-shadow-lg data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
+        className,
+      )}
+      {...props}
+    >
+      <div dir={dir}>{children}</div>
+    </DropdownMenuPrimitive.SubContent>
+  );
+});
 DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayName;
 
 /* TODO: bug in shadcn component: DropdownMenuContent does not support a dir prop.
@@ -219,6 +224,7 @@ export const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
   DropdownMenuCheckboxItemProps
 >(({ className, children, checked, ...props }, ref) => {
+  const dir: Direction = readDirection();
   const context = useMenuContext(); // CUSTOM use context to add variants
   return (
     <DropdownMenuPrimitive.CheckboxItem
@@ -230,6 +236,7 @@ export const DropdownMenuCheckboxItem = React.forwardRef<
       )}
       checked={checked}
       {...props}
+      dir={dir}
     >
       <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
         <DropdownMenuPrimitive.ItemIndicator>
@@ -247,6 +254,7 @@ export const DropdownMenuRadioItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
   DropdownMenuRadioItemProps
 >(({ className, children, ...props }, ref) => {
+  const dir: Direction = readDirection();
   const context = useMenuContext(); // CUSTOM use context to add variants
   return (
     <DropdownMenuPrimitive.RadioItem
@@ -257,6 +265,7 @@ export const DropdownMenuRadioItem = React.forwardRef<
         menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
       )}
       {...props}
+      dir={dir}
     >
       <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
         <DropdownMenuPrimitive.ItemIndicator>

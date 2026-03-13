@@ -26,6 +26,7 @@ import { RefObject, useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
 import MenuItemIcon from './menu-icon.component';
+import { Z_INDEX_ABOVE_DOCK } from '../../z-index';
 
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
@@ -238,7 +239,7 @@ export function PlatformMenubar({
               {typeof column === 'object' && 'label' in column && column.label}
             </MenubarTrigger>
             <MenubarContent
-              className="tw-z-[250]" // Need to get over the floating web view z-index 200
+              style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
             >
               <TooltipProvider>
                 {getMenubarContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}

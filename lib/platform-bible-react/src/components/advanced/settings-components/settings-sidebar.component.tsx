@@ -123,7 +123,7 @@ export function SettingsSidebar({
                 'tw-bg-sidebar-accent tw-text-sidebar-accent-foreground':
                   selectedSidebarItem?.projectId,
               })}
-              popoverContentClassName="tw-z-[1000]"
+              popoverContentClassName="tw-z-[400]" // Must match Z_INDEX_OVERLAY (z-index.ts) — className prop prevents using the constant
               options={projectInfo.flatMap((info) => info.projectId)}
               getOptionLabel={getProjectNameFromProjectId}
               buttonPlaceholder={buttonPlaceholderText}
