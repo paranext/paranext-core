@@ -1,6 +1,6 @@
 import { logger } from '@papi/frontend';
 import { Copy, X } from 'lucide-react';
-import { DropdownMenuItem, ResultsCard } from 'platform-bible-react';
+import { Button, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
 import {
   getErrorMessage,
   LocalizedStringValue,
@@ -9,6 +9,7 @@ import {
 } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
 import { useEffect, useMemo, useState } from 'react';
+import { LocalizedBookData } from './find-types';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean };
 
@@ -22,6 +23,7 @@ export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%webView_find_dismiss%',
   '%webView_find_noVerseTextAvailable%',
   '%webView_find_loadingVerseText%',
+  '%webView_find_replace%',
 ];
 
 /** Props interface for the SearchResult component */
@@ -35,11 +37,17 @@ interface SearchResultProps {
   /** UsjReaderWriter for the book this search result occurred in */
   usjReaderWriter: UsjReaderWriter | undefined;
   /** Map of book IDs to their localized display names */
-  localizedBookData: Map<string, { localizedId: string }>;
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
   /** Callback function called when the user clicks on this search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
+  /** Callback function called when the user clicks Replace on this result */
+  onReplace: (index: number) => void;
+  /** Whether the find webview is currently in replace mode */
+  isReplaceMode: boolean;
+  /** Whether a replace operation is currently in progress */
+  isReplacing: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -77,7 +85,10 @@ export default function SearchResult({
   localizedBookData,
   onResultClick,
   onHideResult,
+  onReplace,
   localizedStrings,
+  isReplaceMode,
+  isReplacing,
 }: SearchResultProps) {
   // We should avoid calculating context unless this result is selected to improve performance
   const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(isSelected);
@@ -163,6 +174,21 @@ export default function SearchResult({
     onHideResult(globalResultsIndex);
   };
 
+  const replaceButton = (
+    <Button
+      className="tw-m-1 tw-h-6 tw-text-foreground"
+      variant="outline"
+      size="sm"
+      disabled={isReplacing}
+      onClick={(e) => {
+        e.stopPropagation();
+        onReplace(globalResultsIndex);
+      }}
+    >
+      {localizedStrings['%webView_find_replace%']}
+    </Button>
+  );
+
   const dropdownContent = (
     <>
       <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyReference}>
@@ -211,7 +237,10 @@ export default function SearchResult({
         setShouldGetVerseText(true);
         onResultClick(searchResult, globalResultsIndex);
       }}
+      selectedButtons={isReplaceMode ? replaceButton : undefined}
+      hoverButtons={isReplaceMode ? replaceButton : undefined}
       dropdownContent={dropdownContent}
+      showDropdownOnHover
       additionalSelectedContent={additionalSelectedContent}
     >
       {cardContent}

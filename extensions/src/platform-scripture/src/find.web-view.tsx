@@ -7,7 +7,16 @@ import {
   useWebViewController,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { Info, SearchX, SlidersHorizontal } from 'lucide-react';
+import {
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  Replace,
+  ReplaceAll,
+  TextSearch,
+  X,
+} from 'lucide-react';
 import {
   Button,
   Card,
@@ -15,20 +24,18 @@ import {
   Checkbox,
   Input,
   Label,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Progress,
-  RadioGroup,
-  RadioGroupItem,
   RecentSearches,
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
   ScopeSelector,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Skeleton,
   Spinner,
+  ToggleGroup,
+  ToggleGroupItem,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -37,12 +44,12 @@ import {
 } from 'platform-bible-react';
 import {
   formatReplacementString,
-  formatReplacementStringToArray,
   getErrorMessage,
   groupBy,
   isPlatformError,
   LocalizeKey,
   Mutex,
+  UnsubscriberAsync,
 } from 'platform-bible-utils';
 import {
   FindJobStatus,
@@ -52,6 +59,8 @@ import {
   WordRestriction,
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FindFilters } from './find/find-filters.component';
+import { LocalizedBookData, SearchTextType } from './find/find-types';
 import {
   HidableFindResult,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
@@ -61,23 +70,18 @@ import { SearchResultsInBook } from './find/search-results-in-book.component';
 const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_allowRegex%',
   '%webView_find_cancelSearch%',
-  '%webView_find_clearSearchResults%',
   '%webView_find_errorOccurred%',
   '%webView_find_findButton%',
   '%webView_find_findInProject%',
   '%webView_find_matchCase%',
   '%webView_find_noResultsFound%',
-  '%webView_find_scopeSummary_format%',
   '%webView_find_showRecentSearches%',
   '%webView_find_recent%',
-  '%webView_find_scopeUndetermined%',
   '%webView_find_searchPlaceholder%',
   '%webView_find_result%',
   '%webView_find_showingResults%',
   '%webView_find_showingResultsOfMore%',
   '%webView_find_toggleFilters%',
-  '%webView_find_showRecentSearches%',
-  '%webView_find_recent%',
   '%webView_find_matchContentIn%',
   '%webView_find_allText%',
   '%webView_find_allText_tooltip%',
@@ -87,17 +91,48 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_restrictions_wholeWord%',
   '%webView_find_restrictions_startOfWord%',
   '%webView_find_restrictions_endOfWord%',
+  '%webView_find_findTab%',
+  '%webView_find_replaceTab%',
+  '%webView_find_replace%',
+  '%webView_find_replaceAll%',
+  '%webView_find_preserveCase%',
+  '%webView_find_preserveCase_tooltip%',
+  '%webView_find_replaceTerm_placeholder%',
+  '%webView_find_capitalization%',
+  '%webView_find_pattern%',
+  '%webView_find_showing%',
+  '%webView_find_resultNavigation%',
+  '%webView_find_previousResult%',
+  '%webView_find_nextResult%',
 ];
-
-/** The type of text content to search in */
-type SearchTextType = 'all' | 'verseOnly';
 
 const defaultBooksPresent: string = '';
 const defaultProjectName = '';
 const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
-/** Set to true to re-enable the Allow Regex option for advanced users */
-const SHOW_ALLOW_REGEX_OPTION = false;
+const SEARCH_DEBOUNCE_DELAY_MS = 500;
+
+/**
+ * Applies preserve-case transformation to the replacement text based on the casing of the matched
+ * text:
+ *
+ * - ALL CAPS match → ALL CAPS replacement
+ * - Title Case match (first letter capital) → Title Case replacement
+ * - Otherwise → replacement as-is
+ */
+function applyPreserveCase(matchedText: string, replacementText: string): string {
+  if (!replacementText || !matchedText) return replacementText;
+  if (matchedText === matchedText.toUpperCase() && matchedText !== matchedText.toLowerCase()) {
+    return replacementText.toUpperCase();
+  }
+  if (
+    matchedText[0] === matchedText[0].toUpperCase() &&
+    matchedText[0] !== matchedText[0].toLowerCase()
+  ) {
+    return replacementText[0].toUpperCase() + replacementText.slice(1);
+  }
+  return replacementText;
+}
 
 global.webViewComponent = function FindWebView({
   projectId,
@@ -105,10 +140,12 @@ global.webViewComponent = function FindWebView({
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [searchTerm, setSearchTerm] = useWebViewState<string>('findSearchTerm', '');
-  const [submittedSearchTerm, setSubmittedSearchTerm] = useState<string | undefined>(undefined);
   const [scope, setScope] = useWebViewState<Scope>('findScope', 'book');
-  const [submittedScope, setSubmittedScope] = useState<Scope | undefined>();
-  const [submittedVerseRef, setSubmittedVerseRef] = useState<SerializedVerseRef | undefined>(
+  // These three state variables exist solely for the change-detection feature (booksToMonitor /
+  // external change detection effect). They are not used for scope display text or
+  // query-changed detection.
+  const [monitoredScope, setMonitoredScope] = useState<Scope | undefined>();
+  const [monitoredVerseRef, setMonitoredVerseRef] = useState<SerializedVerseRef | undefined>(
     undefined,
   );
 
@@ -116,21 +153,34 @@ global.webViewComponent = function FindWebView({
 
   const addRecentSearchItem = useRecentSearches(recentSearches, setRecentSearches);
 
-  const [areFiltersShown, setAreFiltersShown] = useState(false);
   const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
     'findSelectedBookIds',
     [],
   );
-  const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
-  const [shouldMatchCase, setShouldMatchCase] = useState(false);
-  const [submittedShouldMatchCase, setSubmittedShouldMatchCase] = useState(false);
-  const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
-  const [submittedSearchTextType, setSubmittedSearchTextType] = useState<SearchTextType>('all');
-  const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
-  const [submittedWordRestriction, setSubmittedWordRestriction] = useState<WordRestriction>('none');
-  // isRegexAllowed is hidden from the UI via SHOW_ALLOW_REGEX_OPTION but kept for future use
-  const [isRegexAllowed, setIsRegexAllowed] = useState(false);
-  const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
+  const [monitoredBookIds, setMonitoredBookIds] = useState<string[]>([]);
+  const [shouldMatchCase, setShouldMatchCase] = useWebViewState<boolean>(
+    'findShouldMatchCase',
+    false,
+  );
+  const [searchTextType, setSearchTextType] = useWebViewState<SearchTextType>(
+    'findSearchTextType',
+    'all',
+  );
+  const [wordRestriction, setWordRestriction] = useWebViewState<WordRestriction>(
+    'findWordRestriction',
+    'none',
+  );
+  const [isRegexAllowed, setIsRegexAllowed] = useWebViewState<boolean>('findIsRegexAllowed', false);
+
+  const [activeMode, setActiveMode] = useWebViewState<'find' | 'replace'>('findActiveMode', 'find');
+  const [replaceTerm, setReplaceTerm] = useWebViewState<string>('findReplaceTerm', '');
+  const [preserveCase, setPreserveCase] = useWebViewState<boolean>('findPreserveCase', false);
+  /**
+   * True while a replace operation is executing (including the mandatory re-find afterward). Keeps
+   * replace buttons disabled during the gap between replace() completing and searchStatus becoming
+   * 'running', preventing the user from replacing with already-stale positions.
+   */
+  const [isReplacing, setIsReplacing] = useState(false);
 
   const [activeJobId, setActiveJobId] = useState<string>();
   const [searchProgress, setSearchProgress] = useState<number>(0);
@@ -165,6 +215,14 @@ global.webViewComponent = function FindWebView({
   );
 
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
+  const replacePdp = useProjectDataProvider('platformScripture.replaceWithUsfm', projectId);
+
+  // Project data provider for USFM Book data — used in Replace mode to detect external edits.
+  // Only activated in Replace mode to avoid overhead.
+  const usfmBookPdp = useProjectDataProvider(
+    'platformScripture.USFM_Book',
+    activeMode === 'replace' ? projectId : undefined,
+  );
 
   const [localizedStrings, isLocalizedStringsLoading] = useLocalizedStrings(
     useMemo(() => LOCALIZED_STRINGS, []),
@@ -239,7 +297,7 @@ global.webViewComponent = function FindWebView({
   const [localizedBookIdsAndShortNames] = useLocalizedStrings(availableBooksLocalizationKeys);
 
   const localizedBookData = useMemo(() => {
-    const data = new Map<string, { localizedId: string; localizedName: string }>();
+    const data = new Map<string, LocalizedBookData>();
     availableBooksIds.forEach((book) => {
       data.set(book, {
         localizedId: localizedBookIdsAndShortNames[`%LocalizedId.${book}%` as const],
@@ -366,102 +424,93 @@ global.webViewComponent = function FindWebView({
     }
   }, [scope, selectedBookIds, verseRefSetting]);
 
+  /**
+   * A stable string key capturing only the parts of scope/verseRef that affect the search query.
+   * Used to trigger auto-search when the user changes scope or navigates to a different
+   * book/chapter, without spuriously re-searching when clicking a result (which calls
+   * setVerseRefSetting but stays within the already-searched book/chapter).
+   */
+  const relevantScopeKey = useMemo(() => {
+    if (scope === 'selectedBooks') return `selectedBooks:${selectedBookIds.join(',')}`;
+    if (scope === 'book') return `book:${verseRefSetting.book}`;
+    return `chapter:${verseRefSetting.book}:${verseRefSetting.chapterNum}`;
+  }, [scope, selectedBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
+
   const isStartingSearchRef = useRef(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Skip auto-search on the initial render so that restoring a non-empty searchTerm from
+  // useWebViewState doesn't trigger an unwanted search before the user has interacted.
+  const isInitialAutoSearchRef = useRef(true);
 
-  const handleStartSearch = useCallback(async () => {
-    if (!isSearchQueryValid || !findPdp || isStartingSearchRef.current) return;
+  const handleStartSearch = useCallback(
+    async (isExplicitSearch = false) => {
+      clearTimeout(searchDebounceRef.current);
+      if (!isSearchQueryValid || !findPdp || isStartingSearchRef.current) return;
 
-    // Set the flag to prevent concurrent calls
-    // No mutex is needed here because we're fine throwing away concurrent calls instead of queuing
-    // them to execute serially. Rapid button clicking or pressing Enter isn't a use case that needs
-    // to be supported since no one could see the search results of all but the final search anyway.
-    isStartingSearchRef.current = true;
+      // Set the flag to prevent concurrent calls
+      // No mutex is needed here because we're fine throwing away concurrent calls instead of queuing
+      // them to execute serially. Rapid button clicking or pressing Enter isn't a use case that needs
+      // to be supported since no one could see the search results of all but the final search anyway.
+      isStartingSearchRef.current = true;
 
-    try {
-      addRecentSearchItem(searchTerm);
+      try {
+        if (isExplicitSearch) addRecentSearchItem(searchTerm);
 
-      await abandonFindJob();
-      if (!isMountedRef.current) return;
+        await abandonFindJob();
+        if (!isMountedRef.current) return;
 
-      await beginFindJob({
-        scope: findScope,
-        searchString: searchTerm,
-        caseInsensitive: !shouldMatchCase,
-        useRegex: isRegexAllowed,
-        verseTextOnly: searchTextType === 'verseOnly',
-        wordRestriction,
-      });
-      if (!isMountedRef.current) return;
+        await beginFindJob({
+          scope: findScope,
+          searchString: searchTerm,
+          caseInsensitive: !shouldMatchCase,
+          useRegex: isRegexAllowed,
+          verseTextOnly: searchTextType === 'verseOnly',
+          wordRestriction,
+        });
+        if (!isMountedRef.current) return;
 
-      setSearchStatus('running');
-      setSearchProgress(0);
+        setSearchStatus('running');
+        setSearchProgress(0);
 
-      setSubmittedSearchTerm(searchTerm);
-      setSubmittedScope(scope);
-      setSubmittedVerseRef(verseRefSetting);
-      setSubmittedBookIds(selectedBookIds);
-      setSubmittedShouldMatchCase(shouldMatchCase);
-      setSubmittedSearchTextType(searchTextType);
-      setSubmittedWordRestriction(wordRestriction);
-      setSubmittedIsRegexAllowed(isRegexAllowed);
-      setFocusedResultIndex(undefined);
+        setMonitoredScope(scope);
+        setMonitoredVerseRef(verseRefSetting);
+        setMonitoredBookIds(selectedBookIds);
 
-      setResults([]);
-      loadedResultsLengthRef.current = 0;
-      setNumberOfHiddenResults(0);
-    } catch (error) {
-      logger.error('Error starting search:', error);
+        setFocusedResultIndex(undefined);
 
-      setSearchStatus('errored');
-      setSearchProgress(0);
+        setResults([]);
+        loadedResultsLengthRef.current = 0;
+        setNumberOfHiddenResults(0);
+      } catch (error) {
+        logger.error('Error starting search:', error);
 
-      setSubmittedSearchTerm('');
-      setSubmittedScope(undefined);
-      setSubmittedVerseRef(undefined);
-    } finally {
-      // Clear the flag regardless of success or failure
-      isStartingSearchRef.current = false;
-    }
-  }, [
-    abandonFindJob,
-    addRecentSearchItem,
-    beginFindJob,
-    findPdp,
-    findScope,
-    isRegexAllowed,
-    isSearchQueryValid,
-    scope,
-    searchTerm,
-    searchTextType,
-    selectedBookIds,
-    shouldMatchCase,
-    verseRefSetting,
-    wordRestriction,
-  ]);
+        setSearchStatus('errored');
+        setSearchProgress(0);
 
-  const clearSearchResults = useCallback(async () => {
-    await abandonFindJob();
-    if (!isMountedRef.current) return;
-
-    setResults([]);
-    loadedResultsLengthRef.current = 0;
-    setNumberOfHiddenResults(0);
-
-    setSearchStatus(undefined);
-    setSearchProgress(0);
-    setSearchError(undefined);
-
-    setSubmittedSearchTerm(undefined);
-    setSubmittedScope(undefined);
-    setSubmittedVerseRef(undefined);
-    setSubmittedBookIds([]);
-    setSubmittedShouldMatchCase(false);
-    setSubmittedSearchTextType('all');
-    setSubmittedWordRestriction('none');
-    setSubmittedIsRegexAllowed(false);
-
-    setFocusedResultIndex(undefined);
-  }, [abandonFindJob]);
+        setMonitoredScope(undefined);
+        setMonitoredVerseRef(undefined);
+      } finally {
+        // Clear the flag regardless of success or failure
+        isStartingSearchRef.current = false;
+      }
+    },
+    [
+      abandonFindJob,
+      addRecentSearchItem,
+      beginFindJob,
+      findPdp,
+      findScope,
+      isRegexAllowed,
+      isSearchQueryValid,
+      scope,
+      searchTerm,
+      searchTextType,
+      selectedBookIds,
+      shouldMatchCase,
+      verseRefSetting,
+      wordRestriction,
+    ],
+  );
 
   const handleStopSearch = useCallback(
     async (shouldClearResults?: boolean) => {
@@ -471,45 +520,12 @@ global.webViewComponent = function FindWebView({
         setResults([]);
         loadedResultsLengthRef.current = 0;
         setNumberOfHiddenResults(0);
+        setSearchStatus(undefined);
         await abandonFindJob();
       } else await stopFindJob();
     },
     [abandonFindJob, stopFindJob],
   );
-
-  const searchQueryChanged = useMemo(() => {
-    return (
-      searchTerm.trim() !== submittedSearchTerm ||
-      scope !== submittedScope ||
-      (scope === 'chapter' &&
-        (verseRefSetting.book !== submittedVerseRef?.book ||
-          verseRefSetting.chapterNum !== submittedVerseRef?.chapterNum)) ||
-      (scope === 'book' && verseRefSetting.book !== submittedVerseRef?.book) ||
-      (scope === 'selectedBooks' &&
-        [...selectedBookIds].sort().join(',') !== [...submittedBookIds].sort().join(',')) ||
-      shouldMatchCase !== submittedShouldMatchCase ||
-      searchTextType !== submittedSearchTextType ||
-      wordRestriction !== submittedWordRestriction ||
-      isRegexAllowed !== submittedIsRegexAllowed
-    );
-  }, [
-    searchTerm,
-    submittedSearchTerm,
-    verseRefSetting,
-    submittedVerseRef,
-    scope,
-    submittedScope,
-    selectedBookIds,
-    submittedBookIds,
-    shouldMatchCase,
-    submittedShouldMatchCase,
-    searchTextType,
-    submittedSearchTextType,
-    wordRestriction,
-    submittedWordRestriction,
-    isRegexAllowed,
-    submittedIsRegexAllowed,
-  ]);
 
   const loadMoreResults = useCallback(async () => {
     try {
@@ -592,70 +608,300 @@ global.webViewComponent = function FindWebView({
     };
   }, [abandonFindJob]);
 
-  const scopeSummaryText = useMemo(() => {
-    if (!submittedScope || !submittedVerseRef)
-      return localizedStrings['%webView_find_scopeUndetermined%'];
+  // #region External scripture change detection for Replace mode
 
-    const localizedBookName =
-      localizedBookData.get(submittedVerseRef.book)?.localizedId ?? submittedVerseRef.book;
+  /**
+   * Combined version counter string for all monitored books (bookId:version pairs joined by '|').
+   * Updated by subscriptions below. Used to detect external edits while in Replace mode. Uses
+   * version counters instead of raw USFM to avoid storing megabytes of scripture text in state.
+   */
+  const [scriptureDataForChangeDetection, setScriptureDataForChangeDetection] = useState<
+    string | undefined
+  >(undefined);
 
-    switch (submittedScope) {
-      case 'selectedText':
-        return scopeSelectorLocalizedStrings['%webView_scope_selector_selected_text%'];
-      case 'verse':
-        return `${localizedBookName} ${submittedVerseRef.chapterNum}:${submittedVerseRef.verseNum}`;
-      case 'chapter':
-        return `${localizedBookName} ${submittedVerseRef.chapterNum}`;
-      case 'book':
-        return localizedBookName;
-      case 'selectedBooks':
-        return submittedBookIds
-          .map((bookId) => localizedBookData.get(bookId)?.localizedId)
-          .join(' ');
-      default:
-        return localizedStrings['%webView_find_scopeUndetermined%'];
+  // Determine which books to monitor: all selected books for 'selectedBooks' scope, or the single
+  // submitted book for 'book'/'chapter' scope. Only populated after a search has been run.
+  const booksToMonitor = useMemo((): string[] => {
+    if (!monitoredScope) return [];
+    if (monitoredScope === 'selectedBooks') return monitoredBookIds;
+    const book = monitoredVerseRef?.book;
+    return book ? [book] : [];
+  }, [monitoredScope, monitoredBookIds, monitoredVerseRef?.book]);
+
+  // Subscribe to USFM data for every monitored book in Replace mode. When any book's data
+  // changes, increment that book's version counter and update `scriptureDataForChangeDetection`
+  // so the detection effect below can react. Version counters avoid storing full USFM in state.
+  useEffect(() => {
+    if (activeMode !== 'replace' || !usfmBookPdp || booksToMonitor.length === 0) {
+      setScriptureDataForChangeDetection(undefined);
+      return undefined;
     }
+
+    const bookVersionMap = new Map<string, number>();
+    const unsubscribers: UnsubscriberAsync[] = [];
+    let isEffectActive = true;
+
+    const updateCombined = () => {
+      if (!isEffectActive) return;
+      const combined = booksToMonitor
+        .map((bookId) => `${bookId}:${bookVersionMap.get(bookId) ?? 0}`)
+        .join('|');
+      setScriptureDataForChangeDetection(combined);
+    };
+
+    (async () => {
+      await booksToMonitor.reduce(async (prevPromise, bookId) => {
+        await prevPromise;
+        if (!isEffectActive) return;
+        const verseRef = { book: bookId, chapterNum: 1, verseNum: 0 };
+        // eslint-disable-next-line no-await-in-loop
+        const unsubscriber = await usfmBookPdp.subscribeBookUSFM(
+          verseRef,
+          (usfm) => {
+            if (!isEffectActive) return;
+            if (!isPlatformError(usfm))
+              bookVersionMap.set(bookId, (bookVersionMap.get(bookId) ?? 0) + 1);
+            updateCombined();
+          },
+          { retrieveDataImmediately: true },
+        );
+        if (!isEffectActive) {
+          unsubscriber().catch((err) =>
+            logger.warn(`Error unsubscribing book USFM: ${getErrorMessage(err)}`),
+          );
+          return;
+        }
+        unsubscribers.push(unsubscriber);
+      }, Promise.resolve());
+    })().catch((err) =>
+      logger.error(`Error subscribing to book USFM for change detection: ${getErrorMessage(err)}`),
+    );
+
+    return () => {
+      isEffectActive = false;
+      unsubscribers.forEach((unsub) =>
+        unsub().catch((err) =>
+          logger.warn(`Error unsubscribing book USFM: ${getErrorMessage(err)}`),
+        ),
+      );
+    };
+  }, [activeMode, usfmBookPdp, booksToMonitor]);
+
+  /**
+   * Baseline scripture data recorded at the time of the last find. `undefined` means no baseline
+   * has been set yet for the current Replace mode session. Compared against
+   * `scriptureDataForChangeDetection` to detect external edits.
+   */
+  const scriptureDataBaselineRef = useRef<string | undefined>(undefined);
+
+  // Track a baseline snapshot of the scripture data so we can detect external edits during Replace mode.
+  // Reset to undefined when leaving Replace mode, captured on first load or whenever a new search runs.
+  useEffect(() => {
+    if (activeMode !== 'replace') {
+      scriptureDataBaselineRef.current = undefined;
+      return;
+    }
+    if (
+      scriptureDataForChangeDetection !== undefined &&
+      (scriptureDataBaselineRef.current === undefined || searchStatus === 'running')
+    ) {
+      scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
+    }
+  }, [activeMode, searchStatus, scriptureDataForChangeDetection]);
+
+  // Keep handleStartSearch in a ref so the detection effect never re-runs just because the
+  // memoized callback identity changed (it has many dependencies).
+  const handleStartSearchRef = useRef(handleStartSearch);
+  handleStartSearchRef.current = handleStartSearch;
+
+  // Auto-search with debounce when the search term or any filter changes
+  useEffect(() => {
+    if (isInitialAutoSearchRef.current) {
+      isInitialAutoSearchRef.current = false;
+      return undefined;
+    }
+    searchDebounceRef.current = setTimeout(() => {
+      handleStartSearchRef.current();
+    }, SEARCH_DEBOUNCE_DELAY_MS);
+    return () => clearTimeout(searchDebounceRef.current);
   }, [
-    localizedBookData,
-    localizedStrings,
-    scopeSelectorLocalizedStrings,
-    submittedBookIds,
-    submittedScope,
-    submittedVerseRef,
+    searchTerm,
+    shouldMatchCase,
+    wordRestriction,
+    isRegexAllowed,
+    searchTextType,
+    relevantScopeKey,
   ]);
+
+  // When scripture changes externally in Replace mode, auto-re-run find so positions stay fresh.
+  useEffect(() => {
+    if (activeMode !== 'replace') return;
+    if (scriptureDataBaselineRef.current === undefined) return; // No baseline yet
+    if (isReplacing || searchStatus === 'running' || searchStatus === undefined) return;
+    if (!monitoredScope) return; // No previous search to re-run
+    if (scriptureDataForChangeDetection === undefined) return;
+    if (scriptureDataForChangeDetection === scriptureDataBaselineRef.current) return;
+
+    // External change detected — update baseline and re-run find to refresh positions
+    scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
+    handleStartSearchRef.current();
+  }, [scriptureDataForChangeDetection, activeMode, isReplacing, searchStatus, monitoredScope]);
+
+  // #endregion
+
+  // Auto-select first result when switching to Replace mode
+  useEffect(() => {
+    if (activeMode === 'replace' && results.length > 0 && focusedResultIndex === undefined) {
+      const firstVisibleIndex = results.findIndex((r) => !r.isHidden);
+      if (firstVisibleIndex >= 0) setFocusedResultIndex(firstVisibleIndex);
+    }
+  }, [activeMode, focusedResultIndex, results]);
 
   const handleFocusedResultChange = useCallback(
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
-        papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        // In Find mode, focus the editor so the user can read in context.
+        // In Replace mode, keep focus in the Find webview so replace term stays editable.
+        if (activeMode === 'find') {
+          papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        }
         editorWebViewController.selectRange({
           start: searchResult.start,
           end: searchResult.end,
         });
       }
     },
-    [editorWebViewController, editorWebViewId, setVerseRefSetting],
+    [activeMode, editorWebViewController, editorWebViewId, setVerseRefSetting],
   );
 
-  const handleHideResult = useCallback(
-    (index: number) => {
-      setResults((prevResults) =>
-        prevResults.map((prevResult, i) =>
-          i === index ? { ...prevResult, isHidden: true } : prevResult,
-        ),
-      );
-      setNumberOfHiddenResults((prevCount) => prevCount + 1);
-      setFocusedResultIndex(undefined);
+  const handleHideResult = useCallback((index: number) => {
+    setResults((prevResults) =>
+      prevResults.map((prevResult, i) =>
+        i === index ? { ...prevResult, isHidden: true } : prevResult,
+      ),
+    );
+    setNumberOfHiddenResults((prevCount) => prevCount + 1);
+    setFocusedResultIndex(undefined);
+  }, []);
+
+  const handleReplace = useCallback(
+    async (resultIndex?: number) => {
+      const indexToReplace = resultIndex ?? focusedResultIndex;
+      if (indexToReplace === undefined || !replacePdp) return;
+
+      const result = results[indexToReplace];
+      if (!result || result.isHidden) return;
+
+      const usfmToInsert = preserveCase
+        ? applyPreserveCase(result.text ?? '', replaceTerm)
+        : replaceTerm;
+
+      setIsReplacing(true);
+      try {
+        await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
+        // Re-run find immediately after replace so positions are fresh before the user can
+        // click replace again. isReplacing stays true until this completes, closing the gap
+        // between replace() returning and searchStatus becoming 'running'.
+        await handleStartSearchRef.current();
+      } catch (error) {
+        logger.error(`Error replacing result: ${getErrorMessage(error)}`);
+      } finally {
+        setIsReplacing(false);
+      }
     },
-    [setFocusedResultIndex, setNumberOfHiddenResults, setResults],
+    [focusedResultIndex, preserveCase, replacePdp, replaceTerm, results],
   );
 
-  const canClearResults = useMemo(
-    () => !searchQueryChanged && searchStatus && searchStatus !== 'running',
-    [searchQueryChanged, searchStatus],
+  const handleReplaceAll = useCallback(async () => {
+    if (!replacePdp) return;
+
+    setIsReplacing(true);
+    try {
+      // Load all remaining results before replacing so we don't miss any.
+      // Use a local `latestTotal` updated from each server response so that a stale
+      // `totalNumberOfResults` snapshot (from when the button was clicked) cannot cause
+      // the loop to exit before all results have arrived.
+      let allResults = [...results];
+      let latestTotal = totalNumberOfResults;
+      while (allResults.length < latestTotal) {
+        // eslint-disable-next-line no-await-in-loop
+        const update = await retrieveFindJobUpdate(RESULTS_BATCH_SIZE);
+        if (!update || !isMountedRef.current) break;
+        latestTotal = update.totalResultsCount;
+        const newBatch = update.nextResults || [];
+        if (newBatch.length === 0) break;
+        allResults = [...allResults, ...newBatch];
+        loadedResultsLengthRef.current += newBatch.length;
+      }
+      // Sync any newly loaded results into state
+      if (allResults.length > results.length) setResults(allResults);
+
+      const visibleResultsList = allResults.filter((r) => !r.isHidden);
+      if (visibleResultsList.length === 0) return;
+
+      const rangesToReplace = visibleResultsList.map((r) => ({ start: r.start, end: r.end }));
+      const usfmToInsert = preserveCase
+        ? visibleResultsList.map((r) => applyPreserveCase(r.text ?? '', replaceTerm))
+        : replaceTerm;
+
+      await replacePdp.replace(rangesToReplace, usfmToInsert);
+      await handleStartSearchRef.current();
+    } catch (error) {
+      logger.error(`Error replacing all results: ${getErrorMessage(error)}`);
+    } finally {
+      setIsReplacing(false);
+    }
+  }, [preserveCase, replacePdp, replaceTerm, results, retrieveFindJobUpdate, totalNumberOfResults]);
+
+  const visibleResults = useMemo(
+    () =>
+      results
+        .map((result, index) => ({ result, originalIndex: index }))
+        .filter(({ result }) => !result.isHidden),
+    [results],
   );
+
+  const focusedVisibleIndex = useMemo(
+    () =>
+      focusedResultIndex !== undefined
+        ? visibleResults.findIndex((vr) => vr.originalIndex === focusedResultIndex)
+        : -1,
+    [visibleResults, focusedResultIndex],
+  );
+
+  const handlePreviousResult = useCallback(() => {
+    if (visibleResults.length === 0) return;
+    if (focusedResultIndex === undefined) {
+      const last = visibleResults[visibleResults.length - 1];
+      handleFocusedResultChange(last.result, last.originalIndex);
+      return;
+    }
+    if (focusedVisibleIndex > 0) {
+      const prev = visibleResults[focusedVisibleIndex - 1];
+      handleFocusedResultChange(prev.result, prev.originalIndex);
+    }
+  }, [focusedResultIndex, focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
+
+  const handleNextResult = useCallback(() => {
+    if (visibleResults.length === 0) return;
+    if (focusedResultIndex === undefined) {
+      handleFocusedResultChange(visibleResults[0].result, visibleResults[0].originalIndex);
+      return;
+    }
+    if (focusedVisibleIndex < visibleResults.length - 1) {
+      const next = visibleResults[focusedVisibleIndex + 1];
+      handleFocusedResultChange(next.result, next.originalIndex);
+    }
+  }, [focusedResultIndex, focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
+
+  const findButtonText = isLocalizedStringsLoading
+    ? ''
+    : localizedStrings['%webView_find_findButton%'];
+
+  const areFiltersActive =
+    shouldMatchCase || wordRestriction !== 'none' || searchTextType !== 'all' || isRegexAllowed;
 
   const resultsMessage = useMemo(() => {
     if (!results) return '';
@@ -673,90 +919,219 @@ global.webViewComponent = function FindWebView({
     });
   }, [results, numberOfHiddenResults, totalNumberOfResults, searchStatus, localizedStrings]);
 
-  const findButtonText = isLocalizedStringsLoading
-    ? ''
-    : localizedStrings['%webView_find_findButton%'];
+  /** Text shown in the scope popover trigger, e.g. "Genesis 1" or "Genesis, Exodus, John" */
+  const scopeDisplayText = useMemo(() => {
+    switch (scope) {
+      case 'chapter': {
+        const bookName =
+          localizedBookData.get(verseRefSetting.book)?.localizedId ?? verseRefSetting.book;
+        return `${bookName} ${verseRefSetting.chapterNum}`;
+      }
+      case 'book':
+        return localizedBookData.get(verseRefSetting.book)?.localizedId ?? verseRefSetting.book;
+      case 'selectedBooks':
+        if (selectedBookIds.length === 0) return '…';
+        return selectedBookIds.map((id) => localizedBookData.get(id)?.localizedId ?? id).join(', ');
+      default:
+        return '';
+    }
+  }, [scope, selectedBookIds, verseRefSetting, localizedBookData]);
 
   return (
     <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-gap-4 tw-p-4 tw-min-w-[10rem] tw-max-h-screen">
       {/* Header with searchbar and filters */}
-      <Card>
-        <CardContent className="tw-space-y-4 tw-p-6">
-          <div className="tw-flex tw-gap-2 tw-flex-wrap">
-            <div className="tw-relative tw-flex-1">
-              <Input
-                id="search-term"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleStartSearch();
-                  }
+      <div className="tw-space-y-3">
+        {/* Find/Replace mode toggle */}
+        <ToggleGroup
+          type="single"
+          value={activeMode}
+          onValueChange={(value) => {
+            if (value === 'find' || value === 'replace') setActiveMode(value);
+          }}
+          className="tw-w-fit tw-rounded-lg tw-bg-muted tw-p-1"
+        >
+          <ToggleGroupItem
+            value="find"
+            className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
+          >
+            {localizedStrings['%webView_find_findTab%']}
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="replace"
+            className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
+          >
+            {localizedStrings['%webView_find_replaceTab%']}
+          </ToggleGroupItem>
+        </ToggleGroup>
+
+        {/* Find input row */}
+        <div className="tw-flex tw-gap-2 tw-flex-wrap">
+          <div className="tw-relative tw-flex-1">
+            <TextSearch className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
+            <Input
+              id="search-term"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleStartSearch(true);
+                }
+              }}
+              placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
+              className={`tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 scripture-font ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  handleStopSearch(true);
                 }}
-                placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-                className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'} scripture-font`}
-              />
-              <RecentSearches
-                classNameForItems="scripture-font"
-                recentSearches={recentSearches}
-                onSearchItemSelect={setSearchTerm}
-                ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
-                groupHeading={localizedStrings['%webView_find_recent%']}
+                className="tw-absolute tw-end-2 tw-top-1/2 -tw-translate-y-1/2 tw-text-muted-foreground hover:tw-text-foreground tw-bg-transparent tw-border-0 tw-p-0 tw-cursor-pointer"
+              >
+                <X className="tw-h-4 tw-w-4" />
+              </button>
+            )}
+          </div>
+          <RecentSearches
+            classNameForItems="scripture-font"
+            recentSearches={recentSearches}
+            onSearchItemSelect={setSearchTerm}
+            ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
+            groupHeading={localizedStrings['%webView_find_recent%']}
+            buttonClassName="tw-h-10 tw-w-10"
+            buttonVariant="outline"
+          />
+
+          <FindFilters
+            areFiltersActive={areFiltersActive}
+            searchTextType={searchTextType}
+            setSearchTextType={setSearchTextType}
+            wordRestriction={wordRestriction}
+            setWordRestriction={setWordRestriction}
+            shouldMatchCase={shouldMatchCase}
+            setShouldMatchCase={setShouldMatchCase}
+            isRegexAllowed={isRegexAllowed}
+            setIsRegexAllowed={setIsRegexAllowed}
+            strings={{
+              toggleFilters: localizedStrings['%webView_find_toggleFilters%'],
+              matchContentIn: localizedStrings['%webView_find_matchContentIn%'],
+              allText: localizedStrings['%webView_find_allText%'],
+              allTextTooltip: localizedStrings['%webView_find_allText_tooltip%'],
+              verseTextOnly: localizedStrings['%webView_find_verseTextOnly%'],
+              restrictions: localizedStrings['%webView_find_restrictions%'],
+              restrictionNone: localizedStrings['%webView_find_restrictions_none%'],
+              restrictionWholeWord: localizedStrings['%webView_find_restrictions_wholeWord%'],
+              restrictionStartOfWord: localizedStrings['%webView_find_restrictions_startOfWord%'],
+              restrictionEndOfWord: localizedStrings['%webView_find_restrictions_endOfWord%'],
+              capitalization: localizedStrings['%webView_find_capitalization%'],
+              matchCase: localizedStrings['%webView_find_matchCase%'],
+              pattern: localizedStrings['%webView_find_pattern%'],
+              allowRegex: localizedStrings['%webView_find_allowRegex%'],
+            }}
+          />
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => handleStartSearch(true)}
+                  disabled={
+                    !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
+                  }
+                >
+                  {searchStatus === 'running' ? <Spinner /> : findButtonText}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="tw-font-light">
+                  {formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
+                    projectName,
+                  })}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+
+        {/* Replace input row — shown in Replace mode */}
+        {activeMode === 'replace' && (
+          <>
+            <div className="tw-relative tw-flex-1">
+              <ArrowRight className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
+              <Input
+                id="replace-term"
+                value={replaceTerm}
+                onChange={(e) => setReplaceTerm(e.target.value)}
+                placeholder={localizedStrings['%webView_find_replaceTerm_placeholder%']}
+                className="tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4 scripture-font"
               />
             </div>
+            <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-flex-wrap">
+              <div className="tw-flex tw-items-center tw-gap-2">
+                <Checkbox
+                  id="preserve-case"
+                  checked={preserveCase}
+                  onCheckedChange={(checked) => setPreserveCase(checked === true)}
+                />
+                <Label htmlFor="preserve-case" className="tw-cursor-pointer">
+                  {localizedStrings['%webView_find_preserveCase%']}
+                </Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="tw-h-3.5 tw-w-3.5 tw-text-muted-foreground tw-cursor-default" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="tw-max-w-xs tw-whitespace-pre-line">
+                        {localizedStrings['%webView_find_preserveCase_tooltip%']}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="tw-flex tw-gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleReplaceAll}
+                  disabled={
+                    visibleResults.length === 0 || searchStatus === 'running' || isReplacing
+                  }
+                >
+                  <ReplaceAll className="tw-h-4 tw-w-4" />
+                  {localizedStrings['%webView_find_replaceAll%']}
+                </Button>
+                <Button
+                  onClick={() => handleReplace()}
+                  disabled={
+                    focusedResultIndex === undefined || searchStatus === 'running' || isReplacing
+                  }
+                >
+                  <Replace className="tw-h-4 tw-w-4" />
+                  {localizedStrings['%webView_find_replace%']}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
 
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setAreFiltersShown(!areFiltersShown)}
-                    aria-label={localizedStrings['%webView_find_toggleFilters%']}
-                    className={areFiltersShown ? 'tw-bg-muted' : ''}
-                  >
-                    <SlidersHorizontal className="tw-h-4 tw-w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{localizedStrings['%webView_find_toggleFilters%']}</TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  {canClearResults ? (
-                    <Button onClick={() => clearSearchResults()}>
-                      <SearchX />
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={handleStartSearch}
-                      disabled={
-                        !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
-                      }
-                    >
-                      {searchStatus === 'running' ? <Spinner /> : findButtonText}
-                    </Button>
-                  )}
-                </TooltipTrigger>
-                <TooltipContent>
-                  {canClearResults ? (
-                    <p className="tw-font-light">
-                      {localizedStrings['%webView_find_clearSearchResults%']}
-                    </p>
-                  ) : (
-                    <p className="tw-font-light">
-                      {formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
-                        projectName,
-                      })}
-                    </p>
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-
-          {areFiltersShown && (
-            <div className="tw-space-y-4 tw-border-t tw-pt-4">
+        {/* Scope selector row */}
+        <div className="tw-flex tw-items-center tw-justify-between">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="tw-h-auto tw-gap-1 tw-px-2 tw-py-1 tw-font-normal"
+              >
+                <span className="tw-text-sm tw-text-muted-foreground">
+                  {localizedStrings['%webView_find_showing%']}
+                </span>
+                <span className="tw-text-sm tw-font-medium">{scopeDisplayText}</span>
+                <ChevronDown className="tw-h-3 tw-w-3 tw-text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="tw-w-auto tw-p-3">
               <ScopeSelector
                 scope={scope}
                 availableScopes={['chapter', 'book', 'selectedBooks']}
@@ -767,114 +1142,39 @@ global.webViewComponent = function FindWebView({
                 localizedStrings={scopeSelectorLocalizedStrings}
                 localizedBookNames={localizedBookData}
               />
-
-              <div className="tw-space-y-2">
-                <Label>{localizedStrings['%webView_find_matchContentIn%']}</Label>
-                <RadioGroup
-                  value={searchTextType}
-                  onValueChange={(value: SearchTextType) => setSearchTextType(value)}
-                >
-                  <div className="tw-flex tw-items-center tw-space-x-2">
-                    <RadioGroupItem value="all" id="text-type-all" />
-                    <Label htmlFor="text-type-all" className="tw-cursor-pointer tw-font-normal">
-                      {localizedStrings['%webView_find_allText%']}
-                    </Label>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="tw-h-4 tw-w-4 tw-text-muted-foreground" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="tw-max-w-xs">
-                            {localizedStrings['%webView_find_allText_tooltip%']}
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <div className="tw-flex tw-items-center tw-space-x-2">
-                    <RadioGroupItem value="verseOnly" id="text-type-verse-only" />
-                    <Label
-                      htmlFor="text-type-verse-only"
-                      className="tw-cursor-pointer tw-font-normal"
-                    >
-                      {localizedStrings['%webView_find_verseTextOnly%']}
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="tw-space-y-2">
-                <Label>{localizedStrings['%webView_find_restrictions%']}</Label>
-                <Select
-                  value={wordRestriction}
-                  onValueChange={(value: WordRestriction) => setWordRestriction(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">
-                      {localizedStrings['%webView_find_restrictions_none%']}
-                    </SelectItem>
-                    <SelectItem value="wholeWord">
-                      {localizedStrings['%webView_find_restrictions_wholeWord%']}
-                    </SelectItem>
-                    <SelectItem value="startOfWord">
-                      {localizedStrings['%webView_find_restrictions_startOfWord%']}
-                    </SelectItem>
-                    <SelectItem value="endOfWord">
-                      {localizedStrings['%webView_find_restrictions_endOfWord%']}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="tw-flex tw-items-center tw-space-x-2">
-                <Checkbox
-                  id="match-case"
-                  checked={shouldMatchCase}
-                  onCheckedChange={(checked) => setShouldMatchCase(checked === true)}
-                />
-                <Label htmlFor="match-case" className="tw-cursor-pointer">
-                  {localizedStrings['%webView_find_matchCase%']}
-                </Label>
-              </div>
-              {SHOW_ALLOW_REGEX_OPTION && (
-                <div className="tw-flex tw-items-center tw-space-x-2">
-                  <Checkbox
-                    id="allow-regex"
-                    checked={isRegexAllowed}
-                    onCheckedChange={(checked) => setIsRegexAllowed(checked === true)}
-                  />
-                  <Label htmlFor="allow-regex" className="tw-cursor-pointer">
-                    {localizedStrings['%webView_find_allowRegex%']}
-                  </Label>
-                </div>
-              )}
+            </PopoverContent>
+          </Popover>
+          {visibleResults.length > 0 && (
+            <div className="tw-flex tw-items-center tw-gap-1">
+              <span className="tw-text-sm tw-text-muted-foreground tw-tabular-nums">
+                {formatReplacementString(localizedStrings['%webView_find_resultNavigation%'], {
+                  current: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',
+                  total: String(visibleResults.length),
+                })}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tw-h-7 tw-w-7"
+                disabled={focusedVisibleIndex <= 0 || visibleResults.length === 0}
+                onClick={handlePreviousResult}
+                aria-label={localizedStrings['%webView_find_previousResult%']}
+              >
+                <ChevronUp className="tw-h-4 tw-w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tw-h-7 tw-w-7"
+                disabled={focusedVisibleIndex >= visibleResults.length - 1}
+                onClick={handleNextResult}
+                aria-label={localizedStrings['%webView_find_nextResult%']}
+              >
+                <ChevronDown className="tw-h-4 tw-w-4" />
+              </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Search Query Summary */}
-      <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
-        {submittedScope && submittedSearchTerm ? (
-          <>
-            {formatReplacementStringToArray(
-              localizedStrings['%webView_find_scopeSummary_format%'],
-              {
-                projectName,
-                scope: scopeSummaryText,
-                searchTerm: <span className="scripture-font">{submittedSearchTerm}</span>,
-              },
-            )}
-          </>
-        ) : (
-          formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
-            projectName,
-          })
-        )}
+        </div>
       </div>
 
       {/* Search Results Placeholder */}
@@ -917,7 +1217,12 @@ global.webViewComponent = function FindWebView({
               onHideResult={(indexInBookResults) =>
                 handleHideResult(bookResults[indexInBookResults].originalIndex)
               }
+              onReplace={(indexInBookResults) =>
+                handleReplace(bookResults[indexInBookResults].originalIndex)
+              }
               localizedStrings={searchResultLocalizedStrings}
+              isReplaceMode={activeMode === 'replace'}
+              isReplacing={isReplacing}
             />
           );
         })}

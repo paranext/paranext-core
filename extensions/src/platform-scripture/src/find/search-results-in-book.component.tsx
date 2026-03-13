@@ -8,6 +8,7 @@ import {
 import { useProjectData } from '@papi/frontend/react';
 import { useMemo } from 'react';
 import { logger } from '@papi/frontend';
+import { LocalizedBookData } from './find-types';
 import SearchResult, {
   HidableFindResult,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
@@ -21,13 +22,19 @@ type SearchResultsInBookProps = {
   /** The list of search results in this book */
   results: HidableFindResult[];
   /** Map of book IDs to their localized display names */
-  localizedBookData: Map<string, { localizedId: string }>;
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
   /** The index of the currently focused/selected result in this list */
   focusedResultIndex: number | undefined;
   /** Callback function called when the user clicks on a search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss a result */
   onHideResult: (index: number) => void;
+  /** Callback function called when the user clicks Replace on a result */
+  onReplace: (index: number) => void;
+  /** Whether the find webview is currently in replace mode */
+  isReplaceMode: boolean;
+  /** Whether a replace operation is currently in progress */
+  isReplacing: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -42,7 +49,10 @@ export function SearchResultsInBook({
   focusedResultIndex,
   onResultClick,
   onHideResult,
+  onReplace,
   localizedStrings,
+  isReplaceMode,
+  isReplacing,
 }: SearchResultsInBookProps) {
   const verseRefForBook = useMemo(() => {
     return {
@@ -91,7 +101,10 @@ export function SearchResultsInBook({
           localizedBookData={localizedBookData}
           onResultClick={onResultClick}
           onHideResult={onHideResult}
+          onReplace={onReplace}
           localizedStrings={localizedStrings}
+          isReplaceMode={isReplaceMode}
+          isReplacing={isReplacing}
         />
       ))}
     </>
