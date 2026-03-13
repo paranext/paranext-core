@@ -719,9 +719,10 @@ global.webViewComponent = function FindWebView({
   // Auto-select first result when switching to Replace mode
   useEffect(() => {
     if (activeMode === 'replace' && results.length > 0 && focusedResultIndex === undefined) {
-      setFocusedResultIndex(0);
+      const firstVisibleIndex = results.findIndex((r) => !r.isHidden);
+      if (firstVisibleIndex >= 0) setFocusedResultIndex(firstVisibleIndex);
     }
-  }, [activeMode, focusedResultIndex, results.length]);
+  }, [activeMode, focusedResultIndex, results]);
 
   const handleFocusedResultChange = useCallback(
     (searchResult: HidableFindResult, index: number) => {
