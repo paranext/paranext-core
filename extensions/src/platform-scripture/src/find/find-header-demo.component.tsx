@@ -33,6 +33,7 @@ import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { formatReplacementString } from 'platform-bible-utils';
 import { SetStateAction, useEffect, useMemo, useState } from 'react';
 import { FindFilters } from './find-filters.component';
+import { SearchTextType } from './find-types';
 
 export function FindHeaderDemo() {
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -51,7 +52,7 @@ export function FindHeaderDemo() {
 
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
-  const [searchTextType, setSearchTextType] = useState<'all' | 'verseOnly'>('all');
+  const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
   const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
   const [isRegexAllowed, setIsRegexAllowed] = useState(false);
 
@@ -299,7 +300,7 @@ export function FindHeaderDemo() {
         {demoTotalResults > 0 && (
           <div className="tw-flex tw-items-center tw-gap-1">
             <span className="tw-text-sm tw-text-muted-foreground tw-tabular-nums">
-              {formatReplacementString('{current} of {total}', {
+              {formatReplacementString('%webView_find_resultNavigation%', {
                 current: focusedResultIndex !== undefined ? String(focusedResultIndex + 1) : '–',
                 total: String(demoTotalResults),
               })}
@@ -312,7 +313,7 @@ export function FindHeaderDemo() {
               onClick={() =>
                 setFocusedResultIndex((prev) => (prev !== undefined && prev > 0 ? prev - 1 : prev))
               }
-              aria-label="Previous result"
+              aria-label="%webView_find_previousResult%"
             >
               <ChevronUp className="tw-h-4 tw-w-4" />
             </Button>
@@ -326,7 +327,7 @@ export function FindHeaderDemo() {
                   prev === undefined ? 0 : Math.min(prev + 1, demoTotalResults - 1),
                 )
               }
-              aria-label="Next result"
+              aria-label="%webView_find_nextResult%"
             >
               <ChevronDown className="tw-h-4 tw-w-4" />
             </Button>

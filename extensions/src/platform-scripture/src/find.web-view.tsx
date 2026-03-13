@@ -60,7 +60,7 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FindFilters } from './find/find-filters.component';
-import { LocalizedBookData } from './find/find-types';
+import { LocalizedBookData, SearchTextType } from './find/find-types';
 import {
   HidableFindResult,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
@@ -108,9 +108,6 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_nextResult%',
 ];
 
-/** The type of text content to search in */
-type SearchTextType = 'all' | 'verseOnly';
-
 const defaultBooksPresent: string = '';
 const defaultProjectName = '';
 const findPdpMutex = new Mutex();
@@ -146,8 +143,11 @@ global.webViewComponent = function FindWebView({
 }: WebViewProps) {
   const [searchTerm, setSearchTerm] = useWebViewState<string>('findSearchTerm', '');
   const [scope, setScope] = useWebViewState<Scope>('findScope', 'book');
-  const [submittedScope, setSubmittedScope] = useState<Scope | undefined>();
-  const [submittedVerseRef, setSubmittedVerseRef] = useState<SerializedVerseRef | undefined>(
+  // These three state variables exist solely for the change-detection feature (booksToMonitor /
+  // external change detection effect). They are not used for scope display text or
+  // query-changed detection.
+  const [monitoredScope, setMonitoredScope] = useState<Scope | undefined>();
+  const [monitoredVerseRef, setMonitoredVerseRef] = useState<SerializedVerseRef | undefined>(
     undefined,
   );
 
@@ -159,7 +159,7 @@ global.webViewComponent = function FindWebView({
     'findSelectedBookIds',
     [],
   );
-  const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
+  const [monitoredBookIds, setMonitoredBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useWebViewState<boolean>(
     'findShouldMatchCase',
     false,
@@ -440,6 +440,9 @@ global.webViewComponent = function FindWebView({
 
   const isStartingSearchRef = useRef(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Skip auto-search on the initial render so that restoring a non-empty searchTerm from
+  // useWebViewState doesn't trigger an unwanted search before the user has interacted.
+  const isInitialAutoSearchRef = useRef(true);
 
   const handleStartSearch = useCallback(async () => {
     clearTimeout(searchDebounceRef.current);
@@ -470,9 +473,9 @@ global.webViewComponent = function FindWebView({
       setSearchStatus('running');
       setSearchProgress(0);
 
-      setSubmittedScope(scope);
-      setSubmittedVerseRef(verseRefSetting);
-      setSubmittedBookIds(selectedBookIds);
+      setMonitoredScope(scope);
+      setMonitoredVerseRef(verseRefSetting);
+      setMonitoredBookIds(selectedBookIds);
 
       setFocusedResultIndex(undefined);
 
@@ -485,8 +488,8 @@ global.webViewComponent = function FindWebView({
       setSearchStatus('errored');
       setSearchProgress(0);
 
-      setSubmittedScope(undefined);
-      setSubmittedVerseRef(undefined);
+      setMonitoredScope(undefined);
+      setMonitoredVerseRef(undefined);
     } finally {
       // Clear the flag regardless of success or failure
       isStartingSearchRef.current = false;
@@ -617,11 +620,11 @@ global.webViewComponent = function FindWebView({
   // Determine which books to monitor: all selected books for 'selectedBooks' scope, or the single
   // submitted book for 'book'/'chapter' scope. Only populated after a search has been run.
   const booksToMonitor = useMemo((): string[] => {
-    if (!submittedScope) return [];
-    if (submittedScope === 'selectedBooks') return submittedBookIds;
-    const book = submittedVerseRef?.book;
+    if (!monitoredScope) return [];
+    if (monitoredScope === 'selectedBooks') return monitoredBookIds;
+    const book = monitoredVerseRef?.book;
     return book ? [book] : [];
-  }, [submittedScope, submittedBookIds, submittedVerseRef?.book]);
+  }, [monitoredScope, monitoredBookIds, monitoredVerseRef?.book]);
 
   // Subscribe to USFM data for every monitored book in Replace mode. When any book's data
   // changes, increment that book's version counter and update `scriptureDataForChangeDetection`
@@ -696,7 +699,10 @@ global.webViewComponent = function FindWebView({
       scriptureDataBaselineRef.current = undefined;
       return;
     }
-    if (scriptureDataBaselineRef.current === undefined || searchStatus === 'running') {
+    if (
+      scriptureDataForChangeDetection !== undefined &&
+      (scriptureDataBaselineRef.current === undefined || searchStatus === 'running')
+    ) {
       scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
     }
   }, [activeMode, searchStatus, scriptureDataForChangeDetection]);
@@ -708,6 +714,10 @@ global.webViewComponent = function FindWebView({
 
   // Auto-search with debounce when the search term or any filter changes
   useEffect(() => {
+    if (isInitialAutoSearchRef.current) {
+      isInitialAutoSearchRef.current = false;
+      return undefined;
+    }
     searchDebounceRef.current = setTimeout(() => {
       handleStartSearchRef.current();
     }, SEARCH_DEBOUNCE_DELAY_MS);
@@ -726,14 +736,14 @@ global.webViewComponent = function FindWebView({
     if (activeMode !== 'replace') return;
     if (scriptureDataBaselineRef.current === undefined) return; // No baseline yet
     if (isReplacing || searchStatus === 'running' || searchStatus === undefined) return;
-    if (!submittedScope) return; // No previous search to re-run
+    if (!monitoredScope) return; // No previous search to re-run
     if (scriptureDataForChangeDetection === undefined) return;
     if (scriptureDataForChangeDetection === scriptureDataBaselineRef.current) return;
 
     // External change detected — update baseline and re-run find to refresh positions
     scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
     handleStartSearchRef.current();
-  }, [scriptureDataForChangeDetection, activeMode, isReplacing, searchStatus, submittedScope]);
+  }, [scriptureDataForChangeDetection, activeMode, isReplacing, searchStatus, monitoredScope]);
 
   // #endregion
 
@@ -764,18 +774,15 @@ global.webViewComponent = function FindWebView({
     [activeMode, editorWebViewController, editorWebViewId, setVerseRefSetting],
   );
 
-  const handleHideResult = useCallback(
-    (index: number) => {
-      setResults((prevResults) =>
-        prevResults.map((prevResult, i) =>
-          i === index ? { ...prevResult, isHidden: true } : prevResult,
-        ),
-      );
-      setNumberOfHiddenResults((prevCount) => prevCount + 1);
-      setFocusedResultIndex(undefined);
-    },
-    [setFocusedResultIndex, setNumberOfHiddenResults, setResults],
-  );
+  const handleHideResult = useCallback((index: number) => {
+    setResults((prevResults) =>
+      prevResults.map((prevResult, i) =>
+        i === index ? { ...prevResult, isHidden: true } : prevResult,
+      ),
+    );
+    setNumberOfHiddenResults((prevCount) => prevCount + 1);
+    setFocusedResultIndex(undefined);
+  }, []);
 
   const handleReplace = useCallback(
     async (resultIndex?: number) => {
@@ -810,12 +817,17 @@ global.webViewComponent = function FindWebView({
 
     setIsReplacing(true);
     try {
-      // Load all remaining results before replacing so we don't miss any
+      // Load all remaining results before replacing so we don't miss any.
+      // Use a local `latestTotal` updated from each server response so that a stale
+      // `totalNumberOfResults` snapshot (from when the button was clicked) cannot cause
+      // the loop to exit before all results have arrived.
       let allResults = [...results];
-      while (allResults.length < totalNumberOfResults) {
+      let latestTotal = totalNumberOfResults;
+      while (allResults.length < latestTotal) {
         // eslint-disable-next-line no-await-in-loop
         const update = await retrieveFindJobUpdate(RESULTS_BATCH_SIZE);
         if (!update || !isMountedRef.current) break;
+        latestTotal = update.totalResultsCount;
         const newBatch = update.nextResults || [];
         if (newBatch.length === 0) break;
         allResults = [...allResults, ...newBatch];
@@ -977,7 +989,10 @@ global.webViewComponent = function FindWebView({
             {searchTerm && (
               <button
                 type="button"
-                onClick={() => setSearchTerm('')}
+                onClick={() => {
+                  setSearchTerm('');
+                  handleStopSearch(true);
+                }}
                 className="tw-absolute tw-end-2 tw-top-1/2 -tw-translate-y-1/2 tw-text-muted-foreground hover:tw-text-foreground tw-bg-transparent tw-border-0 tw-p-0 tw-cursor-pointer"
               >
                 <X className="tw-h-4 tw-w-4" />
@@ -1147,7 +1162,7 @@ global.webViewComponent = function FindWebView({
                 variant="ghost"
                 size="icon"
                 className="tw-h-7 tw-w-7"
-                disabled={focusedVisibleIndex <= 0}
+                disabled={focusedVisibleIndex === 0 || visibleResults.length === 0}
                 onClick={handlePreviousResult}
                 aria-label={localizedStrings['%webView_find_previousResult%']}
               >

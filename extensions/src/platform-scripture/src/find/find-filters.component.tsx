@@ -10,8 +10,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { WordRestriction } from 'platform-scripture';
-
-export type SearchTextType = 'all' | 'verseOnly';
+import { SearchTextType } from './find-types';
 
 export type FindFiltersStrings = {
   toggleFilters: string;
@@ -89,7 +88,7 @@ export function FindFilters({
                 key={value}
                 type="button"
                 onClick={() => setSearchTextType(value)}
-                className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
+                className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-rounded"
               >
                 <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
                   {searchTextType === value ? '•' : ''}
@@ -128,7 +127,7 @@ export function FindFilters({
                 key={value}
                 type="button"
                 onClick={() => setWordRestriction(value)}
-                className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
+                className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-rounded"
               >
                 <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
                   {wordRestriction === value ? '•' : ''}
@@ -145,7 +144,7 @@ export function FindFilters({
           <button
             type="button"
             onClick={() => setShouldMatchCase(!shouldMatchCase)}
-            className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
+            className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-rounded"
           >
             <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
               {shouldMatchCase ? '•' : ''}
@@ -160,7 +159,7 @@ export function FindFilters({
           <button
             type="button"
             onClick={() => setIsRegexAllowed(!isRegexAllowed)}
-            className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
+            className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-rounded"
           >
             <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
               {isRegexAllowed ? '•' : ''}
