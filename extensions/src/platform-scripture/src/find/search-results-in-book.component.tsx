@@ -8,6 +8,7 @@ import {
 import { useProjectData } from '@papi/frontend/react';
 import { useMemo } from 'react';
 import { logger } from '@papi/frontend';
+import { LocalizedBookData } from './find-types';
 import SearchResult, {
   HidableFindResult,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
@@ -21,7 +22,7 @@ type SearchResultsInBookProps = {
   /** The list of search results in this book */
   results: HidableFindResult[];
   /** Map of book IDs to their localized display names */
-  localizedBookData: Map<string, { localizedId: string }>;
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
   /** The index of the currently focused/selected result in this list */
   focusedResultIndex: number | undefined;
   /** Callback function called when the user clicks on a search result */

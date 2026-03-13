@@ -1,29 +1,25 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
-  ArrowLeftRight,
   ArrowRight,
   ChevronDown,
   ChevronUp,
-  Clock,
   Info,
+  Replace,
+  ReplaceAll,
   TextSearch,
-  Search,
-  SlidersHorizontal,
+  X,
 } from 'lucide-react';
 import {
   Button,
   Checkbox,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
   Input,
   Label,
   Popover,
   PopoverContent,
   PopoverTrigger,
+  RecentSearches,
   Scope,
   ScopeSelector,
-  ScrollGroupSelector,
   Spinner,
   ToggleGroup,
   ToggleGroupItem,
@@ -31,10 +27,12 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useRecentSearches,
 } from 'platform-bible-react';
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { formatReplacementString } from 'platform-bible-utils';
 import { SetStateAction, useEffect, useMemo, useState } from 'react';
+import { FindFilters } from './find-filters.component';
 
 export function FindHeaderDemo() {
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -45,28 +43,17 @@ export function FindHeaderDemo() {
     chapterNum: 1,
     verseNum: 1,
   });
-  // custom for demo
-  const [scrollGroupId, setScrollGroupId] = useState<number | undefined>();
 
-  const [submittedSearchTerm, setSubmittedSearchTerm] = useState<string | undefined>(undefined);
   const [scope, setScope] = useState<Scope>('book');
-  const [submittedScope, setSubmittedScope] = useState<Scope | undefined>();
-  const [submittedScrollGroupId, setSubmittedScrollGroupId] = useState<number | undefined>();
-  const [submittedVerseRef, setSubmittedVerseRef] = useState<SerializedVerseRef | undefined>(
-    undefined,
-  );
 
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const addRecentSearchItem = useRecentSearches(recentSearches, setRecentSearches);
 
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
-  const [submittedBookIds, setSubmittedBookIds] = useState<string[]>([]);
   const [shouldMatchCase, setShouldMatchCase] = useState(false);
-  const [submittedShouldMatchCase, setSubmittedShouldMatchCase] = useState(false);
   const [searchTextType, setSearchTextType] = useState<'all' | 'verseOnly'>('all');
   const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
-  const [submittedWordRestriction, setSubmittedWordRestriction] = useState<WordRestriction>('none');
   const [isRegexAllowed, setIsRegexAllowed] = useState(false);
-  const [submittedIsRegexAllowed, setSubmittedIsRegexAllowed] = useState(false);
 
   const [activeMode, setActiveMode] = useState<'find' | 'replace'>('find');
   const [replaceTerm, setReplaceTerm] = useState<string>('');
@@ -77,45 +64,6 @@ export function FindHeaderDemo() {
   // custom for demo
   const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
   const demoTotalResults = searchStatus === 'completed' ? 5 : 0;
-
-  const searchQueryChanged = useMemo(() => {
-    return (
-      searchTerm.trim() !== submittedSearchTerm ||
-      scrollGroupId !== submittedScrollGroupId ||
-      scope !== submittedScope ||
-      (scope === 'chapter' &&
-        (verseRefSetting.book !== submittedVerseRef?.book ||
-          verseRefSetting.chapterNum !== submittedVerseRef?.chapterNum)) ||
-      (scope === 'book' && verseRefSetting.book !== submittedVerseRef?.book) ||
-      (scope === 'selectedBooks' &&
-        selectedBookIds.sort().join(',') !== submittedBookIds.sort().join(',')) ||
-      shouldMatchCase !== submittedShouldMatchCase ||
-      wordRestriction !== submittedWordRestriction ||
-      isRegexAllowed !== submittedIsRegexAllowed
-    );
-  }, [
-    searchTerm,
-    submittedSearchTerm,
-    verseRefSetting,
-    submittedVerseRef,
-    scope,
-    submittedScope,
-    scrollGroupId,
-    submittedScrollGroupId,
-    selectedBookIds,
-    submittedBookIds,
-    shouldMatchCase,
-    submittedShouldMatchCase,
-    wordRestriction,
-    submittedWordRestriction,
-    isRegexAllowed,
-    submittedIsRegexAllowed,
-  ]);
-
-  const canClearResults = useMemo(
-    () => !searchQueryChanged && searchStatus && searchStatus !== 'running',
-    [searchQueryChanged, searchStatus],
-  );
 
   const areFiltersActive =
     shouldMatchCase || wordRestriction !== 'none' || searchTextType !== 'all' || isRegexAllowed;
@@ -139,24 +87,7 @@ export function FindHeaderDemo() {
       setSearchStatus('completed');
     }, 1000);
 
-    if (!recentSearches.includes(searchTerm)) {
-      recentSearches.push(searchTerm);
-      setRecentSearches(recentSearches);
-    }
-
-    setSubmittedSearchTerm(searchTerm);
-    setSubmittedScrollGroupId(scrollGroupId);
-    setSubmittedScope(scope);
-    setSubmittedVerseRef(verseRefSetting);
-    setSubmittedBookIds(selectedBookIds);
-    setSubmittedShouldMatchCase(shouldMatchCase);
-    setSubmittedWordRestriction(wordRestriction);
-    setSubmittedIsRegexAllowed(isRegexAllowed);
-  };
-
-  // custom for demo
-  const clearSearchResults = () => {
-    setSubmittedSearchTerm('');
+    addRecentSearchItem(searchTerm);
   };
 
   // custom for demo
@@ -190,17 +121,15 @@ export function FindHeaderDemo() {
       >
         <ToggleGroupItem
           value="find"
-          className="tw-gap-1 data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
+          className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
         >
-          <Search className="tw-h-4 tw-w-4" />
-          Find
+          %webView_find_findTab%
         </ToggleGroupItem>
         <ToggleGroupItem
           value="replace"
-          className="tw-gap-1 data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
+          className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
         >
-          <ArrowLeftRight className="tw-h-4 tw-w-4" />
-          Replace
+          %webView_find_replaceTab%
         </ToggleGroupItem>
       </ToggleGroup>
 
@@ -221,177 +150,125 @@ export function FindHeaderDemo() {
               }
             }}
             placeholder="%webView_find_searchPlaceholder%"
-            className="tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 !tw-pr-4"
+            className={`tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              className="tw-absolute tw-end-2 tw-top-1/2 -tw-translate-y-1/2 tw-text-muted-foreground hover:tw-text-foreground tw-bg-transparent tw-border-0 tw-p-0 tw-cursor-pointer"
+            >
+              <X className="tw-h-4 tw-w-4" />
+            </button>
+          )}
         </div>
-        {recentSearches.length > 0 && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Show recent searches">
-                <Clock className="tw-h-4 tw-w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="tw-w-[300px] tw-p-0" align="start">
-              <div className="tw-py-1">
-                {recentSearches.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => setSearchTerm(item)}
-                    className="tw-flex tw-w-full tw-cursor-pointer tw-items-center tw-gap-2 tw-px-3 tw-py-1.5 tw-text-sm hover:tw-bg-accent"
-                  >
-                    <Clock className="tw-h-4 tw-w-4 tw-opacity-50" />
-                    <span>{item}</span>
-                  </button>
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
-        )}
+        <RecentSearches
+          recentSearches={recentSearches}
+          onSearchItemSelect={setSearchTerm}
+          ariaLabel="%webView_find_showRecentSearches%"
+          groupHeading="%webView_find_recent%"
+          buttonClassName="tw-h-10 tw-w-10"
+          buttonVariant="outline"
+        />
 
-        <DropdownMenu>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label="%webView_find_toggleFilters%"
-                    className={areFiltersActive ? 'tw-bg-muted' : ''}
-                  >
-                    <SlidersHorizontal className="tw-h-4 tw-w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent>%webView_find_toggleFilters%</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <DropdownMenuContent align="end" className="tw-w-72 tw-p-3">
-            {/* 1. Match content in */}
-            <div className="tw-mb-3">
-              <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">%webView_find_matchContentIn%</p>
-              <div className="tw-flex tw-flex-col tw-gap-1">
-                {(
-                  [
-                    ['all', '%webView_find_allText%'],
-                    ['verseOnly', '%webView_find_verseTextOnly%'],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setSearchTextType(value)}
-                    className="tw-flex tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
-                  >
-                    <span className="tw-w-4 tw-shrink-0 tw-text-center">
-                      {searchTextType === value ? '•' : ''}
-                    </span>
-                    <span>{label}</span>
-                    {value === 'all' && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="tw-h-3.5 tw-w-3.5 tw-text-muted-foreground" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="tw-max-w-xs">%webView_find_allText_tooltip%</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 2. Match boundaries */}
-            <div className="tw-mb-3">
-              <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">%webView_find_restrictions%</p>
-              <div className="tw-flex tw-flex-col tw-gap-1">
-                {(
-                  [
-                    ['none', '%webView_find_restrictions_none%'],
-                    ['wholeWord', '%webView_find_restrictions_wholeWord%'],
-                    ['startOfWord', '%webView_find_restrictions_startOfWord%'],
-                    ['endOfWord', '%webView_find_restrictions_endOfWord%'],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setWordRestriction(value)}
-                    className="tw-flex tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
-                  >
-                    <span className="tw-w-4 tw-shrink-0 tw-text-center">
-                      {wordRestriction === value ? '•' : ''}
-                    </span>
-                    <span>{label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 3. Capitalization */}
-            <div className="tw-mb-3">
-              <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">%webView_find_capitalization%</p>
-              <button
-                type="button"
-                onClick={() => setShouldMatchCase(!shouldMatchCase)}
-                className="tw-flex tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
-              >
-                <span className="tw-w-4 tw-shrink-0 tw-text-center">
-                  {shouldMatchCase ? '•' : ''}
-                </span>
-                <span>%webView_find_matchCase%</span>
-              </button>
-            </div>
-
-            {/* 4. Pattern */}
-            <div>
-              <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">%webView_find_pattern%</p>
-              <button
-                type="button"
-                onClick={() => setIsRegexAllowed(!isRegexAllowed)}
-                className="tw-flex tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground"
-              >
-                <span className="tw-w-4 tw-shrink-0 tw-text-center">
-                  {isRegexAllowed ? '•' : ''}
-                </span>
-                <span>%webView_find_allowRegex%</span>
-              </button>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <FindFilters
+          areFiltersActive={areFiltersActive}
+          searchTextType={searchTextType}
+          setSearchTextType={setSearchTextType}
+          wordRestriction={wordRestriction}
+          setWordRestriction={setWordRestriction}
+          shouldMatchCase={shouldMatchCase}
+          setShouldMatchCase={setShouldMatchCase}
+          isRegexAllowed={isRegexAllowed}
+          setIsRegexAllowed={setIsRegexAllowed}
+          strings={{
+            toggleFilters: '%webView_find_toggleFilters%',
+            matchContentIn: '%webView_find_matchContentIn%',
+            allText: '%webView_find_allText%',
+            allTextTooltip: '%webView_find_allText_tooltip%',
+            verseTextOnly: '%webView_find_verseTextOnly%',
+            restrictions: '%webView_find_restrictions%',
+            restrictionNone: '%webView_find_restrictions_none%',
+            restrictionWholeWord: '%webView_find_restrictions_wholeWord%',
+            restrictionStartOfWord: '%webView_find_restrictions_startOfWord%',
+            restrictionEndOfWord: '%webView_find_restrictions_endOfWord%',
+            capitalization: '%webView_find_capitalization%',
+            matchCase: '%webView_find_matchCase%',
+            pattern: '%webView_find_pattern%',
+            allowRegex: '%webView_find_allowRegex%',
+          }}
+        />
 
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              {canClearResults ? (
-                <Button onClick={() => clearSearchResults()}>
-                  %webView_find_clearSearchResults%
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleStartSearch}
-                  disabled={
-                    !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
-                  }
-                >
-                  {searchStatus === 'running' ? <Spinner /> : findButtonText}
-                </Button>
-              )}
+              <Button
+                onClick={handleStartSearch}
+                disabled={
+                  !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
+                }
+              >
+                {searchStatus === 'running' ? <Spinner /> : findButtonText}
+              </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {canClearResults ? (
-                <p className="tw-font-light">%webView_find_clearSearchResults%</p>
-              ) : (
-                <p className="tw-font-light">%webView_find_findInProject%</p>
-              )}
+              <p className="tw-font-light">%webView_find_findInProject%</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       </div>
+
+      {/* Replace input row — shown in Replace mode */}
+      {activeMode === 'replace' && (
+        <>
+          <div className="tw-relative tw-flex-1">
+            <ArrowRight className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
+            <Input
+              id="replace-term"
+              value={replaceTerm}
+              onChange={(e: { target: { value: SetStateAction<string> } }) =>
+                setReplaceTerm(e.target.value)
+              }
+              placeholder="%webView_find_replaceTerm_placeholder%"
+              className="tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4"
+            />
+          </div>
+          <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-flex-wrap">
+            <div className="tw-flex tw-items-center tw-gap-2">
+              <Checkbox
+                id="preserve-case"
+                checked={preserveCase}
+                onCheckedChange={(checked: boolean) => setPreserveCase(checked === true)}
+              />
+              <Label htmlFor="preserve-case" className="tw-cursor-pointer">
+                %webView_find_preserveCase%
+              </Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="tw-h-3.5 tw-w-3.5 tw-text-muted-foreground tw-cursor-default" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="tw-max-w-xs tw-whitespace-pre-line">
+                      %webView_find_preserveCase_tooltip%
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <div className="tw-flex tw-gap-2">
+              <Button variant="outline" onClick={() => {}}>
+                <ReplaceAll className="tw-h-4 tw-w-4" />
+                %webView_find_replaceAll%
+              </Button>
+              <Button onClick={() => {}}>
+                <Replace className="tw-h-4 tw-w-4" />
+                %webView_find_replace%
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Scope selector row */}
       <div className="tw-flex tw-items-center tw-justify-between">
@@ -402,7 +279,7 @@ export function FindHeaderDemo() {
               size="sm"
               className="tw-h-auto tw-gap-1 tw-px-2 tw-py-1 tw-font-normal"
             >
-              <span className="tw-text-sm tw-text-muted-foreground">Showing</span>
+              <span className="tw-text-sm tw-text-muted-foreground">%webView_find_showing%</span>
               <span className="tw-text-sm tw-font-medium">{scopeDisplayText}</span>
               <ChevronDown className="tw-h-3 tw-w-3 tw-text-muted-foreground" />
             </Button>
@@ -417,16 +294,6 @@ export function FindHeaderDemo() {
               localizedStrings={{}}
               availableBookInfo={availableBookIds}
             />
-            {(scope === 'chapter' || scope === 'book') && (
-              <div className="tw-mt-3 tw-flex tw-flex-col tw-items-start tw-gap-2">
-                <Label>%webView_find_scrollGroup%</Label>
-                <ScrollGroupSelector
-                  availableScrollGroupIds={[undefined, ...Array(5).keys()]}
-                  onChangeScrollGroupId={setScrollGroupId}
-                  scrollGroupId={scrollGroupId}
-                />
-              </div>
-            )}
           </PopoverContent>
         </Popover>
         {demoTotalResults > 0 && (
@@ -466,56 +333,6 @@ export function FindHeaderDemo() {
           </div>
         )}
       </div>
-
-      {/* Replace input row — shown in Replace mode */}
-      {activeMode === 'replace' && (
-        <>
-          <div className="tw-relative tw-flex-1">
-            <ArrowRight className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
-            <Input
-              id="replace-term"
-              value={replaceTerm}
-              onChange={(e: { target: { value: SetStateAction<string> } }) =>
-                setReplaceTerm(e.target.value)
-              }
-              placeholder="%webView_find_replaceTerm_placeholder%"
-              className="tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4"
-            />
-          </div>
-          <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-flex-wrap">
-            <div className="tw-flex tw-items-center tw-gap-2">
-              <Checkbox
-                id="preserve-case"
-                checked={preserveCase}
-                onCheckedChange={(checked: boolean) => setPreserveCase(checked === true)}
-              />
-              <Label htmlFor="preserve-case" className="tw-cursor-pointer">
-                %webView_find_preserveCase%
-              </Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="tw-h-3.5 tw-w-3.5 tw-text-muted-foreground tw-cursor-default" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="tw-max-w-xs tw-whitespace-pre-line">
-                      {
-                        'Adapts replacement to match original casing:\ngod → lord\nGOD → LORD\nGod → Lord'
-                      }
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <div className="tw-flex tw-gap-2">
-              <Button variant="outline" onClick={() => {}}>
-                %webView_find_replaceAll%
-              </Button>
-              <Button onClick={() => {}}>%webView_find_replace%</Button>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }
