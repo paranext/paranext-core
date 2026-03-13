@@ -123,6 +123,11 @@ export {
   type OverlayPopoverContent,
   type OverlayPopoverProps,
 } from './components/advanced/overlays/overlay-popover.component';
+export {
+  OverlayCommandPalette,
+  type OverlayCommandPaletteItem,
+  type OverlayCommandPaletteProps,
+} from './components/advanced/overlays/overlay-command-palette.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
   default as SettingsSidebar,

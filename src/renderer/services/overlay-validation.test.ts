@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
+  validateCommandPaletteRequest,
   validateContextMenuRequest,
   validateMenuItems,
   validateModalDialogOptions,
   validatePopoverRequest,
 } from '@renderer/services/overlay-validation';
 import {
+  CommandPaletteRequest,
   ContextMenuRequest,
   ContextMenuItem,
   OverlayValidationError,
@@ -438,6 +440,128 @@ describe('overlay-validation', () => {
         dismissAfterMs: 3000,
       };
       expect(() => validatePopoverRequest(request)).not.toThrow();
+    });
+  });
+
+  describe('validateCommandPaletteRequest', () => {
+    const validRequest: CommandPaletteRequest = {
+      items: [
+        { id: 'ft', label: 'Footnote' },
+        { id: 'xt', label: 'Cross Reference' },
+      ],
+    };
+
+    it('should pass for a valid command palette request', () => {
+      expect(() => validateCommandPaletteRequest(validRequest)).not.toThrow();
+    });
+
+    it('should throw for empty items array', () => {
+      expect(() => validateCommandPaletteRequest({ ...validRequest, items: [] })).toThrow(
+        OverlayValidationError,
+      );
+      expect(() => validateCommandPaletteRequest({ ...validRequest, items: [] })).toThrow(
+        'Items array must not be empty',
+      );
+    });
+
+    it('should throw for too many items (>200)', () => {
+      const items = Array.from({ length: 201 }, (_, i) => ({ id: `id-${i}`, label: `Item ${i}` }));
+      expect(() => validateCommandPaletteRequest({ ...validRequest, items })).toThrow(
+        OverlayValidationError,
+      );
+      expect(() => validateCommandPaletteRequest({ ...validRequest, items })).toThrow(
+        'Too many items (max 200)',
+      );
+    });
+
+    it('should pass for exactly 200 items', () => {
+      const items = Array.from({ length: 200 }, (_, i) => ({ id: `id-${i}`, label: `Item ${i}` }));
+      expect(() => validateCommandPaletteRequest({ ...validRequest, items })).not.toThrow();
+    });
+
+    it('should throw for item missing id', () => {
+      // Intentionally malformed input to test validation; must bypass TS to simulate bad runtime data
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const request = { items: [{ label: 'No ID' }] } as unknown as CommandPaletteRequest;
+      expect(() => validateCommandPaletteRequest(request)).toThrow(OverlayValidationError);
+      expect(() => validateCommandPaletteRequest(request)).toThrow('Each item must have an id');
+    });
+
+    it('should throw for label too long', () => {
+      const items = [{ id: 'long', label: 'a'.repeat(501) }];
+      expect(() => validateCommandPaletteRequest({ ...validRequest, items })).toThrow(
+        OverlayValidationError,
+      );
+      expect(() => validateCommandPaletteRequest({ ...validRequest, items })).toThrow(
+        'Label exceeds maximum length of 500 characters',
+      );
+    });
+
+    it('should throw for invalid anchor coordinates (NaN)', () => {
+      expect(() =>
+        validateCommandPaletteRequest({ ...validRequest, anchor: { x: NaN, y: 100 } }),
+      ).toThrow(OverlayValidationError);
+      expect(() =>
+        validateCommandPaletteRequest({ ...validRequest, anchor: { x: NaN, y: 100 } }),
+      ).toThrow('Anchor must have valid x and y coordinates');
+    });
+
+    it('should throw for negative maxWidth', () => {
+      expect(() => validateCommandPaletteRequest({ ...validRequest, maxWidth: -10 })).toThrow(
+        OverlayValidationError,
+      );
+      expect(() => validateCommandPaletteRequest({ ...validRequest, maxWidth: -10 })).toThrow(
+        'maxWidth must be greater than 0',
+      );
+    });
+
+    it('should throw for zero maxWidth', () => {
+      expect(() => validateCommandPaletteRequest({ ...validRequest, maxWidth: 0 })).toThrow(
+        OverlayValidationError,
+      );
+    });
+
+    it('should throw for negative maxHeight', () => {
+      expect(() => validateCommandPaletteRequest({ ...validRequest, maxHeight: -5 })).toThrow(
+        OverlayValidationError,
+      );
+      expect(() => validateCommandPaletteRequest({ ...validRequest, maxHeight: -5 })).toThrow(
+        'maxHeight must be greater than 0',
+      );
+    });
+
+    it('should throw for zero maxHeight', () => {
+      expect(() => validateCommandPaletteRequest({ ...validRequest, maxHeight: 0 })).toThrow(
+        OverlayValidationError,
+      );
+    });
+
+    it('should pass with all optional fields on items', () => {
+      const items = [
+        {
+          id: 'ft',
+          label: 'Footnote',
+          description: 'A footnote',
+          icon: 'book',
+          badge: 'Common',
+          group: 'inline',
+          disabled: false,
+        },
+      ];
+      expect(() => validateCommandPaletteRequest({ ...validRequest, items })).not.toThrow();
+    });
+
+    it('should pass with valid anchor coordinates', () => {
+      expect(() =>
+        validateCommandPaletteRequest({
+          ...validRequest,
+          anchor: { x: 100, y: 200 },
+        }),
+      ).not.toThrow();
+    });
+
+    it('should pass with no anchor (centered mode)', () => {
+      expect(() => validateCommandPaletteRequest(validRequest)).not.toThrow();
     });
   });
 });
