@@ -65,6 +65,9 @@ export async function launchElectronApp(): Promise<ElectronAppContext> {
     ...process.env,
     NODE_ENV: 'development',
     ELECTRON_RUN_AS_NODE: undefined,
+    // Enable noisy dev mode so test extensions (helloRock3, helloSomeone, etc.) are loaded.
+    // Only set if not already defined, so other E2E suites can override.
+    DEV_NOISY: process.env.DEV_NOISY ?? 'true',
   };
 
   // Use an isolated user-data directory so the singleton instance lock does not
