@@ -75,10 +75,8 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_findInProject%',
   '%webView_find_matchCase%',
   '%webView_find_noResultsFound%',
-  '%webView_find_scopeSummary_format%',
   '%webView_find_showRecentSearches%',
   '%webView_find_recent%',
-  '%webView_find_scopeUndetermined%',
   '%webView_find_searchPlaceholder%',
   '%webView_find_result%',
   '%webView_find_showingResults%',
@@ -444,72 +442,75 @@ global.webViewComponent = function FindWebView({
   // useWebViewState doesn't trigger an unwanted search before the user has interacted.
   const isInitialAutoSearchRef = useRef(true);
 
-  const handleStartSearch = useCallback(async () => {
-    clearTimeout(searchDebounceRef.current);
-    if (!isSearchQueryValid || !findPdp || isStartingSearchRef.current) return;
+  const handleStartSearch = useCallback(
+    async (isExplicitSearch = false) => {
+      clearTimeout(searchDebounceRef.current);
+      if (!isSearchQueryValid || !findPdp || isStartingSearchRef.current) return;
 
-    // Set the flag to prevent concurrent calls
-    // No mutex is needed here because we're fine throwing away concurrent calls instead of queuing
-    // them to execute serially. Rapid button clicking or pressing Enter isn't a use case that needs
-    // to be supported since no one could see the search results of all but the final search anyway.
-    isStartingSearchRef.current = true;
+      // Set the flag to prevent concurrent calls
+      // No mutex is needed here because we're fine throwing away concurrent calls instead of queuing
+      // them to execute serially. Rapid button clicking or pressing Enter isn't a use case that needs
+      // to be supported since no one could see the search results of all but the final search anyway.
+      isStartingSearchRef.current = true;
 
-    try {
-      addRecentSearchItem(searchTerm);
+      try {
+        if (isExplicitSearch) addRecentSearchItem(searchTerm);
 
-      await abandonFindJob();
-      if (!isMountedRef.current) return;
+        await abandonFindJob();
+        if (!isMountedRef.current) return;
 
-      await beginFindJob({
-        scope: findScope,
-        searchString: searchTerm,
-        caseInsensitive: !shouldMatchCase,
-        useRegex: isRegexAllowed,
-        verseTextOnly: searchTextType === 'verseOnly',
-        wordRestriction,
-      });
-      if (!isMountedRef.current) return;
+        await beginFindJob({
+          scope: findScope,
+          searchString: searchTerm,
+          caseInsensitive: !shouldMatchCase,
+          useRegex: isRegexAllowed,
+          verseTextOnly: searchTextType === 'verseOnly',
+          wordRestriction,
+        });
+        if (!isMountedRef.current) return;
 
-      setSearchStatus('running');
-      setSearchProgress(0);
+        setSearchStatus('running');
+        setSearchProgress(0);
 
-      setMonitoredScope(scope);
-      setMonitoredVerseRef(verseRefSetting);
-      setMonitoredBookIds(selectedBookIds);
+        setMonitoredScope(scope);
+        setMonitoredVerseRef(verseRefSetting);
+        setMonitoredBookIds(selectedBookIds);
 
-      setFocusedResultIndex(undefined);
+        setFocusedResultIndex(undefined);
 
-      setResults([]);
-      loadedResultsLengthRef.current = 0;
-      setNumberOfHiddenResults(0);
-    } catch (error) {
-      logger.error('Error starting search:', error);
+        setResults([]);
+        loadedResultsLengthRef.current = 0;
+        setNumberOfHiddenResults(0);
+      } catch (error) {
+        logger.error('Error starting search:', error);
 
-      setSearchStatus('errored');
-      setSearchProgress(0);
+        setSearchStatus('errored');
+        setSearchProgress(0);
 
-      setMonitoredScope(undefined);
-      setMonitoredVerseRef(undefined);
-    } finally {
-      // Clear the flag regardless of success or failure
-      isStartingSearchRef.current = false;
-    }
-  }, [
-    abandonFindJob,
-    addRecentSearchItem,
-    beginFindJob,
-    findPdp,
-    findScope,
-    isRegexAllowed,
-    isSearchQueryValid,
-    scope,
-    searchTerm,
-    searchTextType,
-    selectedBookIds,
-    shouldMatchCase,
-    verseRefSetting,
-    wordRestriction,
-  ]);
+        setMonitoredScope(undefined);
+        setMonitoredVerseRef(undefined);
+      } finally {
+        // Clear the flag regardless of success or failure
+        isStartingSearchRef.current = false;
+      }
+    },
+    [
+      abandonFindJob,
+      addRecentSearchItem,
+      beginFindJob,
+      findPdp,
+      findScope,
+      isRegexAllowed,
+      isSearchQueryValid,
+      scope,
+      searchTerm,
+      searchTextType,
+      selectedBookIds,
+      shouldMatchCase,
+      verseRefSetting,
+      wordRestriction,
+    ],
+  );
 
   const handleStopSearch = useCallback(
     async (shouldClearResults?: boolean) => {
@@ -519,6 +520,7 @@ global.webViewComponent = function FindWebView({
         setResults([]);
         loadedResultsLengthRef.current = 0;
         setNumberOfHiddenResults(0);
+        setSearchStatus(undefined);
         await abandonFindJob();
       } else await stopFindJob();
     },
@@ -802,14 +804,14 @@ global.webViewComponent = function FindWebView({
         // Re-run find immediately after replace so positions are fresh before the user can
         // click replace again. isReplacing stays true until this completes, closing the gap
         // between replace() returning and searchStatus becoming 'running'.
-        await handleStartSearch();
+        await handleStartSearchRef.current();
       } catch (error) {
         logger.error(`Error replacing result: ${getErrorMessage(error)}`);
       } finally {
         setIsReplacing(false);
       }
     },
-    [focusedResultIndex, handleStartSearch, preserveCase, replacePdp, replaceTerm, results],
+    [focusedResultIndex, preserveCase, replacePdp, replaceTerm, results],
   );
 
   const handleReplaceAll = useCallback(async () => {
@@ -845,21 +847,13 @@ global.webViewComponent = function FindWebView({
         : replaceTerm;
 
       await replacePdp.replace(rangesToReplace, usfmToInsert);
-      await handleStartSearch();
+      await handleStartSearchRef.current();
     } catch (error) {
       logger.error(`Error replacing all results: ${getErrorMessage(error)}`);
     } finally {
       setIsReplacing(false);
     }
-  }, [
-    handleStartSearch,
-    preserveCase,
-    replacePdp,
-    replaceTerm,
-    results,
-    retrieveFindJobUpdate,
-    totalNumberOfResults,
-  ]);
+  }, [preserveCase, replacePdp, replaceTerm, results, retrieveFindJobUpdate, totalNumberOfResults]);
 
   const visibleResults = useMemo(
     () =>
@@ -980,7 +974,7 @@ global.webViewComponent = function FindWebView({
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  handleStartSearch();
+                  handleStartSearch(true);
                 }
               }}
               placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
@@ -1041,7 +1035,7 @@ global.webViewComponent = function FindWebView({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  onClick={handleStartSearch}
+                  onClick={() => handleStartSearch(true)}
                   disabled={
                     !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
                   }
@@ -1162,7 +1156,7 @@ global.webViewComponent = function FindWebView({
                 variant="ghost"
                 size="icon"
                 className="tw-h-7 tw-w-7"
-                disabled={focusedVisibleIndex === 0 || visibleResults.length === 0}
+                disabled={focusedVisibleIndex <= 0 || visibleResults.length === 0}
                 onClick={handlePreviousResult}
                 aria-label={localizedStrings['%webView_find_previousResult%']}
               >
