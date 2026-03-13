@@ -71,6 +71,8 @@
   "%overlay_dialog_title_alert%": "Alert",
   "%overlay_dialog_title_confirm%": "Confirm",
   "%overlay_dialog_title_dialog%": "Dialog",
+  "%overlay_commandPalette_searchPlaceholder%": "Search...",
+  "%overlay_commandPalette_noResults%": "No results found",
   "%product_name%": "Platform.Bible",
   "%product_shortName%": "Platform",
   "%project_full_name_missing%": "*Name Missing*",

@@ -193,6 +193,8 @@
   "%overlay_dialog_title_alert%": "Alerta",
   "%overlay_dialog_title_confirm%": "Confirmar",
   "%overlay_dialog_title_dialog%": "Diálogo",
+  "%overlay_commandPalette_searchPlaceholder%": "Buscar...",
+  "%overlay_commandPalette_noResults%": "No se encontraron resultados",
   "%product_name%": "Platform.Bible",
   "%product_shortName%": "Platform",
   "%project_full_name_missing%": "*Falta el Nombre*",
