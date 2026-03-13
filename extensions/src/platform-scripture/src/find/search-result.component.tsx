@@ -9,6 +9,7 @@ import {
 } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
 import { useEffect, useMemo, useState } from 'react';
+import { LocalizedBookData } from './find-types';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean };
 
@@ -36,7 +37,7 @@ interface SearchResultProps {
   /** UsjReaderWriter for the book this search result occurred in */
   usjReaderWriter: UsjReaderWriter | undefined;
   /** Map of book IDs to their localized display names */
-  localizedBookData: Map<string, { localizedId: string }>;
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
   /** Callback function called when the user clicks on this search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
