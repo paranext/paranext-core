@@ -24,7 +24,7 @@ import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import React$1 from 'react';
-import { ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -1016,6 +1016,229 @@ export interface MarkerMenuProps {
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
 export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
+type PlatformIconName = string;
+/**
+ * A single item in an overlay context menu. Discriminated union on `type`:
+ *
+ * - `'item'` — A clickable menu item that returns its `id` when selected.
+ * - `'separator'` — A visual divider between groups of items.
+ * - `'submenu'` — A nested menu that expands on hover to show child `items`.
+ * - `'checkbox'` — A toggleable item that reports its new `checked` state when selected.
+ * - `'radio'` — A radio button within a named `group`.
+ */
+export type OverlayContextMenuItem = {
+	type: "item";
+	id: string;
+	label: string | LocalizeKey;
+	icon?: PlatformIconName;
+	shortcut?: string;
+	disabled?: boolean;
+	destructive?: boolean;
+} | {
+	type: "separator";
+} | {
+	type: "submenu";
+	label: string | LocalizeKey;
+	icon?: PlatformIconName;
+	items: OverlayContextMenuItem[];
+} | {
+	type: "checkbox";
+	id: string;
+	label: string | LocalizeKey;
+	checked: boolean;
+} | {
+	type: "radio";
+	id: string;
+	label: string | LocalizeKey;
+	value: string;
+	group: string;
+	checked: boolean;
+};
+/** Result returned when the user selects an item from the context menu */
+export type OverlayContextMenuResult = {
+	itemId: string;
+	checked?: boolean;
+};
+/** Props for the presentational OverlayContextMenu component */
+export type OverlayContextMenuProps = {
+	/** Menu items to display */
+	items: OverlayContextMenuItem[];
+	/** Document-relative position for the menu */
+	position: {
+		x: number;
+		y: number;
+	};
+	/** Called when the user selects a menu item */
+	onSelect: (result: OverlayContextMenuResult) => void;
+	/** Called when the menu is dismissed without a selection */
+	onDismiss: () => void;
+};
+/**
+ * Renders a context menu at a fixed position using Radix DropdownMenu. Supports items, separators,
+ * submenus, checkboxes, and radio groups.
+ */
+export declare function OverlayContextMenu({ items, position, onSelect, onDismiss, }: OverlayContextMenuProps): import("react/jsx-runtime").JSX.Element;
+/** The supported modal dialog types */
+export type OverlayModalDialogType = "alert" | "confirm";
+/** Options for each modal dialog type, keyed by dialog type */
+export interface OverlayModalDialogOptions {
+	alert: {
+		title?: string | LocalizeKey;
+		message: string | LocalizeKey;
+		okLabel?: string | LocalizeKey;
+	};
+	confirm: {
+		title?: string | LocalizeKey;
+		message: string | LocalizeKey;
+		okLabel?: string | LocalizeKey;
+		cancelLabel?: string | LocalizeKey;
+		destructive?: boolean;
+	};
+}
+/** Props for the presentational OverlayModalDialog component */
+export type OverlayModalDialogProps = {
+	/** Which dialog variant to render */
+	dialogType: OverlayModalDialogType;
+	/** Type-specific dialog configuration */
+	options: OverlayModalDialogOptions[OverlayModalDialogType];
+	/** Called when the dialog resolves with a result */
+	onResolve: (result: unknown) => void;
+	/** Called when the dialog is dismissed without a result */
+	onDismiss: () => void;
+};
+/**
+ * Renders a modal dialog using Radix Dialog. Supports alert and confirm dialog types with
+ * appropriate UI elements, keyboard handling, and accessibility attributes.
+ */
+export declare function OverlayModalDialog({ dialogType, options, onResolve, onDismiss, }: OverlayModalDialogProps): import("react/jsx-runtime").JSX.Element;
+/** An action button displayed at the bottom of a card-type popover */
+export type OverlayPopoverAction = {
+	id: string;
+	label: string | LocalizeKey;
+	variant?: "default" | "destructive" | "secondary";
+};
+/** A segment of styled text within rich text content */
+export type OverlayRichTextRun = {
+	text: string | LocalizeKey;
+	bold?: boolean;
+	italic?: boolean;
+	scriptureRef?: boolean;
+};
+/**
+ * The content to display inside a popover. Discriminated union on `type`:
+ *
+ * - `'text'` — Simple text with an optional title and a plain-text body.
+ * - `'list'` — A bulleted list of items with an optional title.
+ * - `'description'` — A term/detail list, useful for metadata or properties.
+ * - `'richText'` — Styled text composed of runs with inline formatting.
+ * - `'card'` — A card with title, body text, and action buttons.
+ */
+export type OverlayPopoverContent = {
+	type: "text";
+	title?: string | LocalizeKey;
+	body: string | LocalizeKey;
+} | {
+	type: "list";
+	title?: string | LocalizeKey;
+	items: (string | LocalizeKey)[];
+} | {
+	type: "description";
+	title?: string | LocalizeKey;
+	entries: {
+		term: string | LocalizeKey;
+		detail: string | LocalizeKey;
+	}[];
+} | {
+	type: "richText";
+	title?: string | LocalizeKey;
+	body: OverlayRichTextRun[];
+} | {
+	type: "card";
+	title?: string | LocalizeKey;
+	body: string | LocalizeKey;
+	actions: OverlayPopoverAction[];
+};
+/** Props for the presentational OverlayPopover component */
+export type OverlayPopoverProps = {
+	/** The content to display inside the popover */
+	content: OverlayPopoverContent;
+	/** Document-relative position for the popover anchor */
+	position: {
+		x: number;
+		y: number;
+	};
+	/** Optional anchor dimensions */
+	anchor?: {
+		width?: number;
+		height?: number;
+	};
+	/** Preferred side of the anchor. Defaults to 'bottom'. */
+	side?: "top" | "bottom" | "left" | "right";
+	/** Maximum width in pixels. Defaults to 320. */
+	maxWidth?: number;
+	/** Whether to display an arrow pointing toward the anchor. Defaults to true. */
+	showArrow?: boolean;
+	/** Called when the user clicks an action button (card content) */
+	onAction?: (actionId: string) => void;
+	/** Called when the popover is dismissed */
+	onDismiss: () => void;
+};
+/**
+ * Renders a popover anchored to a position using Radix Popover. Supports text, list, description,
+ * rich text, and card content types with optional action buttons and arrow indicator.
+ */
+export declare function OverlayPopover({ content, position, anchor, side, maxWidth, showArrow, onAction, onDismiss, }: OverlayPopoverProps): import("react/jsx-runtime").JSX.Element;
+/** A single item in the command palette */
+export type OverlayCommandPaletteItem = {
+	/** Unique identifier returned when this item is selected */
+	id: string;
+	/** Primary display text */
+	label: string | LocalizeKey;
+	/** Secondary description text displayed below the label */
+	description?: string | LocalizeKey;
+	/** Optional icon displayed to the left of the label */
+	icon?: string;
+	/** Optional badge text (e.g., "Deprecated", "Disallowed") */
+	badge?: string | LocalizeKey;
+	/** Optional group key for visual sectioning with group headers */
+	group?: string;
+	/** Whether the item is grayed out and non-selectable. Defaults to false. */
+	disabled?: boolean;
+};
+/** Props for the presentational OverlayCommandPalette component */
+export type OverlayCommandPaletteProps = {
+	/** The selectable items to display */
+	items: OverlayCommandPaletteItem[];
+	/** Document-relative position for the palette anchor. Omit for centered mode. */
+	position?: {
+		x: number;
+		y: number;
+	};
+	/** Optional anchor dimensions */
+	anchor?: {
+		width?: number;
+		height?: number;
+	};
+	/** Preferred side of the anchor. Defaults to 'bottom'. */
+	side?: "top" | "bottom" | "left" | "right";
+	/** Placeholder text for the search input */
+	placeholder?: string;
+	/** Text shown when no items match the search filter. Defaults to 'No results found'. */
+	noResultsText?: string;
+	/** Maximum width in pixels. Defaults to 500. */
+	maxWidth?: number;
+	/** Maximum height in pixels. Defaults to 400. */
+	maxHeight?: number;
+	/** Called when the user selects an item */
+	onSelect: (itemId: string) => void;
+	/** Called when the palette is dismissed (Escape, click outside) */
+	onDismiss: () => void;
+};
+/**
+ * Renders a command palette as a searchable list of items. Positioned via a Radix Popover virtual
+ * anchor when `position` is provided, or centered in the viewport when omitted.
+ */
+export declare function OverlayCommandPalette({ items, position, anchor, side, placeholder, noResultsText, maxWidth, maxHeight, onSelect, onDismiss, }: OverlayCommandPaletteProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
@@ -1670,6 +1893,11 @@ export type ComboBoxProps<T> = {
 	/** Additional css classes to help with unique styling of the combo box popover */
 	popoverContentClassName?: string;
 	/**
+	 * Additional inline styles for the combo box popover. Use for z-index overrides instead of
+	 * className to avoid being overridden by PopoverContent's inline default z-index.
+	 */
+	popoverContentStyle?: React$1.CSSProperties;
+	/**
 	 * The selected value that the combo box currently holds. Must be shallow equal to one of the
 	 * options entries.
 	 */
@@ -1706,7 +1934,7 @@ export type ComboBoxProps<T> = {
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, popoverContentStyle, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 type EditorKeyboardShortcutsProps = React$1.PropsWithChildren & {
 	editorRef: React$1.MutableRefObject<EditorRef | null>;
 };
@@ -2319,7 +2547,7 @@ export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<Sel
  */
 export declare function ResizablePanelGroup({ className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelGroup>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ResizablePanelGroup */
-export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLElement | HTMLCanvasElement | HTMLImageElement | HTMLVideoElement | HTMLAnchorElement | HTMLScriptElement | HTMLEmbedElement | HTMLFormElement | HTMLHeadElement | HTMLAreaElement | HTMLObjectElement | HTMLLinkElement | HTMLMapElement | HTMLInputElement | HTMLBaseElement | HTMLTimeElement | HTMLDataElement | HTMLProgressElement | HTMLTrackElement | HTMLSourceElement | HTMLButtonElement | HTMLAudioElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLTableCaptionElement | HTMLTableColElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDivElement | HTMLDListElement | HTMLFieldSetElement | HTMLHeadingElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLabelElement | HTMLLegendElement | HTMLLIElement | HTMLMenuElement | HTMLMetaElement | HTMLMeterElement | HTMLOListElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLParagraphElement | HTMLPictureElement | HTMLPreElement | HTMLSelectElement | HTMLSlotElement | HTMLSpanElement | HTMLStyleElement | HTMLTableElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTemplateElement | HTMLTextAreaElement | HTMLTitleElement | HTMLTableRowElement | HTMLUListElement>, "id" | "onResize"> & {
+export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLImageElement | HTMLElement | HTMLVideoElement | HTMLCanvasElement | HTMLAnchorElement | HTMLScriptElement | HTMLEmbedElement | HTMLFormElement | HTMLHeadElement | HTMLAreaElement | HTMLObjectElement | HTMLLinkElement | HTMLMapElement | HTMLInputElement | HTMLBaseElement | HTMLDataElement | HTMLTimeElement | HTMLSourceElement | HTMLProgressElement | HTMLTrackElement | HTMLButtonElement | HTMLAudioElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLTableCaptionElement | HTMLTableColElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDivElement | HTMLDListElement | HTMLFieldSetElement | HTMLHeadingElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLabelElement | HTMLLegendElement | HTMLLIElement | HTMLMenuElement | HTMLMetaElement | HTMLMeterElement | HTMLOListElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLParagraphElement | HTMLPictureElement | HTMLPreElement | HTMLSelectElement | HTMLSlotElement | HTMLSpanElement | HTMLStyleElement | HTMLTableElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTemplateElement | HTMLTextAreaElement | HTMLTitleElement | HTMLTableRowElement | HTMLUListElement>, "id" | "onResize"> & {
 	className?: string;
 	collapsedSize?: number | undefined;
 	collapsible?: boolean | undefined;
@@ -2693,6 +2921,16 @@ export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCh
 	/** Focus an option by its ID */
 	focusOption: (id: string) => void;
 };
+/** Z-index for elements that need to appear above rc-dock floating tabs (~200) */
+export declare const Z_INDEX_ABOVE_DOCK = 250;
+/** Z-index for the footnote editor layer */
+export declare const Z_INDEX_FOOTNOTE_EDITOR = 300;
+/** Z-index for overlay popovers and context menus */
+export declare const Z_INDEX_OVERLAY = 400;
+/** Z-index for the semi-transparent backdrop behind modal dialogs */
+export declare const Z_INDEX_MODAL_BACKDROP = 450;
+/** Z-index for modal dialog content */
+export declare const Z_INDEX_MODAL = 500;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

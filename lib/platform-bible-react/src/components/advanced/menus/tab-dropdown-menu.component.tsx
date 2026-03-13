@@ -29,6 +29,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
+import { Z_INDEX_ABOVE_DOCK } from '../../z-index';
 
 const getGroupContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
@@ -145,7 +146,7 @@ export default function TabDropdownMenu({
           {icon ?? <MenuIcon />}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="tw-z-[250]">
+      <DropdownMenuContent align="start" style={{ zIndex: Z_INDEX_ABOVE_DOCK }}>
         {Object.entries(menuData.columns)
           .filter(([, column]) => typeof column === 'object')
           .sort(([, a], [, b]) => {

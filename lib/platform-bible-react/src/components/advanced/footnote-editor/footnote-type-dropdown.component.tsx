@@ -12,6 +12,7 @@ import { TooltipTrigger } from '@radix-ui/react-tooltip';
 import { FunctionSquare, SquareSigma, SquareX } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { FootnoteEditorLocalizedStrings } from './footnote-editor.types';
+import { Z_INDEX_FOOTNOTE_EDITOR } from '../../z-index';
 
 interface FootnoteTypeDropdownProps {
   noteType: string;
@@ -87,7 +88,7 @@ export function FootnoteTypeDropdown({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <DropdownMenuContent className="tw-z-[300]">
+      <DropdownMenuContent style={{ zIndex: Z_INDEX_FOOTNOTE_EDITOR }}>
         <DropdownMenuLabel>
           {localizedStrings['%footnoteEditor_noteTypeDropdown_label%']}
         </DropdownMenuLabel>
