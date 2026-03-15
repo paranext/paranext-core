@@ -1215,7 +1215,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public string GetBookUsfm(VerseRef verseRef)
     {
-        return GetFromScrText(
+        return GetUsfmFromScrText(
             verseRef,
             (ScrText scrText, VerseRef verseRef) => scrText.GetText(verseRef, false, true)
         );
@@ -1223,7 +1223,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public string GetChapterUsfm(VerseRef verseRef)
     {
-        return GetFromScrText(
+        return GetUsfmFromScrText(
             verseRef,
             (ScrText scrText, VerseRef verseRef) => scrText.GetText(verseRef, true, true)
         );
@@ -1231,17 +1231,55 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public string GetVerseUsfm(VerseRef verseRef)
     {
-        return GetFromScrText(
+        return GetUsfmFromScrText(
             verseRef,
             (ScrText scrText, VerseRef verseRef) =>
                 scrText.Parser.GetVerseUsfmText(FindMatchingVerseRefInScrText(verseRef, scrText))
         );
     }
 
+    /// <summary>
+    /// Copied from `ScrText.StandardizeCrLfsIfNecessary`. We need to do this when setting USFM
+    /// because we need to normalize USFM with CR/LFs before we run `ScrText.PutText`, and we expect
+    /// CR not to be present on the USFM received for setting.
+    ///
+    /// Some programs (include cc which is used for mapin/mapout) strip out CRs.
+    /// Put them back in if missing. Also terminates with CR/LF
+    /// </summary>
+    private static string StandardizeCrLfsIfNecessary(string text)
+    {
+        text = text.Replace("\r", "").Replace("\n", "\r\n");
+        if (!text.EndsWith("\r\n", StringComparison.Ordinal))
+            text = text + "\r\n";
+        return text;
+    }
+
+    /// <summary>
+    /// Strip out the carriage returns from a string. This should be run on all USFM text going out
+    /// from this class.
+    ///
+    /// We use just LF in Platform.Bible Scripture text so UsjReaderWriter can accurately convert
+    /// between USFM and USJ positions without knowing the USFM.
+    /// </summary>
+    /// <param name="text"></param>
+    /// <returns></returns>
+    private static string RemoveCarriageReturns(string text)
+    {
+        return text.Replace("\r", "");
+    }
+
     public bool SetBookUsfm(VerseRef verseRef, string data)
     {
         verseRef.ChapterNum = 0;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        // Make newlines have CRLF because Paratext 9.4 always does this regardless of operating
+        // system, and we want to match Paratext 9.4's whitespace.
+        data = StandardizeCrLfsIfNecessary(data);
+        // Normalize the USFM before saving (note: this is now done twice when called from SetBookUsx,
+        // but that normalization is done before making sure everything is CRLF which does affect
+        // the normalization code, unfortunately. Could optimize)
+        data = UsfmToken.NormalizeUsfm(scrText, verseRef.BookNum, data);
 
         var isNewBook = false;
 
@@ -1271,6 +1309,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+            // Make newlines have CRLF because Paratext 9.4 always does this regardless of operating
+            // system, and we want to match Paratext 9.4's whitespace.
+            data = StandardizeCrLfsIfNecessary(data);
+            // Normalize the USFM before saving (note: this is now done twice when called from SetChapterUsx,
+            // but that normalization is done before making sure everything is CRLF which does affect
+            // the normalization code, unfortunately. Could optimize)
+            data = UsfmToken.NormalizeUsfm(scrText, verseRef.BookNum, data);
+
             RunWithinLock(
                 WriteScope.EntireProject(scrText),
                 writeLock =>
@@ -1350,7 +1397,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     // This may happen if someone makes a whitespace change that gets normalized
                     // back to the same USFM
                     var currentUsfm = GetChapterUsfm(verseRef);
-                    if (currentUsfm == usfm)
+                    // We need to remove carriage returns from the new USFM before comparing
+                    // because GetChapterUsfm removes carriage returns but the normalized USFM
+                    // from the input USX appropriately has CRLFs for saving to file
+                    if (currentUsfm == RemoveCarriageReturns(usfm))
                     {
                         didChange = false;
                         return;
@@ -1396,6 +1446,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #region Private helper methods
 
+    /// <summary>
+    /// Helper function to make it convenient to get text data from ScrText and normalize it so it
+    /// is ready to be used.
+    /// </summary>
+    /// <param name="verseRef">Verse reference at which to get the text data</param>
+    /// <param name="getTextFromScrText">Function to get the text from ScrText. If you want to get USFM from the ScrText, use `GetUsfmFromScrText` instead</param>
+    /// <returns></returns>
+    /// <exception cref="MissingBookException">If the requested book is missing in the ScrText</exception>
+    /// <exception cref="InvalidDataException">If the project was not found</exception>
     private string GetFromScrText(
         VerseRef verseRef,
         Func<ScrText, VerseRef, string> getTextFromScrText
@@ -1416,6 +1475,37 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Project with ID '{ProjectDetails.Metadata.Id}' was not found"
             );
         }
+    }
+
+    /// <summary>
+    /// Helper function to make it convenient to get USFM data from ScrText and normalize it so it
+    /// is ready to be used.
+    /// </summary>
+    /// <param name="verseRef">Verse reference at which to get the USFM data</param>
+    /// <param name="getTextFromScrText">Function to get the USFM from ScrText. If you want to get other kinds of text from the ScrText like USX, use `GetFromScrText` instead</param>
+    /// <returns></returns>
+    /// <exception cref="MissingBookException">If the requested book is missing in the ScrText</exception>
+    /// <exception cref="InvalidDataException">If the project was not found</exception>
+    private string GetUsfmFromScrText(
+        VerseRef verseRef,
+        Func<ScrText, VerseRef, string> getTextFromScrText
+    )
+    {
+        return GetFromScrText(
+            verseRef,
+            (scrText, verseRef) =>
+            {
+                // Always normalize the USFM and remove CR before giving it out. This way,
+                // UsjReaderWriter can accurately convert between USFM and USJ positions without knowing
+                // the USFM
+                var usfm = UsfmToken.NormalizeUsfm(
+                    scrText,
+                    verseRef.BookNum,
+                    getTextFromScrText(scrText, verseRef)
+                );
+                return RemoveCarriageReturns(usfm);
+            }
+        );
     }
 
     /// <summary>
