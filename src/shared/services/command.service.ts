@@ -77,4 +77,4 @@ export const createSendCommandFunction = <CommandName extends CommandNames>(
  * can register a command that other services and extensions can send you. You can send commands to
  * other services and extensions that have registered commands.
  */
-export type moduleSummaryComments = {};
+export type ModuleSummaryComments = {};
