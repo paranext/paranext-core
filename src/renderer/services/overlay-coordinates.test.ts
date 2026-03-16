@@ -1,9 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import {
   translateCoordinates,
   getWebViewIframe,
   clampToViewport,
+  isWebViewVisible,
 } from '@renderer/services/overlay-coordinates';
+
+// jsdom doesn't provide CSS.escape; polyfill for tests
+beforeAll(() => {
+  if (typeof CSS === 'undefined' || !CSS.escape) {
+    globalThis.CSS = {
+      escape: (value: string) => value.replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g, '\\$&'),
+    } as typeof CSS;
+  }
+});
 
 describe('overlay-coordinates', () => {
   describe('getWebViewIframe', () => {
@@ -27,6 +37,13 @@ describe('overlay-coordinates', () => {
     it('should return null for a non-existent webViewId', () => {
       const result = getWebViewIframe('non-existent');
       expect(result).toBeNull();
+    });
+
+    it('should return null without throwing when webViewId contains CSS selector characters', () => {
+      // Without CSS.escape, characters like " or ] would break the attribute selector
+      // and cause querySelector to throw a DOMException
+      expect(() => getWebViewIframe('malicious"]iframe')).not.toThrow();
+      expect(getWebViewIframe('malicious"]iframe')).toBeNull();
     });
   });
 
@@ -104,6 +121,137 @@ describe('overlay-coordinates', () => {
     it('should use default padding of 0', () => {
       const result = clampToViewport({ x: -5, y: -5 });
       expect(result).toEqual({ x: 0, y: 0 });
+    });
+  });
+
+  describe('isWebViewVisible', () => {
+    let mockIframe: HTMLIFrameElement;
+
+    beforeEach(() => {
+      Object.defineProperty(window, 'innerWidth', { value: 1024, writable: true });
+      Object.defineProperty(window, 'innerHeight', { value: 768, writable: true });
+
+      mockIframe = document.createElement('iframe');
+      mockIframe.setAttribute('data-web-view-id', 'test-webview-1');
+      document.body.appendChild(mockIframe);
+    });
+
+    afterEach(() => {
+      document.body.removeChild(mockIframe);
+      vi.restoreAllMocks();
+    });
+
+    it('should return true for "renderer" pseudo-webViewId', () => {
+      expect(isWebViewVisible('renderer')).toBe(true);
+    });
+
+    it('should return false for a non-existent webViewId', () => {
+      expect(isWebViewVisible('non-existent')).toBe(false);
+    });
+
+    it('should return true for an iframe within the viewport', () => {
+      vi.spyOn(mockIframe, 'getBoundingClientRect').mockReturnValue({
+        top: 50,
+        left: 100,
+        bottom: 550,
+        right: 500,
+        width: 400,
+        height: 500,
+        x: 100,
+        y: 50,
+        toJSON: () => ({}),
+      });
+      expect(isWebViewVisible('test-webview-1')).toBe(true);
+    });
+
+    it('should return false for an iframe with zero dimensions', () => {
+      vi.spyOn(mockIframe, 'getBoundingClientRect').mockReturnValue({
+        top: 50,
+        left: 100,
+        bottom: 50,
+        right: 100,
+        width: 0,
+        height: 0,
+        x: 100,
+        y: 50,
+        toJSON: () => ({}),
+      });
+      expect(isWebViewVisible('test-webview-1')).toBe(false);
+    });
+
+    it('should return false for an iframe entirely off-screen to the right', () => {
+      vi.spyOn(mockIframe, 'getBoundingClientRect').mockReturnValue({
+        top: 50,
+        left: 1200,
+        bottom: 550,
+        right: 1600,
+        width: 400,
+        height: 500,
+        x: 1200,
+        y: 50,
+        toJSON: () => ({}),
+      });
+      expect(isWebViewVisible('test-webview-1')).toBe(false);
+    });
+
+    it('should return false for an iframe entirely below the viewport', () => {
+      vi.spyOn(mockIframe, 'getBoundingClientRect').mockReturnValue({
+        top: 900,
+        left: 100,
+        bottom: 1400,
+        right: 500,
+        width: 400,
+        height: 500,
+        x: 100,
+        y: 900,
+        toJSON: () => ({}),
+      });
+      expect(isWebViewVisible('test-webview-1')).toBe(false);
+    });
+
+    it('should return false for an iframe entirely above the viewport', () => {
+      vi.spyOn(mockIframe, 'getBoundingClientRect').mockReturnValue({
+        top: -600,
+        left: 100,
+        bottom: -100,
+        right: 500,
+        width: 400,
+        height: 500,
+        x: 100,
+        y: -600,
+        toJSON: () => ({}),
+      });
+      expect(isWebViewVisible('test-webview-1')).toBe(false);
+    });
+
+    it('should return false for an iframe entirely to the left of the viewport', () => {
+      vi.spyOn(mockIframe, 'getBoundingClientRect').mockReturnValue({
+        top: 50,
+        left: -500,
+        bottom: 550,
+        right: -100,
+        width: 400,
+        height: 500,
+        x: -500,
+        y: 50,
+        toJSON: () => ({}),
+      });
+      expect(isWebViewVisible('test-webview-1')).toBe(false);
+    });
+
+    it('should return true for an iframe partially overlapping the viewport', () => {
+      vi.spyOn(mockIframe, 'getBoundingClientRect').mockReturnValue({
+        top: -100,
+        left: -100,
+        bottom: 200,
+        right: 200,
+        width: 300,
+        height: 300,
+        x: -100,
+        y: -100,
+        toJSON: () => ({}),
+      });
+      expect(isWebViewVisible('test-webview-1')).toBe(true);
     });
   });
 });

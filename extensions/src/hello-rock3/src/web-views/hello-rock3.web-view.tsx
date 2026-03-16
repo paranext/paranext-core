@@ -650,6 +650,8 @@ globalThis.webViewComponent = function HelloRock3({
       },
       globalThis.webViewId,
     );
+    // showPopover returns undefined if the request was dropped by debounce
+    if (!overlayId) return;
     popoverIdRef.current = overlayId;
 
     // Clean up when dismissed

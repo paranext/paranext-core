@@ -24,7 +24,7 @@ import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import React$1 from 'react';
-import { ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -1207,6 +1207,8 @@ export type OverlayCommandPaletteProps = {
 	side?: "top" | "bottom" | "left" | "right";
 	/** Placeholder text for the search input */
 	placeholder?: string;
+	/** Text shown when no items match the search filter. Defaults to 'No results found'. */
+	noResultsText?: string;
 	/** Maximum width in pixels. Defaults to 500. */
 	maxWidth?: number;
 	/** Maximum height in pixels. Defaults to 400. */
@@ -1220,7 +1222,7 @@ export type OverlayCommandPaletteProps = {
  * Renders a command palette as a searchable list of items. Positioned via a Radix Popover virtual
  * anchor when `position` is provided, or centered in the viewport when omitted.
  */
-export declare function OverlayCommandPalette({ items, position, anchor, side, placeholder, maxWidth, maxHeight, onSelect, onDismiss, }: OverlayCommandPaletteProps): import("react/jsx-runtime").JSX.Element;
+export declare function OverlayCommandPalette({ items, position, anchor, side, placeholder, noResultsText, maxWidth, maxHeight, onSelect, onDismiss, }: OverlayCommandPaletteProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
@@ -1875,6 +1877,11 @@ export type ComboBoxProps<T> = {
 	/** Additional css classes to help with unique styling of the combo box popover */
 	popoverContentClassName?: string;
 	/**
+	 * Additional inline styles for the combo box popover. Use for z-index overrides instead of
+	 * className to avoid being overridden by PopoverContent's inline default z-index.
+	 */
+	popoverContentStyle?: React$1.CSSProperties;
+	/**
 	 * The selected value that the combo box currently holds. Must be shallow equal to one of the
 	 * options entries.
 	 */
@@ -1911,7 +1918,7 @@ export type ComboBoxProps<T> = {
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, popoverContentStyle, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 type EditorKeyboardShortcutsProps = React$1.PropsWithChildren & {
 	editorRef: React$1.MutableRefObject<EditorRef | null>;
 };

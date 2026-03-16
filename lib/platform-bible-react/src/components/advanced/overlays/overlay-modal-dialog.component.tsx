@@ -182,16 +182,21 @@ export function OverlayModalDialog({
   );
 
   const handleCancel = useCallback(() => {
-    if (hasResolved.current) return;
-    hasResolved.current = true;
-    onDismiss();
-  }, [onDismiss]);
+    // Confirm Cancel button resolves false (explicit cancellation), distinct from
+    // Escape/click-outside which calls onDismiss → resolves undefined
+    resolveOnce(false);
+  }, [resolveOnce]);
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
-      if (!open) handleCancel();
+      // Escape / click-outside dismissal → resolve undefined via onDismiss
+      if (!open) {
+        if (hasResolved.current) return;
+        hasResolved.current = true;
+        onDismiss();
+      }
     },
-    [handleCancel],
+    [onDismiss],
   );
 
   const dialogRole = getDialogRole(dialogType);

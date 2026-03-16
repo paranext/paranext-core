@@ -42,7 +42,12 @@ export function getOverlaysByWebView(webViewId: string): OverlayEntry[] {
   return Array.from(overlays.values()).filter((entry) => entry.webViewId === webViewId);
 }
 
-/** Remove all overlays for a specific webViewId */
+/**
+ * Remove all overlays for a specific webViewId. WARNING: This does not call resolve/reject on the
+ * removed entries. Callers must settle overlay promises before calling this to avoid leaking
+ * unsettled popover promises. Production dismissal should go through the service host's dismiss
+ * functions which resolve before removing.
+ */
 export function removeOverlaysByWebView(webViewId: string): void {
   let changed = false;
   overlays.forEach((entry, id) => {

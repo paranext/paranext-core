@@ -23,7 +23,6 @@ vi.mock('@renderer/services/overlay-coordinates', () => ({
   translateCoordinates: vi.fn((_, pos) => pos),
   clampToViewport: vi.fn((pos) => pos),
   isWebViewVisible: vi.fn(() => true),
-  isPositionInViewport: vi.fn(() => true),
   getWebViewIframe: vi.fn(() => undefined),
 }));
 
@@ -56,6 +55,12 @@ vi.mock('@shared/services/menu-data.service', () => ({
 // Import the service after mocks are set up
 // eslint-disable-next-line import/first
 import { overlayService, resetDebounceState } from '@renderer/services/overlay.service-host';
+
+/** Assert that showPopover returned a defined overlay ID (non-debounced). Narrows the type. */
+function expectPopoverId(id: string | undefined): asserts id is string {
+  expect(id).toBeDefined();
+  expect(typeof id).toBe('string');
+}
 
 describe('overlay.service-host', () => {
   beforeEach(() => {
@@ -275,9 +280,7 @@ describe('overlay.service-host', () => {
 
     it('should create a popover overlay entry and return an ID string', async () => {
       const overlayId = await overlayService.showPopover(validRequest, 'test-webview');
-
-      expect(typeof overlayId).toBe('string');
-      expect(overlayId.length).toBeGreaterThan(0);
+      expectPopoverId(overlayId);
 
       // Verify an overlay entry was created in the store
       const overlays = getOverlays();
@@ -305,12 +308,14 @@ describe('overlay.service-host', () => {
       };
 
       const id1 = await overlayService.showPopover(request1, 'test-webview');
+      expectPopoverId(id1);
       const dismissPromise1 = overlayService.onPopoverDismissed(id1);
 
       // Advance past debounce cooldown so the second call is accepted
       vi.advanceTimersByTime(DEBOUNCE_COOLDOWN_MS);
 
       const id2 = await overlayService.showPopover(request2, 'test-webview');
+      expectPopoverId(id2);
 
       // First should have been rejected with OverlayReplacedError
       await expect(dismissPromise1).rejects.toThrow(OverlayReplacedError);
@@ -329,6 +334,7 @@ describe('overlay.service-host', () => {
 
     it('should update popover content in store', async () => {
       const overlayId = await overlayService.showPopover(validRequest, 'test-webview');
+      expectPopoverId(overlayId);
 
       const newContent: PopoverContent = { type: 'text', body: 'Updated content' };
       await overlayService.updatePopover(overlayId, newContent);
@@ -351,6 +357,7 @@ describe('overlay.service-host', () => {
 
     it('should dismiss popover and resolve with undefined', async () => {
       const overlayId = await overlayService.showPopover(validRequest, 'test-webview');
+      expectPopoverId(overlayId);
       const dismissPromise = overlayService.onPopoverDismissed(overlayId);
 
       await overlayService.dismissPopover(overlayId);
@@ -369,6 +376,7 @@ describe('overlay.service-host', () => {
 
     it('should resolve onPopoverDismissed when popover is dismissed', async () => {
       const overlayId = await overlayService.showPopover(validRequest, 'test-webview');
+      expectPopoverId(overlayId);
       const dismissPromise = overlayService.onPopoverDismissed(overlayId);
 
       // Dismiss the popover
@@ -383,6 +391,21 @@ describe('overlay.service-host', () => {
       expect(result).toBeUndefined();
     });
 
+    it('should return undefined when debounce cooldown is active', async () => {
+      const overlayId1 = await overlayService.showPopover(validRequest, 'test-webview');
+      expectPopoverId(overlayId1);
+      // Second call within 50ms should be dropped and return undefined
+      const overlayId2 = await overlayService.showPopover(validRequest, 'test-webview');
+      expect(overlayId2).toBeUndefined();
+
+      // Only one popover should exist in the store
+      const popovers = getOverlays().filter((o) => o.type === 'popover');
+      expect(popovers).toHaveLength(1);
+
+      // Clean up
+      await overlayService.dismissPopover(overlayId1);
+    });
+
     it('should auto-dismiss after dismissAfterMs', async () => {
       vi.useFakeTimers();
       resetDebounceState();
@@ -394,6 +417,7 @@ describe('overlay.service-host', () => {
       };
 
       const overlayId = await overlayService.showPopover(request, 'test-webview');
+      expectPopoverId(overlayId);
       const dismissPromise = overlayService.onPopoverDismissed(overlayId);
 
       // Popover should still exist before timeout
