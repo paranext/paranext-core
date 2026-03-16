@@ -424,11 +424,12 @@ export interface IOverlayService {
    * @param request The popover anchor, content, and behavioral options
    * @param webViewId The ID of the WebView requesting the popover. Pass `globalThis.webViewId` from
    *   within a WebView iframe.
-   * @returns The overlay ID string, usable with other popover methods
+   * @returns The overlay ID string, usable with other popover methods. Returns `undefined` if the
+   *   request was dropped by the debounce cooldown.
    * @throws {OverlayValidationError} If the request is invalid
    * @throws {OverlayReplacedError} If replaced by another popover from the same WebView
    */
-  showPopover(request: PopoverRequest, webViewId: string): Promise<string>;
+  showPopover(request: PopoverRequest, webViewId: string): Promise<string | undefined>;
   /**
    * Replaces the content of an existing popover without closing and reopening it. Useful for
    * updating status messages or showing loading progress.

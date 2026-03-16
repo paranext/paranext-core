@@ -139,26 +139,6 @@ globalThis.webViewComponent = function HelloRock3({
         testDeprecatedString,
         testException,
         testMe,
-        overlaySelectProject,
-        overlayOpenEditor,
-        overlayVerboseLogging,
-        overlayAutoSave,
-        overlaySizeSmall,
-        overlaySizeMedium,
-        overlaySizeLarge,
-        overlayMoreActions,
-        overlayShowAlert,
-        overlayAlertTitle,
-        overlayAlertMessage,
-        overlayDeletePersonTitle,
-        overlayDeletePersonMessage,
-        overlayDeletePersonOkLabel,
-        overlayCancel,
-        overlayPopoverAbout,
-        overlayPopoverName,
-        overlayPopoverGreeting,
-        overlayPopoverAge,
-        overlayPopoverUnknown,
       ],
       [],
     ),
@@ -650,6 +630,8 @@ globalThis.webViewComponent = function HelloRock3({
       },
       globalThis.webViewId,
     );
+    // showPopover returns undefined if the request was dropped by debounce
+    if (!overlayId) return;
     popoverIdRef.current = overlayId;
 
     // Clean up when dismissed

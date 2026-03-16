@@ -16,7 +16,6 @@ vi.mock('@renderer/services/overlay-coordinates', () => ({
   translateCoordinates: vi.fn((_wvId: string, pos: { x: number; y: number }) => pos),
   clampToViewport: vi.fn((pos: { x: number; y: number }) => pos),
   isWebViewVisible: vi.fn(() => true),
-  isPositionInViewport: vi.fn(() => true),
   getWebViewIframe: vi.fn(() => undefined),
 }));
 

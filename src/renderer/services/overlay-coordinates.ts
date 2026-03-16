@@ -11,7 +11,10 @@
  * @returns The iframe element, or null if not found
  */
 export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null {
-  return document.querySelector<HTMLIFrameElement>(`iframe[data-web-view-id="${webViewId}"]`);
+  // CSS.escape prevents selector injection if webViewId contains characters like " or ]
+  return document.querySelector<HTMLIFrameElement>(
+    `iframe[data-web-view-id="${CSS.escape(webViewId)}"]`,
+  );
 }
 
 /**
@@ -68,8 +71,15 @@ export function isWebViewVisible(webViewId: string): boolean {
   if (!iframe) return false;
 
   const rect = iframe.getBoundingClientRect();
-  // Iframe must have non-zero dimensions and overlap the viewport
-  return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0;
+  // Iframe must have non-zero dimensions and not be entirely outside the viewport on any side
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.bottom > 0 &&
+    rect.right > 0 &&
+    rect.top < window.innerHeight &&
+    rect.left < window.innerWidth
+  );
 }
 
 /**

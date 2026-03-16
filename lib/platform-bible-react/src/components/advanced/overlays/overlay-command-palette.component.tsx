@@ -53,6 +53,8 @@ export type OverlayCommandPaletteProps = {
   side?: 'top' | 'bottom' | 'left' | 'right';
   /** Placeholder text for the search input */
   placeholder?: string;
+  /** Text shown when no items match the search filter. Defaults to 'No results found'. */
+  noResultsText?: string;
   /** Maximum width in pixels. Defaults to 500. */
   maxWidth?: number;
   /** Maximum height in pixels. Defaults to 400. */
@@ -166,6 +168,7 @@ export function OverlayCommandPalette({
   anchor,
   side = 'bottom',
   placeholder = 'Search...',
+  noResultsText = 'No results found',
   maxWidth = DEFAULT_MAX_WIDTH,
   maxHeight = DEFAULT_MAX_HEIGHT,
   onSelect,
@@ -198,7 +201,7 @@ export function OverlayCommandPalette({
     >
       <CommandInput ref={inputRef} placeholder={placeholder} />
       <CommandList style={{ maxHeight: maxHeight - 44 }}>
-        <CommandEmpty>No results found</CommandEmpty>
+        <CommandEmpty>{noResultsText}</CommandEmpty>
         <GroupedItems items={items} onSelect={onSelect} />
       </CommandList>
     </Command>
