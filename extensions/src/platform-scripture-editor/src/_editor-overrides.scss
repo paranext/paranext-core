@@ -26,13 +26,13 @@
 
 // text selection
 :focus ::selection {
-  color: hsl(var(--accent-foreground));
-  background-color: hsl(var(--accent));
+  color: hsl(var(--primary-foreground));
+  background-color: hsl(var(--primary));
 }
 
 ::selection {
-  color: hsl(var(--secondary-foreground));
-  background-color: hsl(var(--secondary));
+  color: hsl(var(--primary-foreground));
+  background-color: hsl(var(--primary));
 }
 
 // focus ring
