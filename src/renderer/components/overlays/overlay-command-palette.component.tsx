@@ -11,18 +11,33 @@ import { OverlayCommandPalette as PresentationalCommandPalette } from 'platform-
 import { useCallback, useMemo, useRef } from 'react';
 import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 
+// Platform-level default keys for search placeholder and no-results text
+const DEFAULT_PLACEHOLDER_KEY: LocalizeKey = '%overlay_commandPalette_searchPlaceholder%';
+const DEFAULT_NO_RESULTS_KEY: LocalizeKey = '%overlay_commandPalette_noResults%';
+
 /** Helper to push a value to the keys array if it is a LocalizeKey */
 function pushIfKey(keys: LocalizeKey[], value: string | LocalizeKey | undefined): void {
   if (typeof value === 'string' && isLocalizeKey(value)) keys.push(value);
 }
 
-/** Collects all LocalizeKey values from command palette items and placeholder */
+/**
+ * Collects all localization keys from a command palette configuration.
+ *
+ * Extracts localization keys from the provided command palette items and placeholder, returning an
+ * array of keys that need to be localized. Always includes the default "no results" key.
+ *
+ * @param items - Array of command palette items to collect keys from
+ * @param placeholder - Optional localization key or placeholder text to display when no items are
+ *   shown
+ * @returns Array of localization keys found in the items and placeholder, including the default no
+ *   results key
+ */
 function collectCommandPaletteKeys(
   items: CommandPaletteItem[],
   placeholder: string | LocalizeKey | undefined,
 ): LocalizeKey[] {
-  const keys: LocalizeKey[] = [];
-  pushIfKey(keys, placeholder);
+  const keys: LocalizeKey[] = [DEFAULT_NO_RESULTS_KEY];
+  pushIfKey(keys, placeholder ?? DEFAULT_PLACEHOLDER_KEY);
   items.forEach((item) => {
     pushIfKey(keys, item.label);
     pushIfKey(keys, item.description);
@@ -71,11 +86,16 @@ export function OverlayCommandPalette({ overlay }: Props) {
   );
 
   const localizedPlaceholder = useMemo(() => {
-    if (!overlay.request.placeholder) return undefined;
-    return isLocalizeKey(overlay.request.placeholder)
-      ? (localizedStrings[overlay.request.placeholder] ?? overlay.request.placeholder)
-      : overlay.request.placeholder;
+    const placeholder = overlay.request.placeholder ?? DEFAULT_PLACEHOLDER_KEY;
+    return isLocalizeKey(placeholder)
+      ? (localizedStrings[placeholder] ?? placeholder)
+      : placeholder;
   }, [overlay.request.placeholder, localizedStrings]);
+
+  const localizedNoResults = useMemo(
+    () => localizedStrings[DEFAULT_NO_RESULTS_KEY] ?? 'No results found',
+    [localizedStrings],
+  );
 
   const handleSelect = useCallback(
     (itemId: string) => {
@@ -104,6 +124,7 @@ export function OverlayCommandPalette({ overlay }: Props) {
       }}
       side={overlay.request.side}
       placeholder={localizedPlaceholder}
+      noResultsText={localizedNoResults}
       maxWidth={overlay.request.maxWidth}
       maxHeight={overlay.request.maxHeight}
       onSelect={handleSelect}

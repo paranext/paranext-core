@@ -91,6 +91,8 @@ export type {
   ProjectSettingValidator,
 } from '@shared/services/project-settings.service-model';
 export type {
+  CommandPaletteItem,
+  CommandPaletteRequest,
   ContextMenuItem,
   ContextMenuRequest,
   ContextMenuResult,

@@ -1207,6 +1207,8 @@ export type OverlayCommandPaletteProps = {
 	side?: "top" | "bottom" | "left" | "right";
 	/** Placeholder text for the search input */
 	placeholder?: string;
+	/** Text shown when no items match the search filter. Defaults to 'No results found'. */
+	noResultsText?: string;
 	/** Maximum width in pixels. Defaults to 500. */
 	maxWidth?: number;
 	/** Maximum height in pixels. Defaults to 400. */
@@ -1220,7 +1222,7 @@ export type OverlayCommandPaletteProps = {
  * Renders a command palette as a searchable list of items. Positioned via a Radix Popover virtual
  * anchor when `position` is provided, or centered in the viewport when omitted.
  */
-export declare function OverlayCommandPalette({ items, position, anchor, side, placeholder, maxWidth, maxHeight, onSelect, onDismiss, }: OverlayCommandPaletteProps): import("react/jsx-runtime").JSX.Element;
+export declare function OverlayCommandPalette({ items, position, anchor, side, placeholder, noResultsText, maxWidth, maxHeight, onSelect, onDismiss, }: OverlayCommandPaletteProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.

@@ -15,7 +15,6 @@ import {
   translateCoordinates,
   clampToViewport,
   isWebViewVisible,
-  isPositionInViewport,
   getWebViewIframe,
 } from '@renderer/services/overlay-coordinates';
 import { convertContributionToContextMenuItems } from '@renderer/services/overlay-menu-converter';
@@ -198,9 +197,9 @@ function dismissAllContextMenus(): void {
   const allOverlays = getOverlays();
   allOverlays.forEach((overlay) => {
     if (overlay.type === 'contextMenu') {
+      // overlay.resolve already calls restoreFocus via the wrapper set in showContextMenu
       overlay.resolve(undefined);
       removeOverlay(overlay.id);
-      restoreFocus(overlay.id);
     }
   });
 }
@@ -210,15 +209,9 @@ function dismissAllPopovers(): void {
   const allOverlays = getOverlays();
   allOverlays.forEach((overlay) => {
     if (overlay.type === 'popover') {
+      // overlay.resolve already calls restoreFocus and resolves/deletes popoverPromises
       overlay.resolve(undefined);
       removeOverlay(overlay.id);
-      restoreFocus(overlay.id);
-      // Clean up onPopoverDismissed promises
-      const pending = popoverPromises.get(overlay.id);
-      if (pending) {
-        pending.resolve(undefined);
-        popoverPromises.delete(overlay.id);
-      }
     }
   });
 }
@@ -228,26 +221,9 @@ function dismissAllCommandPalettes(): void {
   const allOverlays = getOverlays();
   allOverlays.forEach((overlay) => {
     if (overlay.type === 'commandPalette') {
+      // overlay.resolve already calls restoreFocus via the wrapper set in showCommandPalette
       overlay.resolve(undefined);
       removeOverlay(overlay.id);
-      restoreFocus(overlay.id);
-    }
-  });
-}
-
-/** Check popovers whose anchors may have scrolled out of view */
-function checkPopoverAnchorsInView(): void {
-  const allOverlays = getOverlays();
-  allOverlays.forEach((overlay) => {
-    if (overlay.type === 'popover' && !isPositionInViewport(overlay.position)) {
-      overlay.resolve(undefined);
-      removeOverlay(overlay.id);
-      restoreFocus(overlay.id);
-      const pending = popoverPromises.get(overlay.id);
-      if (pending) {
-        pending.resolve(undefined);
-        popoverPromises.delete(overlay.id);
-      }
     }
   });
 }
@@ -420,7 +396,10 @@ async function showContextMenuFromContribution(
  * @param webViewId The webViewId that originated the request
  * @returns The overlay ID string
  */
-async function showPopover(request: PopoverRequest, webViewId: string): Promise<string> {
+async function showPopover(
+  request: PopoverRequest,
+  webViewId: string,
+): Promise<string | undefined> {
   validatePopoverRequest(request);
 
   // Visibility check (popovers require visible WebView)
@@ -428,9 +407,9 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
     throw new OverlayNotVisibleError();
   }
 
-  // Leading-edge debounce
+  // Leading-edge debounce: return undefined to signal no popover was created
   if (!debounceCheck('popover', webViewId)) {
-    return '';
+    return undefined;
   }
 
   // Replace any existing popover from this webView
@@ -494,6 +473,8 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
   });
 
   announceToScreenReader('Popover opened');
+
+  lastOverlayCreatedAt = Date.now();
 
   // Set up auto-dismiss timer if requested
   if (request.dismissAfterMs && request.dismissAfterMs > 0) {
@@ -636,13 +617,15 @@ export const overlayService: IOverlayService = {
 
 /** Set up scroll, tab change, and blur listeners */
 function registerAutoDismissListeners(): void {
-  // Dismiss context menus on scroll (capturing phase to catch iframe scrolls too).
+  // Dismiss context menus and popovers on scroll (capturing phase to catch iframe scrolls too).
+  // Popovers are hover-initiated and lose context when the anchor scrolls away; programmatic
+  // popovers that need to survive scroll should live within the iframe boundary instead.
   // Command palettes are intentionally NOT dismissed on scroll — they contain a scrollable list.
   window.addEventListener(
     'scroll',
     () => {
       dismissAllContextMenus();
-      checkPopoverAnchorsInView();
+      dismissAllPopovers();
     },
     { capture: true },
   );
@@ -658,14 +641,9 @@ function registerAutoDismissListeners(): void {
     const allOverlays = getOverlays();
     allOverlays.forEach((overlay) => {
       if (overlay.type === 'popover' && overlay.request.dismissOnClickOutside !== false) {
+        // overlay.resolve already calls restoreFocus and resolves/deletes popoverPromises
         overlay.resolve(undefined);
         removeOverlay(overlay.id);
-        restoreFocus(overlay.id);
-        const pending = popoverPromises.get(overlay.id);
-        if (pending) {
-          pending.resolve(undefined);
-          popoverPromises.delete(overlay.id);
-        }
       }
     });
   });

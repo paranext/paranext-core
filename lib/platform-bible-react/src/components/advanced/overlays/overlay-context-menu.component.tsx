@@ -259,7 +259,10 @@ function renderMenuItems(
     } else if (item.type === 'submenu') {
       result.push(
         <HoverableSubmenu
-          key={`submenu-${item.label}`}
+          // Use index for a stable key — labels are not guaranteed unique (LocalizeKeys may resolve
+          // to the same string), which would cause key collisions and unstable submenu behavior.
+          // eslint-disable-next-line react/no-array-index-key
+          key={`submenu-${i}`}
           label={typeof item.label === 'string' ? item.label : String(item.label)}
           items={item.items}
           onSelect={onSelect}

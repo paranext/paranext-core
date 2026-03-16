@@ -23,7 +23,6 @@ vi.mock('@renderer/services/overlay-coordinates', () => ({
   translateCoordinates: vi.fn((_, pos) => pos),
   clampToViewport: vi.fn((pos) => pos),
   isWebViewVisible: vi.fn(() => true),
-  isPositionInViewport: vi.fn(() => true),
   getWebViewIframe: vi.fn(() => undefined),
 }));
 
@@ -381,6 +380,23 @@ describe('overlay.service-host', () => {
     it('should resolve onPopoverDismissed immediately for unknown ID', async () => {
       const result = await overlayService.onPopoverDismissed('nonexistent-id');
       expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when debounce cooldown is active', async () => {
+      const overlayId1 = await overlayService.showPopover(validRequest, 'test-webview');
+      // Second call within 50ms should be dropped and return undefined
+      const overlayId2 = await overlayService.showPopover(validRequest, 'test-webview');
+
+      expect(overlayId1).toBeDefined();
+      expect(typeof overlayId1).toBe('string');
+      expect(overlayId2).toBeUndefined();
+
+      // Only one popover should exist in the store
+      const popovers = getOverlays().filter((o) => o.type === 'popover');
+      expect(popovers).toHaveLength(1);
+
+      // Clean up
+      await overlayService.dismissPopover(overlayId1);
     });
 
     it('should auto-dismiss after dismissAfterMs', async () => {
