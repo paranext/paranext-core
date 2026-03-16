@@ -399,6 +399,9 @@ export const FootnoteEditorView: FootnoteEditorViewStory = {
             _source?: DeltaSource,
             insertedNodeKey?: string,
           ) => {
+            // replaceEmbedUpdate creates a new node with a new key; keep noteKey in sync so
+            // subsequent saves use the correct key.
+            if (noteKey.current && insertedNodeKey) noteKey.current = insertedNodeKey;
             openFootnoteEditorOnNewNote(ops, insertedNodeKey);
           }}
           ref={editorRef}
@@ -418,6 +421,7 @@ export const FootnoteEditorView: FootnoteEditorViewStory = {
               editorOptions={mergedOptions}
               defaultMarkerMenuTrigger={mergedOptions.markerMenuTrigger ?? '\\'}
               localizedStrings={localizedStrings.localizedStrings?.[args.language]}
+              noteKeyRef={noteKey}
               parentEditorRef={editorRef}
             />
           </PopoverContent>

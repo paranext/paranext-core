@@ -12,7 +12,16 @@ import {
   StateChangeSnapshot,
 } from '@eten-tech-foundation/platform-editor';
 import { Copy, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  MutableRefObject,
+  RefObject,
+} from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -61,6 +70,13 @@ export interface FootnoteEditorProps {
    * parent editor, so the client does not need to handle this in the `onChange` callback.
    */
   parentEditorRef?: RefObject<EditorRef | null>;
+  /**
+   * Mutable ref tracking the current Lexical node key of the note being edited in the parent
+   * editor. Must be kept in sync by the parent: after each call to `replaceEmbedUpdate` the parent
+   * editor fires `onUsjChange` with the newly assigned `insertedNodeKey`; the parent should write
+   * that value back into this ref so that subsequent saves use the correct key.
+   */
+  noteKeyRef?: MutableRefObject<string | undefined>;
 }
 
 /**
@@ -144,6 +160,7 @@ export default function FootnoteEditor({
   defaultMarkerMenuTrigger,
   localizedStrings,
   parentEditorRef,
+  noteKeyRef,
 }: FootnoteEditorProps) {
   // These refs must have default values of `null` to be accepted by the React elements as refs
   // eslint-disable-next-line no-null/no-null
@@ -265,12 +282,13 @@ export default function FootnoteEditor({
           currentNoteOp.insert.note.caller = caller;
         }
         onChange?.([currentNoteOp]);
-        if (applyToParent && parentEditorRef && noteKey) {
-          parentEditorRef.current?.replaceEmbedUpdate(noteKey, [currentNoteOp]);
+        const currentKey = noteKeyRef?.current ?? noteKey;
+        if (applyToParent && parentEditorRef && currentKey) {
+          parentEditorRef.current?.replaceEmbedUpdate(currentKey, [currentNoteOp]);
         }
       }
     },
-    [noteKey, onChange, parentEditorRef],
+    [noteKey, noteKeyRef, onChange, parentEditorRef],
   );
 
   const handleClose = useCallback(() => {
@@ -279,8 +297,11 @@ export default function FootnoteEditor({
   }, [callerType, customCaller, onClose, saveCurrentNoteOp]);
 
   // Close when the book or chapter changes — verse changes don't require closing.
+  // useLayoutEffect runs before useEffect, so the save via replaceEmbedUpdate (which is a
+  // synchronous discrete Lexical update) completes before the parent editor's useEffect loads
+  // the new chapter's content.
   const prevScrRefBookChapter = useRef({ book: scrRef.book, chapterNum: scrRef.chapterNum });
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (
       prevScrRefBookChapter.current.book !== scrRef.book ||
       prevScrRefBookChapter.current.chapterNum !== scrRef.chapterNum
@@ -340,8 +361,6 @@ export default function FootnoteEditor({
   };
 
   const handleUsjChange = (usj: Usj) => {
-    // Makes sure that the editor is focused when the usj changes
-    editorRef.current?.focus();
     const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
       // Prevents adding additional note nodes or other nodes after the main footnote node
@@ -391,7 +410,7 @@ export default function FootnoteEditor({
       // Track whether the user has undone all their edits back to the initial state
       setIsAtInitialState(JSON.stringify(noteOp) === initialNoteOpsJson.current);
 
-      // Auto-save on every content change
+      // Auto-save on every content change (does not apply to parent editor)
       saveCurrentNoteOp(callerType, customCaller);
     } else {
       setIsTypeSwitchable(false);

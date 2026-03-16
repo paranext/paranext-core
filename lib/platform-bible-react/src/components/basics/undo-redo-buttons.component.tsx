@@ -88,7 +88,7 @@ export function UndoRedoButtons({
           <TooltipContent>
             <p>
               {localizeString(localizedStrings, '%undoButton_tooltip%')}
-              {showKeyboardShortcuts && ` (${isMac ? '⌘⇧z' : 'Ctrl + Z'})`}
+              {showKeyboardShortcuts && ` (${isMac ? '⌘Z' : 'Ctrl+Z'})`}
             </p>
           </TooltipContent>
         </Tooltip>
@@ -111,7 +111,7 @@ export function UndoRedoButtons({
             <TooltipContent>
               <p>
                 {localizeString(localizedStrings, '%redoButton_tooltip%')}
-                {showKeyboardShortcuts && ` (${isMac ? '⌘⇧Z' : 'Ctrl + Y'})`}
+                {showKeyboardShortcuts && ` (${isMac ? '⌘⇧Z' : 'Ctrl+Y'})`}
               </p>
             </TooltipContent>
           </Tooltip>

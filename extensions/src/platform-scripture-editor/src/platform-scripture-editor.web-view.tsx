@@ -1049,6 +1049,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [usjFromPdpPossiblyError]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
+  // Lags one render behind saveUsjToPdpRaw. Updated in useEffect (after all useLayoutEffects),
+  // so when a useLayoutEffect fires during a chapter-change render (e.g. footnote-editor closing),
+  // this ref still holds the OLD chapter's setter — preventing saves to the wrong chapter.
+  const prevSaveUsjToPdpRawRef = useRef<typeof saveUsjToPdpRaw>(saveUsjToPdpRaw);
+  useEffect(() => {
+    prevSaveUsjToPdpRawRef.current = saveUsjToPdpRaw;
+  }, [saveUsjToPdpRaw]);
 
   /**
    * Creates a click handler for a comment annotation that opens the comment list and scrolls to the
@@ -1089,7 +1096,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
     // `saveUsjToPdpIfUpdated` everywhere.
     async function saveUsjToPdpInternal(newUsj: Usj) {
-      if (!saveUsjToPdpRaw) return;
+      // Capture the save function at call time. During a chapter-change useLayoutEffect (e.g.
+      // footnote-editor closing), prevSaveUsjToPdpRawRef.current still holds the old chapter's
+      // setter because the useEffect that updates it hasn't run yet.
+      const saveFn = prevSaveUsjToPdpRawRef.current;
+      if (!saveFn) return;
 
       // Don't start writing to the PDP again if we're in the middle of writing now
       if (currentlyWritingUsjToPdp.current) return;
@@ -1098,7 +1109,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       currentlyWritingUsjToPdp.current = true;
       usjSentToPdp.current = newUsj;
       try {
-        if (!(await saveUsjToPdpRaw(newUsj)) && currentlyWritingUsjToPdp.current) {
+        if (!(await saveFn(newUsj)) && currentlyWritingUsjToPdp.current) {
           currentlyWritingUsjToPdp.current = false;
 
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
@@ -1140,7 +1151,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [saveUsjToPdpRaw, usjFromPdp, projectName, localizedStrings]);
+  }, [usjFromPdp, projectName, localizedStrings]);
 
   const openFootnoteEditorOnNewNote = useCallback(
     (ops?: DeltaOp[], insertedNodeKey?: string) => {
@@ -1171,9 +1182,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const handleEditorialUsjChange = useCallback(
     (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
       saveUsjToPdpIfUpdated(usj);
+      // replaceEmbedUpdate assigns a new Lexical node key; keep editingNoteKey in sync so
+      // subsequent saves use the correct key.
+      if (editingNoteKey.current && insertedNodeKey) editingNoteKey.current = insertedNodeKey;
       openFootnoteEditorOnNewNote(ops, insertedNodeKey);
     },
-    [openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
+    [editingNoteKey, openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
   );
 
   /**
@@ -1718,6 +1732,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             classNameForEditor="scripture-font"
             noteOps={editingNoteOps.current}
             noteKey={editingNoteKey.current}
+            noteKeyRef={editingNoteKey}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
             editorOptions={options}
