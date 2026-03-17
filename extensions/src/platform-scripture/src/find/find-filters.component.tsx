@@ -43,7 +43,7 @@ type FindFiltersProps = {
   setShouldMatchCase: (value: boolean) => void;
   isRegexAllowed: boolean;
   setIsRegexAllowed: (value: boolean) => void;
-  strings: FindFiltersStrings;
+  localizedStrings: FindFiltersStrings;
 };
 
 export function FindFilters({
@@ -56,7 +56,7 @@ export function FindFilters({
   setShouldMatchCase,
   isRegexAllowed,
   setIsRegexAllowed,
-  strings,
+  localizedStrings,
 }: FindFiltersProps) {
   return (
     <DropdownMenu>
@@ -67,29 +67,32 @@ export function FindFilters({
               <Button
                 variant="outline"
                 size="icon"
-                aria-label={strings.toggleFilters}
+                aria-label={localizedStrings.toggleFilters}
                 className={areFiltersActive ? 'tw-bg-muted' : ''}
               >
                 <SlidersHorizontal className="tw-h-4 tw-w-4" />
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent>{strings.toggleFilters}</TooltipContent>
+          <TooltipContent>{localizedStrings.toggleFilters}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
       <DropdownMenuContent align="end" className="tw-w-72 tw-p-3">
         {/* 1. Match content in */}
         <div className="tw-mb-3">
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{strings.matchContentIn}</p>
+          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.matchContentIn}</p>
           <RadioGroup
             value={searchTextType}
+            // RadioGroup onValueChange provides a plain string, but we know it will always be one
+            // of the SearchTextType values since only the RadioGroupItem children use those values
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
             onValueChange={(value) => setSearchTextType(value as SearchTextType)}
             className="tw-gap-1"
           >
             {(
               [
-                ['all', strings.allText],
-                ['verseOnly', strings.verseTextOnly],
+                ['all', localizedStrings.allText],
+                ['verseOnly', localizedStrings.verseTextOnly],
               ] as const
             ).map(([value, label]) => (
               <div key={value} className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
@@ -107,7 +110,7 @@ export function FindFilters({
                         <Info className="tw-h-3.5 tw-w-3.5 tw-text-muted-foreground" />
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p className="tw-max-w-xs">{strings.allTextTooltip}</p>
+                        <p className="tw-max-w-xs">{localizedStrings.allTextTooltip}</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -119,18 +122,21 @@ export function FindFilters({
 
         {/* 2. Match boundaries */}
         <div className="tw-mb-3">
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{strings.restrictions}</p>
+          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.restrictions}</p>
           <RadioGroup
             value={wordRestriction}
+            // RadioGroup onValueChange provides a plain string, but we know it will always be one
+            // of the SearchTextType values since only the RadioGroupItem children use those values
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
             onValueChange={(value) => setWordRestriction(value as WordRestriction)}
             className="tw-gap-1"
           >
             {(
               [
-                ['none', strings.restrictionNone],
-                ['wholeWord', strings.restrictionWholeWord],
-                ['startOfWord', strings.restrictionStartOfWord],
-                ['endOfWord', strings.restrictionEndOfWord],
+                ['none', localizedStrings.restrictionNone],
+                ['wholeWord', localizedStrings.restrictionWholeWord],
+                ['startOfWord', localizedStrings.restrictionStartOfWord],
+                ['endOfWord', localizedStrings.restrictionEndOfWord],
               ] as const
             ).map(([value, label]) => (
               <div key={value} className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
@@ -148,7 +154,7 @@ export function FindFilters({
 
         {/* 3. Capitalization */}
         <div className="tw-mb-3">
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{strings.capitalization}</p>
+          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.capitalization}</p>
           <div className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
             <Checkbox
               id="matchCase"
@@ -156,14 +162,14 @@ export function FindFilters({
               onCheckedChange={(checked) => setShouldMatchCase(checked === true)}
             />
             <Label htmlFor="matchCase" className="tw-cursor-pointer tw-text-sm tw-font-normal">
-              {strings.matchCase}
+              {localizedStrings.matchCase}
             </Label>
           </div>
         </div>
 
         {/* 4. Pattern */}
         <div>
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{strings.pattern}</p>
+          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.pattern}</p>
           <div className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
             <Checkbox
               id="allowRegex"
@@ -171,7 +177,7 @@ export function FindFilters({
               onCheckedChange={(checked) => setIsRegexAllowed(checked === true)}
             />
             <Label htmlFor="allowRegex" className="tw-cursor-pointer tw-text-sm tw-font-normal">
-              {strings.allowRegex}
+              {localizedStrings.allowRegex}
             </Label>
           </div>
         </div>

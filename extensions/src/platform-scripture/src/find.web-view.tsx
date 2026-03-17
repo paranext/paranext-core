@@ -68,42 +68,42 @@ import {
 import { SearchResultsInBook } from './find/search-results-in-book.component';
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
+  '%webView_find_allText%',
+  '%webView_find_allText_tooltip%',
   '%webView_find_allowRegex%',
   '%webView_find_cancelSearch%',
+  '%webView_find_capitalization%',
   '%webView_find_errorOccurred%',
   '%webView_find_findButton%',
   '%webView_find_findInProject%',
-  '%webView_find_matchCase%',
-  '%webView_find_noResultsFound%',
-  '%webView_find_showRecentSearches%',
-  '%webView_find_recent%',
-  '%webView_find_searchPlaceholder%',
-  '%webView_find_result%',
-  '%webView_find_showingResults%',
-  '%webView_find_showingResultsOfMore%',
-  '%webView_find_toggleFilters%',
-  '%webView_find_matchContentIn%',
-  '%webView_find_allText%',
-  '%webView_find_allText_tooltip%',
-  '%webView_find_verseTextOnly%',
-  '%webView_find_restrictions%',
-  '%webView_find_restrictions_none%',
-  '%webView_find_restrictions_wholeWord%',
-  '%webView_find_restrictions_startOfWord%',
-  '%webView_find_restrictions_endOfWord%',
   '%webView_find_findTab%',
-  '%webView_find_replaceTab%',
-  '%webView_find_replace%',
-  '%webView_find_replaceAll%',
+  '%webView_find_matchCase%',
+  '%webView_find_matchContentIn%',
+  '%webView_find_nextResult%',
+  '%webView_find_noResultsFound%',
+  '%webView_find_pattern%',
   '%webView_find_preserveCase%',
   '%webView_find_preserveCase_tooltip%',
-  '%webView_find_replaceTerm_placeholder%',
-  '%webView_find_capitalization%',
-  '%webView_find_pattern%',
-  '%webView_find_showing%',
-  '%webView_find_resultNavigation%',
   '%webView_find_previousResult%',
-  '%webView_find_nextResult%',
+  '%webView_find_recent%',
+  '%webView_find_replace%',
+  '%webView_find_replaceAll%',
+  '%webView_find_replaceTab%',
+  '%webView_find_replaceTerm_placeholder%',
+  '%webView_find_restrictions%',
+  '%webView_find_restrictions_endOfWord%',
+  '%webView_find_restrictions_none%',
+  '%webView_find_restrictions_startOfWord%',
+  '%webView_find_restrictions_wholeWord%',
+  '%webView_find_result%',
+  '%webView_find_resultNavigation%',
+  '%webView_find_searchPlaceholder%',
+  '%webView_find_showing%',
+  '%webView_find_showingResults%',
+  '%webView_find_showingResultsOfMore%',
+  '%webView_find_showRecentSearches%',
+  '%webView_find_toggleFilters%',
+  '%webView_find_verseTextOnly%',
 ];
 
 const defaultBooksPresent: string = '';
@@ -125,10 +125,8 @@ function applyPreserveCase(matchedText: string, replacementText: string): string
   if (matchedText === matchedText.toUpperCase() && matchedText !== matchedText.toLowerCase()) {
     return replacementText.toUpperCase();
   }
-  if (
-    matchedText[0] === matchedText[0].toUpperCase() &&
-    matchedText[0] !== matchedText[0].toLowerCase()
-  ) {
+  const firstChar = matchedText[0];
+  if (firstChar === firstChar.toUpperCase() && firstChar !== firstChar.toLowerCase()) {
     return replacementText[0].toUpperCase() + replacementText.slice(1);
   }
   return replacementText;
@@ -662,7 +660,9 @@ global.webViewComponent = function FindWebView({
         await prevPromise;
         if (!isEffectActive) return;
         const verseRef = { book: bookId, chapterNum: 1, verseNum: 0 };
-        // eslint-disable-next-line no-await-in-loop
+        // Subscriptions must be created sequentially so that `isEffectActive` is checked between
+        // each one, allowing cleanup to abort early if the effect has been torn down mid-loop.
+        // eslint-disable-line no-await-in-loop
         const unsubscriber = await usfmBookPdp.subscribeBookUSFM(
           verseRef,
           (usfm) => {
@@ -784,7 +784,7 @@ global.webViewComponent = function FindWebView({
       setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
         // In Find mode, focus the editor so the user can read in context.
-        // In Replace mode, keep focus in the Find webview so replace term stays editable.
+        // In Replace mode, keep focus in the Find WebView so replace term stays editable.
         if (activeMode === 'find') {
           papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
         }
@@ -854,6 +854,8 @@ global.webViewComponent = function FindWebView({
       let allResults = [...resultsRef.current];
       let latestTotal = totalNumberOfResults;
       while (allResults.length < latestTotal) {
+        // Sequential awaiting is intentional: each call fetches the next batch and its result
+        // determines whether another fetch is needed. Promise.all cannot be used here.
         // eslint-disable-next-line no-await-in-loop
         const update = await retrieveFindJobUpdate(RESULTS_BATCH_SIZE);
         if (!update || !isMountedRef.current) break;
@@ -893,9 +895,9 @@ global.webViewComponent = function FindWebView({
 
   const focusedVisibleIndex = useMemo(
     () =>
-      focusedResultIndex !== undefined
-        ? visibleResults.findIndex((vr) => vr.originalIndex === focusedResultIndex)
-        : -1,
+      focusedResultIndex === undefined
+        ? -1
+        : visibleResults.findIndex((vr) => vr.originalIndex === focusedResultIndex),
     [visibleResults, focusedResultIndex],
   );
 
@@ -903,7 +905,9 @@ global.webViewComponent = function FindWebView({
     if (visibleResults.length === 0) return;
     if (focusedVisibleIndex <= 0) {
       // Wrap to last result (also handles the no-focus case where focusedVisibleIndex === -1)
-      const last = visibleResults[visibleResults.length - 1];
+      // The check above ensures last is always defined
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const last = visibleResults.at(-1)!;
       handleFocusedResultChange(last.result, last.originalIndex);
     } else {
       const prev = visibleResults[focusedVisibleIndex - 1];
@@ -1039,7 +1043,7 @@ global.webViewComponent = function FindWebView({
             setShouldMatchCase={setShouldMatchCase}
             isRegexAllowed={isRegexAllowed}
             setIsRegexAllowed={setIsRegexAllowed}
-            strings={{
+            localizedStrings={{
               toggleFilters: localizedStrings['%webView_find_toggleFilters%'],
               matchContentIn: localizedStrings['%webView_find_matchContentIn%'],
               allText: localizedStrings['%webView_find_allText%'],

@@ -44,7 +44,7 @@ interface SearchResultProps {
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on this result */
   onReplace: (index: number) => void;
-  /** Whether the find webview is currently in replace mode */
+  /** Whether the find WebView is currently in replace mode */
   isReplaceMode: boolean;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
