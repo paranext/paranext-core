@@ -761,7 +761,10 @@ global.webViewComponent = function FindWebView({
   // after a replace operation instead of jumping back to the first.
   useEffect(() => {
     if (activeMode === 'replace' && results.length > 0 && focusedResultIndex === undefined) {
-      if (pendingAdvanceIndexRef.current !== undefined) {
+      if (pendingAdvanceIndexRef.current === undefined) {
+        const firstVisibleIndex = results.findIndex((r) => !r.isHidden);
+        if (firstVisibleIndex >= 0) setFocusedResultIndex(firstVisibleIndex);
+      } else {
         // Wait until the search finishes so all results are available before picking the target.
         if (searchStatus === 'running') return;
         const targetIndex = pendingAdvanceIndexRef.current;
@@ -771,9 +774,6 @@ global.webViewComponent = function FindWebView({
         const nextIndex = results.findIndex((r, i) => i >= targetIndex && !r.isHidden);
         const indexToFocus = nextIndex >= 0 ? nextIndex : results.findIndex((r) => !r.isHidden);
         if (indexToFocus >= 0) setFocusedResultIndex(indexToFocus);
-      } else {
-        const firstVisibleIndex = results.findIndex((r) => !r.isHidden);
-        if (firstVisibleIndex >= 0) setFocusedResultIndex(firstVisibleIndex);
       }
     }
   }, [activeMode, focusedResultIndex, results, searchStatus]);

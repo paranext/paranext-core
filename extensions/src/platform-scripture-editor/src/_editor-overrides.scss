@@ -31,8 +31,8 @@
 }
 
 ::selection {
-  color: hsl(var(--primary-foreground));
-  background-color: hsl(var(--primary));
+  color: hsl(var(--secondary-foreground));
+  background-color: hsl(var(--secondary));
 }
 
 // focus ring
