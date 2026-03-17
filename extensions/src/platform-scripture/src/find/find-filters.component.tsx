@@ -1,9 +1,13 @@
 import { Info, SlidersHorizontal } from 'lucide-react';
 import {
   Button,
+  Checkbox,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
+  Label,
+  RadioGroup,
+  RadioGroupItem,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -77,23 +81,25 @@ export function FindFilters({
         {/* 1. Match content in */}
         <div className="tw-mb-3">
           <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{strings.matchContentIn}</p>
-          <div className="tw-flex tw-flex-col tw-gap-1">
+          <RadioGroup
+            value={searchTextType}
+            onValueChange={(value) => setSearchTextType(value as SearchTextType)}
+            className="tw-gap-1"
+          >
             {(
               [
                 ['all', strings.allText],
                 ['verseOnly', strings.verseTextOnly],
               ] as const
             ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setSearchTextType(value)}
-                className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-rounded"
-              >
-                <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
-                  {searchTextType === value ? '•' : ''}
-                </span>
-                <span>{label}</span>
+              <div key={value} className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
+                <RadioGroupItem value={value} id={`searchTextType-${value}`} />
+                <Label
+                  htmlFor={`searchTextType-${value}`}
+                  className="tw-cursor-pointer tw-text-sm tw-font-normal"
+                >
+                  {label}
+                </Label>
                 {value === 'all' && (
                   <TooltipProvider>
                     <Tooltip>
@@ -106,15 +112,19 @@ export function FindFilters({
                     </Tooltip>
                   </TooltipProvider>
                 )}
-              </button>
+              </div>
             ))}
-          </div>
+          </RadioGroup>
         </div>
 
         {/* 2. Match boundaries */}
         <div className="tw-mb-3">
           <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{strings.restrictions}</p>
-          <div className="tw-flex tw-flex-col tw-gap-1">
+          <RadioGroup
+            value={wordRestriction}
+            onValueChange={(value) => setWordRestriction(value as WordRestriction)}
+            className="tw-gap-1"
+          >
             {(
               [
                 ['none', strings.restrictionNone],
@@ -123,49 +133,47 @@ export function FindFilters({
                 ['endOfWord', strings.restrictionEndOfWord],
               ] as const
             ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setWordRestriction(value)}
-                className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-rounded"
-              >
-                <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
-                  {wordRestriction === value ? '•' : ''}
-                </span>
-                <span>{label}</span>
-              </button>
+              <div key={value} className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
+                <RadioGroupItem value={value} id={`wordRestriction-${value}`} />
+                <Label
+                  htmlFor={`wordRestriction-${value}`}
+                  className="tw-cursor-pointer tw-text-sm tw-font-normal"
+                >
+                  {label}
+                </Label>
+              </div>
             ))}
-          </div>
+          </RadioGroup>
         </div>
 
         {/* 3. Capitalization */}
         <div className="tw-mb-3">
           <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{strings.capitalization}</p>
-          <button
-            type="button"
-            onClick={() => setShouldMatchCase(!shouldMatchCase)}
-            className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-rounded"
-          >
-            <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
-              {shouldMatchCase ? '•' : ''}
-            </span>
-            <span>{strings.matchCase}</span>
-          </button>
+          <div className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
+            <Checkbox
+              id="matchCase"
+              checked={shouldMatchCase}
+              onCheckedChange={(checked) => setShouldMatchCase(checked === true)}
+            />
+            <Label htmlFor="matchCase" className="tw-cursor-pointer tw-text-sm tw-font-normal">
+              {strings.matchCase}
+            </Label>
+          </div>
         </div>
 
         {/* 4. Pattern */}
         <div>
           <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{strings.pattern}</p>
-          <button
-            type="button"
-            onClick={() => setIsRegexAllowed(!isRegexAllowed)}
-            className="tw-flex tw-min-h-9 tw-cursor-pointer tw-items-center tw-gap-1 tw-text-left tw-text-sm tw-font-normal tw-bg-transparent tw-border-0 tw-p-0 tw-text-foreground hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-rounded"
-          >
-            <span className="tw-w-8 tw-shrink-0 tw-text-center tw-text-4xl tw-leading-none">
-              {isRegexAllowed ? '•' : ''}
-            </span>
-            <span>{strings.allowRegex}</span>
-          </button>
+          <div className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
+            <Checkbox
+              id="allowRegex"
+              checked={isRegexAllowed}
+              onCheckedChange={(checked) => setIsRegexAllowed(checked === true)}
+            />
+            <Label htmlFor="allowRegex" className="tw-cursor-pointer tw-text-sm tw-font-normal">
+              {strings.allowRegex}
+            </Label>
+          </div>
         </div>
       </DropdownMenuContent>
     </DropdownMenu>
