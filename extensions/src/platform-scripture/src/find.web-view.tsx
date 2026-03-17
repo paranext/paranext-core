@@ -189,6 +189,8 @@ global.webViewComponent = function FindWebView({
   const [searchError, setSearchError] = useState<string | undefined>();
 
   const [results, setResults] = useState<HidableFindResult[]>([]);
+  const resultsRef = useRef<HidableFindResult[]>([]);
+  resultsRef.current = results;
   const loadedResultsLengthRef = useRef(0);
   const [numberOfHiddenResults, setNumberOfHiddenResults] = useState<number>(0);
   const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
@@ -438,6 +440,9 @@ global.webViewComponent = function FindWebView({
 
   const isStartingSearchRef = useRef(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Tracks the index of the result that was just replaced so the auto-select effect can advance
+  // focus to the next result instead of jumping back to the first.
+  const pendingAdvanceIndexRef = useRef<number | undefined>(undefined);
   // Skip auto-search on the initial render so that restoring a non-empty searchTerm from
   // useWebViewState doesn't trigger an unwanted search before the user has interacted.
   const isInitialAutoSearchRef = useRef(true);
@@ -470,6 +475,7 @@ global.webViewComponent = function FindWebView({
         if (!isMountedRef.current) return;
 
         setSearchStatus('running');
+        setSearchError(undefined);
         setSearchProgress(0);
 
         setMonitoredScope(scope);
@@ -521,6 +527,8 @@ global.webViewComponent = function FindWebView({
         loadedResultsLengthRef.current = 0;
         setNumberOfHiddenResults(0);
         setSearchStatus(undefined);
+        setSearchError(undefined);
+        setFocusedResultIndex(undefined);
         await abandonFindJob();
       } else await stopFindJob();
     },
@@ -749,13 +757,26 @@ global.webViewComponent = function FindWebView({
 
   // #endregion
 
-  // Auto-select first result when switching to Replace mode
+  // Auto-select first result when switching to Replace mode, or advance to the next result
+  // after a replace operation instead of jumping back to the first.
   useEffect(() => {
     if (activeMode === 'replace' && results.length > 0 && focusedResultIndex === undefined) {
-      const firstVisibleIndex = results.findIndex((r) => !r.isHidden);
-      if (firstVisibleIndex >= 0) setFocusedResultIndex(firstVisibleIndex);
+      if (pendingAdvanceIndexRef.current !== undefined) {
+        // Wait until the search finishes so all results are available before picking the target.
+        if (searchStatus === 'running') return;
+        const targetIndex = pendingAdvanceIndexRef.current;
+        pendingAdvanceIndexRef.current = undefined;
+        // Find the first visible result at or after the replaced position (the replaced result
+        // is gone, so this naturally advances to what was previously the next result).
+        const nextIndex = results.findIndex((r, i) => i >= targetIndex && !r.isHidden);
+        const indexToFocus = nextIndex >= 0 ? nextIndex : results.findIndex((r) => !r.isHidden);
+        if (indexToFocus >= 0) setFocusedResultIndex(indexToFocus);
+      } else {
+        const firstVisibleIndex = results.findIndex((r) => !r.isHidden);
+        if (firstVisibleIndex >= 0) setFocusedResultIndex(firstVisibleIndex);
+      }
     }
-  }, [activeMode, focusedResultIndex, results]);
+  }, [activeMode, focusedResultIndex, results, searchStatus]);
 
   const handleFocusedResultChange = useCallback(
     (searchResult: HidableFindResult, index: number) => {
@@ -767,10 +788,12 @@ global.webViewComponent = function FindWebView({
         if (activeMode === 'find') {
           papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
         }
-        editorWebViewController.selectRange({
-          start: searchResult.start,
-          end: searchResult.end,
-        });
+        editorWebViewController
+          .selectRange({
+            start: searchResult.start,
+            end: searchResult.end,
+          })
+          .catch((e) => logger.warn(`Find: selectRange failed: ${getErrorMessage(e)}`));
       }
     },
     [activeMode, editorWebViewController, editorWebViewId, setVerseRefSetting],
@@ -801,6 +824,9 @@ global.webViewComponent = function FindWebView({
       setIsReplacing(true);
       try {
         await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
+        // Store the replaced index so the auto-select effect can advance to the next result
+        // rather than jumping back to the first after the re-search completes.
+        pendingAdvanceIndexRef.current = indexToReplace;
         // Re-run find immediately after replace so positions are fresh before the user can
         // click replace again. isReplacing stays true until this completes, closing the gap
         // between replace() returning and searchStatus becoming 'running'.
@@ -823,7 +849,9 @@ global.webViewComponent = function FindWebView({
       // Use a local `latestTotal` updated from each server response so that a stale
       // `totalNumberOfResults` snapshot (from when the button was clicked) cannot cause
       // the loop to exit before all results have arrived.
-      let allResults = [...results];
+      // Use the ref so we always start from the latest results, even if state updates
+      // (e.g. user scrolled to load more) happened after the callback was created.
+      let allResults = [...resultsRef.current];
       let latestTotal = totalNumberOfResults;
       while (allResults.length < latestTotal) {
         // eslint-disable-next-line no-await-in-loop
@@ -836,7 +864,7 @@ global.webViewComponent = function FindWebView({
         loadedResultsLengthRef.current += newBatch.length;
       }
       // Sync any newly loaded results into state
-      if (allResults.length > results.length) setResults(allResults);
+      if (allResults.length > resultsRef.current.length) setResults(allResults);
 
       const visibleResultsList = allResults.filter((r) => !r.isHidden);
       if (visibleResultsList.length === 0) return;
@@ -853,7 +881,7 @@ global.webViewComponent = function FindWebView({
     } finally {
       setIsReplacing(false);
     }
-  }, [preserveCase, replacePdp, replaceTerm, results, retrieveFindJobUpdate, totalNumberOfResults]);
+  }, [preserveCase, replacePdp, replaceTerm, retrieveFindJobUpdate, totalNumberOfResults]);
 
   const visibleResults = useMemo(
     () =>
@@ -873,28 +901,26 @@ global.webViewComponent = function FindWebView({
 
   const handlePreviousResult = useCallback(() => {
     if (visibleResults.length === 0) return;
-    if (focusedResultIndex === undefined) {
+    if (focusedVisibleIndex <= 0) {
+      // Wrap to last result (also handles the no-focus case where focusedVisibleIndex === -1)
       const last = visibleResults[visibleResults.length - 1];
       handleFocusedResultChange(last.result, last.originalIndex);
-      return;
-    }
-    if (focusedVisibleIndex > 0) {
+    } else {
       const prev = visibleResults[focusedVisibleIndex - 1];
       handleFocusedResultChange(prev.result, prev.originalIndex);
     }
-  }, [focusedResultIndex, focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
+  }, [focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
 
   const handleNextResult = useCallback(() => {
     if (visibleResults.length === 0) return;
-    if (focusedResultIndex === undefined) {
+    if (focusedVisibleIndex >= visibleResults.length - 1) {
+      // Wrap to first result
       handleFocusedResultChange(visibleResults[0].result, visibleResults[0].originalIndex);
-      return;
-    }
-    if (focusedVisibleIndex < visibleResults.length - 1) {
+    } else {
       const next = visibleResults[focusedVisibleIndex + 1];
       handleFocusedResultChange(next.result, next.originalIndex);
     }
-  }, [focusedResultIndex, focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
+  }, [focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
 
   const findButtonText = isLocalizedStringsLoading
     ? ''
@@ -1156,7 +1182,7 @@ global.webViewComponent = function FindWebView({
                 variant="ghost"
                 size="icon"
                 className="tw-h-7 tw-w-7"
-                disabled={focusedVisibleIndex <= 0 || visibleResults.length === 0}
+                disabled={visibleResults.length === 0}
                 onClick={handlePreviousResult}
                 aria-label={localizedStrings['%webView_find_previousResult%']}
               >
@@ -1166,7 +1192,7 @@ global.webViewComponent = function FindWebView({
                 variant="ghost"
                 size="icon"
                 className="tw-h-7 tw-w-7"
-                disabled={focusedVisibleIndex >= visibleResults.length - 1}
+                disabled={visibleResults.length === 0}
                 onClick={handleNextResult}
                 aria-label={localizedStrings['%webView_find_nextResult%']}
               >
