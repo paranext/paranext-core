@@ -182,7 +182,7 @@ export function FindHeaderDemo() {
           setShouldMatchCase={setShouldMatchCase}
           isRegexAllowed={isRegexAllowed}
           setIsRegexAllowed={setIsRegexAllowed}
-          strings={{
+          localizedStrings={{
             toggleFilters: '%webView_find_toggleFilters%',
             matchContentIn: '%webView_find_matchContentIn%',
             allText: '%webView_find_allText%',
