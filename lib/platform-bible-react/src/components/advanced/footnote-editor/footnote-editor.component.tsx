@@ -11,7 +11,7 @@ import {
   isInsertEmbedOpOfType,
   StateChangeSnapshot,
 } from '@eten-tech-foundation/platform-editor';
-import { Copy, X } from 'lucide-react';
+import { Check, Copy, X } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -169,6 +169,19 @@ export default function FootnoteEditor({
   const editorParentRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line no-null/no-null
   const outerBorderRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Lock the container width to its natural rendered width so content changes (e.g. switching
+  // language, undo/redo enabling) don't cause the popover to resize while editing.
+  // useLayoutEffect fires after DOM layout but before paint, so getBoundingClientRect() returns
+  // the natural width. The parent PopoverContent unmounts this component on close, so the effect
+  // re-runs fresh on each open.
+  useLayoutEffect(() => {
+    if (!containerRef.current) return;
+    const { width } = containerRef.current.getBoundingClientRect();
+    if (width > 0) containerRef.current.style.width = `${width}px`;
+  }, []);
 
   const [callerType, setCallerType] = useState<FootnoteCallerType>('generated');
   const [customCaller, setCustomCaller] = useState<string>('*');
@@ -291,7 +304,7 @@ export default function FootnoteEditor({
     [noteKey, noteKeyRef, onChange, parentEditorRef],
   );
 
-  const handleClose = useCallback(() => {
+  const closeAndSave = useCallback(() => {
     saveCurrentNoteOp(callerType, customCaller, true);
     onClose();
   }, [callerType, customCaller, onClose, saveCurrentNoteOp]);
@@ -307,9 +320,9 @@ export default function FootnoteEditor({
       prevScrRefBookChapter.current.chapterNum !== scrRef.chapterNum
     ) {
       prevScrRefBookChapter.current = { book: scrRef.book, chapterNum: scrRef.chapterNum };
-      handleClose();
+      closeAndSave();
     }
-  }, [handleClose, scrRef.book, scrRef.chapterNum]);
+  }, [closeAndSave, scrRef.book, scrRef.chapterNum]);
 
   const handleCopy = () => {
     const editorInput = editorParentRef.current?.getElementsByClassName('editor-input')[0];
@@ -489,7 +502,7 @@ export default function FootnoteEditor({
 
   return (
     <>
-      <div className="footnote-editor tw-grid tw-gap-[12px]">
+      <div ref={containerRef} className="footnote-editor tw-grid tw-gap-[12px]">
         <div className="tw-flex">
           <div className="tw-flex tw-gap-4">
             <FootnoteTypeDropdown
@@ -518,16 +531,28 @@ export default function FootnoteEditor({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    onClick={handleClose}
+                    onClick={closeAndSave}
                     className="tw-h-6 tw-w-6"
                     size="icon"
                     variant="ghost"
                   >
+                    <Check />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{localizedStrings['%footnoteEditor_saveButton_tooltip%']}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="ghost">
                     <X />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{localizedStrings['%footnoteEditor_closeButton_tooltip%']}</p>
+                  <p>{localizedStrings['%footnoteEditor_cancelButton_tooltip%']}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
