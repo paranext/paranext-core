@@ -182,7 +182,7 @@ const meta: Meta<TabToolbarProps> = {
           onChangeScrollGroupId={setScrollGroupId}
           size="sm"
         />
-        <ScrollGroupSelector
+        {/* <ScrollGroupSelector
           availableScrollGroupIds={[0, 1, 2, 3, 4]}
           localizedStrings={myScrollGroupIdLocalizedStrings}
           scrollGroupId={0}
@@ -195,13 +195,13 @@ const meta: Meta<TabToolbarProps> = {
           scrollGroupId={0}
           onChangeScrollGroupId={setScrollGroupId}
           size="sm"
-        />
-        <BookChapterControl
+        /> */}
+        {/* <BookChapterControl
           scrRef={defaultScrRef}
           handleSubmit={() => {}}
           recentSearches={mockRecentScriptureRefs}
           onAddRecentSearch={mockAddRecentSearch}
-        />
+        /> */}
       </>
     ),
   },
