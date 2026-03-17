@@ -3,7 +3,7 @@
 import type { LogLevel } from 'electron-log';
 import { polyfillLocalStorage } from '@node/polyfills/local-storage.polyfill';
 import {
-  COMMAND_LINE_ARGS,
+  CommandLineArgs,
   getCommandLineArgument,
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
@@ -12,13 +12,12 @@ import { isNoisyDevModeEnvVariableSet } from '@node/utils/util';
 
 // #region command-line arguments
 
-const isPackaged = getCommandLineSwitch(COMMAND_LINE_ARGS.Packaged);
-const resourcesPath = getCommandLineArgument(COMMAND_LINE_ARGS.ResourcesPath) ?? 'resources://';
+const isPackaged = getCommandLineSwitch(CommandLineArgs.Packaged);
+const resourcesPath = getCommandLineArgument(CommandLineArgs.ResourcesPath) ?? 'resources://';
 const logLevel =
   // Assert the extracted type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  (getCommandLineArgument(COMMAND_LINE_ARGS.LogLevel) as LogLevel) ??
-  (isPackaged ? 'error' : 'info');
+  (getCommandLineArgument(CommandLineArgs.LogLevel) as LogLevel) ?? (isPackaged ? 'error' : 'info');
 globalThis.isNoisyDevModeEnabled = isNoisyDevModeEnvVariableSet();
 
 // #endregion

@@ -21,7 +21,7 @@ import * as platformBibleUtils from 'platform-bible-utils';
 import * as crypto from 'crypto';
 import { logger } from '@shared/services/logger.service';
 import {
-  COMMAND_LINE_ARGS,
+  CommandLineArgs,
   getCommandLineArgumentsGroup,
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
@@ -262,7 +262,7 @@ const bundledExtensionDir = `resources://extensions${globalThis.isPackaged ? '' 
  */
 const extensionRootDirectories: Uri[] = [
   // 1. `--extensionDirs`-provided directories
-  ...getCommandLineArgumentsGroup(COMMAND_LINE_ARGS.ExtensionsDir).map(
+  ...getCommandLineArgumentsGroup(CommandLineArgs.ExtensionsDir).map(
     (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
   ),
   // 2. Installed extensions directory
@@ -279,7 +279,7 @@ const extensionRootDirectories: Uri[] = [
  * more information about navigating to our uri scheme.
  */
 const extensionRootDirectoriesToWatch: Uri[] = [...extensionRootDirectories];
-if (getCommandLineSwitch(COMMAND_LINE_ARGS.Portable)) {
+if (getCommandLineSwitch(CommandLineArgs.Portable)) {
   extensionRootDirectoriesToWatch.splice(
     extensionRootDirectoriesToWatch.indexOf(bundledExtensionDir),
     1,
@@ -288,7 +288,7 @@ if (getCommandLineSwitch(COMMAND_LINE_ARGS.Portable)) {
 
 /** Individual extension folders and/or zips to load as provided by command-line `--extensions` */
 const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(
-  COMMAND_LINE_ARGS.Extensions,
+  CommandLineArgs.Extensions,
 ).map((extensionPath) => `${FILE_PROTOCOL}${path.resolve(extensionPath)}`);
 
 /**
@@ -1094,7 +1094,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
     manageExtensions: undefined,
     handleUri: undefined,
   };
-  if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.createProcess)) {
+  if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.CreateProcess)) {
     const createProcess: CreateProcess = {
       fork: wrappedFork,
       spawn: wrappedSpawn,
@@ -1107,7 +1107,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
     Object.freeze(createProcess);
     retVal.createProcess = createProcess;
   }
-  if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.manageExtensions)) {
+  if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.ManageExtensions)) {
     const manageExtensions: ManageExtensions = {
       installExtension,
       enableExtension,
@@ -1118,7 +1118,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
     Object.freeze(manageExtensions);
     retVal.manageExtensions = manageExtensions;
   }
-  if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.handleUri)) {
+  if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.HandleUri)) {
     const handleUri: HandleUri = {
       redirectUri: getRedirectUri(manifest),
       registerUriHandler: createRegisterUriHandlerFunction(manifest),
@@ -1568,7 +1568,7 @@ export const initialize = () => {
 
     await normalizeExtensionFileNames();
 
-    const didRestart = getCommandLineSwitch(COMMAND_LINE_ARGS.DidRestart);
+    const didRestart = getCommandLineSwitch(CommandLineArgs.DidRestart);
     logger.info(
       `Loading extensions on initializing extension service. didRestart: ${didRestart}. ${process.argv}`,
     );

@@ -2,7 +2,7 @@
 
 import {
   getCommandLineArgumentsGroup,
-  COMMAND_LINE_ARGS,
+  CommandLineArgs,
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
 import { logger } from '@shared/services/logger.service';
@@ -125,8 +125,8 @@ function hardKillExtensionHost() {
 function getCommandLineArgumentsToForward() {
   // Pass through the relevant command-line arguments to the extension host
   return [
-    ...getCommandLineArgumentsGroup(COMMAND_LINE_ARGS.Extensions, true),
-    ...getCommandLineArgumentsGroup(COMMAND_LINE_ARGS.ExtensionsDir, true),
+    ...getCommandLineArgumentsGroup(CommandLineArgs.Extensions, true),
+    ...getCommandLineArgumentsGroup(CommandLineArgs.ExtensionsDir, true),
   ];
 }
 
@@ -183,13 +183,13 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
   // In development, fork a new process for the extension-host and watch for changes with chokidar
   /** Arguments that will be passed to the extension host no matter how we start the process */
   const sharedArgs = [
-    commandLineArgumentsAliases[COMMAND_LINE_ARGS.ResourcesPath][0],
+    commandLineArgumentsAliases[CommandLineArgs.ResourcesPath][0],
     globalThis.resourcesPath,
-    commandLineArgumentsAliases[COMMAND_LINE_ARGS.LogLevel][0],
+    commandLineArgumentsAliases[CommandLineArgs.LogLevel][0],
     globalThis.logLevel,
     ...getCommandLineArgumentsToForward(),
   ];
-  if (isRestarting) sharedArgs.push(commandLineArgumentsAliases[COMMAND_LINE_ARGS.DidRestart][0]);
+  if (isRestarting) sharedArgs.push(commandLineArgumentsAliases[CommandLineArgs.DidRestart][0]);
 
   function startExtensionHostInternal() {
     createNewProcessLifetimeVariable();
@@ -202,10 +202,10 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
     const extensionHostArgs = app.isPackaged
       ? [
           // Tell the extension host we're packaged
-          commandLineArgumentsAliases[COMMAND_LINE_ARGS.Packaged][0],
+          commandLineArgumentsAliases[CommandLineArgs.Packaged][0],
           ...(process.env.PORTABLE_EXECUTABLE_FILE
             ? // Tell the extension host we're portable
-              [commandLineArgumentsAliases[COMMAND_LINE_ARGS.Portable][0]]
+              [commandLineArgumentsAliases[CommandLineArgs.Portable][0]]
             : []),
           ...sharedArgs,
         ]
@@ -258,8 +258,7 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
     await waitForExtensionHost(maxWaitTimeInMS, false);
 
     // If we didn't already set the restarting flag, set it now
-    if (!isRestarting)
-      sharedArgs.push(commandLineArgumentsAliases[COMMAND_LINE_ARGS.DidRestart][0]);
+    if (!isRestarting) sharedArgs.push(commandLineArgumentsAliases[CommandLineArgs.DidRestart][0]);
 
     startExtensionHostInternal();
     // Debounce by the nodemon-configured amount

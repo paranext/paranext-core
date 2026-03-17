@@ -10,7 +10,7 @@
 import { polyfillLocalStorage } from '@node/polyfills/local-storage.polyfill';
 import { ProcessType } from '@shared/global-this.model';
 import { app } from 'electron';
-import { getCommandLineArgument, COMMAND_LINE_ARGS } from '@node/utils/command-line.util';
+import { getCommandLineArgument, CommandLineArgs } from '@node/utils/command-line.util';
 import { LogLevel } from 'electron-log';
 import { isNoisyDevModeEnvVariableSet } from '@node/utils/util';
 
@@ -23,7 +23,7 @@ globalThis.resourcesPath = app.isPackaged ? process.resourcesPath : process.cwd(
 globalThis.logLevel =
   // Assert the extracted type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  (getCommandLineArgument(COMMAND_LINE_ARGS.LogLevel) as LogLevel) ??
+  (getCommandLineArgument(CommandLineArgs.LogLevel) as LogLevel) ??
   (globalThis.isPackaged ? 'info' : 'debug');
 globalThis.isNoisyDevModeEnabled = isNoisyDevModeEnvVariableSet();
 

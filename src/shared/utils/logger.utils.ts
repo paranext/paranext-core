@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import { MainLogger, RendererLogger } from 'electron-log';
 
 /** Represents details that can be parsed from a single line of an Error object */
-type parsedErrorLine =
+type ParsedErrorLine =
   | {
       functionName: string;
       fileName: string;
@@ -21,7 +21,7 @@ type parsedErrorLine =
  * @returns Object containing the function name, file name, line number, and column number from the
  *   line of the Error object string. If the line couldn't be parsed, then undefined.
  */
-function parseErrorLine(errorLine: string): parsedErrorLine {
+function parseErrorLine(errorLine: string): ParsedErrorLine {
   // A few example lines to parse:
   // "    at functionName (filename.js:15:27)"
   // "at /home/username/paranext-core/src/shared/services/logger.service.ts:119:22"
@@ -65,7 +65,7 @@ function parseErrorLine(errorLine: string): parsedErrorLine {
 function identifyCaller(): string | undefined {
   const { stack } = new Error();
   if (!stack) return undefined;
-  let details: parsedErrorLine;
+  let details: ParsedErrorLine;
   const lines = split(stack, '\n');
   // Start at 3 to skip the "Error" line, this function's stack frame, and this function's caller
   for (let lineNumber = 3; lineNumber < lines.length; lineNumber += 1) {

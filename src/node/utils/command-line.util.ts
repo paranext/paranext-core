@@ -2,7 +2,7 @@ import { startsWith } from 'platform-bible-utils';
 
 /** All command line arguments mapped from argument type to array of aliases for the argument */
 type CommandLineArgumentAliases = {
-  [argument in COMMAND_LINE_ARGS]: string[];
+  [argument in CommandLineArgs]: string[];
 };
 
 /**
@@ -31,7 +31,7 @@ type CommandLineArgumentAliases = {
  * - Maximize - Command-line switch that specifies that the renderer should be maximized on launch.
  *   Only on main process
  */
-export enum COMMAND_LINE_ARGS {
+export enum CommandLineArgs {
   Extensions = 'extensions',
   ExtensionsDir = 'extensions_dir',
   LogLevel = 'log_level',
@@ -48,15 +48,15 @@ export enum COMMAND_LINE_ARGS {
  * argument type
  */
 export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
-  [COMMAND_LINE_ARGS.Extensions]: ['--extensions', '--extension', '-e'],
-  [COMMAND_LINE_ARGS.ExtensionsDir]: ['--extensionDirs', '--extensionDir', '-d'],
-  [COMMAND_LINE_ARGS.LogLevel]: ['--logLevels', '--logLevel', '-l'],
-  [COMMAND_LINE_ARGS.ResourcesPath]: ['--resourcesPath', '--resourcePath', '-r'],
-  [COMMAND_LINE_ARGS.Packaged]: ['--packaged', '--isPackaged', '-p'],
-  [COMMAND_LINE_ARGS.Portable]: ['--portable'],
-  [COMMAND_LINE_ARGS.DidRestart]: ['--didRestart'],
-  [COMMAND_LINE_ARGS.WindowSize]: ['--windowSize', '--window-size'],
-  [COMMAND_LINE_ARGS.Maximize]: ['--maximize'],
+  [CommandLineArgs.Extensions]: ['--extensions', '--extension', '-e'],
+  [CommandLineArgs.ExtensionsDir]: ['--extensionDirs', '--extensionDir', '-d'],
+  [CommandLineArgs.LogLevel]: ['--logLevels', '--logLevel', '-l'],
+  [CommandLineArgs.ResourcesPath]: ['--resourcesPath', '--resourcePath', '-r'],
+  [CommandLineArgs.Packaged]: ['--packaged', '--isPackaged', '-p'],
+  [CommandLineArgs.Portable]: ['--portable'],
+  [CommandLineArgs.DidRestart]: ['--didRestart'],
+  [CommandLineArgs.WindowSize]: ['--windowSize', '--window-size'],
+  [CommandLineArgs.Maximize]: ['--maximize'],
 };
 
 /** Get the index of the next command-line argument after the startIndex */
@@ -94,7 +94,7 @@ export function findNextCommandLineArgumentIndex(currentArgIndex: number) {
  *   - `getCommandLineArgumentsGroup('--things', true)` returns `[]`
  */
 export function getCommandLineArgumentsGroup(
-  argName: COMMAND_LINE_ARGS,
+  argName: CommandLineArgs,
   shouldIncludeArgName = false,
 ): string[] {
   const argNames: string[] = commandLineArgumentsAliases[argName];
@@ -129,7 +129,7 @@ export function getCommandLineArgumentsGroup(
  *
  *   - `getCommandLineArgument('--thing')` returns `'ben'`
  */
-export function getCommandLineArgument(argName: COMMAND_LINE_ARGS) {
+export function getCommandLineArgument(argName: CommandLineArgs) {
   // TODO: If argName has two hyphens, check for single hyphen and first char + capitals if
   // two-hyphen version does not exist. eg --extensionDirs -> -ed
   const argNames: string[] = commandLineArgumentsAliases[argName];
@@ -162,7 +162,7 @@ export function getCommandLineArgument(argName: COMMAND_LINE_ARGS) {
  *
  *   - `getCommandLineSwitch('--thing')` returns `true`
  */
-export function getCommandLineSwitch(argName: COMMAND_LINE_ARGS) {
+export function getCommandLineSwitch(argName: CommandLineArgs) {
   const argNames: string[] = commandLineArgumentsAliases[argName];
   return argNames.some((alias) => process.argv.includes(alias));
 }

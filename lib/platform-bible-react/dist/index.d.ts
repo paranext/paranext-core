@@ -108,8 +108,14 @@ export type ChapterRangeSelectorProps = {
 export declare function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
 /** Enumeration of possible book selection modes */
 export declare enum BookSelectionMode {
-	CURRENT_BOOK = "current book",
-	CHOOSE_BOOKS = "choose books"
+	CurrentBook = "current book",
+	ChooseBooks = "choose books"
+}
+export declare namespace BookSelectionMode {
+	/** @deprecated Use BookSelectionMode.CurrentBook instead. */
+	const CURRENT_BOOK: BookSelectionMode;
+	/** @deprecated Use BookSelectionMode.ChooseBooks instead. */
+	const CHOOSE_BOOKS: BookSelectionMode;
 }
 /**
  * Object containing all keys used for localization in this component. If you're using this

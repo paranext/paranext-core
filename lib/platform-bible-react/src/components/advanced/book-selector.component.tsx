@@ -11,8 +11,15 @@ import {
 
 /** Enumeration of possible book selection modes */
 export enum BookSelectionMode {
-  CURRENT_BOOK = 'current book',
-  CHOOSE_BOOKS = 'choose books',
+  CurrentBook = 'current book',
+  ChooseBooks = 'choose books',
+}
+
+export namespace BookSelectionMode {
+  /** @deprecated Use BookSelectionMode.CurrentBook instead. */
+  export const CURRENT_BOOK: BookSelectionMode = BookSelectionMode.CurrentBook;
+  /** @deprecated Use BookSelectionMode.ChooseBooks instead. */
+  export const CHOOSE_BOOKS: BookSelectionMode = BookSelectionMode.ChooseBooks;
 }
 
 /**
@@ -87,7 +94,7 @@ export function BookSelector({
   const chooseBooksText = localizeString(localizedStrings, '%webView_bookSelector_chooseBooks%');
 
   const [bookSelectionMode, setBookSelectionMode] = useState<BookSelectionMode>(
-    BookSelectionMode.CURRENT_BOOK,
+    BookSelectionMode.CurrentBook,
   );
 
   const onSelectionModeChange = (newMode: BookSelectionMode) => {
@@ -106,13 +113,13 @@ export function BookSelector({
       <div className="tw-flex tw-w-full tw-flex-col tw-gap-4">
         <div className="tw-grid tw-grid-cols-[25%,25%,50%]">
           <div className="tw-flex tw-items-center">
-            <RadioGroupItem value={BookSelectionMode.CURRENT_BOOK} />
+            <RadioGroupItem value={BookSelectionMode.CurrentBook} />
             <Label className="tw-ms-1">{currentBookText}</Label>
           </div>
           <Label className="tw-flex tw-items-center">{currentBookName}</Label>
           <div className="tw-flex tw-items-center tw-justify-end">
             <ChapterRangeSelector
-              isDisabled={bookSelectionMode === BookSelectionMode.CHOOSE_BOOKS}
+              isDisabled={bookSelectionMode === BookSelectionMode.ChooseBooks}
               handleSelectStartChapter={handleSelectStartChapter}
               handleSelectEndChapter={handleSelectEndChapter}
               chapterCount={chapterCount}
@@ -123,14 +130,14 @@ export function BookSelector({
         </div>
         <div className="tw-grid tw-grid-cols-[25%,50%,25%]">
           <div className="tw-flex tw-items-center">
-            <RadioGroupItem value={BookSelectionMode.CHOOSE_BOOKS} />
+            <RadioGroupItem value={BookSelectionMode.ChooseBooks} />
             <Label className="tw-ms-1">{chooseBooksText}</Label>
           </div>
           <Label className="tw-flex tw-items-center">
             {selectedBookIds.map((bookId: string) => Canon.bookIdToEnglishName(bookId)).join(', ')}
           </Label>
           <Button
-            disabled={bookSelectionMode === BookSelectionMode.CURRENT_BOOK}
+            disabled={bookSelectionMode === BookSelectionMode.CurrentBook}
             onClick={() => onSelectBooks()}
           >
             {chooseText}

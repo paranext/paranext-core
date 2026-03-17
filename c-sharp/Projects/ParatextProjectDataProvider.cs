@@ -1015,16 +1015,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             var characterCategorizer = scrText.CharacterCategorizer;
             return paratextSettingName switch
             {
-                ProjectSettingsNames.PT_BASE_CHARACTER_CLASS_REGEX =>
-                    characterCategorizer.BaseCharacterRegex,
-                ProjectSettingsNames.PT_DIACRITIC_CHARACTER_CLASS_REGEX =>
-                    characterCategorizer.DiacriticCharacterRegex,
                 // `\-` is accepted by .NET regex, but in ECMAScript `u` mode it is invalid
                 // outside character classes. Use `\x2D` so the pattern is valid in JavaScript
                 // with `u` regardless of where this fragment is inserted.
+                ProjectSettingsNames.PT_BASE_CHARACTER_CLASS_REGEX =>
+                    characterCategorizer.BaseCharacterRegex.Replace(@"\-", @"\x2D"),
+                ProjectSettingsNames.PT_DIACRITIC_CHARACTER_CLASS_REGEX =>
+                    characterCategorizer.DiacriticCharacterRegex.Replace(@"\-", @"\x2D"),
                 ProjectSettingsNames.PT_WORD_MEDIAL_CHARACTER_REGEX =>
                     characterCategorizer.WordMedialRegex.Replace(@"\-", @"\x2D"),
-                _ => characterCategorizer.WordBreakRegex.Replace(@"\-", @"\x2D"),
+                ProjectSettingsNames.PT_WORD_BREAK_REGEX =>
+                    characterCategorizer.WordBreakRegex.Replace(@"\-", @"\x2D"),
+                _ => throw new InvalidDataException(
+                    $"Unexpected or unimplemented character categorizer setting name: {paratextSettingName}"
+                ),
             };
         }
 
