@@ -123,8 +123,6 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
-  '%webView_platformScriptureEditor_undoButton_tooltip%',
-  '%webView_platformScriptureEditor_redoButton_tooltip%',
 ];
 
 /** Annotation type used for translator comments (kebab-case to match CSS class naming) */
@@ -1565,6 +1563,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             {!isReadOnlyEffective && (
               <>
                 <UndoRedoButtons
+                  className="tw-h-8"
                   onUndoClick={() => editorRef.current?.undo()}
                   onRedoClick={() => editorRef.current?.redo()}
                   canUndo={canUndo}
