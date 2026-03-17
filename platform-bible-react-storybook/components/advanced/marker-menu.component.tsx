@@ -83,8 +83,8 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
 
     return markerMenuItems.filter(
       (markerItem) =>
-        (markerItem.marker && markerItem.marker?.toLowerCase().includes(query)) ||
-        (!markerItem.marker && markerItem.title.toLowerCase().includes(query)),
+        markerItem.marker?.toLowerCase().includes(query) ||
+        markerItem.title.toLowerCase().includes(query),
     );
   }, [commandSearch, markerMenuItems]);
 
