@@ -81,11 +81,17 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
       return markerMenuItems;
     }
 
-    return markerMenuItems.filter(
-      (markerItem) =>
-        markerItem.marker?.toLowerCase().includes(query) ||
-        markerItem.title.toLowerCase().includes(query),
+    const filteredMarkerMenuItems = markerMenuItems.filter((markerItem) =>
+      markerItem.marker?.toLowerCase().startsWith(query),
     );
+    filteredMarkerMenuItems.push(
+      ...markerMenuItems.filter(
+        (markerItem) =>
+          markerItem.title.includes(query) && !filteredMarkerMenuItems.includes(markerItem),
+      ),
+    );
+
+    return filteredMarkerMenuItems;
   }, [commandSearch, markerMenuItems]);
 
   return (
