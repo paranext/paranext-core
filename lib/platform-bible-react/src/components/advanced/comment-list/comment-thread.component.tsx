@@ -366,7 +366,7 @@ export function CommentThread({
         {
           'tw-bg-primary-foreground': !isSelected && threadStatus !== 'Resolved' && isRead,
           'tw-bg-background': isSelected && threadStatus !== 'Resolved' && isRead,
-          'tw-bg-secondary': threadStatus === 'Resolved',
+          'tw-bg-muted': threadStatus === 'Resolved',
           'tw-bg-accent': !isRead && !isSelected && threadStatus !== 'Resolved',
         },
       )}
