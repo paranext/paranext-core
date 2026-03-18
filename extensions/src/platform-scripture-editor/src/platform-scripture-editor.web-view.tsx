@@ -225,6 +225,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const editingNoteKey = useRef<string>();
   const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+  /** True when the footnote editor was opened for a newly inserted note (not an existing one) */
+  const editingNoteIsNew = useRef(false);
 
   // These control the placement of the comment editor popover by setting the location of the anchor
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
@@ -1151,11 +1153,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return saveUsjToPdpIfUpdatedInternal;
   }, [usjFromPdp, projectName, localizedStrings]);
 
-  const onFootnoteEditorClose = useCallback(() => {
+  /**
+   * Close the footnote editor, optionally deleting the note from the main editor first. Pass
+   * `deleteIfNew = true` when the user explicitly discards (X button); pass `false` when the note
+   * was already deleted externally so there is nothing left to remove.
+   */
+  const closeFootnoteEditor = useCallback((deleteIfNew: boolean) => {
+    if (deleteIfNew && editingNoteIsNew.current && editingNoteKey.current)
+      editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, []);
+    editingNoteIsNew.current = false;
     editingNoteKey.current = undefined;
     editingNoteOps.current = undefined;
     setShowFootnoteEditor(false);
   }, []);
+
+  /** Called by FootnoteEditor's onClose prop (X button or save-then-close). */
+  const onFootnoteEditorClose = useCallback(() => {
+    closeFootnoteEditor(true);
+  }, [closeFootnoteEditor]);
 
   const openFootnoteEditorOnNewNote = useCallback(
     (ops?: DeltaOp[], insertedNodeKey?: string) => {
@@ -1177,6 +1192,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         setNotePopoverAnchorHeight(targetRect.height);
         editingNoteKey.current = insertedNodeKey;
         editingNoteOps.current = [noteOp];
+        editingNoteIsNew.current = true;
         setShowFootnoteEditor(true);
       }
     },
@@ -1187,14 +1203,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
       saveUsjToPdpIfUpdated(usj);
       // replaceEmbedUpdate assigns a new Lexical node key; keep editingNoteKey in sync so
-      // subsequent saves use the correct key.
-      if (editingNoteKey.current && insertedNodeKey) editingNoteKey.current = insertedNodeKey;
+      // subsequent saves use the correct key. A sync means the note was saved back to the parent
+      // editor, so it is no longer "new" (closing the editor should not delete it).
+      if (editingNoteKey.current && insertedNodeKey) {
+        editingNoteKey.current = insertedNodeKey;
+        editingNoteIsNew.current = false;
+      }
       openFootnoteEditorOnNewNote(ops, insertedNodeKey);
-      // Close and discard if the note being edited was deleted from the main editor
+      // Close and discard if the note being edited was deleted from the main editor.
       if (editingNoteKey.current && !editorRef.current?.getNoteOps(editingNoteKey.current))
-        onFootnoteEditorClose();
+        closeFootnoteEditor(false); // false => the note caller is already gone.
     },
-    [editingNoteKey, onFootnoteEditorClose, openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
+    [
+      closeFootnoteEditor,
+      editingNoteIsNew,
+      editingNoteKey,
+      openFootnoteEditorOnNewNote,
+      saveUsjToPdpIfUpdated,
+    ],
   );
 
   /**
