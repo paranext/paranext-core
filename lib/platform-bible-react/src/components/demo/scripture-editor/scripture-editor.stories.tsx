@@ -279,7 +279,7 @@ export const CustomMarkerTrigger: Story = {
   args: {
     defaultUsj: usjWeb,
     options: {
-      hasExternalUI: true,
+      hasExternalUI: false,
       markerMenuTrigger: '?',
     },
   },
@@ -400,8 +400,10 @@ export const FootnoteEditorView: FootnoteEditorViewStory = {
             insertedNodeKey?: string,
           ) => {
             // replaceEmbedUpdate creates a new node with a new key; keep noteKey in sync so
-            // subsequent saves use the correct key.
-            if (noteKey.current && insertedNodeKey) noteKey.current = insertedNodeKey;
+            // subsequent saves use the correct key. Only update for replaceEmbedUpdate (not a
+            // fresh note insertion, which has ops[1] as the note embed).
+            if (noteKey.current && insertedNodeKey && !isInsertEmbedOpOfType('note', ops?.[1]))
+              noteKey.current = insertedNodeKey;
             openFootnoteEditorOnNewNote(ops, insertedNodeKey);
           }}
           ref={editorRef}

@@ -1205,7 +1205,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // replaceEmbedUpdate assigns a new Lexical node key; keep editingNoteKey in sync so
       // subsequent saves use the correct key. A sync means the note was saved back to the parent
       // editor, so it is no longer "new" (closing the editor should not delete it).
-      if (editingNoteKey.current && insertedNodeKey) {
+      // Guard: only update when this is a replaceEmbedUpdate for our note, not a fresh note
+      // insertion. A fresh insertion has ops[1] as the note embed; replaceEmbedUpdate produces
+      // a different ops structure (a delete op at ops[1]).
+      if (editingNoteKey.current && insertedNodeKey && !isInsertEmbedOpOfType('note', ops?.[1])) {
         editingNoteKey.current = insertedNodeKey;
         editingNoteIsNew.current = false;
       }

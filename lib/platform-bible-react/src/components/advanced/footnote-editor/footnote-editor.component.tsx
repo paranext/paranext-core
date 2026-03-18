@@ -373,63 +373,66 @@ export default function FootnoteEditor({
     setCanRedo(state.canRedo);
   };
 
-  const handleUsjChange = (usj: Usj) => {
-    const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
-    if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
-      // Prevents adding additional note nodes or other nodes after the main footnote node
-      if (usj.content.length > 1) {
-        setTimeout(() => {
-          // Retains the first two nodes which are the added paragraph node (for now) and the
-          // footnote/cross-reference and deletes the unwanted node that was just inserted
-          editorRef.current?.applyUpdate([{ retain: 2 }, { delete: 1 }]);
-        }, 0);
-      }
-      const currentNoteType = noteOp.insert.note?.style;
-      const innerNoteOps = noteOp.insert.note?.contents?.ops;
-      if (!currentNoteType) setIsTypeSwitchable(false);
+  const handleUsjChange = useCallback(
+    (usj: Usj) => {
+      const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
+      if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
+        // Prevents adding additional note nodes or other nodes after the main footnote node
+        if (usj.content.length > 1) {
+          setTimeout(() => {
+            // Retains the first two nodes which are the added paragraph node (for now) and the
+            // footnote/cross-reference and deletes the unwanted node that was just inserted
+            editorRef.current?.applyUpdate([{ retain: 2 }, { delete: 1 }]);
+          }, 0);
+        }
+        const currentNoteType = noteOp.insert.note?.style;
+        const innerNoteOps = noteOp.insert.note?.contents?.ops;
+        if (!currentNoteType) setIsTypeSwitchable(false);
 
-      if (currentNoteType === 'x') {
-        setIsTypeSwitchable(
-          !!innerNoteOps?.every((op) => {
-            if (!op.attributes?.char) return true;
-            // The built-in type for the delta note ops does not contain the types for the attributes
-            // so have to cast it here
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            const nodeType = (op.attributes?.char as Record<string, string>).style;
-            return nodeType === 'xt' || nodeType === 'xo' || nodeType === 'xq';
-          }),
-        );
+        if (currentNoteType === 'x') {
+          setIsTypeSwitchable(
+            !!innerNoteOps?.every((op) => {
+              if (!op.attributes?.char) return true;
+              // The built-in type for the delta note ops does not contain the types for the attributes
+              // so have to cast it here
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              const nodeType = (op.attributes?.char as Record<string, string>).style;
+              return nodeType === 'xt' || nodeType === 'xo' || nodeType === 'xq';
+            }),
+          );
+        } else {
+          setIsTypeSwitchable(
+            !!innerNoteOps?.every((op) => {
+              if (!op.attributes?.char) return true;
+              // The built-in type for the delta note ops does not contain the types for the attributes
+              // so have to cast it here
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              const nodeType = (op.attributes?.char as Record<string, string>).style;
+              return nodeType === 'ft' || nodeType === 'fr' || nodeType === 'fq';
+            }),
+          );
+        }
+
+        // On the first call after loading a note, snapshot the initial state and skip auto-save
+        if (!hasInitializedEditor.current) {
+          hasInitializedEditor.current = true;
+          initialNoteOpsJson.current = JSON.stringify(noteOp);
+          setIsAtInitialState(true);
+          return;
+        }
+
+        // Track whether the user has undone all their edits back to the initial state
+        setIsAtInitialState(JSON.stringify(noteOp) === initialNoteOpsJson.current);
+
+        // Auto-save on every content change (does not apply to parent editor)
+        saveCurrentNoteOp(callerType, customCaller);
       } else {
-        setIsTypeSwitchable(
-          !!innerNoteOps?.every((op) => {
-            if (!op.attributes?.char) return true;
-            // The built-in type for the delta note ops does not contain the types for the attributes
-            // so have to cast it here
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            const nodeType = (op.attributes?.char as Record<string, string>).style;
-            return nodeType === 'ft' || nodeType === 'fr' || nodeType === 'fq';
-          }),
-        );
-      }
-
-      // On the first call after loading a note, snapshot the initial state and skip auto-save
-      if (!hasInitializedEditor.current) {
-        hasInitializedEditor.current = true;
-        initialNoteOpsJson.current = JSON.stringify(noteOp);
+        setIsTypeSwitchable(false);
         setIsAtInitialState(true);
-        return;
       }
-
-      // Track whether the user has undone all their edits back to the initial state
-      setIsAtInitialState(JSON.stringify(noteOp) === initialNoteOpsJson.current);
-
-      // Auto-save on every content change (does not apply to parent editor)
-      saveCurrentNoteOp(callerType, customCaller);
-    } else {
-      setIsTypeSwitchable(false);
-      setIsAtInitialState(true);
-    }
-  };
+    },
+    [callerType, customCaller, saveCurrentNoteOp],
+  );
 
   const showInlineMarkersMenu = useCallback(() => {
     // Only shows the markers menu if there is currently a selection in the editor and there are

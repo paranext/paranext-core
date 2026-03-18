@@ -3,7 +3,7 @@
     "%footnoteEditor_callerDropdown_label%": {
       "fallbackKey": "%Paratext.Base.ScriptureEditor.NoteCallerForm.NoteCallerForm.Text%"
     },
-    "%footnoteEditor_cButton_tooltip%": {
+    "%footnoteEditor_cancelButton_tooltip%": {
       "fallbackKey": "%general_cancel%"
     },
     "%footnoteEditor_noteType_crossReference_label%": {
