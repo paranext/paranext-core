@@ -82,7 +82,7 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
     }
 
     const filteredMarkerMenuItems = markerMenuItems.filter((markerItem) =>
-      markerItem.marker?.toLowerCase().startsWith(query),
+      markerItem.marker?.toLowerCase().includes(query),
     );
     filteredMarkerMenuItems.push(
       ...markerMenuItems.filter(
