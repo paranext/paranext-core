@@ -1151,6 +1151,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return saveUsjToPdpIfUpdatedInternal;
   }, [usjFromPdp, projectName, localizedStrings]);
 
+  const onFootnoteEditorClose = useCallback(() => {
+    editingNoteKey.current = undefined;
+    editingNoteOps.current = undefined;
+    setShowFootnoteEditor(false);
+  }, []);
+
   const openFootnoteEditorOnNewNote = useCallback(
     (ops?: DeltaOp[], insertedNodeKey?: string) => {
       if (insertedNodeKey && ops) {
@@ -1184,8 +1190,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // subsequent saves use the correct key.
       if (editingNoteKey.current && insertedNodeKey) editingNoteKey.current = insertedNodeKey;
       openFootnoteEditorOnNewNote(ops, insertedNodeKey);
+      // Close and discard if the note being edited was deleted from the main editor
+      if (editingNoteKey.current && !editorRef.current?.getNoteOps(editingNoteKey.current))
+        onFootnoteEditorClose();
     },
-    [editingNoteKey, openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
+    [editingNoteKey, onFootnoteEditorClose, openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
   );
 
   /**
@@ -1325,12 +1334,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       highlightedVerseElement?.classList.remove('highlighted');
     };
   }, [scrRef]);
-
-  const onFootnoteEditorClose = useCallback(() => {
-    editingNoteKey.current = undefined;
-    editingNoteOps.current = undefined;
-    setShowFootnoteEditor(false);
-  }, []);
 
   const onCommentEditorCancel = useCallback(() => {
     // Remove the pending annotation if one was created
