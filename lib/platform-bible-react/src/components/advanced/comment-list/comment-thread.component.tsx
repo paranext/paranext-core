@@ -367,7 +367,7 @@ export function CommentThread({
           'tw-bg-primary-foreground': !isSelected && threadStatus !== 'Resolved' && isRead,
           'tw-bg-background': isSelected && threadStatus !== 'Resolved' && isRead,
           'tw-bg-muted': threadStatus === 'Resolved',
-          'tw-bg-blue-50': !isRead && !isSelected && threadStatus !== 'Resolved',
+          'tw-bg-accent': !isRead && !isSelected && threadStatus !== 'Resolved',
         },
       )}
       onClick={() => {
