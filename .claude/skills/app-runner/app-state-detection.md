@@ -142,4 +142,3 @@ done
 - [reference.md](reference.md) - Process architecture details
 - [../visual-verification/SKILL.md](../visual-verification/SKILL.md) - Visual verification skill
 - [../papi-client/SKILL.md](../papi-client/SKILL.md) - WebSocket API skill
-- [../../scripts/preflight-check.sh](../../scripts/preflight-check.sh) - Pre-flight check script

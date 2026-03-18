@@ -24,8 +24,7 @@ toc: true
 <!-- | 207 | Component Usage and Creation | -->
 <!-- | 242 | shadcn/ui Guidelines | -->
 <!-- | 252 | Shared Utilities and Common Code | -->
-<!-- | 412 | Source Provenance Comments (AI Porting) | -->
-<!-- | 541 | Related Documentation | -->
+<!-- | 412 | Related Documentation | -->
 <!-- | 549 | Version Log | -->
 <!-- TOC:END -->
 
@@ -384,11 +383,11 @@ describe('parseScriptureReference', () => {
 Every regular expression in the codebase MUST have:
 
 1. **Unit tests with examples** - At least 5 test cases showing valid matches and invalid non-matches
-2. **Origin documentation** - Either PT9 source location OR explanation of how pattern was derived
-3. **EXPLANATION comment** - What the regex matches and why (see Source Provenance section)
+2. **Origin documentation** - Where the pattern came from or how it was derived
+3. **EXPLANATION comment** - What the regex matches and why
 
 **AI-generated regexes require user validation**:
-- When creating a new regex not directly copied from PT9, **STOP and ask the user** to validate the pattern
+- When creating a new regex, **STOP and ask the user** to validate the pattern
 - Show example matches/non-matches for user review before proceeding
 
 Example test structure:

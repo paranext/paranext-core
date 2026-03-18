@@ -20,6 +20,8 @@ For detailed guidance, see the `.context/` and `.context/standards/` folders. Re
 
 **Reading large files**: Check the file's YAML frontmatter for `toc: true` — if present, the file has a machine-readable `<!-- TOC:BEGIN -->` block with section line numbers. Read the TOC first (~50 lines) to find the relevant section, then use offset/limit to read only that section — do not read the entire file.
 
+**When editing any standards doc**: bump the `version` and `last_updated` fields in the YAML frontmatter, and add a row to the `## Version Log` table at the bottom describing what changed. Use semver: patch for fixes/clarifications, minor for new sections or significant content changes, major for breaking restructures.
+
 ### Project Context (`.context/`)
 
 | Topic | File | Key Content |

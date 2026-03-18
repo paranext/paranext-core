@@ -11,7 +11,7 @@ last_updated: 2026-03-04
 
 > **Source**: [UX Component Choices Google Doc](https://docs.google.com/document/d/1gKmb2PnCWtRAbVN8ERskRRy-IoTRTsEpC4-kpgEvzxY/)
 >
-> This guide helps the Component Builder agent select appropriate components from `platform-bible-react` when building UI for ported features.
+> This guide helps select appropriate components from `platform-bible-react` when building UI.
 
 ## Common Patterns
 

@@ -11,7 +11,7 @@ Use these categories with `dotnet test --filter "Category=..."`:
 | `Unit` | Isolated unit tests | Testing single methods/classes in isolation |
 | `Integration` | Integration tests | Testing component interactions |
 | `Contract` | API contract verification | Verifying API signatures and types match |
-| `GoldenMaster` | PT9 behavior comparison | Verifying PT10 matches PT9 output |
+| `GoldenMaster` | Snapshot comparison testing | Verifying output matches expected snapshots |
 | `Property` | Property-based tests | Testing invariants with random inputs |
 
 ### Feature-Specific Categories
@@ -122,7 +122,7 @@ public void Method_Condition_ExpectedBehavior() { }
 
 [Test]
 [Category("GoldenMaster")]
-public void Feature_MatchesPT9Output() { }
+public void Feature_MatchesExpectedOutput() { }
 
 [FsCheck.NUnit.Property]
 [Category("Property")]
@@ -140,7 +140,7 @@ dotnet test --filter "Category=Contract"
 # 2. Unit tests (core logic)
 dotnet test --filter "Category=Unit"
 
-# 3. Golden master tests (PT9 compatibility)
+# 3. Golden master tests (snapshot comparison)
 dotnet test --filter "Category=GoldenMaster"
 
 # 4. Property tests (invariants)
@@ -170,7 +170,7 @@ For a typical feature:
 |----------|-------|---------|
 | Unit | Many (10-50+) | Cover all code paths |
 | Contract | Few (3-10) | Verify API surface |
-| GoldenMaster | Several (5-20) | Key PT9 scenarios |
+| GoldenMaster | Several (5-20) | Key scenarios |
 | Property | Few (2-5) | Core invariants |
 | Integration | Few (3-10) | Component interactions |
 

@@ -10,7 +10,7 @@ toc: true
 
 # Component Builder Patterns Reference
 
-This is a reference document (not an agent) containing patterns and examples for the Component Builder agent to consult during UI development.
+This document contains patterns and examples for building React UI components in Platform.Bible.
 
 <!-- TOC:BEGIN -->
 <!-- | Line | Section | -->
@@ -20,7 +20,7 @@ This is a reference document (not an agent) containing patterns and examples for
 <!-- | 121 | PAPI Integration Patterns | -->
 <!-- | 158 | Styling Patterns | -->
 <!-- | 199 | Localization Patterns | -->
-<!-- | 323 | Provenance Comment Patterns | -->
+<!-- (Provenance Comment Patterns section removed — see porting overlay) -->
 <!-- | 371 | Common Component Patterns | -->
 <!-- | 399 | Debounce Usage Guidelines | -->
 <!-- | 430 | Disabled Button with Tooltip Pattern | -->

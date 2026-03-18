@@ -33,15 +33,7 @@ Entry point registration involves four files:
 
 ## Step 1: Identify Entry Points
 
-Read entry points from discovery artifacts:
-
-```bash
-# Find Entry Points section in behavior catalog
-grep -A 50 "## Entry Points" .context/features/{feature}/behavior-catalog.md
-
-# Check ui-interaction-map for menu paths
-grep -i "menu" .context/features/{feature}/ui-interaction-map.md
-```
+Identify what entry points your feature needs — menu items, keyboard shortcuts, and/or commands.
 
 ---
 

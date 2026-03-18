@@ -6,7 +6,7 @@
 #   selector   - CSS selector for the component (e.g., '[data-testid="my-component"]')
 #   output-dir - Directory for screenshot output (REQUIRED)
 #   filename   - Screenshot filename (optional, defaults to verify-YYYYMMDD-HHMMSS.png)
-#                For iteration-planner compatibility, use: {WP}-render-verification.png
+#                Example: {WP}-render-verification.png
 
 if [ -z "$1" ] || [ -z "$2" ]; then
   echo "Usage: quick-verify.sh <selector> <output-dir> [filename]"
@@ -20,7 +20,7 @@ if [ -z "$1" ] || [ -z "$2" ]; then
   echo "  # Default filename (verify-YYYYMMDD-HHMMSS.png):"
   echo "  quick-verify.sh '[data-testid=\"my-component\"]' ./evidence/"
   echo ""
-  echo "  # Custom filename for iteration-planner compatibility:"
+  echo "  # Custom filename:"
   echo "  quick-verify.sh '[data-testid=\"my-component\"]' ./evidence/ UI-PKG-001-render-verification.png"
   exit 1
 fi
@@ -85,7 +85,7 @@ echo ""
 
 # 3. Check console errors
 echo "3. Console Errors:"
-ERRORS=$(grep -i "error\|exception" ~/.config/platform.bible/logs/renderer.log 2>/dev/null | tail -5)
+ERRORS=$(grep -i "error\|exception" ~/.config/Platform.Bible/logs/main.log 2>/dev/null | tail -5)
 if [ -z "$ERRORS" ]; then
   echo "   ✓ No errors in renderer log"
   CONSOLE_OK=true

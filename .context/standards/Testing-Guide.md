@@ -1,10 +1,10 @@
 ---
 title: Testing Infrastructure Guide
-description: Vitest, NUnit, TDD discipline, testing trophy model, AI agent test quality guardrails, mocking, and CI.
-version: 1.1.1
+description: Vitest, NUnit, TDD discipline, testing trophy model, test quality guardrails, mocking, and CI.
+version: 1.2.0
 status: active
 created: 2026-03-04
-last_updated: 2026-03-16
+last_updated: 2026-03-18
 toc: true
 ---
 
@@ -95,7 +95,7 @@ git stash pop
 
 **If a test passes without implementation, it proves nothing and must be rewritten.**
 
-> **Note:** In Phase 3 TDD workflow, the Test Writer agent's RED phase evidence (`test-evidence-red.log`) serves as proof that all tests fail before implementation. The explicit Revert Test is unnecessary when practicing strict TDD.
+> **Note:** When practicing strict TDD, the RED phase naturally proves all tests fail before implementation. The explicit Revert Test is unnecessary in this case.
 
 ### Continuous Testing Frequency
 
@@ -114,7 +114,7 @@ We use [Outside-In TDD](https://outsidein.dev/concepts/outside-in-tdd/) to const
 ┌─────────────────────────────────────────────────────────────┐
 │  OUTER LOOP (Acceptance Test)                               │
 │                                                             │
-│  Write acceptance test from Phase 2 spec FIRST              │
+│  Write acceptance test from specification FIRST              │
 │  This test defines WHAT the capability must do              │
 │  It constrains the implementation scope                     │
 │  ┌─────────────────────────────────────────────────────┐   │
@@ -128,24 +128,19 @@ We use [Outside-In TDD](https://outsidein.dev/concepts/outside-in-tdd/) to const
 
 **Key Principle**: The **outer acceptance test** is the done signal. When it passes, the capability is complete.
 
-**Outer Test Sources:**
-- **When test-specifications/ exists**: Test specification JSON (spec-XXX)
-- **When golden-masters/ exists**: Golden master comparison (gm-XXX)
-
 #### Acceptance Test Characteristics
 
 An acceptance test should:
-1. Call the **public API** defined in data-contracts.md
+1. Call the **public API** as documented
 2. Verify the **complete outcome** of a capability
-3. Be marked with `[Category("Acceptance")]` and `[Property("CapabilityId", "CAP-XXX")]`
+3. Be marked with `[Category("Acceptance")]`
 4. Include **side-effect verification** for methods with effects (create, update, delete)
 
 ```csharp
 [Test]
 [Category("Acceptance")]
-[Property("CapabilityId", "CAP-001")]
 [Property("ScenarioId", "TS-001")]
-[Description("Acceptance test: {capability description}")]
+[Description("Acceptance test: {feature description}")]
 public async Task {Capability}_AcceptanceTest()
 {
     // This test passes when the capability is COMPLETE
@@ -284,7 +279,7 @@ If you need >3 mocks for a test, reconsider:
 | External APIs    | Mock          | Mock              |
 | System time      | Mock          | Mock              |
 
-**ParatextData Exception:** For features with LB-PD logic, NEVER mock ParatextData. It's the shared oracle between PT9 and PT10.
+**ParatextData Exception:** For features with LB-PD logic, NEVER mock ParatextData. It's the shared data library and should be tested with real instances.
 
 ### Test Quality Curation Checklist
 
@@ -295,7 +290,7 @@ Before accepting AI-generated tests, verify:
 - [ ] **Behavior-focused:** Tests WHAT, not HOW
 - [ ] **Meaningful assertions:** Checks business value, not artifacts
 - [ ] **Deterministic:** Same result on every run
-- [ ] **Traceable:** References specification (BHV-XXX, TS-XXX)
+- [ ] **Traceable:** References specification or requirement
 
 ### Stop and Ask Triggers
 
@@ -327,14 +322,14 @@ Before implementation can begin, verify all tests meet these criteria:
 | **Mock count ≤ 3** | Or exception documented with justification |
 | **Deterministic** | Time, random, network are all controlled |
 | **No trivial tests** | No simple accessor or constructor tests |
-| **Quality Report present** | Documented in test-writer-plan.md |
+| **Quality Report present** | Documented in test quality report |
 
 ### Enforcement
 
 - **Who verifies:** Human reviewer
 - **When:** After test writing completes, before implementation starts
 - **Blocking:** Implementation CANNOT begin until G4.5 passes
-- **Evidence:** Quality checklist in `test-writer-plan.md`
+- **Evidence:** Quality checklist in test quality report
 
 ---
 
@@ -1112,9 +1107,9 @@ Every test must trace back to a specification to ensure complete coverage and en
 
 | ID | Format | Source | Purpose |
 |----|--------|--------|---------|
-| BHV-XXX | Behavior ID | behavior-catalog.md | What the system does |
-| TS-XXX | Test Scenario ID | test-scenarios.json | How to test a behavior |
-| INV-XXX | Invariant ID | business-rules.md | Property that must hold (tested with regular tests) |
+| REQ-XXX | Requirement ID | requirements document | What the system does |
+| TS-XXX | Test Scenario ID | test plan | How to test a requirement |
+| INV-XXX | Invariant ID | business rules | Property that must hold (tested with regular tests) |
 
 ### Adding Traceability to Tests
 
@@ -1123,7 +1118,7 @@ Every test must trace back to a specification to ensure complete coverage and en
 [Test]
 [Category("Contract")]
 [Property("ScenarioId", "TS-001")]
-[Property("BehaviorId", "BHV-001")]
+[Property("RequirementId", "REQ-001")]
 public void CreateProject_WithValidSettings_ReturnsSuccess() { }
 ```
 
@@ -1131,24 +1126,21 @@ public void CreateProject_WithValidSettings_ReturnsSuccess() { }
 ```typescript
 /**
  * @scenario TS-001
- * @behavior BHV-001
+ * @requirement REQ-001
  */
 test('CreateProject with valid settings returns success', () => { });
 ```
 
 ### Validation Rules
 
-- Every BHV-XXX must have at least one TS-XXX
+- Every REQ-XXX must have at least one TS-XXX
 - Every TS-XXX must have at least one test
-- Every test must reference a valid scenario ID
+- Every test must reference a valid scenario or requirement ID
 - Orphan tests (except Infrastructure category) are flagged
 
 These rules should be verified during code review.
 
 ---
-
-<!-- Porting-specific sections (Golden Master Testing, Characterization Testing, -->
-<!-- Proof of Work Artifacts, UI Test-First Pattern) are maintained separately.  -->
 
 ## Testing Recommendations for New Features
 
@@ -1381,7 +1373,7 @@ Property-based testing verifies that **invariants hold for all possible inputs**
 
 **Status**: Future improvement. Currently, invariants are tested with regular unit tests using specific inputs (see [Invariant Testing](#invariant-testing)).
 
-**When to Add**: After 3-5 features are successfully ported with regular invariant tests.
+**When to Add**: After 3-5 features have test coverage with regular invariant tests.
 
 #### When to Use Property Tests
 
@@ -1454,9 +1446,9 @@ describe('VerseRef Properties', () => {
 
 Mutation testing verifies **test quality** by checking if tests detect small code changes (mutations). A high mutation score means tests catch real defects.
 
-**Status**: Future improvement. Can be added after baseline test coverage is established for ported features.
+**Status**: Future improvement. Can be added after baseline test coverage is established for features.
 
-**When to Add**: After baseline test coverage is established for 2-3 ported features.
+**When to Add**: After baseline test coverage is established for 2-3 features.
 
 #### When to Use
 
@@ -1521,7 +1513,7 @@ E2E tests that verify user flows MUST interact through visible UI only:
 
 Note: `app.fixture` is retained for CI smoke tests only (launches standalone Electron).
 
-E2E tests are written by the UI phase command (via the `e2e-test-writer` agent) after all UI work packages complete.
+E2E tests are created after all UI work packages complete.
 
 #### Test Location
 
@@ -1616,9 +1608,9 @@ test.describe('{Feature} Render Smoke Tests', () => {
 
 #### Scenario-Driven Test Selection
 
-Derive E2E tests from Phase 2 test scenarios:
+Derive E2E tests from test scenarios:
 
-1. Load `characterization/test-scenarios.json`
+1. Load test scenarios
 2. Filter by `logicLayer`: Keep `"UI"` or `"Mixed"` (pure `"ParatextData"` scenarios are covered by unit tests)
 3. Filter by `priority`: Keep `"critical"` or `"high"` (E2E tests are expensive)
 4. Write one E2E test per selected scenario
@@ -1661,3 +1653,4 @@ npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright.con
 | 1.0.0   | 2026-03-04 | Initial version                                       |
 | 1.1.0   | 2026-03-04 | Strip human-readable TOC, keep machine-readable only  |
 | 1.1.1   | 2026-03-16 | Decouple golden master strategy from classification level; reference logic layers instead |
+| 1.2.0   | 2026-03-18 | Remove all porting-specific references; generalize for non-porting teams |

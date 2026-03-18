@@ -105,7 +105,7 @@ public class FeatureGoldenMasterTests
     [Test]
     [Category("GoldenMaster")]
     [TestCaseSource(nameof(GetGoldenMasterScenarios))]
-    public void Feature_MatchesPT9Behavior(GoldenMasterScenario scenario)
+    public void Feature_MatchesExpectedBehavior(GoldenMasterScenario scenario)
     {
         // Arrange
         var input = LoadInput(scenario.InputPath);
@@ -120,7 +120,7 @@ public class FeatureGoldenMasterTests
 
     private static IEnumerable<GoldenMasterScenario> GetGoldenMasterScenarios()
     {
-        // Load from .context/features/{feature}/golden-masters/
+        // Load expected output from golden master fixtures
     }
 }
 ```

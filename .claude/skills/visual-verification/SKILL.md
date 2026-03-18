@@ -1,6 +1,6 @@
 ---
 name: visual-verification
-description: "[paranext-core ONLY] Visual verification and UI interaction for Platform.Bible using Playwright over CDP. REQUIRED for Component Builder agent. Use to take screenshots, click buttons, fill inputs, inspect DOM, navigate menus, and verify UI. Requires app started with remote debugging enabled. NOT for use in PT9/legacy Paratext codebases."
+description: "[paranext-core ONLY] Visual verification and UI interaction for Platform.Bible using Playwright over CDP. Use to take screenshots, click buttons, fill inputs, inspect DOM, navigate menus, and verify UI. Requires app started with remote debugging enabled. NOT for use in PT9/legacy Paratext codebases."
 ---
 
 # Visual Verification Skill
@@ -367,11 +367,11 @@ Run all visual verification checks in one command:
 ```bash
 # Default filename (verify-YYYYMMDD-HHMMSS.png):
 .claude/skills/visual-verification/scripts/quick-verify.sh '[data-testid="my-component"]' \
-  .context/features/{feature}/proofs/component-evidence/
+  /tmp/evidence/
 
-# Custom filename (for iteration-planner compatibility):
+# Custom filename:
 .claude/skills/visual-verification/scripts/quick-verify.sh '[data-testid="my-component"]' \
-  .context/features/{feature}/proofs/component-evidence/ \
+  /tmp/evidence/ \
   UI-PKG-001-render-verification.png
 ```
 
@@ -448,29 +448,27 @@ echo '{"cmd":"click","role":"menuitem","name":"Help"}
 .claude/skills/visual-verification/scripts/cdp-helper.sh screenshot /tmp/screenshot.png
 ```
 
-### 4. Compare to Golden Master
+### 4. Verify Screenshot
 
 Visual comparison checklist:
 
-- [ ] Layout matches PT9 golden master
+- [ ] Layout matches expected design
 - [ ] Colors and styling correct
 - [ ] Text content matches
 - [ ] Icons and images present
 - [ ] Spacing and alignment correct
 
-Golden masters are in:
-`.context/features/{feature}/golden-masters/`
 
 ### 5. Document Differences
 
-If there are intentional differences from PT9, document them:
+If there are intentional visual differences, document them:
 
 ```markdown
-## Visual Differences from PT9
+## Visual Differences
 
 1. **Button styling**: Using Platform.Bible design system colors
-2. **Font**: Using system font instead of PT9 custom font
-3. **Icons**: Using Lucide icons instead of PT9 custom icons
+2. **Font**: Using system font instead of custom font
+3. **Icons**: Using Lucide icons instead of custom icons
 ```
 
 ## DOM Inspection
@@ -522,87 +520,6 @@ Alternatively, check console via CDP:
 # This requires additional CDP setup for console message capture
 # Prefer using log-inspector skill instead
 ```
-
-## Integration with Component Builder
-
-### Required Workflow for Component Builder Agent
-
-1. **Pre-flight check**: Verify app is running with debugging (see above)
-   - If not running: Use `app-runner` skill (Claude has full authority)
-
-2. **Interact with UI and verify state** using `pw-server.mjs`:
-   ```bash
-   echo '{"cmd":"screenshot","output":"/tmp/initial-state.png"}
-   {"cmd":"click","role":"button","name":"Open Project"}
-   {"cmd":"wait","role":"dialog","timeout":10000}
-   {"cmd":"screenshot","output":"/tmp/dialog-open.png"}
-   {"cmd":"fill","selector":"input","text":"Test Project"}
-   {"cmd":"screenshot","output":"/tmp/form-filled.png"}
-   {"cmd":"quit"}' | node .claude/skills/visual-verification/scripts/pw-server.mjs 2>/dev/null
-   ```
-
-3. **Milestone screenshots**:
-   - Initial render
-   - Loading state
-   - Populated state
-   - After interactions (clicks, form fills)
-   - Error state (if applicable)
-
-4. **Check logs for errors** (using log-inspector skill)
-
-5. **Compare to golden masters**
-
-6. **Document visual verification results**
-
-## Golden Master Comparison
-
-### Location
-
-Golden masters are stored in:
-
-```
-.context/features/{feature}/golden-masters/
-├── scenario-001/
-│   ├── screenshot.png      # PT9 screenshot
-│   ├── input.json          # Test data
-│   └── metadata.json       # Scenario description
-└── scenario-002/
-    └── ...
-```
-
-### Comparison Process
-
-1. Load PT9 golden master screenshot
-2. Take screenshot of PT10 implementation via CDP
-3. Compare visually:
-   - Same layout structure?
-   - Same visual hierarchy?
-   - Same content?
-4. Document any intentional differences
-
-### Acceptable Differences
-
-Some differences are expected between PT9 and PT10:
-
-| Category | PT9 | PT10 | Acceptable? |
-|----------|-----|------|-------------|
-| Design system | WinForms | React + Tailwind | Yes |
-| Icons | Custom | Lucide/shadcn | Yes |
-| Fonts | MS fonts | System fonts | Yes |
-| Behavior | Identical | Identical | Required |
-| Data | Identical | Identical | Required |
-
-## No Graceful Degradation — Visual Verification is MANDATORY
-
-**VIS-SKIP is deprecated and MUST NOT be used.** Visual verification is a blocking requirement for all UI work packages.
-
-If CDP is not available:
-
-1. **Use `app-runner` skill** to start Platform.Bible with CDP enabled (Claude has full authority)
-2. **If `app-runner` fails after 3 attempts**: Set status to **BLOCKED** and escalate
-3. **NEVER skip visual verification** — a UI component that hasn't been verified rendering is not complete
-
-Any verdict containing `VIS-SKIP` or visual verification listed under `non_blocking_issues` is **invalid** and must be rejected.
 
 ## Troubleshooting
 
@@ -677,7 +594,6 @@ apt install jq
 ## See Also
 
 - [reference.md](reference.md) - CDP command details
-- [visual-verification.md](visual-verification.md) - Detailed verification workflow
 - [papi-client skill](../papi-client/SKILL.md) - Send PAPI commands
 - [app-runner skill](../app-runner/SKILL.md) - Check app status and guide user
 - [log-inspector skill](../log-inspector/SKILL.md) - Debug issues via logs

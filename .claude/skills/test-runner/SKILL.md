@@ -98,7 +98,7 @@ Platform.Bible uses test categories:
 | Category | Purpose |
 |----------|---------|
 | `Contract` | API contract tests |
-| `GoldenMaster` | PT9 behavior comparison |
+| `GoldenMaster` | Snapshot comparison testing |
 | `Property` | Property-based tests |
 | `Integration` | Integration tests |
 | `Unit` | Unit tests |

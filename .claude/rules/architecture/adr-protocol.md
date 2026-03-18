@@ -98,4 +98,4 @@ Violations will block your commit. Fix them before committing.
 
 - [Decision Registry](/.context/architecture/decision-registry.json)
 - [Decision Registry Schema](/.context/architecture/decision-registry.schema.json)
-- [ADR Reviewer Agent](/.claude/agents/adr-reviewer.md)
+- Run an ADR compliance check before finalizing architectural decisions
