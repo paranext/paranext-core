@@ -27,7 +27,6 @@ For detailed guidance, see the `.context/` and `.context/standards/` folders. Re
 | Topic | File | Key Content |
 | --- | --- | --- |
 | Paratext 10 Overview | [Paratext10-Overview.md](.context/Paratext10-Overview.md) | PT10/Platform.Bible key concepts |
-| Cross-Cutting Decisions | [Decisions.md](.context/Decisions.md) | Architectural decisions affecting multiple features |
 
 ### Standards & Guides (`.context/standards/`)
 

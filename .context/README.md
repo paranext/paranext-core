@@ -9,7 +9,6 @@ This directory contains structured documentation that Claude Code and other AI t
 | `standards/` | Coding standards, architecture patterns, testing guides |
 | `architecture/` | Decision registry (ADRs) and schema |
 | `Paratext10-Overview.md` | High-level overview of PT10/Platform.Bible concepts |
-| `Decisions.md` | Cross-cutting architectural decisions |
 
 ## Standards
 

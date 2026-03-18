@@ -90,7 +90,6 @@ e2e-tests/.dev-server.pid
 .context/*
 !.context/architecture/
 !.context/Paratext10-Overview.md
-!.context/Decisions.md
 !.context/README.md
 !.context/standards/
 .context/standards/*
