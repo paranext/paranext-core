@@ -87,7 +87,8 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
     filteredMarkerMenuItems.push(
       ...markerMenuItems.filter(
         (markerItem) =>
-          markerItem.title.includes(query) && !filteredMarkerMenuItems.includes(markerItem),
+          markerItem.title.toLowerCase().includes(query) &&
+          !filteredMarkerMenuItems.includes(markerItem),
       ),
     );
 
