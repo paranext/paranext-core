@@ -3,5 +3,6 @@
   "compilerOptions": {
     "allowJs": true
   },
-  "include": [".eslintrc.cjs", "*.cjs", "*.ts", "*.js", "__test-mocks__", "lib", "src", "webpack"]
+  "include": [".eslintrc.cjs", "*.cjs", "*.ts", "*.js", "__test-mocks__", "lib", "src", "webpack"],
+  "exclude": ["node_modules", "**/temp-build"]
 }
