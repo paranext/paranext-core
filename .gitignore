@@ -56,11 +56,58 @@ e2e-tests/playwright-report/
 e2e-tests/test-results/
 e2e-tests/.dev-server.pid
 
-#claude
-.claude
+# ── Claude Code shared configuration ──────────────────────────────────
+# Shared content is committed to git (available to all teams).
+# Porting-specific items are symlinked from ai-prompts and auto-ignored.
+#
+# HOW TO ADD A NEW SHARED FILE:
+#   1. Add a !whitelist entry below for the file/directory
+#   2. Run: git add -f .claude/path/to/file
+#   3. Commit normally
+#
+# HOW TO ADD A NEW PORTING FILE:
+#   Just add it to ai-prompts — it's auto-ignored here. No changes needed.
+
+# .claude/ — ignore all, then whitelist shared items
+.claude/*
+!.claude/settings.json
+!.claude/rules/
+.claude/rules/*
+!.claude/rules/architecture/
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/test-runner/
+!.claude/skills/visual-verification/
+!.claude/skills/app-runner/
+!.claude/skills/log-inspector/
+!.claude/skills/papi-client/
+!.claude/scripts/
+.claude/scripts/*
+!.claude/scripts/statusline.sh
+!.claude/README.md
+
+# .context/ — ignore all, then whitelist shared items
+.context/*
+!.context/architecture/
+!.context/Paratext10-Overview.md
+!.context/Decisions.md
+!.context/README.md
+!.context/standards/
+.context/standards/*
+!.context/standards/Architecture.md
+!.context/standards/Code-Review-Guide.md
+!.context/standards/Code-Style-Guide.md
+!.context/standards/Component-Builder-Patterns.md
+!.context/standards/Component-Selection-Quick-Reference.md
+!.context/standards/Entry-Point-Guide.md
+!.context/standards/Extension-Development-Guide.md
+!.context/standards/Git-Guide.md
+!.context/standards/Localization-Guide.md
+!.context/standards/Paranext-Core-Patterns.md
+!.context/standards/Security-Guide.md
+!.context/standards/Testing-Guide.md
+
+# Backups
 .claude.backup/
-.context
-c-sharp/CLAUDE.md
-CLAUDE.md
 CLAUDE.md.backup
 

@@ -65,3 +65,7 @@ dev-packages/
 e2e-tests/test-results
 e2e-tests/playwright-report
 
+# Claude Code configuration
+.claude/
+.context/
+

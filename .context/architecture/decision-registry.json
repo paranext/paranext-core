@@ -1,0 +1,385 @@
+{
+  "$schema": "./decision-registry.schema.json",
+  "meta": {
+    "version": "1.3.0",
+    "lastUpdated": "2026-02-11",
+    "description": "Agents MUST query this before making architectural choices. If no entry exists, ESCALATE TO HUMAN. Constraints with 'enforcement' field indicate Tier 1 automated checks."
+  },
+  "libraries": {
+    "typescript": {
+      "stateManagement": {
+        "choice": "PlatformEventEmitter with local state objects",
+        "notAllowed": ["RxJS", "Redux", "MobX", "Zustand", "signals"],
+        "rationale": "Lightweight, event-driven, integrated with PAPI network model"
+      },
+      "eventEmitter": {
+        "choice": "PlatformEventEmitter (from platform-bible-utils)",
+        "notAllowed": ["Node.js EventEmitter", "mitt", "eventemitter3"],
+        "rationale": "Custom implementation with lazy init, dispose support, and subscription tracking"
+      },
+      "asyncCoordination": {
+        "choice": "Mutex and AsyncVariable (from platform-bible-utils)",
+        "notAllowed": ["raw Promise.race for timeouts", "manual lock implementations"],
+        "rationale": "Mutex for exclusive execution, AsyncVariable for promise-based sync with timeout"
+      },
+      "serialization": {
+        "choice": "serialize()/deserialize() from platform-bible-utils",
+        "notAllowed": ["direct JSON.parse/stringify for network data"],
+        "rationale": "Handles null↔undefined conversion for cross-process communication"
+      },
+      "logging": {
+        "choice": "electron-log via logger.service.ts",
+        "notAllowed": ["console.log in production code", "winston", "pino", "bunyan"],
+        "rationale": "Process-aware, file + console output, integrates with Electron"
+      },
+      "errorTypes": {
+        "choice": "PlatformError for network/cross-process errors",
+        "notAllowed": ["plain Error objects across process boundaries"],
+        "rationale": "Serializable with version tracking, preserves stack traces"
+      },
+      "testFramework": {
+        "choice": "Vitest",
+        "notAllowed": ["Jest", "Mocha", "Jasmine"],
+        "rationale": "Vite-native, ESM support, fast execution"
+      },
+      "reactTestingLibrary": {
+        "choice": "@testing-library/react",
+        "notAllowed": ["Enzyme", "react-test-renderer"],
+        "rationale": "User-centric testing, accessibility alignment"
+      },
+      "e2eFramework": {
+        "choice": "Playwright",
+        "notAllowed": ["Cypress", "Protractor", "TestCafe"],
+        "rationale": "Multi-browser, modern API, integrated CI"
+      },
+      "uiComponentLibrary": {
+        "choice": "platform-bible-react (built on shadcn/ui + Radix UI)",
+        "notAllowed": ["Material-UI", "Ant Design", "Chakra UI", "Bootstrap"],
+        "rationale": "Custom design system with accessibility via Radix"
+      },
+      "cssFramework": {
+        "choice": "Tailwind CSS with tw- prefix classes",
+        "notAllowed": ["CSS-in-JS (styled-components, emotion)", "inline styles", "CSS modules"],
+        "rationale": "Consistent theming, performance, enforced by ESLint PNX011"
+      },
+      "bundler": {
+        "choice": "Webpack for Electron app, Vite for library packages",
+        "notAllowed": ["Rollup (directly)", "esbuild (directly)", "Parcel"],
+        "rationale": "Webpack integrated with Electron Builder, Vite for modern lib builds"
+      }
+    },
+    "csharp": {
+      "jsonSerialization": {
+        "choice": "System.Text.Json",
+        "notAllowed": ["Newtonsoft"],
+        "rationale": "Modern, built-in, faster"
+      },
+      "asyncPattern": {
+        "choice": "Task/async-await",
+        "notAllowed": ["callbacks"],
+        "rationale": ".NET standard"
+      },
+      "collections": {
+        "choice": "System.Collections.Immutable",
+        "rationale": "Thread-safe for shared state"
+      },
+      "dependencyInjection": {
+        "choice": "manual",
+        "notAllowed": ["DI-container"],
+        "rationale": "Explicit, simpler debugging"
+      },
+      "concurrency": {
+        "choice": "Interlocked for atomic counters/flags, lock for multi-operation atomicity, ConcurrentDictionary for simple key-value",
+        "when": {
+          "interlocked": "Single atomic counter/flag operations",
+          "lock": "Multiple operations required to update shared state (REQUIRED for atomicity)",
+          "concurrentDictionary": "Simple key-value access without additional atomicity requirements"
+        },
+        "notAllowed": ["volatile for counters", "lock for single operations", "ConcurrentDictionary without lock when atomicity needed across multiple operations"],
+        "rationale": "If concurrent calls require more than a single operation to update shared state, you MUST lock to achieve atomicity"
+      },
+      "conflictResolution": {
+        "choice": "Lamport clocks (SharedStore)",
+        "when": "Cross-process synchronization",
+        "rationale": "Deterministic ordering without central authority"
+      },
+      "resourceDisposal": {
+        "choice": "Standard IDisposable pattern with bool _isDisposed flag",
+        "rationale": "Deterministic cleanup with GC.SuppressFinalize"
+      },
+      "customExceptions": {
+        "choice": "Record-style with structured properties (ProjectId, BookNum, etc.)",
+        "when": "Domain-specific errors needing structured metadata",
+        "rationale": "Serializable across process boundaries"
+      },
+      "networkTimeouts": {
+        "choice": "30 seconds default, NetworkTimeoutAttribute for per-method override",
+        "rationale": "Attribute-based configuration allows method-specific timeouts"
+      },
+      "asyncSyncBridge": {
+        "choice": "ThreadingUtils (RunTask, GetTaskResult, IsTaskCompletedAsync)",
+        "when": "Bridging synchronous ParatextData API with async PAPI",
+        "notAllowed": ["Task.Result blocking", ".Wait() without timeout"],
+        "rationale": "Handles timeouts and exceptions safely"
+      },
+      "jsonConverters": {
+        "choice": "Custom JsonConverter<T> registered in SerializationOptions.CreateSerializationOptions()",
+        "when": "Domain objects crossing process boundaries (VerseRef, Comments, Inventory, etc.)",
+        "rationale": "Centralized registration, consistent camelCase conversion"
+      },
+      "testFramework": {
+        "choice": "NUnit",
+        "notAllowed": ["xUnit", "MSTest"],
+        "rationale": "Established throughout c-sharp-tests/, consistent assertions"
+      }
+    }
+  },
+  "patterns": {
+    "typescript": {
+      "statelessService": {
+        "use": "Function exports (no class)",
+        "when": "Pure utilities, logging, formatting, stateless helpers",
+        "rationale": "Simpler, tree-shakeable, no this binding issues"
+      },
+      "statefulService": {
+        "use": "Module-level state with initialize()/shutdown() functions",
+        "when": "Services requiring lifecycle management (network, data providers)",
+        "rationale": "Explicit lifecycle, mutex-protected initialization"
+      },
+      "processSpecificService": {
+        "use": "Factory function with dynamic import",
+        "when": "Different implementations needed per process (main/renderer/extension-host)",
+        "rationale": "Lazy loading, process detection at runtime"
+      },
+      "dataSubscription": {
+        "use": "DataProviderEngine with PlatformEventEmitter",
+        "when": "Cross-process subscribable data in extensions",
+        "rationale": "Matches C# DataProvider pattern, integrated with PAPI"
+      },
+      "reactComponentStyle": {
+        "use": "Functional components with hooks",
+        "notAllowed": ["class components", "HOCs for state management"],
+        "rationale": "Modern React, simpler testing, cleaner code"
+      },
+      "componentDocumentation": {
+        "use": "Storybook stories (*.stories.tsx) with play functions",
+        "when": "All reusable UI components",
+        "rationale": "Visual testing, documentation, interaction testing"
+      }
+    },
+    "csharp": {
+      "dataSubscription": {
+        "use": "DataProvider",
+        "when": "Data that changes over time and multiple consumers need to subscribe"
+      },
+      "individualCommands": {
+        "use": "RegisterRequestHandlerAsync with individual command methods",
+        "when": "<=5 related commands needed without subscription",
+        "notAllowed": ["NetworkObject for <=5 commands"],
+        "rationale": "Simpler than NetworkObject for small command sets; InitializeAsync() called in Program.cs"
+      },
+      "commandAggregation": {
+        "use": "NetworkObject",
+        "when": ">5 related commands needed without subscription",
+        "notAllowed": ["Individual commands for >5 operations"],
+        "rationale": "Aggregates related commands into single network-addressable object"
+      },
+      "statelessOperations": {
+        "use": "Service (static)",
+        "when": "Pure functions, validation, transformations"
+      },
+      "statefulProcessing": {
+        "use": "Worker (instance)",
+        "when": "Jobs, multi-step workflows"
+      },
+      "objectConstruction": {
+        "use": "Factory",
+        "when": "Abstracting ParatextData object creation"
+      },
+      "initializationSequencing": {
+        "use": "Dependency-aware ordering with Task.WhenAll for independent operations",
+        "order": "PapiClient.ConnectAsync → SharedStoreService.InitializeAsync → Settings → Factories/Providers",
+        "rationale": "Services depend on earlier initializations; parallel registration for independent providers"
+      },
+      "registeredMethodThreadSafety": {
+        "use": "Lock all registered methods for the network object or data provider",
+        "when": "Any registered method is not thread safe",
+        "rationale": "Registered methods are called concurrently from PAPI; lock shared state to ensure thread safety"
+      },
+      "doubleCheckedLocking": {
+        "use": "ConcurrentDictionary check → lock → re-check → create",
+        "when": "Factory patterns with cached instances (e.g., ParatextProjectDataProviderFactory)",
+        "rationale": "Minimizes lock contention for existing entries"
+      },
+      "logicPlacement": {
+        "use": "C# process (c-sharp/) for logic not available in ParatextData.dll",
+        "when": "Business logic discovered outside ParatextData during Phase 1",
+        "notAllowed": ["TypeScript for business logic that needs ParatextData access"],
+        "rationale": "Direct ParatextData.dll access, same language as PT9"
+      }
+    },
+    "errorHandling": {
+      "expectedErrors": {
+        "strategy": "return Result<T>",
+        "rationale": "Don't throw for expected cases"
+      },
+      "unexpectedErrors": {
+        "strategy": "throw exception",
+        "rationale": "Programmer errors only"
+      },
+      "logging": {
+        "strategy": "structured",
+        "rationale": "Include context for debugging"
+      }
+    },
+    "apiDesign": {
+      "versioning": {
+        "strategy": "none",
+        "rationale": "Not needed until breaking changes"
+      },
+      "nullables": {
+        "strategy": "explicit handling",
+        "rationale": "All nullables must be handled"
+      },
+      "idFormat": {
+        "choice": "string (GUID)",
+        "notAllowed": ["int", "custom"],
+        "rationale": "Consistency across systems"
+      }
+    }
+  },
+  "constraints": {
+    "noAnyType": {
+      "enabled": true,
+      "enforcement": "eslint",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "rationale": "TypeScript: never use 'any'"
+    },
+    "noNull": {
+      "enabled": true,
+      "enforcement": "eslint",
+      "rule": "no-null/no-null",
+      "rationale": "Use undefined instead of null; null reserved for external APIs only"
+    },
+    "noNestedCallbacks": {
+      "enabled": true,
+      "enforcement": "adr-only",
+      "maxLevels": 2,
+      "rationale": "Readability"
+    },
+    "noGodObjects": {
+      "enabled": true,
+      "enforcement": "adr-only",
+      "maxLines": 500,
+      "rationale": "Single responsibility"
+    },
+    "noCircularDeps": {
+      "enabled": true,
+      "enforcement": "pre-commit",
+      "rule": "architecture-boundaries.sh",
+      "rationale": "Between directories"
+    },
+    "noHardcodedStrings": {
+      "enabled": true,
+      "enforcement": "eslint",
+      "rule": "PNX006",
+      "rationale": "All user-visible text localized"
+    },
+    "noInlineStyles": {
+      "enabled": true,
+      "enforcement": "eslint",
+      "rule": "PNX011",
+      "rationale": "Use Tailwind tw- prefix classes only"
+    },
+    "noConsoleLog": {
+      "enabled": true,
+      "enforcement": "eslint",
+      "rule": "no-console (warn)",
+      "rationale": "Use logger.service.ts for persistent logs"
+    },
+    "noTraceDebug": {
+      "enabled": true,
+      "enforcement": "roslyn",
+      "rule": "PNX001",
+      "rationale": "C#: Use Console.WriteLine instead of System.Diagnostics.Trace/Debug"
+    },
+    "oneTypePerFile": {
+      "enabled": true,
+      "enforcement": "roslyn",
+      "rule": "PNX004",
+      "exception": "A record type used exclusively by another record type may share the same file",
+      "rationale": "C#: Only one type per file (exception: exclusively-used records share file with primary record)"
+    },
+    "namespaceMatchesDirectory": {
+      "enabled": true,
+      "enforcement": "roslyn",
+      "rule": "PNX005",
+      "rationale": "C#: Namespace must match directory structure (Paranext.DataProvider.{Directory})"
+    },
+    "noTupleReturnTypes": {
+      "enabled": true,
+      "enforcement": "roslyn",
+      "rule": "PNX007",
+      "rationale": "C#: DataProvider/NetworkObject methods cannot return tuples (serialize as {} over JSON-RPC)"
+    },
+    "concreteReturnTypes": {
+      "enabled": true,
+      "enforcement": "roslyn",
+      "rule": "PNX008",
+      "rationale": "C#: DataProvider/NetworkObject methods must return concrete types, not object/dynamic"
+    },
+    "fileScopedNamespaces": {
+      "enabled": true,
+      "enforcement": "adr-only",
+      "rule": "IDE0161 (via .editorconfig)",
+      "notAllowed": ["block-style namespace declarations"],
+      "rationale": "C#: Always use 'namespace X;' (file-scoped), not 'namespace X { }' (block-style). Enforce via .editorconfig: csharp_style_namespace_declarations = file_scoped:error"
+    }
+  },
+  "naming": {
+    "files": {
+      "services": {
+        "pattern": "*.service.ts",
+        "rationale": "Consistent discovery"
+      },
+      "webviews": {
+        "pattern": "*.web-view.tsx",
+        "rationale": "Webpack loader pattern"
+      },
+      "dataProviders": {
+        "pattern": "*DataProvider.cs",
+        "rationale": "Reflection-based registration"
+      }
+    },
+    "variables": {
+      "booleanPrefix": {
+        "pattern": "is|has|can|should",
+        "rationale": "Self-documenting"
+      },
+      "handlerPrefix": {
+        "pattern": "handle|on",
+        "rationale": "Event handler clarity"
+      },
+      "asyncSuffix": {
+        "pattern": "Async",
+        "language": "csharp",
+        "rationale": ".NET convention"
+      }
+    }
+  },
+  "extensions": {
+    "entryPoint": {
+      "path": "src/main.ts",
+      "notAllowed": ["index.ts"],
+      "rationale": "Explicit naming"
+    },
+    "typeDeclarations": {
+      "path": "src/types/*.d.ts",
+      "rationale": "Module augmentations location"
+    },
+    "webviewLocation": {
+      "path": "src/*.web-view.tsx",
+      "rationale": "Flat in src/, not nested"
+    }
+  }
+}

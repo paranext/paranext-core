@@ -70,3 +70,7 @@ e2e-tests/playwright-report
 # (no sync with .eslintignore and .stylelintignore)
 ## MDXv2+ (used by Storybook)
 *.mdx
+
+# Claude Code configuration — not code, should not be reformatted
+.claude/
+.context/

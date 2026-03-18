@@ -8,7 +8,9 @@
     "node_modules",
     "package.json",
     "package-lock.json",
-    "vscode-extension"
+    "vscode-extension",
+    ".claude",
+    ".context"
   ],
   "overrides": [
     {

@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision-registry.schema.json",
+  "title": "Architecture Decision Registry",
+  "description": "Schema for validating architectural decisions that agents must follow",
+  "type": "object",
+  "required": ["meta", "libraries", "patterns", "constraints", "naming", "extensions"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Reference to this schema file"
+    },
+    "meta": {
+      "type": "object",
+      "description": "Registry metadata",
+      "required": ["version", "lastUpdated", "description"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Semantic version of the registry"
+        },
+        "lastUpdated": {
+          "type": "string",
+          "format": "date",
+          "description": "Date of last update (YYYY-MM-DD)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Purpose and usage instructions"
+        }
+      }
+    },
+    "libraries": {
+      "type": "object",
+      "description": "Library choices by language",
+      "properties": {
+        "typescript": {
+          "$ref": "#/$defs/libraryChoices"
+        },
+        "csharp": {
+          "$ref": "#/$defs/libraryChoices"
+        }
+      }
+    },
+    "patterns": {
+      "type": "object",
+      "description": "Architectural patterns to use",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/$defs/patternDecision"
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "description": "Things we've decided NOT to do",
+      "additionalProperties": {
+        "$ref": "#/$defs/constraint"
+      }
+    },
+    "naming": {
+      "type": "object",
+      "description": "Naming conventions",
+      "properties": {
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/namingRule"
+          }
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/namingRule"
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Extension-specific conventions",
+      "additionalProperties": {
+        "$ref": "#/$defs/extensionRule"
+      }
+    }
+  },
+  "$defs": {
+    "libraryChoices": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/libraryChoice"
+      }
+    },
+    "libraryChoice": {
+      "type": "object",
+      "required": ["choice", "rationale"],
+      "properties": {
+        "choice": {
+          "type": "string",
+          "description": "The chosen library/approach"
+        },
+        "notAllowed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Alternatives that must NOT be used"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why this choice was made"
+        }
+      }
+    },
+    "patternDecision": {
+      "type": "object",
+      "properties": {
+        "use": {
+          "type": "string",
+          "description": "The pattern to use"
+        },
+        "when": {
+          "type": "string",
+          "description": "When to apply this pattern"
+        },
+        "strategy": {
+          "type": "string",
+          "description": "The strategy to follow"
+        },
+        "choice": {
+          "type": "string",
+          "description": "The chosen approach"
+        },
+        "notAllowed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Approaches that must NOT be used"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why this decision was made"
+        }
+      }
+    },
+    "constraint": {
+      "type": "object",
+      "required": ["enabled", "rationale"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether this constraint is active"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why this constraint exists"
+        },
+        "enforcement": {
+          "type": "string",
+          "enum": ["eslint", "roslyn", "pre-commit", "adr-only"],
+          "description": "How this constraint is enforced: eslint/roslyn/pre-commit = Tier 1 automated, adr-only = guidance only"
+        },
+        "rule": {
+          "type": "string",
+          "description": "The specific lint rule or script that enforces this (e.g., 'PNX001', 'no-null/no-null')"
+        },
+        "maxLevels": {
+          "type": "integer",
+          "description": "Maximum allowed levels (for nesting constraints)"
+        },
+        "maxLines": {
+          "type": "integer",
+          "description": "Maximum allowed lines (for size constraints)"
+        }
+      }
+    },
+    "namingRule": {
+      "type": "object",
+      "required": ["pattern", "rationale"],
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "The naming pattern (glob or regex)"
+        },
+        "language": {
+          "type": "string",
+          "enum": ["typescript", "csharp"],
+          "description": "Language this rule applies to (if not universal)"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why this naming convention exists"
+        }
+      }
+    },
+    "extensionRule": {
+      "type": "object",
+      "required": ["rationale"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The required path pattern"
+        },
+        "notAllowed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Paths/patterns that must NOT be used"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why this rule exists"
+        }
+      }
+    }
+  }
+}
