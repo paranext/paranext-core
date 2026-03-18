@@ -81,7 +81,7 @@ import {
 } from 'platform-scripture-editor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
-import { Redo, Undo } from 'lucide-react';
+import { ChevronDown, Redo, Undo } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import {
   getLocalizeKeysFromDecorations,
@@ -1613,6 +1613,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                         )
                           ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
                           : localizedStrings['%paragraphMenu_misc_markerDescription%']}
+                        <ChevronDown />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="tw-p-0 tw-w-96">
