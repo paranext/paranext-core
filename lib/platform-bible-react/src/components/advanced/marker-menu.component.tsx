@@ -81,9 +81,11 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
       return markerMenuItems;
     }
 
+    // Puts markers with direct inclusions of the search query at the top
     const filteredMarkerMenuItems = markerMenuItems.filter((markerItem) =>
       markerItem.marker?.toLowerCase().includes(query),
     );
+    // Then lists markers with descriptions that includes the search query
     filteredMarkerMenuItems.push(
       ...markerMenuItems.filter(
         (markerItem) =>
