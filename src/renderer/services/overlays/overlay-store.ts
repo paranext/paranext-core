@@ -3,7 +3,8 @@
  * menus, modal dialogs, popovers) and notifies subscribers on changes.
  */
 
-import { OverlayEntry, PopoverContent } from '@shared/models/overlay.service-model';
+import type { PlatformError } from 'platform-bible-utils';
+import { OverlayEntry, PopoverContent } from './overlay.service-model';
 
 /** Map of overlay id to overlay entry */
 const overlays = new Map<string, OverlayEntry>();
@@ -22,14 +23,32 @@ export function addOverlay(entry: OverlayEntry): void {
   notifyListeners();
 }
 
-/** Remove an overlay by id and return it, or undefined if not found */
-export function removeOverlay(id: string): OverlayEntry | undefined {
+/**
+ * Resolves an overlay's promise with the given result and removes it from the store. Returns true
+ * if the overlay was found and settled, false if not found.
+ */
+export function resolveAndRemoveOverlay(id: string, result: unknown): boolean {
   const entry = overlays.get(id);
-  if (entry) {
-    overlays.delete(id);
-    notifyListeners();
-  }
-  return entry;
+  if (!entry) return false;
+  // OverlayEntry resolve types are not compatible, so we need to assert
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  (entry as { resolve: (value: unknown) => void }).resolve(result);
+  overlays.delete(id);
+  notifyListeners();
+  return true;
+}
+
+/**
+ * Rejects an overlay's promise with the given error and removes it from the store. Returns true if
+ * the overlay was found and settled, false if not found.
+ */
+export function rejectAndRemoveOverlay(id: string, error: PlatformError): boolean {
+  const entry = overlays.get(id);
+  if (!entry) return false;
+  entry.reject(error);
+  overlays.delete(id);
+  notifyListeners();
+  return true;
 }
 
 /** Get all active overlays as an array */
@@ -40,23 +59,6 @@ export function getOverlays(): OverlayEntry[] {
 /** Get all overlays for a specific webViewId */
 export function getOverlaysByWebView(webViewId: string): OverlayEntry[] {
   return Array.from(overlays.values()).filter((entry) => entry.webViewId === webViewId);
-}
-
-/**
- * Remove all overlays for a specific webViewId. WARNING: This does not call resolve/reject on the
- * removed entries. Callers must settle overlay promises before calling this to avoid leaking
- * unsettled popover promises. Production dismissal should go through the service host's dismiss
- * functions which resolve before removing.
- */
-export function removeOverlaysByWebView(webViewId: string): void {
-  let changed = false;
-  overlays.forEach((entry, id) => {
-    if (entry.webViewId === webViewId) {
-      overlays.delete(id);
-      changed = true;
-    }
-  });
-  if (changed) notifyListeners();
 }
 
 /** Subscribe to store changes. Returns an unsubscribe function. */
@@ -72,7 +74,7 @@ export function getOverlayById(id: string): OverlayEntry | undefined {
   return overlays.get(id);
 }
 
-/** Removes all overlays from the store and notifies listeners. Exported for use in tests. */
+/** Removes all overlays from the store and notifies listeners. Only exported for use in tests. */
 export function clearAllOverlays(): void {
   if (overlays.size === 0) return;
   overlays.clear();

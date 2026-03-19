@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Localized, WebViewMenu } from 'platform-bible-utils';
 
 import { menuDataService } from '@shared/services/menu-data.service';
-import { overlayService, resetDebounceState } from '@renderer/services/overlay.service-host';
+import { overlayService, resetDebounceState } from './overlay.service-host';
 
 // Mock the menu data service
 vi.mock('@shared/services/menu-data.service', () => ({
@@ -12,20 +12,28 @@ vi.mock('@shared/services/menu-data.service', () => ({
 }));
 
 // Mock overlay-coordinates to avoid DOM dependencies
-vi.mock('@renderer/services/overlay-coordinates', () => ({
+vi.mock('./overlay-coordinates', () => ({
   translateCoordinates: vi.fn((_wvId: string, pos: { x: number; y: number }) => pos),
   clampToViewport: vi.fn((pos: { x: number; y: number }) => pos),
   isWebViewVisible: vi.fn(() => true),
   getWebViewIframe: vi.fn(() => undefined),
 }));
 
+// Mock command service
+vi.mock('@shared/services/command.service', () => ({
+  commandService: {
+    sendCommand: vi.fn(),
+  },
+}));
+
 // Mock overlay-store
-vi.mock('@renderer/services/overlay-store', () => ({
+vi.mock('./overlay-store', () => ({
   addOverlay: vi.fn((entry: { resolve: (v: unknown) => void }) => {
     // Auto-resolve to simulate user selecting the first item
-    entry.resolve({ itemId: 'ext.doSomething' });
+    entry.resolve('ext.doSomething');
   }),
-  removeOverlay: vi.fn(),
+  resolveAndRemoveOverlay: vi.fn(() => true),
+  rejectAndRemoveOverlay: vi.fn(() => true),
   removeOverlaysByWebView: vi.fn(),
   getOverlaysByWebView: vi.fn(() => []),
   getOverlays: vi.fn(() => []),
@@ -53,7 +61,7 @@ vi.mock('platform-bible-utils', async () => {
 
 const mockGetWebViewMenu = vi.mocked(menuDataService.getWebViewMenu);
 
-describe('showContextMenuFromContribution', () => {
+describe('showContextMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetDebounceState();
@@ -80,7 +88,7 @@ describe('showContextMenuFromContribution', () => {
     };
     mockGetWebViewMenu.mockResolvedValue(webViewMenu);
 
-    await overlayService.showContextMenuFromContribution(
+    await overlayService.showContextMenu(
       'platformScripture.checkingResultsListWebView',
       'test-webview',
     );
@@ -96,10 +104,7 @@ describe('showContextMenuFromContribution', () => {
     };
     mockGetWebViewMenu.mockResolvedValue(webViewMenu);
 
-    const result = await overlayService.showContextMenuFromContribution(
-      'ext.someWebView',
-      'test-webview',
-    );
+    const result = await overlayService.showContextMenu('ext.someWebView', 'test-webview');
 
     expect(result).toBeUndefined();
   });
@@ -125,13 +130,11 @@ describe('showContextMenuFromContribution', () => {
     };
     mockGetWebViewMenu.mockResolvedValue(webViewMenu);
 
-    const result = await overlayService.showContextMenuFromContribution(
-      'ext.myWebView',
-      'test-webview',
-      { position: { x: 100, y: 200 } },
-    );
+    const result = await overlayService.showContextMenu('ext.myWebView', 'test-webview', {
+      position: { x: 100, y: 200 },
+    });
 
-    // The mock auto-resolves with { itemId: 'ext.doSomething' }
-    expect(result).toEqual({ itemId: 'ext.doSomething' });
+    // The mock auto-resolves with 'ext.doSomething'
+    expect(result).toBe('ext.doSomething');
   });
 });

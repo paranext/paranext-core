@@ -91,6 +91,37 @@
             "command": "platform.openSettings"
           }
         ]
+      },
+      "contextMenu": {
+        "groups": {
+          "helloRock3.contextActions": {
+            "order": 1
+          },
+          "helloRock3.contextMoreActions": {
+            "order": 2,
+            "menuItem": "helloRock3.moreActionsSubmenu"
+          }
+        },
+        "items": [
+          {
+            "label": "%helloRock3_overlay_openEditor%",
+            "group": "helloRock3.contextActions",
+            "order": 1,
+            "command": "platformScriptureEditor.openScriptureEditor"
+          },
+          {
+            "id": "helloRock3.moreActionsSubmenu",
+            "label": "%helloRock3_overlay_moreActions%",
+            "group": "helloRock3.contextActions",
+            "order": 2
+          },
+          {
+            "label": "%helloRock3_overlay_showAlert%",
+            "group": "helloRock3.contextMoreActions",
+            "order": 1,
+            "command": "helloRock3.helloRock3"
+          }
+        ]
       }
     }
   },
