@@ -438,6 +438,9 @@ global.webViewComponent = function FindWebView({
   }, [scope, selectedBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
 
   const isStartingSearchRef = useRef(false);
+  // Set when the user explicitly starts a search (Enter/Find button) so the debounce timer that
+  // may still be pending from the same keystroke skips its redundant restart.
+  const explicitSearchPendingRef = useRef(false);
   // Tracks the index of the result that was just replaced so the auto-select effect can advance
   // focus to the next result instead of jumping back to the first.
   const pendingAdvanceIndexRef = useRef<number | undefined>(undefined);
@@ -448,6 +451,8 @@ global.webViewComponent = function FindWebView({
   const handleStartSearch = useCallback(
     async (isExplicitSearch = false) => {
       if (!isSearchQueryValid || !findPdp || isStartingSearchRef.current) return;
+
+      if (isExplicitSearch) explicitSearchPendingRef.current = true;
 
       // Set the flag to prevent concurrent calls
       // No mutex is needed here because we're fine throwing away concurrent calls instead of queuing
@@ -721,7 +726,13 @@ global.webViewComponent = function FindWebView({
   const handleStartSearchRef = useRef(handleStartSearch);
   handleStartSearchRef.current = handleStartSearch;
   const debouncedHandleStartSearch = useRef(
-    debounce(() => handleStartSearchRef.current(), SEARCH_DEBOUNCE_DELAY_MS),
+    debounce(() => {
+      if (explicitSearchPendingRef.current) {
+        explicitSearchPendingRef.current = false;
+        return;
+      }
+      handleStartSearchRef.current();
+    }, SEARCH_DEBOUNCE_DELAY_MS),
   );
 
   // Auto-search with debounce when the search term or any filter changes
