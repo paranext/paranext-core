@@ -90,37 +90,46 @@ These React-dependent packages must be verified for React 19 compatibility befor
 | `postcss`                        | ^8.5.3   | keep        | extensions            | Still needed for webpack                              |
 | `postcss-loader`                 | ^8.1.1   | keep        | extensions            | Still needed for webpack                              |
 
-### Config Migration
+### Config Migration (Two Stages)
 
-**tailwind.config.ts** (JS-based) → **CSS-based config** (no JS config file)
+#### Stage 1: Upgrade to TW4 while keeping JS config (done during initial TW4 upgrade)
 
-Delete `tailwind.config.ts` from PBR and all extensions. Delete `postcss.config.js` from PBR (switching to `@tailwindcss/vite`).
+Keep `tailwind.config.ts` files. TW4 supports referencing them from CSS via `@config`. This minimizes config risk during the upgrade.
 
-PBR `index.css` becomes:
+PBR `index.css` adds:
 
 ```css
 @import 'tailwindcss' prefix(tw);
-@plugin '@tailwindcss/typography';
-
-@theme {
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  /* ... all color/radius/animation tokens from current tailwind.config.ts ... */
-}
+@config './tailwind.config.ts';
 ```
 
-**postcss.config** (extensions only — PBR uses `@tailwindcss/vite`):
+The existing `tailwind.config.ts` will need minor updates for TW4 compatibility:
+
+- Remove plugins that are now built-in (`@tailwindcss/container-queries`)
+- Replace `tailwindcss-animate` with `tw-animate-css` (or load via CSS `@plugin`)
+- Replace `tailwindcss-scoped-preflight` (see Scoped Preflight section)
+- Remove the `prefix: 'tw-'` option (prefix is now set in the CSS import via `prefix(tw)`)
+- Remove the `content` array (TW4 auto-detects content files)
+
+**postcss.config** updates:
 
 ```js
+// PBR: postcss.config.js — update plugin name
+export default { plugins: { '@tailwindcss/postcss': {} } };
+
+// Extensions: postcss.config.ts — same change
 export default { plugins: { '@tailwindcss/postcss': {} } };
 ```
 
-**Per-extension configs**: Each extension under `extensions/src/*/` has its own `tailwind.config.ts` and `postcss.config.ts` (10 extensions). All must be migrated to the CSS-based config approach. The per-extension postcss configs update to use `@tailwindcss/postcss`. The per-extension tailwind configs are replaced by CSS directives in each extension's stylesheet.
+**Per-extension configs**: Each extension under `extensions/src/*/` has its own `tailwind.config.ts` and `postcss.config.ts` (10 extensions). All postcss configs update to use `@tailwindcss/postcss`. All tailwind configs stay but get the same minor updates as PBR's (remove built-in plugins, remove prefix/content).
+
+**PBR Vite build**: Optionally add `@tailwindcss/vite` to `vite.config.ts` for better Vite integration. If used, PBR's `postcss.config.js` can be removed (the Vite plugin handles it). This is an optimization, not a requirement.
+
+#### Stage 2: Migrate JS config to pure CSS config (separate follow-up, after everything is stable)
+
+Once TW4 is working with the JS config bridge, optionally migrate theme tokens, plugins, and other config from `tailwind.config.ts` into CSS directives (`@theme`, `@plugin`, etc.) and delete the JS config files. This is a **separate effort** that can happen later and is not required for the TW4 upgrade to be complete.
+
+Note: some config options like `corePlugins`, `safelist`, and `separator` are not supported in CSS config. If the JS config uses these, the `@config` bridge must remain.
 
 ### Scoped Preflight
 
@@ -345,18 +354,19 @@ PBR uses `dts-bundle-generator` to produce bundled `.d.ts` files. After removing
 
 ## Execution Order
 
-| Step | Phase                      | Scope                                                       | Risk              |
-| ---- | -------------------------- | ----------------------------------------------------------- | ----------------- |
-| 0    | Prototype                  | Scoped preflight approach for TW4 (blocking)                | High              |
-| 1    | React 19                   | Root + pbr + extensions deps, types, remove test-renderer   | Low               |
-| 2    | Tailwind 4 — deps & config | pbr + extensions + per-extension package.json, CSS configs  | Medium            |
-| 3    | Tailwind 4 — `cn()` shim   | `shadcn-ui.util.ts` + comprehensive unit tests              | Medium            |
-| 4    | Tailwind 4 — class rename  | All `.tsx` files: `tw-` → `tw:`, variant reorder            | High (mechanical) |
-| 5    | Tailwind 4 — validate      | Build, test, Storybook visual check, scoped preflight check | —                 |
-| 6    | shadcn new york            | Diff + apply per-component style changes                    | Low               |
-| 7    | shadcn new york — validate | Storybook visual check                                      | —                 |
+| Step | Phase                      | Scope                                                                           | Risk              |
+| ---- | -------------------------- | ------------------------------------------------------------------------------- | ----------------- |
+| 0    | Prototype                  | Scoped preflight approach for TW4 (blocking)                                    | High              |
+| 1    | React 19                   | Root + pbr + extensions deps, types, remove test-renderer                       | Low               |
+| 2    | Tailwind 4 — deps & config | Update packages, postcss configs, add `@config` bridge in CSS                   | Medium            |
+| 3    | Tailwind 4 — `cn()` shim   | `shadcn-ui.util.ts` + comprehensive unit tests                                  | Medium            |
+| 4    | Tailwind 4 — class rename  | All `.tsx` files: `tw-` → `tw:`, variant reorder                                | High (mechanical) |
+| 5    | Tailwind 4 — validate      | Build, test, Storybook visual check, scoped preflight check                     | —                 |
+| 6    | shadcn new york            | Diff + apply per-component style changes                                        | Low               |
+| 7    | shadcn new york — validate | Storybook visual check                                                          | —                 |
+| 8    | (Optional) Pure CSS config | Migrate `tailwind.config.ts` → `@theme`/`@plugin` directives, delete JS configs | Low               |
 
-Note: Step 3 (cn() shim) is validated primarily via unit tests at that point. Full integration testing of mixed `tw-`/`tw:` classes happens at Step 5 after the class rename.
+Note: Step 3 (cn() shim) is validated primarily via unit tests at that point. Full integration testing of mixed `tw-`/`tw:` classes happens at Step 5 after the class rename. Step 8 is a separate follow-up that can happen at any point after Step 5 is stable.
 
 ## Cross-Cutting Concerns
 
@@ -367,7 +377,7 @@ Note: Step 3 (cn() shim) is validated primarily via unit tests at that point. Fu
 - **`tailwind-merge` v3**: Breaking change — theme scale keys match TW4 variable namespaces; prefix config changes to `tw:`.
 - **`class-variance-authority`**: Framework-agnostic, no changes needed.
 - **`prettier-plugin-tailwindcss`**: Needs `tailwindStylesheet` option in Prettier config pointing to the CSS entry file so it can sort TW4 classes correctly.
-- **Per-extension configs**: 10 extensions each have their own `tailwind.config.ts` and `postcss.config.ts` that all need migration.
+- **Per-extension configs**: 10 extensions each have their own `tailwind.config.ts` and `postcss.config.ts`. PostCSS configs update to `@tailwindcss/postcss`; tailwind configs stay but get minor updates (remove built-in plugins, prefix, content). Full CSS config migration is optional (Step 8).
 
 ## Rollback Strategy
 
