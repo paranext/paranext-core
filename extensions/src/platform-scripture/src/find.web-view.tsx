@@ -96,7 +96,7 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_restrictions_none%',
   '%webView_find_restrictions_startOfWord%',
   '%webView_find_restrictions_wholeWord%',
-  '%general_currentOfTotal%',
+  '%general_countOfTotal%',
   '%webView_find_result%',
   '%webView_find_searchPlaceholder%',
   '%webView_find_showing%',
@@ -1176,8 +1176,8 @@ global.webViewComponent = function FindWebView({
           {visibleResults.length > 0 && (
             <div className="tw-flex tw-items-center tw-gap-1">
               <span className="tw-text-sm tw-text-muted-foreground tw-tabular-nums">
-                {formatReplacementString(localizedStrings['%general_currentOfTotal%'], {
-                  current: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',
+                {formatReplacementString(localizedStrings['%general_countOfTotal%'], {
+                  count: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',
                   total: String(visibleResults.length),
                 })}
               </span>
