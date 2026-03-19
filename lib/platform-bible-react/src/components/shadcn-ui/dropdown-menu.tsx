@@ -300,6 +300,7 @@ export function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortc
   return (
     <span
       className={cn('tw-ms-auto tw-text-xs tw-tracking-widest tw-opacity-60', className)}
+      // Shadcn UI pattern: spreading props onto the element is necessary to forward all HTML attributes
       // eslint-disable-next-line react/jsx-props-no-spreading
       {...props}
     />

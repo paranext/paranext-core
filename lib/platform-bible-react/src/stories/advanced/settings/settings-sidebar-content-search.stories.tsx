@@ -50,6 +50,7 @@ const mockProjectInfo = [
   },
 ];
 
+// Story template accepts heterogeneous Storybook args; the exact type cannot be narrowed here
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function InteractiveTemplate(args: any) {
   const { extensionLabels, projectInfo } = args;
@@ -72,6 +73,7 @@ function InteractiveTemplate(args: any) {
   const filteredProjectInfo = useMemo(() => {
     if (!searchValue) return projectInfo;
 
+    // projectInfo items come from untyped Storybook args; explicit any is unavoidable here
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return projectInfo.filter((project: any) =>
       project.projectName.toLowerCase().includes(searchValue.toLowerCase()),
