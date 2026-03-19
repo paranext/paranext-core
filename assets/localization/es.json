@@ -144,6 +144,7 @@
   "%extension_failed_to_start%": "No se pudo iniciar la extensión: {extensionName}",
   "%general_button_submit%": "Enviar",
   "%general_cancel%": "Cancelar",
+  "%general_currentOfTotal%": "{current} de {total}",
   "%general_error_title%": "Error",
   "%general_loading%": "Cargando",
   "%general_open%": "Abrir",
