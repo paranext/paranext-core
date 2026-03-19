@@ -294,7 +294,8 @@ class LocalizationDataProviderEngine
   extends DataProviderEngine<LocalizationDataDataTypes>
   implements IDataProviderEngine<LocalizationDataDataTypes>
 {
-  // This method legitimately does not need to call anything else in this class as of now
+  // getLocalizedString doesn't use instance state but cannot be static because it implements the
+  // IDataProviderEngine<LocalizationDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getLocalizedString({ localizeKey, locales = [] }: LocalizationSelector) {
     const deprecationInfo = localizedStringsDocumentCombiner.deprecatedStringsByKey[localizeKey];
@@ -357,31 +358,36 @@ class LocalizationDataProviderEngine
     return Object.fromEntries(localizations);
   }
 
-  // This method legitimately does not need to call anything else in this class as of now
+  // getAvailableInterfaceLanguages doesn't use instance state but cannot be static because it
+  // implements the IDataProviderEngine<LocalizationDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getAvailableInterfaceLanguages() {
     return loadedLocales;
   }
 
-  // This method legitimately does not need to call anything else in this class as of now
+  // retrieveCurrentLocalizedStringData doesn't use instance state but cannot be static because it
+  // implements the ILocalizationService interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async retrieveCurrentLocalizedStringData(): Promise<LocalizedStringDataContribution> {
     return localizedStringsDocumentCombiner.getLocalizedStringData();
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setLocalizedString doesn't use instance state but cannot be static because it implements the
+  // IDataProviderEngine<LocalizationDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>> {
     throw new Error('setLocalizedString disabled');
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setLocalizedStrings doesn't use instance state but cannot be static because it implements the
+  // IDataProviderEngine<LocalizationDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>> {
     throw new Error('setLocalizedStrings disabled');
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setAvailableInterfaceLanguages doesn't use instance state but cannot be static because it
+  // implements the IDataProviderEngine<LocalizationDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setAvailableInterfaceLanguages(): Promise<
     DataProviderUpdateInstructions<LocalizationDataDataTypes>

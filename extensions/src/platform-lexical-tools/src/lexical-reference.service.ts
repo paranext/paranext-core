@@ -46,13 +46,15 @@ export class LexicalReferenceService
     return this.lexicalReferenceTextManager.getSensesByOccurrence(selector);
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setEntriesById doesn't use instance state but cannot be static because it implements the
+  // IDataProviderEngine<LexicalReferenceDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   setEntriesById(): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>> {
     throw new Error('These lexical reference texts are readonly. Cannot set entries by ID.');
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setEntriesByOccurrence doesn't use instance state but cannot be static because it implements
+  // the IDataProviderEngine<LexicalReferenceDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   setEntriesByOccurrence(): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>> {
     throw new Error(
@@ -60,13 +62,15 @@ export class LexicalReferenceService
     );
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setSensesById doesn't use instance state but cannot be static because it implements the
+  // IDataProviderEngine<LexicalReferenceDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   setSensesById(): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>> {
     throw new Error('These lexical reference texts are readonly. Cannot set senses by ID.');
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setSensesByOccurrence doesn't use instance state but cannot be static because it implements
+  // the IDataProviderEngine<LexicalReferenceDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   setSensesByOccurrence(): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>> {
     throw new Error('These lexical reference texts are readonly. Cannot set senses by occurrence.');

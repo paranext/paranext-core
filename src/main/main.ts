@@ -711,7 +711,6 @@ async function main() {
 
   app
     .whenReady()
-    // eslint-disable-next-line promise/always-return
     .then(() => {
       // Set up ipc handlers
       ipcMain.handle(
@@ -1035,6 +1034,7 @@ async function main() {
     setTimeout(async () => {
       logger.info(
         `Available network request types after 30 seconds: ${serialize(
+          // `GET_METHODS` is required by OpenRPC to get the list of available methods
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           await networkService.request(GET_METHODS as SerializedRequestType, {}),
         )}`,
