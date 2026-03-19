@@ -3,6 +3,7 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 
 import { cn } from '@/utils/shadcn-ui.util';
 import { ButtonProps, buttonVariants } from '@/components/shadcn-ui/button';
+import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 
 /** @inheritdoc Tooltip */
 const TooltipProvider = TooltipPrimitive.Provider;
@@ -33,18 +34,14 @@ TooltipTrigger.displayName = TooltipPrimitive.Trigger.displayName;
 const TooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
+>(({ className, sideOffset = 4, style, ...props }, ref) => (
   <TooltipPrimitive.Portal>
     <TooltipPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
+      style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
       className={cn(
-        // CUSTOM: Match other portal-based components which use a higher z-index than the default
-        // `tw-z-50`. This prevents other high-z-index elements from obscuring a tooltip.
-        // Implemented by Tom Bogle
-        // Approved by ???
-        // 23 March 2026
-        'pr-twp tw-z-[250] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-px-3 tw-py-1.5 tw-text-sm tw-text-popover-foreground tw-shadow-md tw-animate-in tw-fade-in-0 tw-zoom-in-95 data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=closed]:tw-zoom-out-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
+        'pr-twp tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-px-3 tw-py-1.5 tw-text-sm tw-text-popover-foreground tw-shadow-md tw-animate-in tw-fade-in-0 tw-zoom-in-95 data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=closed]:tw-zoom-out-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
         className,
       )}
       {...props}

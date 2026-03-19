@@ -205,6 +205,7 @@ declare module 'papi-shared-types' {
 
   export interface CommandHandlers {
     'helloRock3.helloRock3': () => string;
+    'helloRock3.showContextMenuAlert': () => Promise<void>;
     'helloRock3.helloException': (message: string) => void;
     /**
      * Opens a new Hello Rock3 Project WebView and returns the WebView id

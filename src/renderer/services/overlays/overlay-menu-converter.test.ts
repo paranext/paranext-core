@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { convertContributionToContextMenuItems } from '@renderer/services/overlay-menu-converter';
 import type { Localized, SingleColumnMenu } from 'platform-bible-utils';
+import { convertContributionToContextMenuItems } from './overlay-menu-converter';
 
 describe('overlay-menu-converter', () => {
   describe('convertContributionToContextMenuItems', () => {
@@ -153,33 +153,6 @@ describe('overlay-menu-converter', () => {
       const result = convertContributionToContextMenuItems(menu);
 
       expect(result).toEqual([]);
-    });
-
-    it('should use command field as id for MenuItemContainingCommand', () => {
-      const menu: Localized<SingleColumnMenu> = {
-        groups: {
-          'ext.group1': { order: 1 },
-        },
-        items: [
-          {
-            command: 'myExtension.openSettings',
-            group: 'ext.group1',
-            label: 'Open Settings',
-            order: 1,
-            localizeNotes: '',
-          },
-        ],
-      };
-
-      const result = convertContributionToContextMenuItems(menu);
-
-      expect(result).toHaveLength(1);
-      expect(result[0]).toEqual(
-        expect.objectContaining({
-          type: 'item',
-          id: 'myExtension.openSettings',
-        }),
-      );
     });
 
     it('should order groups by their order field', () => {

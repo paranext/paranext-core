@@ -1,4 +1,4 @@
-import { WebViewProps, ContextMenuItem } from '@papi/core';
+import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
@@ -88,17 +88,6 @@ globalThis.webViewComponent = function HelloRock3({
   const testMe = '%helloRock3_testMe%';
 
   // Overlay demo localization keys
-  const overlaySelectProject: LocalizeKey = '%helloRock3_overlay_selectProject%';
-  const overlayOpenEditor: LocalizeKey = '%helloRock3_overlay_openEditor%';
-  const overlayVerboseLogging: LocalizeKey = '%helloRock3_overlay_verboseLogging%';
-  const overlayAutoSave: LocalizeKey = '%helloRock3_overlay_autoSave%';
-  const overlaySizeSmall: LocalizeKey = '%helloRock3_overlay_sizeSmall%';
-  const overlaySizeMedium: LocalizeKey = '%helloRock3_overlay_sizeMedium%';
-  const overlaySizeLarge: LocalizeKey = '%helloRock3_overlay_sizeLarge%';
-  const overlayMoreActions: LocalizeKey = '%helloRock3_overlay_moreActions%';
-  const overlayShowAlert: LocalizeKey = '%helloRock3_overlay_showAlert%';
-  const overlayAlertTitle: LocalizeKey = '%helloRock3_overlay_alertTitle%';
-  const overlayAlertMessage: LocalizeKey = '%helloRock3_overlay_alertMessage%';
   const overlayDeletePersonTitle: LocalizeKey = '%helloRock3_overlay_deletePerson_title%';
   const overlayDeletePersonMessage: LocalizeKey = '%helloRock3_overlay_deletePerson_message%';
   const overlayDeletePersonOkLabel: LocalizeKey = '%helloRock3_overlay_deletePerson_okLabel%';
@@ -139,6 +128,11 @@ globalThis.webViewComponent = function HelloRock3({
         testDeprecatedString,
         testException,
         testMe,
+        overlayPopoverAbout,
+        overlayPopoverName,
+        overlayPopoverGreeting,
+        overlayPopoverAge,
+        overlayPopoverUnknown,
       ],
       [],
     ),
@@ -172,6 +166,12 @@ globalThis.webViewComponent = function HelloRock3({
   const localizedTestDeprecatedString = localizedStrings[testDeprecatedString];
   const localizedTestException = localizedStrings[testException];
   const localizedTestMe = localizedStrings[testMe];
+  const localizedPopoverAbout = localizedStrings[overlayPopoverAbout] ?? overlayPopoverAbout;
+  const localizedPopoverName = localizedStrings[overlayPopoverName] ?? overlayPopoverName;
+  const localizedPopoverGreeting =
+    localizedStrings[overlayPopoverGreeting] ?? overlayPopoverGreeting;
+  const localizedPopoverAge = localizedStrings[overlayPopoverAge] ?? overlayPopoverAge;
+  const localizedPopoverUnknown = localizedStrings[overlayPopoverUnknown] ?? overlayPopoverUnknown;
 
   // Update the clicks when we are informed helloRock3 has been run
   useEvent(
@@ -460,138 +460,13 @@ globalThis.webViewComponent = function HelloRock3({
 
   // #region Overlay service demos
 
-  // State for context menu checkbox and radio items so they visually toggle
-  const [verboseLogging, setVerboseLogging] = useWebViewState('verboseLogging', false);
-  const [autoSave, setAutoSave] = useWebViewState('autoSave', true);
-  const [textSize, setTextSize] = useWebViewState('textSize', 'medium');
-
   // Context menu: right-click handler that shows overlay context menu
-  const handleContextMenu = useCallback(
-    async (e: MouseEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const items: ContextMenuItem[] = [
-        { type: 'item', id: 'selectProject', label: overlaySelectProject },
-        { type: 'item', id: 'openEditor', label: overlayOpenEditor },
-        { type: 'separator' },
-        {
-          type: 'checkbox',
-          id: 'toggleVerbose',
-          label: overlayVerboseLogging,
-          checked: verboseLogging,
-        },
-        { type: 'checkbox', id: 'toggleAutoSave', label: overlayAutoSave, checked: autoSave },
-        { type: 'separator' },
-        {
-          type: 'radio',
-          id: 'sizeSmall',
-          label: overlaySizeSmall,
-          value: 'small',
-          group: 'textSize',
-          checked: textSize === 'small',
-        },
-        {
-          type: 'radio',
-          id: 'sizeMedium',
-          label: overlaySizeMedium,
-          value: 'medium',
-          group: 'textSize',
-          checked: textSize === 'medium',
-        },
-        {
-          type: 'radio',
-          id: 'sizeLarge',
-          label: overlaySizeLarge,
-          value: 'large',
-          group: 'textSize',
-          checked: textSize === 'large',
-        },
-        { type: 'separator' },
-        {
-          type: 'submenu',
-          label: overlayMoreActions,
-          items: [{ type: 'item', id: 'showAlert', label: overlayShowAlert }],
-        },
-        { type: 'separator' },
-        {
-          type: 'item',
-          id: 'deletePerson',
-          label: `${localizedDelete} ${name}`,
-          destructive: true,
-        },
-      ];
-
-      const result = await papi.overlay.showContextMenu(
-        {
-          items,
-          position: { x: e.clientX, y: e.clientY },
-        },
-        globalThis.webViewId,
-      );
-
-      if (!result) return;
-      switch (result.itemId) {
-        case 'selectProject':
-          selectProject();
-          break;
-        case 'openEditor':
-          papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId);
-          break;
-        case 'showAlert':
-          papi.overlay.showModalDialog(
-            'alert',
-            {
-              title: overlayAlertTitle,
-              message: overlayAlertMessage,
-            },
-            globalThis.webViewId,
-          );
-          break;
-        case 'deletePerson':
-          peopleDataProvider?.deletePerson(name);
-          break;
-        case 'toggleVerbose':
-          setVerboseLogging(result.checked ?? !verboseLogging);
-          logger.debug(`Verbose logging: ${result.checked ?? !verboseLogging}`);
-          break;
-        case 'toggleAutoSave':
-          setAutoSave(result.checked ?? !autoSave);
-          logger.debug(`Auto-save: ${result.checked ?? !autoSave}`);
-          break;
-        case 'sizeSmall':
-        case 'sizeMedium':
-        case 'sizeLarge':
-          setTextSize(result.itemId.replace('size', '').toLowerCase());
-          logger.debug(`Text size: ${result.itemId.replace('size', '').toLowerCase()}`);
-          break;
-        default:
-          logger.debug(`Context menu selected: ${result.itemId} (checked: ${result.checked})`);
-      }
-    },
-    [
-      name,
-      projectId,
-      selectProject,
-      peopleDataProvider,
-      verboseLogging,
-      autoSave,
-      textSize,
-      setVerboseLogging,
-      setAutoSave,
-      setTextSize,
-      localizedDelete,
-      overlaySelectProject,
-      overlayOpenEditor,
-      overlayVerboseLogging,
-      overlayAutoSave,
-      overlaySizeSmall,
-      overlaySizeMedium,
-      overlaySizeLarge,
-      overlayMoreActions,
-      overlayShowAlert,
-      overlayAlertTitle,
-      overlayAlertMessage,
-    ],
-  );
+  const handleContextMenu = useCallback(async (e: MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    await papi.overlays.showContextMenu('helloRock3.projectWebView', globalThis.webViewId, {
+      position: { x: e.clientX, y: e.clientY },
+    });
+  }, []);
 
   // Popover: hover on greeting to show person details
   // eslint-disable-next-line no-null/no-null
@@ -602,40 +477,23 @@ globalThis.webViewComponent = function HelloRock3({
   const showPersonPopover = useCallback(async () => {
     if (popoverIdRef.current || !greetingRef.current) return;
     const rect = greetingRef.current.getBoundingClientRect();
-    const overlayId = await papi.overlay.showPopover(
+    const overlayId = await papi.overlays.showPopover(
       {
         anchor: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
         side: 'bottom',
         content: {
-          type: 'description',
-          title: overlayPopoverAbout,
-          entries: [
-            { term: overlayPopoverName, detail: name },
-            {
-              term: overlayPopoverGreeting,
-              detail: isPlatformError(personGreeting)
-                ? personGreeting.message
-                : (personGreeting ?? overlayPopoverUnknown),
-            },
-            {
-              term: overlayPopoverAge,
-              detail: isPlatformError(personAge)
-                ? personAge.message
-                : String(personAge ?? overlayPopoverUnknown),
-            },
-          ],
+          type: 'markdown',
+          markdown: `# ${localizedPopoverAbout}\n\n**${localizedPopoverName}**: ${name}\n\n**${localizedPopoverGreeting}**: ${isPlatformError(personGreeting) ? personGreeting.message : (personGreeting ?? localizedPopoverUnknown)}\n\n**${localizedPopoverAge}**: ${isPlatformError(personAge) ? personAge.message : String(personAge ?? localizedPopoverUnknown)}`,
         },
         dismissOnClickOutside: true,
         showArrow: true,
       },
       globalThis.webViewId,
     );
-    // showPopover returns undefined if the request was dropped by debounce
-    if (!overlayId) return;
     popoverIdRef.current = overlayId;
 
     // Clean up when dismissed
-    papi.overlay
+    papi.overlays
       .onPopoverDismissed(overlayId)
       .then((actionId) => {
         logger.debug(`Person popover dismissed (action: ${actionId ?? 'none'})`);
@@ -649,16 +507,16 @@ globalThis.webViewComponent = function HelloRock3({
     name,
     personGreeting,
     personAge,
-    overlayPopoverAbout,
-    overlayPopoverName,
-    overlayPopoverGreeting,
-    overlayPopoverAge,
-    overlayPopoverUnknown,
+    localizedPopoverAbout,
+    localizedPopoverName,
+    localizedPopoverGreeting,
+    localizedPopoverAge,
+    localizedPopoverUnknown,
   ]);
 
   const dismissPersonPopover = useCallback(async () => {
     if (popoverIdRef.current) {
-      await papi.overlay.dismissPopover(popoverIdRef.current);
+      await papi.overlays.dismissPopover(popoverIdRef.current);
       popoverIdRef.current = undefined;
     }
   }, []);
@@ -680,7 +538,7 @@ globalThis.webViewComponent = function HelloRock3({
 
   // Command palette demo handler
   const handleCommandPalette = useCallback(async () => {
-    const result = await papi.overlay.showCommandPalette(
+    const result = await papi.overlays.showCommandPalette(
       {
         items: [
           { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph', group: 'Paragraphs' },
@@ -768,17 +626,13 @@ globalThis.webViewComponent = function HelloRock3({
           <Button
             onClick={async () => {
               // Overlay service demo: confirm dialog before destructive action
-              const confirmed = await papi.overlay.showModalDialog(
-                'confirm',
-                {
-                  title: overlayDeletePersonTitle,
-                  message: overlayDeletePersonMessage,
-                  okLabel: overlayDeletePersonOkLabel,
-                  cancelLabel: overlayCancel,
-                  destructive: true,
-                },
-                globalThis.webViewId,
-              );
+              const confirmed = await papi.dialogs.showDialog('platform.confirm', {
+                title: overlayDeletePersonTitle,
+                prompt: overlayDeletePersonMessage,
+                okLabel: overlayDeletePersonOkLabel,
+                cancelLabel: overlayCancel,
+                destructive: true,
+              });
               if (confirmed) peopleDataProvider?.deletePerson(name);
             }}
           >

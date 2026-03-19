@@ -1,18 +1,18 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import {
-  OverlayContextMenu,
+  OverlayContextMenuPresentational,
   OverlayContextMenuItem,
-} from '@/components/advanced/overlays/overlay-context-menu.component';
+} from './overlay-context-menu.component';
 
-const meta: Meta<typeof OverlayContextMenu> = {
+const meta: Meta<typeof OverlayContextMenuPresentational> = {
   title: 'Advanced/OverlayContextMenu',
-  component: OverlayContextMenu,
+  component: OverlayContextMenuPresentational,
   tags: ['autodocs'],
   parameters: {
     docs: {
       description: {
         component:
-          'A context menu component rendered at a specific position. Supports items, separators, submenus, checkboxes, and radio groups.',
+          'A context menu component rendered at a specific position. Supports items, separators, and submenus.',
       },
     },
   },
@@ -24,7 +24,7 @@ const meta: Meta<typeof OverlayContextMenu> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof OverlayContextMenu>;
+type Story = StoryObj<typeof OverlayContextMenuPresentational>;
 
 const basicItems: OverlayContextMenuItem[] = [
   { type: 'item', id: 'cut', label: 'Cut', shortcut: 'Ctrl+X' },
@@ -32,31 +32,11 @@ const basicItems: OverlayContextMenuItem[] = [
   { type: 'item', id: 'paste', label: 'Paste', shortcut: 'Ctrl+V' },
   { type: 'separator' },
   { type: 'item', id: 'disabled', label: 'Disabled Item', disabled: true },
-  { type: 'item', id: 'delete', label: 'Delete', destructive: true },
+  { type: 'item', id: 'delete', label: 'Delete' },
 ];
 
 export const BasicItems: Story = {
   args: { items: basicItems },
-};
-
-const checkboxItems: OverlayContextMenuItem[] = [
-  { type: 'checkbox', id: 'bold', label: 'Bold', checked: true },
-  { type: 'checkbox', id: 'italic', label: 'Italic', checked: false },
-  { type: 'checkbox', id: 'underline', label: 'Underline', checked: false },
-];
-
-export const CheckboxItems: Story = {
-  args: { items: checkboxItems },
-};
-
-const radioItems: OverlayContextMenuItem[] = [
-  { type: 'radio', id: 'small', label: 'Small', value: 'small', group: 'size', checked: false },
-  { type: 'radio', id: 'medium', label: 'Medium', value: 'medium', group: 'size', checked: true },
-  { type: 'radio', id: 'large', label: 'Large', value: 'large', group: 'size', checked: false },
-];
-
-export const RadioGroup: Story = {
-  args: { items: radioItems },
 };
 
 const submenuItems: OverlayContextMenuItem[] = [
@@ -82,12 +62,6 @@ const kitchenSinkItems: OverlayContextMenuItem[] = [
   { type: 'item', id: 'open', label: 'Open', shortcut: 'Ctrl+O' },
   { type: 'item', id: 'save', label: 'Save', shortcut: 'Ctrl+S' },
   { type: 'separator' },
-  { type: 'checkbox', id: 'wrap', label: 'Word Wrap', checked: true },
-  { type: 'checkbox', id: 'minimap', label: 'Show Minimap', checked: false },
-  { type: 'separator' },
-  { type: 'radio', id: 'lf', label: 'LF', value: 'lf', group: 'eol', checked: true },
-  { type: 'radio', id: 'crlf', label: 'CRLF', value: 'crlf', group: 'eol', checked: false },
-  { type: 'separator' },
   {
     type: 'submenu',
     label: 'Encoding',
@@ -98,7 +72,7 @@ const kitchenSinkItems: OverlayContextMenuItem[] = [
     ],
   },
   { type: 'separator' },
-  { type: 'item', id: 'delete', label: 'Delete File', destructive: true },
+  { type: 'item', id: 'delete', label: 'Delete File' },
 ];
 
 export const KitchenSink: Story = {
