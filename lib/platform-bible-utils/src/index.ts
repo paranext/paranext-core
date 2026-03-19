@@ -17,6 +17,24 @@ export { UnsubscriberAsyncList } from './lifetime-management/unsubscriber-async-
 // Consts
 export { PLATFORM_ERROR_VERSION } from './platform-error';
 export {
+  CANCELLED,
+  UNKNOWN,
+  INVALID_ARGUMENT,
+  DEADLINE_EXCEEDED,
+  NOT_FOUND,
+  ALREADY_EXISTS,
+  PERMISSION_DENIED,
+  RESOURCE_EXHAUSTED,
+  FAILED_PRECONDITION,
+  ABORTED,
+  OUT_OF_RANGE,
+  UNIMPLEMENTED,
+  INTERNAL,
+  UNAVAILABLE,
+  DATA_LOSS,
+  UNAUTHENTICATED,
+} from './platform-error';
+export {
   getChaptersForBook,
   offsetBook,
   offsetChapter,
@@ -104,6 +122,7 @@ export {
 } from './string-util';
 export { getPaneSizeLimits } from './pane-utils';
 export { newPlatformError, isPlatformError } from './platform-error';
+export type { PlatformError, PlatformErrorCode } from './platform-error';
 export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
@@ -122,7 +141,6 @@ export type {
   CanHaveOnDidDispose,
 } from './lifetime-management/disposal.model';
 export type { PaneSizeLimitsOptions } from './pane-utils';
-export type { PlatformError } from './platform-error';
 export type {
   PlatformEventHandler,
   PlatformEvent,

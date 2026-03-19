@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
-  OverlayCommandPalette,
+  OverlayCommandPalettePresentational,
   OverlayCommandPaletteItem,
 } from './overlay-command-palette.component';
 
@@ -21,7 +21,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
-describe('OverlayCommandPalette', () => {
+describe('OverlayCommandPalettePresentational', () => {
   const sampleItems: OverlayCommandPaletteItem[] = [
     { id: 'open', label: 'Open File' },
     { id: 'save', label: 'Save File' },
@@ -34,7 +34,11 @@ describe('OverlayCommandPalette', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalette items={sampleItems} onSelect={onSelect} onDismiss={onDismiss} />,
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+        />,
       );
 
       fireEvent.click(screen.getByText('Save File'));
@@ -48,7 +52,11 @@ describe('OverlayCommandPalette', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalette items={sampleItems} onSelect={onSelect} onDismiss={onDismiss} />,
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+        />,
       );
 
       fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
@@ -62,7 +70,11 @@ describe('OverlayCommandPalette', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalette items={sampleItems} onSelect={onSelect} onDismiss={onDismiss} />,
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+        />,
       );
 
       const backdrop = document.querySelector('[data-overlay-command-palette-backdrop]');
@@ -77,7 +89,7 @@ describe('OverlayCommandPalette', () => {
 
     it('should display custom noResultsText', () => {
       render(
-        <OverlayCommandPalette
+        <OverlayCommandPalettePresentational
           items={[]}
           noResultsText="Nothing here"
           onSelect={vi.fn()}
@@ -90,7 +102,7 @@ describe('OverlayCommandPalette', () => {
 
     it('should display custom placeholder text', () => {
       render(
-        <OverlayCommandPalette
+        <OverlayCommandPalettePresentational
           items={sampleItems}
           placeholder="Type a command..."
           onSelect={vi.fn()}
@@ -107,7 +119,13 @@ describe('OverlayCommandPalette', () => {
         { id: 'disabled-item', label: 'Cannot Click', disabled: true },
       ];
 
-      render(<OverlayCommandPalette items={items} onSelect={onSelect} onDismiss={vi.fn()} />);
+      render(
+        <OverlayCommandPalettePresentational
+          items={items}
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
 
       fireEvent.click(screen.getByText('Cannot Click'));
 
@@ -121,7 +139,7 @@ describe('OverlayCommandPalette', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalette
+        <OverlayCommandPalettePresentational
           items={sampleItems}
           position={{ x: 100, y: 200 }}
           onSelect={onSelect}
@@ -144,7 +162,13 @@ describe('OverlayCommandPalette', () => {
         { id: 'find', label: 'Find', group: 'Edit' },
       ];
 
-      render(<OverlayCommandPalette items={groupedItems} onSelect={vi.fn()} onDismiss={vi.fn()} />);
+      render(
+        <OverlayCommandPalettePresentational
+          items={groupedItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
 
       expect(screen.getByText('File')).toBeInTheDocument();
       expect(screen.getByText('Edit')).toBeInTheDocument();

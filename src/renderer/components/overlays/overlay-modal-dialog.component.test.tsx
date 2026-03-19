@@ -1,16 +1,16 @@
 import { vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { OverlayModalDialog } from './overlay-modal-dialog.component';
+import { OverlayModalDialogPresentational } from './overlay-modal-dialog.component';
 
-describe('OverlayModalDialog', () => {
+describe('OverlayModalDialogPresentational', () => {
   describe('confirm dialog', () => {
     it('should call onResolve(false) when Cancel is clicked', () => {
       const onResolve = vi.fn();
       const onDismiss = vi.fn();
 
       render(
-        <OverlayModalDialog
+        <OverlayModalDialogPresentational
           dialogType="confirm"
           options={{ message: 'Are you sure?', cancelLabel: 'Cancel', okLabel: 'OK' }}
           onResolve={onResolve}
@@ -30,7 +30,7 @@ describe('OverlayModalDialog', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayModalDialog
+        <OverlayModalDialogPresentational
           dialogType="confirm"
           options={{ message: 'Are you sure?', cancelLabel: 'Cancel', okLabel: 'OK' }}
           onResolve={onResolve}
@@ -50,7 +50,7 @@ describe('OverlayModalDialog', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayModalDialog
+        <OverlayModalDialogPresentational
           dialogType="confirm"
           options={{ message: 'Are you sure?', cancelLabel: 'Cancel', okLabel: 'OK' }}
           onResolve={onResolve}
@@ -72,7 +72,7 @@ describe('OverlayModalDialog', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayModalDialog
+        <OverlayModalDialogPresentational
           dialogType="alert"
           options={{ message: 'Something happened' }}
           onResolve={onResolve}
