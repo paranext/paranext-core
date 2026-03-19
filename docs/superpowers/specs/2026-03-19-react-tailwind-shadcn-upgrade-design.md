@@ -133,13 +133,156 @@ Note: some config options like `corePlugins`, `safelist`, and `separator` are no
 
 ### Scoped Preflight
 
-Replace `tailwindcss-scoped-preflight` plugin with TW4's native approach. **The nested `@import` inside a selector may not be valid CSS** — `@import` must appear at the top level of a stylesheet. The correct approach needs to be determined during implementation. Options:
+**Status: Validated** — Approach determined via research spike (Task 0).
 
-1. **Split imports and wrap manually**: Import `tailwindcss/preflight.css` separately, then use `@layer base { .pr-twp { /* preflight rules */ } }` with CSS nesting to scope them.
-2. **PostCSS plugin**: Use a PostCSS plugin like `postcss-nested` to process the nesting before the browser sees it.
-3. **Copy and scope**: Copy TW4's preflight output, wrap it in `.pr-twp { }`, and maintain it as a static file.
+Replace `tailwindcss-scoped-preflight` plugin (no TW4 support) with the **"Disable + Copy-and-Scope"** approach described below.
 
-This is a **blocking risk** that must be prototyped early in Phase 2 before committing to the approach.
+#### Background
+
+TW4 changes how Tailwind is imported. The default `@import "tailwindcss"` expands to three layer imports:
+
+```css
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css' layer(utilities);
+```
+
+TW4 officially documents that you can **disable preflight** by using the split imports and simply omitting the `preflight.css` line. This is the key enabler for our scoping approach.
+
+#### Recommended Approach: Disable Preflight + Maintain Scoped Copy
+
+**Step 1: Disable preflight in the TW4 import.** Replace `@import "tailwindcss"` with split imports that omit preflight:
+
+```css
+/* PBR index.css — TW4 split imports (no preflight) */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+/* preflight.css intentionally omitted — we scope it below */
+@import 'tailwindcss/utilities.css' layer(utilities);
+```
+
+When using modifiers like `prefix()`, apply them to the appropriate imports per TW4 docs:
+
+```css
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme) theme(static);
+@import 'tailwindcss/utilities.css' layer(utilities) prefix(tw);
+```
+
+**Step 2: Create a scoped preflight file.** Copy TW4's `preflight.css` (~330 lines) and wrap every rule block under `.pr-twp`:
+
+```css
+/* lib/platform-bible-react/src/scoped-preflight.css */
+/* Scoped version of Tailwind CSS v4 preflight.
+ * Source: tailwindcss/preflight.css (v4.x)
+ * All rules are nested under .pr-twp so they only apply within our component scope.
+ * When upgrading Tailwind, re-copy preflight.css and re-apply the .pr-twp wrapper.
+ */
+
+@layer base {
+  .pr-twp {
+    /* === Universal reset === */
+    & *,
+    & ::after,
+    & ::before {
+      box-sizing: border-box;
+      border-width: 0;
+      border-style: solid;
+      border-color: var(--default-border-color, currentColor);
+    }
+
+    /* === Document defaults (applied to .pr-twp itself instead of html/:host) === */
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    font-family: var(
+      --default-font-family,
+      ui-sans-serif,
+      system-ui,
+      sans-serif,
+      'Apple Color Emoji',
+      'Segoe UI Emoji',
+      'Segoe UI Symbol',
+      'Noto Color Emoji'
+    );
+    font-feature-settings: var(--default-font-feature-settings, normal);
+    font-variation-settings: var(--default-font-variation-settings, normal);
+    -webkit-tap-highlight-color: transparent;
+
+    /* === Element resets (scoped to descendants) === */
+    & hr {
+      height: 0;
+      color: inherit;
+      border-top-width: 1px;
+    }
+
+    & h1,
+    & h2,
+    & h3,
+    & h4,
+    & h5,
+    & h6 {
+      font-size: inherit;
+      font-weight: inherit;
+    }
+
+    & a {
+      color: inherit;
+      text-decoration: inherit;
+    }
+
+    /* ... remaining preflight rules, all nested under .pr-twp ... */
+  }
+}
+```
+
+The key transformation rules when scoping:
+
+- **`*`, `::after`, `::before`** become `& *`, `& ::after`, `& ::before` (descendants of `.pr-twp`)
+- **`html`, `:host`** properties move directly onto `.pr-twp` itself (it is the scoping root)
+- **`body`** properties also move onto `.pr-twp` itself (or onto `& body.pr-twp` for the case where `<body>` has the class)
+- **All element selectors** (`h1`, `a`, `img`, `button`, etc.) become `& h1`, `& a`, etc.
+- **Pseudo-selectors and attribute selectors** are nested the same way: `& [hidden]`, `& ::placeholder`, etc.
+
+**Step 3: Import the scoped preflight in `index.css`:**
+
+```css
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import './scoped-preflight.css';
+@import 'tailwindcss/utilities.css' layer(utilities);
+```
+
+#### Why This Approach (Not the Others)
+
+| Approach                                       | Verdict     | Reason                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CSS nesting with `@import` inside selector** | Not viable  | CSS spec requires `@import` at top level; `@import` inside `.pr-twp { }` or `@layer base { .pr-twp { @import ... } }` is invalid and will be ignored by browsers and build tools                                                                                                              |
+| **PostCSS plugin (e.g., `postcss-nested`)**    | Unnecessary | TW4 uses Lightning CSS (not PostCSS) for its processing pipeline; adding PostCSS just for nesting adds complexity. Also, `@import` nesting is a build-tool limitation, not just a browser one                                                                                                 |
+| **Disable + Copy-and-Scope**                   | Recommended | Leverages TW4's official split-import mechanism to disable preflight; uses standard CSS nesting (supported by Lightning CSS and all modern browsers) to scope the copied rules; no extra dependencies; works with both Vite (`@tailwindcss/vite`) and Webpack (`@tailwindcss/postcss`) builds |
+
+#### Maintenance Cost
+
+The scoped preflight file is a **vendored copy** of TW4's preflight with a mechanical `.pr-twp` wrapper transformation. Maintenance burden is low:
+
+- Preflight changes rarely between minor Tailwind versions
+- When updating Tailwind, diff `node_modules/tailwindcss/preflight.css` against the vendored copy
+- The transformation is mechanical and could be scripted (copy preflight, apply nesting)
+- A comment at the top of the file records which Tailwind version it was copied from
+
+#### Extension Compatibility
+
+Extensions use the same scoped preflight via PBR's published CSS. Extensions that use `@tailwindcss/postcss` in their Webpack builds will also use the split-import pattern with the same scoped preflight approach. The `postcss.config.ts` change from `tailwindcss` to `@tailwindcss/postcss` is orthogonal to preflight scoping.
+
+#### Risk Assessment
+
+This approach is **low risk**:
+
+- Uses only officially documented TW4 features (split imports, omitting preflight)
+- Uses standard CSS nesting (no preprocessor tricks)
+- No new dependencies
+- Degrades gracefully: if the scoped preflight has a bug, only `.pr-twp`-scoped elements are affected; the rest of the page is untouched
 
 ### Prefix Change: `tw-` → `tw:`
 
@@ -356,7 +499,7 @@ PBR uses `dts-bundle-generator` to produce bundled `.d.ts` files. After removing
 
 | Step | Phase                      | Scope                                                                           | Risk              |
 | ---- | -------------------------- | ------------------------------------------------------------------------------- | ----------------- |
-| 0    | Prototype                  | Scoped preflight approach for TW4 (blocking)                                    | High              |
+| 0    | Prototype                  | Scoped preflight approach for TW4 — **DONE** (Disable + Copy-and-Scope)         | Resolved          |
 | 1    | React 19                   | Root + pbr + extensions deps, types, remove test-renderer                       | Low               |
 | 2    | Tailwind 4 — deps & config | Update packages, postcss configs, add `@config` bridge in CSS                   | Medium            |
 | 3    | Tailwind 4 — `cn()` shim   | `shadcn-ui.util.ts` + comprehensive unit tests                                  | Medium            |
