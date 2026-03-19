@@ -227,8 +227,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
 
-  const editingNoteKey = useRef<string>();
-  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+  const editingNoteKey = useRef<string | undefined>(undefined);
+  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[] | undefined>(undefined);
 
   // These control the placement of the comment editor popover by setting the location of the anchor
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);

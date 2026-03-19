@@ -53,9 +53,9 @@ export function useInventory(
   const [error, setError] = useState<string | undefined>();
 
   // Resource tracking for cleanup - using refs to avoid stale closures
-  const currentSummaryRef = useRef<SummarizedInventory | undefined>();
+  const currentSummaryRef = useRef<SummarizedInventory | undefined>(undefined);
   const activeJobsRef = useRef<Set<string>>(new Set());
-  const isMountedRef = useRef(true);
+  const isMountedRef = useRef<boolean>(true);
 
   /**
    * Cleanup function that abandons active jobs and discards inventory summaries. Uses

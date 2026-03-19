@@ -140,7 +140,7 @@ export function FootnotesLayout({
     20,
   );
 
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const debouncedSetFootnotesPaneSize = useCallback(
     (size: number) => {

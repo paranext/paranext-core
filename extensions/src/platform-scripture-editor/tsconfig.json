@@ -12,6 +12,8 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
+    // Required: rc-dock uses removed React.ReactChild type; @types/mdx uses global JSX namespace
+    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     // Platform.Bible requires modules to be CommonJS
     // Running webpack.config.ts also requires CommonJS
