@@ -3,9 +3,7 @@ import { waitForAppReady } from '../../../fixtures/helpers';
 import { findHelloRock3Frame, DEFAULT_PERSON_NAME } from './overlay-helpers';
 
 test.describe('Overlay Popover', () => {
-  test('hover on greeting shows description popover with expected content', async ({
-    mainPage,
-  }) => {
+  test('hover on greeting shows markdown popover with expected content', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const frame = await findHelloRock3Frame(mainPage);
 
@@ -22,12 +20,12 @@ test.describe('Overlay Popover', () => {
     const popover = mainPage.locator('[data-overlay-popover]');
     await expect(popover).toBeVisible({ timeout: 5_000 });
 
-    // Verify the popover content — a description type with person details.
-    // Title is "About {name}" where name defaults to the contributed setting default.
+    // Verify the popover content — a markdown type with person details.
+    // Title is "About {name}" rendered as a markdown heading.
     await expect(popover).toContainText('About');
     await expect(popover).toContainText(DEFAULT_PERSON_NAME);
 
-    // Description entries: Name, Greeting, Age
+    // Markdown bold terms: Name, Greeting, Age
     await expect(popover).toContainText('Name');
     await expect(popover).toContainText('Greeting');
     await expect(popover).toContainText('Age');
@@ -37,25 +35,28 @@ test.describe('Overlay Popover', () => {
     await expect(popover).not.toBeVisible({ timeout: 5_000 });
   });
 
-  test('popover dismissed on mouse leave', async ({ mainPage }) => {
+  test('popover reappears after dismissal and re-hover', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const frame = await findHelloRock3Frame(mainPage);
 
     const greetingEl = frame.locator('[style*="cursor"]');
     await expect(greetingEl).toBeVisible({ timeout: 10_000 });
 
-    // Move mouse away first to ensure a clean mouseenter event on hover
-    await frame.locator('.title').hover();
-
     // Show the popover
     await greetingEl.hover();
     const popover = mainPage.locator('[data-overlay-popover]');
     await expect(popover).toBeVisible({ timeout: 10_000 });
 
-    // Move mouse to a different element in the frame (triggers mouseleave on greeting)
+    // Dismiss by moving away
     await frame.locator('.title').hover();
+    await expect(popover).not.toBeVisible({ timeout: 5_000 });
 
-    // Popover should be dismissed via the handleGreetingMouseLeave handler
+    // Re-hover should show the popover again (verifies cleanup/re-trigger works)
+    await greetingEl.hover();
+    await expect(popover).toBeVisible({ timeout: 10_000 });
+
+    // Clean up
+    await frame.locator('.title').hover();
     await expect(popover).not.toBeVisible({ timeout: 5_000 });
   });
 });

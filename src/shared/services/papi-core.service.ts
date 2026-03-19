@@ -93,9 +93,6 @@ export type {
 export type {
   CommandPaletteItem,
   CommandPaletteRequest,
-  ContextMenuItem,
-  ContextMenuRequest,
-  ContextMenuResult,
   IOverlayService,
   ModalDialogOptions,
   ModalDialogResponse,
@@ -103,10 +100,4 @@ export type {
   PopoverAction,
   PopoverContent,
   PopoverRequest,
-  RichTextRun,
-} from '@shared/models/overlay.service-model';
-export {
-  OverlayNotVisibleError,
-  OverlayReplacedError,
-  OverlayValidationError,
-} from '@shared/models/overlay.service-model';
+} from '@renderer/services/overlays/overlay.service-model';

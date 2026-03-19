@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { OverlayPopover } from './overlay-popover.component';
+import { OverlayPopoverPresentational } from './overlay-popover.component';
 
 // Radix Popover uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
 // implementation. The methods intentionally don't use `this` since they're empty stubs.
@@ -16,13 +16,13 @@ beforeAll(() => {
   };
 });
 
-describe('OverlayPopover', () => {
+describe('OverlayPopoverPresentational', () => {
   const position = { x: 100, y: 200 };
 
   describe('text content', () => {
     it('should render title and body', () => {
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{ type: 'text', title: 'Info', body: 'Some details here' }}
           position={position}
           onDismiss={vi.fn()}
@@ -34,13 +34,50 @@ describe('OverlayPopover', () => {
     });
   });
 
+  describe('text content without title', () => {
+    it('should render body text without a title element', () => {
+      render(
+        <OverlayPopoverPresentational
+          content={{ type: 'text', body: 'Just a body' }}
+          position={position}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Just a body')).toBeInTheDocument();
+      // No title should be rendered - the PopoverTitle component returns undefined when no title
+      expect(screen.queryByText('Info')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('card content rendering', () => {
+    it('should render card title and body text', () => {
+      render(
+        <OverlayPopoverPresentational
+          content={{
+            type: 'card',
+            title: 'Card Title',
+            body: 'Card body text',
+            actions: [{ id: 'ok', label: 'OK' }],
+          }}
+          position={position}
+          onAction={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Card Title')).toBeInTheDocument();
+      expect(screen.getByText('Card body text')).toBeInTheDocument();
+    });
+  });
+
   describe('card content with actions', () => {
     it('should call onAction with the correct action id when a button is clicked', () => {
       const onAction = vi.fn();
       const onDismiss = vi.fn();
 
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{
             type: 'card',
             title: 'Confirm',
@@ -62,11 +99,11 @@ describe('OverlayPopover', () => {
       expect(onDismiss).not.toHaveBeenCalled();
     });
 
-    it('should call onAction with cancel id when cancel button is clicked', () => {
+    it('should call onAction with dismiss id when Dismiss button is clicked', () => {
       const onAction = vi.fn();
 
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{
             type: 'card',
             title: 'Actions',
@@ -88,14 +125,29 @@ describe('OverlayPopover', () => {
     });
   });
 
-  describe('list content', () => {
-    it('should render all list items', () => {
+  describe('markdown content', () => {
+    it('should render markdown with bold and italic', () => {
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{
-            type: 'list',
-            title: 'Steps',
-            items: ['Step one', 'Step two', 'Step three'],
+            type: 'markdown',
+            markdown: 'Some **bold** and *italic* text',
+          }}
+          position={position}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('bold').tagName).toBe('STRONG');
+      expect(screen.getByText('italic').tagName).toBe('EM');
+    });
+
+    it('should render markdown list items', () => {
+      render(
+        <OverlayPopoverPresentational
+          content={{
+            type: 'markdown',
+            markdown: '# Steps\n\n- Step one\n- Step two\n- Step three',
           }}
           position={position}
           onDismiss={vi.fn()}
@@ -109,59 +161,12 @@ describe('OverlayPopover', () => {
     });
   });
 
-  describe('description content', () => {
-    it('should render term/detail pairs', () => {
-      render(
-        <OverlayPopover
-          content={{
-            type: 'description',
-            title: 'Details',
-            entries: [
-              { term: 'Name', detail: 'John' },
-              { term: 'Role', detail: 'Admin' },
-            ],
-          }}
-          position={position}
-          onDismiss={vi.fn()}
-        />,
-      );
-
-      expect(screen.getByText('Name')).toBeInTheDocument();
-      expect(screen.getByText('John')).toBeInTheDocument();
-      expect(screen.getByText('Role')).toBeInTheDocument();
-      expect(screen.getByText('Admin')).toBeInTheDocument();
-    });
-  });
-
-  describe('richText content', () => {
-    it('should render bold and italic runs', () => {
-      render(
-        <OverlayPopover
-          content={{
-            type: 'richText',
-            body: [
-              { text: 'Normal ' },
-              { text: 'bold', bold: true },
-              { text: ' and ' },
-              { text: 'italic', italic: true },
-            ],
-          }}
-          position={position}
-          onDismiss={vi.fn()}
-        />,
-      );
-
-      expect(screen.getByText('bold').tagName).toBe('STRONG');
-      expect(screen.getByText('italic').tagName).toBe('EM');
-    });
-  });
-
   describe('keyboard dismissal', () => {
     it('should call onDismiss when Escape is pressed', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{ type: 'text', body: 'Hello' }}
           position={position}
           onDismiss={onDismiss}

@@ -4,7 +4,8 @@ import {
   getWebViewIframe,
   clampToViewport,
   isWebViewVisible,
-} from '@renderer/services/overlay-coordinates';
+  isPositionInViewport,
+} from './overlay-coordinates';
 
 // jsdom doesn't provide CSS.escape; polyfill for tests.
 // Only the escape method is needed; other CSS static methods are unused in the tested code.
@@ -256,6 +257,57 @@ describe('overlay-coordinates', () => {
         toJSON: () => ({}),
       });
       expect(isWebViewVisible('test-webview-1')).toBe(true);
+    });
+  });
+
+  describe('isPositionInViewport', () => {
+    beforeEach(() => {
+      Object.defineProperty(window, 'innerWidth', { value: 1024, writable: true });
+      Object.defineProperty(window, 'innerHeight', { value: 768, writable: true });
+    });
+
+    it('should return true for a position well within the viewport', () => {
+      expect(isPositionInViewport({ x: 500, y: 400 })).toBe(true);
+    });
+
+    it('should return true for a position at the origin', () => {
+      expect(isPositionInViewport({ x: 0, y: 0 })).toBe(true);
+    });
+
+    it('should return true for a position at the viewport edge', () => {
+      expect(isPositionInViewport({ x: 1024, y: 768 })).toBe(true);
+    });
+
+    it('should return true for a position slightly outside viewport within default margin', () => {
+      // Default margin is 50px
+      expect(isPositionInViewport({ x: -30, y: -30 })).toBe(true);
+      expect(isPositionInViewport({ x: 1060, y: 800 })).toBe(true);
+    });
+
+    it('should return false for a position far outside viewport beyond default margin', () => {
+      expect(isPositionInViewport({ x: -100, y: 400 })).toBe(false);
+      expect(isPositionInViewport({ x: 500, y: -100 })).toBe(false);
+      expect(isPositionInViewport({ x: 1200, y: 400 })).toBe(false);
+      expect(isPositionInViewport({ x: 500, y: 900 })).toBe(false);
+    });
+
+    it('should respect custom margin parameter', () => {
+      // With margin=0, anything outside [0, innerWidth] x [0, innerHeight] is out
+      expect(isPositionInViewport({ x: -1, y: 0 }, 0)).toBe(false);
+      expect(isPositionInViewport({ x: 0, y: -1 }, 0)).toBe(false);
+      expect(isPositionInViewport({ x: 1025, y: 0 }, 0)).toBe(false);
+      expect(isPositionInViewport({ x: 0, y: 769 }, 0)).toBe(false);
+
+      // With larger margin, more tolerance
+      expect(isPositionInViewport({ x: -99, y: 0 }, 100)).toBe(true);
+      expect(isPositionInViewport({ x: 1123, y: 0 }, 100)).toBe(true);
+    });
+
+    it('should return false at exactly the margin boundary (exclusive)', () => {
+      // At exactly -margin, x >= -margin is true (boundary is inclusive)
+      expect(isPositionInViewport({ x: -50, y: 0 })).toBe(true);
+      // Just past the margin
+      expect(isPositionInViewport({ x: -51, y: 0 })).toBe(false);
     });
   });
 });

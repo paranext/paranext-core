@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
-  OverlayCommandPalette,
+  OverlayCommandPalettePresentational,
   OverlayCommandPaletteItem,
 } from './overlay-command-palette.component';
 
@@ -21,7 +21,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
-describe('OverlayCommandPalette', () => {
+describe('OverlayCommandPalettePresentational', () => {
   const sampleItems: OverlayCommandPaletteItem[] = [
     { id: 'open', label: 'Open File' },
     { id: 'save', label: 'Save File' },
@@ -34,7 +34,11 @@ describe('OverlayCommandPalette', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalette items={sampleItems} onSelect={onSelect} onDismiss={onDismiss} />,
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+        />,
       );
 
       fireEvent.click(screen.getByText('Save File'));
@@ -48,7 +52,11 @@ describe('OverlayCommandPalette', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalette items={sampleItems} onSelect={onSelect} onDismiss={onDismiss} />,
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+        />,
       );
 
       fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
@@ -62,7 +70,11 @@ describe('OverlayCommandPalette', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalette items={sampleItems} onSelect={onSelect} onDismiss={onDismiss} />,
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+        />,
       );
 
       const backdrop = document.querySelector('[data-overlay-command-palette-backdrop]');
@@ -77,7 +89,7 @@ describe('OverlayCommandPalette', () => {
 
     it('should display custom noResultsText', () => {
       render(
-        <OverlayCommandPalette
+        <OverlayCommandPalettePresentational
           items={[]}
           noResultsText="Nothing here"
           onSelect={vi.fn()}
@@ -90,7 +102,7 @@ describe('OverlayCommandPalette', () => {
 
     it('should display custom placeholder text', () => {
       render(
-        <OverlayCommandPalette
+        <OverlayCommandPalettePresentational
           items={sampleItems}
           placeholder="Type a command..."
           onSelect={vi.fn()}
@@ -107,7 +119,13 @@ describe('OverlayCommandPalette', () => {
         { id: 'disabled-item', label: 'Cannot Click', disabled: true },
       ];
 
-      render(<OverlayCommandPalette items={items} onSelect={onSelect} onDismiss={vi.fn()} />);
+      render(
+        <OverlayCommandPalettePresentational
+          items={items}
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
 
       fireEvent.click(screen.getByText('Cannot Click'));
 
@@ -121,7 +139,7 @@ describe('OverlayCommandPalette', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayCommandPalette
+        <OverlayCommandPalettePresentational
           items={sampleItems}
           position={{ x: 100, y: 200 }}
           onSelect={onSelect}
@@ -136,6 +154,82 @@ describe('OverlayCommandPalette', () => {
     });
   });
 
+  describe('search filtering', () => {
+    it('should filter visible items when typing in the search input', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // All items visible initially
+      expect(screen.getByText('Open File')).toBeInTheDocument();
+      expect(screen.getByText('Save File')).toBeInTheDocument();
+      expect(screen.getByText('Close Tab')).toBeInTheDocument();
+
+      // Type in the search input to filter
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Save' } });
+
+      // Only matching item remains visible; non-matching items are hidden by cmdk
+      expect(screen.getByText('Save File')).toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+
+    it('should show noResultsText when search matches nothing', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          noResultsText="Nothing found"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zzzzz' } });
+
+      expect(screen.getByText('Nothing found')).toBeInTheDocument();
+    });
+  });
+
+  describe('keyboard navigation', () => {
+    it('should select the first item when Enter is pressed without arrow navigation', () => {
+      const onSelect = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // cmdk auto-selects the first item; pressing Enter should select it
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+
+      expect(onSelect).toHaveBeenCalledWith('open');
+    });
+
+    it('should select the second item after pressing ArrowDown then Enter', () => {
+      const onSelect = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      expect(onSelect).toHaveBeenCalledWith('save');
+    });
+  });
+
   describe('grouped items', () => {
     it('should render group headings when items have group keys', () => {
       const groupedItems: OverlayCommandPaletteItem[] = [
@@ -144,7 +238,13 @@ describe('OverlayCommandPalette', () => {
         { id: 'find', label: 'Find', group: 'Edit' },
       ];
 
-      render(<OverlayCommandPalette items={groupedItems} onSelect={vi.fn()} onDismiss={vi.fn()} />);
+      render(
+        <OverlayCommandPalettePresentational
+          items={groupedItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
 
       expect(screen.getByText('File')).toBeInTheDocument();
       expect(screen.getByText('Edit')).toBeInTheDocument();

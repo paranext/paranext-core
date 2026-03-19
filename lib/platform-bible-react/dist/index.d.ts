@@ -5,6 +5,7 @@ import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import * as AvatarPrimitive from '@radix-ui/react-avatar';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
 import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
@@ -1016,229 +1017,6 @@ export interface MarkerMenuProps {
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
 export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
-type PlatformIconName = string;
-/**
- * A single item in an overlay context menu. Discriminated union on `type`:
- *
- * - `'item'` — A clickable menu item that returns its `id` when selected.
- * - `'separator'` — A visual divider between groups of items.
- * - `'submenu'` — A nested menu that expands on hover to show child `items`.
- * - `'checkbox'` — A toggleable item that reports its new `checked` state when selected.
- * - `'radio'` — A radio button within a named `group`.
- */
-export type OverlayContextMenuItem = {
-	type: "item";
-	id: string;
-	label: string | LocalizeKey;
-	icon?: PlatformIconName;
-	shortcut?: string;
-	disabled?: boolean;
-	destructive?: boolean;
-} | {
-	type: "separator";
-} | {
-	type: "submenu";
-	label: string | LocalizeKey;
-	icon?: PlatformIconName;
-	items: OverlayContextMenuItem[];
-} | {
-	type: "checkbox";
-	id: string;
-	label: string | LocalizeKey;
-	checked: boolean;
-} | {
-	type: "radio";
-	id: string;
-	label: string | LocalizeKey;
-	value: string;
-	group: string;
-	checked: boolean;
-};
-/** Result returned when the user selects an item from the context menu */
-export type OverlayContextMenuResult = {
-	itemId: string;
-	checked?: boolean;
-};
-/** Props for the presentational OverlayContextMenu component */
-export type OverlayContextMenuProps = {
-	/** Menu items to display */
-	items: OverlayContextMenuItem[];
-	/** Document-relative position for the menu */
-	position: {
-		x: number;
-		y: number;
-	};
-	/** Called when the user selects a menu item */
-	onSelect: (result: OverlayContextMenuResult) => void;
-	/** Called when the menu is dismissed without a selection */
-	onDismiss: () => void;
-};
-/**
- * Renders a context menu at a fixed position using Radix DropdownMenu. Supports items, separators,
- * submenus, checkboxes, and radio groups.
- */
-export declare function OverlayContextMenu({ items, position, onSelect, onDismiss, }: OverlayContextMenuProps): import("react/jsx-runtime").JSX.Element;
-/** The supported modal dialog types */
-export type OverlayModalDialogType = "alert" | "confirm";
-/** Options for each modal dialog type, keyed by dialog type */
-export interface OverlayModalDialogOptions {
-	alert: {
-		title?: string | LocalizeKey;
-		message: string | LocalizeKey;
-		okLabel?: string | LocalizeKey;
-	};
-	confirm: {
-		title?: string | LocalizeKey;
-		message: string | LocalizeKey;
-		okLabel?: string | LocalizeKey;
-		cancelLabel?: string | LocalizeKey;
-		destructive?: boolean;
-	};
-}
-/** Props for the presentational OverlayModalDialog component */
-export type OverlayModalDialogProps = {
-	/** Which dialog variant to render */
-	dialogType: OverlayModalDialogType;
-	/** Type-specific dialog configuration */
-	options: OverlayModalDialogOptions[OverlayModalDialogType];
-	/** Called when the dialog resolves with a result */
-	onResolve: (result: unknown) => void;
-	/** Called when the dialog is dismissed without a result */
-	onDismiss: () => void;
-};
-/**
- * Renders a modal dialog using Radix Dialog. Supports alert and confirm dialog types with
- * appropriate UI elements, keyboard handling, and accessibility attributes.
- */
-export declare function OverlayModalDialog({ dialogType, options, onResolve, onDismiss, }: OverlayModalDialogProps): import("react/jsx-runtime").JSX.Element;
-/** An action button displayed at the bottom of a card-type popover */
-export type OverlayPopoverAction = {
-	id: string;
-	label: string | LocalizeKey;
-	variant?: "default" | "destructive" | "secondary";
-};
-/** A segment of styled text within rich text content */
-export type OverlayRichTextRun = {
-	text: string | LocalizeKey;
-	bold?: boolean;
-	italic?: boolean;
-	scriptureRef?: boolean;
-};
-/**
- * The content to display inside a popover. Discriminated union on `type`:
- *
- * - `'text'` — Simple text with an optional title and a plain-text body.
- * - `'list'` — A bulleted list of items with an optional title.
- * - `'description'` — A term/detail list, useful for metadata or properties.
- * - `'richText'` — Styled text composed of runs with inline formatting.
- * - `'card'` — A card with title, body text, and action buttons.
- */
-export type OverlayPopoverContent = {
-	type: "text";
-	title?: string | LocalizeKey;
-	body: string | LocalizeKey;
-} | {
-	type: "list";
-	title?: string | LocalizeKey;
-	items: (string | LocalizeKey)[];
-} | {
-	type: "description";
-	title?: string | LocalizeKey;
-	entries: {
-		term: string | LocalizeKey;
-		detail: string | LocalizeKey;
-	}[];
-} | {
-	type: "richText";
-	title?: string | LocalizeKey;
-	body: OverlayRichTextRun[];
-} | {
-	type: "card";
-	title?: string | LocalizeKey;
-	body: string | LocalizeKey;
-	actions: OverlayPopoverAction[];
-};
-/** Props for the presentational OverlayPopover component */
-export type OverlayPopoverProps = {
-	/** The content to display inside the popover */
-	content: OverlayPopoverContent;
-	/** Document-relative position for the popover anchor */
-	position: {
-		x: number;
-		y: number;
-	};
-	/** Optional anchor dimensions */
-	anchor?: {
-		width?: number;
-		height?: number;
-	};
-	/** Preferred side of the anchor. Defaults to 'bottom'. */
-	side?: "top" | "bottom" | "left" | "right";
-	/** Maximum width in pixels. Defaults to 320. */
-	maxWidth?: number;
-	/** Whether to display an arrow pointing toward the anchor. Defaults to true. */
-	showArrow?: boolean;
-	/** Called when the user clicks an action button (card content) */
-	onAction?: (actionId: string) => void;
-	/** Called when the popover is dismissed */
-	onDismiss: () => void;
-};
-/**
- * Renders a popover anchored to a position using Radix Popover. Supports text, list, description,
- * rich text, and card content types with optional action buttons and arrow indicator.
- */
-export declare function OverlayPopover({ content, position, anchor, side, maxWidth, showArrow, onAction, onDismiss, }: OverlayPopoverProps): import("react/jsx-runtime").JSX.Element;
-/** A single item in the command palette */
-export type OverlayCommandPaletteItem = {
-	/** Unique identifier returned when this item is selected */
-	id: string;
-	/** Primary display text */
-	label: string | LocalizeKey;
-	/** Secondary description text displayed below the label */
-	description?: string | LocalizeKey;
-	/** Optional icon displayed to the left of the label */
-	icon?: string;
-	/** Optional badge text (e.g., "Deprecated", "Disallowed") */
-	badge?: string | LocalizeKey;
-	/** Optional group key for visual sectioning with group headers */
-	group?: string;
-	/** Whether the item is grayed out and non-selectable. Defaults to false. */
-	disabled?: boolean;
-};
-/** Props for the presentational OverlayCommandPalette component */
-export type OverlayCommandPaletteProps = {
-	/** The selectable items to display */
-	items: OverlayCommandPaletteItem[];
-	/** Document-relative position for the palette anchor. Omit for centered mode. */
-	position?: {
-		x: number;
-		y: number;
-	};
-	/** Optional anchor dimensions */
-	anchor?: {
-		width?: number;
-		height?: number;
-	};
-	/** Preferred side of the anchor. Defaults to 'bottom'. */
-	side?: "top" | "bottom" | "left" | "right";
-	/** Placeholder text for the search input */
-	placeholder?: string;
-	/** Text shown when no items match the search filter. Defaults to 'No results found'. */
-	noResultsText?: string;
-	/** Maximum width in pixels. Defaults to 500. */
-	maxWidth?: number;
-	/** Maximum height in pixels. Defaults to 400. */
-	maxHeight?: number;
-	/** Called when the user selects an item */
-	onSelect: (itemId: string) => void;
-	/** Called when the palette is dismissed (Escape, click outside) */
-	onDismiss: () => void;
-};
-/**
- * Renders a command palette as a searchable list of items. Positioned via a Radix Popover virtual
- * anchor when `position` is provided, or centered in the viewport when omitted.
- */
-export declare function OverlayCommandPalette({ items, position, anchor, side, placeholder, noResultsText, maxWidth, maxHeight, onSelect, onDismiss, }: OverlayCommandPaletteProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
@@ -2303,6 +2081,41 @@ export declare function ContextMenuShortcut({ className, ...props }: React$1.HTM
 export declare namespace ContextMenuShortcut {
 	var displayName: string;
 }
+/**
+ * The Dialog component displays a modal dialog window. Built on Radix UI's Dialog component and
+ * styled by Shadcn UI.
+ *
+ * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/dialog See Radix UI
+ * Documentation https://www.radix-ui.com/docs/primitives/components/dialog
+ */
+export declare const Dialog: React$1.FC<DialogPrimitive.DialogProps>;
+/** Button or element that opens the dialog when clicked. */
+export declare const DialogTrigger: React$1.ForwardRefExoticComponent<DialogPrimitive.DialogTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+/** Portals the dialog content into `document.body` to avoid z-index and overflow issues. */
+export declare const DialogPortal: React$1.FC<DialogPrimitive.DialogPortalProps>;
+/** Button or element that closes the dialog when clicked. */
+export declare const DialogClose: React$1.ForwardRefExoticComponent<DialogPrimitive.DialogCloseProps & React$1.RefAttributes<HTMLButtonElement>>;
+/** Semi-transparent backdrop rendered behind the dialog content. Animates on open/close. */
+export declare const DialogOverlay: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogOverlayProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Main container for dialog content. Renders inside a portal with an overlay backdrop, centered on
+ * screen. Includes a close button in the top corner.
+ */
+export declare const DialogContent: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** Container for the dialog's header area. Stacks title and description vertically. */
+export declare function DialogHeader({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
+export declare namespace DialogHeader {
+	var displayName: string;
+}
+/** Container for the dialog's footer area. Lays out action buttons in a row on larger screens. */
+export declare function DialogFooter({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
+export declare namespace DialogFooter {
+	var displayName: string;
+}
+/** Renders the dialog's title as a styled heading. Used inside DialogHeader. */
+export declare const DialogTitle: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogTitleProps & React$1.RefAttributes<HTMLHeadingElement>, "ref"> & React$1.RefAttributes<HTMLHeadingElement>>;
+/** Renders the dialog's description text in a muted style. Used inside DialogHeader. */
+export declare const DialogDescription: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogDescriptionProps & React$1.RefAttributes<HTMLParagraphElement>, "ref"> & React$1.RefAttributes<HTMLParagraphElement>>;
 /**
  * A drawer component for React. These components are built on Vaul and styled with Shadcn UI. See
  * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/drawer See Vaul Documentation:

@@ -26,10 +26,10 @@ import {
 } from 'platform-bible-utils';
 import { Fragment, ReactNode } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
+import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
 import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
-import { Z_INDEX_ABOVE_DOCK } from '../../z-index';
 
 const getGroupContent = (
   groups: Localized<GroupsInMultiColumnMenu>,

@@ -1,9 +1,9 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
-import { OverlayCommandPalette } from '@/components/advanced/overlays/overlay-command-palette.component';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { OverlayCommandPalettePresentational } from './overlay-command-palette.component';
 
-const meta: Meta<typeof OverlayCommandPalette> = {
+const meta: Meta<typeof OverlayCommandPalettePresentational> = {
   title: 'Advanced/OverlayCommandPalette',
-  component: OverlayCommandPalette,
+  component: OverlayCommandPalettePresentational,
   tags: ['autodocs'],
   parameters: {
     docs: {
@@ -21,7 +21,7 @@ const meta: Meta<typeof OverlayCommandPalette> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof OverlayCommandPalette>;
+type Story = StoryObj<typeof OverlayCommandPalettePresentational>;
 
 export const BasicItems: Story = {
   args: {

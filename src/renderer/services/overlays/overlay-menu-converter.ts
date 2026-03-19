@@ -3,8 +3,8 @@
  * ContextMenuItem[] format for rendering context menus.
  */
 
-import type { ContextMenuItem } from '@shared/models/overlay.service-model';
 import type { Localized, SingleColumnMenu, MenuGroupDetailsInSubMenu } from 'platform-bible-utils';
+import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 
 /** Type guard to check if a menu item has a `command` field (MenuItemContainingCommand) */
 function isCommandItem(
@@ -28,15 +28,15 @@ function isSubMenuGroup(
 }
 
 /**
- * Converts a localized SingleColumnMenu from the menu data service into an array of ContextMenuItem
- * objects suitable for the overlay service's context menu rendering.
+ * Converts a localized SingleColumnMenu from the menu data service into an array of
+ * OverlayContextMenuItem objects suitable for the overlay service's context menu rendering.
  *
  * @param menu The localized SingleColumnMenu to convert
- * @returns An array of ContextMenuItem objects
+ * @returns An array of OverlayContextMenuItem objects
  */
 export function convertContributionToContextMenuItems(
   menu: Localized<SingleColumnMenu>,
-): ContextMenuItem[] {
+): OverlayContextMenuItem[] {
   const { groups, items } = menu;
 
   if (!items || items.length === 0) return [];
@@ -81,19 +81,22 @@ export function convertContributionToContextMenuItems(
   });
 
   /**
-   * Build ContextMenuItem[] for a given submenu item, collecting items from all groups that
+   * Build OverlayContextMenuItem[] for a given submenu item, collecting items from all groups that
    * reference this submenu item.
    */
-  function buildSubmenuItems(submenuItemId: string): ContextMenuItem[] {
+  function buildSubmenuItems(submenuItemId: string): OverlayContextMenuItem[] {
     const subGroupIds = submenuGroupMap.get(submenuItemId) ?? [];
     // Sort submenu groups by order
     subGroupIds.sort((a, b) => groupsRecord[a].order - groupsRecord[b].order);
     return buildItemsFromGroups(subGroupIds);
   }
 
-  /** Build ContextMenuItem[] from an ordered list of group IDs, inserting separators between groups. */
-  function buildItemsFromGroups(groupIds: string[]): ContextMenuItem[] {
-    const result: ContextMenuItem[] = [];
+  /**
+   * Build OverlayContextMenuItem[] from an ordered list of group IDs, inserting separators between
+   * groups.
+   */
+  function buildItemsFromGroups(groupIds: string[]): OverlayContextMenuItem[] {
+    const result: OverlayContextMenuItem[] = [];
 
     groupIds.forEach((groupId, i) => {
       const groupItems = itemsByGroup.get(groupId) ?? [];

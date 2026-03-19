@@ -11,8 +11,8 @@ import { Tooltip, TooltipContent, TooltipProvider } from '@/components/shadcn-ui
 import { TooltipTrigger } from '@radix-ui/react-tooltip';
 import { FunctionSquare, SquareSigma, SquareX } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
+import { Z_INDEX_FOOTNOTE_EDITOR } from '@/components/z-index';
 import { FootnoteEditorLocalizedStrings } from './footnote-editor.types';
-import { Z_INDEX_FOOTNOTE_EDITOR } from '../../z-index';
 
 interface FootnoteTypeDropdownProps {
   noteType: string;
