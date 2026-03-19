@@ -27,12 +27,14 @@ export const test = base.extend<CdpFixtures>({
     let browser;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        // eslint-disable-next-line no-await-in-loop -- intentional retry loop
+        // intentional retry loop
+        // eslint-disable-next-line no-await-in-loop
         browser = await chromium.connectOverCDP(CDP_URL, { timeout: 30_000 });
         break;
       } catch (err) {
         if (attempt === 3) throw err;
-        // eslint-disable-next-line no-await-in-loop -- intentional retry delay
+        // intentional retry delay
+        // eslint-disable-next-line no-await-in-loop
         await new Promise<void>((resolve) => {
           setTimeout(resolve, 2_000);
         });

@@ -30,6 +30,8 @@ function isPotentialConnectionToPapiNetwork(url: string | URL): boolean {
   return parseInt(port, 10) === parseInt(`${WEBSOCKET_PORT}`, 10);
 }
 
+// The following block is copied verbatim from the `ws` package type definitions, which use `any`,
+// omit blank lines between overloads, have unused overload stubs, and duplicate class members.
 /* eslint-disable @typescript-eslint/no-explicit-any, @stylistic/ts/lines-between-class-members, @typescript-eslint/no-unused-vars, @typescript-eslint/class-methods-use-this, no-dupe-class-members */
 // Copied from ws types
 type BufferLike =

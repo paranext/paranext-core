@@ -20,6 +20,7 @@ describe('Dock Layout Component', () => {
 
   describe('loadTab()', () => {
     it('should throw when no id', () => {
+      // Intentionally constructing an invalid object to test the guard against missing `id`.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const savedTabInfoNoId = {} as SavedTabInfo;
 
@@ -33,6 +34,7 @@ describe('Dock Layout Component', () => {
       const layout: Layout = { type: 'tab' };
 
       expect(() =>
+        // Passing a non-object value to force the type guard to throw; `unknown` cast is required to simulate invalid input.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         addTabToDock('this is wrong' as unknown as SavedTabInfo, layout, false, dockLayout),
       ).toThrow();
@@ -43,6 +45,7 @@ describe('Dock Layout Component', () => {
   describe('addWebViewToDock()', () => {
     it('should throw when no id', () => {
       const dockLayout = instance(mockDockLayout);
+      // Intentionally constructing an invalid object to test the guard against missing `id`.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const webView = {} as WebViewTabProps;
       const layout: Layout = { type: 'tab' };
@@ -55,6 +58,7 @@ describe('Dock Layout Component', () => {
       when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
       const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
+      // Passing an unrecognized layout type to verify the function throws on unknown layouts.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const layout = { type: 'wacked' } as unknown as FloatLayout;
 

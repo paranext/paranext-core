@@ -74,6 +74,8 @@ class CheckRunnerEngine
 
   // #region Checks
 
+  // getAvailableChecks doesn't use instance state but cannot be static because it implements the
+  // DataProviderEngine<CheckRunnerDataTypes> type
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getAvailableChecks(): Promise<CheckRunnerCheckDetails[]> {
     // Copy over check details to return
@@ -90,7 +92,8 @@ class CheckRunnerEngine
     return [...checks.values()];
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setAvailableChecks doesn't use instance state but cannot be static because it implements the
+  // DataProviderEngine<CheckRunnerDataTypes> contract
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setAvailableChecks(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
     throw new Error('setAvailableChecks disabled - use enableCheck and disableCheck');
@@ -160,10 +163,14 @@ class CheckRunnerEngine
 
   // #region Check Configuration Provider
 
+  // isCheckSetupForProject doesn't use instance state but cannot be static because it implements
+  // the CheckConfigurationProvider interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async isCheckSetupForProject(
+    // Parameters are required by the interface but unused since the method always throws.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _checkId: string,
+    // Second parameter also required by the interface but unused since the method always throws.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _projectId: string,
   ): Promise<boolean> {
@@ -326,7 +333,7 @@ class CheckRunnerEngine
           }
         });
       }
-      /* eslint-disable no-await-in-loop */
+      /* eslint-enable no-await-in-loop */
 
       // At this point we finished all checks in all ranges
       job.status = 'completed';

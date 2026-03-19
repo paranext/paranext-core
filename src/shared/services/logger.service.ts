@@ -26,6 +26,7 @@ if (!isRenderer()) {
   log.transports.console.writeFn = ({ message: msg }) => {
     const message = msg.data.join('\n');
 
+    // This write function IS the custom console transport implementation; direct `console` calls are intentional here.
     /* eslint-disable no-console */
     switch (msg.level) {
       case 'info':

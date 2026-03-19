@@ -157,7 +157,8 @@ export class ScriptureExtenderProjectDataProviderEngine
     return false;
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setVerseUSJ doesn't use instance state but cannot be static because it implements the
+  // IProjectDataProviderEngine interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setVerseUSJ(): Promise<DataProviderUpdateInstructions<USJVerseProjectInterfaceDataTypes>> {
     throw new Error('Cannot call setVerseUSJ, use setChapterUSJ or setBookUSJ instead');

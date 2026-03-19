@@ -157,6 +157,7 @@ const RESTART_WAIT_TIMEOUT_MS = 60000;
 /** Save the original `require` function. */
 const requireOriginal = Module.prototype.require;
 
+// `__non_webpack_require__` is a webpack-injected global that does not follow camelCase naming.
 // eslint-disable-next-line camelcase
 const systemRequire = globalThis.isPackaged ? __non_webpack_require__ : require;
 
@@ -1381,6 +1382,7 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   // eslint-disable-next-line no-restricted-syntax
   for (const extensionWithCheck of extensionsWithCheck) {
     try {
+      // Extensions must be activated in dependency order, so sequential awaiting is intentional.
       // eslint-disable-next-line no-await-in-loop
       const extension = await activateExtension(extensionWithCheck.extension);
       extensionsActive.push(extension);
@@ -1449,6 +1451,7 @@ async function deactivateExtensions(extensions: ExtensionInfo[]): Promise<void> 
       if (!activeExtension) {
         logger.error(`Cannot deactivate '${extension.name}' due to missing active extension data`);
       } else {
+        // Extensions must be deactivated in reverse activation order, so sequential awaiting is intentional.
         // eslint-disable-next-line no-await-in-loop
         const isDeactivated = await deactivateExtension(activeExtension);
         if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);

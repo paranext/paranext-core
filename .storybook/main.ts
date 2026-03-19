@@ -49,7 +49,8 @@ const config: StorybookConfig = {
         ? // Storybook is a build tool so this will not affect anything
           // eslint-disable-next-line global-require
           require('../.erb/configs/webpack.config.renderer.prod').default
-        : // eslint-disable-next-line global-require
+        : // Storybook is a build tool so this will not affect anything
+          // eslint-disable-next-line global-require
           require('../.erb/configs/webpack.config.renderer.dev').default;
     // Remove configs that break stuff (https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

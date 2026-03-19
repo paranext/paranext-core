@@ -16,5 +16,4 @@ const buildInfo = {
 fs.mkdirSync(path.dirname(buildInfoPath), { recursive: true });
 fs.writeFileSync(buildInfoPath, JSON.stringify(buildInfo));
 
-// eslint-disable-next-line no-console
 console.log(`Generated development buildInfo.json at ${buildInfoPath}`);

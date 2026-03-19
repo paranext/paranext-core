@@ -52,7 +52,8 @@ class MenuDataDataProviderEngine
     return this.mainMenu;
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setMainMenu doesn't use instance state but cannot be static because it implements the
+  // IDataProviderEngine<MenuDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setMainMenu(): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
     throw new Error('setMainMenu disabled');
@@ -63,7 +64,8 @@ class MenuDataDataProviderEngine
     return this.unlocalizedMainMenu;
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setUnlocalizedMainMenu doesn't use instance state but cannot be static because it implements
+  // the IDataProviderEngine<MenuDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setUnlocalizedMainMenu(): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
     throw new Error('setUnlocalizedMainMenu disabled');
@@ -78,7 +80,8 @@ class MenuDataDataProviderEngine
     return webViewMenu;
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setWebViewMenu doesn't use instance state but cannot be static because it implements the
+  // IDataProviderEngine<MenuDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setWebViewMenu(): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
     throw new Error('setWebViewMenu disabled');

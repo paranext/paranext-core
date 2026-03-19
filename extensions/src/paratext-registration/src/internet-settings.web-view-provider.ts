@@ -9,7 +9,8 @@ const titleKey = '%internetSettings_webView_title%';
 const tooltipKey = '%internetSettings_webView_tooltip%';
 
 export class InternetSettingsWebViewProvider implements IWebViewProvider {
-  // needs to be a class method, not static method
+  // getWebView doesn't use instance state but cannot be static because it implements the
+  // IWebViewProvider interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== internetSettingsWebViewType)

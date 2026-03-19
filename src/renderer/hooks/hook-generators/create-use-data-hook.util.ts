@@ -265,12 +265,14 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
         // If we have already generated the hook, return the cached version
         if (prop in useDataHooksForProvider)
           // Assert type of `prop` to index `useDataHooksForProvider`.
+          // TypeScript cannot narrow a Proxy `get` trap's `prop` to a known key without an assertion.
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           return useDataHooksForProvider[prop as keyof typeof useDataHooksForProvider];
 
         // Build a new useData hook
         if (!isString(prop)) throw new Error('Must provide a string to the useData hook proxy');
 
+        // `prop` is guaranteed to be a string by the check above; casting to the keyed type is safe here.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         const dataType = prop as keyof ExtractDataProviderDataTypes<TDataProvider>;
 

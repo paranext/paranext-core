@@ -1,3 +1,4 @@
+// Tests cast mock objects to interfaces and define multiple helper classes in a single file for conciseness.
 /* eslint-disable no-type-assertion/no-type-assertion, max-classes-per-file */
 
 import { vi } from 'vitest';

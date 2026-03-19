@@ -1,3 +1,5 @@
+// All exported types are intentionally typed as `any` since this is a stub shim to avoid typecheck
+// errors from vite's broken rollup types.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // vite is shimmed since we only use it for vitest and this excludes it from type checking. Note to

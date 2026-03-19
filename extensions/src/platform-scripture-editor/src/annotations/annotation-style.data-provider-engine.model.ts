@@ -103,6 +103,8 @@ export class AnnotationStyleDataProviderEngine
     return this.#latestStylesheet;
   }
 
+  // setAnnotationStylesheet doesn't use instance state but cannot be static because it implements
+  // the IDataProviderEngine<AnnotationStyleDataProviderDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setAnnotationStylesheet(): Promise<
     DataProviderUpdateInstructions<AnnotationStyleDataProviderDataTypes>

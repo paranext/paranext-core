@@ -1,3 +1,4 @@
+// This extension is not bundled by webpack, so `require` must be called dynamically at runtime.
 /* eslint-disable global-require */
 
 'use strict';

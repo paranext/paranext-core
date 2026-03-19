@@ -107,7 +107,8 @@ class CheckAggregatorDataProviderEngine
     return retVal;
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setAvailableChecks doesn't use instance state but cannot be static because it implements the
+  // DataProviderEngine<CheckRunnerDataTypes> contract
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setAvailableChecks(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
     throw new Error('Not supported on the check aggregator');

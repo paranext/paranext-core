@@ -371,7 +371,7 @@ const get = async <T extends object>(
     // If a property exists on the base object, we use it and won't look for it on the remote object.
     // If a property does not exist on the base object, it is assumed to exist on the remote object.
     const baseObject: Partial<T> = createLocalObjectToProxy
-      ? // Assert to specified generic type.
+      ? // The factory returns an untyped object that the caller guarantees satisfies `Partial<T>`.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         (createLocalObjectToProxy(id, networkObjectVariable.promise) as Partial<T>)
       : {};

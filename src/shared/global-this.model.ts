@@ -16,6 +16,7 @@ import {
  * (renderer), and extension-host.ts (extension host)
  */
 
+// `declare global` augmentation requires `var` declarations; TypeScript does not support `const`/`let` for global augmentation.
 /* eslint-disable vars-on-top, no-var */
 declare global {
   /** Type of process this is. Helps with running specific code based on which process you're in */
