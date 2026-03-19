@@ -23,6 +23,13 @@ export interface RecentSearchesProps<T> {
   id?: string;
   /** Class name for styling the `CommandItem` for each recent search result */
   classNameForItems?: string;
+  /**
+   * Class name for the trigger button. Defaults to absolute positioning inside an input field. Pass
+   * a custom value to render the button standalone (e.g. `"tw-h-9 tw-w-9"`)
+   */
+  buttonClassName?: string;
+  /** Variant for the trigger button. Defaults to `"ghost"` */
+  buttonVariant?: 'ghost' | 'outline' | 'default' | 'destructive' | 'secondary' | 'link';
 }
 
 /**
@@ -38,6 +45,8 @@ export default function RecentSearches<T>({
   groupHeading = 'Recent',
   id,
   classNameForItems,
+  buttonClassName = 'tw-absolute tw-right-0 tw-top-0 tw-h-full tw-px-3 tw-py-2',
+  buttonVariant = 'ghost',
 }: RecentSearchesProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -54,9 +63,9 @@ export default function RecentSearches<T>({
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="ghost"
+          variant={buttonVariant}
           size="icon"
-          className="tw-absolute tw-right-0 tw-top-0 tw-h-full tw-px-3 tw-py-2"
+          className={buttonClassName}
           aria-label={ariaLabel}
         >
           <Clock className="tw-h-4 tw-w-4" />
