@@ -69,6 +69,7 @@ import {
 import { SearchResultsInBook } from './find/search-results-in-book.component';
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
+  '%general_countOfTotal%',
   '%webView_find_allText%',
   '%webView_find_allText_tooltip%',
   '%webView_find_allowRegex%',
@@ -96,7 +97,6 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_restrictions_none%',
   '%webView_find_restrictions_startOfWord%',
   '%webView_find_restrictions_wholeWord%',
-  '%general_countOfTotal%',
   '%webView_find_result%',
   '%webView_find_searchPlaceholder%',
   '%webView_find_showing%',
