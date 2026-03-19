@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { newPlatformError, isPlatformError, PLATFORM_ERROR_VERSION } from './platform-error';
+import {
+  newPlatformError,
+  isPlatformError,
+  PLATFORM_ERROR_VERSION,
+  INVALID_ARGUMENT,
+  FAILED_PRECONDITION,
+  ABORTED,
+} from './platform-error';
 
 describe('newPlatformError', () => {
   it('should return an empty PlatformError when no argument is provided', () => {
@@ -101,5 +108,34 @@ describe('isPlatformError', () => {
     expect(isPlatformError(undefined)).toBe(false);
     expect(isPlatformError([])).toBe(false);
     expect(isPlatformError(1)).toBe(false);
+  });
+});
+
+describe('PlatformError code field', () => {
+  it('should allow setting code on a PlatformError created from a string', () => {
+    const error = newPlatformError('test error');
+    error.code = INVALID_ARGUMENT;
+    expect(error.code).toBe('INVALID_ARGUMENT');
+    expect(isPlatformError(error)).toBe(true);
+  });
+
+  it('should propagate code from Error-like objects that have a code property', () => {
+    const errorObj = { message: 'validation failed', code: FAILED_PRECONDITION };
+    const error = newPlatformError(errorObj);
+    expect(error.code).toBe('FAILED_PRECONDITION');
+    expect(isPlatformError(error)).toBe(true);
+  });
+
+  it('should include code in JSON.stringify output when set', () => {
+    const error = newPlatformError('test');
+    error.code = ABORTED;
+    const json = JSON.stringify(error);
+    expect(json).toContain('"code":"ABORTED"');
+  });
+
+  it('should not include code in JSON.stringify when not set', () => {
+    const error = newPlatformError('test');
+    const json = JSON.stringify(error);
+    expect(json).not.toContain('"code"');
   });
 });

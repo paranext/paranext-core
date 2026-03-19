@@ -91,46 +91,83 @@
             "command": "platform.openSettings"
           }
         ]
+      },
+      "contextMenu": {
+        "groups": {
+          "helloRock3.contextActions": {
+            "order": 1
+          },
+          "helloRock3.contextMoreActions": {
+            "order": 2,
+            "menuItem": "helloRock3.moreActionsSubmenu"
+          }
+        },
+        "items": [
+          {
+            "label": "%helloRock3_overlay_openEditor%",
+            "group": "helloRock3.contextActions",
+            "order": 1,
+            "command": "platformScriptureEditor.openScriptureEditor"
+          },
+          {
+            "id": "helloRock3.moreActionsSubmenu",
+            "label": "%helloRock3_overlay_moreActions%",
+            "group": "helloRock3.contextActions",
+            "order": 2
+          },
+          {
+            "label": "%helloRock3_overlay_sayHello%",
+            "group": "helloRock3.contextMoreActions",
+            "order": 1,
+            "command": "helloRock3.helloRock3"
+          },
+          {
+            "label": "%helloRock3_overlay_showAlert%",
+            "group": "helloRock3.contextMoreActions",
+            "order": 2,
+            "command": "helloRock3.showContextMenuAlert"
+          }
+        ]
       }
-    }
-  },
-  "helloRock3.react": {
-    "topMenu": {
-      "columns": {
-        "helloRock3.project": {
-          "label": "%helloRock3_webViewMenu_project%",
-          "order": 1
-        }
-      },
-      "groups": {
-        "helloRock3.projectGroup": {
-          "column": "helloRock3.project",
-          "order": 1
-        }
-      },
-      "items": [
-        {
-          "label": "%mainMenu_openHelloRock3Project%",
-          "localizeNotes": "Application main menu > Project > Hello Rock3 Projects > Open Hello Rock3 Project",
-          "group": "helloRock3.projectGroup",
-          "order": 1,
-          "command": "helloRock3.openProject"
+    },
+    "helloRock3.react": {
+      "topMenu": {
+        "columns": {
+          "helloRock3.project": {
+            "label": "%helloRock3_webViewMenu_project%",
+            "order": 1
+          }
         },
-        {
-          "label": "%mainMenu_createNewHelloRock3Project%",
-          "localizeNotes": "Application main menu > Project > Hello Rock3 Projects > Create New Hello Rock3 Project",
-          "group": "helloRock3.projectGroup",
-          "order": 2,
-          "command": "helloRock3.createNewProject"
+        "groups": {
+          "helloRock3.projectGroup": {
+            "column": "helloRock3.project",
+            "order": 1
+          }
         },
-        {
-          "label": "%mainMenu_deleteHelloRock3Project%",
-          "localizeNotes": "Application main menu > Project > Hello Rock3 Projects > Delete Hello Rock3 Project",
-          "group": "helloRock3.projectGroup",
-          "order": 3,
-          "command": "helloRock3.deleteProject"
-        }
-      ]
+        "items": [
+          {
+            "label": "%mainMenu_openHelloRock3Project%",
+            "localizeNotes": "Application main menu > Project > Hello Rock3 Projects > Open Hello Rock3 Project",
+            "group": "helloRock3.projectGroup",
+            "order": 1,
+            "command": "helloRock3.openProject"
+          },
+          {
+            "label": "%mainMenu_createNewHelloRock3Project%",
+            "localizeNotes": "Application main menu > Project > Hello Rock3 Projects > Create New Hello Rock3 Project",
+            "group": "helloRock3.projectGroup",
+            "order": 2,
+            "command": "helloRock3.createNewProject"
+          },
+          {
+            "label": "%mainMenu_deleteHelloRock3Project%",
+            "localizeNotes": "Application main menu > Project > Hello Rock3 Projects > Delete Hello Rock3 Project",
+            "group": "helloRock3.projectGroup",
+            "order": 3,
+            "command": "helloRock3.deleteProject"
+          }
+        ]
+      }
     }
   }
 }

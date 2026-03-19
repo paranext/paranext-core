@@ -3,7 +3,7 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 import { cn } from '@/utils/shadcn-ui.util';
-import { Z_INDEX_ABOVE_DOCK } from '../z-index';
+import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 
 /**
  * The Popover component displays rich content in a portal, triggered by a button. This popover is
