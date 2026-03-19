@@ -122,6 +122,7 @@ export const Rating: Story = {
           <span className="tw-text-sm tw-font-medium">{rating}</span>
           <div className="tw-flex">
             {[...Array(stars)].map((_, i) => (
+              // Stars are generated from count; index is the only meaningful key here
               // eslint-disable-next-line react/no-array-index-key
               <Star key={i} className="tw-h-4 tw-w-4 tw-fill-yellow-400 tw-text-yellow-400" />
             ))}
@@ -129,6 +130,7 @@ export const Rating: Story = {
               <Star className="tw-h-4 tw-w-4 tw-fill-yellow-400/50 tw-text-yellow-400" />
             )}
             {[...Array(5 - Math.ceil(rating))].map((_, i) => (
+              // Empty stars generated from count; index is the only meaningful key here
               // eslint-disable-next-line react/no-array-index-key
               <Star key={`empty-${i}`} className="tw-h-4 tw-w-4 tw-text-gray-300" />
             ))}
@@ -157,6 +159,7 @@ export const StatusIndicator: Story = {
         busy: { color: 'tw-bg-red-500', text: 'Busy', textColor: 'tw-text-red-700' },
       };
 
+      // item comes from the story args as a generic string; cast is needed to index statusConfig
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const config = statusConfig[item as keyof typeof statusConfig] || statusConfig.offline;
 
@@ -193,6 +196,7 @@ export const FileType: Story = {
         png: { color: 'tw-bg-green-100 tw-text-green-800', label: 'PNG' },
       };
 
+      // extension comes from the story args as a generic string; cast is needed to index typeConfig
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const config = typeConfig[extension as keyof typeof typeConfig] || {
         color: 'tw-bg-gray-100 tw-text-gray-800',
@@ -298,6 +302,7 @@ export const PriorityTransformation: Story = {
         high: '🔴 High Priority',
         urgent: '🚨 Urgent Priority',
       };
+      // item comes from the story args as a generic string; cast is needed to index priorities
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       return priorities[item as keyof typeof priorities] || `❓ ${item} Priority`;
     },

@@ -1,3 +1,4 @@
+// Multiple combiner implementations are defined in this test file for different test scenarios
 /* eslint-disable max-classes-per-file */
 
 import { vi } from 'vitest';
@@ -244,6 +245,7 @@ test('Can handle various empty contributions', () => {
 
 test('Validation checking works', () => {
   expect(() => {
+    // Constructor throws; the return value is intentionally unused - only the throw matters
     // eslint-disable-next-line no-new
     new AlwaysThrowingCombiner({});
   }).toThrow();
@@ -253,6 +255,7 @@ test('Validation checking works', () => {
   expect(() => combiner.addOrUpdateContribution('A', {})).toThrow();
 
   expect(() => {
+    // Constructor throws; the return value is intentionally unused - only the throw matters
     // eslint-disable-next-line no-new
     new OutputThrowingCombiner({});
   }).toThrow();

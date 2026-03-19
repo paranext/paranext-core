@@ -138,8 +138,10 @@ export default function FootnoteEditor({
   // These refs must have default values of `null` to be accepted by the React elements as refs
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+  // Refs must default to null to be accepted as element refs
   // eslint-disable-next-line no-null/no-null
   const editorParentRef = useRef<HTMLDivElement>(null);
+  // Ref must default to null to be accepted as an element ref
   // eslint-disable-next-line no-null/no-null
   const outerBorderRef = useRef<HTMLDivElement>(null);
 

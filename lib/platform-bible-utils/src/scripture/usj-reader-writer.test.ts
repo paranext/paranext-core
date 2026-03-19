@@ -1,9 +1,7 @@
+// Disabling no-useless-escape: raw USFM/USJ test data has useless escapes and fewer manual edits is better.
+// Disabling no-irregular-whitespace: test data includes irregular whitespace that we test on purpose.
+// Disabling camelcase and naming-convention: test data uses 3_1 to indicate USFM 3.1.
 /* eslint-disable no-useless-escape, no-irregular-whitespace, camelcase, @typescript-eslint/naming-convention */
-// Need to disable no-useless-escape because there are some useless escapes in the raw USFM and USJ
-// data, and it's better to do fewer manual edits.
-// Need to disable no-irregular-whitespace because the test data includes irregular whitespace that
-// we are testing on purpose.
-// Disabling camelcase and @typescript-eslint/naming-convention so we can use 3_1 indicating USFM 3.1
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import fs from 'fs';

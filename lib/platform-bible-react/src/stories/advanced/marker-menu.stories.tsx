@@ -48,18 +48,21 @@ export const Default: Story = {
         marker: 'p',
         title: 'Paragraph',
         subtitle: 'normal (with indent first line)',
+        // Story action callback - alert is intentional to demonstrate marker selection feedback
         // eslint-disable-next-line no-alert
         action: () => alert('Paragraph marker selected!'),
       },
       {
         icon: ClipboardPaste,
         title: 'Paste',
+        // Story action callback - alert is intentional to demonstrate command selection feedback
         // eslint-disable-next-line no-alert
         action: () => alert('Paste command selected!'),
       },
       {
         icon: ClipboardPaste,
         title: 'Paste as plaintext',
+        // Story action callback - alert is intentional to demonstrate command selection feedback
         // eslint-disable-next-line no-alert
         action: () => alert('Past as plaintext selected!'),
       },
@@ -67,6 +70,7 @@ export const Default: Story = {
         marker: 'pi',
         title: 'Indented Paragraph',
         subtitle: 'indent level 1 (with first line indent)',
+        // Story action callback - alert is intentional to demonstrate marker selection feedback
         // eslint-disable-next-line no-alert
         action: () => alert('Indented Paragraph marker selected!'),
         isDisallowed: true,
@@ -74,6 +78,7 @@ export const Default: Story = {
       {
         marker: 'ph',
         title: 'Indented paragraph with hanging indent',
+        // Story action callback - alert is intentional to demonstrate marker selection feedback
         // eslint-disable-next-line no-alert
         action: () => alert('Indented paragraph with hanging indent marker selected!'),
         isDeprecated: true,

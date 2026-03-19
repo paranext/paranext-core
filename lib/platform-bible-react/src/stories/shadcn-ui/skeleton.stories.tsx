@@ -91,6 +91,7 @@ export const List: Story = {
   render: () => (
     <div className="tw-space-y-3">
       {Array.from({ length: 5 }).map((_, i) => (
+        // Items generated from a count; index is the only meaningful key here
         // eslint-disable-next-line react/no-array-index-key
         <div key={`skeleton-item-${i}`} className="tw-flex tw-items-center tw-space-x-3">
           <Skeleton className="tw-h-10 tw-w-10 tw-rounded-full" />

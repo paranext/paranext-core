@@ -212,6 +212,7 @@ export const InlineErrorIndicator: Story = {
       <h3 className="tw-text-lg tw-font-semibold">User Registration Form</h3>
       <div className="tw-grid tw-grid-cols-2 tw-gap-4">
         <div>
+          {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
           <label className="tw-block tw-text-sm tw-font-medium">First Name</label>
           <input
@@ -221,6 +222,7 @@ export const InlineErrorIndicator: Story = {
           />
         </div>
         <div>
+          {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
           <label className="tw-block tw-text-sm tw-font-medium">Last Name</label>
           <input
@@ -231,6 +233,7 @@ export const InlineErrorIndicator: Story = {
         </div>
         <div className="tw-col-span-2">
           <div className="tw-flex tw-items-center tw-gap-2">
+            {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
             {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
             <label className="tw-block tw-text-sm tw-font-medium">Email Address</label>
             <ErrorPopover {...args}>

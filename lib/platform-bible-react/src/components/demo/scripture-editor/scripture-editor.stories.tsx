@@ -52,6 +52,7 @@ This demo version is included in Storybook to showcase the component's functiona
     ref: {
       control: 'object',
       description: 'Reference to the editor instance',
+      // Storybook argType defaultValue must be null for a ref
       // eslint-disable-next-line no-null/no-null
       defaultValue: null,
     },
@@ -149,17 +150,20 @@ function handleAnnotationOnClick(
   id: string,
   textContent: string,
 ) {
+  // Story callback - logging to console is intentional for demonstrating annotation events
   // eslint-disable-next-line no-console
   console.log('handleAnnotationOnClick', { event, type, id, textContent });
 }
 
 function handleAnnotationOnRemove(type: string, id: string, cause: string, textContent: string) {
+  // Story callback - logging to console is intentional for demonstrating annotation events
   // eslint-disable-next-line no-console
   console.log('handleAnnotationOnRemove', { type, id, cause, textContent });
 }
 
 export const Annotated: Story = {
   render: (args) => {
+    // Ref must default to null to be accepted by React as an element ref
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
 
@@ -222,6 +226,7 @@ const customNodeOptions: EditorOptions = {
   nodes: {
     noteCallers: ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'],
     noteCallerOnClick: (event, noteNodeKey, isCollapsed, getCaller, setCaller, getNoteOps) => {
+      // Story demo callback - console.log and alert are intentional to show the click handler
       // eslint-disable-next-line no-console
       console.log(
         'Note caller clicked:',
@@ -232,6 +237,7 @@ const customNodeOptions: EditorOptions = {
         setCaller,
         getNoteOps,
       );
+      // Story demo callback - alert is intentional to show the click handler
       // eslint-disable-next-line no-alert
       alert('Note caller clicked! Check console for details.');
     },
@@ -280,6 +286,7 @@ export const CustomMarkerTrigger: Story = {
 
 export const FootnoteEditorView: Story = {
   render: (args) => {
+    // Ref must default to null to be accepted by React as an element ref
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
 

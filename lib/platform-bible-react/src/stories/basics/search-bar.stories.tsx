@@ -164,11 +164,13 @@ export const Variants: Story = {
     return (
       <div className="tw-space-y-4">
         <div>
+          {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
           <label className="tw-mb-2 tw-block tw-text-sm tw-font-medium">Default Search</label>
           <SearchBar value={query1} onSearch={setQuery1} placeholder="Search..." />
         </div>
         <div>
+          {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
           <label className="tw-mb-2 tw-block tw-text-sm tw-font-medium">Full Width Search</label>
           <SearchBar
@@ -179,6 +181,7 @@ export const Variants: Story = {
           />
         </div>
         <div>
+          {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
           <label className="tw-mb-2 tw-block tw-text-sm tw-font-medium">Disabled Search</label>
           <SearchBar value={query3} onSearch={setQuery3} placeholder="Disabled..." isDisabled />

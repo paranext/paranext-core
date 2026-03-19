@@ -1,3 +1,6 @@
+// This test file necessarily contains directive text (prettier-ignore, stylelint-disable, etc.)
+// as description comments and string fixtures — disabling the rule file-wide is correct here.
+/* eslint-disable paranext/require-disable-comment */
 import rule from './require-disable-comment';
 import { ruleTester } from '../test.utils';
 
@@ -91,6 +94,83 @@ console.log('x'); // eslint-disable-line no-console
 const cls = 'myClass'; // stylelint-disable-line selector-class-pattern
       `,
     },
+    // valid: @ts-expect-error with explanatory comment on line above
+    {
+      code: `
+// TypeScript doesn't narrow the type correctly in this branch
+// @ts-expect-error ts(2322)
+const x: string = getValue();
+      `,
+    },
+    // valid: @ts-ignore with explanatory comment on line above
+    {
+      code: `
+// Third-party types are incomplete for this method
+// @ts-ignore
+externalLib.undocumentedMethod();
+      `,
+    },
+    // valid: @ts-nocheck with explanatory comment on line above
+    {
+      code: `
+// This file is auto-generated and should not be type-checked
+// @ts-nocheck
+      `,
+    },
+    // valid: @ts-expect-error with inline explanation (no preceding comment needed)
+    {
+      code: `
+// @ts-expect-error we want to remove Function because it can create code from strings
+delete globalThis.Function;
+      `,
+    },
+    // valid: @ts-ignore with inline explanation
+    {
+      code: `
+// @ts-ignore TypeScript pretends it can't find 'selector', but it works just fine
+const sel = hook.selector;
+      `,
+    },
+    // valid: @ts-expect-error with inline explanation after error code
+    {
+      code: `
+// @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function
+mockFn.mockReturnValue(42);
+      `,
+    },
+    // valid: @ts-ignore with colon-prefixed inline explanation
+    {
+      code: `
+// @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
+import something from '@papi/core';
+      `,
+    },
+    // valid: @ts-expect-error with inline explanation above eslint-disable (consecutive group)
+    {
+      code: `
+// @ts-expect-error we want to remove eval because it can create code from strings
+// eslint-disable-next-line no-eval
+delete globalThis.eval;
+      `,
+    },
+    // Comment above a group of @ts-ignore + eslint-disable
+    {
+      code: `
+// This will be needed later for disposing of the network object
+// @ts-ignore 6133
+// eslint-disable-next-line no-unused-vars
+const disposer = createNetworkObject();
+      `,
+    },
+    // Comment above two stacked eslint-disable-next-line directives
+    {
+      code: `
+// Explanation covering both disables
+// eslint-disable-next-line no-console
+// eslint-disable-next-line no-debugger
+debugger;
+      `,
+    },
   ],
   invalid: [
     // invalid: eslint-disable-next-line with no comment above
@@ -162,6 +242,43 @@ debugger;
 
 // eslint-disable-next-line no-console
 console.log('x');
+      `,
+      errors: [{ messageId: 'missingExplanation' }],
+    },
+    // invalid: @ts-expect-error with only an error code (not a real explanation)
+    {
+      code: `
+// @ts-expect-error ts(2322)
+const x: string = getValue();
+      `,
+      errors: [{ messageId: 'missingExplanation' }],
+    },
+    // invalid: @ts-expect-error bare with no explanation at all
+    {
+      code: `
+// @ts-expect-error
+const x: string = getValue();
+      `,
+      errors: [{ messageId: 'missingExplanation' }],
+    },
+    // invalid: @ts-ignore bare with no comment above
+    {
+      code: `
+// @ts-ignore
+externalLib.undocumentedMethod();
+      `,
+      errors: [{ messageId: 'missingExplanation' }],
+    },
+    // invalid: @ts-nocheck bare with no comment above
+    {
+      code: `// @ts-nocheck`,
+      errors: [{ messageId: 'missingExplanation' }],
+    },
+    // invalid: @ts-expect-error with only a numeric error code (not a real explanation)
+    {
+      code: `
+// @ts-expect-error 2322
+const x: string = getValue();
       `,
       errors: [{ messageId: 'missingExplanation' }],
     },

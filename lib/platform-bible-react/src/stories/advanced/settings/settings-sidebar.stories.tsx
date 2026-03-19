@@ -310,6 +310,7 @@ export const InteractiveDemo: Story = {
                   <div className="tw-text-sm tw-text-muted-foreground">No selections yet</div>
                 ) : (
                   selectionHistory.map((selection, index) => (
+                    // Items have no stable unique id; index is the only available key
                     // eslint-disable-next-line react/no-array-index-key
                     <div key={index} className="tw-flex tw-items-center tw-gap-2 tw-text-sm">
                       <span className="tw-flex tw-h-4 tw-w-4 tw-items-center tw-justify-center tw-rounded tw-bg-blue-100 tw-text-xs tw-text-blue-800">

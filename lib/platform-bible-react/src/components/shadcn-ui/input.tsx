@@ -25,6 +25,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           className,
         )}
         ref={ref}
+        // Shadcn UI pattern: spreading props onto the element is necessary to forward all HTML attributes
         // eslint-disable-next-line react/jsx-props-no-spreading
         {...props}
       />

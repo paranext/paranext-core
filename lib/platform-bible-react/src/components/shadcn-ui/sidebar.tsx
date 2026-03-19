@@ -140,6 +140,7 @@ const SidebarProvider = React.forwardRef<
         <TooltipProvider delayDuration={0}>
           <div
             style={
+              // CSS custom properties are not in React.CSSProperties; cast is required to use them
               // eslint-disable-next-line no-type-assertion/no-type-assertion
               {
                 '--sidebar-width': SIDEBAR_WIDTH,
@@ -557,6 +558,7 @@ const SidebarMenuButton = React.forwardRef<
     }
 
     if (typeof tooltip === 'string') {
+      // Normalizing the string tooltip to an object shape; reassignment is the clearest approach here
       // eslint-disable-next-line no-param-reassign
       tooltip = {
         children: tooltip,
@@ -652,6 +654,7 @@ const SidebarMenuSkeleton = React.forwardRef<
         className="tw-h-4 tw-max-w-[--skeleton-width] tw-flex-1"
         data-sidebar="menu-skeleton-text"
         style={
+          // CSS custom property '--skeleton-width' is not in React.CSSProperties; cast is required
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           {
             '--skeleton-width': width,
