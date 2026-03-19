@@ -23,7 +23,7 @@
   "%extension_failed_to_start%": "Extension failed to start: {extensionName}",
   "%general_button_submit%": "Submit",
   "%general_cancel%": "Cancel",
-  "%general_currentOfTotal%": "{current} of {total}",
+  "%general_countOfTotal%": "{count} of {total}",
   "%general_error_title%": "Error",
   "%general_loading%": "Loading",
   "%general_open%": "Open",
