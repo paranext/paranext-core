@@ -43,6 +43,7 @@ import {
   useRecentSearches,
 } from 'platform-bible-react';
 import {
+  debounce,
   formatReplacementString,
   getErrorMessage,
   groupBy,
@@ -95,8 +96,8 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_restrictions_none%',
   '%webView_find_restrictions_startOfWord%',
   '%webView_find_restrictions_wholeWord%',
+  '%general_currentOfTotal%',
   '%webView_find_result%',
-  '%webView_find_resultNavigation%',
   '%webView_find_searchPlaceholder%',
   '%webView_find_showing%',
   '%webView_find_showingResults%',
@@ -437,7 +438,9 @@ global.webViewComponent = function FindWebView({
   }, [scope, selectedBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
 
   const isStartingSearchRef = useRef(false);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const debouncedHandleStartSearch = useRef(
+    debounce(() => handleStartSearchRef.current(), SEARCH_DEBOUNCE_DELAY_MS),
+  );
   // Tracks the index of the result that was just replaced so the auto-select effect can advance
   // focus to the next result instead of jumping back to the first.
   const pendingAdvanceIndexRef = useRef<number | undefined>(undefined);
@@ -447,7 +450,6 @@ global.webViewComponent = function FindWebView({
 
   const handleStartSearch = useCallback(
     async (isExplicitSearch = false) => {
-      clearTimeout(searchDebounceRef.current);
       if (!isSearchQueryValid || !findPdp || isStartingSearchRef.current) return;
 
       // Set the flag to prevent concurrent calls
@@ -728,10 +730,7 @@ global.webViewComponent = function FindWebView({
       isInitialAutoSearchRef.current = false;
       return undefined;
     }
-    searchDebounceRef.current = setTimeout(() => {
-      handleStartSearchRef.current();
-    }, SEARCH_DEBOUNCE_DELAY_MS);
-    return () => clearTimeout(searchDebounceRef.current);
+    debouncedHandleStartSearch.current();
   }, [
     searchTerm,
     shouldMatchCase,
@@ -1177,7 +1176,7 @@ global.webViewComponent = function FindWebView({
           {visibleResults.length > 0 && (
             <div className="tw-flex tw-items-center tw-gap-1">
               <span className="tw-text-sm tw-text-muted-foreground tw-tabular-nums">
-                {formatReplacementString(localizedStrings['%webView_find_resultNavigation%'], {
+                {formatReplacementString(localizedStrings['%general_currentOfTotal%'], {
                   current: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',
                   total: String(visibleResults.length),
                 })}
