@@ -309,6 +309,13 @@ export default function FootnoteEditor({
     onClose();
   }, [callerType, customCaller, onClose, saveCurrentNoteOp]);
 
+  // Keep a stable ref to closeAndSave so the chapter-change effect below only needs to depend on
+  // scrRef.book and scrRef.chapterNum (not on caller state that changes during editing).
+  const closeAndSaveRef = useRef(closeAndSave);
+  useLayoutEffect(() => {
+    closeAndSaveRef.current = closeAndSave;
+  });
+
   // Close when the book or chapter changes — verse changes don't require closing.
   // useLayoutEffect runs before useEffect, so the save via replaceEmbedUpdate (which is a
   // synchronous discrete Lexical update) completes before the parent editor's useEffect loads
@@ -320,9 +327,9 @@ export default function FootnoteEditor({
       prevScrRefBookChapter.current.chapterNum !== scrRef.chapterNum
     ) {
       prevScrRefBookChapter.current = { book: scrRef.book, chapterNum: scrRef.chapterNum };
-      closeAndSave();
+      closeAndSaveRef.current();
     }
-  }, [closeAndSave, scrRef.book, scrRef.chapterNum]);
+  }, [scrRef.book, scrRef.chapterNum]);
 
   const handleCopy = () => {
     const editorInput = editorParentRef.current?.getElementsByClassName('editor-input')[0];
