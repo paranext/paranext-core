@@ -304,8 +304,8 @@ export const FootnoteEditorView: FootnoteEditorViewStory = {
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
 
-    const noteKey = useRef<string>();
-    const noteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+    const noteKey = useRef<string | undefined>(undefined);
+    const noteOps = useRef<DeltaOpInsertNoteEmbed[] | undefined>(undefined);
 
     const [popoverX, setPopoverX] = useState<number>();
     const [popoverY, setPopoverY] = useState<number>();

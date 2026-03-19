@@ -224,8 +224,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
 
-  const editingNoteKey = useRef<string>();
-  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+  const editingNoteKey = useRef<string | undefined>(undefined);
+  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[] | undefined>(undefined);
   /** True when the footnote editor was opened for a newly inserted note (not an existing one) */
   const editingNoteIsNew = useRef(false);
 

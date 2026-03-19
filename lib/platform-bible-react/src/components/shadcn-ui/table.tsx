@@ -139,7 +139,7 @@ const TableFooter = React.forwardRef<
 TableFooter.displayName = 'TableFooter';
 
 // CUSTOM: Manage keyboard navigation and Enter key behavior for focusable elements in a row
-function useFocusableInRowKeyboardNavigation(rowRef: React.RefObject<HTMLTableRowElement>) {
+function useFocusableInRowKeyboardNavigation(rowRef: React.RefObject<HTMLTableRowElement | null>) {
   React.useEffect(() => {
     const row = rowRef.current;
     if (!row) return;

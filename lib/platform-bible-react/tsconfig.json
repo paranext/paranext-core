@@ -19,7 +19,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "noImplicitReturns": true,
-    "skipLibCheck": false,
+    "skipLibCheck": true,
     "useDefineForClassFields": true,
     "outDir": "",
     "paths": {

@@ -160,7 +160,7 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
   const [showInvalidCode, setShowInvalidCode] = useState(false);
   const [registrationIsValid, setRegistrationIsValid] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const validationTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const validationTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // If the app just got done with restarting, then changes the save state to `HasSaved`
   useEffect(() => {
