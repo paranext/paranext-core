@@ -1943,8 +1943,11 @@ video:where(.pr-twp,.pr-twp *) {
 .tw-grow {
   flex-grow: 1;
 }
-.tw-grow-\\[2\\] {
-  flex-grow: 2;
+.tw-grow-\\[10\\] {
+  flex-grow: 10;
+}
+.tw-grow-\\[1\\] {
+  flex-grow: 1;
 }
 .tw-basis-0 {
   flex-basis: 0px;
@@ -2169,6 +2172,9 @@ video:where(.pr-twp,.pr-twp *) {
 .tw-gap-\\[12px\\] {
   gap: 12px;
 }
+.tw-gap-x-1 {
+  column-gap: 0.25rem;
+}
 .tw-gap-x-2 {
   column-gap: 0.5rem;
 }
@@ -2180,6 +2186,9 @@ video:where(.pr-twp,.pr-twp *) {
 }
 .tw-gap-y-1 {
   row-gap: 0.25rem;
+}
+.tw-gap-y-2 {
+  row-gap: 0.5rem;
 }
 .tw-space-x-1 > :not([hidden]) ~ :not([hidden]) {
   --tw-space-x-reverse: 0;
@@ -3241,18 +3250,6 @@ video:where(.pr-twp,.pr-twp *) {
 .tw-ease-linear {
   animation-timing-function: linear;
 }
-.tw-\\@container\\/tab-toolbar-center {
-  container-type: inline-size;
-  container-name: tab-toolbar-center;
-}
-.tw-\\@container\\/tab-toolbar-end {
-  container-type: inline-size;
-  container-name: tab-toolbar-end;
-}
-.tw-\\@container\\/tab-toolbar-start {
-  container-type: inline-size;
-  container-name: tab-toolbar-start;
-}
 .tw-\\@container\\/toolbar {
   container-type: inline-size;
   container-name: toolbar;
@@ -3943,10 +3940,6 @@ video:where(.pr-twp,.pr-twp *) {
   min-height: calc(100svh - 1rem);
 }
 @container (min-width: 24rem) {
-
-  .\\@sm\\:tw-grow {
-    flex-grow: 1;
-  }
 
   .\\@sm\\:tw-basis-auto {
     flex-basis: auto;
