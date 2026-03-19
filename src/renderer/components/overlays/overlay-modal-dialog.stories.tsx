@@ -1,9 +1,9 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
-import { OverlayModalDialog } from '@/components/advanced/overlays/overlay-modal-dialog.component';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { OverlayModalDialogPresentational } from './overlay-modal-dialog.component';
 
-const meta: Meta<typeof OverlayModalDialog> = {
+const meta: Meta<typeof OverlayModalDialogPresentational> = {
   title: 'Advanced/OverlayModalDialog',
-  component: OverlayModalDialog,
+  component: OverlayModalDialogPresentational,
   tags: ['autodocs'],
   parameters: {
     docs: {
@@ -20,7 +20,7 @@ const meta: Meta<typeof OverlayModalDialog> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof OverlayModalDialog>;
+type Story = StoryObj<typeof OverlayModalDialogPresentational>;
 
 export const AlertBasic: Story = {
   args: {

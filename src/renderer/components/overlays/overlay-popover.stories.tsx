@@ -1,15 +1,15 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
-import { OverlayPopover } from '@/components/advanced/overlays/overlay-popover.component';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { OverlayPopoverPresentational } from './overlay-popover.component';
 
-const meta: Meta<typeof OverlayPopover> = {
+const meta: Meta<typeof OverlayPopoverPresentational> = {
   title: 'Advanced/OverlayPopover',
-  component: OverlayPopover,
+  component: OverlayPopoverPresentational,
   tags: ['autodocs'],
   parameters: {
     docs: {
       description: {
         component:
-          'A popover component anchored to a position. Supports text, list, description, rich text, and card content types.',
+          'A popover component anchored to a position. Supports text, markdown, and card content types.',
       },
     },
   },
@@ -21,7 +21,7 @@ const meta: Meta<typeof OverlayPopover> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof OverlayPopover>;
+type Story = StoryObj<typeof OverlayPopoverPresentational>;
 
 export const TextContent: Story = {
   args: {
@@ -33,41 +33,31 @@ export const TextContent: Story = {
   },
 };
 
-export const ListContent: Story = {
+export const MarkdownContent: Story = {
   args: {
     content: {
-      type: 'list',
-      title: 'References',
-      items: ['Genesis 1:1', 'Exodus 20:3', 'Psalm 23:1', 'John 3:16'],
+      type: 'markdown',
+      markdown:
+        '# Formatted Text\n\nIn the beginning **God** created the heavens and the earth. *(Gen 1:1)*',
     },
   },
 };
 
-export const DescriptionContent: Story = {
+export const MarkdownList: Story = {
   args: {
     content: {
-      type: 'description',
-      title: 'Word Details',
-      entries: [
-        { term: 'Lemma', detail: 'logos' },
-        { term: 'Gloss', detail: 'word, speech, account' },
-        { term: 'Occurrences', detail: '330' },
-      ],
+      type: 'markdown',
+      markdown: '# References\n\n- Genesis 1:1\n- Exodus 20:3\n- Psalm 23:1\n- John 3:16',
     },
   },
 };
 
-export const RichTextContent: Story = {
+export const MarkdownDescription: Story = {
   args: {
     content: {
-      type: 'richText',
-      title: 'Formatted Text',
-      body: [
-        { text: 'In the beginning ' },
-        { text: 'God', bold: true },
-        { text: ' created the heavens and the earth. ' },
-        { text: '(Gen 1:1)', italic: true, scriptureRef: true },
-      ],
+      type: 'markdown',
+      markdown:
+        '# Word Details\n\n**Lemma**: logos\n\n**Gloss**: word, speech, account\n\n**Occurrences**: 330',
     },
   },
 };

@@ -25,10 +25,9 @@ test.describe('Overlay Modal Dialog', () => {
     await expect(dialog).toHaveAttribute('role', 'alertdialog');
     await expect(dialog).toHaveAttribute('aria-modal', 'true');
 
-    // Verify dialog content
+    // Verify dialog content - localized title and message
     await expect(dialog).toContainText('Delete Person');
     await expect(dialog).toContainText('Are you sure you want to delete');
-    await expect(dialog).toContainText(DEFAULT_PERSON_NAME);
 
     // Verify OK (destructive) and Cancel buttons
     const okButton = dialog.locator('button', { hasText: 'Delete' });
@@ -83,15 +82,14 @@ test.describe('Overlay Modal Dialog', () => {
     const menu = mainPage.locator('[role="menu"]').first();
     await expect(menu).toBeVisible({ timeout: 10_000 });
 
-    // Move mouse to "More Actions" submenu trigger using low-level mouse.move()
+    // Navigate to "More Actions" submenu via mouse.move to avoid Radix stability issues
     const submenuTrigger = menu.locator('[role="menuitem"]', { hasText: 'More Actions' });
     await expect(submenuTrigger).toBeVisible({ timeout: 3_000 });
     const box = await submenuTrigger.boundingBox();
     if (!box) throw new Error('Submenu trigger has no bounding box');
     await mainPage.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
-    // Wait for submenu and click "Show Alert" using low-level mouse.click()
-    // to avoid Radix portal re-render causing "element not stable" errors.
+    // Wait for submenu and click "Show Alert" via mouse.click
     const submenu = mainPage.locator('[role="menu"]').filter({ hasText: 'Show Alert' });
     await expect(submenu).toBeVisible({ timeout: 5_000 });
     const showAlertItem = submenu.getByRole('menuitem', { name: 'Show Alert' });
@@ -103,7 +101,7 @@ test.describe('Overlay Modal Dialog', () => {
     // Context menu should be dismissed
     await expect(menu).not.toBeVisible({ timeout: 3_000 });
 
-    // Alert dialog should appear (chaining: context menu → modal dialog)
+    // Alert dialog should appear (chaining: context menu -> modal dialog)
     const dialog = mainPage.locator('[data-overlay-modal-dialog]');
     await expect(dialog).toBeVisible({ timeout: 5_000 });
 

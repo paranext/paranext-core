@@ -104,30 +104,6 @@ export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
-export {
-  OverlayContextMenu,
-  type OverlayContextMenuItem,
-  type OverlayContextMenuResult,
-  type OverlayContextMenuProps,
-} from './components/advanced/overlays/overlay-context-menu.component';
-export {
-  OverlayModalDialog,
-  type OverlayModalDialogType,
-  type OverlayModalDialogOptions,
-  type OverlayModalDialogProps,
-} from './components/advanced/overlays/overlay-modal-dialog.component';
-export {
-  OverlayPopover,
-  type OverlayPopoverAction,
-  type OverlayRichTextRun,
-  type OverlayPopoverContent,
-  type OverlayPopoverProps,
-} from './components/advanced/overlays/overlay-popover.component';
-export {
-  OverlayCommandPalette,
-  type OverlayCommandPaletteItem,
-  type OverlayCommandPaletteProps,
-} from './components/advanced/overlays/overlay-command-palette.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
   default as SettingsSidebar,
@@ -223,6 +199,18 @@ export {
   CommandList,
 } from './components/shadcn-ui/command';
 export * from './components/shadcn-ui/context-menu';
+export {
+  Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogClose,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from './components/shadcn-ui/dialog';
 export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
