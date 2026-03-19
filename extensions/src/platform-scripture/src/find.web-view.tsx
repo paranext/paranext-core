@@ -438,9 +438,6 @@ global.webViewComponent = function FindWebView({
   }, [scope, selectedBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
 
   const isStartingSearchRef = useRef(false);
-  const debouncedHandleStartSearch = useRef(
-    debounce(() => handleStartSearchRef.current(), SEARCH_DEBOUNCE_DELAY_MS),
-  );
   // Tracks the index of the result that was just replaced so the auto-select effect can advance
   // focus to the next result instead of jumping back to the first.
   const pendingAdvanceIndexRef = useRef<number | undefined>(undefined);
@@ -723,6 +720,9 @@ global.webViewComponent = function FindWebView({
   // memoized callback identity changed (it has many dependencies).
   const handleStartSearchRef = useRef(handleStartSearch);
   handleStartSearchRef.current = handleStartSearch;
+  const debouncedHandleStartSearch = useRef(
+    debounce(() => handleStartSearchRef.current(), SEARCH_DEBOUNCE_DELAY_MS),
+  );
 
   // Auto-search with debounce when the search term or any filter changes
   useEffect(() => {
