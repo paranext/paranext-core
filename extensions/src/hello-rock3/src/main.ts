@@ -254,6 +254,14 @@ function helloRock3() {
   return 'Hello Third Rock!';
 }
 
+/** Shows an alert dialog via the overlay modal dialog system. Used by the context menu demo. */
+async function showContextMenuAlert() {
+  await papi.dialogs.showDialog('platform.alert', {
+    title: '%helloRock3_overlay_alertTitle%',
+    prompt: '%helloRock3_overlay_alertMessage%',
+  });
+}
+
 /** Simple function to throw a customized exception. Registered as a command handler */
 function helloRock3Exception(message: string) {
   throw new Error(`Hello Rock3 Exception! ${message}`);
@@ -454,6 +462,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   const helloRock3Promise = papi.commands.registerCommand('helloRock3.helloRock3', helloRock3);
 
+  const showContextMenuAlertPromise = papi.commands.registerCommand(
+    'helloRock3.showContextMenuAlert',
+    showContextMenuAlert,
+  );
+
   const helloExceptionPromise = papi.commands.registerCommand(
     'helloRock3.helloException',
     helloRock3Exception,
@@ -487,6 +500,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await reactWebView2ProviderPromise,
     onHelloRock3Emitter,
     await helloRock3Promise,
+    await showContextMenuAlertPromise,
     await helloExceptionPromise,
     await checkPromise,
   );

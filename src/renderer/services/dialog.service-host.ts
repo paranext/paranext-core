@@ -1,7 +1,15 @@
 import { ABOUT_DIALOG } from '@renderer/components/dialogs/about-dialog.component';
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
 import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
-import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
+import {
+  ALERT_DIALOG_TYPE,
+  AlertDialogOptions,
+  CONFIRM_DIALOG_TYPE,
+  ConfirmDialogOptions,
+  DialogTabTypes,
+  DialogTypes,
+} from '@renderer/components/dialogs/dialog-definition.model';
+import { showModalDialogOverlay } from '@renderer/services/overlays/overlay.service-host';
 import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-project.dialog';
 import * as webViewService from '@renderer/services/web-view.service-host';
 import {
@@ -189,7 +197,32 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 ): Promise<DialogTypes[DialogTabType]['responseType'] | undefined> {
   await initialize();
 
-  const optionsLocalized = await localizeDialogOptions(options);
+  // Route overlay-based modal dialogs — no rc-dock tab needed
+  // The overlay service handles localization, so no need to duplicate that work here
+  if (dialogType === ALERT_DIALOG_TYPE) {
+    if (!options) throw new Error(`Options are required to show an alert dialog`);
+    // Type narrowing not possible without asserting
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const alertOptions = options as AlertDialogOptions;
+    return showModalDialogOverlay('alert', {
+      message: alertOptions.prompt,
+      title: alertOptions.title,
+      okLabel: alertOptions.okLabel,
+    });
+  }
+  if (dialogType === CONFIRM_DIALOG_TYPE) {
+    if (!options) throw new Error(`Options are required to show a confirm dialog`);
+    // Type narrowing not possible without asserting
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const confirmOptions = options as ConfirmDialogOptions;
+    return showModalDialogOverlay('confirm', {
+      message: confirmOptions.prompt,
+      title: confirmOptions.title,
+      okLabel: confirmOptions.okLabel,
+      cancelLabel: confirmOptions.cancelLabel,
+      destructive: confirmOptions.destructive,
+    });
+  }
 
   // Set up a DialogRequest
   let dialogId = newGuid();
@@ -215,7 +248,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
       {
         id: dialogId,
         tabType: dialogType,
-        data: { ...optionsLocalized, isDialog: true },
+        data: { ...(await localizeDialogOptions(options)), isDialog: true },
       },
       {
         type: 'float',
@@ -309,6 +342,9 @@ export async function startDialogService(): Promise<void> {
                   excludeProjectIds: { type: 'array', items: { type: 'string' } },
                   selectedProjectIds: { type: 'array', items: { type: 'string' } },
                   selectedBookIds: { type: 'array', items: { type: 'string' } },
+                  okLabel: { type: 'string' },
+                  cancelLabel: { type: 'string' },
+                  destructive: { type: 'boolean' },
                 },
               },
             },

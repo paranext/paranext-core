@@ -1,25 +1,37 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getOverlays, getOverlayById, clearAllOverlays } from '@renderer/services/overlay-store';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  isPlatformError,
+  ABORTED,
+  RESOURCE_EXHAUSTED,
+  FAILED_PRECONDITION,
+} from 'platform-bible-utils';
+import { sendCommand } from '@shared/services/command.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import {
   CommandPaletteRequest,
   ModalDialogOptions,
-  OverlayReplacedError,
   PopoverContent,
   PopoverRequest,
-} from '@shared/models/overlay.service-model';
+} from './overlay.service-model';
+import { getOverlays, getOverlayById, clearAllOverlays } from './overlay-store';
+import { isWebViewVisible } from './overlay-coordinates';
 
 /** Must match DEBOUNCE_COOLDOWN_MS in overlay.service-host.ts */
 const DEBOUNCE_COOLDOWN_MS = 50;
 
 // Mock dependencies
-vi.mock('@renderer/services/overlay-validation', () => ({
+vi.mock('./overlay-validation', () => ({
   validateCommandPaletteRequest: vi.fn(),
-  validateContextMenuRequest: vi.fn(),
+  validateContextMenuItems: vi.fn(),
   validateModalDialogOptions: vi.fn(),
   validatePopoverRequest: vi.fn(),
 }));
 
-vi.mock('@renderer/services/overlay-coordinates', () => ({
+vi.mock('@shared/services/command.service', () => ({
+  sendCommand: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('./overlay-coordinates', () => ({
   translateCoordinates: vi.fn((_, pos) => pos),
   clampToViewport: vi.fn((pos) => pos),
   isWebViewVisible: vi.fn(() => true),
@@ -52,9 +64,36 @@ vi.mock('@shared/services/menu-data.service', () => ({
   },
 }));
 
+vi.mock('@shared/services/window.service', () => ({
+  windowService: {
+    getFocus: vi.fn(() => Promise.resolve({ focusType: 'webView', id: 'test-webview' })),
+    setFocus: vi.fn(() => Promise.resolve()),
+    subscribeFocus: vi.fn(() => Promise.resolve(vi.fn())),
+  },
+}));
+
 // Import the service after mocks are set up
 // eslint-disable-next-line import/first
-import { overlayService, resetDebounceState } from '@renderer/services/overlay.service-host';
+import { overlayService, resetDebounceState, showModalDialogOverlay } from './overlay.service-host';
+// eslint-disable-next-line import/first
+
+/** A minimal WebViewMenu with one context menu item, used across context menu tests */
+const DEFAULT_WEB_VIEW_MENU = {
+  includeDefaults: false,
+  topMenu: undefined,
+  contextMenu: {
+    groups: { 'ext.group1': { order: 1 } },
+    items: [
+      {
+        command: 'ext.cut',
+        group: 'ext.group1',
+        label: 'Cut',
+        order: 1,
+        localizeNotes: '',
+      },
+    ],
+  },
+};
 
 /** Assert that showPopover returned a defined overlay ID (non-debounced). Narrows the type. */
 function expectPopoverId(id: string | undefined): asserts id is string {
@@ -71,13 +110,15 @@ describe('overlay.service-host', () => {
   });
 
   describe('context menus', () => {
-    const validRequest = {
-      items: [{ type: 'item' as const, id: 'cut', label: 'Cut' }],
-      position: { x: 50, y: 100 },
-    };
+    beforeEach(() => {
+      vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
+    });
 
-    it('should create an overlay entry of type contextMenu', () => {
-      const promise = overlayService.showContextMenu(validRequest, 'test-webview');
+    it('should create an overlay entry of type contextMenu', async () => {
+      const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+
+      // Flush the getWebViewMenu promise so addOverlay is called
+      await Promise.resolve();
 
       const overlays = getOverlays();
       expect(overlays).toHaveLength(1);
@@ -89,21 +130,27 @@ describe('overlay.service-host', () => {
       return promise;
     });
 
-    it('should resolve with the selected item result', async () => {
-      const promise = overlayService.showContextMenu(validRequest, 'test-webview');
+    it('should resolve with the selected command string', async () => {
+      const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+
+      // Flush the getWebViewMenu promise so addOverlay is called
+      await Promise.resolve();
 
       const overlays = getOverlays();
       // Only contextMenu overlays exist in this test
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const menuOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'contextMenu' }>;
-      menuOverlay.resolve({ itemId: 'cut' });
+      menuOverlay.resolve('ext.cut');
 
       const result = await promise;
-      expect(result).toEqual({ itemId: 'cut' });
+      expect(result).toBe('ext.cut');
     });
 
     it('should resolve with undefined when dismissed', async () => {
-      const promise = overlayService.showContextMenu(validRequest, 'test-webview');
+      const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+
+      // Flush the getWebViewMenu promise so addOverlay is called
+      await Promise.resolve();
 
       const overlays = getOverlays();
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -117,17 +164,23 @@ describe('overlay.service-host', () => {
     it('should replace existing context menu from same webView', async () => {
       vi.useFakeTimers();
 
-      const promise1 = overlayService.showContextMenu(validRequest, 'test-webview');
+      const promise1 = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+
+      // Flush the getWebViewMenu promise for the first call
+      await Promise.resolve();
 
       vi.advanceTimersByTime(DEBOUNCE_COOLDOWN_MS);
 
-      const request2 = {
-        items: [{ type: 'item' as const, id: 'copy', label: 'Copy' }],
+      const promise2 = overlayService.showContextMenu('ext.testWebView', 'test-webview', {
         position: { x: 60, y: 110 },
-      };
-      const promise2 = overlayService.showContextMenu(request2, 'test-webview');
+      });
 
-      await expect(promise1).rejects.toThrow(OverlayReplacedError);
+      // Flush the getWebViewMenu promise for the second call
+      await Promise.resolve();
+
+      await expect(promise1).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
 
       const overlays = getOverlays();
       const menus = overlays.filter((o) => o.type === 'contextMenu');
@@ -139,12 +192,18 @@ describe('overlay.service-host', () => {
       return promise2;
     });
 
-    it('should drop requests within debounce cooldown', async () => {
-      const promise1 = overlayService.showContextMenu(validRequest, 'test-webview');
-      // Second call within 50ms should be dropped
-      const result2 = await overlayService.showContextMenu(validRequest, 'test-webview');
+    it('should reject with RESOURCE_EXHAUSTED within debounce cooldown', async () => {
+      const promise1 = overlayService.showContextMenu('ext.testWebView', 'test-webview');
 
-      expect(result2).toBeUndefined();
+      // Flush the getWebViewMenu promise for the first call so the overlay is registered
+      await Promise.resolve();
+
+      // Second call within 50ms should throw (debounce check happens after menu fetch)
+      await expect(
+        overlayService.showContextMenu('ext.testWebView', 'test-webview'),
+      ).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === RESOURCE_EXHAUSTED,
+      );
       expect(getOverlays()).toHaveLength(1);
 
       // Clean up
@@ -160,7 +219,7 @@ describe('overlay.service-host', () => {
       };
 
       // Start the promise but don't await yet (it waits for user interaction)
-      const promise = overlayService.showModalDialog('alert', options, 'test-webview');
+      const promise = showModalDialogOverlay('alert', options, 'test-webview');
 
       // Verify an overlay entry was created in the store
       const overlays = getOverlays();
@@ -183,7 +242,7 @@ describe('overlay.service-host', () => {
         message: 'Are you sure?',
       };
 
-      const promise = overlayService.showModalDialog('confirm', options, 'test-webview');
+      const promise = showModalDialogOverlay('confirm', options, 'test-webview');
 
       const overlays = getOverlays();
       expect(overlays).toHaveLength(1);
@@ -211,16 +270,18 @@ describe('overlay.service-host', () => {
       };
 
       // Show first modal - it will be rejected when second replaces it
-      const promise1 = overlayService.showModalDialog('alert', options1, 'test-webview');
+      const promise1 = showModalDialogOverlay('alert', options1, 'test-webview');
 
       // Advance past debounce cooldown so the second call is accepted
       vi.advanceTimersByTime(DEBOUNCE_COOLDOWN_MS);
 
       // Show second modal from same webView
-      const promise2 = overlayService.showModalDialog('confirm', options2, 'test-webview');
+      const promise2 = showModalDialogOverlay('confirm', options2, 'test-webview');
 
-      // First should be rejected with OverlayReplacedError
-      await expect(promise1).rejects.toThrow(OverlayReplacedError);
+      // First should be rejected with ABORTED
+      await expect(promise1).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
 
       // Only the second modal should remain
       const overlays = getOverlays();
@@ -240,7 +301,7 @@ describe('overlay.service-host', () => {
         message: 'Confirm?',
       };
 
-      const promise = overlayService.showModalDialog('confirm', options, 'test-webview');
+      const promise = showModalDialogOverlay('confirm', options, 'test-webview');
 
       const overlays = getOverlays();
       expect(overlays).toHaveLength(1);
@@ -254,12 +315,12 @@ describe('overlay.service-host', () => {
       expect(result).toBe(true);
     });
 
-    it('should resolve with undefined when alert dialog is dismissed', async () => {
+    it('should resolve with true when alert dialog is acknowledged', async () => {
       const options: ModalDialogOptions['alert'] = {
         message: 'Info',
       };
 
-      const promise = overlayService.showModalDialog('alert', options, 'test-webview');
+      const promise = showModalDialogOverlay('alert', options, 'test-webview');
 
       const overlays = getOverlays();
       // Only modalDialog overlays exist in this test; TS can't narrow the union
@@ -269,6 +330,22 @@ describe('overlay.service-host', () => {
 
       const result = await promise;
       expect(result).toBe(true);
+    });
+
+    it('should resolve with undefined when alert dialog is dismissed without response', async () => {
+      const options: ModalDialogOptions['alert'] = {
+        message: 'Info',
+      };
+
+      const promise = showModalDialogOverlay('alert', options, 'test-webview');
+
+      const overlays = getOverlays();
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const alertOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'modalDialog' }>;
+      alertOverlay.resolve(undefined);
+
+      const result = await promise;
+      expect(result).toBeUndefined();
     });
   });
 
@@ -317,8 +394,10 @@ describe('overlay.service-host', () => {
       const id2 = await overlayService.showPopover(request2, 'test-webview');
       expectPopoverId(id2);
 
-      // First should have been rejected with OverlayReplacedError
-      await expect(dismissPromise1).rejects.toThrow(OverlayReplacedError);
+      // First should have been rejected with ABORTED
+      await expect(dismissPromise1).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
 
       // Only the second popover should remain
       const overlays = getOverlays();
@@ -374,29 +453,18 @@ describe('overlay.service-host', () => {
       await expect(overlayService.dismissPopover('unknown-id')).resolves.not.toThrow();
     });
 
-    it('should resolve onPopoverDismissed when popover is dismissed', async () => {
-      const overlayId = await overlayService.showPopover(validRequest, 'test-webview');
-      expectPopoverId(overlayId);
-      const dismissPromise = overlayService.onPopoverDismissed(overlayId);
-
-      // Dismiss the popover
-      await overlayService.dismissPopover(overlayId);
-
-      const result = await dismissPromise;
-      expect(result).toBeUndefined();
-    });
-
     it('should resolve onPopoverDismissed immediately for unknown ID', async () => {
       const result = await overlayService.onPopoverDismissed('nonexistent-id');
       expect(result).toBeUndefined();
     });
 
-    it('should return undefined when debounce cooldown is active', async () => {
+    it('should reject with RESOURCE_EXHAUSTED when debounce cooldown is active', async () => {
       const overlayId1 = await overlayService.showPopover(validRequest, 'test-webview');
       expectPopoverId(overlayId1);
-      // Second call within 50ms should be dropped and return undefined
-      const overlayId2 = await overlayService.showPopover(validRequest, 'test-webview');
-      expect(overlayId2).toBeUndefined();
+      // Second call within 50ms should throw
+      await expect(overlayService.showPopover(validRequest, 'test-webview')).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === RESOURCE_EXHAUSTED,
+      );
 
       // Only one popover should exist in the store
       const popovers = getOverlays().filter((o) => o.type === 'popover');
@@ -495,7 +563,9 @@ describe('overlay.service-host', () => {
       };
       const promise2 = overlayService.showCommandPalette(request2, 'test-webview');
 
-      await expect(promise1).rejects.toThrow(OverlayReplacedError);
+      await expect(promise1).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
 
       const overlays = getOverlays();
       const palettes = overlays.filter((o) => o.type === 'commandPalette');
@@ -506,11 +576,14 @@ describe('overlay.service-host', () => {
       return promise2;
     });
 
-    it('should drop requests within debounce cooldown', async () => {
+    it('should reject with RESOURCE_EXHAUSTED within debounce cooldown', async () => {
       const promise1 = overlayService.showCommandPalette(validRequest, 'test-webview');
-      const result2 = await overlayService.showCommandPalette(validRequest, 'test-webview');
-
-      expect(result2).toBeUndefined();
+      // Second call within 50ms should throw
+      await expect(
+        overlayService.showCommandPalette(validRequest, 'test-webview'),
+      ).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === RESOURCE_EXHAUSTED,
+      );
       expect(getOverlays()).toHaveLength(1);
 
       getOverlays()[0].resolve(undefined);
@@ -532,6 +605,188 @@ describe('overlay.service-host', () => {
 
       overlay.resolve(undefined);
       return promise;
+    });
+  });
+
+  describe('isWebViewVisible rejection', () => {
+    it('should reject context menu with FAILED_PRECONDITION when webView is not visible', async () => {
+      vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
+      vi.mocked(isWebViewVisible).mockReturnValue(false);
+
+      await expect(
+        overlayService.showContextMenu('ext.testWebView', 'hidden-webview'),
+      ).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === FAILED_PRECONDITION,
+      );
+
+      vi.mocked(isWebViewVisible).mockReturnValue(true);
+    });
+
+    it('should reject popover with FAILED_PRECONDITION when webView is not visible', async () => {
+      vi.mocked(isWebViewVisible).mockReturnValue(false);
+
+      const request: PopoverRequest = {
+        anchor: { x: 10, y: 20 },
+        content: { type: 'text', body: 'Test' },
+      };
+
+      await expect(overlayService.showPopover(request, 'hidden-webview')).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === FAILED_PRECONDITION,
+      );
+
+      vi.mocked(isWebViewVisible).mockReturnValue(true);
+    });
+
+    it('should reject command palette with FAILED_PRECONDITION when webView is not visible', async () => {
+      vi.mocked(isWebViewVisible).mockReturnValue(false);
+
+      const request: CommandPaletteRequest = {
+        items: [{ id: 'ft', label: 'Footnote' }],
+      };
+
+      await expect(overlayService.showCommandPalette(request, 'hidden-webview')).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === FAILED_PRECONDITION,
+      );
+
+      vi.mocked(isWebViewVisible).mockReturnValue(true);
+    });
+  });
+
+  describe('sendCommand after context menu selection', () => {
+    beforeEach(() => {
+      vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
+    });
+
+    it('should call sendCommand when a context menu item is selected', async () => {
+      const promise = overlayService.showContextMenu('ext.testWebView', 'test-webview');
+
+      await Promise.resolve();
+
+      const overlays = getOverlays();
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const menuOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'contextMenu' }>;
+      menuOverlay.resolve('ext.cut');
+
+      await promise;
+      expect(sendCommand).toHaveBeenCalledWith('ext.cut');
+    });
+
+    it('should not call sendCommand when context menu is dismissed', async () => {
+      vi.mocked(sendCommand).mockClear();
+      const promise = overlayService.showContextMenu('ext.testWebView', 'cmd-webview');
+
+      await Promise.resolve();
+
+      const overlays = getOverlays();
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const menuOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'contextMenu' }>;
+      menuOverlay.resolve(undefined);
+
+      await promise;
+      expect(sendCommand).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('announceToScreenReader / aria-live', () => {
+    afterEach(() => {
+      // Clean up aria-live region if created
+      const region = document.querySelector('[aria-live="assertive"]');
+      if (region) region.remove();
+    });
+
+    it('should create an aria-live region when showing a context menu', async () => {
+      vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
+      const promise = overlayService.showContextMenu('ext.testWebView', 'aria-webview');
+
+      await Promise.resolve();
+
+      const region = document.querySelector('[aria-live="assertive"]');
+      expect(region).not.toBeNull();
+      expect(region?.getAttribute('role')).toBe('status');
+
+      // Clean up
+      getOverlays()[0].resolve(undefined);
+      return promise;
+    });
+  });
+
+  describe('auto-dismiss listeners', () => {
+    it('should call registerAutoDismissListeners when startOverlayService is called', async () => {
+      const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
+
+      // Import and call startOverlayService
+      const { startOverlayService } = await import('./overlay.service-host');
+      await startOverlayService();
+
+      // Should register scroll and blur listeners
+      const scrollCall = addEventListenerSpy.mock.calls.find((call) => call[0] === 'scroll');
+      const blurCall = addEventListenerSpy.mock.calls.find((call) => call[0] === 'blur');
+      expect(scrollCall).toBeDefined();
+      expect(blurCall).toBeDefined();
+
+      addEventListenerSpy.mockRestore();
+    });
+
+    it('should dismiss context menus on scroll', async () => {
+      vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
+
+      const promise = overlayService.showContextMenu('ext.testWebView', 'scroll-webview');
+      await Promise.resolve();
+
+      expect(getOverlays().filter((o) => o.type === 'contextMenu')).toHaveLength(1);
+
+      // Simulate scroll event
+      window.dispatchEvent(new Event('scroll'));
+
+      // The overlay should have been resolved with undefined (dismissed)
+      const result = await promise;
+      expect(result).toBeUndefined();
+    });
+
+    it('should dismiss context menus on window blur outside creation grace period', async () => {
+      vi.useFakeTimers();
+      resetDebounceState();
+      vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
+
+      const promise = overlayService.showContextMenu('ext.testWebView', 'blur-webview');
+      await Promise.resolve();
+
+      expect(getOverlays().filter((o) => o.type === 'contextMenu')).toHaveLength(1);
+
+      // Advance past OVERLAY_CREATION_GRACE_MS (300ms)
+      vi.advanceTimersByTime(350);
+
+      // Simulate blur event
+      window.dispatchEvent(new Event('blur'));
+
+      const result = await promise;
+      expect(result).toBeUndefined();
+
+      vi.useRealTimers();
+    });
+  });
+
+  describe('focus save/restore', () => {
+    it('should save and restore focus when showing and resolving a modal dialog', async () => {
+      // windowService.getFocus and setFocus are mocked at the top
+      const { windowService } = await import('@shared/services/window.service');
+
+      const options: ModalDialogOptions['alert'] = { message: 'Focus test' };
+      const promise = showModalDialogOverlay('alert', options, 'focus-webview');
+
+      // saveFocus should have been called (getFocus is async, allow it to resolve)
+      await Promise.resolve();
+      expect(windowService.getFocus).toHaveBeenCalled();
+
+      // Resolve the dialog to trigger restoreFocus
+      const overlays = getOverlays();
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const modalOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'modalDialog' }>;
+      modalOverlay.resolve(true);
+
+      await promise;
+      // setFocus should have been called to restore
+      expect(windowService.setFocus).toHaveBeenCalled();
     });
   });
 });

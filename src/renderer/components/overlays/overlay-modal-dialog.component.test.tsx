@@ -1,16 +1,16 @@
 import { vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { OverlayModalDialog } from './overlay-modal-dialog.component';
+import { OverlayModalDialogPresentational } from './overlay-modal-dialog.component';
 
-describe('OverlayModalDialog', () => {
+describe('OverlayModalDialogPresentational', () => {
   describe('confirm dialog', () => {
     it('should call onResolve(false) when Cancel is clicked', () => {
       const onResolve = vi.fn();
       const onDismiss = vi.fn();
 
       render(
-        <OverlayModalDialog
+        <OverlayModalDialogPresentational
           dialogType="confirm"
           options={{ message: 'Are you sure?', cancelLabel: 'Cancel', okLabel: 'OK' }}
           onResolve={onResolve}
@@ -30,7 +30,7 @@ describe('OverlayModalDialog', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayModalDialog
+        <OverlayModalDialogPresentational
           dialogType="confirm"
           options={{ message: 'Are you sure?', cancelLabel: 'Cancel', okLabel: 'OK' }}
           onResolve={onResolve}
@@ -50,7 +50,7 @@ describe('OverlayModalDialog', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayModalDialog
+        <OverlayModalDialogPresentational
           dialogType="confirm"
           options={{ message: 'Are you sure?', cancelLabel: 'Cancel', okLabel: 'OK' }}
           onResolve={onResolve}
@@ -66,13 +66,35 @@ describe('OverlayModalDialog', () => {
     });
   });
 
+  describe('destructive confirm dialog', () => {
+    it('should render the OK button with destructive variant', () => {
+      render(
+        <OverlayModalDialogPresentational
+          dialogType="confirm"
+          options={{
+            message: 'Delete everything?',
+            cancelLabel: 'Cancel',
+            okLabel: 'Delete',
+            destructive: true,
+          }}
+          onResolve={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const deleteButton = screen.getByRole('button', { name: 'Delete' });
+      // The destructive variant adds a specific class; verify it is present
+      expect(deleteButton.className).toMatch(/destructive/);
+    });
+  });
+
   describe('alert dialog', () => {
     it('should call onResolve(true) when OK is clicked', () => {
       const onResolve = vi.fn();
       const onDismiss = vi.fn();
 
       render(
-        <OverlayModalDialog
+        <OverlayModalDialogPresentational
           dialogType="alert"
           options={{ message: 'Something happened' }}
           onResolve={onResolve}
@@ -85,6 +107,44 @@ describe('OverlayModalDialog', () => {
 
       expect(onResolve).toHaveBeenCalledWith(true);
       expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it('should call onResolve(true) when Enter is pressed', () => {
+      const onResolve = vi.fn();
+      const onDismiss = vi.fn();
+
+      render(
+        <OverlayModalDialogPresentational
+          dialogType="alert"
+          options={{ message: 'Something happened' }}
+          onResolve={onResolve}
+          onDismiss={onDismiss}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Enter' });
+
+      expect(onResolve).toHaveBeenCalledWith(true);
+      expect(onDismiss).not.toHaveBeenCalled();
+    });
+
+    it('should call onDismiss when Escape is pressed', () => {
+      const onResolve = vi.fn();
+      const onDismiss = vi.fn();
+
+      render(
+        <OverlayModalDialogPresentational
+          dialogType="alert"
+          options={{ message: 'Something happened' }}
+          onResolve={onResolve}
+          onDismiss={onDismiss}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' });
+
+      expect(onDismiss).toHaveBeenCalled();
+      expect(onResolve).not.toHaveBeenCalled();
     });
   });
 });

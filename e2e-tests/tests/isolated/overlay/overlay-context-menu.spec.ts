@@ -19,18 +19,11 @@ test.describe('Overlay Context Menu', () => {
     // Right-click the title area inside the iframe to trigger handleContextMenu
     const menu = await openContextMenu(mainPage, frame);
 
-    // Verify expected menu items from hello-rock3's handleContextMenu
-    await expect(menu.getByRole('menuitem', { name: 'Select Project' })).toBeVisible();
+    // Verify expected menu items from hello-rock3's contextMenu contributions
     await expect(menu.getByRole('menuitem', { name: 'Open Scripture Editor' })).toBeVisible();
 
     // Verify submenu trigger exists
     await expect(menu.locator('[role="menuitem"]', { hasText: 'More Actions' })).toBeVisible();
-
-    // Verify destructive item
-    await expect(menu.getByRole('menuitem', { name: /Delete/i })).toBeVisible();
-
-    // Verify at least one separator
-    await expect(menu.locator('[role="separator"]').first()).toBeVisible();
 
     // Clean up
     await mainPage.keyboard.press('Escape');
@@ -42,8 +35,8 @@ test.describe('Overlay Context Menu', () => {
 
     const menu = await openContextMenu(mainPage, frame);
 
-    // Click "Select Project" — a simple action item
-    await menu.getByRole('menuitem', { name: 'Select Project' }).click();
+    // Click "Open Scripture Editor" - a simple action item
+    await menu.getByRole('menuitem', { name: 'Open Scripture Editor' }).click();
 
     // Menu should be dismissed after item selection
     await expect(menu).not.toBeVisible({ timeout: 5_000 });
@@ -75,11 +68,12 @@ test.describe('Overlay Context Menu', () => {
     await mainPage.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 
     // Submenu content appears (Radix portals it separately, creating a second [role="menu"])
-    // The "More Actions" submenu contains only "Show Alert"
-    const submenu = mainPage.locator('[role="menu"]').filter({ hasText: 'Show Alert' });
+    // The "More Actions" submenu contains "Say Hello" and "Show Alert"
+    const submenu = mainPage.locator('[role="menu"]').filter({ hasText: 'Say Hello' });
     await expect(submenu).toBeVisible({ timeout: 5_000 });
 
-    // Verify submenu item
+    // Verify submenu items
+    await expect(submenu.getByRole('menuitem', { name: 'Say Hello' })).toBeVisible();
     await expect(submenu.getByRole('menuitem', { name: 'Show Alert' })).toBeVisible();
 
     // Clean up
