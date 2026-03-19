@@ -1,9 +1,9 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
-import { OverlayPopover } from '@/components/advanced/overlays/overlay-popover.component';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { OverlayPopoverPresentational } from './overlay-popover.component';
 
-const meta: Meta<typeof OverlayPopover> = {
+const meta: Meta<typeof OverlayPopoverPresentational> = {
   title: 'Advanced/OverlayPopover',
-  component: OverlayPopover,
+  component: OverlayPopoverPresentational,
   tags: ['autodocs'],
   parameters: {
     docs: {
@@ -21,7 +21,7 @@ const meta: Meta<typeof OverlayPopover> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof OverlayPopover>;
+type Story = StoryObj<typeof OverlayPopoverPresentational>;
 
 export const TextContent: Story = {
   args: {

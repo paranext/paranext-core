@@ -3,7 +3,7 @@
  * menus, modal dialogs, popovers) and notifies subscribers on changes.
  */
 
-import { OverlayEntry, PopoverContent } from '@shared/models/overlay.service-model';
+import { OverlayEntry, PopoverContent } from './overlay.service-model';
 
 /** Map of overlay id to overlay entry */
 const overlays = new Map<string, OverlayEntry>();
@@ -42,23 +42,6 @@ export function getOverlaysByWebView(webViewId: string): OverlayEntry[] {
   return Array.from(overlays.values()).filter((entry) => entry.webViewId === webViewId);
 }
 
-/**
- * Remove all overlays for a specific webViewId. WARNING: This does not call resolve/reject on the
- * removed entries. Callers must settle overlay promises before calling this to avoid leaking
- * unsettled popover promises. Production dismissal should go through the service host's dismiss
- * functions which resolve before removing.
- */
-export function removeOverlaysByWebView(webViewId: string): void {
-  let changed = false;
-  overlays.forEach((entry, id) => {
-    if (entry.webViewId === webViewId) {
-      overlays.delete(id);
-      changed = true;
-    }
-  });
-  if (changed) notifyListeners();
-}
-
 /** Subscribe to store changes. Returns an unsubscribe function. */
 export function subscribe(listener: () => void): () => void {
   listeners.add(listener);
@@ -72,7 +55,7 @@ export function getOverlayById(id: string): OverlayEntry | undefined {
   return overlays.get(id);
 }
 
-/** Removes all overlays from the store and notifies listeners. Exported for use in tests. */
+/** Removes all overlays from the store and notifies listeners. Only exported for use in tests. */
 export function clearAllOverlays(): void {
   if (overlays.size === 0) return;
   overlays.clear();

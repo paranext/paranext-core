@@ -4,7 +4,7 @@ import {
   getWebViewIframe,
   clampToViewport,
   isWebViewVisible,
-} from '@renderer/services/overlay-coordinates';
+} from './overlay-coordinates';
 
 // jsdom doesn't provide CSS.escape; polyfill for tests.
 // Only the escape method is needed; other CSS static methods are unused in the tested code.

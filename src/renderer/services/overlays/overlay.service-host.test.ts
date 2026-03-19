@@ -1,25 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getOverlays, getOverlayById, clearAllOverlays } from '@renderer/services/overlay-store';
+import { isPlatformError, ABORTED, RESOURCE_EXHAUSTED } from 'platform-bible-utils';
 import {
   CommandPaletteRequest,
   ModalDialogOptions,
-  OverlayReplacedError,
   PopoverContent,
   PopoverRequest,
-} from '@shared/models/overlay.service-model';
+} from './overlay.service-model';
+import { getOverlays, getOverlayById, clearAllOverlays } from './overlay-store';
 
 /** Must match DEBOUNCE_COOLDOWN_MS in overlay.service-host.ts */
 const DEBOUNCE_COOLDOWN_MS = 50;
 
 // Mock dependencies
-vi.mock('@renderer/services/overlay-validation', () => ({
+vi.mock('./overlay-validation', () => ({
   validateCommandPaletteRequest: vi.fn(),
   validateContextMenuRequest: vi.fn(),
   validateModalDialogOptions: vi.fn(),
   validatePopoverRequest: vi.fn(),
 }));
 
-vi.mock('@renderer/services/overlay-coordinates', () => ({
+vi.mock('./overlay-coordinates', () => ({
   translateCoordinates: vi.fn((_, pos) => pos),
   clampToViewport: vi.fn((pos) => pos),
   isWebViewVisible: vi.fn(() => true),
@@ -54,7 +54,7 @@ vi.mock('@shared/services/menu-data.service', () => ({
 
 // Import the service after mocks are set up
 // eslint-disable-next-line import/first
-import { overlayService, resetDebounceState } from '@renderer/services/overlay.service-host';
+import { overlayService, resetDebounceState, showModalDialogOverlay } from './overlay.service-host';
 
 /** Assert that showPopover returned a defined overlay ID (non-debounced). Narrows the type. */
 function expectPopoverId(id: string | undefined): asserts id is string {
@@ -127,7 +127,9 @@ describe('overlay.service-host', () => {
       };
       const promise2 = overlayService.showContextMenu(request2, 'test-webview');
 
-      await expect(promise1).rejects.toThrow(OverlayReplacedError);
+      await expect(promise1).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
 
       const overlays = getOverlays();
       const menus = overlays.filter((o) => o.type === 'contextMenu');
@@ -139,12 +141,12 @@ describe('overlay.service-host', () => {
       return promise2;
     });
 
-    it('should drop requests within debounce cooldown', async () => {
+    it('should reject with RESOURCE_EXHAUSTED within debounce cooldown', async () => {
       const promise1 = overlayService.showContextMenu(validRequest, 'test-webview');
-      // Second call within 50ms should be dropped
-      const result2 = await overlayService.showContextMenu(validRequest, 'test-webview');
-
-      expect(result2).toBeUndefined();
+      // Second call within 50ms should throw
+      await expect(overlayService.showContextMenu(validRequest, 'test-webview')).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === RESOURCE_EXHAUSTED,
+      );
       expect(getOverlays()).toHaveLength(1);
 
       // Clean up
@@ -160,7 +162,7 @@ describe('overlay.service-host', () => {
       };
 
       // Start the promise but don't await yet (it waits for user interaction)
-      const promise = overlayService.showModalDialog('alert', options, 'test-webview');
+      const promise = showModalDialogOverlay('alert', options, 'test-webview');
 
       // Verify an overlay entry was created in the store
       const overlays = getOverlays();
@@ -183,7 +185,7 @@ describe('overlay.service-host', () => {
         message: 'Are you sure?',
       };
 
-      const promise = overlayService.showModalDialog('confirm', options, 'test-webview');
+      const promise = showModalDialogOverlay('confirm', options, 'test-webview');
 
       const overlays = getOverlays();
       expect(overlays).toHaveLength(1);
@@ -211,16 +213,18 @@ describe('overlay.service-host', () => {
       };
 
       // Show first modal - it will be rejected when second replaces it
-      const promise1 = overlayService.showModalDialog('alert', options1, 'test-webview');
+      const promise1 = showModalDialogOverlay('alert', options1, 'test-webview');
 
       // Advance past debounce cooldown so the second call is accepted
       vi.advanceTimersByTime(DEBOUNCE_COOLDOWN_MS);
 
       // Show second modal from same webView
-      const promise2 = overlayService.showModalDialog('confirm', options2, 'test-webview');
+      const promise2 = showModalDialogOverlay('confirm', options2, 'test-webview');
 
-      // First should be rejected with OverlayReplacedError
-      await expect(promise1).rejects.toThrow(OverlayReplacedError);
+      // First should be rejected with ABORTED
+      await expect(promise1).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
 
       // Only the second modal should remain
       const overlays = getOverlays();
@@ -240,7 +244,7 @@ describe('overlay.service-host', () => {
         message: 'Confirm?',
       };
 
-      const promise = overlayService.showModalDialog('confirm', options, 'test-webview');
+      const promise = showModalDialogOverlay('confirm', options, 'test-webview');
 
       const overlays = getOverlays();
       expect(overlays).toHaveLength(1);
@@ -259,7 +263,7 @@ describe('overlay.service-host', () => {
         message: 'Info',
       };
 
-      const promise = overlayService.showModalDialog('alert', options, 'test-webview');
+      const promise = showModalDialogOverlay('alert', options, 'test-webview');
 
       const overlays = getOverlays();
       // Only modalDialog overlays exist in this test; TS can't narrow the union
@@ -317,8 +321,10 @@ describe('overlay.service-host', () => {
       const id2 = await overlayService.showPopover(request2, 'test-webview');
       expectPopoverId(id2);
 
-      // First should have been rejected with OverlayReplacedError
-      await expect(dismissPromise1).rejects.toThrow(OverlayReplacedError);
+      // First should have been rejected with ABORTED
+      await expect(dismissPromise1).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
 
       // Only the second popover should remain
       const overlays = getOverlays();
@@ -391,12 +397,13 @@ describe('overlay.service-host', () => {
       expect(result).toBeUndefined();
     });
 
-    it('should return undefined when debounce cooldown is active', async () => {
+    it('should reject with RESOURCE_EXHAUSTED when debounce cooldown is active', async () => {
       const overlayId1 = await overlayService.showPopover(validRequest, 'test-webview');
       expectPopoverId(overlayId1);
-      // Second call within 50ms should be dropped and return undefined
-      const overlayId2 = await overlayService.showPopover(validRequest, 'test-webview');
-      expect(overlayId2).toBeUndefined();
+      // Second call within 50ms should throw
+      await expect(overlayService.showPopover(validRequest, 'test-webview')).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === RESOURCE_EXHAUSTED,
+      );
 
       // Only one popover should exist in the store
       const popovers = getOverlays().filter((o) => o.type === 'popover');
@@ -495,7 +502,9 @@ describe('overlay.service-host', () => {
       };
       const promise2 = overlayService.showCommandPalette(request2, 'test-webview');
 
-      await expect(promise1).rejects.toThrow(OverlayReplacedError);
+      await expect(promise1).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
 
       const overlays = getOverlays();
       const palettes = overlays.filter((o) => o.type === 'commandPalette');
@@ -506,11 +515,14 @@ describe('overlay.service-host', () => {
       return promise2;
     });
 
-    it('should drop requests within debounce cooldown', async () => {
+    it('should reject with RESOURCE_EXHAUSTED within debounce cooldown', async () => {
       const promise1 = overlayService.showCommandPalette(validRequest, 'test-webview');
-      const result2 = await overlayService.showCommandPalette(validRequest, 'test-webview');
-
-      expect(result2).toBeUndefined();
+      // Second call within 50ms should throw
+      await expect(
+        overlayService.showCommandPalette(validRequest, 'test-webview'),
+      ).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === RESOURCE_EXHAUSTED,
+      );
       expect(getOverlays()).toHaveLength(1);
 
       getOverlays()[0].resolve(undefined);

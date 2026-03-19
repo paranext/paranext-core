@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
-  OverlayContextMenu,
+  OverlayContextMenuPresentational,
   OverlayContextMenuItem,
   OverlayContextMenuResult,
 } from './overlay-context-menu.component';
@@ -20,7 +20,7 @@ beforeAll(() => {
   };
 });
 
-describe('OverlayContextMenu', () => {
+describe('OverlayContextMenuPresentational', () => {
   const position = { x: 100, y: 200 };
 
   it('should call onSelect with the correct itemId when a plain item is clicked', () => {
@@ -32,7 +32,7 @@ describe('OverlayContextMenu', () => {
     ];
 
     render(
-      <OverlayContextMenu
+      <OverlayContextMenuPresentational
         items={items}
         position={position}
         onSelect={onSelect}
@@ -53,7 +53,7 @@ describe('OverlayContextMenu', () => {
     ];
 
     render(
-      <OverlayContextMenu
+      <OverlayContextMenuPresentational
         items={items}
         position={position}
         onSelect={onSelect}
@@ -77,7 +77,7 @@ describe('OverlayContextMenu', () => {
     ];
 
     render(
-      <OverlayContextMenu
+      <OverlayContextMenuPresentational
         items={items}
         position={position}
         onSelect={onSelect}
@@ -100,7 +100,7 @@ describe('OverlayContextMenu', () => {
     ];
 
     render(
-      <OverlayContextMenu
+      <OverlayContextMenuPresentational
         items={items}
         position={position}
         onSelect={onSelect}
@@ -121,7 +121,7 @@ describe('OverlayContextMenu', () => {
     ];
 
     render(
-      <OverlayContextMenu
+      <OverlayContextMenuPresentational
         items={items}
         position={position}
         onSelect={vi.fn()}

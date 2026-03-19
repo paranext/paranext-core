@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Localized, WebViewMenu } from 'platform-bible-utils';
 
 import { menuDataService } from '@shared/services/menu-data.service';
-import { overlayService, resetDebounceState } from '@renderer/services/overlay.service-host';
+import { overlayService, resetDebounceState } from './overlay.service-host';
 
 // Mock the menu data service
 vi.mock('@shared/services/menu-data.service', () => ({
@@ -12,7 +12,7 @@ vi.mock('@shared/services/menu-data.service', () => ({
 }));
 
 // Mock overlay-coordinates to avoid DOM dependencies
-vi.mock('@renderer/services/overlay-coordinates', () => ({
+vi.mock('./overlay-coordinates', () => ({
   translateCoordinates: vi.fn((_wvId: string, pos: { x: number; y: number }) => pos),
   clampToViewport: vi.fn((pos: { x: number; y: number }) => pos),
   isWebViewVisible: vi.fn(() => true),
@@ -20,7 +20,7 @@ vi.mock('@renderer/services/overlay-coordinates', () => ({
 }));
 
 // Mock overlay-store
-vi.mock('@renderer/services/overlay-store', () => ({
+vi.mock('./overlay-store', () => ({
   addOverlay: vi.fn((entry: { resolve: (v: unknown) => void }) => {
     // Auto-resolve to simulate user selecting the first item
     entry.resolve({ itemId: 'ext.doSomething' });

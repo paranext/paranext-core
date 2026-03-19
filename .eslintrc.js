@@ -151,6 +151,7 @@ module.exports = {
     {
       files: ['*.stories.ts', '*.stories.tsx'],
       rules: {
+        'no-console': 'off',
         '@typescript-eslint/naming-convention': [
           'error',
           {

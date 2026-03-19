@@ -7,8 +7,8 @@ import { OverlayCommandPalette } from '@renderer/components/overlays/overlay-com
 import { OverlayContextMenu } from '@renderer/components/overlays/overlay-context-menu.component';
 import { OverlayModalDialog } from '@renderer/components/overlays/overlay-modal-dialog.component';
 import { OverlayPopover } from '@renderer/components/overlays/overlay-popover.component';
-import { getOverlays, subscribe } from '@renderer/services/overlay-store';
-import { OverlayEntry } from '@shared/models/overlay.service-model';
+import { getOverlays, subscribe } from '@renderer/services/overlays/overlay-store';
+import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 

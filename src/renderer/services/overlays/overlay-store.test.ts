@@ -1,15 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { OverlayEntry, ContextMenuItem } from './overlay.service-model';
 import {
   addOverlay,
   removeOverlay,
   getOverlays,
   getOverlaysByWebView,
-  removeOverlaysByWebView,
   subscribe,
   getOverlayById,
   clearAllOverlays,
-} from '@renderer/services/overlay-store';
-import { OverlayEntry, ContextMenuItem } from '@shared/models/overlay.service-model';
+} from './overlay-store';
 
 function createContextMenuEntry(
   id: string,
@@ -83,20 +82,6 @@ describe('overlay-store', () => {
     });
   });
 
-  describe('removeOverlaysByWebView', () => {
-    it('should remove all overlays for a webViewId', () => {
-      const entry1 = createContextMenuEntry('overlay-1', 'webview-1');
-      const entry2 = createContextMenuEntry('overlay-2', 'webview-1');
-      const entry3 = createContextMenuEntry('overlay-3', 'webview-2');
-      addOverlay(entry1);
-      addOverlay(entry2);
-      addOverlay(entry3);
-      removeOverlaysByWebView('webview-1');
-      expect(getOverlays()).toHaveLength(1);
-      expect(getOverlays()[0]).toBe(entry3);
-    });
-  });
-
   describe('getOverlayById', () => {
     it('should return the overlay with the given id', () => {
       const entry = createContextMenuEntry('overlay-1', 'webview-1');
@@ -134,15 +119,6 @@ describe('overlay-store', () => {
       const entry = createContextMenuEntry('overlay-1', 'webview-1');
       addOverlay(entry);
       expect(listener).not.toHaveBeenCalled();
-    });
-
-    it('should notify listeners when overlays are removed by webViewId', () => {
-      const entry = createContextMenuEntry('overlay-1', 'webview-1');
-      addOverlay(entry);
-      const listener = vi.fn();
-      subscribe(listener);
-      removeOverlaysByWebView('webview-1');
-      expect(listener).toHaveBeenCalledTimes(1);
     });
   });
 });

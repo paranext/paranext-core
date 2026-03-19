@@ -6,32 +6,25 @@
  *
  * - Leading-edge debounce with 50ms trailing cooldown per overlay type
  * - WebView visibility checks (context menus/popovers only; modals exempt)
- * - Focus save/restore via postMessage to requesting iframe
+ * - Focus save/restore via window service getFocus/setFocus
  * - Aria-live announcements for cross-iframe screen reader accessibility
  * - Auto-dismiss on scroll, tab change, and window blur (context menus/popovers)
  */
 
+import { FocusSubject } from '@shared/services/window.service-model';
+import { menuDataService } from '@shared/services/menu-data.service';
+import { windowService } from '@shared/services/window.service';
+import { logger } from '@shared/services/logger.service';
 import {
-  translateCoordinates,
-  clampToViewport,
-  isWebViewVisible,
-  getWebViewIframe,
-} from '@renderer/services/overlay-coordinates';
-import { convertContributionToContextMenuItems } from '@renderer/services/overlay-menu-converter';
-import {
-  addOverlay,
-  removeOverlay,
-  getOverlaysByWebView,
-  getOverlayById,
-  getOverlays,
-  updateOverlayContent,
-} from '@renderer/services/overlay-store';
-import {
-  validateCommandPaletteRequest,
-  validateContextMenuRequest,
-  validateModalDialogOptions,
-  validatePopoverRequest,
-} from '@renderer/services/overlay-validation';
+  isPlatformError,
+  newGuid,
+  newPlatformError,
+  ReferencedItem,
+  ABORTED,
+  FAILED_PRECONDITION,
+  RESOURCE_EXHAUSTED,
+} from 'platform-bible-utils';
+import type { PlatformError, PlatformErrorCode } from 'platform-bible-utils';
 import {
   CommandPaletteRequest,
   ContextMenuRequest,
@@ -40,17 +33,32 @@ import {
   ModalDialogOptions,
   ModalDialogResponse,
   ModalDialogType,
-  OverlayNotVisibleError,
-  OverlayReplacedError,
   PopoverContent,
   PopoverRequest,
-} from '@shared/models/overlay.service-model';
-import { menuDataService } from '@shared/services/menu-data.service';
-import { logger } from '@shared/services/logger.service';
-import { newGuid, ReferencedItem } from 'platform-bible-utils';
+} from './overlay.service-model';
+import { convertContributionToContextMenuItems } from './overlay-menu-converter';
+import {
+  validateCommandPaletteRequest,
+  validateContextMenuRequest,
+  validateModalDialogOptions,
+  validatePopoverRequest,
+} from './overlay-validation';
+import {
+  addOverlay,
+  removeOverlay,
+  getOverlaysByWebView,
+  getOverlayById,
+  getOverlays,
+  updateOverlayContent,
+} from './overlay-store';
+import { translateCoordinates, clampToViewport, isWebViewVisible } from './overlay-coordinates';
 
-/** Default webViewId used when no specific webView context is provided */
-const DEFAULT_WEB_VIEW_ID = 'renderer';
+/** Creates a PlatformError with the given message and error code */
+function newOverlayError(message: string, code: PlatformErrorCode): PlatformError {
+  const error = newPlatformError(message);
+  error.code = code;
+  return error;
+}
 
 // ── Debounce ──
 
@@ -61,10 +69,9 @@ const DEFAULT_WEB_VIEW_ID = 'renderer';
 const DEBOUNCE_COOLDOWN_MS = 50;
 
 /**
- * Grace period after creating an overlay during which auto-dismiss listeners (MutationObserver,
- * window blur) will not dismiss it. This prevents the race condition where right-clicking a webview
- * that doesn't have focus causes rc-dock class changes that immediately dismiss the just-created
- * context menu.
+ * Grace period after creating an overlay during which auto-dismiss listeners (focus changes, window
+ * blur) will not dismiss it. This prevents the race condition where right-clicking a webview that
+ * doesn't have focus causes focus changes that immediately dismiss the just-created context menu.
  */
 const OVERLAY_CREATION_GRACE_MS = 300;
 
@@ -98,85 +105,42 @@ export function resetDebounceState(): void {
 
 // ── Focus Save/Restore ──
 
-/**
- * Returns the origin of an iframe for use as the postMessage targetOrigin. Prefers
- * contentWindow.origin (reflects current navigation state) over iframe.src (initial attribute).
- * Falls back to '*' for srcdoc iframes or when origin is inaccessible.
- */
-function getIframeOrigin(iframe: HTMLIFrameElement): string {
-  try {
-    // contentWindow.origin reflects the iframe's current origin, not just the initial src attr
-    const { origin } = iframe.contentWindow ?? {};
-    if (origin && origin !== 'null') return origin;
-  } catch {
-    // Cross-origin access denied — try the src attribute as fallback
-  }
+/** Saved focus subject per overlay ID, captured via windowService.getFocus() */
+const savedFocusState = new Map<string, FocusSubject>();
 
+/**
+ * Captures the current window focus subject and stores it for later restoration. Uses the window
+ * service's getFocus API instead of postMessage to iframes.
+ */
+async function saveFocus(overlayId: string): Promise<void> {
   try {
-    if (iframe.src) {
-      const { origin } = new URL(iframe.src);
-      if (origin && origin !== 'null') return origin;
+    const focusSubject = await windowService.getFocus();
+    if (focusSubject) {
+      savedFocusState.set(overlayId, focusSubject);
     }
   } catch {
-    // Invalid URL — fall back to wildcard
-  }
-
-  return '*';
-}
-
-/** Saved focus state per overlay ID, received from iframe postMessage response */
-const savedFocusState = new Map<string, { webViewId: string }>();
-
-/**
- * Sends an overlay:focusSave message to the requesting iframe. The iframe's PAPI runtime captures
- * the active element and selection state. This is fire-and-forget — the overlay renders
- * immediately.
- */
-function requestFocusSave(overlayId: string, webViewId: string): void {
-  if (webViewId === DEFAULT_WEB_VIEW_ID) return;
-
-  const iframe = getWebViewIframe(webViewId);
-  if (!iframe?.contentWindow) return;
-
-  // Store tracking info so we know which iframe to restore focus to
-  savedFocusState.set(overlayId, { webViewId });
-
-  try {
-    iframe.contentWindow.postMessage(
-      { type: 'overlay:focusSave', overlayId },
-      getIframeOrigin(iframe),
-    );
-  } catch {
-    // Cross-origin or detached iframe — focus save best-effort
+    // Best-effort focus save
   }
 }
 
 /**
- * Sends an overlay:focusRestore message to the iframe that originally had focus. Falls back to
- * focusing the iframe directly if no saved state is available.
+ * Restores focus to the subject that was active when the overlay was created. Uses the window
+ * service's setFocus API to return focus to the original webView or tab.
  */
 function restoreFocus(overlayId: string): void {
-  const state = savedFocusState.get(overlayId);
+  const focusSubject = savedFocusState.get(overlayId);
   savedFocusState.delete(overlayId);
 
-  if (!state) return;
+  if (!focusSubject || focusSubject.focusType === 'other') return;
 
-  const iframe = getWebViewIframe(state.webViewId);
-  if (!iframe) return;
-
-  try {
-    if (iframe.contentWindow) {
-      iframe.contentWindow.postMessage(
-        { type: 'overlay:focusRestore', overlayId },
-        getIframeOrigin(iframe),
-      );
-    } else {
-      iframe.focus();
-    }
-  } catch {
+  // setFocus accepts SetFocusSubject (webView or tab with id) — pass only the fields it needs
+  const setFocusTarget =
+    focusSubject.focusType === 'webView'
+      ? focusSubject
+      : { focusType: focusSubject.focusType, id: focusSubject.id };
+  windowService.setFocus(setFocusTarget).catch(() => {
     // Best-effort focus restore
-    iframe.focus();
-  }
+  });
 }
 
 // ── Aria-Live Announcements ──
@@ -232,7 +196,7 @@ const popoverPromises = new Map<
   {
     promise: Promise<string | undefined>;
     resolve: (value: string | undefined) => void;
-    reject: (error: Error) => void;
+    reject: (error: PlatformError) => void;
   }
 >();
 
@@ -281,6 +245,8 @@ function dismissAllCommandPalettes(): void {
  * @param request The context menu request with items and optional position
  * @param webViewId The webViewId that originated the request
  * @returns The selected menu item result, or undefined if dismissed
+ * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
+ *   debounce cooldown
  */
 async function showContextMenu(
   request: ContextMenuRequest,
@@ -290,26 +256,26 @@ async function showContextMenu(
 
   // Visibility check (context menus require visible WebView)
   if (!isWebViewVisible(webViewId)) {
-    throw new OverlayNotVisibleError();
+    throw newOverlayError('Requesting WebView is not visible', FAILED_PRECONDITION);
   }
 
   // Leading-edge debounce: drop rapid re-triggers within 50ms
   if (!debounceCheck('contextMenu', webViewId)) {
-    return undefined;
+    throw newOverlayError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
   // Replace any existing context menu from this webView (only context menus, not other overlay types)
   const existingOverlays = getOverlaysByWebView(webViewId).filter((o) => o.type === 'contextMenu');
   existingOverlays.forEach((existing) => {
-    existing.reject(new OverlayReplacedError());
+    existing.reject(newOverlayError('Overlay was replaced by a new request', ABORTED));
     removeOverlay(existing.id);
     restoreFocus(existing.id);
   });
 
   const overlayId = newGuid();
 
-  // Save focus state from the requesting iframe (fire-and-forget)
-  requestFocusSave(overlayId, webViewId);
+  // Save current focus state for later restoration
+  saveFocus(overlayId);
 
   // Translate coordinates from iframe-relative to document-relative
   const rawPosition = request.position ?? { x: 0, y: 0 };
@@ -337,40 +303,36 @@ async function showContextMenu(
 }
 
 /**
- * Shows a modal dialog overlay. Validates the options, replaces any existing modal from the same
- * webView, and returns a promise that resolves with the user's response.
+ * Shows a modal dialog overlay. Called internally by the dialog service host. Not exposed on PAPI.
  *
- * Modal dialogs are exempt from the visibility check — they dim the entire app.
- *
- * @param dialogType The type of dialog (alert, confirm)
- * @param options The dialog options
- * @param webViewId The webViewId that originated the request
- * @returns The dialog result, or undefined if dismissed
+ * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
+ *   debounce cooldown
+ * @internal
  */
-async function showModalDialog<T extends ModalDialogType>(
+export async function showModalDialogOverlay<T extends ModalDialogType>(
   dialogType: T,
   options: ModalDialogOptions[T],
-  webViewId: string = DEFAULT_WEB_VIEW_ID,
+  webViewId: string = 'dialog-service',
 ): Promise<ModalDialogResponse[T] | undefined> {
   validateModalDialogOptions(dialogType, options);
 
   // Leading-edge debounce
   if (!debounceCheck('modalDialog', webViewId)) {
-    return undefined;
+    throw newOverlayError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
   // Replace any existing modal dialog from this webView (only modals, not other overlay types)
   const existingOverlays = getOverlaysByWebView(webViewId).filter((o) => o.type === 'modalDialog');
   existingOverlays.forEach((existing) => {
-    existing.reject(new OverlayReplacedError());
+    existing.reject(newOverlayError('Overlay was replaced by a new request', ABORTED));
     removeOverlay(existing.id);
     restoreFocus(existing.id);
   });
 
   const overlayId = newGuid();
 
-  // Save focus state from the requesting iframe
-  requestFocusSave(overlayId, webViewId);
+  // Save current focus state for later restoration
+  saveFocus(overlayId);
 
   const title =
     'title' in options && typeof options.title === 'string' ? options.title : dialogType;
@@ -439,41 +401,40 @@ async function showContextMenuFromContribution(
  * @param request The popover request with anchor, content, and options
  * @param webViewId The webViewId that originated the request
  * @returns The overlay ID string
+ * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
+ *   debounce cooldown
  */
-async function showPopover(
-  request: PopoverRequest,
-  webViewId: string,
-): Promise<string | undefined> {
+async function showPopover(request: PopoverRequest, webViewId: string): Promise<string> {
   validatePopoverRequest(request);
 
   // Visibility check (popovers require visible WebView)
   if (!isWebViewVisible(webViewId)) {
-    throw new OverlayNotVisibleError();
+    throw newOverlayError('Requesting WebView is not visible', FAILED_PRECONDITION);
   }
 
-  // Leading-edge debounce: return undefined to signal no popover was created
+  // Leading-edge debounce: reject rapid re-triggers within cooldown window
   if (!debounceCheck('popover', webViewId)) {
-    return undefined;
+    throw newOverlayError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
   // Replace any existing popover from this webView
   const existingOverlays = getOverlaysByWebView(webViewId).filter((o) => o.type === 'popover');
   existingOverlays.forEach((existing) => {
-    existing.reject(new OverlayReplacedError());
+    existing.reject(newOverlayError('Overlay was replaced by a new request', ABORTED));
     removeOverlay(existing.id);
     restoreFocus(existing.id);
     // Also reject the onPopoverDismissed promise
     const pending = popoverPromises.get(existing.id);
     if (pending) {
-      pending.reject(new OverlayReplacedError());
+      pending.reject(newOverlayError('Overlay was replaced by a new request', ABORTED));
       popoverPromises.delete(existing.id);
     }
   });
 
   const overlayId = newGuid();
 
-  // Save focus state from the requesting iframe
-  requestFocusSave(overlayId, webViewId);
+  // Save current focus state for later restoration
+  saveFocus(overlayId);
 
   // Translate coordinates from iframe-relative to document-relative
   const translatedPosition = translateCoordinates(webViewId, request.anchor);
@@ -481,7 +442,7 @@ async function showPopover(
 
   // Create a deferred promise for onPopoverDismissed
   let resolveDismissed!: (value: string | undefined) => void;
-  let rejectDismissed!: (error: Error) => void;
+  let rejectDismissed!: (error: PlatformError) => void;
   const dismissedPromise = new Promise<string | undefined>((resolve, reject) => {
     resolveDismissed = resolve;
     rejectDismissed = reject;
@@ -508,7 +469,7 @@ async function showPopover(
         popoverPromises.delete(overlayId);
       }
     },
-    reject: (error: Error) => {
+    reject: (error: PlatformError) => {
       clearPopoverTimer(overlayId);
       const pending = popoverPromises.get(overlayId);
       if (pending) {
@@ -589,6 +550,8 @@ async function onPopoverDismissed(overlayId: string): Promise<string | undefined
  * @param request The command palette request with items and optional anchor
  * @param webViewId The webViewId that originated the request
  * @returns The selected item's ID, or undefined if dismissed
+ * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
+ *   debounce cooldown
  */
 async function showCommandPalette(
   request: CommandPaletteRequest,
@@ -598,12 +561,12 @@ async function showCommandPalette(
 
   // Visibility check (command palettes require visible WebView)
   if (!isWebViewVisible(webViewId)) {
-    throw new OverlayNotVisibleError();
+    throw newOverlayError('Requesting WebView is not visible', FAILED_PRECONDITION);
   }
 
   // Leading-edge debounce: drop rapid re-triggers within 50ms
   if (!debounceCheck('commandPalette', webViewId)) {
-    return undefined;
+    throw newOverlayError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
   // Replace any existing command palette from this webView
@@ -611,15 +574,15 @@ async function showCommandPalette(
     (o) => o.type === 'commandPalette',
   );
   existingOverlays.forEach((existing) => {
-    existing.reject(new OverlayReplacedError());
+    existing.reject(newOverlayError('Overlay was replaced by a new request', ABORTED));
     removeOverlay(existing.id);
     restoreFocus(existing.id);
   });
 
   const overlayId = newGuid();
 
-  // Save focus state from the requesting iframe (fire-and-forget)
-  requestFocusSave(overlayId, webViewId);
+  // Save current focus state for later restoration
+  saveFocus(overlayId);
 
   // Translate coordinates from iframe-relative to document-relative (if anchored)
   let position: { x: number; y: number } | undefined;
@@ -653,7 +616,6 @@ async function showCommandPalette(
 export const overlayService: IOverlayService = {
   showContextMenu,
   showContextMenuFromContribution,
-  showModalDialog,
   showPopover,
   updatePopover,
   dismissPopover,
@@ -705,50 +667,28 @@ function registerAutoDismissListeners(): void {
     });
   });
 
-  // Listen for tab changes via MutationObserver on dock-layout class attribute changes.
-  // rc-dock doesn't fire a standard event for tab switches, so we observe subtree class changes
-  // as a proxy. This is broad — any class change in the dock tree (e.g., React re-renders,
-  // animation classes) will trigger dismissal after the grace period. If unexpected premature
-  // dismissals occur, consider narrowing the observer or using a different detection strategy.
-  const observer = new MutationObserver(() => {
-    // Skip if an overlay was just created — right-clicking a different panel causes rc-dock
-    // class changes that would otherwise immediately dismiss the just-created context menu
-    if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
+  // Dismiss overlays when the focused tab changes
+  let lastFocusId: string | undefined;
+  windowService
+    .subscribeFocus(undefined, (focusSubject) => {
+      if (isPlatformError(focusSubject)) return;
 
-    dismissAllContextMenus();
-    dismissAllCommandPalettes();
-    dismissAllPopovers();
-  });
+      // Determine the id of the newly focused subject (undefined for 'other')
+      const newFocusId = focusSubject.focusType === 'other' ? undefined : focusSubject.id;
 
-  // Observe the dock layout container for class/attribute changes indicating tab switches.
-  // The dock layout may not be mounted yet when the overlay service starts (React renders
-  // concurrently), so wait for it to appear before attaching the observer.
-  function observeDockLayout(): void {
-    const dockLayout = document.querySelector('.dock-layout');
-    if (dockLayout) {
-      observer.observe(dockLayout, {
-        attributes: true,
-        subtree: true,
-        attributeFilter: ['class'],
-      });
-      return;
-    }
+      // Only dismiss if focus actually moved to a different tab/webView
+      if (newFocusId === lastFocusId) return;
+      lastFocusId = newFocusId;
 
-    // .dock-layout not yet in DOM — watch for it to appear
-    const bodyObserver = new MutationObserver(() => {
-      const layout = document.querySelector('.dock-layout');
-      if (layout) {
-        bodyObserver.disconnect();
-        observer.observe(layout, {
-          attributes: true,
-          subtree: true,
-          attributeFilter: ['class'],
-        });
-      }
-    });
-    bodyObserver.observe(document.body, { childList: true, subtree: true });
-  }
-  observeDockLayout();
+      // Skip if an overlay was just created — right-clicking a different panel causes focus
+      // changes that would otherwise immediately dismiss the just-created context menu
+      if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
+
+      dismissAllContextMenus();
+      dismissAllCommandPalettes();
+      dismissAllPopovers();
+    })
+    .catch((err) => logger.warn(`Failed to subscribe to window focus changes: ${err}`));
 }
 
 /** Initialize the overlay service. Called during renderer startup. */

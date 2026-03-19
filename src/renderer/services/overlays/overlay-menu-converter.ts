@@ -3,8 +3,8 @@
  * ContextMenuItem[] format for rendering context menus.
  */
 
-import type { ContextMenuItem } from '@shared/models/overlay.service-model';
 import type { Localized, SingleColumnMenu, MenuGroupDetailsInSubMenu } from 'platform-bible-utils';
+import type { ContextMenuItem } from './overlay.service-model';
 
 /** Type guard to check if a menu item has a `command` field (MenuItemContainingCommand) */
 function isCommandItem(

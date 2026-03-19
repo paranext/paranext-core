@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { convertContributionToContextMenuItems } from '@renderer/services/overlay-menu-converter';
 import type { Localized, SingleColumnMenu } from 'platform-bible-utils';
+import { convertContributionToContextMenuItems } from './overlay-menu-converter';
 
 describe('overlay-menu-converter', () => {
   describe('convertContributionToContextMenuItems', () => {

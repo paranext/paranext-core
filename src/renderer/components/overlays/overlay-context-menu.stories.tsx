@@ -1,12 +1,12 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import {
-  OverlayContextMenu,
+  OverlayContextMenuPresentational,
   OverlayContextMenuItem,
-} from '@/components/advanced/overlays/overlay-context-menu.component';
+} from './overlay-context-menu.component';
 
-const meta: Meta<typeof OverlayContextMenu> = {
+const meta: Meta<typeof OverlayContextMenuPresentational> = {
   title: 'Advanced/OverlayContextMenu',
-  component: OverlayContextMenu,
+  component: OverlayContextMenuPresentational,
   tags: ['autodocs'],
   parameters: {
     docs: {
@@ -24,7 +24,7 @@ const meta: Meta<typeof OverlayContextMenu> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof OverlayContextMenu>;
+type Story = StoryObj<typeof OverlayContextMenuPresentational>;
 
 const basicItems: OverlayContextMenuItem[] = [
   { type: 'item', id: 'cut', label: 'Cut', shortcut: 'Ctrl+X' },

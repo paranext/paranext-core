@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { OverlayPopover } from './overlay-popover.component';
+import { OverlayPopoverPresentational } from './overlay-popover.component';
 
 // Radix Popover uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
 // implementation. The methods intentionally don't use `this` since they're empty stubs.
@@ -16,13 +16,13 @@ beforeAll(() => {
   };
 });
 
-describe('OverlayPopover', () => {
+describe('OverlayPopoverPresentational', () => {
   const position = { x: 100, y: 200 };
 
   describe('text content', () => {
     it('should render title and body', () => {
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{ type: 'text', title: 'Info', body: 'Some details here' }}
           position={position}
           onDismiss={vi.fn()}
@@ -40,7 +40,7 @@ describe('OverlayPopover', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{
             type: 'card',
             title: 'Confirm',
@@ -66,7 +66,7 @@ describe('OverlayPopover', () => {
       const onAction = vi.fn();
 
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{
             type: 'card',
             title: 'Actions',
@@ -91,7 +91,7 @@ describe('OverlayPopover', () => {
   describe('list content', () => {
     it('should render all list items', () => {
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{
             type: 'list',
             title: 'Steps',
@@ -112,7 +112,7 @@ describe('OverlayPopover', () => {
   describe('description content', () => {
     it('should render term/detail pairs', () => {
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{
             type: 'description',
             title: 'Details',
@@ -136,7 +136,7 @@ describe('OverlayPopover', () => {
   describe('richText content', () => {
     it('should render bold and italic runs', () => {
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{
             type: 'richText',
             body: [
@@ -161,7 +161,7 @@ describe('OverlayPopover', () => {
       const onDismiss = vi.fn();
 
       render(
-        <OverlayPopover
+        <OverlayPopoverPresentational
           content={{ type: 'text', body: 'Hello' }}
           position={position}
           onDismiss={onDismiss}

@@ -5783,6 +5783,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
   import { ReactElement } from 'react';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
+  import { LocalizeKey } from 'platform-bible-utils';
   /** The tabType for the about dialog in `about-dialog.component.tsx` */
   export const ABOUT_DIALOG_TYPE = 'platform.aboutDialog';
   /** The tabType for the select project dialog in `select-project.dialog.tsx` */
@@ -5791,6 +5792,10 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
   /** The tabType for the select books dialog in `select-books.dialog.tsx` */
   export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
+  /** The dialogType for alert dialogs rendered via overlay */
+  export const ALERT_DIALOG_TYPE = 'platform.alert';
+  /** The dialogType for confirm dialogs rendered via overlay */
+  export const CONFIRM_DIALOG_TYPE = 'platform.confirm';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -5804,12 +5809,28 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     /** Books IDs that should start selected in the dialog */
     selectedBookIds?: string[];
   };
+  /** Options to provide when showing an alert dialog */
+  export type AlertDialogOptions = DialogOptions & {
+    /** The message body displayed in the dialog. Required for alert dialogs. */
+    prompt: string | LocalizeKey;
+    /** Custom label for the OK button. Defaults to a localized "OK". */
+    okLabel?: string | LocalizeKey;
+  };
+  /** Options to provide when showing a confirm dialog */
+  export type ConfirmDialogOptions = DialogOptions & {
+    /** The message body displayed in the dialog. Required for confirm dialogs. */
+    prompt: string | LocalizeKey;
+    /** Custom label for the OK button. Defaults to a localized "OK". */
+    okLabel?: string | LocalizeKey;
+    /** Custom label for the Cancel button. Defaults to a localized "Cancel". */
+    cancelLabel?: string | LocalizeKey;
+    /** Whether to style the OK button as a destructive action (e.g., red) */
+    destructive?: boolean;
+  };
   /**
    * Mapped type for dialog functions to use in getting various types for dialogs
    *
    * Keys should be dialog names, and values should be {@link DialogDataTypes}
-   *
-   * If you add a dialog here, you must also add it on {@link DIALOGS}
    */
   export interface DialogTypes {
     [ABOUT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, void>;
@@ -5819,8 +5840,16 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
       string[]
     >;
     [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
+    [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
+    [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
   }
-  /** Each type of dialog. These are the tab types used in the dock layout */
+  /** Dialog types that render as rc-dock floating tabs (have a DialogDefinition) */
+  export type TabDialogTypes =
+    | typeof ABOUT_DIALOG_TYPE
+    | typeof SELECT_PROJECT_DIALOG_TYPE
+    | typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE
+    | typeof SELECT_BOOKS_DIALOG_TYPE;
+  /** All dialog types including overlay-routed dialogs */
   export type DialogTabTypes = keyof DialogTypes;
   /** Types related to a specific dialog */
   export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
@@ -5837,7 +5866,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     /** Props provided to the dialog component */
     props: DialogProps<TReturnType> & TOptions;
   };
-  export type DialogDefinition<DialogTabType extends DialogTabTypes> = Readonly<
+  export type DialogDefinition<DialogTabType extends TabDialogTypes> = Readonly<
     DialogDefinitionBase & {
       /**
        * Type of tab - indicates what kind of built-in dock layout tab this dialog definition
@@ -7285,39 +7314,15 @@ declare module 'shared/services/project-settings.service-model' {
     [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
   };
 }
-declare module 'shared/models/overlay.service-model' {
+declare module 'renderer/services/overlays/overlay.service-model' {
   /**
    * Type definitions for the overlay service, a renderer-only service that manages overlays (context
-   * menus, modal dialogs, popovers) rendered in the renderer's top-level document outside iframe
+   * menus, popovers, command palettes) rendered in the renderer's top-level document outside iframe
    * boundaries. Extensions running in sandboxed WebView iframes cannot render UI above other content,
    * so this service provides a way for them to request overlays that the renderer hosts on their
    * behalf.
    */
-  import { LocalizeKey } from 'platform-bible-utils';
-  /**
-   * Thrown when an overlay is requested from a WebView that is not currently visible (e.g., it is on
-   * a background tab). The caller should handle this gracefully since the user cannot interact with
-   * an overlay they cannot see.
-   */
-  export class OverlayNotVisibleError extends Error {
-    constructor(message?: string);
-  }
-  /**
-   * Thrown when an overlay request fails validation (e.g., a context menu with zero items, a modal
-   * dialog missing required options, or a popover with invalid anchor coordinates). Callers should
-   * fix the request rather than retrying.
-   */
-  export class OverlayValidationError extends Error {
-    constructor(message?: string);
-  }
-  /**
-   * Thrown when an overlay's promise is rejected because a new overlay of the same type was requested
-   * from the same WebView, replacing the previous one. Only one overlay of each type (context menu,
-   * modal dialog, popover) can be active per WebView at a time.
-   */
-  export class OverlayReplacedError extends Error {
-    constructor(message?: string);
-  }
+  import { LocalizeKey, PlatformError } from 'platform-bible-utils';
   /** Alias for platform icon names. Currently any string; may become a branded type in the future. */
   type PlatformIconName = string;
   /**
@@ -7615,8 +7620,8 @@ declare module 'shared/models/overlay.service-model' {
   }
   /**
    *
-   * Service for showing overlays (context menus, modal dialogs, popovers, command palettes) that
-   * render outside iframe boundaries in the renderer's top-level document. Renderer-only service.
+   * Service for showing overlays (context menus, popovers, command palettes) that render outside
+   * iframe boundaries in the renderer's top-level document. Renderer-only service.
    *
    * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
    * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -7624,9 +7629,9 @@ declare module 'shared/models/overlay.service-model' {
    * renderer's React tree. Each method returns a promise that resolves when the user interacts with
    * the overlay or it is dismissed.
    *
-   * Only one overlay of each type (context menu, modal dialog, popover, command palette) can be
-   * active per WebView at a time. Requesting a new overlay of the same type from the same WebView
-   * replaces the previous one and rejects its promise with {@link OverlayReplacedError}.
+   * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
+   * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
+   * one and rejects its promise with a PlatformError with code ABORTED.
    */
   export interface IOverlayService {
     /**
@@ -7637,8 +7642,9 @@ declare module 'shared/models/overlay.service-model' {
      * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
      *   from within a WebView iframe.
      * @returns The selected item result, or `undefined` if dismissed
-     * @throws {OverlayValidationError} If the request has no items
-     * @throws {OverlayReplacedError} If replaced by another context menu from the same WebView
+     * @throws PlatformError with code INVALID_ARGUMENT if the request has no items
+     * @throws PlatformError with code ABORTED if replaced by another context menu from the same
+     *   WebView
      */
     showContextMenu(
       request: ContextMenuRequest,
@@ -7667,23 +7673,6 @@ declare module 'shared/models/overlay.service-model' {
       },
     ): Promise<ContextMenuResult | undefined>;
     /**
-     * Shows a modal dialog of the specified type. The returned promise resolves with the user's
-     * response or `undefined` if the dialog was dismissed.
-     *
-     * @param dialogType The type of dialog to show (`'alert'` or `'confirm'`)
-     * @param options Configuration for the dialog, typed according to `dialogType`
-     * @param webViewId Optional ID of the WebView requesting the dialog. Used for one-per-WebView
-     *   enforcement. Pass `globalThis.webViewId` from within a WebView iframe.
-     * @returns The dialog result typed according to `dialogType`, or `undefined` if dismissed
-     * @throws {OverlayValidationError} If required options are missing
-     * @throws {OverlayReplacedError} If replaced by another modal from the same WebView
-     */
-    showModalDialog<T extends ModalDialogType>(
-      dialogType: T,
-      options: ModalDialogOptions[T],
-      webViewId?: string,
-    ): Promise<ModalDialogResponse[T] | undefined>;
-    /**
      * Shows a popover anchored to the specified position. Unlike context menus and modals, popovers
      * return immediately with an overlay ID rather than waiting for dismissal. Use
      * {@link onPopoverDismissed} to await the result, {@link updatePopover} to change content, and
@@ -7692,12 +7681,13 @@ declare module 'shared/models/overlay.service-model' {
      * @param request The popover anchor, content, and behavioral options
      * @param webViewId The ID of the WebView requesting the popover. Pass `globalThis.webViewId` from
      *   within a WebView iframe.
-     * @returns The overlay ID string, usable with other popover methods. Returns `undefined` if the
-     *   request was dropped by the debounce cooldown.
-     * @throws {OverlayValidationError} If the request is invalid
-     * @throws {OverlayReplacedError} If replaced by another popover from the same WebView
+     * @returns The overlay ID string, usable with other popover methods
+     * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
+     *   debounce cooldown
+     * @throws PlatformError with code INVALID_ARGUMENT if the request is invalid
+     * @throws PlatformError with code ABORTED if replaced by another popover from the same WebView
      */
-    showPopover(request: PopoverRequest, webViewId: string): Promise<string | undefined>;
+    showPopover(request: PopoverRequest, webViewId: string): Promise<string>;
     /**
      * Replaces the content of an existing popover without closing and reopening it. Useful for
      * updating status messages or showing loading progress.
@@ -7722,7 +7712,8 @@ declare module 'shared/models/overlay.service-model' {
      *
      * @param overlayId The overlay ID returned by {@link showPopover}
      * @returns The action ID that triggered dismissal, or `undefined`
-     * @throws {OverlayReplacedError} If the popover was replaced by a new one from the same WebView
+     * @throws PlatformError with code ABORTED if the popover was replaced by a new one from the same
+     *   WebView
      */
     onPopoverDismissed(overlayId: string): Promise<string | undefined>;
     /**
@@ -7732,8 +7723,9 @@ declare module 'shared/models/overlay.service-model' {
      * @param request The items, optional anchor position, and display options
      * @param webViewId The ID of the WebView requesting the command palette
      * @returns The selected item's ID, or `undefined` if dismissed
-     * @throws {OverlayValidationError} If the request is invalid
-     * @throws {OverlayReplacedError} If replaced by another command palette from the same WebView
+     * @throws PlatformError with code INVALID_ARGUMENT if the request is invalid
+     * @throws PlatformError with code ABORTED if replaced by another command palette from the same
+     *   WebView
      */
     showCommandPalette(
       request: CommandPaletteRequest,
@@ -7771,8 +7763,8 @@ declare module 'shared/models/overlay.service-model' {
         };
         /** Settles the caller's promise with the selected item, or `undefined` if dismissed */
         resolve: (result: ContextMenuResult | undefined) => void;
-        /** Rejects the caller's promise (e.g., with {@link OverlayReplacedError}) */
-        reject: (error: Error) => void;
+        /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+        reject: (error: PlatformError) => void;
       }
     | {
         type: 'modalDialog';
@@ -7786,11 +7778,12 @@ declare module 'shared/models/overlay.service-model' {
         options: ModalDialogOptions[ModalDialogType];
         /**
          * Settles the caller's promise with the dialog result. Typed as `unknown` because the generic
-         * `T` from `showModalDialog<T>` is not preserved in the store entry; the service widens it.
+         * `T` from `showModalDialogOverlay<T>` is not preserved in the store entry; the service
+         * widens it.
          */
         resolve: (result: unknown) => void;
-        /** Rejects the caller's promise (e.g., with {@link OverlayReplacedError}) */
-        reject: (error: Error) => void;
+        /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+        reject: (error: PlatformError) => void;
       }
     | {
         type: 'popover';
@@ -7812,8 +7805,8 @@ declare module 'shared/models/overlay.service-model' {
          * the {@link PopoverAction} `id` if the user clicked an action, or `undefined` if dismissed.
          */
         resolve: (actionId: string | undefined) => void;
-        /** Rejects the caller's promise (e.g., with {@link OverlayReplacedError}) */
-        reject: (error: Error) => void;
+        /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+        reject: (error: PlatformError) => void;
       }
     | {
         type: 'commandPalette';
@@ -7832,8 +7825,8 @@ declare module 'shared/models/overlay.service-model' {
         };
         /** Settles the caller's promise with the selected item ID, or undefined if dismissed */
         resolve: (selectedId: string | undefined) => void;
-        /** Rejects the caller's promise */
-        reject: (error: Error) => void;
+        /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+        reject: (error: PlatformError) => void;
       };
 }
 declare module '@papi/core' {
@@ -7942,12 +7935,7 @@ declare module '@papi/core' {
     PopoverContent,
     PopoverRequest,
     RichTextRun,
-  } from 'shared/models/overlay.service-model';
-  export {
-    OverlayNotVisibleError,
-    OverlayReplacedError,
-    OverlayValidationError,
-  } from 'shared/models/overlay.service-model';
+  } from 'renderer/services/overlays/overlay.service-model';
 }
 declare module 'shared/services/menu-data.service-model' {
   import {
@@ -9955,7 +9943,104 @@ declare module 'renderer/hooks/papi-hooks/index' {
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
 }
-declare module 'renderer/services/overlay-coordinates' {
+declare module 'renderer/services/overlays/overlay-menu-converter' {
+  /**
+   * Converts menu data service contributions (SingleColumnMenu) into the overlay service's
+   * ContextMenuItem[] format for rendering context menus.
+   */
+  import type { Localized, SingleColumnMenu } from 'platform-bible-utils';
+  import type { ContextMenuItem } from 'renderer/services/overlays/overlay.service-model';
+  /**
+   * Converts a localized SingleColumnMenu from the menu data service into an array of ContextMenuItem
+   * objects suitable for the overlay service's context menu rendering.
+   *
+   * @param menu The localized SingleColumnMenu to convert
+   * @returns An array of ContextMenuItem objects
+   */
+  export function convertContributionToContextMenuItems(
+    menu: Localized<SingleColumnMenu>,
+  ): ContextMenuItem[];
+}
+declare module 'renderer/services/overlays/overlay-validation' {
+  import {
+    CommandPaletteRequest,
+    ContextMenuRequest,
+    ContextMenuItem,
+    ModalDialogOptions,
+    ModalDialogType,
+    PopoverRequest,
+  } from 'renderer/services/overlays/overlay.service-model';
+  /**
+   * Validates a context menu request's items, nesting depth, and label lengths.
+   *
+   * @param request The context menu request to validate
+   * @throws PlatformError with code INVALID_ARGUMENT if validation fails
+   */
+  export function validateContextMenuRequest(request: ContextMenuRequest): void;
+  /**
+   * Recursively validates menu items at a given depth.
+   *
+   * @param items The menu items to validate
+   * @param depth The current nesting depth (0-based)
+   * @throws PlatformError with code INVALID_ARGUMENT if validation fails
+   */
+  export function validateMenuItems(items: ContextMenuItem[], depth: number): void;
+  /**
+   * Validates a popover request's anchor, content, and options.
+   *
+   * @param request The popover request to validate
+   * @throws PlatformError with code INVALID_ARGUMENT if validation fails
+   */
+  export function validatePopoverRequest(request: PopoverRequest): void;
+  /**
+   * Validates a command palette request's items, anchor, and options.
+   *
+   * @param request The command palette request to validate
+   * @throws PlatformError with code INVALID_ARGUMENT if validation fails
+   */
+  export function validateCommandPaletteRequest(request: CommandPaletteRequest): void;
+  /**
+   * Validates modal dialog options based on dialog type.
+   *
+   * @param dialogType The type of dialog (alert, confirm)
+   * @param options The dialog options to validate
+   * @throws PlatformError with code INVALID_ARGUMENT if validation fails
+   */
+  export function validateModalDialogOptions<T extends ModalDialogType>(
+    dialogType: T,
+    options: ModalDialogOptions[T],
+  ): void;
+}
+declare module 'renderer/services/overlays/overlay-store' {
+  /**
+   * Simple overlay store using a Map and listeners pattern. Manages active overlay entries (context
+   * menus, modal dialogs, popovers) and notifies subscribers on changes.
+   */
+  import { OverlayEntry, PopoverContent } from 'renderer/services/overlays/overlay.service-model';
+  /** Add an overlay entry to the store */
+  export function addOverlay(entry: OverlayEntry): void;
+  /** Remove an overlay by id and return it, or undefined if not found */
+  export function removeOverlay(id: string): OverlayEntry | undefined;
+  /** Get all active overlays as an array */
+  export function getOverlays(): OverlayEntry[];
+  /** Get all overlays for a specific webViewId */
+  export function getOverlaysByWebView(webViewId: string): OverlayEntry[];
+  /** Subscribe to store changes. Returns an unsubscribe function. */
+  export function subscribe(listener: () => void): () => void;
+  /** Get a specific overlay by id, or undefined if not found */
+  export function getOverlayById(id: string): OverlayEntry | undefined;
+  /** Removes all overlays from the store and notifies listeners. Only exported for use in tests. */
+  export function clearAllOverlays(): void;
+  /**
+   * Updates the content of a popover overlay and notifies subscribers.
+   *
+   * @param id The overlay id to update
+   * @param content The new popover content
+   * @returns True if the overlay was found and updated, false otherwise
+   */
+  export function updateOverlayContent(id: string, content: PopoverContent): boolean;
+}
+declare module 'renderer/services/overlays/overlay-coordinates' {
   /**
    * Coordinate translation utilities for the overlay service. Translates iframe-relative coordinates
    * to document-relative coordinates, clamps positions to the viewport, and checks WebView
@@ -10027,118 +10112,27 @@ declare module 'renderer/services/overlay-coordinates' {
     margin?: number,
   ): boolean;
 }
-declare module 'renderer/services/overlay-menu-converter' {
-  /**
-   * Converts menu data service contributions (SingleColumnMenu) into the overlay service's
-   * ContextMenuItem[] format for rendering context menus.
-   */
-  import type { ContextMenuItem } from 'shared/models/overlay.service-model';
-  import type { Localized, SingleColumnMenu } from 'platform-bible-utils';
-  /**
-   * Converts a localized SingleColumnMenu from the menu data service into an array of ContextMenuItem
-   * objects suitable for the overlay service's context menu rendering.
-   *
-   * @param menu The localized SingleColumnMenu to convert
-   * @returns An array of ContextMenuItem objects
-   */
-  export function convertContributionToContextMenuItems(
-    menu: Localized<SingleColumnMenu>,
-  ): ContextMenuItem[];
-}
-declare module 'renderer/services/overlay-store' {
-  /**
-   * Simple overlay store using a Map and listeners pattern. Manages active overlay entries (context
-   * menus, modal dialogs, popovers) and notifies subscribers on changes.
-   */
-  import { OverlayEntry, PopoverContent } from 'shared/models/overlay.service-model';
-  /** Add an overlay entry to the store */
-  export function addOverlay(entry: OverlayEntry): void;
-  /** Remove an overlay by id and return it, or undefined if not found */
-  export function removeOverlay(id: string): OverlayEntry | undefined;
-  /** Get all active overlays as an array */
-  export function getOverlays(): OverlayEntry[];
-  /** Get all overlays for a specific webViewId */
-  export function getOverlaysByWebView(webViewId: string): OverlayEntry[];
-  /**
-   * Remove all overlays for a specific webViewId. WARNING: This does not call resolve/reject on the
-   * removed entries. Callers must settle overlay promises before calling this to avoid leaking
-   * unsettled popover promises. Production dismissal should go through the service host's dismiss
-   * functions which resolve before removing.
-   */
-  export function removeOverlaysByWebView(webViewId: string): void;
-  /** Subscribe to store changes. Returns an unsubscribe function. */
-  export function subscribe(listener: () => void): () => void;
-  /** Get a specific overlay by id, or undefined if not found */
-  export function getOverlayById(id: string): OverlayEntry | undefined;
-  /** Removes all overlays from the store and notifies listeners. Exported for use in tests. */
-  export function clearAllOverlays(): void;
-  /**
-   * Updates the content of a popover overlay and notifies subscribers.
-   *
-   * @param id The overlay id to update
-   * @param content The new popover content
-   * @returns True if the overlay was found and updated, false otherwise
-   */
-  export function updateOverlayContent(id: string, content: PopoverContent): boolean;
-}
-declare module 'renderer/services/overlay-validation' {
-  /**
-   * Validation functions for overlay service requests. Validates context menu items count, nesting
-   * depth, and label lengths.
-   */
+declare module 'renderer/services/overlays/overlay.service-host' {
   import {
-    CommandPaletteRequest,
-    ContextMenuRequest,
-    ContextMenuItem,
+    IOverlayService,
     ModalDialogOptions,
+    ModalDialogResponse,
     ModalDialogType,
-    PopoverRequest,
-  } from 'shared/models/overlay.service-model';
-  /**
-   * Validates a context menu request's items, nesting depth, and label lengths.
-   *
-   * @param request The context menu request to validate
-   * @throws OverlayValidationError if validation fails
-   */
-  export function validateContextMenuRequest(request: ContextMenuRequest): void;
-  /**
-   * Recursively validates menu items at a given depth.
-   *
-   * @param items The menu items to validate
-   * @param depth The current nesting depth (0-based)
-   * @throws OverlayValidationError if validation fails
-   */
-  export function validateMenuItems(items: ContextMenuItem[], depth: number): void;
-  /**
-   * Validates a popover request's anchor, content, and options.
-   *
-   * @param request The popover request to validate
-   * @throws OverlayValidationError if validation fails
-   */
-  export function validatePopoverRequest(request: PopoverRequest): void;
-  /**
-   * Validates a command palette request's items, anchor, and options.
-   *
-   * @param request The command palette request to validate
-   * @throws OverlayValidationError if validation fails
-   */
-  export function validateCommandPaletteRequest(request: CommandPaletteRequest): void;
-  /**
-   * Validates modal dialog options based on dialog type.
-   *
-   * @param dialogType The type of dialog (alert, confirm)
-   * @param options The dialog options to validate
-   * @throws OverlayValidationError if validation fails
-   */
-  export function validateModalDialogOptions<T extends ModalDialogType>(
-    dialogType: T,
-    options: ModalDialogOptions[T],
-  ): void;
-}
-declare module 'renderer/services/overlay.service-host' {
-  import { IOverlayService } from 'shared/models/overlay.service-model';
+  } from 'renderer/services/overlays/overlay.service-model';
   /** Resets debounce tracking state. Exported for use in tests only. */
   export function resetDebounceState(): void;
+  /**
+   * Shows a modal dialog overlay. Called internally by the dialog service host. Not exposed on PAPI.
+   *
+   * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
+   *   debounce cooldown
+   * @internal
+   */
+  export function showModalDialogOverlay<T extends ModalDialogType>(
+    dialogType: T,
+    options: ModalDialogOptions[T],
+    webViewId?: string,
+  ): Promise<ModalDialogResponse[T] | undefined>;
   /** The overlay service instance exposed on papi */
   export const overlayService: IOverlayService;
   /** Initialize the overlay service. Called during renderer startup. */
@@ -10395,7 +10389,7 @@ declare module '@papi/frontend' {
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
   import { IWindowService } from 'shared/services/window.service-model';
-  import { IOverlayService } from 'shared/models/overlay.service-model';
+  import { IOverlayService } from 'renderer/services/overlays/overlay.service-model';
   import { IThemeServiceLocal } from 'shared/services/theme.service-model';
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { PapiRendererXMLHttpRequest } from 'renderer/services/renderer-xml-http-request.service';
@@ -10555,8 +10549,8 @@ declare module '@papi/frontend' {
     window: IWindowService;
     /**
      *
-     * Service for showing overlays (context menus, modal dialogs, popovers, command palettes) that
-     * render outside iframe boundaries in the renderer's top-level document. Renderer-only service.
+     * Service for showing overlays (context menus, popovers, command palettes) that render outside
+     * iframe boundaries in the renderer's top-level document. Renderer-only service.
      *
      * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
      * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -10564,11 +10558,11 @@ declare module '@papi/frontend' {
      * renderer's React tree. Each method returns a promise that resolves when the user interacts with
      * the overlay or it is dismissed.
      *
-     * Only one overlay of each type (context menu, modal dialog, popover, command palette) can be
-     * active per WebView at a time. Requesting a new overlay of the same type from the same WebView
-     * replaces the previous one and rejects its promise with {@link OverlayReplacedError}.
+     * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
+     * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
+     * one and rejects its promise with a PlatformError with code ABORTED.
      */
-    overlay: IOverlayService;
+    overlays: IOverlayService;
   };
   export default papi;
   /** This is just an alias for internet.fetch */
@@ -10724,8 +10718,8 @@ declare module '@papi/frontend' {
   export const window: IWindowService;
   /**
    *
-   * Service for showing overlays (context menus, modal dialogs, popovers, command palettes) that
-   * render outside iframe boundaries in the renderer's top-level document. Renderer-only service.
+   * Service for showing overlays (context menus, popovers, command palettes) that render outside
+   * iframe boundaries in the renderer's top-level document. Renderer-only service.
    *
    * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
    * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -10733,10 +10727,10 @@ declare module '@papi/frontend' {
    * renderer's React tree. Each method returns a promise that resolves when the user interacts with
    * the overlay or it is dismissed.
    *
-   * Only one overlay of each type (context menu, modal dialog, popover, command palette) can be
-   * active per WebView at a time. Requesting a new overlay of the same type from the same WebView
-   * replaces the previous one and rejects its promise with {@link OverlayReplacedError}.
+   * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
+   * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
+   * one and rejects its promise with a PlatformError with code ABORTED.
    */
-  export const overlay: IOverlayService;
+  export const overlays: IOverlayService;
   export type Papi = typeof papi;
 }

@@ -1,51 +1,12 @@
-/* eslint-disable max-classes-per-file -- Related overlay error types kept together */
 /**
  * Type definitions for the overlay service, a renderer-only service that manages overlays (context
- * menus, modal dialogs, popovers) rendered in the renderer's top-level document outside iframe
+ * menus, popovers, command palettes) rendered in the renderer's top-level document outside iframe
  * boundaries. Extensions running in sandboxed WebView iframes cannot render UI above other content,
  * so this service provides a way for them to request overlays that the renderer hosts on their
  * behalf.
  */
 
-import { LocalizeKey } from 'platform-bible-utils';
-
-// ── Error Types ──
-
-/**
- * Thrown when an overlay is requested from a WebView that is not currently visible (e.g., it is on
- * a background tab). The caller should handle this gracefully since the user cannot interact with
- * an overlay they cannot see.
- */
-export class OverlayNotVisibleError extends Error {
-  constructor(message?: string) {
-    super(message ?? 'Requesting WebView is not visible');
-    this.name = 'OverlayNotVisibleError';
-  }
-}
-
-/**
- * Thrown when an overlay request fails validation (e.g., a context menu with zero items, a modal
- * dialog missing required options, or a popover with invalid anchor coordinates). Callers should
- * fix the request rather than retrying.
- */
-export class OverlayValidationError extends Error {
-  constructor(message?: string) {
-    super(message ?? 'Invalid overlay request');
-    this.name = 'OverlayValidationError';
-  }
-}
-
-/**
- * Thrown when an overlay's promise is rejected because a new overlay of the same type was requested
- * from the same WebView, replacing the previous one. Only one overlay of each type (context menu,
- * modal dialog, popover) can be active per WebView at a time.
- */
-export class OverlayReplacedError extends Error {
-  constructor(message?: string) {
-    super(message ?? 'Overlay was replaced by a new request');
-    this.name = 'OverlayReplacedError';
-  }
-}
+import { LocalizeKey, PlatformError } from 'platform-bible-utils';
 
 // ── Context Menu Types ──
 
@@ -352,8 +313,8 @@ export interface CommandPaletteRequest {
 /**
  * JSDOC SOURCE overlayService
  *
- * Service for showing overlays (context menus, modal dialogs, popovers, command palettes) that
- * render outside iframe boundaries in the renderer's top-level document. Renderer-only service.
+ * Service for showing overlays (context menus, popovers, command palettes) that render outside
+ * iframe boundaries in the renderer's top-level document. Renderer-only service.
  *
  * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
  * iframe bounds. This service accepts overlay requests from WebViews, translates their
@@ -361,9 +322,9 @@ export interface CommandPaletteRequest {
  * renderer's React tree. Each method returns a promise that resolves when the user interacts with
  * the overlay or it is dismissed.
  *
- * Only one overlay of each type (context menu, modal dialog, popover, command palette) can be
- * active per WebView at a time. Requesting a new overlay of the same type from the same WebView
- * replaces the previous one and rejects its promise with {@link OverlayReplacedError}.
+ * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
+ * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
+ * one and rejects its promise with a PlatformError with code ABORTED.
  */
 export interface IOverlayService {
   /**
@@ -374,8 +335,9 @@ export interface IOverlayService {
    * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
    *   from within a WebView iframe.
    * @returns The selected item result, or `undefined` if dismissed
-   * @throws {OverlayValidationError} If the request has no items
-   * @throws {OverlayReplacedError} If replaced by another context menu from the same WebView
+   * @throws PlatformError with code INVALID_ARGUMENT if the request has no items
+   * @throws PlatformError with code ABORTED if replaced by another context menu from the same
+   *   WebView
    */
   showContextMenu(
     request: ContextMenuRequest,
@@ -399,23 +361,6 @@ export interface IOverlayService {
     context?: { position?: { x: number; y: number } },
   ): Promise<ContextMenuResult | undefined>;
   /**
-   * Shows a modal dialog of the specified type. The returned promise resolves with the user's
-   * response or `undefined` if the dialog was dismissed.
-   *
-   * @param dialogType The type of dialog to show (`'alert'` or `'confirm'`)
-   * @param options Configuration for the dialog, typed according to `dialogType`
-   * @param webViewId Optional ID of the WebView requesting the dialog. Used for one-per-WebView
-   *   enforcement. Pass `globalThis.webViewId` from within a WebView iframe.
-   * @returns The dialog result typed according to `dialogType`, or `undefined` if dismissed
-   * @throws {OverlayValidationError} If required options are missing
-   * @throws {OverlayReplacedError} If replaced by another modal from the same WebView
-   */
-  showModalDialog<T extends ModalDialogType>(
-    dialogType: T,
-    options: ModalDialogOptions[T],
-    webViewId?: string,
-  ): Promise<ModalDialogResponse[T] | undefined>;
-  /**
    * Shows a popover anchored to the specified position. Unlike context menus and modals, popovers
    * return immediately with an overlay ID rather than waiting for dismissal. Use
    * {@link onPopoverDismissed} to await the result, {@link updatePopover} to change content, and
@@ -424,12 +369,13 @@ export interface IOverlayService {
    * @param request The popover anchor, content, and behavioral options
    * @param webViewId The ID of the WebView requesting the popover. Pass `globalThis.webViewId` from
    *   within a WebView iframe.
-   * @returns The overlay ID string, usable with other popover methods. Returns `undefined` if the
-   *   request was dropped by the debounce cooldown.
-   * @throws {OverlayValidationError} If the request is invalid
-   * @throws {OverlayReplacedError} If replaced by another popover from the same WebView
+   * @returns The overlay ID string, usable with other popover methods
+   * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
+   *   debounce cooldown
+   * @throws PlatformError with code INVALID_ARGUMENT if the request is invalid
+   * @throws PlatformError with code ABORTED if replaced by another popover from the same WebView
    */
-  showPopover(request: PopoverRequest, webViewId: string): Promise<string | undefined>;
+  showPopover(request: PopoverRequest, webViewId: string): Promise<string>;
   /**
    * Replaces the content of an existing popover without closing and reopening it. Useful for
    * updating status messages or showing loading progress.
@@ -454,7 +400,8 @@ export interface IOverlayService {
    *
    * @param overlayId The overlay ID returned by {@link showPopover}
    * @returns The action ID that triggered dismissal, or `undefined`
-   * @throws {OverlayReplacedError} If the popover was replaced by a new one from the same WebView
+   * @throws PlatformError with code ABORTED if the popover was replaced by a new one from the same
+   *   WebView
    */
   onPopoverDismissed(overlayId: string): Promise<string | undefined>;
   /**
@@ -464,8 +411,9 @@ export interface IOverlayService {
    * @param request The items, optional anchor position, and display options
    * @param webViewId The ID of the WebView requesting the command palette
    * @returns The selected item's ID, or `undefined` if dismissed
-   * @throws {OverlayValidationError} If the request is invalid
-   * @throws {OverlayReplacedError} If replaced by another command palette from the same WebView
+   * @throws PlatformError with code INVALID_ARGUMENT if the request is invalid
+   * @throws PlatformError with code ABORTED if replaced by another command palette from the same
+   *   WebView
    */
   showCommandPalette(
     request: CommandPaletteRequest,
@@ -503,8 +451,8 @@ export type OverlayEntry =
       position: { x: number; y: number };
       /** Settles the caller's promise with the selected item, or `undefined` if dismissed */
       resolve: (result: ContextMenuResult | undefined) => void;
-      /** Rejects the caller's promise (e.g., with {@link OverlayReplacedError}) */
-      reject: (error: Error) => void;
+      /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+      reject: (error: PlatformError) => void;
     }
   | {
       type: 'modalDialog';
@@ -518,11 +466,12 @@ export type OverlayEntry =
       options: ModalDialogOptions[ModalDialogType];
       /**
        * Settles the caller's promise with the dialog result. Typed as `unknown` because the generic
-       * `T` from `showModalDialog<T>` is not preserved in the store entry; the service widens it.
+       * `T` from `showModalDialogOverlay<T>` is not preserved in the store entry; the service
+       * widens it.
        */
       resolve: (result: unknown) => void;
-      /** Rejects the caller's promise (e.g., with {@link OverlayReplacedError}) */
-      reject: (error: Error) => void;
+      /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+      reject: (error: PlatformError) => void;
     }
   | {
       type: 'popover';
@@ -541,8 +490,8 @@ export type OverlayEntry =
        * the {@link PopoverAction} `id` if the user clicked an action, or `undefined` if dismissed.
        */
       resolve: (actionId: string | undefined) => void;
-      /** Rejects the caller's promise (e.g., with {@link OverlayReplacedError}) */
-      reject: (error: Error) => void;
+      /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+      reject: (error: PlatformError) => void;
     }
   | {
       type: 'commandPalette';
@@ -558,6 +507,6 @@ export type OverlayEntry =
       position?: { x: number; y: number };
       /** Settles the caller's promise with the selected item ID, or undefined if dismissed */
       resolve: (selectedId: string | undefined) => void;
-      /** Rejects the caller's promise */
-      reject: (error: Error) => void;
+      /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+      reject: (error: PlatformError) => void;
     };

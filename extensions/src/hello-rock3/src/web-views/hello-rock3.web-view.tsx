@@ -520,7 +520,7 @@ globalThis.webViewComponent = function HelloRock3({
         },
       ];
 
-      const result = await papi.overlay.showContextMenu(
+      const result = await papi.overlays.showContextMenu(
         {
           items,
           position: { x: e.clientX, y: e.clientY },
@@ -537,14 +537,10 @@ globalThis.webViewComponent = function HelloRock3({
           papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId);
           break;
         case 'showAlert':
-          papi.overlay.showModalDialog(
-            'alert',
-            {
-              title: overlayAlertTitle,
-              message: overlayAlertMessage,
-            },
-            globalThis.webViewId,
-          );
+          papi.dialogs.showDialog('platform.alert', {
+            title: overlayAlertTitle,
+            prompt: overlayAlertMessage,
+          });
           break;
         case 'deletePerson':
           peopleDataProvider?.deletePerson(name);
@@ -602,7 +598,7 @@ globalThis.webViewComponent = function HelloRock3({
   const showPersonPopover = useCallback(async () => {
     if (popoverIdRef.current || !greetingRef.current) return;
     const rect = greetingRef.current.getBoundingClientRect();
-    const overlayId = await papi.overlay.showPopover(
+    const overlayId = await papi.overlays.showPopover(
       {
         anchor: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
         side: 'bottom',
@@ -630,12 +626,10 @@ globalThis.webViewComponent = function HelloRock3({
       },
       globalThis.webViewId,
     );
-    // showPopover returns undefined if the request was dropped by debounce
-    if (!overlayId) return;
     popoverIdRef.current = overlayId;
 
     // Clean up when dismissed
-    papi.overlay
+    papi.overlays
       .onPopoverDismissed(overlayId)
       .then((actionId) => {
         logger.debug(`Person popover dismissed (action: ${actionId ?? 'none'})`);
@@ -658,7 +652,7 @@ globalThis.webViewComponent = function HelloRock3({
 
   const dismissPersonPopover = useCallback(async () => {
     if (popoverIdRef.current) {
-      await papi.overlay.dismissPopover(popoverIdRef.current);
+      await papi.overlays.dismissPopover(popoverIdRef.current);
       popoverIdRef.current = undefined;
     }
   }, []);
@@ -680,7 +674,7 @@ globalThis.webViewComponent = function HelloRock3({
 
   // Command palette demo handler
   const handleCommandPalette = useCallback(async () => {
-    const result = await papi.overlay.showCommandPalette(
+    const result = await papi.overlays.showCommandPalette(
       {
         items: [
           { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph', group: 'Paragraphs' },
@@ -768,17 +762,13 @@ globalThis.webViewComponent = function HelloRock3({
           <Button
             onClick={async () => {
               // Overlay service demo: confirm dialog before destructive action
-              const confirmed = await papi.overlay.showModalDialog(
-                'confirm',
-                {
-                  title: overlayDeletePersonTitle,
-                  message: overlayDeletePersonMessage,
-                  okLabel: overlayDeletePersonOkLabel,
-                  cancelLabel: overlayCancel,
-                  destructive: true,
-                },
-                globalThis.webViewId,
-              );
+              const confirmed = await papi.dialogs.showDialog('platform.confirm', {
+                title: overlayDeletePersonTitle,
+                prompt: overlayDeletePersonMessage,
+                okLabel: overlayDeletePersonOkLabel,
+                cancelLabel: overlayCancel,
+                destructive: true,
+              });
               if (confirmed) peopleDataProvider?.deletePerson(name);
             }}
           >

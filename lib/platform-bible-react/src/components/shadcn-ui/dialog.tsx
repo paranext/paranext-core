@@ -5,14 +5,25 @@ import { X } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { readDirection } from '@/utils/dir-helper.util';
 
+/**
+ * The Dialog component displays a modal dialog window. Built on Radix UI's Dialog component and
+ * styled by Shadcn UI.
+ *
+ * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/dialog See Radix UI
+ * Documentation https://www.radix-ui.com/docs/primitives/components/dialog
+ */
 const Dialog = DialogPrimitive.Root;
 
+/** @inheritdoc Dialog */
 const DialogTrigger = DialogPrimitive.Trigger;
 
+/** @inheritdoc Dialog */
 const DialogPortal = DialogPrimitive.Portal;
 
+/** @inheritdoc Dialog */
 const DialogClose = DialogPrimitive.Close;
 
+/** @inheritdoc Dialog */
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -28,6 +39,7 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+/** @inheritdoc Dialog */
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
@@ -61,6 +73,8 @@ const DialogContent = React.forwardRef<
   );
 });
 DialogContent.displayName = DialogPrimitive.Content.displayName;
+
+/** @inheritdoc Dialog */
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
@@ -74,6 +88,7 @@ function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 }
 DialogHeader.displayName = 'DialogHeader';
 
+/** @inheritdoc Dialog */
 function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
@@ -87,6 +102,7 @@ function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 }
 DialogFooter.displayName = 'DialogFooter';
 
+/** @inheritdoc Dialog */
 const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
@@ -99,6 +115,7 @@ const DialogTitle = React.forwardRef<
 ));
 DialogTitle.displayName = DialogPrimitive.Title.displayName;
 
+/** @inheritdoc Dialog */
 const DialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
