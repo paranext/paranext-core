@@ -2,6 +2,7 @@ import { DialogOptions } from '@shared/models/dialog-options.model';
 import { DialogDefinitionBase, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
 import { ReactElement } from 'react';
 import { ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
+import { LocalizeKey } from 'platform-bible-utils';
 
 /** The tabType for the about dialog in `about-dialog.component.tsx` */
 export const ABOUT_DIALOG_TYPE = 'platform.aboutDialog';
@@ -11,6 +12,10 @@ export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
 /** The tabType for the select books dialog in `select-books.dialog.tsx` */
 export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
+/** The dialogType for alert dialogs rendered via overlay */
+export const ALERT_DIALOG_TYPE = 'platform.alert';
+/** The dialogType for confirm dialogs rendered via overlay */
+export const CONFIRM_DIALOG_TYPE = 'platform.confirm';
 
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
 
@@ -29,12 +34,30 @@ export type SelectBooksDialogOptions = DialogOptions & {
   selectedBookIds?: string[];
 };
 
+/** Options to provide when showing an alert dialog */
+export type AlertDialogOptions = DialogOptions & {
+  /** The message body displayed in the dialog. Required for alert dialogs. */
+  prompt: string | LocalizeKey;
+  /** Custom label for the OK button. Defaults to a localized "OK". */
+  okLabel?: string | LocalizeKey;
+};
+
+/** Options to provide when showing a confirm dialog */
+export type ConfirmDialogOptions = DialogOptions & {
+  /** The message body displayed in the dialog. Required for confirm dialogs. */
+  prompt: string | LocalizeKey;
+  /** Custom label for the OK button. Defaults to a localized "OK". */
+  okLabel?: string | LocalizeKey;
+  /** Custom label for the Cancel button. Defaults to a localized "Cancel". */
+  cancelLabel?: string | LocalizeKey;
+  /** Whether to style the OK button as a destructive action (e.g., red) */
+  destructive?: boolean;
+};
+
 /**
  * Mapped type for dialog functions to use in getting various types for dialogs
  *
  * Keys should be dialog names, and values should be {@link DialogDataTypes}
- *
- * If you add a dialog here, you must also add it on {@link DIALOGS}
  */
 export interface DialogTypes {
   [ABOUT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, void>;
@@ -44,9 +67,18 @@ export interface DialogTypes {
     string[]
   >;
   [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
+  [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
+  [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
 }
 
-/** Each type of dialog. These are the tab types used in the dock layout */
+/** Dialog types that render as rc-dock floating tabs (have a DialogDefinition) */
+export type TabDialogTypes =
+  | typeof ABOUT_DIALOG_TYPE
+  | typeof SELECT_PROJECT_DIALOG_TYPE
+  | typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE
+  | typeof SELECT_BOOKS_DIALOG_TYPE;
+
+/** All dialog types including overlay-routed dialogs */
 export type DialogTabTypes = keyof DialogTypes;
 
 /** Types related to a specific dialog */
@@ -65,7 +97,7 @@ export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
   props: DialogProps<TReturnType> & TOptions;
 };
 
-export type DialogDefinition<DialogTabType extends DialogTabTypes> = Readonly<
+export type DialogDefinition<DialogTabType extends TabDialogTypes> = Readonly<
   DialogDefinitionBase & {
     /**
      * Type of tab - indicates what kind of built-in dock layout tab this dialog definition
