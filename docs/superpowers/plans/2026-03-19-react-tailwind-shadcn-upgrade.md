@@ -93,9 +93,14 @@ And devDependencies:
 - `"@types/react": "^18.3.18"` → `"@types/react": "^19.0.0"`
 - `"@types/react-dom": "^18.3.5"` → `"@types/react-dom": "^19.0.0"`
 
-- [ ] **Step 4: Update extensions workspace types**
+- [ ] **Step 4: Update extensions workspace types and peer deps**
 
-In `extensions/package.json`, change:
+In `extensions/package.json`, change peerDependencies:
+
+- `"react": ">=18.3.1"` → `"react": ">=19.0.0"`
+- `"react-dom": ">=18.3.1"` → `"react-dom": ">=19.0.0"`
+
+And devDependencies:
 
 - `"@types/react": "^18.3.18"` → `"@types/react": "^19.0.0"`
 - `"@types/react-dom": "^18.3.5"` → `"@types/react-dom": "^19.0.0"`
@@ -278,7 +283,7 @@ Fix any new lint errors from `eslint-plugin-react-hooks` v5.
 - [ ] **Step 4: Storybook build**
 
 ```bash
-cd lib/platform-bible-react && npm run storybook:build
+cd lib/platform-bible-react && npm run build:storybook
 ```
 
 If Storybook fails, check `@storybook/react-vite` and `@storybook/react-webpack5` compatibility with React 19 and upgrade if needed.
@@ -298,6 +303,7 @@ git commit -m "fix: resolve React 19 lint and storybook issues"
 
 - Modify: `lib/platform-bible-react/package.json`
 - Modify: `extensions/package.json`
+- Modify: All 9 per-extension `package.json` files
 - Modify: `package.json` (root — for stylelint-config)
 
 - [ ] **Step 1: Update PBR dependencies**
@@ -333,6 +339,21 @@ npm install tw-animate-css
 npm uninstall stylelint-config-tailwindcss
 npm install -D @dreamsicle.io/stylelint-config-tailwindcss
 ```
+
+- [ ] **Step 2b: Update all 9 per-extension package.json dependencies**
+
+Each extension has its own `package.json` with direct devDependencies on TW3 packages. Update all 9:
+
+Extensions: `hello-rock3`, `hello-someone`, `legacy-comment-manager`, `paratext-registration`, `platform-get-resources`, `platform-lexical-tools`, `platform-scripture`, `platform-scripture-editor`, `quick-verse`
+
+In each `extensions/src/{ext}/package.json`:
+
+- `"tailwindcss": "^3.4.17"` → `"tailwindcss": "^4.0.0"`
+- Add `"@tailwindcss/postcss": "^4.0.0"` to devDependencies
+- Remove `"autoprefixer"` from devDependencies
+- Remove `"tailwindcss-animate"` from devDependencies, add `"tw-animate-css"` to dependencies
+- Remove `"stylelint-config-tailwindcss"`, add `"@dreamsicle.io/stylelint-config-tailwindcss"` to devDependencies
+- Keep `"@tailwindcss/typography"` (verify version is TW4-compatible; bump if needed)
 
 - [ ] **Step 3: Update root stylelint config if applicable**
 
@@ -376,7 +397,7 @@ npm install
 - [ ] **Step 5: Commit dependency changes**
 
 ```bash
-git add package.json package-lock.json lib/platform-bible-react/package.json extensions/package.json
+git add -A
 git commit -m "feat: upgrade Tailwind CSS 3 to 4 dependencies
 
 - tailwindcss → ^4.0.0
@@ -433,7 +454,7 @@ In `lib/platform-bible-react/tailwind.config.ts`:
 - Remove `tailwindCssAnimate` from plugins
 - Remove `scopedPreflightStyles` plugin and its import
 - Replace scoped preflight with the approach validated in Task 0
-- Keep `typography()` plugin for now (will be loaded via JS config)
+- Keep `typography()` plugin for now (will be loaded via JS config) — verify `@tailwindcss/typography` version is TW4-compatible and bump if needed
 - Keep all `theme.extend` entries (colors, borderRadius, keyframes, animation, typography)
 
 - [ ] **Step 3: Update PBR postcss.config.js**
@@ -463,12 +484,13 @@ tailwindcss(),
 
 - [ ] **Step 4: Update extensions/tailwind.config.ts**
 
-Same changes as PBR:
-
-- Remove `prefix: 'tw-'`
-- Remove `content` array
+- Remove `prefix: 'tw-'` (now handled by CSS `prefix(tw)`)
+- Remove `content` array (TW4 auto-detects)
 - Remove `tailwindCssAnimate` plugin and import
-- Keep `typography()` and all theme config
+- Keep `typography()` plugin and all `theme.extend` entries
+- Note: Extensions config does NOT have `containerQueries` or `scopedPreflightStyles` — those are PBR-only
+
+After updating, verify whether the parent `extensions/tailwind.config.ts` is still referenced by any per-extension config. If each per-extension CSS now has its own `@config` pointing to the per-extension `tailwind.config.ts`, the parent may be dead code. If so, delete it or document why it's kept.
 
 - [ ] **Step 5: Update extensions/postcss.config.ts**
 
@@ -539,13 +561,14 @@ Files:
 
 - [ ] **Step 7: Update prettier config**
 
-Find the Prettier config (likely `.prettierrc` or `prettier.config.*`) and add:
+The root prettier config is `.prettierrc.js` (CommonJS `module.exports`). Add the `tailwindStylesheet` option:
 
-```json
-{
-  "tailwindStylesheet": "./lib/platform-bible-react/src/index.css"
-}
+```js
+// In .prettierrc.js, add to the exported config object:
+tailwindStylesheet: './lib/platform-bible-react/src/index.css',
 ```
+
+Also check `extensions/.prettierrc.js` and per-extension `.prettierrc.js` files — if they use `prettier-plugin-tailwindcss`, they also need the `tailwindStylesheet` option pointing to their respective CSS entry file (e.g., `'./src/tailwind.css'`). If they reference the root config, the root setting may cover them.
 
 - [ ] **Step 8: Commit config changes**
 
@@ -1087,7 +1110,7 @@ Stylelint may complain about TW4 directives (`@import 'tailwindcss'`, `@config`,
 - [ ] **Step 5: Storybook build and visual check**
 
 ```bash
-cd lib/platform-bible-react && npm run storybook:build
+cd lib/platform-bible-react && npm run build:storybook
 ```
 
 If it builds, run Storybook and visually spot-check a few components:
@@ -1254,7 +1277,7 @@ npm test
 - [ ] **Step 4: Storybook visual check**
 
 ```bash
-cd lib/platform-bible-react && npm run storybook:build
+cd lib/platform-bible-react && npm run build:storybook
 ```
 
 Run Storybook and compare components against shadcn/ui new york reference:
