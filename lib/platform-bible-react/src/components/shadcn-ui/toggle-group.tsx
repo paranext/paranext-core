@@ -18,11 +18,17 @@ const ToggleGroupContext = React.createContext<VariantProps<typeof toggleVariant
  * Documentation: https://ui.shadcn.com/docs/components/toggle-group See Radix UI Documentation:
  * https://www.radix-ui.com/primitives/docs/components/toggle-group
  */
-const ToggleGroup = React.forwardRef<
-  React.ElementRef<typeof ToggleGroupPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> &
-    VariantProps<typeof toggleVariants>
->(({ className, variant, size, children, ...props }, ref) => {
+function ToggleGroup({
+  className,
+  variant,
+  size,
+  children,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> &
+  VariantProps<typeof toggleVariants> & {
+    ref?: React.Ref<React.ComponentRef<typeof ToggleGroupPrimitive.Root>>;
+  }) {
   const dir: Direction = readDirection();
   return (
     <ToggleGroupPrimitive.Root
@@ -40,16 +46,20 @@ const ToggleGroup = React.forwardRef<
       </ToggleGroupContext.Provider>
     </ToggleGroupPrimitive.Root>
   );
-});
-
-ToggleGroup.displayName = ToggleGroupPrimitive.Root.displayName;
+}
 
 /** @inheritdoc ToggleGroup */
-const ToggleGroupItem = React.forwardRef<
-  React.ElementRef<typeof ToggleGroupPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item> &
-    VariantProps<typeof toggleVariants>
->(({ className, children, variant, size, ...props }, ref) => {
+function ToggleGroupItem({
+  className,
+  children,
+  variant,
+  size,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item> &
+  VariantProps<typeof toggleVariants> & {
+    ref?: React.Ref<React.ComponentRef<typeof ToggleGroupPrimitive.Item>>;
+  }) {
   const context = React.useContext(ToggleGroupContext);
 
   return (
@@ -67,8 +77,6 @@ const ToggleGroupItem = React.forwardRef<
       {children}
     </ToggleGroupPrimitive.Item>
   );
-});
-
-ToggleGroupItem.displayName = ToggleGroupPrimitive.Item.displayName;
+}
 
 export { ToggleGroup, ToggleGroupItem };

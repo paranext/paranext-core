@@ -6,8 +6,12 @@ import { cn } from '@/utils/shadcn-ui.util';
  * The Card component displays a card with header, content, and footer. This component is built and
  * styled with Shadcn UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/card
  */
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+function Card({
+  className,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) {
+  return (
     <div
       ref={ref}
       className={cn(
@@ -16,25 +20,31 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
       )}
       {...props}
     />
-  ),
-);
-Card.displayName = 'Card';
+  );
+}
 
 /** @inheritdoc Card */
-const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+function CardHeader({
+  className,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) {
+  return (
     <div
       ref={ref}
       className={cn('pr-twp tw-flex tw-flex-col tw-space-y-1.5 tw-p-6', className)}
       {...props}
     />
-  ),
-);
-CardHeader.displayName = 'CardHeader';
+  );
+}
 
 /** @inheritdoc Card */
-const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, ...props }, ref) => (
+function CardTitle({
+  className,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLHeadingElement> & { ref?: React.Ref<HTMLParagraphElement> }) {
+  return (
     <h3
       ref={ref}
       className={cn(
@@ -46,37 +56,46 @@ const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HT
       {/* added because of https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md  */}
       {props.children}
     </h3>
-  ),
-);
-CardTitle.displayName = 'CardTitle';
+  );
+}
 
 /** @inheritdoc Card */
-const CardDescription = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
->(({ className, ...props }, ref) => (
-  <p ref={ref} className={cn('pr-twp tw-text-sm tw-text-muted-foreground', className)} {...props} />
-));
-CardDescription.displayName = 'CardDescription';
+function CardDescription({
+  className,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLParagraphElement> & { ref?: React.Ref<HTMLParagraphElement> }) {
+  return (
+    <p
+      ref={ref}
+      className={cn('pr-twp tw-text-sm tw-text-muted-foreground', className)}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Card */
-const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('pr-twp tw-p-6 tw-pt-0', className)} {...props} />
-  ),
-);
-CardContent.displayName = 'CardContent';
+function CardContent({
+  className,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) {
+  return <div ref={ref} className={cn('pr-twp tw-p-6 tw-pt-0', className)} {...props} />;
+}
 
 /** @inheritdoc Card */
-const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+function CardFooter({
+  className,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) {
+  return (
     <div
       ref={ref}
       className={cn('pr-twp tw-flex tw-items-center tw-p-6 tw-pt-0', className)}
       {...props}
     />
-  ),
-);
-CardFooter.displayName = 'CardFooter';
+  );
+}
 
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent };

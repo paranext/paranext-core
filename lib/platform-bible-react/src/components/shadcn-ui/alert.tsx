@@ -33,27 +33,35 @@ const alertVariants = cva(
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
  */
-const Alert = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof alertVariants>
->(({ className, variant, ...props }, ref) => (
-  <div
-    ref={ref}
-    role="alert"
-    className={cn(
-      // CUSTOM
-      'pr-twp',
-      alertVariants({ variant }),
-      className,
-    )}
-    {...props}
-  />
-));
-Alert.displayName = 'Alert';
+function Alert({
+  className,
+  variant,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> &
+  VariantProps<typeof alertVariants> & { ref?: React.Ref<HTMLDivElement> }) {
+  return (
+    <div
+      ref={ref}
+      role="alert"
+      className={cn(
+        // CUSTOM
+        'pr-twp',
+        alertVariants({ variant }),
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Alert */
-const AlertTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, ...props }, ref) => (
+function AlertTitle({
+  className,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLHeadingElement> & { ref?: React.Ref<HTMLParagraphElement> }) {
+  return (
     <h5
       ref={ref}
       className={cn('tw-mb-1 tw-font-medium tw-leading-none tw-tracking-tight', className)}
@@ -62,17 +70,18 @@ const AlertTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<H
       {/* added because of https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md  */}
       {props.children}{' '}
     </h5>
-  ),
-);
-AlertTitle.displayName = 'AlertTitle';
+  );
+}
 
 /** @inheritdoc Alert */
-const AlertDescription = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
->(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('tw-text-sm [&_p]:tw-leading-relaxed', className)} {...props} />
-));
-AlertDescription.displayName = 'AlertDescription';
+function AlertDescription({
+  className,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLParagraphElement> & { ref?: React.Ref<HTMLParagraphElement> }) {
+  return (
+    <div ref={ref} className={cn('tw-text-sm [&_p]:tw-leading-relaxed', className)} {...props} />
+  );
+}
 
 export { Alert, AlertTitle, AlertDescription };

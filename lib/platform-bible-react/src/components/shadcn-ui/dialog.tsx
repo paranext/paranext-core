@@ -13,25 +13,33 @@ const DialogPortal = DialogPrimitive.Portal;
 
 const DialogClose = DialogPrimitive.Close;
 
-const DialogOverlay = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
-  <DialogPrimitive.Overlay
-    ref={ref}
-    className={cn(
-      'tw-fixed tw-inset-0 tw-z-50 tw-bg-black/80 data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0',
-      className,
-    )}
-    {...props}
-  />
-));
-DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
+function DialogOverlay({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> & {
+  ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Overlay>>;
+}) {
+  return (
+    <DialogPrimitive.Overlay
+      ref={ref}
+      className={cn(
+        'tw-fixed tw-inset-0 tw-z-50 tw-bg-black/80 data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
-const DialogContent = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+function DialogContent({
+  className,
+  children,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+  ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Content>>;
+}) {
   const dir = readDirection();
   return (
     <DialogPortal>
@@ -59,8 +67,7 @@ const DialogContent = React.forwardRef<
       </DialogPrimitive.Content>
     </DialogPortal>
   );
-});
-DialogContent.displayName = DialogPrimitive.Content.displayName;
+}
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
@@ -72,7 +79,7 @@ function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
     />
   );
 }
-DialogHeader.displayName = 'DialogHeader';
+
 
 function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
@@ -85,31 +92,39 @@ function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
     />
   );
 }
-DialogFooter.displayName = 'DialogFooter';
 
-const DialogTitle = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Title>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
->(({ className, ...props }, ref) => (
-  <DialogPrimitive.Title
-    ref={ref}
-    className={cn('tw-text-lg tw-font-semibold tw-leading-none tw-tracking-tight', className)}
-    {...props}
-  />
-));
-DialogTitle.displayName = DialogPrimitive.Title.displayName;
 
-const DialogDescription = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Description>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
->(({ className, ...props }, ref) => (
-  <DialogPrimitive.Description
-    ref={ref}
-    className={cn('tw-text-sm tw-text-muted-foreground', className)}
-    {...props}
-  />
-));
-DialogDescription.displayName = DialogPrimitive.Description.displayName;
+function DialogTitle({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title> & {
+  ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Title>>;
+}) {
+  return (
+    <DialogPrimitive.Title
+      ref={ref}
+      className={cn('tw-text-lg tw-font-semibold tw-leading-none tw-tracking-tight', className)}
+      {...props}
+    />
+  );
+}
+
+function DialogDescription({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description> & {
+  ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Description>>;
+}) {
+  return (
+    <DialogPrimitive.Description
+      ref={ref}
+      className={cn('tw-text-sm tw-text-muted-foreground', className)}
+      {...props}
+    />
+  );
+}
 
 export {
   Dialog,
