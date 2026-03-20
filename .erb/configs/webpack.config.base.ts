@@ -22,23 +22,9 @@ const configuration: webpack.Configuration = {
 
   module: {
     rules: [
-      /**
-       * Import fully loaded and transformed files as strings with "./file?inline"
-       *
-       * WARNING: These files are NOT bundled. The rules are applied, but webpack does not bundle
-       * dependencies into these files before providing them, unfortunately.
-       */
-      // This must be the first rule in order to be applied after all other transformations
-      // https://webpack.js.org/guides/asset-modules/#replacing-inline-loader-syntax
-      {
-        resourceQuery: {
-          and: [/inline/, { not: [/raw/] }],
-        },
-        type: 'asset/source',
-      },
       {
         test: /\.[jt]sx?$/,
-        resourceQuery: { not: [/raw/, /inline/] },
+        resourceQuery: { not: [/raw/] },
         exclude: /node_modules/,
         use: {
           loader: 'ts-loader',
@@ -47,25 +33,6 @@ const configuration: webpack.Configuration = {
             transpileOnly: true,
             compilerOptions: {
               module: 'esnext',
-            },
-          },
-        },
-      },
-      /**
-       * Import fully loaded and transformed files as CommonJS strings with "./file?inline".
-       * CommonJS is required so the output can be used in Node.js Worker eval mode.
-       */
-      {
-        test: /\.[jt]sx?$/,
-        resourceQuery: /inline/,
-        exclude: /node_modules/,
-        use: {
-          loader: 'ts-loader',
-          options: {
-            // Remove this line to enable type checking in webpack builds
-            transpileOnly: true,
-            compilerOptions: {
-              module: 'commonjs',
             },
           },
         },
