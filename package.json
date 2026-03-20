@@ -244,6 +244,7 @@
     "run-script-os": "^1.1.6",
     "sass": "^1.85.0",
     "sass-loader": "^16.0.5",
+    "scheduler": "^0.27.0",
     "storybook": "9.1.19",
     "storybook-addon-code-editor": "^5.0.0",
     "storybook-addon-rtl": "^2.0.0",
@@ -273,7 +274,8 @@
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.2.2",
     "webpack-merge": "^6.0.1",
-    "yalc": "^1.0.0-pre.53"
+    "yalc": "^1.0.0-pre.53",
+    "yjs": "^13.6.30"
   },
   "engines": {
     "node": ">=18.12.x",
