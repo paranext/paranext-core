@@ -33,7 +33,6 @@ import {
   SCOPE_SELECTOR_STRING_KEYS,
   ScopeSelector,
   Skeleton,
-  Spinner,
   ToggleGroup,
   ToggleGroupItem,
   Tooltip,
@@ -107,7 +106,6 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
 ];
 
 const defaultBooksPresent: string = '';
-const defaultProjectName = '';
 const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
 const SEARCH_DEBOUNCE_DELAY_MS = 500;
@@ -237,20 +235,6 @@ global.webViewComponent = function FindWebView({
       return Array.from(SEARCH_RESULT_LOCALIZED_STRING_KEYS);
     }, []),
   );
-
-  const [projectNamePossiblyError] = useProjectSetting(
-    projectId,
-    'platform.name',
-    defaultProjectName,
-  );
-
-  const projectName = useMemo(() => {
-    if (isPlatformError(projectNamePossiblyError)) {
-      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossiblyError)}`);
-      return defaultProjectName;
-    }
-    return projectNamePossiblyError;
-  }, [projectNamePossiblyError]);
 
   const isMountedRef = useRef(false);
   useEffect(() => {
