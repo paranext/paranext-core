@@ -40,14 +40,14 @@ const SelectValue = SelectPrimitive.Value;
 export const selectTriggerVariants = cva(
   // CUSTOM: Removed tw:justify-between. Added tw:gap-2, tw:[&>span]:flex-1, tw:[&>span]:text-start
   // to keep the chevron tight against the text instead of drifting to the far edge on resize.
-  'tw:flex tw:h-10 tw:w-full tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-input tw:bg-background tw:px-3 tw:py-2 tw:text-sm tw:ring-offset-background tw:placeholder:text-muted-foreground tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50 tw:[&>span]:flex-1 tw:[&>span]:line-clamp-1 tw:[&>span]:text-start',
+  'tw:flex tw:h-9 tw:w-full tw:items-center tw:gap-2 tw:whitespace-nowrap tw:rounded-md tw:border tw:border-input tw:bg-transparent tw:px-3 tw:py-2 tw:text-sm tw:shadow-sm tw:ring-offset-background tw:data-[placeholder]:text-muted-foreground tw:focus:outline-none tw:focus:ring-1 tw:focus:ring-ring tw:disabled:cursor-not-allowed tw:disabled:opacity-50 tw:[&>span]:flex-1 tw:[&>span]:line-clamp-1 tw:[&>span]:text-start',
   {
     variants: {
       size: {
-        default: 'tw:h-10 tw:px-4 tw:py-2',
+        default: 'tw:h-9 tw:px-4 tw:py-2',
         sm: 'tw:h-8 tw:rounded-md tw:px-3',
         lg: 'tw:h-11 tw:rounded-md tw:px-8',
-        icon: 'tw:h-10 tw:w-10',
+        icon: 'tw:h-9 tw:w-9',
       },
     },
     defaultVariants: {

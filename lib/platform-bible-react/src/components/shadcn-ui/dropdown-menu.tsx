@@ -137,7 +137,7 @@ export function DropdownMenuSubTrigger({
     <DropdownMenuPrimitive.SubTrigger
       ref={ref}
       className={cn(
-        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-none tw:focus:bg-accent tw:data-[state=open]:bg-accent',
+        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-none tw:focus:bg-accent tw:data-[state=open]:bg-accent tw:[&_svg]:pointer-events-none tw:[&_svg]:size-4 tw:[&_svg]:shrink-0',
         inset && 'tw:pl-8',
         className,
         menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
@@ -223,7 +223,7 @@ export function DropdownMenuItem({
       ref={ref}
       className={cn(
         // removed: tw:relative tw:focus:text-accent-foreground
-        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-none tw:transition-colors tw:focus:bg-accent tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
+        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-none tw:transition-colors tw:focus:bg-accent tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:size-4 tw:[&_svg]:shrink-0',
         inset && 'tw:pl-8',
         className,
         menuVariants({ variant: context.variant }), // CUSTOM use context to add variants

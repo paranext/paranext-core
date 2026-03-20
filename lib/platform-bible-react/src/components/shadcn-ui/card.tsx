@@ -15,7 +15,7 @@ function Card({
     <div
       ref={ref}
       className={cn(
-        'pr-twp tw:rounded-lg tw:border tw:bg-card tw:text-card-foreground tw:shadow-sm',
+        'pr-twp tw:rounded-xl tw:border tw:bg-card tw:text-card-foreground tw:shadow',
         className,
       )}
       {...props}
@@ -48,7 +48,7 @@ function CardTitle({
     <h3
       ref={ref}
       className={cn(
-        'pr-twp tw:text-2xl tw:font-semibold tw:leading-none tw:tracking-tight',
+        'pr-twp tw:font-semibold tw:leading-none tw:tracking-tight',
         className,
       )}
       {...props}
