@@ -9,19 +9,19 @@ import { cn } from '@/utils/shadcn-ui.util';
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
 const badgeVariants = cva(
-  'pr-twp tw:inline-flex tw:items-center tw:rounded-full tw:px-2.5 tw:py-0.5 tw:text-xs tw:font-semibold tw:transition-colors tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-2',
+  'pr-twp tw:inline-flex tw:items-center tw:rounded-md tw:border tw:px-2.5 tw:py-0.5 tw:text-xs tw:font-semibold tw:transition-colors tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-2',
   {
     variants: {
       variant: {
         default:
-          'tw:border tw:border-transparent tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/80',
+          'tw:border-transparent tw:bg-primary tw:text-primary-foreground tw:shadow tw:hover:bg-primary/80',
         secondary:
-          'tw:border tw:border-transparent tw:bg-secondary tw:text-secondary-foreground tw:hover:bg-secondary/80',
+          'tw:border-transparent tw:bg-secondary tw:text-secondary-foreground tw:hover:bg-secondary/80',
         muted:
-          'tw:border tw:border-transparent tw:bg-muted tw:text-muted-foreground tw:hover:bg-muted/80',
+          'tw:border-transparent tw:bg-muted tw:text-muted-foreground tw:hover:bg-muted/80',
         destructive:
-          'tw:border tw:border-transparent tw:bg-destructive tw:text-destructive-foreground tw:hover:bg-destructive/80',
-        outline: 'tw:border tw:text-foreground',
+          'tw:border-transparent tw:bg-destructive tw:text-destructive-foreground tw:shadow tw:hover:bg-destructive/80',
+        outline: 'tw:text-foreground',
         blueIndicator: 'tw:w-[5px] tw:h-[5px] tw:bg-blue-400 tw:px-0',
         mutedIndicator: 'tw:w-[5px] tw:h-[5px] tw:bg-zinc-400 tw:px-0',
         ghost: 'tw:hover:bg-accent tw:hover:text-accent-foreground tw:text-mu',

@@ -342,7 +342,7 @@ function TableHead({
     <th
       ref={ref}
       className={cn(
-        'tw:h-12 tw:px-4 tw:text-start tw:align-middle tw:font-medium tw:text-muted-foreground tw:[&:has([role=checkbox])]:pe-0',
+        'tw:h-10 tw:px-2 tw:text-start tw:align-middle tw:font-medium tw:text-muted-foreground tw:[&:has([role=checkbox])]:pr-0 tw:[&>[role=checkbox]]:translate-y-[2px]',
         className,
       )}
       {...props}
@@ -359,7 +359,7 @@ function TableCell({
   return (
     <td
       ref={ref}
-      className={cn('tw:p-4 tw:align-middle tw:[&:has([role=checkbox])]:pe-0', className)}
+      className={cn('tw:p-2 tw:align-middle tw:[&:has([role=checkbox])]:pr-0 tw:[&>[role=checkbox]]:translate-y-[2px]', className)}
       {...props}
     />
   );
