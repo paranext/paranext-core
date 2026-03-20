@@ -76,7 +76,6 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_cancelSearch%',
   '%webView_find_capitalization%',
   '%webView_find_errorOccurred%',
-  '%webView_find_findButton%',
   '%webView_find_findInProject%',
   '%webView_find_findTab%',
   '%webView_find_matchCase%',
@@ -225,9 +224,7 @@ global.webViewComponent = function FindWebView({
     activeMode === 'replace' ? projectId : undefined,
   );
 
-  const [localizedStrings, isLocalizedStringsLoading] = useLocalizedStrings(
-    useMemo(() => LOCALIZED_STRINGS, []),
-  );
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
 
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(
     useMemo(() => {
@@ -936,10 +933,6 @@ global.webViewComponent = function FindWebView({
     }
   }, [focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
 
-  const findButtonText = isLocalizedStringsLoading
-    ? ''
-    : localizedStrings['%webView_find_findButton%'];
-
   const areFiltersActive =
     shouldMatchCase || wordRestriction !== 'none' || searchTextType !== 'all' || isRegexAllowed;
 
@@ -1070,28 +1063,6 @@ global.webViewComponent = function FindWebView({
               allowRegex: localizedStrings['%webView_find_allowRegex%'],
             }}
           />
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={() => handleStartSearch(true)}
-                  disabled={
-                    !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
-                  }
-                >
-                  {searchStatus === 'running' ? <Spinner /> : findButtonText}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="tw-font-light">
-                  {formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
-                    projectName,
-                  })}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
         </div>
 
         {/* Replace input row — shown in Replace mode */}
