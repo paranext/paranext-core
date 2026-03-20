@@ -177,7 +177,7 @@ export interface RecentSearchesProps<T> {
 	classNameForItems?: string;
 	/**
 	 * Class name for the trigger button. Defaults to absolute positioning inside an input field. Pass
-	 * a custom value to render the button standalone (e.g. `"tw-h-9 tw-w-9"`)
+	 * a custom value to render the button standalone (e.g. `"tw:h-9 tw:w-9"`)
 	 */
 	buttonClassName?: string;
 	/** Variant for the trigger button. Defaults to `"ghost"` */
@@ -1533,7 +1533,7 @@ export type ToolbarProps = React$1.PropsWithChildren<{
  * 'darwin' will reserve the necessary space for macos traffic lights at the start, otherwise a
  * different amount of space at the end for the window controls.
  *
- * Apply to the toolbar like: `<Toolbar className={cn('tw-h-8 tw-bg-background',
+ * Apply to the toolbar like: `<Toolbar className={cn('tw:h-8 tw:bg-background',
  * getToolbarOSReservedSpaceClassName('darwin'))}>` or `<Toolbar
  * className={getToolbarOSReservedSpaceClassName('linux')}>`
  *
@@ -1755,7 +1755,7 @@ export type UndoRedoButtonsProps = {
 	 * shortcuts functional.
 	 */
 	showKeyboardShortcuts?: boolean;
-	/** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
+	/** CSS class name for the buttons. Defaults to "tw:h-6 tw:w-6". */
 	className?: string;
 	/** Variant for the buttons. Defaults to "ghost". */
 	variant?: ButtonProps["variant"];
@@ -2382,7 +2382,7 @@ export declare function SelectSeparator({ className, ref, ...props }: React$1.Co
  */
 export declare function ResizablePanelGroup({ className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelGroup>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ResizablePanelGroup */
-export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLButtonElement | HTMLElement | HTMLDivElement | HTMLObjectElement | HTMLParagraphElement | HTMLSelectElement | HTMLMapElement | HTMLAnchorElement | HTMLFormElement | HTMLHeadingElement | HTMLImageElement | HTMLInputElement | HTMLLabelElement | HTMLLIElement | HTMLOListElement | HTMLSpanElement | HTMLUListElement | HTMLAreaElement | HTMLAudioElement | HTMLBaseElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLCanvasElement | HTMLTableColElement | HTMLDataElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDListElement | HTMLEmbedElement | HTMLFieldSetElement | HTMLHeadElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLegendElement | HTMLLinkElement | HTMLMetaElement | HTMLMeterElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLPreElement | HTMLProgressElement | HTMLSlotElement | HTMLScriptElement | HTMLSourceElement | HTMLStyleElement | HTMLTableElement | HTMLTemplateElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTextAreaElement | HTMLTimeElement | HTMLTitleElement | HTMLTableRowElement | HTMLTrackElement | HTMLVideoElement | HTMLTableCaptionElement | HTMLMenuElement | HTMLPictureElement>, "id" | "onResize"> & {
+export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLButtonElement | HTMLElement | HTMLDivElement | HTMLObjectElement | HTMLMapElement | HTMLAnchorElement | HTMLFormElement | HTMLHeadingElement | HTMLImageElement | HTMLInputElement | HTMLLabelElement | HTMLLIElement | HTMLOListElement | HTMLParagraphElement | HTMLSelectElement | HTMLSpanElement | HTMLUListElement | HTMLAreaElement | HTMLAudioElement | HTMLBaseElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLCanvasElement | HTMLTableColElement | HTMLDataElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDListElement | HTMLEmbedElement | HTMLFieldSetElement | HTMLHeadElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLegendElement | HTMLLinkElement | HTMLMetaElement | HTMLMeterElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLPreElement | HTMLProgressElement | HTMLSlotElement | HTMLScriptElement | HTMLSourceElement | HTMLStyleElement | HTMLTableElement | HTMLTemplateElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTextAreaElement | HTMLTimeElement | HTMLTitleElement | HTMLTableRowElement | HTMLTrackElement | HTMLVideoElement | HTMLTableCaptionElement | HTMLMenuElement | HTMLPictureElement>, "id" | "onResize"> & {
 	className?: string;
 	collapsedSize?: number | undefined;
 	collapsible?: boolean | undefined;
@@ -2844,11 +2844,12 @@ export declare const Z_INDEX_MODAL = 500;
  * object syntax, and uses [`tailwind-merge`](https://www.npmjs.com/package/tailwind-merge) to make
  * it easy to merge/overwrite Tailwind classes in a programmer-logic-friendly way.
  *
- * Note: `tailwind-merge` is configured to use the prefix `tw-`, so you must use the same prefix
- * with any Tailwind classes you use with this function to successfully overwrite other Tailwind
- * classes. `platform-bible-react` is configured to use `tw-` as its Tailwind prefix, so any
- * Tailwind classes you pass into `platform-bible-react` components will be compared using the `tw-`
- * prefix.
+ * Supports both TW3 (`tw-*`) and TW4 (`tw:*`) prefix formats. When classes using different prefix
+ * formats conflict (e.g. `tw-p-4` vs `tw:p-4`), the last one specified wins (standard
+ * tailwind-merge behavior), and the result preserves the winning class's original prefix format.
+ *
+ * This backwards compatibility allows extensions still using TW3's `tw-` prefix to interoperate
+ * with PBR components that have migrated to TW4's `tw:` prefix.
  *
  * This function was popularized by
  * [shadcn/ui](https://ui.shadcn.com/docs/installation/manual#add-a-cn-helper). See [ByteGrad's
@@ -2861,26 +2862,26 @@ export declare const Z_INDEX_MODAL = 500;
  * const textShouldBeRed = true;
  * const heightShouldBe20 = false;
  * const classString = cn(
- *   'tw-bg-primary tw-h-10 tw-text-primary-foreground',
- *   'tw-bg-secondary',
+ *   'tw:bg-primary tw:h-10 tw:text-primary-foreground',
+ *   'tw:bg-secondary',
  *   {
- *     'tw-border-blue-500': borderShouldBeBlue,
- *     'tw-text-red-500': textShouldBeRed,
- *     'tw-h-20': heightShouldBe20,
+ *     'tw:border-blue-500': borderShouldBeBlue,
+ *     'tw:text-red-500': textShouldBeRed,
+ *     'tw:h-20': heightShouldBe20,
  *   },
  *   'some-class',
  * );
  * ```
  *
- * The resulting `classString` is `'tw-h-10 tw-bg-secondary tw-border-blue-500 tw-text-red-500
+ * The resulting `classString` is `'tw:h-10 tw:bg-secondary tw:border-blue-500 tw:text-red-500
  * some-class'`
  *
- * - Notice that `'tw-bg-secondary'`, specified later, overwrote `'tw-bg-primary'`, specified earlier,
+ * - Notice that `'tw:bg-secondary'`, specified later, overwrote `'tw:bg-primary'`, specified earlier,
  *   because they are Tailwind classes that affect the same css property
- * - Notice that `'tw-text-red-500'`, specified later, overwrote `'tw-text-primary-foreground'`,
+ * - Notice that `'tw:text-red-500'`, specified later, overwrote `'tw:text-primary-foreground'`,
  *   specified earlier, because they are Tailwind classes that affect the same css property
- * - Notice that `'tw-h-20'`, specified later, did not overwrite `'tw-h-10'`, specified earlier,
- *   because `'tw-h-20'` is part of a conditional class object and its value evaluated to `false`;
+ * - Notice that `'tw:h-20'`, specified later, did not overwrite `'tw:h-10'`, specified earlier,
+ *   because `'tw:h-20'` is part of a conditional class object and its value evaluated to `false`;
  *   therefore it was not applied
  * - Notice that `'some-class'` was applied. This function is not limited only to Tailwind classes.
  *

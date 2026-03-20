@@ -359,7 +359,10 @@ function TableCell({
   return (
     <td
       ref={ref}
-      className={cn('tw:p-2 tw:align-middle tw:[&:has([role=checkbox])]:pr-0 tw:[&>[role=checkbox]]:translate-y-[2px]', className)}
+      className={cn(
+        'tw:p-2 tw:align-middle tw:[&:has([role=checkbox])]:pr-0 tw:[&>[role=checkbox]]:translate-y-[2px]',
+        className,
+      )}
       {...props}
     />
   );
