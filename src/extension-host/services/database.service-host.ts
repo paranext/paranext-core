@@ -134,8 +134,11 @@ class DatabaseService implements IDatabaseService {
   }
 
   async dispose(): Promise<boolean> {
-    await this.#sendRequest('dispose', {});
-    await this.#worker.terminate();
+    try {
+      await this.#sendRequest('dispose', {});
+    } finally {
+      await this.#worker.terminate();
+    }
     return true;
   }
 

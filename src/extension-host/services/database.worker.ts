@@ -164,8 +164,16 @@ function createMessageHandler(
         }
 
         case 'dispose': {
-          databases.forEach((db) => db.close());
+          const errors: string[] = [];
+          databases.forEach((db, nonce) => {
+            try {
+              db.close();
+            } catch (e) {
+              errors.push(`${nonce}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          });
           databases.clear();
+          if (errors.length > 0) throw new Error(`Failed to close databases: ${errors.join('; ')}`);
           break;
         }
 
