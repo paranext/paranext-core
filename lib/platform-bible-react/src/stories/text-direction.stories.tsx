@@ -27,7 +27,7 @@ type Story = StoryObj<typeof meta>;
 
 function DemoComponent() {
   return (
-    <div className="pr-twp tw-max-w-md tw-space-y-4 tw-p-6">
+    <div className="pr-twp tw:max-w-md tw:space-y-4 tw:p-6">
       <Card>
         <CardHeader>
           <CardTitle>Direction Test Card</CardTitle>
@@ -35,20 +35,20 @@ function DemoComponent() {
             This card tests RTL/LTR direction changes. العربية: هذا نص تجريبي باللغة العربية
           </CardDescription>
         </CardHeader>
-        <CardContent className="tw-space-y-4">
-          <div className="tw-space-y-2">
-            <label htmlFor="test-input" className="tw-block tw-text-sm tw-font-medium">
+        <CardContent className="tw:space-y-4">
+          <div className="tw:space-y-2">
+            <label htmlFor="test-input" className="tw:block tw:text-sm tw:font-medium">
               Test Input (English + עברית)
             </label>
-            <Input id="test-input" placeholder="Type here... اكتب هنا" className="tw-w-full" />
+            <Input id="test-input" placeholder="Type here... اكتب هنا" className="tw:w-full" />
           </div>
 
-          <div className="tw-flex tw-gap-2">
+          <div className="tw:flex tw:gap-2">
             <Button variant="default">Button 1 (زر)</Button>
             <Button variant="outline">Button 2 (כפתור)</Button>
           </div>
 
-          <div className="tw-space-y-1 tw-text-sm">
+          <div className="tw:space-y-1 tw:text-sm">
             <p>
               <strong>English:</strong> This text should align left in LTR mode and right in RTL
               mode.
@@ -61,8 +61,8 @@ function DemoComponent() {
             </p>
           </div>
 
-          <div className="tw-rounded tw-border tw-p-3">
-            <p className="tw-mb-2 tw-text-xs tw-text-muted-foreground">Mixed content test:</p>
+          <div className="tw:rounded tw:border tw:p-3">
+            <p className="tw:mb-2 tw:text-xs tw:text-muted-foreground">Mixed content test:</p>
             <p>Hello مرحبا שלום world! Numbers: 123 ١٢٣</p>
           </div>
         </CardContent>
@@ -85,14 +85,14 @@ export const DirectionDemo: Story = {
 
 export const ButtonAlignment: Story = {
   render: () => (
-    <div className="pr-twp tw-space-y-4 tw-p-6">
-      <h3 className="tw-text-lg tw-font-semibold">Button Alignment Test</h3>
-      <div className="tw-flex tw-justify-start tw-gap-2">
+    <div className="pr-twp tw:space-y-4 tw:p-6">
+      <h3 className="tw:text-lg tw:font-semibold">Button Alignment Test</h3>
+      <div className="tw:flex tw:justify-start tw:gap-2">
         <Button>First زر</Button>
         <Button variant="outline">Second כפתור</Button>
         <Button variant="ghost">Third Button</Button>
       </div>
-      <div className="tw-flex tw-justify-end tw-gap-2">
+      <div className="tw:flex tw:justify-end tw:gap-2">
         <Button size="sm">Small</Button>
         <Button>Medium</Button>
         <Button size="lg">Large</Button>

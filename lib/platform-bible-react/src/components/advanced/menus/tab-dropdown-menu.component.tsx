@@ -145,7 +145,7 @@ export default function TabDropdownMenu({
           {icon ?? <MenuIcon />}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="tw-z-[250]">
+      <DropdownMenuContent align="start" className="tw:z-[250]">
         {Object.entries(menuData.columns)
           .filter(([, column]) => typeof column === 'object')
           .sort(([, a], [, b]) => {

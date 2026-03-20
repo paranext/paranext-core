@@ -160,21 +160,21 @@ export function DictionaryEntryDisplay({
         localizedStrings={localizedStrings}
         handleBackToListButton={handleBackToListButton}
       />
-      <div className="tw-mb-4">
-        <div className="tw-flex tw-items-baseline tw-justify-between tw-gap-2">
-          <span className="tw-flex tw-flex-row tw-items-baseline tw-gap-2">
-            <TitleComponent className="tw-text-2xl tw-font-normal scripture-font">
+      <div className="tw:mb-4">
+        <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-2">
+          <span className="tw:flex tw:flex-row tw:items-baseline tw:gap-2">
+            <TitleComponent className="tw:text-2xl tw:font-normal scripture-font">
               {dictionaryEntry.lemma}
             </TitleComponent>
-            <DescriptionComponent className="tw-text-lg tw-text-muted-foreground">
+            <DescriptionComponent className="tw:text-lg tw:text-muted-foreground">
               {formattedGlosses}
             </DescriptionComponent>
           </span>
-          <ul className="tw-flex tw-flex-row tw-gap-1">
+          <ul className="tw:flex tw:flex-row tw:gap-1">
             {dictionaryEntry.strongsCodes.map((strongsCode) => (
               <li
                 key={strongsCode}
-                className="tw-ml-auto tw-rounded tw-bg-accent tw-px-2 tw-py-0.5 tw-text-sm tw-accent-foreground"
+                className="tw:ml-auto tw:rounded tw:bg-accent tw:px-2 tw:py-0.5 tw:text-sm tw:accent-foreground"
               >
                 {strongsCode}
               </li>
@@ -183,10 +183,10 @@ export function DictionaryEntryDisplay({
         </div>
       </div>
 
-      <Separator className="tw-my-3" />
+      <Separator className="tw:my-3" />
 
-      <div className="tw-mb-4">
-        <h3 className="tw-mb-1 tw-font-semibold">
+      <div className="tw:mb-4">
+        <h3 className="tw:mb-1 tw:font-semibold">
           {localizedStrings['%platformLexicalTools_dictionary_sensesLabel%']}
         </h3>
         <ToggleGroup
@@ -202,7 +202,7 @@ export function DictionaryEntryDisplay({
             setSelectedSenseIndex(index >= 0 ? index + 1 : undefined);
             setSelectedSense(index >= 0 ? sensesFlat[index] : undefined);
           }}
-          className="tw-flex tw-flex-col tw-gap-3"
+          className="tw:flex tw:flex-col tw:gap-3"
         >
           {Object.values(sensesFilteredByScrRef)
             .flat()
@@ -211,14 +211,14 @@ export function DictionaryEntryDisplay({
               <ToggleGroupItem
                 key={`${sense.lexicalReferenceTextId}-sense-${sense.id}`}
                 value={`${sense.lexicalReferenceTextId}-sense-${sense.id}`}
-                className="tw-flex tw-w-full tw-h-fit tw-flex-col tw-items-start tw-border tw-rounded-lg tw-shadow-sm tw-p-4 tw-cursor-pointer data-[state=on]:tw-border-accent data-[state=on]:tw-shadow-md tw-transition-colors"
+                className="tw:flex tw:w-full tw:h-fit tw:flex-col tw:items-start tw:border tw:rounded-lg tw:shadow-sm tw:p-4 tw:cursor-pointer tw:data-[state=on]:border-accent tw:data-[state=on]:shadow-md tw:transition-colors"
               >
-                <div className="tw-flex tw-items-baseline tw-gap-2">
-                  <span className="tw-font-bold tw-text-accent-foreground">{senseIndex + 1}</span>
-                  <span className="tw-text-base">{sense.glosses.join(', ')}</span>
+                <div className="tw:flex tw:items-baseline tw:gap-2">
+                  <span className="tw:font-bold tw:text-accent-foreground">{senseIndex + 1}</span>
+                  <span className="tw:text-base">{sense.glosses.join(', ')}</span>
                 </div>
                 {sense.definition && (
-                  <div className="tw-mt-1 tw-max-w-lg tw-text-start tw-text-sm tw-text-muted-foreground">
+                  <div className="tw:mt-1 tw:max-w-lg tw:text-start tw:text-sm tw:text-muted-foreground">
                     {sense.definition}
                   </div>
                 )}
@@ -233,16 +233,16 @@ export function DictionaryEntryDisplay({
         </ToggleGroup>
       </div>
       <div>
-        <div className="tw-flex tw-items-center tw-justify-between tw-mb-2">
-          <h3 className="tw-font-semibold">{occurrencesLabel}</h3>
+        <div className="tw:flex tw:items-center tw:justify-between tw:mb-2">
+          <h3 className="tw:font-semibold">{occurrencesLabel}</h3>
 
-          <div className="tw-flex tw-items-center tw-gap-2 tw-border tw-rounded-md">
+          <div className="tw:flex tw:items-center tw:gap-2 tw:border tw:rounded-md">
             <button
               type="button"
               className={cn(
-                'tw-text-xs tw-px-3 tw-py-1 tw-rounded-s-md',
-                { 'tw-bg-accent': occurrenceView === 'chapter' },
-                { 'hover:tw-bg-accent': occurrenceView !== 'chapter' },
+                'tw:text-xs tw:px-3 tw:py-1 tw:rounded-s-md',
+                { 'tw:bg-accent': occurrenceView === 'chapter' },
+                { 'tw:hover:bg-accent': occurrenceView !== 'chapter' },
               )}
               onClick={() => setOccurrenceView('chapter')}
             >
@@ -252,9 +252,9 @@ export function DictionaryEntryDisplay({
             <button
               type="button"
               className={cn(
-                'tw-text-xs tw-px-3 tw-py-1 tw-rounded-e-md',
-                { 'tw-bg-accent': occurrenceView === 'all' },
-                { 'hover:tw-bg-accent': occurrenceView !== 'all' },
+                'tw:text-xs tw:px-3 tw:py-1 tw:rounded-e-md',
+                { 'tw:bg-accent': occurrenceView === 'all' },
+                { 'tw:hover:bg-accent': occurrenceView !== 'all' },
               )}
               onClick={() => setOccurrenceView('all')}
             >
@@ -263,15 +263,15 @@ export function DictionaryEntryDisplay({
             </button>
           </div>
         </div>
-        <ul className="tw-list-disc tw-list-inside">
+        <ul className="tw:list-disc tw:list-inside">
           {deduplicatedOccurrences.map((occurrence) => (
             <li
               key={`${occurrence.wordNum}-${formatScrRef(occurrence.verseRef, 'English')}`}
-              className="tw-py-0.5"
+              className="tw:py-0.5"
             >
               <Button
                 variant="link"
-                className="tw-p-0 tw-h-auto"
+                className="tw:p-0 tw:h-auto"
                 onClick={() => onSelectOccurrence(occurrence.verseRef)}
               >
                 {formatScrRef(occurrence.verseRef, 'English')}
@@ -280,15 +280,15 @@ export function DictionaryEntryDisplay({
           ))}
         </ul>
         {dictionaryEntry.lexicalReferenceTextId === 'SDBH' && (
-          <div className="tw-max-w-xs tw-pt-3 tw-mt-auto">
-            <p className="tw-text-xs tw-text-muted-foreground">
+          <div className="tw:max-w-xs tw:pt-3 tw:mt-auto">
+            <p className="tw:text-xs tw:text-muted-foreground">
               {localizedStrings['%platformLexicalTools_dictionary_sdbhCopyright%']}
             </p>
           </div>
         )}
         {dictionaryEntry.lexicalReferenceTextId === 'SDBG' && (
-          <div className="tw-max-w-xs tw-pt-3 tw-mt-auto">
-            <p className="tw-text-xs tw-text-muted-foreground">
+          <div className="tw:max-w-xs tw:pt-3 tw:mt-auto">
+            <p className="tw:text-xs tw:text-muted-foreground">
               {localizedStrings['%platformLexicalTools_dictionary_sdbgCopyright%']}
             </p>
           </div>
@@ -296,7 +296,7 @@ export function DictionaryEntryDisplay({
         <Button
           variant="secondary"
           size="icon"
-          className="tw-fixed tw-bottom-4 tw-right-4 tw-z-20"
+          className="tw:fixed tw:bottom-4 tw:right-4 tw:z-20"
           onClick={onClickScrollToTop}
         >
           <ChevronUpIcon />

@@ -53,7 +53,7 @@ function DrawerOverlay({
   return (
     <DrawerPrimitive.Overlay
       ref={ref}
-      className={cn('tw-fixed tw-inset-0 tw-z-50 tw-bg-black/80', className)}
+      className={cn('tw:fixed tw:inset-0 tw:z-50 tw:bg-black/80', className)}
       {...props}
     />
   );
@@ -81,18 +81,18 @@ function DrawerContent({
 
   // CUSTOM: Define positioning and styling based on direction
   const directionStyles = {
-    bottom: 'tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-[10px]',
-    top: 'tw-inset-x-0 tw-top-0 tw-mb-24 tw-rounded-b-[10px]',
-    left: 'tw-inset-y-0 tw-left-0 tw-mr-24 tw-rounded-r-[10px] tw-w-auto tw-max-w-sm',
-    right: 'tw-inset-y-0 tw-right-0 tw-ml-24 tw-rounded-l-[10px] tw-w-auto tw-max-w-sm',
+    bottom: 'tw:inset-x-0 tw:bottom-0 tw:mt-24 tw:rounded-t-[10px]',
+    top: 'tw:inset-x-0 tw:top-0 tw:mb-24 tw:rounded-b-[10px]',
+    left: 'tw:inset-y-0 tw:left-0 tw:mr-24 tw:rounded-r-[10px] tw:w-auto tw:max-w-sm',
+    right: 'tw:inset-y-0 tw:right-0 tw:ml-24 tw:rounded-l-[10px] tw:w-auto tw:max-w-sm',
   };
 
   // CUSTOM: Define handle styles for each direction
   const handleStyles = {
-    bottom: 'tw-mx-auto tw-mt-4 tw-h-2 tw-w-[100px] tw-rounded-full tw-bg-muted',
-    top: 'tw-mx-auto tw-mb-4 tw-h-2 tw-w-[100px] tw-rounded-full tw-bg-muted',
-    left: 'tw-my-auto tw-mr-4 tw-w-2 tw-h-[100px] tw-rounded-full tw-bg-muted',
-    right: 'tw-my-auto tw-ml-4 tw-w-2 tw-h-[100px] tw-rounded-full tw-bg-muted',
+    bottom: 'tw:mx-auto tw:mt-4 tw:h-2 tw:w-[100px] tw:rounded-full tw:bg-muted',
+    top: 'tw:mx-auto tw:mb-4 tw:h-2 tw:w-[100px] tw:rounded-full tw:bg-muted',
+    left: 'tw:my-auto tw:mr-4 tw:w-2 tw:h-[100px] tw:rounded-full tw:bg-muted',
+    right: 'tw:my-auto tw:ml-4 tw:w-2 tw:h-[100px] tw:rounded-full tw:bg-muted',
   };
 
   return (
@@ -102,9 +102,9 @@ function DrawerContent({
         ref={ref}
         className={cn(
           // CUSTOM: Change Tailwind CSS classes for styling
-          // Removed tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-[10px] tw-flex-col
-          'pr-twp tw-fixed tw-z-50 tw-flex tw-h-auto tw-border tw-bg-background',
-          direction === 'bottom' || direction === 'top' ? 'tw-flex-col' : 'tw-flex-row',
+          // Removed tw:inset-x-0 tw:bottom-0 tw:mt-24 tw:rounded-t-[10px] tw:flex-col
+          'pr-twp tw:fixed tw:z-50 tw:flex tw:h-auto tw:border tw:bg-background',
+          direction === 'bottom' || direction === 'top' ? 'tw:flex-col' : 'tw:flex-row',
           directionStyles[direction],
           className,
         )}
@@ -114,7 +114,7 @@ function DrawerContent({
         {!hideDrawerHandle && (direction === 'bottom' || direction === 'right') && (
           <div className={handleStyles[direction]} />
         )}
-        <div className="tw-flex tw-flex-col">{children}</div>
+        <div className="tw:flex tw:flex-col">{children}</div>
         {!hideDrawerHandle && (direction === 'top' || direction === 'left') && (
           <div className={handleStyles[direction]} />
         )}
@@ -127,7 +127,7 @@ function DrawerContent({
 function DrawerHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('tw-grid tw-gap-1.5 tw-p-4 tw-text-center sm:tw-text-left', className)}
+      className={cn('tw:grid tw:gap-1.5 tw:p-4 tw:text-center tw:sm:text-left', className)}
       {...props}
     />
   );
@@ -136,7 +136,7 @@ function DrawerHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 /** @inheritdoc Drawer */
 function DrawerFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('tw-mt-auto tw-flex tw-flex-col tw-gap-2 tw-p-4', className)} {...props} />
+    <div className={cn('tw:mt-auto tw:flex tw:flex-col tw:gap-2 tw:p-4', className)} {...props} />
   );
 }
 
@@ -151,7 +151,7 @@ function DrawerTitle({
   return (
     <DrawerPrimitive.Title
       ref={ref}
-      className={cn('tw-text-lg tw-font-semibold tw-leading-none tw-tracking-tight', className)}
+      className={cn('tw:text-lg tw:font-semibold tw:leading-none tw:tracking-tight', className)}
       {...props}
     />
   );
@@ -168,7 +168,7 @@ function DrawerDescription({
   return (
     <DrawerPrimitive.Description
       ref={ref}
-      className={cn('tw-text-sm tw-text-muted-foreground', className)}
+      className={cn('tw:text-sm tw:text-muted-foreground', className)}
       {...props}
     />
   );

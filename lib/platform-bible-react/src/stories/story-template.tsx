@@ -45,9 +45,9 @@ export const Default: Story = {
 // Example of a story with live editing capabilities
 export const LiveEditable: Story = {
   render: () => (
-    <div className="tw-space-y-4">
+    <div className="tw:space-y-4">
       <ComponentName />
-      <p className="tw-text-sm tw-text-gray-600">
+      <p className="tw:text-sm tw:text-gray-600">
         Use the Code Editor tab to modify this component in real-time!
       </p>
     </div>

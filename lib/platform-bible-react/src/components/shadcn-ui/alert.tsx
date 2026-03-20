@@ -9,18 +9,18 @@ const alertVariants = cva(
   // Implemented by TJ Couch
   // Approved by Alex Mercado
   // 20 February 2025
-  'tw-relative tw-w-full tw-rounded-lg tw-border tw-p-4 [&>svg~*]:tw-pl-7 [&>svg+div]:tw-translate-y-[-3px] [&>svg]:tw-absolute [&>svg]:tw-left-4 [&>svg]:tw-top-4 [&>svg]:tw-text-foreground [&>img~*]:tw-pl-7 [&>img+div]:tw-translate-y-[-3px] [&>img]:tw-absolute [&>img]:tw-left-4 [&>img]:tw-top-4 [&>img]:tw-text-foreground',
+  'tw:relative tw:w-full tw:rounded-lg tw:border tw:p-4 tw:[&>svg~*]:pl-7 tw:[&>svg+div]:translate-y-[-3px] tw:[&>svg]:absolute tw:[&>svg]:left-4 tw:[&>svg]:top-4 tw:[&>svg]:text-foreground tw:[&>img~*]:pl-7 tw:[&>img+div]:translate-y-[-3px] tw:[&>img]:absolute tw:[&>img]:left-4 tw:[&>img]:top-4 tw:[&>img]:text-foreground',
   {
     variants: {
       variant: {
-        default: 'tw-bg-background tw-text-foreground',
+        default: 'tw:bg-background tw:text-foreground',
         destructive:
           // CUSTOM: Copied all `svg` arbitrary selector variant classes as `img` variants so we can
           // use images (or svgs from file) as icons
           // Implemented by TJ Couch
           // Approved by Alex Mercado
           // 20 February 2025
-          'tw-border-destructive/50 tw-text-destructive dark:tw-border-destructive [&>svg]:tw-text-destructive [&>img]:tw-text-destructive',
+          'tw:border-destructive/50 tw:text-destructive tw:dark:border-destructive tw:[&>svg]:text-destructive tw:[&>img]:text-destructive',
       },
     },
     defaultVariants: {
@@ -64,7 +64,7 @@ function AlertTitle({
   return (
     <h5
       ref={ref}
-      className={cn('tw-mb-1 tw-font-medium tw-leading-none tw-tracking-tight', className)}
+      className={cn('tw:mb-1 tw:font-medium tw:leading-none tw:tracking-tight', className)}
       {...props}
     >
       {/* added because of https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md  */}
@@ -80,7 +80,7 @@ function AlertDescription({
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement> & { ref?: React.Ref<HTMLParagraphElement> }) {
   return (
-    <div ref={ref} className={cn('tw-text-sm [&_p]:tw-leading-relaxed', className)} {...props} />
+    <div ref={ref} className={cn('tw:text-sm tw:[&_p]:leading-relaxed', className)} {...props} />
   );
 }
 

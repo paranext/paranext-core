@@ -9,7 +9,7 @@ const meta: Meta<typeof MarkdownRenderer> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-4xl tw-p-4">
+        <div className="tw:max-w-4xl tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -136,7 +136,7 @@ This markdown has custom CSS classes applied for specific styling needs.
 - Custom spacing
 - Different typography
 - Theme-aware colors`,
-    className: 'tw-prose-sm tw-text-muted-foreground',
+    className: 'tw:prose-sm tw:text-muted-foreground',
   },
   parameters: {
     docs: {

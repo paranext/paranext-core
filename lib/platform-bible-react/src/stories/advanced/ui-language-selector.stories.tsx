@@ -105,7 +105,7 @@ const meta: Meta<typeof UiLanguageSelector> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-md tw-p-4">
+        <div className="tw:max-w-md tw:p-4">
           <Story />
         </div>
       </ThemeProvider>

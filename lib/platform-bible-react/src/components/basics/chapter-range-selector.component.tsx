@@ -60,7 +60,7 @@ export function ChapterRangeSelector({
       <ComboBox
         isDisabled={isDisabled}
         onChange={onChangeStartChapter}
-        buttonClassName="tw-me-2 tw-ms-2 tw-w-20"
+        buttonClassName="tw:me-2 tw:ms-2 tw:w-20"
         key="start chapter"
         options={chapterOptions}
         getOptionLabel={(option) => option.toString()}
@@ -71,7 +71,7 @@ export function ChapterRangeSelector({
       <ComboBox
         isDisabled={isDisabled}
         onChange={onChangeEndChapter}
-        buttonClassName="tw-ms-2 tw-w-20"
+        buttonClassName="tw:ms-2 tw:w-20"
         key="end chapter"
         options={chapterOptions}
         getOptionLabel={(option) => option.toString()}

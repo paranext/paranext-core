@@ -24,19 +24,19 @@ export function DomainsDisplay({ domains, domainText }: DomainsDisplayProps) {
   // Helper to choose icon based on taxonomy. Icons picked by UX. Only works with SDBH lexical reference text.
   const getDomainIcon = (taxonomy: string) => {
     if (taxonomy === 'SDBH-Lexical' || taxonomy === 'SDBG-Lexical')
-      return <BookA className="tw-inline tw-mr-1 tw-h-3 tw-w-3" />;
+      return <BookA className="tw:inline tw:mr-1 tw:h-3 tw:w-3" />;
     if (taxonomy === 'SDBH-Contextual' || taxonomy === 'SDBG-Contextual')
-      return <LandPlot className="tw-inline tw-mr-1 tw-h-3 tw-w-3" />;
-    return <Box className="tw-inline tw-mr-1 tw-h-3 tw-w-3" />;
+      return <LandPlot className="tw:inline tw:mr-1 tw:h-3 tw:w-3" />;
+    return <Box className="tw:inline tw:mr-1 tw:h-3 tw:w-3" />;
   };
 
   return (
-    <div className="tw-mt-2 tw-flex tw-flex-wrap tw-gap-2">
+    <div className="tw:mt-2 tw:flex tw:flex-wrap tw:gap-2">
       {domains.map((domain) => (
         <TooltipProvider key={domain.code}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="tw-rounded tw-bg-accent tw-px-2 tw-py-0.5 tw-text-xs tw-accent-foreground tw-flex tw-items-center tw-gap-1">
+              <span className="tw:rounded tw:bg-accent tw:px-2 tw:py-0.5 tw:text-xs tw:accent-foreground tw:flex tw:items-center tw:gap-1">
                 {getDomainIcon(domain.taxonomy)}
                 <span>{domain.code}</span>
                 <span>{domain.label ?? ''}</span>

@@ -20,7 +20,7 @@
 
   /**
    * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
-   * properties using `hsl(var(--variableName))` or Tailwind classes like `tw-bg-primary`
+   * properties using `hsl(var(--variableName))` or Tailwind classes like `tw:bg-primary`
    *
    * See the wiki's [Matching Application
    * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
@@ -174,7 +174,7 @@
 @layer base {
   .pr-twp,
   .pr-twp * {
-    @apply tw-border-border tw-outline-ring/50;
+    @apply tw:border-border tw:outline-ring/50;
   }
 
   /**
@@ -182,6 +182,6 @@
     */
   /* stylelint-disable-next-line selector-no-qualifying-type */
   body.pr-twp {
-    @apply tw-bg-background tw-text-foreground;
+    @apply tw:bg-background tw:text-foreground;
   }
 }

@@ -66,14 +66,14 @@ export function ErrorDump({
   return (
     <div
       id={id}
-      className="tw-inline-flex tw-w-full tw-flex-col tw-items-start tw-justify-start tw-gap-4"
+      className="tw:inline-flex tw:w-full tw:flex-col tw:items-start tw:justify-start tw:gap-4"
     >
-      <div className="tw-inline-flex tw-items-start tw-justify-start tw-gap-4 tw-self-stretch">
-        <div className="tw-inline-flex tw-flex-1 tw-flex-col tw-items-start tw-justify-start">
-          <div className="tw-text-color-text tw-justify-center tw-text-center tw-text-lg tw-font-semibold tw-leading-loose">
+      <div className="tw:inline-flex tw:items-start tw:justify-start tw:gap-4 tw:self-stretch">
+        <div className="tw:inline-flex tw:flex-1 tw:flex-col tw:items-start tw:justify-start">
+          <div className="tw:text-color-text tw:justify-center tw:text-center tw:text-lg tw:font-semibold tw:leading-loose">
             {headerText}
           </div>
-          <div className="tw-justify-center tw-self-stretch tw-text-sm tw-font-normal tw-leading-tight tw-text-muted-foreground">
+          <div className="tw:justify-center tw:self-stretch tw:text-sm tw:font-normal tw:leading-tight tw:text-muted-foreground">
             {infoMessage}
           </div>
         </div>
@@ -81,8 +81,8 @@ export function ErrorDump({
           <Copy />
         </Button>
       </div>
-      <div className="tw-prose tw-w-full">
-        <pre className="tw-text-xs">{errorDetails}</pre>
+      <div className="tw:prose tw:w-full">
+        <pre className="tw:text-xs">{errorDetails}</pre>
       </div>
     </div>
   );

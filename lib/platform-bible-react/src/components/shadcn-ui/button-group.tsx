@@ -6,14 +6,14 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { Separator } from '@/components/shadcn-ui/separator';
 
 const buttonGroupVariants = cva(
-  'tw-flex tw-w-fit tw-items-stretch has-[>[data-slot=button-group]]:tw-gap-2 [&>*]:focus-visible:tw-relative [&>*]:focus-visible:tw-z-10 has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:tw-rounded-r-md [&>[data-slot=select-trigger]:not([class*=w-])]:tw-w-fit [&>input]:tw-flex-1',
+  'tw:flex tw:w-fit tw:items-stretch tw:has-[>[data-slot=button-group]]:gap-2 tw:[&>*]:focus-visible:relative tw:[&>*]:focus-visible:z-10 tw:has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-r-md tw:[&>[data-slot=select-trigger]:not([class*=w-])]:w-fit tw:[&>input]:flex-1',
   {
     variants: {
       orientation: {
         horizontal:
-          '[&>*:not(:first-child)]:tw-rounded-l-none [&>*:not(:first-child)]:tw-border-l-0 [&>*:not(:last-child)]:tw-rounded-r-none',
+          'tw:[&>*:not(:first-child)]:rounded-l-none tw:[&>*:not(:first-child)]:border-l-0 tw:[&>*:not(:last-child)]:rounded-r-none',
         vertical:
-          'tw-flex-col [&>*:not(:first-child)]:tw-rounded-t-none [&>*:not(:first-child)]:tw-border-t-0 [&>*:not(:last-child)]:tw-rounded-b-none',
+          'tw:flex-col tw:[&>*:not(:first-child)]:rounded-t-none tw:[&>*:not(:first-child)]:border-t-0 tw:[&>*:not(:last-child)]:rounded-b-none',
       },
     },
     defaultVariants: {
@@ -50,7 +50,7 @@ function ButtonGroupText({
   return (
     <Comp
       className={cn(
-        'tw-shadow-xs tw-flex tw-items-center tw-gap-2 tw-rounded-md tw-border tw-bg-muted tw-px-4 tw-text-sm tw-font-medium [&_svg:not([class*=size-])]:tw-size-4 [&_svg]:tw-pointer-events-none',
+        'tw:shadow-xs tw:flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:bg-muted tw:px-4 tw:text-sm tw:font-medium tw:[&_svg:not([class*=size-])]:size-4 tw:[&_svg]:pointer-events-none',
         className,
       )}
       {...props}
@@ -68,7 +68,7 @@ function ButtonGroupSeparator({
       data-slot="button-group-separator"
       orientation={orientation}
       className={cn(
-        'tw-!m-0 tw-relative tw-self-stretch tw-bg-input data-[orientation=vertical]:tw-h-auto',
+        'tw:!m-0 tw:relative tw:self-stretch tw:bg-input tw:data-[orientation=vertical]:h-auto',
         className,
       )}
       {...props}

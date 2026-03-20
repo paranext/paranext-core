@@ -12,7 +12,7 @@ type MenuItemIconProps = {
 function MenuItemIcon({ icon, menuLabel, leading }: MenuItemIconProps) {
   return icon ? (
     <img
-      className={cn('tw-max-h-5 tw-max-w-5', leading ? 'tw-me-2' : 'tw-ms-2')}
+      className={cn('tw:max-h-5 tw:max-w-5', leading ? 'tw:me-2' : 'tw:ms-2')}
       src={icon}
       alt={`${leading ? 'Leading' : 'Trailing'} icon for ${menuLabel}`}
     />

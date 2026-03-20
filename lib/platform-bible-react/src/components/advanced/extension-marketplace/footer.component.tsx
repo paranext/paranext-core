@@ -50,26 +50,26 @@ export function Footer({
   const languageNames = getLanguageNames(locales);
 
   return (
-    <div id={id} className="pr-twp tw-border-t tw-py-2">
-      <div className="tw-flex tw-flex-col tw-gap-2 tw-divide-y">
+    <div id={id} className="pr-twp tw:border-t tw:py-2">
+      <div className="tw:flex tw:flex-col tw:gap-2 tw:divide-y">
         {Object.entries(versionHistory).length > 0 && (
           <VersionHistory versionHistory={versionHistory} />
         )}
-        <div className="tw-flex tw-flex-col tw-gap-2 tw-py-2">
-          <h2 className="tw-text-md tw-font-semibold">Information</h2>
-          <div className="tw-flex tw-items-start tw-justify-between tw-text-xs tw-text-foreground">
-            <p className="tw-flex tw-flex-col tw-justify-start tw-gap-1">
+        <div className="tw:flex tw:flex-col tw:gap-2 tw:py-2">
+          <h2 className="tw:text-md tw:font-semibold">Information</h2>
+          <div className="tw:flex tw:items-start tw:justify-between tw:text-xs tw:text-foreground">
+            <p className="tw:flex tw:flex-col tw:justify-start tw:gap-1">
               <span>Publisher</span>
-              <span className="tw-font-semibold">{publisherDisplayName}</span>
+              <span className="tw:font-semibold">{publisherDisplayName}</span>
               <span>Size</span>
-              <span className="tw-font-semibold">{formattedFileSize}</span>
+              <span className="tw:font-semibold">{formattedFileSize}</span>
             </p>
-            <div className="tw-flex tw-w-3/4 tw-items-center tw-justify-between tw-text-xs tw-text-foreground">
-              <p className="tw-flex tw-flex-col tw-justify-start tw-gap-1">
+            <div className="tw:flex tw:w-3/4 tw:items-center tw:justify-between tw:text-xs tw:text-foreground">
+              <p className="tw:flex tw:flex-col tw:justify-start tw:gap-1">
                 <span>Version</span>
-                <span className="tw-font-semibold">{currentVersion}</span>
+                <span className="tw:font-semibold">{currentVersion}</span>
                 <span>Languages</span>
-                <span className="tw-font-semibold">{languageNames.join(', ')}</span>
+                <span className="tw:font-semibold">{languageNames.join(', ')}</span>
               </p>
             </div>
           </div>

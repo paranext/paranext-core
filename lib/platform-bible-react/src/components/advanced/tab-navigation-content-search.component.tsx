@@ -64,7 +64,7 @@ export function TabNavigationContentSearch({
 }: TabNavigationContentSearchProps) {
   return (
     <div id={id} className="pr-twp">
-      <div className="tw-sticky tw-top-0 tw-space-y-2 tw-pb-2">
+      <div className="tw:sticky tw:top-0 tw:space-y-2 tw:pb-2">
         {headerTitle ? <h1>{headerTitle}</h1> : ''}
         <SearchBar
           className={searchClassName}

@@ -10,38 +10,38 @@ Remove this when we can correctly import the tailwind styles
 Numbers are also different in Storybook due to a 50px margin left and right of the Story */
 const styles = `
   @media (min-width: 868px) {
-    .md\\:\\!tw-table-cell {
+    .tw\\:md\\:\\!table-cell {
       display: table-cell !important;
     }
   }
 
   @media (min-width: 740px) {
-    .sm\\:\\!tw-table-cell {
+    .tw\\:sm\\:\\!table-cell {
       display: table-cell !important;
     }
   }
 
   @media (max-width: 400px) {
-    .max-\\[300px\\]\\:tw-hidden {
+    .tw\\:max-\\[300px\\]\\:hidden {
       display: none;
     }
-    .max-\\[300px\\]\\:\\!tw-hidden {
+    .tw\\:max-\\[300px\\]\\:\\!hidden {
       display: none !important;
     }
-    .max-\\[300px\\]\\:\\!tw-flex {
+    .tw\\:max-\\[300px\\]\\:\\!flex {
       display: flex !important;
     }
-    .max-\\[300px\\]\\:\\!tw-px-4 {
+    .tw\\:max-\\[300px\\]\\:\\!px-4 {
       padding-left: 1rem !important;
       padding-right: 1rem !important;
     }
   }
 
-  .tw-ps-2 {
+  .tw\\:ps-2 {
     padding-left: 0.5rem;
   }
 
-  .tw-text-muted-foreground\\/70 {
+  .tw\\:text-muted-foreground\\/70 {
     color: hsl(var(--muted-foreground) / 0.7);
   }
 `;

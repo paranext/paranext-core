@@ -165,27 +165,27 @@ export default function SearchResult({
 
   const dropdownContent = (
     <>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyReference}>
-        <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
+      <DropdownMenuItem className="tw:flex tw:flex-row" onClick={handleCopyReference}>
+        <Copy className="tw:mr-2 tw:h-4 tw:w-4" />
         <span>{localizedStrings['%webView_find_copyReference%']}</span>
       </DropdownMenuItem>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyVerseText}>
-        <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
+      <DropdownMenuItem className="tw:flex tw:flex-row" onClick={handleCopyVerseText}>
+        <Copy className="tw:mr-2 tw:h-4 tw:w-4" />
         <span>{localizedStrings['%webView_find_copyVerseText%']}</span>
       </DropdownMenuItem>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyReferenceAndVerseText}>
-        <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
+      <DropdownMenuItem className="tw:flex tw:flex-row" onClick={handleCopyReferenceAndVerseText}>
+        <Copy className="tw:mr-2 tw:h-4 tw:w-4" />
         <span>{localizedStrings['%webView_find_copyReferenceAndVerseText%']}</span>
       </DropdownMenuItem>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleDismiss}>
-        <X className="tw-mr-2 tw-h-4 tw-w-4" />
+      <DropdownMenuItem className="tw:flex tw:flex-row" onClick={handleDismiss}>
+        <X className="tw:mr-2 tw:h-4 tw:w-4" />
         <span>{localizedStrings['%webView_find_dismiss%']}</span>
       </DropdownMenuItem>
     </>
   );
 
   const cardContent = (
-    <div className="tw-text-xs tw-font-medium">
+    <div className="tw:text-xs tw:font-medium">
       {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
         searchResult.start.verseRef.book}{' '}
       {searchResult.start.verseRef.chapterNum}:
@@ -195,7 +195,7 @@ export default function SearchResult({
   );
 
   const additionalSelectedContent = (
-    <div className="tw-text-xs tw-font-normal tw-text-muted-foreground scripture-font">
+    <div className="tw:text-xs tw:font-normal tw:text-muted-foreground scripture-font">
       {getFocusedVerseText()}
     </div>
   );

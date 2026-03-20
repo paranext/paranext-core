@@ -52,7 +52,7 @@ export type ToolbarProps = PropsWithChildren<{
  * 'darwin' will reserve the necessary space for macos traffic lights at the start, otherwise a
  * different amount of space at the end for the window controls.
  *
- * Apply to the toolbar like: `<Toolbar className={cn('tw-h-8 tw-bg-background',
+ * Apply to the toolbar like: `<Toolbar className={cn('tw:h-8 tw:bg-background',
  * getToolbarOSReservedSpaceClassName('darwin'))}>` or `<Toolbar
  * className={getToolbarOSReservedSpaceClassName('linux')}>`
  *
@@ -66,9 +66,9 @@ export function getToolbarOSReservedSpaceClassName(
     case undefined:
       return undefined;
     case 'darwin':
-      return 'tw-ps-[85px]';
+      return 'tw:ps-[85px]';
     default:
-      return 'tw-pe-[calc(138px+1rem)]';
+      return 'tw:pe-[calc(138px+1rem)]';
   }
 }
 
@@ -97,20 +97,20 @@ export function Toolbar({
 
   return (
     <div
-      className={cn('tw-border tw-px-4 tw-text-foreground', className)}
+      className={cn('tw:border tw:px-4 tw:text-foreground', className)}
       ref={containerRef}
       style={{ position: 'relative' }}
       id={id}
     >
       <div
-        className="tw-flex tw-h-full tw-w-full tw-justify-between tw-overflow-hidden"
+        className="tw:flex tw:h-full tw:w-full tw:justify-between tw:overflow-hidden"
         /* @ts-ignore Electron-only property */
         style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
       >
         {/* App Menu area */}
-        <div className="tw-flex tw-grow tw-basis-0">
+        <div className="tw:flex tw:grow tw:basis-0">
           <div
-            className="tw-flex tw-items-center tw-gap-2"
+            className="tw:flex tw:items-center tw:gap-2"
             /* @ts-ignore Electron-only property */
             style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >
@@ -129,7 +129,7 @@ export function Toolbar({
 
         {/* Content area */}
         <div
-          className="tw-flex tw-items-center tw-gap-2 tw-px-2"
+          className="tw:flex tw:items-center tw:gap-2 tw:px-2"
           /* @ts-ignore Electron-only property */
           style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
         >
@@ -137,9 +137,9 @@ export function Toolbar({
         </div>
 
         {/* Configure area */}
-        <div className="tw-flex tw-min-w-0 tw-grow tw-basis-0 tw-justify-end">
+        <div className="tw:flex tw:min-w-0 tw:grow tw:basis-0 tw:justify-end">
           <div
-            className="tw-flex tw-min-w-0 tw-items-center tw-gap-2 tw-pe-1"
+            className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:pe-1"
             /* @ts-ignore Electron-only property */
             style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >

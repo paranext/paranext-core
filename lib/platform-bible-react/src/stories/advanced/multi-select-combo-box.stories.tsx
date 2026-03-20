@@ -154,7 +154,7 @@ const meta: Meta<typeof MultiSelectComboBox> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-4">
+        <div className="tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -186,8 +186,8 @@ export const Default: Story = {
     };
 
     return (
-      <div className="tw-flex tw-flex-col tw-gap-4">
-        <div className="tw-w-[300px]">
+      <div className="tw:flex tw:flex-col tw:gap-4">
+        <div className="tw:w-[300px]">
           <MultiSelectComboBox
             entries={types}
             selected={selectedTypes}
@@ -228,7 +228,7 @@ export const BasicUsage: Story = {
     const [selected, setSelected] = useState<string[]>(['resources']);
 
     return (
-      <div className="tw-w-[300px]">
+      <div className="tw:w-[300px]">
         <MultiSelectComboBox
           entries={types}
           selected={selected}
@@ -253,7 +253,7 @@ export const WithCounts: Story = {
     const [selected, setSelected] = useState<string[]>([]);
 
     return (
-      <div className="tw-w-[300px]">
+      <div className="tw:w-[300px]">
         <MultiSelectComboBox
           entries={types}
           selected={selected}
@@ -278,7 +278,7 @@ export const AllSelected: Story = {
     const [selected, setSelected] = useState<string[]>(types.map((type) => type.value));
 
     return (
-      <div className="tw-w-[300px]">
+      <div className="tw:w-[300px]">
         <MultiSelectComboBox
           entries={types}
           selected={selected}
@@ -313,13 +313,13 @@ export const ResizableContainer: Story = {
     };
 
     return (
-      <div className="tw-flex tw-flex-col tw-gap-4">
-        <p className="tw-text-sm tw-text-muted-foreground">
+      <div className="tw:flex tw:flex-col tw:gap-4">
+        <p className="tw:text-sm tw:text-muted-foreground">
           Resize the container below to test overflow behavior. The text should truncate with
           ellipsis when the container becomes too narrow.
         </p>
         <div
-          className="tw-resize tw-overflow-auto tw-rounded tw-border-2 tw-border-dashed tw-border-muted-foreground tw-p-4"
+          className="tw:resize tw:overflow-auto tw:rounded tw:border-2 tw:border-dashed tw:border-muted-foreground tw:p-4"
           style={{ minWidth: '150px', width: '300px', maxWidth: '600px' }}
         >
           <MultiSelectComboBox
@@ -332,9 +332,9 @@ export const ResizableContainer: Story = {
             hasToggleAllFeature
           />
         </div>
-        <div className="tw-mt-4">
-          <p className="tw-font-semibold">Selected values:</p>
-          <p className="tw-text-sm">{selected.length > 0 ? selected.join(', ') : 'None'}</p>
+        <div className="tw:mt-4">
+          <p className="tw:font-semibold">Selected values:</p>
+          <p className="tw:text-sm">{selected.length > 0 ? selected.join(', ') : 'None'}</p>
         </div>
       </div>
     );

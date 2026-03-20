@@ -17,10 +17,10 @@ export function ThemeButton() {
 
   return (
     <Button variant="outline" size="icon" onClick={toggleTheme}>
-      {theme === 'light' && <Sun className="tw-h-[1.2rem] tw-w-[1.2rem]" />}
-      {theme === 'dark' && <Moon className="tw-h-[1.2rem] tw-w-[1.2rem]" />}
-      {theme === 'system' && <div className="tw-h-[1.2rem] tw-w-[1.2rem] tw-text-xs">SYS</div>}
-      <span className="tw-sr-only">Toggle thesme</span>
+      {theme === 'light' && <Sun className="tw:h-[1.2rem] tw:w-[1.2rem]" />}
+      {theme === 'dark' && <Moon className="tw:h-[1.2rem] tw:w-[1.2rem]" />}
+      {theme === 'system' && <div className="tw:h-[1.2rem] tw:w-[1.2rem] tw:text-xs">SYS</div>}
+      <span className="tw:sr-only">Toggle thesme</span>
     </Button>
   );
 }

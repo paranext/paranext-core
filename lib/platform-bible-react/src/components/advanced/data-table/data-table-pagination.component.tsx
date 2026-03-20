@@ -16,21 +16,21 @@ interface DataTablePaginationProps<TData> {
 
 export function DataTablePagination<TData>({ table }: DataTablePaginationProps<TData>) {
   return (
-    <div className="tw-flex tw-items-center tw-justify-between tw-px-2 tw-pb-3 tw-pt-3">
-      <div className="tw-flex tw-items-center tw-space-x-6 lg:tw-space-x-8">
-        <div className="tw-flex-1 tw-text-sm tw-text-muted-foreground">
+    <div className="tw:flex tw:items-center tw:justify-between tw:px-2 tw:pb-3 tw:pt-3">
+      <div className="tw:flex tw:items-center tw:space-x-6 tw:lg:space-x-8">
+        <div className="tw:flex-1 tw:text-sm tw:text-muted-foreground">
           {table.getFilteredSelectedRowModel().rows.length} of{' '}
           {table.getFilteredRowModel().rows.length} row(s) selected
         </div>
-        <div className="tw-flex tw-items-center tw-space-x-2">
-          <p className="tw-text-nowrap tw-text-sm tw-font-medium">Rows per page</p>
+        <div className="tw:flex tw:items-center tw:space-x-2">
+          <p className="tw:text-nowrap tw:text-sm tw:font-medium">Rows per page</p>
           <Select
             value={`${table.getState().pagination.pageSize}`}
             onValueChange={(value) => {
               table.setPageSize(Number(value));
             }}
           >
-            <SelectTrigger className="tw-h-8 tw-w-[70px]">
+            <SelectTrigger className="tw:h-8 tw:w-[70px]">
               <SelectValue placeholder={table.getState().pagination.pageSize} />
             </SelectTrigger>
             <SelectContent side="top">
@@ -42,49 +42,49 @@ export function DataTablePagination<TData>({ table }: DataTablePaginationProps<T
             </SelectContent>
           </Select>
         </div>
-        <div className="tw-flex tw-w-[100px] tw-items-center tw-justify-center tw-text-sm tw-font-medium">
+        <div className="tw:flex tw:w-[100px] tw:items-center tw:justify-center tw:text-sm tw:font-medium">
           Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
         </div>
-        <div className="tw-flex tw-items-center tw-space-x-2">
+        <div className="tw:flex tw:items-center tw:space-x-2">
           <Button
             variant="outline"
             size="icon"
-            className="tw-hidden tw-h-8 tw-w-8 tw-p-0 lg:tw-flex"
+            className="tw:hidden tw:h-8 tw:w-8 tw:p-0 tw:lg:flex"
             onClick={() => table.setPageIndex(0)}
             disabled={!table.getCanPreviousPage()}
           >
-            <span className="tw-sr-only">Go to first page</span>
-            <ArrowLeftIcon className="tw-h-4 tw-w-4" />
+            <span className="tw:sr-only">Go to first page</span>
+            <ArrowLeftIcon className="tw:h-4 tw:w-4" />
           </Button>
           <Button
             variant="outline"
             size="icon"
-            className="tw-h-8 tw-w-8 tw-p-0"
+            className="tw:h-8 tw:w-8 tw:p-0"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
-            <span className="tw-sr-only">Go to previous page</span>
-            <ChevronLeftIcon className="tw-h-4 tw-w-4" />
+            <span className="tw:sr-only">Go to previous page</span>
+            <ChevronLeftIcon className="tw:h-4 tw:w-4" />
           </Button>
           <Button
             variant="outline"
             size="icon"
-            className="tw-h-8 tw-w-8 tw-p-0"
+            className="tw:h-8 tw:w-8 tw:p-0"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
-            <span className="tw-sr-only">Go to next page</span>
-            <ChevronRightIcon className="tw-h-4 tw-w-4" />
+            <span className="tw:sr-only">Go to next page</span>
+            <ChevronRightIcon className="tw:h-4 tw:w-4" />
           </Button>
           <Button
             variant="outline"
             size="icon"
-            className="tw-hidden tw-h-8 tw-w-8 tw-p-0 lg:tw-flex"
+            className="tw:hidden tw:h-8 tw:w-8 tw:p-0 tw:lg:flex"
             onClick={() => table.setPageIndex(table.getPageCount() - 1)}
             disabled={!table.getCanNextPage()}
           >
-            <span className="tw-sr-only">Go to last page</span>
-            <ArrowRightIcon className="tw-h-4 tw-w-4" />
+            <span className="tw:sr-only">Go to last page</span>
+            <ArrowRightIcon className="tw:h-4 tw:w-4" />
           </Button>
         </div>
       </div>

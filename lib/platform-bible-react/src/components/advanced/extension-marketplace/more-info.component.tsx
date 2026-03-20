@@ -61,27 +61,27 @@ export function MoreInfo({
   return (
     <div
       id={id}
-      className="pr-twp tw-flex tw-items-center tw-justify-center tw-gap-4 tw-divide-x tw-border-b tw-border-t tw-py-2 tw-text-center"
+      className="pr-twp tw:flex tw:items-center tw:justify-center tw:gap-4 tw:divide-x tw:border-b tw:border-t tw:py-2 tw:text-center"
     >
       {category && (
-        <div className="tw-flex tw-flex-col tw-items-center tw-gap-1">
-          <div className="tw-flex">
-            <span className="tw-text-xs tw-font-semibold tw-text-foreground">{category}</span>
+        <div className="tw:flex tw:flex-col tw:items-center tw:gap-1">
+          <div className="tw:flex">
+            <span className="tw:text-xs tw:font-semibold tw:text-foreground">{category}</span>
           </div>
-          <span className="tw-text-xs tw-text-foreground">CATEGORY</span>
+          <span className="tw:text-xs tw:text-foreground">CATEGORY</span>
         </div>
       )}
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-1 tw-ps-4">
-        <div className="tw-flex tw-gap-1">
-          <User className="tw-h-4 tw-w-4" />
-          <span className="tw-text-xs tw-font-semibold tw-text-foreground">{numberFormatted}</span>
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-1 tw:ps-4">
+        <div className="tw:flex tw:gap-1">
+          <User className="tw:h-4 tw:w-4" />
+          <span className="tw:text-xs tw:font-semibold tw:text-foreground">{numberFormatted}</span>
         </div>
-        <span className="tw-text-xs tw-text-foreground">USERS</span>
+        <span className="tw:text-xs tw:text-foreground">USERS</span>
       </div>
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-1 tw-ps-4">
-        <div className="tw-flex tw-gap-2">
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-1 tw:ps-4">
+        <div className="tw:flex tw:gap-2">
           {languages.slice(0, 3).map((locale) => (
-            <span key={locale} className="tw-text-xs tw-font-semibold tw-text-foreground">
+            <span key={locale} className="tw:text-xs tw:font-semibold tw:text-foreground">
               {locale.toUpperCase()}
             </span>
           ))}
@@ -90,35 +90,35 @@ export function MoreInfo({
           <button
             type="button"
             onClick={() => handleScrollToBottom()}
-            className="tw-text-xs tw-text-foreground tw-underline"
+            className="tw:text-xs tw:text-foreground tw:underline"
           >
             +{languages.length - 3} more languages
           </button>
         )}
       </div>
       {(moreInfoUrl || supportUrl) && (
-        <div className="tw-flex tw-flex-col tw-gap-1 tw-ps-4">
+        <div className="tw:flex tw:flex-col tw:gap-1 tw:ps-4">
           {moreInfoUrl && (
-            <div className="tw-flex tw-gap-1">
+            <div className="tw:flex tw:gap-1">
               <Button
                 onClick={() => handleMoreInfoLinkClick()}
                 variant="link"
-                className="tw-flex tw-h-auto tw-gap-1 tw-py-0 tw-text-xs tw-font-semibold tw-text-foreground"
+                className="tw:flex tw:h-auto tw:gap-1 tw:py-0 tw:text-xs tw:font-semibold tw:text-foreground"
               >
                 Website
-                <LucideLink className="tw-h-4 tw-w-4" />
+                <LucideLink className="tw:h-4 tw:w-4" />
               </Button>
             </div>
           )}
           {supportUrl && (
-            <div className="tw-flex tw-gap-1">
+            <div className="tw:flex tw:gap-1">
               <Button
                 onClick={() => handleSupportLinkClick()}
                 variant="link"
-                className="tw-flex tw-h-auto tw-gap-1 tw-py-0 tw-text-xs tw-font-semibold tw-text-foreground"
+                className="tw:flex tw:h-auto tw:gap-1 tw:py-0 tw:text-xs tw:font-semibold tw:text-foreground"
               >
                 Support
-                <CircleHelp className="tw-h-4 tw-w-4" />
+                <CircleHelp className="tw:h-4 tw:w-4" />
               </Button>
             </div>
           )}

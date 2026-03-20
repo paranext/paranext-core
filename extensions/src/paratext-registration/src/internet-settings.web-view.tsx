@@ -203,11 +203,11 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   };
 
   return (
-    <div className="tw-flex tw-flex-col tw-gap-2 tw-h-screen tw-p-4">
-      <div className="tw-m-2">
+    <div className="tw:flex tw:flex-col tw:gap-2 tw:h-screen tw:p-4">
+      <div className="tw:m-2">
         {localizedStrings['%paratextRegistration_description_internetUse_disclaimer%']}
       </div>
-      <div className="tw-m-2">
+      <div className="tw:m-2">
         <Select
           disabled={isFormDisabled}
           value={internetSettings.permittedInternetUse}
@@ -228,12 +228,12 @@ globalThis.webViewComponent = function InternetSettingsComponent({
         </Select>
       </div>
       {internetSettings.permittedInternetUse === 'ProxyOnly' && (
-        <Card className="tw-m-2">
+        <Card className="tw:m-2">
           <CardHeader>
             {localizedStrings['%paratextRegistration_section_proxySettings%']}
           </CardHeader>
           <CardContent>
-            <Grid className="tw-m-0">
+            <Grid className="tw:m-0">
               <span>{localizedStrings['%paratextRegistration_label_proxyMode%']}</span>
               <Select
                 disabled={isFormDisabled}
@@ -255,7 +255,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
               </Select>
               <span>{localizedStrings['%paratextRegistration_label_proxyHost%']}</span>
               <Input
-                className="invalid:tw-border-destructive"
+                className="tw:invalid:border-destructive"
                 minLength={1}
                 required
                 value={internetSettings.proxyHost}
@@ -321,9 +321,9 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       <div>
         {!saveError &&
           (saveState === SaveState.IsRestarting || saveState === SaveState.HasSaved) && (
-            <div className="tw-mx-2 tw-my-4">
+            <div className="tw:mx-2 tw:my-4">
               <Alert ref={scrollToRef}>
-                <CircleCheck className="tw-h-4 tw-w-4" />
+                <CircleCheck className="tw:h-4 tw:w-4" />
                 <AlertTitle>
                   {localizedStrings['%paratextRegistration_alert_updatedInternetSettings%']}
                 </AlertTitle>
@@ -332,15 +332,15 @@ globalThis.webViewComponent = function InternetSettingsComponent({
             </div>
           )}
         {saveError && (
-          <div className="tw-mx-2 tw-my-4">
+          <div className="tw:mx-2 tw:my-4">
             <Alert ref={scrollToRef} variant="destructive">
-              <AlertCircle className="tw-h-4 tw-w-4" />
+              <AlertCircle className="tw:h-4 tw:w-4" />
               <AlertTitle>{localizedStrings['%general_error_title%']}</AlertTitle>
               <AlertDescription>{saveError}</AlertDescription>
             </Alert>
           </div>
         )}
-        <Grid className="tw-grid-cols-[1fr_auto] tw-items-end">
+        <Grid className="tw:grid-cols-[1fr_auto] tw:items-end">
           <span />
           <Button variant="default" disabled={isButtonDisabled} onClick={saveAndRestart}>
             {saveState === SaveState.IsRestarting ? (

@@ -138,7 +138,7 @@ export function UiLanguageSelector({
   };
 
   return (
-    <div id={id} className={cn('pr-twp tw-max-w-sm', className)}>
+    <div id={id} className={cn('pr-twp tw:max-w-sm', className)}>
       {/* Language Selector */}
       <Select
         name="uiLanguage"
@@ -151,7 +151,7 @@ export function UiLanguageSelector({
           <SelectValue />
         </SelectTrigger>
         <SelectContent
-          className="tw-z-[250]" // Need to get over the floating web view z-index 200
+          className="tw:z-[250]" // Need to get over the floating web view z-index 200
         >
           {Object.keys(knownUiLanguages).map((key) => {
             return (
@@ -165,8 +165,8 @@ export function UiLanguageSelector({
 
       {/* Fallback Language Button */}
       {primaryLanguage !== 'en' && (
-        <div className="tw-pt-3">
-          <Label className="tw-font-normal tw-text-muted-foreground">
+        <div className="tw:pt-3">
+          <Label className="tw:font-normal tw:text-muted-foreground">
             {formatReplacementString(fallbackLanguagesText, {
               fallbackLanguages:
                 fallbackLanguages?.length > 0

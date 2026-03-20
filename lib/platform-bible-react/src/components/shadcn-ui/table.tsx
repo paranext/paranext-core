@@ -79,7 +79,7 @@ function Table({
   };
 
   return (
-    <div className={cn('pr-twp tw-relative tw-w-full', { 'tw-p-1': stickyHeader })}>
+    <div className={cn('pr-twp tw:relative tw:w-full', { 'tw:p-1': stickyHeader })}>
       {/* Table element is not interactive by default but we need to add a keydown handler */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <table
@@ -89,8 +89,8 @@ function Table({
         onKeyDown={handleKeyDownInTable} // CUSTOM: Enable keyboard behavior
         ref={tableRef} // CUSTOM: Use internal ref to manage keyboard navigation
         className={cn(
-          'tw-w-full tw-caption-bottom tw-text-sm tw-outline-none', // CUSTOM: Add outline-none to remove duplicate outline
-          'focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background', // CUSTOM: Add focus styles
+          'tw:w-full tw:caption-bottom tw:text-sm tw:outline-none', // CUSTOM: Add outline-none to remove duplicate outline
+          'tw:focus:relative tw:focus:z-10 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background', // CUSTOM: Add focus styles
           className,
         )}
         aria-label="Table" // CUSTOM: Add aria-label for accessibility
@@ -116,9 +116,9 @@ function TableHeader({
       ref={ref}
       className={cn(
         {
-          'tw-sticky tw-top-[-1px] tw-z-20 tw-bg-background tw-drop-shadow-sm': stickyHeader,
+          'tw:sticky tw:top-[-1px] tw:z-20 tw:bg-background tw:drop-shadow-sm': stickyHeader,
         },
-        '[&_tr]:tw-border-b',
+        'tw:[&_tr]:border-b',
         className,
       )}
       {...props}
@@ -132,7 +132,7 @@ function TableBody({
   ref,
   ...props
 }: React.HTMLAttributes<HTMLTableSectionElement> & { ref?: React.Ref<HTMLTableSectionElement> }) {
-  return <tbody ref={ref} className={cn('[&_tr:last-child]:tw-border-0', className)} {...props} />;
+  return <tbody ref={ref} className={cn('tw:[&_tr:last-child]:border-0', className)} {...props} />;
 }
 
 /** @inheritdoc Table */
@@ -145,7 +145,7 @@ function TableFooter({
     <tfoot
       ref={ref}
       className={cn(
-        'tw-border-t tw-bg-muted/50 tw-font-medium [&>tr]:last:tw-border-b-0',
+        'tw:border-t tw:bg-muted/50 tw:font-medium tw:[&>tr]:last:border-b-0',
         className,
       )}
       {...props}
@@ -321,10 +321,10 @@ function TableRow({
       onKeyDown={handleKeyDown} // CUSTOM: Enable keyboard behavior
       onFocus={handleFocus} // CUSTOM: Handle focus event
       className={cn(
-        // CUSTOM: Add focus styles and add tw-outline-none so there isn't a duplicate outline
-        'tw-border-b tw-outline-none tw-transition-colors hover:tw-bg-muted/50',
-        'focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
-        'data-[state=selected]:tw-bg-muted',
+        // CUSTOM: Add focus styles and add tw:outline-none so there isn't a duplicate outline
+        'tw:border-b tw:outline-none tw:transition-colors tw:hover:bg-muted/50',
+        'tw:focus:relative tw:focus:z-10 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
+        'tw:data-[state=selected]:bg-muted',
         className,
       )}
       {...props}
@@ -342,7 +342,7 @@ function TableHead({
     <th
       ref={ref}
       className={cn(
-        'tw-h-12 tw-px-4 tw-text-start tw-align-middle tw-font-medium tw-text-muted-foreground [&:has([role=checkbox])]:tw-pe-0',
+        'tw:h-12 tw:px-4 tw:text-start tw:align-middle tw:font-medium tw:text-muted-foreground tw:[&:has([role=checkbox])]:pe-0',
         className,
       )}
       {...props}
@@ -359,7 +359,7 @@ function TableCell({
   return (
     <td
       ref={ref}
-      className={cn('tw-p-4 tw-align-middle [&:has([role=checkbox])]:tw-pe-0', className)}
+      className={cn('tw:p-4 tw:align-middle tw:[&:has([role=checkbox])]:pe-0', className)}
       {...props}
     />
   );
@@ -374,7 +374,7 @@ function TableCaption({
   return (
     <caption
       ref={ref}
-      className={cn('tw-mt-4 tw-text-sm tw-text-muted-foreground', className)}
+      className={cn('tw:mt-4 tw:text-sm tw:text-muted-foreground', className)}
       {...props}
     />
   );

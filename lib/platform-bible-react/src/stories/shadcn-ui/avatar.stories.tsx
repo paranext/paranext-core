@@ -68,7 +68,7 @@ export const BrokenImage: Story = {
 
 export const Different: Story = {
   render: () => (
-    <div className="tw-flex tw-gap-4">
+    <div className="tw:flex tw:gap-4">
       <Avatar>
         <AvatarImage src="https://github.com/vercel.png" alt="@vercel" />
         <AvatarFallback>VC</AvatarFallback>

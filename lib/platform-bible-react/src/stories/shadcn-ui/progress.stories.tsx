@@ -71,26 +71,26 @@ export const Complete: Story = {
 
 export const States: Story = {
   render: () => (
-    <div className="tw-flex tw-w-80 tw-flex-col tw-gap-4">
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <Progress value={0} className="tw-flex-1" />
-        <span className="tw-w-8 tw-text-sm">0%</span>
+    <div className="tw:flex tw:w-80 tw:flex-col tw:gap-4">
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <Progress value={0} className="tw:flex-1" />
+        <span className="tw:w-8 tw:text-sm">0%</span>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <Progress value={25} className="tw-flex-1" />
-        <span className="tw-w-8 tw-text-sm">25%</span>
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <Progress value={25} className="tw:flex-1" />
+        <span className="tw:w-8 tw:text-sm">25%</span>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <Progress value={50} className="tw-flex-1" />
-        <span className="tw-w-8 tw-text-sm">50%</span>
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <Progress value={50} className="tw:flex-1" />
+        <span className="tw:w-8 tw:text-sm">50%</span>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <Progress value={75} className="tw-flex-1" />
-        <span className="tw-w-8 tw-text-sm">75%</span>
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <Progress value={75} className="tw:flex-1" />
+        <span className="tw:w-8 tw:text-sm">75%</span>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <Progress value={100} className="tw-flex-1" />
-        <span className="tw-w-8 tw-text-sm">100%</span>
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <Progress value={100} className="tw:flex-1" />
+        <span className="tw:w-8 tw:text-sm">100%</span>
       </div>
     </div>
   ),
@@ -113,9 +113,9 @@ export const Animated: Story = {
     }, []);
 
     return (
-      <div className="tw-w-80">
+      <div className="tw:w-80">
         <Progress value={progress} />
-        <p className="tw-mt-2 tw-text-sm tw-text-muted-foreground">Progress: {progress}%</p>
+        <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Progress: {progress}%</p>
       </div>
     );
   },
@@ -130,9 +130,9 @@ export const Animated: Story = {
 
 export const Interactive: Story = {
   render: (args) => (
-    <div className="tw-w-80">
+    <div className="tw:w-80">
       <Progress {...args} />
-      <p className="tw-mt-2 tw-text-sm tw-text-muted-foreground">
+      <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">
         Use the controls to adjust the progress value.
       </p>
     </div>

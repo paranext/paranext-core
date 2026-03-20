@@ -12,7 +12,7 @@ const meta: Meta<typeof Toolbar> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-4">
+        <div className="tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -28,15 +28,15 @@ export const Default: Story = {
   render: () => (
     <Toolbar onSelectMenuItem={(menuItemId) => console.log('Selected:', menuItemId)}>
       <Button variant="ghost" size="sm">
-        <Save className="tw-h-4 tw-w-4" />
+        <Save className="tw:h-4 tw:w-4" />
         Save
       </Button>
       <Button variant="ghost" size="sm">
-        <Share className="tw-h-4 tw-w-4" />
+        <Share className="tw:h-4 tw:w-4" />
         Share
       </Button>
       <Button variant="ghost" size="sm">
-        <Settings className="tw-h-4 tw-w-4" />
+        <Settings className="tw:h-4 tw:w-4" />
         Settings
       </Button>
     </Toolbar>
@@ -53,21 +53,21 @@ export const Default: Story = {
 export const WithSearch: Story = {
   render: () => (
     <Toolbar onSelectMenuItem={(menuItemId) => console.log('Selected:', menuItemId)}>
-      <div className="tw-flex tw-items-center tw-space-x-2">
-        <div className="tw-relative">
-          <Search className="tw-absolute tw-left-2 tw-top-2.5 tw-h-4 tw-w-4 tw-text-muted-foreground" />
-          <Input type="search" placeholder="Search..." className="tw-w-[200px] tw-pl-8" />
+      <div className="tw:flex tw:items-center tw:space-x-2">
+        <div className="tw:relative">
+          <Search className="tw:absolute tw:left-2 tw:top-2.5 tw:h-4 tw:w-4 tw:text-muted-foreground" />
+          <Input type="search" placeholder="Search..." className="tw:w-[200px] tw:pl-8" />
         </div>
         <Button variant="ghost" size="sm">
-          <Save className="tw-h-4 tw-w-4" />
+          <Save className="tw:h-4 tw:w-4" />
           Save
         </Button>
         <Button variant="ghost" size="sm">
-          <Share className="tw-h-4 tw-w-4" />
+          <Share className="tw:h-4 tw:w-4" />
           Share
         </Button>
         <Button variant="ghost" size="sm">
-          <Settings className="tw-h-4 tw-w-4" />
+          <Settings className="tw:h-4 tw:w-4" />
           Settings
         </Button>
       </div>
@@ -86,7 +86,7 @@ export const WithMenuBar: Story = {
   render: () => (
     <Toolbar onSelectMenuItem={(menuItemId) => console.log('Selected:', menuItemId)}>
       <Button variant="ghost" size="sm">
-        <Save className="tw-h-4 tw-w-4" />
+        <Save className="tw:h-4 tw:w-4" />
         Save
       </Button>
     </Toolbar>
@@ -104,10 +104,10 @@ export const MinimalToolbar: Story = {
   render: () => (
     <Toolbar onSelectMenuItem={(menuItemId) => console.log('Selected:', menuItemId)}>
       <Button variant="ghost" size="sm">
-        <Save className="tw-h-4 tw-w-4" />
+        <Save className="tw:h-4 tw:w-4" />
       </Button>
       <Button variant="ghost" size="sm">
-        <Share className="tw-h-4 tw-w-4" />
+        <Share className="tw:h-4 tw:w-4" />
       </Button>
     </Toolbar>
   ),

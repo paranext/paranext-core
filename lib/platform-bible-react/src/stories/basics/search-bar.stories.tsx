@@ -128,9 +128,9 @@ export const Debounced: Story = {
     };
 
     return (
-      <div className="tw-space-y-4">
+      <div className="tw:space-y-4">
         <SearchBar {...args} value={searchQuery} onSearch={handleSearchDebounced} />
-        <div className="tw-text-sm tw-text-muted-foreground">
+        <div className="tw:text-sm tw:text-muted-foreground">
           <div>
             Current input: <code>{searchQuery || '(empty)'}</code>
           </div>
@@ -162,15 +162,15 @@ export const Variants: Story = {
     const [query3, setQuery3] = useState('');
 
     return (
-      <div className="tw-space-y-4">
+      <div className="tw:space-y-4">
         <div>
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label className="tw-mb-2 tw-block tw-text-sm tw-font-medium">Default Search</label>
+          <label className="tw:mb-2 tw:block tw:text-sm tw:font-medium">Default Search</label>
           <SearchBar value={query1} onSearch={setQuery1} placeholder="Search..." />
         </div>
         <div>
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label className="tw-mb-2 tw-block tw-text-sm tw-font-medium">Full Width Search</label>
+          <label className="tw:mb-2 tw:block tw:text-sm tw:font-medium">Full Width Search</label>
           <SearchBar
             value={query2}
             onSearch={setQuery2}
@@ -180,7 +180,7 @@ export const Variants: Story = {
         </div>
         <div>
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label className="tw-mb-2 tw-block tw-text-sm tw-font-medium">Disabled Search</label>
+          <label className="tw:mb-2 tw:block tw:text-sm tw:font-medium">Disabled Search</label>
           <SearchBar value={query3} onSearch={setQuery3} placeholder="Disabled..." isDisabled />
         </div>
       </div>
@@ -205,9 +205,9 @@ export const Interactive: Story = {
     };
 
     return (
-      <div className="tw-space-y-4">
+      <div className="tw:space-y-4">
         <SearchBar {...args} value={searchQuery} onSearch={handleSearch} />
-        <div className="tw-text-sm tw-text-muted-foreground">
+        <div className="tw:text-sm tw:text-muted-foreground">
           Current search: <code>{searchQuery || '(empty)'}</code>
         </div>
       </div>

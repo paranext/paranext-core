@@ -558,7 +558,7 @@
  * effort than is currently warranted for fixing fonts.
  */
 
-/** Repeat pr-twp class to out-specify `.pr-twp` which applies `tw-font-sans` in PBU `index.css` */
+/** Repeat pr-twp class to out-specify `.pr-twp` which applies `tw:font-sans` in PBU `index.css` */
 body,
 .pr-twp.pr-twp {
   font-family: 'Google Sans', 'Cardo', 'Noto Sans Syriac', sans-serif;

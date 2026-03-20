@@ -158,9 +158,9 @@ export function FindHeaderDemo() {
 
   return (
     <Card>
-      <CardContent className="tw-space-y-4 tw-p-6">
-        <div className="tw-flex tw-gap-2 tw-flex-wrap">
-          <div className="tw-relative tw-flex-1">
+      <CardContent className="tw:space-y-4 tw:p-6">
+        <div className="tw:flex tw:gap-2 tw:flex-wrap">
+          <div className="tw:relative tw:flex-1">
             <Input
               id="search-term"
               value={searchTerm}
@@ -174,7 +174,7 @@ export function FindHeaderDemo() {
                 }
               }}
               placeholder="%webView_find_searchPlaceholder%"
-              className={`tw-w-full tw-min-w-16 tw-text-ellipsis ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
+              className={`tw:w-full tw:min-w-16 tw:text-ellipsis ${recentSearches.length > 0 ? 'tw:!pr-10' : 'tw:!pr-4'}`}
             />
             <RecentSearches recentSearches={recentSearches} onSearchItemSelect={setSearchTerm} />
           </div>
@@ -187,9 +187,9 @@ export function FindHeaderDemo() {
                   size="icon"
                   onClick={() => setAreFiltersShown(!areFiltersShown)}
                   aria-label="%webView_find_toggleFilters%"
-                  className={areFiltersShown ? 'tw-bg-muted' : ''}
+                  className={areFiltersShown ? 'tw:bg-muted' : ''}
                 >
-                  <SlidersHorizontal className="tw-h-4 tw-w-4" />
+                  <SlidersHorizontal className="tw:h-4 tw:w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>%webView_find_toggleFilters%</TooltipContent>
@@ -214,9 +214,9 @@ export function FindHeaderDemo() {
               </TooltipTrigger>
               <TooltipContent>
                 {canClearResults ? (
-                  <p className="tw-font-light">%webView_find_clearSearchResults%</p>
+                  <p className="tw:font-light">%webView_find_clearSearchResults%</p>
                 ) : (
-                  <p className="tw-font-light">%webView_find_findInProject%</p>
+                  <p className="tw:font-light">%webView_find_findInProject%</p>
                 )}
               </TooltipContent>
             </Tooltip>
@@ -224,7 +224,7 @@ export function FindHeaderDemo() {
         </div>
 
         {areFiltersShown && (
-          <div className="tw-space-y-4 tw-border-t tw-pt-4">
+          <div className="tw:space-y-4 tw:border-t tw:pt-4">
             <ScopeSelector
               scope={scope}
               availableScopes={['chapter', 'book', 'selectedBooks']}
@@ -234,7 +234,7 @@ export function FindHeaderDemo() {
               localizedStrings={{}}
               availableBookInfo={availableBookIds}
             />
-            <div className="tw-space-y-2">
+            <div className="tw:space-y-2">
               <Label>%webView_find_restrictions%</Label>
               <Select
                 value={wordRestriction}
@@ -255,7 +255,7 @@ export function FindHeaderDemo() {
             </div>
 
             {(scope === 'chapter' || scope === 'book') && (
-              <div className="tw-flex tw-flex-col tw-items-start tw-gap-4">
+              <div className="tw:flex tw:flex-col tw:items-start tw:gap-4">
                 <Label>%webView_find_scrollGroup%</Label>
                 <ScrollGroupSelector
                   // This is kinda hacky, but the real scrollgroup keys are also defined like this
@@ -270,24 +270,24 @@ export function FindHeaderDemo() {
               </div>
             )}
 
-            <div className="tw-flex tw-items-center tw-space-x-2">
+            <div className="tw:flex tw:items-center tw:space-x-2">
               <Checkbox
                 id="match-case"
                 checked={shouldMatchCase}
                 onCheckedChange={(checked: boolean) => setShouldMatchCase(checked === true)}
               />
-              <Label htmlFor="match-case" className="tw-cursor-pointer">
+              <Label htmlFor="match-case" className="tw:cursor-pointer">
                 %webView_find_matchCase%
               </Label>
             </div>
             {SHOW_ALLOW_REGEX_OPTION && (
-              <div className="tw-flex tw-items-center tw-space-x-2">
+              <div className="tw:flex tw:items-center tw:space-x-2">
                 <Checkbox
                   id="allow-regex"
                   checked={isRegexAllowed}
                   onCheckedChange={(checked: boolean) => setIsRegexAllowed(checked === true)}
                 />
-                <Label htmlFor="allow-regex" className="tw-cursor-pointer">
+                <Label htmlFor="allow-regex" className="tw:cursor-pointer">
                   %webView_find_allowRegex%
                 </Label>
               </div>

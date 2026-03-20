@@ -67,7 +67,7 @@ export function TabToolbar({
   menuButtonIcon,
 }: TabToolbarProps) {
   return (
-    <TabToolbarContainer className={`tw-w-full tw-border ${className}`} id={id}>
+    <TabToolbarContainer className={`tw:w-full tw:border ${className}`} id={id}>
       {projectMenuData && (
         <TabDropdownMenu
           onSelectMenuItem={onSelectProjectMenuItem}
@@ -78,23 +78,23 @@ export function TabToolbar({
         />
       )}
       {startAreaChildren && (
-        <div className="tw-flex tw-h-full tw-shrink tw-grow-[10] tw-flex-row tw-flex-wrap tw-items-start tw-gap-x-1 tw-gap-y-2 tw-overflow-clip">
+        <div className="tw:flex tw:h-full tw:shrink tw:grow-[10] tw:flex-row tw:flex-wrap tw:items-start tw:gap-x-1 tw:gap-y-2 tw:overflow-clip">
           {startAreaChildren}
         </div>
       )}
       {centerAreaChildren && (
-        <div className="tw-flex tw-h-full tw-shrink tw-grow-[1] tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-x-1 tw-gap-y-2 tw-overflow-clip @sm:tw-basis-auto">
+        <div className="tw:flex tw:h-full tw:shrink tw:grow-[1] tw:basis-0 tw:flex-row tw:flex-wrap tw:items-start tw:justify-center tw:gap-x-1 tw:gap-y-2 tw:overflow-clip tw:@sm:basis-auto">
           {centerAreaChildren}
         </div>
       )}
-      <div className="tw-flex tw-h-full tw-shrink tw-grow-[1] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-x-1 tw-gap-y-2 tw-overflow-clip">
+      <div className="tw:flex tw:h-full tw:shrink tw:grow-[1] tw:flex-row-reverse tw:flex-wrap tw:items-start tw:gap-x-1 tw:gap-y-2 tw:overflow-clip">
         {tabViewMenuData && (
           <TabDropdownMenu
             onSelectMenuItem={onSelectViewInfoMenuItem}
             menuData={tabViewMenuData}
             tabLabel="View Info"
             icon={<EllipsisVertical />}
-            className="tw-h-full"
+            className="tw:h-full"
           />
         )}
         {endAreaChildren}

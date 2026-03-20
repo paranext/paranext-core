@@ -56,13 +56,13 @@ export default function RecentSearches<T>({
         <Button
           variant="ghost"
           size="icon"
-          className="tw-absolute tw-right-0 tw-top-0 tw-h-full tw-px-3 tw-py-2"
+          className="tw:absolute tw:right-0 tw:top-0 tw:h-full tw:px-3 tw:py-2"
           aria-label={ariaLabel}
         >
-          <Clock className="tw-h-4 tw-w-4" />
+          <Clock className="tw:h-4 tw:w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent id={id} className="tw-w-[300px] tw-p-0" align="start">
+      <PopoverContent id={id} className="tw:w-[300px] tw:p-0" align="start">
         <Command>
           <CommandList>
             <CommandGroup heading={groupHeading}>
@@ -70,9 +70,9 @@ export default function RecentSearches<T>({
                 <CommandItem
                   key={getItemKey(item)}
                   onSelect={() => handleSearchItemSelect(item)}
-                  className={cn('tw-flex tw-items-center', classNameForItems)}
+                  className={cn('tw:flex tw:items-center', classNameForItems)}
                 >
-                  <Clock className="tw-mr-2 tw-h-4 tw-w-4 tw-opacity-50" />
+                  <Clock className="tw:mr-2 tw:h-4 tw:w-4 tw:opacity-50" />
                   <span>{renderItem(item)}</span>
                 </CommandItem>
               ))}

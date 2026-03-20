@@ -182,7 +182,7 @@ export function PlatformBibleToolbar() {
       }}
       onSelectMenuItem={handleMenuCommand}
       className={cn(
-        'tw-h-12 tw-bg-transparent',
+        'tw:h-12 tw:bg-transparent',
         getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
       )}
       menubarVariant="muted"
@@ -196,13 +196,13 @@ export function PlatformBibleToolbar() {
                 <TooltipTrigger asChild>
                   <Badge
                     variant="ghost"
-                    className="tw-block tw-max-w-[150px] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-font-normal tw-shrink"
+                    className="tw:block tw:max-w-[150px] tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:font-normal tw:shrink"
                   >
                     {marketingVersion}
                   </Badge>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="tw-font-light">{marketingVersion}</p>
+                  <p className="tw:font-light">{marketingVersion}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -213,7 +213,7 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  className="pr-twp tw:h-8 tw:flex-shrink-0"
                   onClick={() => {
                     if (!isThemeLoadedNotError) return;
 
@@ -232,7 +232,7 @@ export function PlatformBibleToolbar() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="tw-font-light">{themeButtonTooltip}</p>
+                <p className="tw:font-light">{themeButtonTooltip}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -243,7 +243,7 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  className="pr-twp tw:h-8 tw:flex-shrink-0"
                   onClick={() => sendCommand('paratextRegistration.showInternetSettings')}
                 >
                   <Network />
@@ -251,7 +251,7 @@ export function PlatformBibleToolbar() {
               </TooltipTrigger>
               {localizedStrings['%mainMenu_openInternetSettings%'] && (
                 <TooltipContent>
-                  <p className="tw-font-light">
+                  <p className="tw:font-light">
                     {localizedStrings['%mainMenu_openInternetSettings%']}
                   </p>
                 </TooltipContent>
@@ -264,7 +264,7 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  className="pr-twp tw:h-8 tw:flex-shrink-0"
                   onClick={() => sendCommand('paratextRegistration.showParatextRegistration')}
                 >
                   <CircleUserRound />
@@ -272,7 +272,7 @@ export function PlatformBibleToolbar() {
               </TooltipTrigger>
               {localizedStrings['%mainMenu_openParatextRegistration%'] && (
                 <TooltipContent>
-                  <p className="tw-font-light">
+                  <p className="tw:font-light">
                     {localizedStrings['%mainMenu_openParatextRegistration%']}
                   </p>
                 </TooltipContent>
@@ -288,7 +288,7 @@ export function PlatformBibleToolbar() {
             <Button
               variant="ghost"
               size="icon"
-              className="tw-h-8"
+              className="tw:h-8"
               onClick={() => sendCommand('platformGetResources.openHome')}
             >
               <HomeIcon />
@@ -296,7 +296,7 @@ export function PlatformBibleToolbar() {
           </TooltipTrigger>
           {localizedStrings['%mainMenu_openHome%'] && (
             <TooltipContent>
-              <p className="tw-font-light">{localizedStrings['%mainMenu_openHome%']}</p>
+              <p className="tw:font-light">{localizedStrings['%mainMenu_openHome%']}</p>
             </TooltipContent>
           )}
         </Tooltip>
@@ -304,7 +304,7 @@ export function PlatformBibleToolbar() {
       <BookChapterControl
         scrRef={scrRef}
         handleSubmit={setScrRef}
-        className="tw-w-96"
+        className="tw:w-96"
         recentSearches={recentScriptureRefs}
         onAddRecentSearch={addRecentScriptureRef}
       />
@@ -313,7 +313,7 @@ export function PlatformBibleToolbar() {
         scrollGroupId={scrollGroupId}
         onChangeScrollGroupId={setScrollGroupId}
         localizedStrings={scrollGroupLocalizedStrings}
-        className="tw-h-8"
+        className="tw:h-8"
       />
     </Toolbar>
   );

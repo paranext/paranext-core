@@ -69,7 +69,7 @@ export function FontFormatToolbarPlugin() {
             activeEditor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
           }}
         >
-          <Icon className="tw-h-4 tw-w-4" />
+          <Icon className="tw:h-4 tw:w-4" />
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

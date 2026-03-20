@@ -15,7 +15,7 @@ function Card({
     <div
       ref={ref}
       className={cn(
-        'pr-twp tw-rounded-lg tw-border tw-bg-card tw-text-card-foreground tw-shadow-sm',
+        'pr-twp tw:rounded-lg tw:border tw:bg-card tw:text-card-foreground tw:shadow-sm',
         className,
       )}
       {...props}
@@ -32,7 +32,7 @@ function CardHeader({
   return (
     <div
       ref={ref}
-      className={cn('pr-twp tw-flex tw-flex-col tw-space-y-1.5 tw-p-6', className)}
+      className={cn('pr-twp tw:flex tw:flex-col tw:space-y-1.5 tw:p-6', className)}
       {...props}
     />
   );
@@ -48,7 +48,7 @@ function CardTitle({
     <h3
       ref={ref}
       className={cn(
-        'pr-twp tw-text-2xl tw-font-semibold tw-leading-none tw-tracking-tight',
+        'pr-twp tw:text-2xl tw:font-semibold tw:leading-none tw:tracking-tight',
         className,
       )}
       {...props}
@@ -68,7 +68,7 @@ function CardDescription({
   return (
     <p
       ref={ref}
-      className={cn('pr-twp tw-text-sm tw-text-muted-foreground', className)}
+      className={cn('pr-twp tw:text-sm tw:text-muted-foreground', className)}
       {...props}
     />
   );
@@ -80,7 +80,7 @@ function CardContent({
   ref,
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) {
-  return <div ref={ref} className={cn('pr-twp tw-p-6 tw-pt-0', className)} {...props} />;
+  return <div ref={ref} className={cn('pr-twp tw:p-6 tw:pt-0', className)} {...props} />;
 }
 
 /** @inheritdoc Card */
@@ -92,7 +92,7 @@ function CardFooter({
   return (
     <div
       ref={ref}
-      className={cn('pr-twp tw-flex tw-items-center tw-p-6 tw-pt-0', className)}
+      className={cn('pr-twp tw:flex tw:items-center tw:p-6 tw:pt-0', className)}
       {...props}
     />
   );

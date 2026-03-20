@@ -138,33 +138,33 @@ export function MultiSelectComboBox({
             variant={variant}
             role="combobox"
             aria-expanded={actualIsOpen}
-            className="tw-group tw-w-full tw-justify-between"
+            className="tw:group tw:w-full tw:justify-between"
             disabled={isDisabled}
           >
-            <div className="tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-2">
+            <div className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-2">
               {icon && (
-                <div className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50">
-                  <span className="tw-flex tw-h-full tw-w-full tw-items-center tw-justify-center">
+                <div className="tw:ml-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50">
+                  <span className="tw:flex tw:h-full tw:w-full tw:items-center tw:justify-center">
                     {icon}
                   </span>
                 </div>
               )}
               <span
                 className={cn(
-                  'tw-min-w-0 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-text-start tw-font-normal',
+                  'tw:min-w-0 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:text-start tw:font-normal',
                 )}
               >
                 {getPlaceholderText()}
               </span>
             </div>
-            <ChevronsUpDown className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+            <ChevronsUpDown className="tw:ml-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="tw-w-full tw-p-0">
+        <PopoverContent align="start" className="tw:w-full tw:p-0">
           <Command>
             <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
             {hasToggleAllFeature && (
-              <div className="tw-flex tw-justify-between tw-border-b tw-p-2">
+              <div className="tw:flex tw:justify-between tw:border-b tw:p-2">
                 <Button variant="ghost" size="sm" onClick={handleSelectAll}>
                   {selectAllText}
                 </Button>
@@ -182,20 +182,20 @@ export function MultiSelectComboBox({
                       key={option.label}
                       value={option.label}
                       onSelect={handleSelect}
-                      className="tw-flex tw-items-center tw-gap-2"
+                      className="tw:flex tw:items-center tw:gap-2"
                     >
                       <div className="w-4">
                         <Check
                           className={cn(
-                            'tw-h-4 tw-w-4',
-                            selected.includes(option.value) ? 'tw-opacity-100' : 'tw-opacity-0',
+                            'tw:h-4 tw:w-4',
+                            selected.includes(option.value) ? 'tw:opacity-100' : 'tw:opacity-0',
                           )}
                         />
                       </div>
-                      {option.starred && <Star className="tw-h-4 tw-w-4" />}
-                      <div className="tw-flex-grow">{option.label}</div>
+                      {option.starred && <Star className="tw:h-4 tw:w-4" />}
+                      <div className="tw:flex-grow">{option.label}</div>
                       {option.secondaryLabel && (
-                        <div className="tw-text-end tw-text-muted-foreground">
+                        <div className="tw:text-end tw:text-muted-foreground">
                           {option.secondaryLabel}
                         </div>
                       )}

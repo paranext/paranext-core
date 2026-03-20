@@ -202,8 +202,8 @@ function TabMenuDemo({
   };
 
   return (
-    <div className="tw-space-y-4">
-      <div className="tw-flex tw-items-center tw-gap-4">
+    <div className="tw:space-y-4">
+      <div className="tw:flex tw:items-center tw:gap-4">
         <TabDropdownMenu
           menuData={createSampleMenuData()}
           onSelectMenuItem={handleSelectMenuItem}
@@ -211,16 +211,16 @@ function TabMenuDemo({
           icon={customIcon}
           variant={variant}
         />
-        <span className="tw-text-sm tw-text-muted-foreground">
+        <span className="tw:text-sm tw:text-muted-foreground">
           Click the menu button to see tab options
         </span>
       </div>
 
-      <div className="tw-rounded tw-border tw-bg-gray-50 tw-p-4">
-        <div className="tw-text-sm">
+      <div className="tw:rounded tw:border tw:bg-gray-50 tw:p-4">
+        <div className="tw:text-sm">
           <strong>Last Command:</strong> {lastCommand || 'None'}
         </div>
-        <p className="tw-mt-2 tw-text-xs tw-text-muted-foreground">
+        <p className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
           Menu items are organized by columns and separated with dividers.
         </p>
       </div>
@@ -234,7 +234,7 @@ export const Default: Story = {
 
 export const WithCustomIcon: Story = {
   render: () => (
-    <TabMenuDemo customIcon={<Settings className="tw-h-4 tw-w-4" />} customLabel="Settings Menu" />
+    <TabMenuDemo customIcon={<Settings className="tw:h-4 tw:w-4" />} customLabel="Settings Menu" />
   ),
   parameters: {
     docs: {
@@ -266,38 +266,38 @@ export const MultipleMenus: Story = {
     };
 
     return (
-      <div className="tw-space-y-4">
-        <div className="tw-flex tw-items-center tw-gap-2 tw-rounded tw-border tw-p-4">
-          <span className="tw-text-sm tw-font-medium">Document Tab:</span>
+      <div className="tw:space-y-4">
+        <div className="tw:flex tw:items-center tw:gap-2 tw:rounded tw:border tw:p-4">
+          <span className="tw:text-sm tw:font-medium">Document Tab:</span>
           <TabDropdownMenu
             menuData={createSampleMenuData()}
             onSelectMenuItem={handleSelectMenuItem}
             tabLabel="Document Options"
           />
 
-          <span className="tw-ml-4 tw-text-sm tw-font-medium">Settings Tab:</span>
+          <span className="tw:ml-4 tw:text-sm tw:font-medium">Settings Tab:</span>
           <TabDropdownMenu
             menuData={createSampleMenuData()}
             onSelectMenuItem={handleSelectMenuItem}
             tabLabel="Settings Options"
-            icon={<Settings className="tw-h-4 tw-w-4" />}
+            icon={<Settings className="tw:h-4 tw:w-4" />}
             variant="muted"
           />
 
-          <span className="tw-ml-4 tw-text-sm tw-font-medium">Home Tab:</span>
+          <span className="tw:ml-4 tw:text-sm tw:font-medium">Home Tab:</span>
           <TabDropdownMenu
             menuData={createSampleMenuData()}
             onSelectMenuItem={handleSelectMenuItem}
             tabLabel="Home Options"
-            icon={<Home className="tw-h-4 tw-w-4" />}
+            icon={<Home className="tw:h-4 tw:w-4" />}
           />
         </div>
 
-        <div className="tw-rounded tw-border tw-bg-gray-50 tw-p-4">
-          <div className="tw-text-sm">
+        <div className="tw:rounded tw:border tw:bg-gray-50 tw:p-4">
+          <div className="tw:text-sm">
             <strong>Last Command:</strong> {lastCommand || 'None'}
           </div>
-          <p className="tw-mt-2 tw-text-xs tw-text-muted-foreground">
+          <p className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
             Example showing multiple tab dropdown menus with different icons and variants.
           </p>
         </div>
@@ -365,24 +365,24 @@ export const WithSubmenus: Story = {
     };
 
     return (
-      <div className="tw-space-y-4">
-        <div className="tw-flex tw-items-center tw-gap-4">
+      <div className="tw:space-y-4">
+        <div className="tw:flex tw:items-center tw:gap-4">
           <TabDropdownMenu
             menuData={menuDataWithSubmenus}
             onSelectMenuItem={handleSelectMenuItem}
             tabLabel="Tab with Submenus"
-            icon={<FileText className="tw-h-4 tw-w-4" />}
+            icon={<FileText className="tw:h-4 tw:w-4" />}
           />
-          <span className="tw-text-sm tw-text-muted-foreground">
+          <span className="tw:text-sm tw:text-muted-foreground">
             Tab menu with nested export options
           </span>
         </div>
 
-        <div className="tw-rounded tw-border tw-bg-gray-50 tw-p-4">
-          <div className="tw-text-sm">
+        <div className="tw:rounded tw:border tw:bg-gray-50 tw:p-4">
+          <div className="tw:text-sm">
             <strong>Last Command:</strong> {lastCommand || 'None'}
           </div>
-          <p className="tw-mt-2 tw-text-xs tw-text-muted-foreground">
+          <p className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
             Try the &quot;Tools&quot; section and look for the &quot;Export...&quot; submenu.
           </p>
         </div>

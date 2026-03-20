@@ -51,9 +51,9 @@ export function Checklist({
   return (
     <div id={id} className={className}>
       {listItems.map((item) => (
-        <div key={item} className="tw-m-2 tw-flex tw-items-center">
+        <div key={item} className="tw:m-2 tw:flex tw:items-center">
           <Checkbox
-            className="tw-me-2 tw-align-middle"
+            className="tw:me-2 tw:align-middle"
             checked={selectedListItems.includes(item)}
             onCheckedChange={(value: boolean) => handleSelectListItem(item, value)}
           />

@@ -79,25 +79,25 @@ export const Variants: Story = {
     const [value2, setValue2] = useState([20, 80]);
 
     return (
-      <div className="tw-w-80 tw-space-y-6">
+      <div className="tw:w-80 tw:space-y-6">
         <div>
-          <label htmlFor="single-slider" className="tw-mb-2 tw-block tw-text-sm tw-font-medium">
+          <label htmlFor="single-slider" className="tw:mb-2 tw:block tw:text-sm tw:font-medium">
             Single Value
           </label>
           <Slider id="single-slider" value={value1} onValueChange={setValue1} max={100} step={1} />
-          <div className="tw-mt-1 tw-text-sm tw-text-muted-foreground">Value: {value1[0]}</div>
+          <div className="tw:mt-1 tw:text-sm tw:text-muted-foreground">Value: {value1[0]}</div>
         </div>
         <div>
-          <label htmlFor="range-slider" className="tw-mb-2 tw-block tw-text-sm tw-font-medium">
+          <label htmlFor="range-slider" className="tw:mb-2 tw:block tw:text-sm tw:font-medium">
             Range Selection
           </label>
           <Slider id="range-slider" value={value2} onValueChange={setValue2} max={100} step={1} />
-          <div className="tw-mt-1 tw-text-sm tw-text-muted-foreground">
+          <div className="tw:mt-1 tw:text-sm tw:text-muted-foreground">
             Range: {value2[0]} - {value2[1]}
           </div>
         </div>
         <div>
-          <label htmlFor="disabled-slider" className="tw-mb-2 tw-block tw-text-sm tw-font-medium">
+          <label htmlFor="disabled-slider" className="tw:mb-2 tw:block tw:text-sm tw:font-medium">
             Disabled
           </label>
           <Slider id="disabled-slider" defaultValue={[50]} disabled max={100} step={1} />
@@ -124,9 +124,9 @@ export const Interactive: Story = {
     };
 
     return (
-      <div className="tw-w-80 tw-space-y-4">
+      <div className="tw:w-80 tw:space-y-4">
         <Slider {...args} value={value} onValueChange={handleValueChange} />
-        <div className="tw-text-sm tw-text-muted-foreground">
+        <div className="tw:text-sm tw:text-muted-foreground">
           Current value: <code>{value[0]}</code>
         </div>
       </div>

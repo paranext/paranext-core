@@ -33,7 +33,7 @@ function ToggleGroup({
   return (
     <ToggleGroupPrimitive.Root
       ref={ref}
-      className={cn('pr-twp tw-flex tw-items-center tw-justify-center tw-gap-1', className)}
+      className={cn('pr-twp tw:flex tw:items-center tw:justify-center tw:gap-1', className)}
       {...props}
       dir={dir}
     >

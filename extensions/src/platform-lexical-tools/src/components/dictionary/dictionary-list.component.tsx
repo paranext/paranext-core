@@ -85,11 +85,11 @@ export function DictionaryList({
   }, [selectedEntryId, isWideScreen]);
 
   return (
-    <div className="tw-flex tw-flex-row tw-flex-1 tw-overflow-hidden">
+    <div className="tw:flex tw:flex-row tw:flex-1 tw:overflow-hidden">
       <div
-        className={cn('tw-overflow-y-auto tw-px-2 tw-py-2', {
-          'tw-w-1/2': isWideScreen && selectedEntryId,
-          'tw-w-full': !isWideScreen || !selectedEntryId,
+        className={cn('tw:overflow-y-auto tw:px-2 tw:py-2', {
+          'tw:w-1/2': isWideScreen && selectedEntryId,
+          'tw:w-full': !isWideScreen || !selectedEntryId,
         })}
       >
         <ul
@@ -100,7 +100,7 @@ export function DictionaryList({
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           ref={listboxRef as RefObject<HTMLUListElement>}
           aria-activedescendant={activeId ?? undefined}
-          className="tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background"
+          className="tw:outline-none tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background"
           onKeyDown={handleKeyDown}
         >
           {dictionaryData.map((entry) => {
@@ -123,7 +123,7 @@ export function DictionaryList({
       {selectedEntryId &&
         selectedEntry &&
         (isWideScreen ? (
-          <div ref={dictionaryEntryRef} className="tw-w-1/2 tw-overflow-y-auto tw-p-4">
+          <div ref={dictionaryEntryRef} className="tw:w-1/2 tw:overflow-y-auto tw:p-4">
             <DictionaryEntryDisplay
               scriptureReferenceToFilterBy={scriptureReferenceToFilterBy}
               isDrawer={false}
@@ -143,8 +143,8 @@ export function DictionaryList({
             <DrawerTrigger asChild>
               <div />
             </DrawerTrigger>
-            <DrawerContent hideDrawerHandle className="tw-max-w-xl">
-              <div ref={dictionaryEntryRef} className="tw-overflow-y-auto tw-p-4">
+            <DrawerContent hideDrawerHandle className="tw:max-w-xl">
+              <div ref={dictionaryEntryRef} className="tw:overflow-y-auto tw:p-4">
                 <DictionaryEntryDisplay
                   scriptureReferenceToFilterBy={scriptureReferenceToFilterBy}
                   isDrawer

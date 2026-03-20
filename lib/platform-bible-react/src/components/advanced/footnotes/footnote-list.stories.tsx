@@ -19,7 +19,7 @@ const meta: Meta<typeof FootnoteList> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-h-[300px] tw-overflow-hidden tw-border tw-border-slate-300 tw-p-4">
+        <div className="tw:h-[300px] tw:overflow-hidden tw:border tw:border-slate-300 tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -63,14 +63,14 @@ function ScripturePanelTemplate({
   return (
     <ResizablePanelGroup
       direction={restArgs.layout === 'horizontal' ? 'vertical' : 'horizontal'}
-      className="tw-h-full tw-min-h-0 tw-w-full"
+      className="tw:h-full tw:min-h-0 tw:w-full"
     >
-      <ResizablePanel className="tw-flex tw-min-h-0 tw-flex-col">
-        <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col">
+      <ResizablePanel className="tw:flex tw:min-h-0 tw:flex-col">
+        <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col">
           <p>
             <sup>11</sup>In the beginning
             {showMarkers ? (
-              <span className="tw-text-blue-400">
+              <span className="tw:text-blue-400">
                 \f + \fr 1.11 \fr* This is a simple footnote \f
               </span>
             ) : (
@@ -85,11 +85,11 @@ function ScripturePanelTemplate({
         <ResizableHandle />
         <ResizablePanel
           defaultSize={39}
-          className="tw-flex tw-min-h-0 tw-flex-col tw-bg-sidebar tw-pb-0 tw-pl-2 tw-pr-0 tw-pt-2"
+          className="tw:flex tw:min-h-0 tw:flex-col tw:bg-sidebar tw:pb-0 tw:pl-2 tw:pr-0 tw:pt-2"
           minSize={15}
           maxSize={85}
         >
-          <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col">
+          <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col">
             <Template
               {...restArgs}
               footnotes={footnotes}

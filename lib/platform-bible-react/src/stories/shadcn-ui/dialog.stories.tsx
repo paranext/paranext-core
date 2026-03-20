@@ -65,7 +65,7 @@ export const ClearFilters: Story = {
       <DialogTrigger asChild>
         <Button>Clear Filters</Button>
       </DialogTrigger>
-      <DialogContent className="tw-max-w-sm">
+      <DialogContent className="tw:max-w-sm">
         <DialogHeader>
           <DialogTitle>Clear filters</DialogTitle>
           <DialogDescription>Clear filters to show all results?</DialogDescription>
@@ -91,25 +91,25 @@ export const WithForm: Story = {
       <DialogTrigger asChild>
         <Button>Edit Profile</Button>
       </DialogTrigger>
-      <DialogContent className="tw-max-w-md">
+      <DialogContent className="tw:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit profile</DialogTitle>
           <DialogDescription>
             Make changes to your profile here. Click save when you&apos;re done.
           </DialogDescription>
         </DialogHeader>
-        <div className="tw-grid tw-gap-4 tw-py-4">
-          <div className="tw-grid tw-grid-cols-4 tw-items-center tw-gap-4">
-            <Label htmlFor="name" className="tw-text-right">
+        <div className="tw:grid tw:gap-4 tw:py-4">
+          <div className="tw:grid tw:grid-cols-4 tw:items-center tw:gap-4">
+            <Label htmlFor="name" className="tw:text-right">
               Name
             </Label>
-            <Input id="name" defaultValue="Pedro Duarte" className="tw-col-span-3" />
+            <Input id="name" defaultValue="Pedro Duarte" className="tw:col-span-3" />
           </div>
-          <div className="tw-grid tw-grid-cols-4 tw-items-center tw-gap-4">
-            <Label htmlFor="username" className="tw-text-right">
+          <div className="tw:grid tw:grid-cols-4 tw:items-center tw:gap-4">
+            <Label htmlFor="username" className="tw:text-right">
               Username
             </Label>
-            <Input id="username" defaultValue="@peduarte" className="tw-col-span-3" />
+            <Input id="username" defaultValue="@peduarte" className="tw:col-span-3" />
           </div>
         </div>
         <DialogFooter>
@@ -168,7 +168,7 @@ export const Destructive: Story = {
       <DialogTrigger asChild>
         <Button variant="destructive">Delete Item</Button>
       </DialogTrigger>
-      <DialogContent className="tw-max-w-sm">
+      <DialogContent className="tw:max-w-sm">
         <DialogHeader>
           <DialogTitle>Are you absolutely sure?</DialogTitle>
           <DialogDescription>

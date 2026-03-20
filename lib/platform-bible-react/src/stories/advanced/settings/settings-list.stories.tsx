@@ -23,7 +23,7 @@ const meta: Meta<typeof SettingsList> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-2xl tw-p-4">
+        <div className="tw:max-w-2xl tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -84,7 +84,7 @@ export const WithoutHeader: Story = {
     <SettingsList>
       <SettingsListItem primary="Theme" secondary="Choose your preferred theme" isLoading={false}>
         <Select>
-          <SelectTrigger className="tw-w-[180px]">
+          <SelectTrigger className="tw:w-[180px]">
             <SelectValue placeholder="Select theme" />
           </SelectTrigger>
           <SelectContent>
@@ -179,7 +179,7 @@ export const VariousControls: Story = {
         isLoading={false}
       >
         <Select>
-          <SelectTrigger className="tw-w-[180px]">
+          <SelectTrigger className="tw:w-[180px]">
             <SelectValue placeholder="Select language" />
           </SelectTrigger>
           <SelectContent>
@@ -230,7 +230,7 @@ export const MinimalExample: Story = {
 
 export const HeaderVariations: Story = {
   render: () => (
-    <div className="tw-space-y-8">
+    <div className="tw:space-y-8">
       <SettingsList>
         <SettingsListHeader
           primary="With Separator"

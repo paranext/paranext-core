@@ -13,7 +13,7 @@
 
   /**
    * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
-   * properties using `hsl(var(--variableName))` or Tailwind classes like `tw-bg-primary`
+   * properties using `hsl(var(--variableName))` or Tailwind classes like `tw:bg-primary`
    *
    * See the wiki's [Matching Application
    * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
@@ -155,11 +155,11 @@
 /* #region shared with https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css but with the difference of being scoped to .pr-twp in platform-bible-react */
 @layer base {
   * {
-    @apply tw-border-border tw-outline-ring/50;
+    @apply tw:border-border tw:outline-ring/50;
   }
 
   body {
-    @apply tw-bg-background tw-text-foreground;
+    @apply tw:bg-background tw:text-foreground;
   }
 }
 /* #endregion */

@@ -23,7 +23,7 @@ function RadioGroup({
   const dir: Direction = readDirection();
   return (
     <RadioGroupPrimitive.Root
-      className={cn('pr-twp tw-grid tw-gap-2', className)}
+      className={cn('pr-twp tw:grid tw:gap-2', className)}
       {...props}
       ref={ref}
       dir={dir}
@@ -43,13 +43,13 @@ function RadioGroupItem({
     <RadioGroupPrimitive.Item
       ref={ref}
       className={cn(
-        'pr-twp tw-aspect-square tw-h-4 tw-w-4 tw-rounded-full tw-border tw-border-primary tw-text-primary tw-ring-offset-background focus:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
+        'pr-twp tw:aspect-square tw:h-4 tw:w-4 tw:rounded-full tw:border tw:border-primary tw:text-primary tw:ring-offset-background tw:focus:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50',
         className,
       )}
       {...props}
     >
-      <RadioGroupPrimitive.Indicator className="tw-flex tw-items-center tw-justify-center">
-        <Circle className="tw-h-2.5 tw-w-2.5 tw-fill-current tw-text-current" />
+      <RadioGroupPrimitive.Indicator className="tw:flex tw:items-center tw:justify-center">
+        <Circle className="tw:h-2.5 tw:w-2.5 tw:fill-current tw:text-current" />
       </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
   );

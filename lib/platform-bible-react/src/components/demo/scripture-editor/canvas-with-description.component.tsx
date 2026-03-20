@@ -17,15 +17,15 @@ export const CanvasWithDescription = memo(function CanvasWithDescription({
     // eslint-disable-next-line no-null/no-null
     if (!isCanvas || typeof description !== 'string' || !description.trim()) return null;
     return (
-      <Card className="tw-w-full">
-        <CardHeader className="tw-pb-2">
-          <CardTitle className="tw-text-sm tw-font-medium tw-text-muted-foreground">
+      <Card className="tw:w-full">
+        <CardHeader className="tw:pb-2">
+          <CardTitle className="tw:text-sm tw:font-medium tw:text-muted-foreground">
             Story Description
           </CardTitle>
         </CardHeader>
-        <CardContent className="tw-pt-2">
+        <CardContent className="tw:pt-2">
           <MarkdownRenderer
-            className="tw-prose-sm tw-max-w-none tw-text-muted-foreground"
+            className="tw:prose-sm tw:max-w-none tw:text-muted-foreground"
             markdown={description}
           />
         </CardContent>

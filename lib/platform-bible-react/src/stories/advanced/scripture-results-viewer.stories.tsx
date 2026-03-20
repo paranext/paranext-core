@@ -12,7 +12,7 @@ const meta: Meta<typeof ScriptureResultsViewer> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-4">
+        <div className="tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -159,14 +159,14 @@ export const Interactive: Story = {
     };
 
     return (
-      <div className="tw-h-96 tw-overflow-y-hidden">
-        <div className="tw-mb-4">
+      <div className="tw:h-96 tw:overflow-y-hidden">
+        <div className="tw:mb-4">
           {sampleChecks.map((check, index) => (
             <Button
               key={check.id}
               type="button"
               onClick={() => updateSource(index)}
-              className="tw-mb-2 tw-mr-2"
+              className="tw:mb-2 tw:mr-2"
             >
               Update {check.displayName} check results
             </Button>

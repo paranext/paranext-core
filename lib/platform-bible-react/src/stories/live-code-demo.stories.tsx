@@ -19,17 +19,17 @@ function LiveCodeDemo() {
   const [count, setCount] = useState(0);
 
   return (
-    <div className="tw-space-y-4 tw-p-4">
-      <h2 className="tw-text-xl tw-font-bold">Live Code Editor Demo</h2>
-      <div className="tw-space-y-2">
+    <div className="tw:space-y-4 tw:p-4">
+      <h2 className="tw:text-xl tw:font-bold">Live Code Editor Demo</h2>
+      <div className="tw:space-y-2">
         <Input
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Type something..."
         />
-        <p className="tw-text-sm tw-text-gray-600">You typed: {text}</p>
+        <p className="tw:text-sm tw:text-gray-600">You typed: {text}</p>
       </div>
-      <div className="tw-space-y-2">
+      <div className="tw:space-y-2">
         <Button onClick={() => setCount(count + 1)}>Clicked {count} times</Button>
         <Button variant="outline" onClick={() => setCount(0)}>
           Reset
@@ -130,17 +130,17 @@ export default function LiveCodeDemo() {
   const [count, setCount] = useState(0);
 
   return (
-    <div className="pr-twp tw-space-y-4 tw-p-4">
-      <h2 className="tw-text-xl tw-font-bold">Live Code Editor Demo</h2>
-      <div className="tw-space-y-2">
+    <div className="pr-twp tw:space-y-4 tw:p-4">
+      <h2 className="tw:text-xl tw:font-bold">Live Code Editor Demo</h2>
+      <div className="tw:space-y-2">
         <Input
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Type something..."
         />
-        <p className="tw-text-sm tw-text-gray-600">You typed: {text}</p>
+        <p className="tw:text-sm tw:text-gray-600">You typed: {text}</p>
       </div>
-      <div className="tw-space-y-2">
+      <div className="tw:space-y-2">
         <Button onClick={() => setCount(count + 1)}>
           Clicked {count} times
         </Button>
@@ -175,14 +175,14 @@ export default function InputDemo() {
   const [value, setValue] = useState('');
 
   return (
-    <div className="pr-twp tw-space-y-2">
+    <div className="pr-twp tw:space-y-2">
       <Input
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="Edit this in the code editor!"
       />
-      <p className="tw-text-sm">Value: {value}</p>
-      <p className="tw-text-xs tw-text-gray-500">
+      <p className="tw:text-sm">Value: {value}</p>
+      <p className="tw:text-xs tw:text-gray-500">
         Try adding validation, changing the placeholder, or styling!
       </p>
     </div>

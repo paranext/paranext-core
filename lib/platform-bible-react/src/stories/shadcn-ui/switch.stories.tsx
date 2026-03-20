@@ -123,16 +123,16 @@ export const States: Story = {
     const [value, setValue] = useState(false);
 
     return (
-      <div className="tw-flex tw-flex-col tw-gap-4">
-        <div className="tw-flex tw-items-center tw-space-x-2">
+      <div className="tw:flex tw:flex-col tw:gap-4">
+        <div className="tw:flex tw:items-center tw:space-x-2">
           <Switch checked={value} onCheckedChange={setValue} />
           <Label>Interactive switch</Label>
         </div>
-        <div className="tw-flex tw-items-center tw-space-x-2">
+        <div className="tw:flex tw:items-center tw:space-x-2">
           <Switch disabled />
           <Label>Disabled (unchecked)</Label>
         </div>
-        <div className="tw-flex tw-items-center tw-space-x-2">
+        <div className="tw:flex tw:items-center tw:space-x-2">
           <Switch checked disabled />
           <Label>Disabled (checked)</Label>
         </div>
@@ -156,21 +156,21 @@ export const WithLabels: Story = {
     const [locationServices, setLocationServices] = useState(false);
 
     return (
-      <div className="tw-space-y-6">
-        <div className="tw-flex tw-items-center tw-justify-between">
-          <Label htmlFor="airplane-mode" className="tw-text-sm tw-font-medium">
+      <div className="tw:space-y-6">
+        <div className="tw:flex tw:items-center tw:justify-between">
+          <Label htmlFor="airplane-mode" className="tw:text-sm tw:font-medium">
             Airplane Mode
           </Label>
           <Switch id="airplane-mode" checked={airplaneMode} onCheckedChange={setAirplaneMode} />
         </div>
-        <div className="tw-flex tw-items-center tw-justify-between">
-          <Label htmlFor="notifications" className="tw-text-sm tw-font-medium">
+        <div className="tw:flex tw:items-center tw:justify-between">
+          <Label htmlFor="notifications" className="tw:text-sm tw:font-medium">
             Push Notifications
           </Label>
           <Switch id="notifications" checked={notifications} onCheckedChange={setNotifications} />
         </div>
-        <div className="tw-flex tw-items-center tw-justify-between">
-          <Label htmlFor="location" className="tw-text-sm tw-font-medium">
+        <div className="tw:flex tw:items-center tw:justify-between">
+          <Label htmlFor="location" className="tw:text-sm tw:font-medium">
             Location Services
           </Label>
           <Switch
@@ -209,12 +209,12 @@ export const FormExample: Story = {
     };
 
     return (
-      <div className="tw-max-w-md tw-space-y-6">
+      <div className="tw:max-w-md tw:space-y-6">
         <div>
-          <h3 className="tw-mb-4 tw-text-lg tw-font-medium">Notification Settings</h3>
-          <div className="tw-space-y-4">
-            <div className="tw-flex tw-items-center tw-justify-between">
-              <Label htmlFor="email-notifications" className="tw-text-sm tw-font-medium">
+          <h3 className="tw:mb-4 tw:text-lg tw:font-medium">Notification Settings</h3>
+          <div className="tw:space-y-4">
+            <div className="tw:flex tw:items-center tw:justify-between">
+              <Label htmlFor="email-notifications" className="tw:text-sm tw:font-medium">
                 Email Notifications
               </Label>
               <Switch
@@ -223,8 +223,8 @@ export const FormExample: Story = {
                 onCheckedChange={updateSetting('emailNotifications')}
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
-              <Label htmlFor="push-notifications" className="tw-text-sm tw-font-medium">
+            <div className="tw:flex tw:items-center tw:justify-between">
+              <Label htmlFor="push-notifications" className="tw:text-sm tw:font-medium">
                 Push Notifications
               </Label>
               <Switch
@@ -233,8 +233,8 @@ export const FormExample: Story = {
                 onCheckedChange={updateSetting('pushNotifications')}
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
-              <Label htmlFor="sms-notifications" className="tw-text-sm tw-font-medium">
+            <div className="tw:flex tw:items-center tw:justify-between">
+              <Label htmlFor="sms-notifications" className="tw:text-sm tw:font-medium">
                 SMS Notifications
               </Label>
               <Switch
@@ -243,8 +243,8 @@ export const FormExample: Story = {
                 onCheckedChange={updateSetting('smsNotifications')}
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
-              <Label htmlFor="marketing-emails" className="tw-text-sm tw-font-medium">
+            <div className="tw:flex tw:items-center tw:justify-between">
+              <Label htmlFor="marketing-emails" className="tw:text-sm tw:font-medium">
                 Marketing Emails
               </Label>
               <Switch
@@ -257,10 +257,10 @@ export const FormExample: Story = {
         </div>
 
         <div>
-          <h3 className="tw-mb-4 tw-text-lg tw-font-medium">App Settings</h3>
-          <div className="tw-space-y-4">
-            <div className="tw-flex tw-items-center tw-justify-between">
-              <Label htmlFor="auto-save" className="tw-text-sm tw-font-medium">
+          <h3 className="tw:mb-4 tw:text-lg tw:font-medium">App Settings</h3>
+          <div className="tw:space-y-4">
+            <div className="tw:flex tw:items-center tw:justify-between">
+              <Label htmlFor="auto-save" className="tw:text-sm tw:font-medium">
                 Auto Save
               </Label>
               <Switch
@@ -269,8 +269,8 @@ export const FormExample: Story = {
                 onCheckedChange={updateSetting('autoSave')}
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
-              <Label htmlFor="dark-mode" className="tw-text-sm tw-font-medium">
+            <div className="tw:flex tw:items-center tw:justify-between">
+              <Label htmlFor="dark-mode" className="tw:text-sm tw:font-medium">
                 Dark Mode
               </Label>
               <Switch
@@ -282,9 +282,9 @@ export const FormExample: Story = {
           </div>
         </div>
 
-        <div className="tw-mt-6 tw-rounded-lg tw-bg-gray-50 tw-p-4">
-          <h4 className="tw-mb-2 tw-text-sm tw-font-medium">Current Settings:</h4>
-          <pre className="tw-text-xs tw-text-gray-600">
+        <div className="tw:mt-6 tw:rounded-lg tw:bg-gray-50 tw:p-4">
+          <h4 className="tw:mb-2 tw:text-sm tw:font-medium">Current Settings:</h4>
+          <pre className="tw:text-xs tw:text-gray-600">
             {JSON.stringify(settings, undefined, 2)}
           </pre>
         </div>

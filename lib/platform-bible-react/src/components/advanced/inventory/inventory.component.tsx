@@ -371,13 +371,13 @@ export function Inventory({
   }, [selectedItem, showAdditionalItems, reducedTableData]);
 
   return (
-    <div id={id} className="pr-twp tw-flex tw-h-full tw-flex-col">
-      <div className="tw-flex tw-items-stretch">
+    <div id={id} className="pr-twp tw:flex tw:h-full tw:flex-col">
+      <div className="tw:flex tw:items-stretch">
         <Select
           onValueChange={(value) => handleStatusFilterChange(value)}
           defaultValue={statusFilter}
         >
-          <SelectTrigger className="tw-m-1">
+          <SelectTrigger className="tw:m-1">
             <SelectValue placeholder="Select filter" />
           </SelectTrigger>
           <SelectContent>
@@ -388,7 +388,7 @@ export function Inventory({
           </SelectContent>
         </Select>
         <Select onValueChange={(value) => handleScopeChange(value)} defaultValue={scope}>
-          <SelectTrigger className="tw-m-1">
+          <SelectTrigger className="tw:m-1">
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>
           <SelectContent>
@@ -398,7 +398,7 @@ export function Inventory({
           </SelectContent>
         </Select>
         <Input
-          className="tw-m-1 tw-rounded-md tw-border"
+          className="tw:m-1 tw:rounded-md tw:border"
           placeholder={filterText}
           value={textFilter}
           onChange={(event) => {
@@ -406,21 +406,21 @@ export function Inventory({
           }}
         />
         {additionalItemsLabels && (
-          <div className="tw-m-1 tw-flex tw-items-center tw-rounded-md tw-border">
+          <div className="tw:m-1 tw:flex tw:items-center tw:rounded-md tw:border">
             <Checkbox
-              className="tw-m-1"
+              className="tw:m-1"
               checked={showAdditionalItems}
               onCheckedChange={(checked: boolean) => {
                 setShowAdditionalItems(checked);
               }}
             />
-            <Label className="tw-m-1 tw-flex-shrink-0 tw-whitespace-nowrap">
+            <Label className="tw:m-1 tw:flex-shrink-0 tw:whitespace-nowrap">
               {additionalItemsLabels?.checkboxText ?? showAdditionalItemsText}
             </Label>
           </div>
         )}
       </div>
-      <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
+      <div className="tw:m-1 tw:flex-1 tw:overflow-auto tw:rounded-md tw:border">
         <DataTable
           columns={allColumns}
           data={filteredTableData}
@@ -431,7 +431,7 @@ export function Inventory({
         />
       </div>
       {occurrenceData.length > 0 && (
-        <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
+        <div className="tw:m-1 tw:flex-1 tw:overflow-auto tw:rounded-md tw:border">
           <OccurrencesTable
             classNameForText={classNameForVerseText}
             occurrenceData={occurrenceData}

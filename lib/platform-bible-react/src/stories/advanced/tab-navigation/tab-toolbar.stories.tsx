@@ -240,7 +240,7 @@ export const AnimatedWidth: Story = {
 
 export const WithCustomClassName: Story = {
   args: {
-    className: 'tw-bg-red-100 tw-border-red-400',
+    className: 'tw:bg-red-100 tw:border-red-400',
   },
   parameters: {
     docs: {

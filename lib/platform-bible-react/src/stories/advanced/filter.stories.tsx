@@ -112,7 +112,7 @@ const meta: Meta<typeof Filter> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-4">
+        <div className="tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -142,8 +142,8 @@ export const Default: Story = {
     });
 
     return (
-      <div className="tw-flex tw-flex-col tw-gap-4">
-        <div className="tw-w-[500px]">
+      <div className="tw:flex tw:flex-col tw:gap-4">
+        <div className="tw:w-[500px]">
           <Filter
             entries={types}
             selected={selectedTypes}
@@ -159,14 +159,14 @@ export const Default: Story = {
           <p>
             <strong>Filtered Resources ({filteredResources.length}):</strong>
           </p>
-          <ul className="tw-max-h-[300px] tw-overflow-y-auto">
+          <ul className="tw:max-h-[300px] tw:overflow-y-auto">
             {filteredResources.map((resource) => (
-              <li key={resource.id} className="tw-py-1">
-                <span className="tw-font-medium">{resource.name}</span>
-                <span className="tw-text-muted-foreground"> ({resource.language})</span>
-                <span className="tw-text-sm tw-text-muted-foreground"> - {resource.size}</span>
+              <li key={resource.id} className="tw:py-1">
+                <span className="tw:font-medium">{resource.name}</span>
+                <span className="tw:text-muted-foreground"> ({resource.language})</span>
+                <span className="tw:text-sm tw:text-muted-foreground"> - {resource.size}</span>
                 {resource.installed && (
-                  <span className="tw-ml-2 tw-text-green-600">✓ Installed</span>
+                  <span className="tw:ml-2 tw:text-green-600">✓ Installed</span>
                 )}
               </li>
             ))}
@@ -194,7 +194,7 @@ export const MultipleBadges: Story = {
     ]);
 
     return (
-      <div className="tw-w-[600px]">
+      <div className="tw:w-[600px]">
         <Filter
           entries={types}
           selected={selectedTypes}
@@ -221,7 +221,7 @@ export const EmptyState: Story = {
     const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
     return (
-      <div className="tw-w-[400px]">
+      <div className="tw:w-[400px]">
         <Filter
           entries={types}
           selected={selectedTypes}

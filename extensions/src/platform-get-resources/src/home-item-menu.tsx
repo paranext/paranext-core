@@ -26,7 +26,7 @@ export function HomeItemDropdownMenu({ children, ellipsisButtonClassName }: Home
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className={cn('tw-w-4', ellipsisButtonClassName)}>
+        <Button variant="ghost" className={cn('tw:w-4', ellipsisButtonClassName)}>
           <Ellipsis />
         </Button>
       </DropdownMenuTrigger>

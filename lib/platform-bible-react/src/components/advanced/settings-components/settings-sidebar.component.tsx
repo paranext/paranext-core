@@ -92,11 +92,11 @@ export function SettingsSidebar({
       id={id}
       collapsible="none"
       variant="inset"
-      className={cn('tw-w-96 tw-gap-2 tw-overflow-y-auto', className)}
+      className={cn('tw:w-96 tw:gap-2 tw:overflow-y-auto', className)}
     >
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="tw-text-sm">
+          <SidebarGroupLabel className="tw:text-sm">
             {extensionsSidebarGroupLabel}
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -107,7 +107,7 @@ export function SettingsSidebar({
                     onClick={() => handleSelectItem(key)}
                     isActive={getIsActive(key)}
                   >
-                    <span className="tw-pl-3">{label}</span>
+                    <span className="tw:pl-3">{label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -115,15 +115,15 @@ export function SettingsSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel className="tw-text-sm">{projectsSidebarGroupLabel}</SidebarGroupLabel>
-          <SidebarGroupContent className="tw-pl-3">
+          <SidebarGroupLabel className="tw:text-sm">{projectsSidebarGroupLabel}</SidebarGroupLabel>
+          <SidebarGroupContent className="tw:pl-3">
             <ComboBox
               buttonVariant="ghost"
-              buttonClassName={cn('tw-w-full', {
-                'tw-bg-sidebar-accent tw-text-sidebar-accent-foreground':
+              buttonClassName={cn('tw:w-full', {
+                'tw:bg-sidebar-accent tw:text-sidebar-accent-foreground':
                   selectedSidebarItem?.projectId,
               })}
-              popoverContentClassName="tw-z-[1000]"
+              popoverContentClassName="tw:z-[1000]"
               options={projectInfo.flatMap((info) => info.projectId)}
               getOptionLabel={getProjectNameFromProjectId}
               buttonPlaceholder={buttonPlaceholderText}

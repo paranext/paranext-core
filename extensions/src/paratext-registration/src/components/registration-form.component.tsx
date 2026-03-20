@@ -349,23 +349,23 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
   };
 
   return (
-    <div className="tw-rounded-md tw-border tw-p-4 tw-shadow-md">
-      <div className="tw-flex tw-flex-col">
+    <div className="tw:rounded-md tw:border tw:p-4 tw:shadow-md">
+      <div className="tw:flex tw:flex-col">
         <Grid>
           {!isEditing && (
             <>
-              <h1 className="tw-font-semibold tw-text-lg">
+              <h1 className="tw:font-semibold tw:text-lg">
                 {localizedStrings['%paratextRegistration_label_yourRegistration%']}
               </h1>
               <span />
             </>
           )}
-          <span className={cn({ 'tw-font-semibold': !isEditing })}>
+          <span className={cn({ 'tw:font-semibold': !isEditing })}>
             {localizedStrings['%paratextRegistration_label_registrationName%']}
           </span>
           {isEditing ? (
             <Input
-              className="tw-max-w-[260px]"
+              className="tw:max-w-[260px]"
               value={name}
               required
               disabled={isFormDisabled}
@@ -374,13 +374,13 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
           ) : (
             <span>{currentRegistrationData.name}</span>
           )}
-          <span className={cn({ 'tw-font-semibold': !isEditing })}>
+          <span className={cn({ 'tw:font-semibold': !isEditing })}>
             {localizedStrings['%paratextRegistration_label_registrationCode%']}
           </span>
           {isEditing ? (
             <Input
-              className={cn('tw-font-mono tw-box-content tw-h-6 tw-max-w-[350px]', {
-                'invalid:tw-border-destructive': showInvalidCode,
+              className={cn('tw:font-mono tw:box-content tw:h-6 tw:max-w-[350px]', {
+                'tw:invalid:border-destructive': showInvalidCode,
               })}
               pattern={REGISTRATION_CODE_REGEX_STRING}
               maxLength={REGISTRATION_CODE_LENGTH_WITH_DASHES}
@@ -395,14 +395,14 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
           )}
           <span />
           {showInvalidCode && (
-            <p className="tw-text-muted-foreground">
+            <p className="tw:text-muted-foreground">
               {localizedStrings['%paratextRegistration_warning_invalid_registration_length%']}
             </p>
           )}
         </Grid>
         {/* UX said to remove supporter info until we are using it in P10S. Leaving here for uncommenting when the time is right */}
         {/* <Section>Please specify who provides Paratext support to you:</Section>
-          <Grid className="tw-mt-8">
+          <Grid className="tw:mt-8">
             <span>Supporter name</span>
             <Input value={supporter} disabled={isFormDisabled} onChange={(e) => setSupporter(e.target.value)} />
           </Grid> */}
@@ -412,9 +412,9 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
           (saveState === SaveState.IsRestarting ||
             saveState === SaveState.HasSaved ||
             (!isLoading && registrationIsValid)) && (
-            <div className="tw-mx-2 tw-my-4">
+            <div className="tw:mx-2 tw:my-4">
               <Alert ref={scrollToRef}>
-                <CircleCheck className="tw-h-4 tw-w-4" />
+                <CircleCheck className="tw:h-4 tw:w-4" />
                 <AlertTitle>
                   {saveState === SaveState.IsRestarting || saveState === SaveState.HasSaved
                     ? localizedStrings['%paratextRegistration_alert_updatedRegistration%']
@@ -425,18 +425,18 @@ export function RegistrationForm({ useWebViewState, handleFormTypeChange }: Regi
             </div>
           )}
         {error && (
-          <div className="tw-mx-2 tw-my-4">
+          <div className="tw:mx-2 tw:my-4">
             <Alert ref={scrollToRef} variant="destructive">
-              <AlertCircle className="tw-h-4 tw-w-4" />
+              <AlertCircle className="tw:h-4 tw:w-4" />
               <AlertTitle>{error}</AlertTitle>
               <AlertDescription>{errorDescription}</AlertDescription>
             </Alert>
           </div>
         )}
-        <Grid className="tw-grid-cols-[1fr_auto] tw-items-end">
+        <Grid className="tw:grid-cols-[1fr_auto] tw:items-end">
           <span />
           {isEditing ? (
-            <div className="tw-flex tw-gap-3">
+            <div className="tw:flex tw:gap-3">
               {currentRegistrationData.code !== '' && (
                 <Button variant="outline" onClick={cancelEditing}>
                   {localizedStrings['%general_cancel%']}

@@ -18,7 +18,7 @@ const meta: Meta<typeof Checkbox> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-4">
+        <div className="tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -32,7 +32,7 @@ type Story = StoryObj<typeof Checkbox>;
 
 export const Default: Story = {
   render: (args) => (
-    <div className="tw-flex tw-items-center tw-space-x-2">
+    <div className="tw:flex tw:items-center tw:space-x-2">
       <Checkbox {...args} id="default" />
       <Label htmlFor="default">Default checkbox</Label>
     </div>
@@ -48,7 +48,7 @@ export const Default: Story = {
 
 export const Checked: Story = {
   render: (args) => (
-    <div className="tw-flex tw-items-center tw-space-x-2">
+    <div className="tw:flex tw:items-center tw:space-x-2">
       <Checkbox {...args} id="checked" checked />
       <Label htmlFor="checked">Checked checkbox</Label>
     </div>
@@ -64,7 +64,7 @@ export const Checked: Story = {
 
 export const Unchecked: Story = {
   render: (args) => (
-    <div className="tw-flex tw-items-center tw-space-x-2">
+    <div className="tw:flex tw:items-center tw:space-x-2">
       <Checkbox {...args} id="unchecked" checked={false} />
       <Label htmlFor="unchecked">Unchecked checkbox</Label>
     </div>
@@ -80,7 +80,7 @@ export const Unchecked: Story = {
 
 export const Disabled: Story = {
   render: (args) => (
-    <div className="tw-flex tw-items-center tw-space-x-2">
+    <div className="tw:flex tw:items-center tw:space-x-2">
       <Checkbox {...args} id="disabled" disabled />
       <Label htmlFor="disabled">Disabled checkbox</Label>
     </div>
@@ -96,7 +96,7 @@ export const Disabled: Story = {
 
 export const DisabledChecked: Story = {
   render: (args) => (
-    <div className="tw-flex tw-items-center tw-space-x-2">
+    <div className="tw:flex tw:items-center tw:space-x-2">
       <Checkbox {...args} id="disabled-checked" disabled checked />
       <Label htmlFor="disabled-checked">Disabled and checked</Label>
     </div>
@@ -123,16 +123,16 @@ export const CheckboxGroup: Story = {
     };
 
     return (
-      <div className="tw-space-y-3">
-        <p className="tw-text-sm tw-font-medium">Select your preferences:</p>
-        <div className="tw-space-y-2">
+      <div className="tw:space-y-3">
+        <p className="tw:text-sm tw:font-medium">Select your preferences:</p>
+        <div className="tw:space-y-2">
           {[
             'Email notifications',
             'SMS notifications',
             'Push notifications',
             'Marketing emails',
           ].map((option) => (
-            <div key={option} className="tw-flex tw-items-center tw-space-x-2">
+            <div key={option} className="tw:flex tw:items-center tw:space-x-2">
               <Checkbox
                 id={option}
                 checked={checkedItems.includes(option)}
@@ -142,7 +142,7 @@ export const CheckboxGroup: Story = {
             </div>
           ))}
         </div>
-        <p className="tw-text-xs tw-text-muted-foreground">
+        <p className="tw:text-xs tw:text-muted-foreground">
           Selected: {checkedItems.join(', ') || 'None'}
         </p>
       </div>
@@ -162,8 +162,8 @@ export const Interactive: Story = {
     const [isChecked, setIsChecked] = useState(false);
 
     return (
-      <div className="tw-space-y-4">
-        <div className="tw-flex tw-items-center tw-space-x-2">
+      <div className="tw:space-y-4">
+        <div className="tw:flex tw:items-center tw:space-x-2">
           <Checkbox
             {...args}
             id="interactive"
@@ -175,7 +175,7 @@ export const Interactive: Story = {
           />
           <Label htmlFor="interactive">Interactive checkbox</Label>
         </div>
-        <p className="tw-text-sm tw-text-muted-foreground">
+        <p className="tw:text-sm tw:text-muted-foreground">
           Current state: {isChecked ? 'Checked' : 'Unchecked'}
         </p>
       </div>

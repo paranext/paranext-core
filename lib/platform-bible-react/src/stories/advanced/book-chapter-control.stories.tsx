@@ -32,9 +32,9 @@ function BookChapterControlWrapper({
 
   return (
     <ThemeProvider>
-      <div className="tw-p-4">
+      <div className="tw:p-4">
         <BookChapterControl {...rest} scrRef={scrRef} handleSubmit={handleSubmitWrapper} />
-        <div className="tw-mt-4 tw-text-sm tw-text-gray-600">
+        <div className="tw:mt-4 tw:text-sm tw:text-gray-600">
           Current Reference: {JSON.stringify(scrRef, undefined, 2)}
         </div>
       </div>
@@ -117,7 +117,7 @@ export const WithLimitedBooks: Story = {
 export const WithCustomTrigger: Story = {
   args: {
     scrRef: defaultScrRef,
-    className: 'tw-w-64 tw-bg-blue-50 tw-rounded-xl tw-p-4',
+    className: 'tw:w-64 tw:bg-blue-50 tw:rounded-xl tw:p-4',
   },
   parameters: {
     docs: {
@@ -967,7 +967,7 @@ function BookChapterControlWithRecentSearches({
 
   return (
     <ThemeProvider>
-      <div className="tw-p-4">
+      <div className="tw:p-4">
         <BookChapterControl
           {...rest}
           scrRef={scrRef}
@@ -975,10 +975,10 @@ function BookChapterControlWithRecentSearches({
           recentSearches={recentSearches}
           onAddRecentSearch={handleAddRecentSearch}
         />
-        <div className="tw-mt-4 tw-text-sm tw-text-gray-600">
+        <div className="tw:mt-4 tw:text-sm tw:text-gray-600">
           Current Reference: {JSON.stringify(scrRef, undefined, 2)}
         </div>
-        <div className="tw-mt-2 tw-text-sm tw-text-gray-500">
+        <div className="tw:mt-2 tw:text-sm tw:text-gray-500">
           Recent Searches:{' '}
           {recentSearches.map((ref) => `${ref.book} ${ref.chapterNum}:${ref.verseNum}`).join(', ')}
         </div>

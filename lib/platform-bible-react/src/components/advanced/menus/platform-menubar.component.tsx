@@ -225,7 +225,7 @@ export function PlatformMenubar({
   if (!menuData) return undefined;
 
   return (
-    <Menubar ref={menubarRef} className="pr-twp tw-border-0 tw-bg-transparent" variant={variant}>
+    <Menubar ref={menubarRef} className="pr-twp tw:border-0 tw:bg-transparent" variant={variant}>
       {Object.entries(menuData.columns)
         .filter(([, column]) => typeof column === 'object')
         .sort(([, a], [, b]) => {
@@ -238,7 +238,7 @@ export function PlatformMenubar({
               {typeof column === 'object' && 'label' in column && column.label}
             </MenubarTrigger>
             <MenubarContent
-              className="tw-z-[250]" // Need to get over the floating web view z-index 200
+              className="tw:z-[250]" // Need to get over the floating web view z-index 200
             >
               <TooltipProvider>
                 {getMenubarContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
