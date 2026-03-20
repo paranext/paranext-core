@@ -1276,6 +1276,9 @@ video:where(.pr-twp,.pr-twp *) {
 .tw-pointer-events-auto {
   pointer-events: auto;
 }
+.tw-invisible {
+  visibility: hidden;
+}
 .tw-fixed {
   position: fixed;
 }
@@ -1768,6 +1771,9 @@ video:where(.pr-twp,.pr-twp *) {
 }
 .tw-w-80 {
   width: 20rem;
+}
+.tw-w-9 {
+  width: 2.25rem;
 }
 .tw-w-9\\/12 {
   width: 75%;
@@ -3647,6 +3653,9 @@ video:where(.pr-twp,.pr-twp *) {
 }
 .disabled\\:tw-opacity-50:disabled {
   opacity: 0.5;
+}
+.tw-group:hover .group-hover\\:tw-visible {
+  visibility: visible;
 }
 .tw-group:hover .group-hover\\:tw-opacity-100 {
   opacity: 1;
