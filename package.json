@@ -273,7 +273,8 @@
     "logLevel": "quiet"
   },
   "overrides": {
-    "@vitest/expect": "^3.2.4"
+    "@vitest/expect": "^3.2.4",
+    "eslint-plugin-react-hooks": "^5.0.0"
   },
   "workspaces": ["lib/*", "extensions", "extensions/src/*"],
   "volta": {
