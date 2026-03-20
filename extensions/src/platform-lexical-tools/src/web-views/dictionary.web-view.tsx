@@ -13,6 +13,8 @@ import { useData, useLocalizedStrings } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
 import { Entry, LexicalEntriesById, LexicalReferenceSelector } from 'platform-lexical-tools';
 import { SerializedVerseRef } from '@sillsdev/scripture';
+import { logger } from '@papi/frontend';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { DictionaryEntryDisplay } from '../components/dictionary/dictionary-entry-display.component';
 import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
@@ -20,8 +22,6 @@ import {
   getFormatGlossesStringFromDictionaryEntrySenses,
 } from '../utils/dictionary.utils';
 import { DictionaryList } from '../components/dictionary/dictionary-list.component';
-import { logger } from '@papi/frontend';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 
 const ENTRIES_DEFAULT: LexicalEntriesById = {};
 
