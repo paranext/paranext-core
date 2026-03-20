@@ -3,7 +3,13 @@
 import webpack from 'webpack';
 import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin';
 import webpackPaths from './webpack.paths';
-import { dependencies as externals } from '../../release/app/package.json';
+import releaseAppPackageInfo from '../../release/app/package.json';
+
+// peerDependencies might not be in package.json, but that's fine. Just account for that
+const releaseAppPackageInfoFull: typeof releaseAppPackageInfo & {
+  dependencies?: Record<string, unknown>;
+} = releaseAppPackageInfo;
+const externals = releaseAppPackageInfoFull.dependencies ?? {};
 
 let processType: string;
 if (
