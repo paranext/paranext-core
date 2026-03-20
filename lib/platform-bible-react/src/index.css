@@ -174,7 +174,11 @@
 @layer base {
   .pr-twp,
   .pr-twp * {
-    @apply tw:border-border tw:outline-ring/50;
+    /* Equivalent to @apply tw:border-border tw:outline-ring/50
+     * Written as raw CSS because @apply with prefix requires the full tailwindcss import,
+     * but we use split imports to exclude preflight (scoped-preflight.css replaces it). */
+    border-color: hsl(var(--border));
+    outline-color: hsl(var(--ring) / 0.5);
   }
 
   /**
@@ -182,6 +186,8 @@
     */
   /* stylelint-disable-next-line selector-no-qualifying-type */
   body.pr-twp {
-    @apply tw:bg-background tw:text-foreground;
+    /* Equivalent to @apply tw:bg-background tw:text-foreground */
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
   }
 }
