@@ -17,8 +17,7 @@ const badgeVariants = cva(
           'tw:border-transparent tw:bg-primary tw:text-primary-foreground tw:shadow tw:hover:bg-primary/80',
         secondary:
           'tw:border-transparent tw:bg-secondary tw:text-secondary-foreground tw:hover:bg-secondary/80',
-        muted:
-          'tw:border-transparent tw:bg-muted tw:text-muted-foreground tw:hover:bg-muted/80',
+        muted: 'tw:border-transparent tw:bg-muted tw:text-muted-foreground tw:hover:bg-muted/80',
         destructive:
           'tw:border-transparent tw:bg-destructive tw:text-destructive-foreground tw:shadow tw:hover:bg-destructive/80',
         outline: 'tw:text-foreground',
