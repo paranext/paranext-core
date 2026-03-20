@@ -8,11 +8,19 @@ import {
   type ListboxOption,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { useState, useEffect, RefObject, useMemo, useRef } from 'react';
+import { RefObject, useRef } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { DictionaryEntryDisplay } from './dictionary-entry-display.component';
-import { DICTIONARY_LOCALIZED_STRING_KEYS, useIsWideScreen } from '../../utils/dictionary.utils';
+import {
+  DICTIONARY_LOCALIZED_STRING_KEYS,
+  DictionaryScope,
+  useIsWideScreen,
+} from '../../utils/dictionary.utils';
 import { DictionaryListItem } from './dictionary-list-item.component';
+
+function getEntryId(entry: Entry): string {
+  return `${entry.lexicalReferenceTextId}-entry-${entry.id}`;
+}
 
 /** Props for the DictionaryList component */
 type DictionaryListProps = {
@@ -20,10 +28,24 @@ type DictionaryListProps = {
   dictionaryData: Entry[];
   /** Scripture reference to filter the dictionary entries by */
   scriptureReferenceToFilterBy: SerializedVerseRef;
+  /** The current scope (chapter or verse) */
+  scope: DictionaryScope;
+  /** The currently selected entry (controlled) */
+  selectedEntry: Entry | undefined;
   /** Callback function to handle occurrence selection */
   onSelectOccurrence: (scrRefOfOccurrence: SerializedVerseRef) => void;
   /** Callback function to handle character press */
   onCharacterPress?: (char: string) => void;
+  /** Callback fired when the selected entry changes */
+  onEntrySelected: (entry: Entry | undefined) => void;
+  /**
+   * Full (unfiltered) entry data for the currently selected entry. Used for displaying all
+   * occurrences and such info in the entire Scripture for this entry, not just the occurrences that
+   * match the current verse/chapter filter. This is optional because it requires an additional data
+   * fetch, so if it's not provided, the entry details view will just use the filtered data for the
+   * selected entry instead of the full data.
+   */
+  fullSelectedEntry?: Entry;
 };
 
 /**
@@ -40,26 +62,25 @@ type DictionaryListProps = {
 export function DictionaryList({
   dictionaryData,
   scriptureReferenceToFilterBy,
+  scope,
+  selectedEntry,
   onSelectOccurrence,
   onCharacterPress,
+  onEntrySelected,
+  fullSelectedEntry,
 }: DictionaryListProps) {
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
   const isWideScreen = useIsWideScreen();
-  const [selectedEntryId, setSelectedEntryId] = useState<string | undefined>(undefined);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const selectedEntryId = selectedEntry ? getEntryId(selectedEntry) : undefined;
 
   const options: ListboxOption[] = dictionaryData.map((entry) => ({
-    id: `${entry.lexicalReferenceTextId}-entry-${entry.id}`,
+    id: getEntryId(entry),
   }));
 
-  const selectedEntry = useMemo(() => {
-    return dictionaryData.find(
-      (entry) => `${entry.lexicalReferenceTextId}-entry-${entry.id}` === selectedEntryId,
-    );
-  }, [dictionaryData, selectedEntryId]);
-
   const handleOptionSelect = (option: ListboxOption) => {
-    setSelectedEntryId((prevId) => (prevId === option.id ? undefined : option.id));
+    const clickedEntry = dictionaryData.find((e) => getEntryId(e) === option.id);
+    onEntrySelected(selectedEntryId === option.id ? undefined : clickedEntry);
   };
 
   const { listboxRef, activeId, handleKeyDown } = useListbox({
@@ -75,14 +96,6 @@ export function DictionaryList({
   const scrollToTop = () => {
     dictionaryEntryRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
-  useEffect(() => {
-    if (selectedEntryId && !isWideScreen) {
-      setDrawerOpen(true);
-    } else {
-      setDrawerOpen(false);
-    }
-  }, [selectedEntryId, isWideScreen]);
 
   return (
     <div className="tw-flex tw-flex-row tw-flex-1 tw-overflow-hidden">
@@ -104,7 +117,7 @@ export function DictionaryList({
           onKeyDown={handleKeyDown}
         >
           {dictionaryData.map((entry) => {
-            const entryId = `${entry.lexicalReferenceTextId}-entry-${entry.id}`;
+            const entryId = getEntryId(entry);
             const isSelected = selectedEntryId === entryId;
             return (
               <div key={entryId}>
@@ -113,21 +126,21 @@ export function DictionaryList({
                   isSelected={isSelected}
                   localizedStrings={localizedStrings}
                   scrRef={scriptureReferenceToFilterBy}
-                  onClick={() => setSelectedEntryId(entryId)}
+                  scope={scope}
+                  onClick={() => onEntrySelected(isSelected ? undefined : entry)}
                 />
               </div>
             );
           })}
         </ul>
       </div>
-      {selectedEntryId &&
-        selectedEntry &&
+      {selectedEntry &&
         (isWideScreen ? (
           <div ref={dictionaryEntryRef} className="tw-w-1/2 tw-overflow-y-auto tw-p-4">
             <DictionaryEntryDisplay
               scriptureReferenceToFilterBy={scriptureReferenceToFilterBy}
               isDrawer={false}
-              dictionaryEntry={selectedEntry}
+              dictionaryEntry={fullSelectedEntry ?? selectedEntry}
               handleBackToListButton={handleOptionSelect}
               onSelectOccurrence={onSelectOccurrence}
               onClickScrollToTop={scrollToTop}
@@ -136,9 +149,8 @@ export function DictionaryList({
         ) : (
           <Drawer
             direction="right"
-            dismissible={false}
-            open={drawerOpen}
-            onOpenChange={() => setSelectedEntryId(undefined)}
+            open={selectedEntry !== undefined}
+            onOpenChange={() => onEntrySelected(undefined)}
           >
             <DrawerTrigger asChild>
               <div />
@@ -148,8 +160,8 @@ export function DictionaryList({
                 <DictionaryEntryDisplay
                   scriptureReferenceToFilterBy={scriptureReferenceToFilterBy}
                   isDrawer
-                  dictionaryEntry={selectedEntry}
-                  handleBackToListButton={() => setSelectedEntryId(undefined)}
+                  dictionaryEntry={fullSelectedEntry ?? selectedEntry}
+                  handleBackToListButton={() => onEntrySelected(undefined)}
                   onSelectOccurrence={onSelectOccurrence}
                   onClickScrollToTop={scrollToTop}
                 />
