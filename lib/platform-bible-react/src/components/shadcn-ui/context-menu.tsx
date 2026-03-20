@@ -228,7 +228,6 @@ function ContextMenuShortcut({ className, ...props }: React.HTMLAttributes<HTMLS
   );
 }
 
-
 export {
   ContextMenu,
   ContextMenuTrigger,

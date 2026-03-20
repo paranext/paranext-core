@@ -166,7 +166,6 @@ function CommandShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanE
   );
 }
 
-
 export {
   Command,
   CommandDialog,

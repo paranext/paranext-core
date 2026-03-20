@@ -33,7 +33,6 @@ function Drawer({
   );
 }
 
-
 /** @inheritdoc Drawer */
 const DrawerTrigger = DrawerPrimitive.Trigger;
 
@@ -134,14 +133,12 @@ function DrawerHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   );
 }
 
-
 /** @inheritdoc Drawer */
 function DrawerFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div className={cn('tw-mt-auto tw-flex tw-flex-col tw-gap-2 tw-p-4', className)} {...props} />
   );
 }
-
 
 /** @inheritdoc Drawer */
 function DrawerTitle({
