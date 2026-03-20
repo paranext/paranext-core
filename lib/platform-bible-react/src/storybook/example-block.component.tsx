@@ -26,26 +26,26 @@ const variantConfig = {
   do: {
     Icon: ThumbsUp,
     label: 'Best Practice',
-    accentClass: 'tw-bg-teal-500',
-    bgClass: 'tw-bg-teal-500/5',
-    textClass: 'tw-text-teal-600 dark:tw-text-teal-400',
-    iconBgClass: 'tw-bg-teal-500/15',
+    accentClass: 'tw:bg-teal-500',
+    bgClass: 'tw:bg-teal-500/5',
+    textClass: 'tw:text-teal-600 tw:dark:text-teal-400',
+    iconBgClass: 'tw:bg-teal-500/15',
   },
   dont: {
     Icon: ThumbsDown,
     label: 'Anti-pattern',
-    accentClass: 'tw-bg-rose-500',
-    bgClass: 'tw-bg-rose-500/5',
-    textClass: 'tw-text-rose-600 dark:tw-text-rose-400',
-    iconBgClass: 'tw-bg-rose-500/15',
+    accentClass: 'tw:bg-rose-500',
+    bgClass: 'tw:bg-rose-500/5',
+    textClass: 'tw:text-rose-600 tw:dark:text-rose-400',
+    iconBgClass: 'tw:bg-rose-500/15',
   },
   neutral: {
     Icon: Lightbulb,
     label: 'Tip',
-    accentClass: 'tw-bg-sky-500',
-    bgClass: 'tw-bg-sky-500/5',
-    textClass: 'tw-text-sky-600 dark:tw-text-sky-400',
-    iconBgClass: 'tw-bg-sky-500/15',
+    accentClass: 'tw:bg-sky-500',
+    bgClass: 'tw:bg-sky-500/5',
+    textClass: 'tw:text-sky-600 tw:dark:text-sky-400',
+    iconBgClass: 'tw:bg-sky-500/15',
   },
 };
 
@@ -80,30 +80,30 @@ export function ExampleBlock({
   return (
     <div
       className={cn(
-        'sb-unstyled pr-twp tw-relative tw-rounded-lg tw-p-4 tw-pl-5',
+        'sb-unstyled pr-twp tw:relative tw:rounded-lg tw:p-4 tw:pl-5',
         bgClass,
         className,
       )}
     >
       <div
         className={cn(
-          'tw-absolute tw-bottom-0 tw-left-0 tw-top-0 tw-w-1 tw-rounded-l-lg',
+          'tw:absolute tw:bottom-0 tw:left-0 tw:top-0 tw:w-1 tw:rounded-l-lg',
           accentClass,
         )}
       />
-      <div className="tw-flex tw-items-start tw-gap-3">
+      <div className="tw:flex tw:items-start tw:gap-3">
         <div
           className={cn(
-            'tw-flex tw-h-8 tw-w-8 tw-shrink-0 tw-items-center tw-justify-center tw-rounded-lg',
+            'tw:flex tw:h-8 tw:w-8 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-lg',
             iconBgClass,
           )}
         >
-          <Icon className={cn('tw-h-4 tw-w-4', textClass)} />
+          <Icon className={cn('tw:h-4 tw:w-4', textClass)} />
         </div>
-        <div className="tw-min-w-0 tw-flex-1 tw-pt-1">
+        <div className="tw:min-w-0 tw:flex-1 tw:pt-1">
           <p
             className={cn(
-              'tw-m-0 tw-mb-2 tw-text-xs tw-font-bold tw-uppercase tw-tracking-widest',
+              'tw:m-0 tw:mb-2 tw:text-xs tw:font-bold tw:uppercase tw:tracking-widest',
               textClass,
             )}
           >
@@ -111,11 +111,11 @@ export function ExampleBlock({
           </p>
 
           {(preview !== undefined || code !== undefined) && (
-            <div className="tw-mb-3 tw-overflow-hidden tw-rounded-md tw-border tw-border-border/50 tw-bg-background/50">
+            <div className="tw:mb-3 tw:overflow-hidden tw:rounded-md tw:border tw:border-border/50 tw:bg-background/50">
               {preview !== undefined && (
                 <div
                   className={cn(
-                    'tw-flex tw-items-center tw-justify-center tw-p-4',
+                    'tw:flex tw:items-center tw:justify-center tw:p-4',
                     previewClassName,
                   )}
                 >
@@ -129,31 +129,31 @@ export function ExampleBlock({
                     type="button"
                     onClick={() => setIsCodeOpen((o) => !o)}
                     className={cn(
-                      'tw-flex tw-w-full tw-cursor-pointer tw-items-center tw-gap-2 tw-overflow-hidden tw-text-left',
-                      preview !== undefined && 'tw-border-t tw-border-border/50',
+                      'tw:flex tw:w-full tw:cursor-pointer tw:items-center tw:gap-2 tw:overflow-hidden tw:text-left',
+                      preview !== undefined && 'tw:border-t tw:border-border/50',
                     )}
                   >
                     {isCodeOpen ? (
-                      <pre className="tw-m-0 tw-flex-1 tw-overflow-x-auto tw-px-3 tw-py-2 tw-font-mono tw-text-xs tw-text-foreground/50">
+                      <pre className="tw:m-0 tw:flex-1 tw:overflow-x-auto tw:px-3 tw:py-2 tw:font-mono tw:text-xs tw:text-foreground/50">
                         <code>{code}</code>
                       </pre>
                     ) : (
-                      <pre className="tw-m-0 tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-px-3 tw-py-2 tw-font-mono tw-text-xs tw-text-foreground/50">
+                      <pre className="tw:m-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:px-3 tw:py-2 tw:font-mono tw:text-xs tw:text-foreground/50">
                         <code>{collapsedCode}</code>
                       </pre>
                     )}
                     <ChevronDown
                       className={cn(
-                        'tw-mr-3 tw-h-3 tw-w-3 tw-shrink-0 tw-text-foreground/30 tw-transition-transform',
-                        isCodeOpen && 'tw-rotate-180',
+                        'tw:mr-3 tw:h-3 tw:w-3 tw:shrink-0 tw:text-foreground/30 tw:transition-transform',
+                        isCodeOpen && 'tw:rotate-180',
                       )}
                     />
                   </button>
                 ) : (
                   <pre
                     className={cn(
-                      'tw-m-0 tw-overflow-x-auto tw-px-3 tw-py-2 tw-font-mono tw-text-xs tw-text-foreground/50',
-                      preview !== undefined && 'tw-border-t tw-border-border/50',
+                      'tw:m-0 tw:overflow-x-auto tw:px-3 tw:py-2 tw:font-mono tw:text-xs tw:text-foreground/50',
+                      preview !== undefined && 'tw:border-t tw:border-border/50',
                     )}
                   >
                     <code>{code}</code>
@@ -163,7 +163,7 @@ export function ExampleBlock({
           )}
 
           {children !== undefined && (
-            <div className="tw-text-sm tw-text-foreground/70">{children}</div>
+            <div className="tw:text-sm tw:text-foreground/70">{children}</div>
           )}
         </div>
       </div>
@@ -182,7 +182,7 @@ type ExampleBlockGroupProps = {
  */
 export function ExampleBlockGroup({ children, className }: ExampleBlockGroupProps) {
   return (
-    <div className={cn('pr-twp tw-my-4 tw-grid tw-gap-4 md:tw-grid-cols-2', className)}>
+    <div className={cn('pr-twp tw:my-4 tw:grid tw:gap-4 tw:md:grid-cols-2', className)}>
       {children}
     </div>
   );

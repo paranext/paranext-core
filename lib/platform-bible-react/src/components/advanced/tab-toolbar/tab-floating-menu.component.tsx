@@ -14,14 +14,14 @@ export function TabFloatingMenu({
   menuButtonIcon,
 }: TabToolbarCommonProps) {
   return (
-    <TabToolbarContainer className="tw-pointer-events-none" id={id}>
+    <TabToolbarContainer className="tw:pointer-events-none" id={id}>
       {projectMenuData && (
         <TabDropdownMenu
           onSelectMenuItem={onSelectProjectMenuItem}
           menuData={projectMenuData}
           tabLabel="Project"
           icon={menuButtonIcon}
-          className={`tw-pointer-events-auto tw-shadow-lg ${className}`}
+          className={`tw:pointer-events-auto tw:shadow-lg ${className}`}
           buttonVariant="outline"
         />
       )}

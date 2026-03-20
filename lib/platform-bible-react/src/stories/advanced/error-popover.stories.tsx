@@ -78,7 +78,7 @@ Timestamp: 2024-08-19T14:30:45.123Z`,
     localizedStrings: defaultLocalizedStrings,
     children: (
       <Button variant="outline" size="sm">
-        <AlertTriangle className="tw-mr-2 tw-h-4 tw-w-4" />
+        <AlertTriangle className="tw:mr-2 tw:h-4 tw:w-4" />
         Network Error
       </Button>
     ),
@@ -95,8 +95,8 @@ Rule: required
 Form: userRegistration`,
     localizedStrings: defaultLocalizedStrings,
     children: (
-      <Badge variant="destructive" className="tw-cursor-pointer">
-        <XCircle className="tw-mr-1 tw-h-3 tw-w-3" />
+      <Badge variant="destructive" className="tw:cursor-pointer">
+        <XCircle className="tw:mr-1 tw:h-3 tw:w-3" />
         Validation Error
       </Badge>
     ),
@@ -135,7 +135,7 @@ Performance: 2.3ms render time`,
     },
     children: (
       <Button variant="ghost" size="sm">
-        <Bug className="tw-mr-2 tw-h-4 tw-w-4" />
+        <Bug className="tw:mr-2 tw:h-4 tw:w-4" />
         Debug Info
       </Button>
     ),
@@ -189,10 +189,10 @@ Timeline:
 14:31:15.500 - Connection timeout reached
 14:31:15.501 - Error thrown and caught`,
     localizedStrings: defaultLocalizedStrings,
-    className: 'tw-max-w-2xl',
+    className: 'tw:max-w-2xl',
     children: (
       <Button variant="destructive">
-        <AlertTriangle className="tw-mr-2 tw-h-4 tw-w-4" />
+        <AlertTriangle className="tw:mr-2 tw:h-4 tw:w-4" />
         Critical Error
       </Button>
     ),
@@ -208,44 +208,44 @@ Timeline:
 
 export const InlineErrorIndicator: Story = {
   render: (args) => (
-    <div className="tw-space-y-4">
-      <h3 className="tw-text-lg tw-font-semibold">User Registration Form</h3>
-      <div className="tw-grid tw-grid-cols-2 tw-gap-4">
+    <div className="tw:space-y-4">
+      <h3 className="tw:text-lg tw:font-semibold">User Registration Form</h3>
+      <div className="tw:grid tw:grid-cols-2 tw:gap-4">
         <div>
           {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label className="tw-block tw-text-sm tw-font-medium">First Name</label>
+          <label className="tw:block tw:text-sm tw:font-medium">First Name</label>
           <input
             type="text"
-            className="tw-mt-1 tw-block tw-w-full tw-rounded tw-border tw-border-gray-300 tw-px-3 tw-py-2"
+            className="tw:mt-1 tw:block tw:w-full tw:rounded tw:border tw:border-gray-300 tw:px-3 tw:py-2"
             defaultValue="John"
           />
         </div>
         <div>
           {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label className="tw-block tw-text-sm tw-font-medium">Last Name</label>
+          <label className="tw:block tw:text-sm tw:font-medium">Last Name</label>
           <input
             type="text"
-            className="tw-mt-1 tw-block tw-w-full tw-rounded tw-border tw-border-gray-300 tw-px-3 tw-py-2"
+            className="tw:mt-1 tw:block tw:w-full tw:rounded tw:border tw:border-gray-300 tw:px-3 tw:py-2"
             defaultValue="Doe"
           />
         </div>
-        <div className="tw-col-span-2">
-          <div className="tw-flex tw-items-center tw-gap-2">
+        <div className="tw:col-span-2">
+          <div className="tw:flex tw:items-center tw:gap-2">
             {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
             {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-            <label className="tw-block tw-text-sm tw-font-medium">Email Address</label>
+            <label className="tw:block tw:text-sm tw:font-medium">Email Address</label>
             <ErrorPopover {...args}>
-              <XCircle className="tw-h-4 tw-w-4 tw-cursor-pointer tw-text-red-500" />
+              <XCircle className="tw:h-4 tw:w-4 tw:cursor-pointer tw:text-red-500" />
             </ErrorPopover>
           </div>
           <input
             type="email"
-            className="tw-mt-1 tw-block tw-w-full tw-rounded tw-border tw-border-red-300 tw-px-3 tw-py-2"
+            className="tw:mt-1 tw:block tw:w-full tw:rounded tw:border tw:border-red-300 tw:px-3 tw:py-2"
             defaultValue="invalid-email"
           />
-          <p className="tw-mt-1 tw-text-sm tw-text-red-600">Please enter a valid email address</p>
+          <p className="tw:mt-1 tw:text-sm tw:text-red-600">Please enter a valid email address</p>
         </div>
       </div>
     </div>
@@ -274,13 +274,13 @@ Form: userRegistration`,
 
 export const MultipleErrorSources: Story = {
   render: () => (
-    <div className="tw-space-y-6">
-      <h3 className="tw-text-lg tw-font-semibold">System Status Dashboard</h3>
+    <div className="tw:space-y-6">
+      <h3 className="tw:text-lg tw:font-semibold">System Status Dashboard</h3>
 
-      <div className="tw-grid tw-grid-cols-3 tw-gap-4">
-        <div className="tw-rounded tw-border tw-p-4">
-          <div className="tw-flex tw-items-center tw-justify-between">
-            <h4 className="tw-font-medium">Database</h4>
+      <div className="tw:grid tw:grid-cols-3 tw:gap-4">
+        <div className="tw:rounded tw:border tw:p-4">
+          <div className="tw:flex tw:items-center tw:justify-between">
+            <h4 className="tw:font-medium">Database</h4>
             <ErrorPopover
               errorDetails={`Database Connection Error:
 Connection timeout after 30 seconds
@@ -288,26 +288,26 @@ Host: db.example.com:5432
 Last successful connection: 2024-08-19T14:25:00Z`}
               localizedStrings={defaultLocalizedStrings}
             >
-              <Badge variant="destructive" className="tw-cursor-pointer">
-                <XCircle className="tw-mr-1 tw-h-3 tw-w-3" />
+              <Badge variant="destructive" className="tw:cursor-pointer">
+                <XCircle className="tw:mr-1 tw:h-3 tw:w-3" />
                 Error
               </Badge>
             </ErrorPopover>
           </div>
-          <p className="tw-mt-2 tw-text-sm tw-text-muted-foreground">Connection failed</p>
+          <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Connection failed</p>
         </div>
 
-        <div className="tw-rounded tw-border tw-p-4">
-          <div className="tw-flex tw-items-center tw-justify-between">
-            <h4 className="tw-font-medium">API Server</h4>
+        <div className="tw:rounded tw:border tw:p-4">
+          <div className="tw:flex tw:items-center tw:justify-between">
+            <h4 className="tw:font-medium">API Server</h4>
             <Badge variant="secondary">Healthy</Badge>
           </div>
-          <p className="tw-mt-2 tw-text-sm tw-text-muted-foreground">All endpoints responding</p>
+          <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">All endpoints responding</p>
         </div>
 
-        <div className="tw-rounded tw-border tw-p-4">
-          <div className="tw-flex tw-items-center tw-justify-between">
-            <h4 className="tw-font-medium">Cache</h4>
+        <div className="tw:rounded tw:border tw:p-4">
+          <div className="tw:flex tw:items-center tw:justify-between">
+            <h4 className="tw:font-medium">Cache</h4>
             <ErrorPopover
               errorDetails={`Redis Cache Warning:
 Memory usage: 87% (1.74GB / 2GB)
@@ -322,14 +322,14 @@ Recommendation: Increase memory or review cache policies`}
             >
               <Badge
                 variant="outline"
-                className="tw-cursor-pointer tw-border-yellow-500 tw-text-yellow-600"
+                className="tw:cursor-pointer tw:border-yellow-500 tw:text-yellow-600"
               >
-                <AlertTriangle className="tw-mr-1 tw-h-3 tw-w-3" />
+                <AlertTriangle className="tw:mr-1 tw:h-3 tw:w-3" />
                 Warning
               </Badge>
             </ErrorPopover>
           </div>
-          <p className="tw-mt-2 tw-text-sm tw-text-muted-foreground">High memory usage</p>
+          <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">High memory usage</p>
         </div>
       </div>
     </div>

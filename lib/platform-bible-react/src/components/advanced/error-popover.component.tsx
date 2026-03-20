@@ -60,7 +60,7 @@ export function ErrorPopover({
   return (
     <Popover onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent id={id} className={cn('tw-min-w-80 tw-max-w-96', className)}>
+      <PopoverContent id={id} className={cn('tw:min-w-80 tw:max-w-96', className)}>
         {isCopySuccess && localizedStrings['%webView_error_dump_copied_message%'] && (
           <Label>{localizedStrings['%webView_error_dump_copied_message%']}</Label>
         )}

@@ -141,7 +141,7 @@ export function ScrollGroupSelector({
         )
       }
     >
-      <SelectTrigger size={size} className={cn('pr-twp tw-w-auto', className)}>
+      <SelectTrigger size={size} className={cn('pr-twp tw:w-auto', className)}>
         <SelectValue
           placeholder={
             localizedStringsDefaulted[getLocalizeKeyForScrollGroupId(scrollGroupId)] ??

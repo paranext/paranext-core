@@ -10,7 +10,7 @@ export type SpinnerProps = LucideProps;
  */
 export const Spinner = forwardRef<SVGSVGElement, SpinnerProps>(({ className, ...props }, ref) => {
   return (
-    <LoaderCircle size={35} className={cn('tw-animate-spin', className)} {...props} ref={ref} />
+    <LoaderCircle size={35} className={cn('tw:animate-spin', className)} {...props} ref={ref} />
   );
 });
 

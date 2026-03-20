@@ -98,10 +98,10 @@ export function DataTable<TData, TValue>({
     const rowCount = 10;
     const skeletonRowIds = Array.from({ length: rowCount }).map((_, idx) => `skeleton-row-${idx}`);
     bodyContent = skeletonRowIds.map((rowId) => (
-      <TableRow key={rowId} className="hover:tw-bg-transparent">
-        <TableCell colSpan={visibleColumns.length ?? columns.length} className="tw-border-0 tw-p-0">
-          <div className="tw-w-full tw-py-2">
-            <Skeleton className="tw-h-14 tw-w-full tw-rounded-md" />
+      <TableRow key={rowId} className="tw:hover:bg-transparent">
+        <TableCell colSpan={visibleColumns.length ?? columns.length} className="tw:border-0 tw:p-0">
+          <div className="tw:w-full tw:py-2">
+            <Skeleton className="tw:h-14 tw:w-full tw:rounded-md" />
           </div>
         </TableCell>
       </TableRow>
@@ -123,7 +123,7 @@ export function DataTable<TData, TValue>({
   } else {
     bodyContent = (
       <TableRow>
-        <TableCell colSpan={columns.length} className="tw-h-24 tw-text-center">
+        <TableCell colSpan={columns.length} className="tw:h-24 tw:text-center">
           {noResultsMessage}
         </TableCell>
       </TableRow>
@@ -139,7 +139,7 @@ export function DataTable<TData, TValue>({
             <TableRow key={headerGroup.id}>
               {headerGroup.headers.map((header) => {
                 return (
-                  <TableHead key={header.id} className="tw-p-0">
+                  <TableHead key={header.id} className="tw:p-0">
                     {header.isPlaceholder
                       ? undefined
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -152,7 +152,7 @@ export function DataTable<TData, TValue>({
         <TableBody>{bodyContent}</TableBody>
       </Table>
       {enablePagination && (
-        <div className="tw-flex tw-items-center tw-justify-end tw-space-x-2 tw-py-4">
+        <div className="tw:flex tw:items-center tw:justify-end tw:space-x-2 tw:py-4">
           <Button
             variant="outline"
             size="sm"

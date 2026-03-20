@@ -66,26 +66,26 @@ export const BasicSettings: Story = {
     const [locationServices, setLocationServices] = useState(false);
 
     return (
-      <Card className="tw-w-full tw-max-w-md">
+      <Card className="tw:w-full tw:max-w-md">
         <CardHeader>
           <CardTitle>Device Settings</CardTitle>
           <CardDescription>Configure your device preferences</CardDescription>
         </CardHeader>
-        <CardContent className="tw-space-y-4">
-          <div className="tw-flex tw-items-center tw-justify-between">
-            <Label htmlFor="airplane-mode" className="tw-text-sm tw-font-medium">
+        <CardContent className="tw:space-y-4">
+          <div className="tw:flex tw:items-center tw:justify-between">
+            <Label htmlFor="airplane-mode" className="tw:text-sm tw:font-medium">
               Airplane Mode
             </Label>
             <Switch id="airplane-mode" checked={airplaneMode} onCheckedChange={setAirplaneMode} />
           </div>
-          <div className="tw-flex tw-items-center tw-justify-between">
-            <Label htmlFor="notifications" className="tw-text-sm tw-font-medium">
+          <div className="tw:flex tw:items-center tw:justify-between">
+            <Label htmlFor="notifications" className="tw:text-sm tw:font-medium">
               Push Notifications
             </Label>
             <Switch id="notifications" checked={notifications} onCheckedChange={setNotifications} />
           </div>
-          <div className="tw-flex tw-items-center tw-justify-between">
-            <Label htmlFor="location" className="tw-text-sm tw-font-medium">
+          <div className="tw:flex tw:items-center tw:justify-between">
+            <Label htmlFor="location" className="tw:text-sm tw:font-medium">
               Location Services
             </Label>
             <Switch
@@ -124,19 +124,19 @@ export const ComprehensiveSettings: Story = {
     };
 
     return (
-      <div className="tw-max-w-2xl tw-space-y-6">
+      <div className="tw:max-w-2xl tw:space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Notification Settings</CardTitle>
             <CardDescription>Manage how you receive notifications</CardDescription>
           </CardHeader>
-          <CardContent className="tw-space-y-4">
-            <div className="tw-flex tw-items-center tw-justify-between">
+          <CardContent className="tw:space-y-4">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label htmlFor="email-notifications" className="tw-text-sm tw-font-medium">
+                <Label htmlFor="email-notifications" className="tw:text-sm tw:font-medium">
                   Email Notifications
                 </Label>
-                <p className="tw-text-xs tw-text-muted-foreground">
+                <p className="tw:text-xs tw:text-muted-foreground">
                   Receive notifications via email
                 </p>
               </div>
@@ -146,12 +146,12 @@ export const ComprehensiveSettings: Story = {
                 onCheckedChange={updateSetting('emailNotifications')}
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label htmlFor="push-notifications" className="tw-text-sm tw-font-medium">
+                <Label htmlFor="push-notifications" className="tw:text-sm tw:font-medium">
                   Push Notifications
                 </Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Receive push notifications</p>
+                <p className="tw:text-xs tw:text-muted-foreground">Receive push notifications</p>
               </div>
               <Switch
                 id="push-notifications"
@@ -159,12 +159,12 @@ export const ComprehensiveSettings: Story = {
                 onCheckedChange={updateSetting('pushNotifications')}
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label htmlFor="sms-notifications" className="tw-text-sm tw-font-medium">
+                <Label htmlFor="sms-notifications" className="tw:text-sm tw:font-medium">
                   SMS Notifications
                 </Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Receive notifications via SMS</p>
+                <p className="tw:text-xs tw:text-muted-foreground">Receive notifications via SMS</p>
               </div>
               <Switch
                 id="sms-notifications"
@@ -172,12 +172,12 @@ export const ComprehensiveSettings: Story = {
                 onCheckedChange={updateSetting('smsNotifications')}
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label htmlFor="marketing-emails" className="tw-text-sm tw-font-medium">
+                <Label htmlFor="marketing-emails" className="tw:text-sm tw:font-medium">
                   Marketing Emails
                 </Label>
-                <p className="tw-text-xs tw-text-muted-foreground">
+                <p className="tw:text-xs tw:text-muted-foreground">
                   Receive marketing and promotional emails
                 </p>
               </div>
@@ -195,13 +195,13 @@ export const ComprehensiveSettings: Story = {
             <CardTitle>App Settings</CardTitle>
             <CardDescription>Configure application behavior</CardDescription>
           </CardHeader>
-          <CardContent className="tw-space-y-4">
-            <div className="tw-flex tw-items-center tw-justify-between">
+          <CardContent className="tw:space-y-4">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label htmlFor="auto-save" className="tw-text-sm tw-font-medium">
+                <Label htmlFor="auto-save" className="tw:text-sm tw:font-medium">
                   Auto Save
                 </Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Automatically save your work</p>
+                <p className="tw:text-xs tw:text-muted-foreground">Automatically save your work</p>
               </div>
               <Switch
                 id="auto-save"
@@ -209,12 +209,12 @@ export const ComprehensiveSettings: Story = {
                 onCheckedChange={updateSetting('autoSave')}
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label htmlFor="dark-mode" className="tw-text-sm tw-font-medium">
+                <Label htmlFor="dark-mode" className="tw:text-sm tw:font-medium">
                   Dark Mode
                 </Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Use dark theme</p>
+                <p className="tw:text-xs tw:text-muted-foreground">Use dark theme</p>
               </div>
               <Switch
                 id="dark-mode"
@@ -231,7 +231,7 @@ export const ComprehensiveSettings: Story = {
             <CardDescription>Debug view of current settings state</CardDescription>
           </CardHeader>
           <CardContent>
-            <pre className="tw-text-xs tw-text-muted-foreground">
+            <pre className="tw:text-xs tw:text-muted-foreground">
               {JSON.stringify(settings, undefined, 2)}
             </pre>
           </CardContent>
@@ -267,14 +267,14 @@ export const MixedControlTypes: Story = {
     };
 
     return (
-      <div className="tw-max-w-2xl tw-space-y-6">
+      <div className="tw:max-w-2xl tw:space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Account Settings</CardTitle>
             <CardDescription>Manage your account preferences</CardDescription>
           </CardHeader>
-          <CardContent className="tw-space-y-6">
-            <div className="tw-space-y-2">
+          <CardContent className="tw:space-y-6">
+            <div className="tw:space-y-2">
               <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
@@ -285,7 +285,7 @@ export const MixedControlTypes: Story = {
               />
             </div>
 
-            <div className="tw-space-y-2">
+            <div className="tw:space-y-2">
               <Label htmlFor="language">Language</Label>
               <Select
                 value={settings.language}
@@ -303,7 +303,7 @@ export const MixedControlTypes: Story = {
               </Select>
             </div>
 
-            <div className="tw-space-y-2">
+            <div className="tw:space-y-2">
               <Label htmlFor="theme">Theme</Label>
               <Select
                 value={settings.theme}
@@ -322,12 +322,12 @@ export const MixedControlTypes: Story = {
 
             <Separator />
 
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label htmlFor="notifications" className="tw-text-sm tw-font-medium">
+                <Label htmlFor="notifications" className="tw:text-sm tw:font-medium">
                   Enable Notifications
                 </Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Receive app notifications</p>
+                <p className="tw:text-xs tw:text-muted-foreground">Receive app notifications</p>
               </div>
               <Switch
                 id="notifications"
@@ -336,12 +336,12 @@ export const MixedControlTypes: Story = {
               />
             </div>
 
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label htmlFor="auto-backup" className="tw-text-sm tw-font-medium">
+                <Label htmlFor="auto-backup" className="tw:text-sm tw:font-medium">
                   Auto Backup
                 </Label>
-                <p className="tw-text-xs tw-text-muted-foreground">
+                <p className="tw:text-xs tw:text-muted-foreground">
                   Automatically backup your data
                 </p>
               </div>
@@ -353,7 +353,7 @@ export const MixedControlTypes: Story = {
             </div>
 
             {settings.autoBackup && (
-              <div className="tw-space-y-2">
+              <div className="tw:space-y-2">
                 <Label htmlFor="backup-frequency">Backup Frequency</Label>
                 <Select
                   value={settings.backupFrequency}
@@ -374,7 +374,7 @@ export const MixedControlTypes: Story = {
           </CardContent>
         </Card>
 
-        <div className="tw-flex tw-justify-end tw-space-x-2">
+        <div className="tw:flex tw:justify-end tw:space-x-2">
           <Button variant="outline" onClick={() => console.log('Settings reset')}>
             Reset
           </Button>
@@ -418,17 +418,17 @@ export const SettingsGrid: Story = {
     };
 
     return (
-      <div className="tw-grid tw-grid-cols-1 tw-gap-6 lg:tw-grid-cols-2">
+      <div className="tw:grid tw:grid-cols-1 tw:gap-6 tw:lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Privacy Settings</CardTitle>
             <CardDescription>Control your privacy preferences</CardDescription>
           </CardHeader>
-          <CardContent className="tw-space-y-4">
-            <div className="tw-flex tw-items-center tw-justify-between">
+          <CardContent className="tw:space-y-4">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label className="tw-text-sm tw-font-medium">Profile Visible</Label>
-                <p className="tw-text-xs tw-text-muted-foreground">
+                <Label className="tw:text-sm tw:font-medium">Profile Visible</Label>
+                <p className="tw:text-xs tw:text-muted-foreground">
                   Make your profile visible to others
                 </p>
               </div>
@@ -437,24 +437,24 @@ export const SettingsGrid: Story = {
                 onCheckedChange={updatePrivacy('profileVisible')}
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label className="tw-text-sm tw-font-medium">Show Email</Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Display email on profile</p>
+                <Label className="tw:text-sm tw:font-medium">Show Email</Label>
+                <p className="tw:text-xs tw:text-muted-foreground">Display email on profile</p>
               </div>
               <Switch checked={privacy.showEmail} onCheckedChange={updatePrivacy('showEmail')} />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label className="tw-text-sm tw-font-medium">Show Phone</Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Display phone number</p>
+                <Label className="tw:text-sm tw:font-medium">Show Phone</Label>
+                <p className="tw:text-xs tw:text-muted-foreground">Display phone number</p>
               </div>
               <Switch checked={privacy.showPhone} onCheckedChange={updatePrivacy('showPhone')} />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label className="tw-text-sm tw-font-medium">Allow Tracking</Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Allow analytics tracking</p>
+                <Label className="tw:text-sm tw:font-medium">Allow Tracking</Label>
+                <p className="tw:text-xs tw:text-muted-foreground">Allow analytics tracking</p>
               </div>
               <Switch
                 checked={privacy.allowTracking}
@@ -469,38 +469,38 @@ export const SettingsGrid: Story = {
             <CardTitle>Security Settings</CardTitle>
             <CardDescription>Manage your security preferences</CardDescription>
           </CardHeader>
-          <CardContent className="tw-space-y-4">
-            <div className="tw-flex tw-items-center tw-justify-between">
+          <CardContent className="tw:space-y-4">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label className="tw-text-sm tw-font-medium">Two-Factor Auth</Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Enable 2FA for added security</p>
+                <Label className="tw:text-sm tw:font-medium">Two-Factor Auth</Label>
+                <p className="tw:text-xs tw:text-muted-foreground">Enable 2FA for added security</p>
               </div>
               <Switch checked={security.twoFactor} onCheckedChange={updateSecurity('twoFactor')} />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label className="tw-text-sm tw-font-medium">Login Alerts</Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Get notified of new logins</p>
+                <Label className="tw:text-sm tw:font-medium">Login Alerts</Label>
+                <p className="tw:text-xs tw:text-muted-foreground">Get notified of new logins</p>
               </div>
               <Switch
                 checked={security.loginAlerts}
                 onCheckedChange={updateSecurity('loginAlerts')}
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label className="tw-text-sm tw-font-medium">Auto Session Timeout</Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Auto logout after inactivity</p>
+                <Label className="tw:text-sm tw:font-medium">Auto Session Timeout</Label>
+                <p className="tw:text-xs tw:text-muted-foreground">Auto logout after inactivity</p>
               </div>
               <Switch
                 checked={security.sessionTimeout}
                 onCheckedChange={updateSecurity('sessionTimeout')}
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between">
+            <div className="tw:flex tw:items-center tw:justify-between">
               <div>
-                <Label className="tw-text-sm tw-font-medium">Trust This Device</Label>
-                <p className="tw-text-xs tw-text-muted-foreground">Remember this device</p>
+                <Label className="tw:text-sm tw:font-medium">Trust This Device</Label>
+                <p className="tw:text-xs tw:text-muted-foreground">Remember this device</p>
               </div>
               <Switch
                 checked={security.deviceTrust}

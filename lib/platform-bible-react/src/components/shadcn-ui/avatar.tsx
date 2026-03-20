@@ -18,7 +18,7 @@ function Avatar({
     <AvatarPrimitive.Root
       ref={ref}
       className={cn(
-        'pr-twp tw-relative tw-flex tw-h-10 tw-w-10 tw-shrink-0 tw-overflow-hidden tw-rounded-full',
+        'pr-twp tw:relative tw:flex tw:h-10 tw:w-10 tw:shrink-0 tw:overflow-hidden tw:rounded-full',
         className,
       )}
       {...props}
@@ -37,7 +37,7 @@ function AvatarImage({
   return (
     <AvatarPrimitive.Image
       ref={ref}
-      className={cn('pr-twp tw-aspect-square tw-h-full tw-w-full', className)}
+      className={cn('pr-twp tw:aspect-square tw:h-full tw:w-full', className)}
       {...props}
     />
   );
@@ -55,7 +55,7 @@ function AvatarFallback({
     <AvatarPrimitive.Fallback
       ref={ref}
       className={cn(
-        'pr-twp tw-flex tw-h-full tw-w-full tw-items-center tw-justify-center tw-rounded-full tw-bg-muted',
+        'pr-twp tw:flex tw:h-full tw:w-full tw:items-center tw:justify-center tw:rounded-full tw:bg-muted',
         className,
       )}
       {...props}

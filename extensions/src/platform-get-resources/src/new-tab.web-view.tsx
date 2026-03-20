@@ -104,7 +104,7 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
   const loadingText: string = localizedStringsWithLoadingState[0]['%resources_loading%'];
 
   return projectLoading ? (
-    <div className="tw-p-8">
+    <div className="tw:p-8">
       <Label>{loadingText}</Label>
     </div>
   ) : (

@@ -257,7 +257,7 @@ const advancedUserColumns: ColumnDef<User>[] = [
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
         >
           Name
-          <ArrowUpDown className="tw-ml-2 tw-h-4 tw-w-4" />
+          <ArrowUpDown className="tw:ml-2 tw:h-4 tw:w-4" />
         </Button>
       );
     },
@@ -297,7 +297,7 @@ const advancedUserColumns: ColumnDef<User>[] = [
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
         >
           Join Date
-          <ArrowUpDown className="tw-ml-2 tw-h-4 tw-w-4" />
+          <ArrowUpDown className="tw:ml-2 tw:h-4 tw:w-4" />
         </Button>
       );
     },
@@ -311,9 +311,9 @@ const advancedUserColumns: ColumnDef<User>[] = [
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="tw-h-8 tw-w-8 tw-p-0">
-              <span className="tw-sr-only">Open menu</span>
-              <MoreHorizontal className="tw-h-4 tw-w-4" />
+            <Button variant="ghost" className="tw:h-8 tw:w-8 tw:p-0">
+              <span className="tw:sr-only">Open menu</span>
+              <MoreHorizontal className="tw:h-4 tw:w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -323,15 +323,15 @@ const advancedUserColumns: ColumnDef<User>[] = [
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
-              <Eye className="tw-mr-2 tw-h-4 tw-w-4" />
+              <Eye className="tw:mr-2 tw:h-4 tw:w-4" />
               View details
             </DropdownMenuItem>
             <DropdownMenuItem>
-              <Edit className="tw-mr-2 tw-h-4 tw-w-4" />
+              <Edit className="tw:mr-2 tw:h-4 tw:w-4" />
               Edit user
             </DropdownMenuItem>
-            <DropdownMenuItem className="tw-text-red-600">
-              <Trash2 className="tw-mr-2 tw-h-4 tw-w-4" />
+            <DropdownMenuItem className="tw:text-red-600">
+              <Trash2 className="tw:mr-2 tw:h-4 tw:w-4" />
               Delete user
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -352,7 +352,7 @@ const productColumns: ColumnDef<Product>[] = [
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
         >
           Product Name
-          <ArrowUpDown className="tw-ml-2 tw-h-4 tw-w-4" />
+          <ArrowUpDown className="tw:ml-2 tw:h-4 tw:w-4" />
         </Button>
       );
     },
@@ -370,7 +370,7 @@ const productColumns: ColumnDef<Product>[] = [
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
         >
           Price
-          <ArrowUpDown className="tw-ml-2 tw-h-4 tw-w-4" />
+          <ArrowUpDown className="tw:ml-2 tw:h-4 tw:w-4" />
         </Button>
       );
     },
@@ -380,7 +380,7 @@ const productColumns: ColumnDef<Product>[] = [
         style: 'currency',
         currency: 'USD',
       }).format(price);
-      return <div className="tw-font-medium">{formatted}</div>;
+      return <div className="tw:font-medium">{formatted}</div>;
     },
   },
   {
@@ -392,7 +392,7 @@ const productColumns: ColumnDef<Product>[] = [
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
         >
           Stock
-          <ArrowUpDown className="tw-ml-2 tw-h-4 tw-w-4" />
+          <ArrowUpDown className="tw:ml-2 tw:h-4 tw:w-4" />
         </Button>
       );
     },

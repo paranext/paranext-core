@@ -144,8 +144,8 @@ function SidebarProvider({
             } as React.CSSProperties
           }
           className={cn(
-            // Removed tw-min-h-svh
-            'tw-group/sidebar-wrapper pr-twp tw-flex tw-w-full has-[[data-variant=inset]]:tw-bg-sidebar',
+            // Removed tw:min-h-svh
+            'tw:group/sidebar-wrapper pr-twp tw:flex tw:w-full tw:has-[[data-variant=inset]]:bg-sidebar',
             className,
           )}
           ref={ref}
@@ -177,7 +177,7 @@ function Sidebar({
     return (
       <div
         className={cn(
-          'tw-flex tw-h-full tw-w-[--sidebar-width] tw-flex-col tw-bg-sidebar tw-text-sidebar-foreground',
+          'tw:flex tw:h-full tw:w-[--sidebar-width] tw:flex-col tw:bg-sidebar tw:text-sidebar-foreground',
           className,
         )}
         ref={ref}
@@ -191,7 +191,7 @@ function Sidebar({
   return (
     <div
       ref={ref}
-      className="tw-group tw-peer tw-hidden tw-text-sidebar-foreground md:tw-block"
+      className="tw:group tw:peer tw:hidden tw:text-sidebar-foreground tw:md:block"
       data-state={context.state}
       data-collapsible={context.state === 'collapsed' ? collapsible : ''}
       data-variant={variant}
@@ -200,32 +200,32 @@ function Sidebar({
       {/* This is what handles the sidebar gap on desktop */}
       <div
         className={cn(
-          'tw-relative tw-h-svh tw-w-[--sidebar-width] tw-bg-transparent tw-transition-[width] tw-duration-200 tw-ease-linear',
-          'group-data-[collapsible=offcanvas]:tw-w-0',
-          'group-data-[side=secondary]:tw-rotate-180',
+          'tw:relative tw:h-svh tw:w-[--sidebar-width] tw:bg-transparent tw:transition-[width] tw:duration-200 tw:ease-linear',
+          'tw:group-data-[collapsible=offcanvas]:w-0',
+          'tw:group-data-[side=secondary]:rotate-180',
           variant === 'floating' || variant === 'inset'
-            ? 'group-data-[collapsible=icon]:tw-w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]'
-            : 'group-data-[collapsible=icon]:tw-w-[--sidebar-width-icon]',
+            ? 'tw:group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]'
+            : 'tw:group-data-[collapsible=icon]:w-[--sidebar-width-icon]',
         )}
       />
       <div
         className={cn(
-          // CUSTOM: Switched tw-fixed to tw-absolute here to scope the sidebar inside of it's container
-          'tw-absolute tw-inset-y-0 tw-z-10 tw-hidden tw-h-svh tw-w-[--sidebar-width] tw-transition-[left,right,width] tw-duration-200 tw-ease-linear md:tw-flex',
+          // CUSTOM: Switched tw:fixed to tw:absolute here to scope the sidebar inside of it's container
+          'tw:absolute tw:inset-y-0 tw:z-10 tw:hidden tw:h-svh tw:w-[--sidebar-width] tw:transition-[left,right,width] tw:duration-200 tw:ease-linear tw:md:flex',
           context.side === 'primary'
-            ? 'tw-left-0 group-data-[collapsible=offcanvas]:tw-left-[calc(var(--sidebar-width)*-1)]'
-            : 'tw-right-0 group-data-[collapsible=offcanvas]:tw-right-[calc(var(--sidebar-width)*-1)]',
+            ? 'tw:left-0 tw:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]'
+            : 'tw:right-0 tw:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]',
           // Adjust the padding for floating and inset variants.
           variant === 'floating' || variant === 'inset'
-            ? 'tw-p-2 group-data-[collapsible=icon]:tw-w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]'
-            : 'group-data-[collapsible=icon]:tw-w-[--sidebar-width-icon] group-data-[side=primary]:tw-border-r group-data-[side=secondary]:tw-border-l',
+            ? 'tw:p-2 tw:group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]'
+            : 'tw:group-data-[collapsible=icon]:w-[--sidebar-width-icon] tw:group-data-[side=primary]:border-r tw:group-data-[side=secondary]:border-l',
           className,
         )}
         {...props}
       >
         <div
           data-sidebar="sidebar"
-          className="tw-flex tw-h-full tw-w-full tw-flex-col tw-bg-sidebar group-data-[variant=floating]:tw-rounded-lg group-data-[variant=floating]:tw-border group-data-[variant=floating]:tw-border-sidebar-border group-data-[variant=floating]:tw-shadow"
+          className="tw:flex tw:h-full tw:w-full tw:flex-col tw:bg-sidebar tw:group-data-[variant=floating]:rounded-lg tw:group-data-[variant=floating]:border tw:group-data-[variant=floating]:border-sidebar-border tw:group-data-[variant=floating]:shadow"
         >
           {children}
         </div>
@@ -251,7 +251,7 @@ function SidebarTrigger({
       data-sidebar="trigger"
       variant="ghost"
       size="icon"
-      className={cn('tw-h-7 tw-w-7', className)}
+      className={cn('tw:h-7 tw:w-7', className)}
       onClick={(event) => {
         onClick?.(event);
         context.toggleSidebar();
@@ -259,7 +259,7 @@ function SidebarTrigger({
       {...props}
     >
       {context.side === 'primary' ? <PanelLeft /> : <PanelRight />}
-      <span className="tw-sr-only">Toggle Sidebar</span>
+      <span className="tw:sr-only">Toggle Sidebar</span>
     </Button>
   );
 }
@@ -282,12 +282,12 @@ function SidebarRail({
       onClick={toggleSidebar}
       title="Toggle Sidebar"
       className={cn(
-        'tw-absolute tw-inset-y-0 tw-z-20 tw-hidden tw-w-4 tw--translate-x-1/2 tw-transition-all tw-ease-linear after:tw-absolute after:tw-inset-y-0 after:tw-left-1/2 after:tw-w-[2px] hover:after:tw-bg-sidebar-border group-data-[side=primary]:tw--right-4 group-data-[side=secondary]:tw-left-0 sm:tw-flex',
-        '[[data-side=secondary]_&]:tw-cursor-e-resize [[data-side=secondary]_&]:tw-cursor-w-resize',
-        '[[data-side=primary][data-state=collapsed]_&]:tw-cursor-e-resize [[data-side=secondary][data-state=collapsed]_&]:tw-cursor-w-resize',
-        'group-data-[collapsible=offcanvas]:tw-translate-x-0 group-data-[collapsible=offcanvas]:after:tw-left-full group-data-[collapsible=offcanvas]:hover:tw-bg-sidebar',
-        '[[data-side=primary][data-collapsible=offcanvas]_&]:tw--right-2',
-        '[[data-side=secondary][data-collapsible=offcanvas]_&]:tw--left-2',
+        'tw:absolute tw:inset-y-0 tw:z-20 tw:hidden tw:w-4 tw:-translate-x-1/2 tw:transition-all tw:ease-linear tw:after:absolute tw:after:inset-y-0 tw:after:left-1/2 tw:after:w-[2px] tw:hover:after:bg-sidebar-border tw:group-data-[side=primary]:-right-4 tw:group-data-[side=secondary]:left-0 tw:sm:flex',
+        'tw:[[data-side=secondary]_&]:cursor-e-resize tw:[[data-side=secondary]_&]:cursor-w-resize',
+        'tw:[[data-side=primary][data-state=collapsed]_&]:cursor-e-resize tw:[[data-side=secondary][data-state=collapsed]_&]:cursor-w-resize',
+        'tw:group-data-[collapsible=offcanvas]:translate-x-0 tw:group-data-[collapsible=offcanvas]:after:left-full tw:group-data-[collapsible=offcanvas]:hover:bg-sidebar',
+        'tw:[[data-side=primary][data-collapsible=offcanvas]_&]:-right-2',
+        'tw:[[data-side=secondary][data-collapsible=offcanvas]_&]:-left-2',
         className,
       )}
       {...props}
@@ -305,9 +305,9 @@ function SidebarInset({
     <main
       ref={ref}
       className={cn(
-        // CUSTOM: Removed tw-min-h-svh
-        'tw-relative tw-flex tw-flex-1 tw-flex-col tw-bg-background',
-        'peer-data-[variant=inset]:tw-min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:tw-m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:tw-ml-2 md:peer-data-[variant=inset]:tw-ml-0 md:peer-data-[variant=inset]:tw-rounded-xl md:peer-data-[variant=inset]:tw-shadow',
+        // CUSTOM: Removed tw:min-h-svh
+        'tw:relative tw:flex tw:flex-1 tw:flex-col tw:bg-background',
+        'tw:peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] tw:md:peer-data-[variant=inset]:m-2 tw:md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 tw:md:peer-data-[variant=inset]:ml-0 tw:md:peer-data-[variant=inset]:rounded-xl tw:md:peer-data-[variant=inset]:shadow',
         className,
       )}
       {...props}
@@ -328,7 +328,7 @@ function SidebarInput({
       ref={ref}
       data-sidebar="input"
       className={cn(
-        'tw-h-8 tw-w-full tw-bg-background tw-shadow-none focus-visible:tw-ring-2 focus-visible:tw-ring-sidebar-ring',
+        'tw:h-8 tw:w-full tw:bg-background tw:shadow-none tw:focus-visible:ring-2 tw:focus-visible:ring-sidebar-ring',
         className,
       )}
       {...props}
@@ -346,7 +346,7 @@ function SidebarHeader({
     <div
       ref={ref}
       data-sidebar="header"
-      className={cn('tw-flex tw-flex-col tw-gap-2 tw-p-2', className)}
+      className={cn('tw:flex tw:flex-col tw:gap-2 tw:p-2', className)}
       {...props}
     />
   );
@@ -362,7 +362,7 @@ function SidebarFooter({
     <div
       ref={ref}
       data-sidebar="footer"
-      className={cn('tw-flex tw-flex-col tw-gap-2 tw-p-2', className)}
+      className={cn('tw:flex tw:flex-col tw:gap-2 tw:p-2', className)}
       {...props}
     />
   );
@@ -380,7 +380,7 @@ function SidebarSeparator({
     <Separator
       ref={ref}
       data-sidebar="separator"
-      className={cn('tw-mx-2 tw-w-auto tw-bg-sidebar-border', className)}
+      className={cn('tw:mx-2 tw:w-auto tw:bg-sidebar-border', className)}
       {...props}
     />
   );
@@ -397,7 +397,7 @@ function SidebarContent({
       ref={ref}
       data-sidebar="content"
       className={cn(
-        'tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-gap-2 tw-overflow-auto group-data-[collapsible=icon]:tw-overflow-hidden',
+        'tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:gap-2 tw:overflow-auto tw:group-data-[collapsible=icon]:overflow-hidden',
         className,
       )}
       {...props}
@@ -415,7 +415,7 @@ function SidebarGroup({
     <div
       ref={ref}
       data-sidebar="group"
-      className={cn('tw-relative tw-flex tw-w-full tw-min-w-0 tw-flex-col tw-p-2', className)}
+      className={cn('tw:relative tw:flex tw:w-full tw:min-w-0 tw:flex-col tw:p-2', className)}
       {...props}
     />
   );
@@ -438,8 +438,8 @@ function SidebarGroupLabel({
       ref={ref}
       data-sidebar="group-label"
       className={cn(
-        'tw-flex tw-h-8 tw-shrink-0 tw-items-center tw-rounded-md tw-px-2 tw-text-xs tw-font-medium tw-text-sidebar-foreground/70 tw-outline-none tw-ring-sidebar-ring tw-transition-[margin,opa] tw-duration-200 tw-ease-linear focus-visible:tw-ring-2 [&>svg]:tw-size-4 [&>svg]:tw-shrink-0',
-        'group-data-[collapsible=icon]:tw--mt-8 group-data-[collapsible=icon]:tw-opacity-0',
+        'tw:flex tw:h-8 tw:shrink-0 tw:items-center tw:rounded-md tw:px-2 tw:text-xs tw:font-medium tw:text-sidebar-foreground/70 tw:outline-none tw:ring-sidebar-ring tw:transition-[margin,opa] tw:duration-200 tw:ease-linear tw:focus-visible:ring-2 tw:[&>svg]:size-4 tw:[&>svg]:shrink-0',
+        'tw:group-data-[collapsible=icon]:-mt-8 tw:group-data-[collapsible=icon]:opacity-0',
         className,
       )}
       {...props}
@@ -464,10 +464,10 @@ function SidebarGroupAction({
       ref={ref}
       data-sidebar="group-action"
       className={cn(
-        'tw-absolute tw-right-3 tw-top-3.5 tw-flex tw-aspect-square tw-w-5 tw-items-center tw-justify-center tw-rounded-md tw-p-0 tw-text-sidebar-foreground tw-outline-none tw-ring-sidebar-ring tw-transition-transform hover:tw-bg-sidebar-accent hover:tw-text-sidebar-accent-foreground focus-visible:tw-ring-2 [&>svg]:tw-size-4 [&>svg]:tw-shrink-0',
+        'tw:absolute tw:right-3 tw:top-3.5 tw:flex tw:aspect-square tw:w-5 tw:items-center tw:justify-center tw:rounded-md tw:p-0 tw:text-sidebar-foreground tw:outline-none tw:ring-sidebar-ring tw:transition-transform tw:hover:bg-sidebar-accent tw:hover:text-sidebar-accent-foreground tw:focus-visible:ring-2 tw:[&>svg]:size-4 tw:[&>svg]:shrink-0',
         // Increases the hit area of the button on mobile.
-        'after:tw-absolute after:tw--inset-2 after:md:tw-hidden',
-        'group-data-[collapsible=icon]:tw-hidden',
+        'tw:after:absolute tw:after:-inset-2 tw:after:md:hidden',
+        'tw:group-data-[collapsible=icon]:hidden',
         className,
       )}
       {...props}
@@ -485,7 +485,7 @@ function SidebarGroupContent({
     <div
       ref={ref}
       data-sidebar="group-content"
-      className={cn('tw-w-full tw-text-sm', className)}
+      className={cn('tw:w-full tw:text-sm', className)}
       {...props}
     />
   );
@@ -501,7 +501,7 @@ function SidebarMenu({
     <ul
       ref={ref}
       data-sidebar="menu"
-      className={cn('tw-flex tw-w-full tw-min-w-0 tw-flex-col tw-gap-1', className)}
+      className={cn('tw:flex tw:w-full tw:min-w-0 tw:flex-col tw:gap-1', className)}
       {...props}
     />
   );
@@ -517,25 +517,25 @@ function SidebarMenuItem({
     <li
       ref={ref}
       data-sidebar="menu-item"
-      className={cn('tw-group/menu-item tw-relative', className)}
+      className={cn('tw:group/menu-item tw:relative', className)}
       {...props}
     />
   );
 }
 
 const sidebarMenuButtonVariants = cva(
-  'tw-peer/menu-button tw-flex tw-w-full tw-items-center tw-gap-2 tw-overflow-hidden tw-rounded-md tw-p-2 tw-text-left tw-text-sm tw-outline-none tw-ring-sidebar-ring tw-transition-[width,height,padding] hover:tw-bg-sidebar-accent hover:tw-text-sidebar-accent-foreground focus-visible:tw-ring-2 active:tw-bg-sidebar-accent active:tw-text-sidebar-accent-foreground disabled:tw-pointer-events-none disabled:tw-opacity-50 tw-group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:tw-pointer-events-none aria-disabled:tw-opacity-50 data-[active=true]:tw-font-medium data-[active=true]:tw-text-sidebar-accent-foreground data-[active=true]:tw-bg-sidebar-accent data-[state=open]:hover:tw-bg-sidebar-accent data-[state=open]:hover:tw-text-sidebar-accent-foreground group-data-[collapsible=icon]:tw-!size-8 group-data-[collapsible=icon]:tw-!p-2 [&>span:last-child]:tw-truncate [&>svg]:tw-size-4 [&>svg]:tw-shrink-0',
+  'tw:peer/menu-button tw:flex tw:w-full tw:items-center tw:gap-2 tw:overflow-hidden tw:rounded-md tw:p-2 tw:text-left tw:text-sm tw:outline-none tw:ring-sidebar-ring tw:transition-[width,height,padding] tw:hover:bg-sidebar-accent tw:hover:text-sidebar-accent-foreground tw:focus-visible:ring-2 tw:active:bg-sidebar-accent tw:active:text-sidebar-accent-foreground tw:disabled:pointer-events-none tw:disabled:opacity-50 tw:group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 tw:aria-disabled:pointer-events-none tw:aria-disabled:opacity-50 tw:data-[active=true]:font-medium tw:data-[active=true]:text-sidebar-accent-foreground tw:data-[active=true]:bg-sidebar-accent tw:data-[state=open]:hover:bg-sidebar-accent tw:data-[state=open]:hover:text-sidebar-accent-foreground tw:group-data-[collapsible=icon]:!size-8 tw:group-data-[collapsible=icon]:!p-2 tw:[&>span:last-child]:truncate tw:[&>svg]:size-4 tw:[&>svg]:shrink-0',
   {
     variants: {
       variant: {
-        default: 'hover:tw-bg-sidebar-accent hover:tw-text-sidebar-accent-foreground',
+        default: 'tw:hover:bg-sidebar-accent tw:hover:text-sidebar-accent-foreground',
         outline:
-          'tw-bg-background tw-shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:tw-bg-sidebar-accent hover:tw-text-sidebar-accent-foreground hover:tw-shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]',
+          'tw:bg-background tw:shadow-[0_0_0_1px_hsl(var(--sidebar-border))] tw:hover:bg-sidebar-accent tw:hover:text-sidebar-accent-foreground tw:hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]',
       },
       size: {
-        default: 'tw-h-8 tw-text-sm',
-        sm: 'tw-h-7 tw-text-xs',
-        lg: 'tw-h-12 tw-text-sm group-data-[collapsible=icon]:tw-!p-0',
+        default: 'tw:h-8 tw:text-sm',
+        sm: 'tw:h-7 tw:text-xs',
+        lg: 'tw:h-12 tw:text-sm tw:group-data-[collapsible=icon]:!p-0',
       },
     },
     defaultVariants: {
@@ -614,15 +614,15 @@ function SidebarMenuAction({
       ref={ref}
       data-sidebar="menu-action"
       className={cn(
-        'tw-peer-hover/menu-button:text-sidebar-accent-foreground tw-absolute tw-right-1 tw-top-1.5 tw-flex tw-aspect-square tw-w-5 tw-items-center tw-justify-center tw-rounded-md tw-p-0 tw-text-sidebar-foreground tw-outline-none tw-ring-sidebar-ring tw-transition-transform hover:tw-bg-sidebar-accent hover:tw-text-sidebar-accent-foreground focus-visible:tw-ring-2 [&>svg]:tw-size-4 [&>svg]:tw-shrink-0',
+        'tw:peer-hover/menu-button:text-sidebar-accent-foreground tw:absolute tw:right-1 tw:top-1.5 tw:flex tw:aspect-square tw:w-5 tw:items-center tw:justify-center tw:rounded-md tw:p-0 tw:text-sidebar-foreground tw:outline-none tw:ring-sidebar-ring tw:transition-transform tw:hover:bg-sidebar-accent tw:hover:text-sidebar-accent-foreground tw:focus-visible:ring-2 tw:[&>svg]:size-4 tw:[&>svg]:shrink-0',
         // Increases the hit area of the button on mobile.
-        'after:tw-absolute after:tw--inset-2 after:md:tw-hidden',
-        'tw-peer-data-[size=sm]/menu-button:top-1',
-        'tw-peer-data-[size=default]/menu-button:top-1.5',
-        'tw-peer-data-[size=lg]/menu-button:top-2.5',
-        'group-data-[collapsible=icon]:tw-hidden',
+        'tw:after:absolute tw:after:-inset-2 tw:after:md:hidden',
+        'tw:peer-data-[size=sm]/menu-button:top-1',
+        'tw:peer-data-[size=default]/menu-button:top-1.5',
+        'tw:peer-data-[size=lg]/menu-button:top-2.5',
+        'tw:group-data-[collapsible=icon]:hidden',
         showOnHover &&
-          'tw-group-focus-within/menu-item:opacity-100 tw-group-hover/menu-item:opacity-100 tw-peer-data-[active=true]/menu-button:text-sidebar-accent-foreground data-[state=open]:tw-opacity-100 md:tw-opacity-0',
+          'tw:group-focus-within/menu-item:opacity-100 tw:group-hover/menu-item:opacity-100 tw:peer-data-[active=true]/menu-button:text-sidebar-accent-foreground tw:data-[state=open]:opacity-100 tw:md:opacity-0',
         className,
       )}
       {...props}
@@ -641,12 +641,12 @@ function SidebarMenuBadge({
       ref={ref}
       data-sidebar="menu-badge"
       className={cn(
-        'tw-pointer-events-none tw-absolute tw-right-1 tw-flex tw-h-5 tw-min-w-5 tw-select-none tw-items-center tw-justify-center tw-rounded-md tw-px-1 tw-text-xs tw-font-medium tw-tabular-nums tw-text-sidebar-foreground',
-        'tw-peer-hover/menu-button:text-sidebar-accent-foreground tw-peer-data-[active=true]/menu-button:text-sidebar-accent-foreground',
-        'tw-peer-data-[size=sm]/menu-button:top-1',
-        'tw-peer-data-[size=default]/menu-button:top-1.5',
-        'tw-peer-data-[size=lg]/menu-button:top-2.5',
-        'group-data-[collapsible=icon]:tw-hidden',
+        'tw:pointer-events-none tw:absolute tw:right-1 tw:flex tw:h-5 tw:min-w-5 tw:select-none tw:items-center tw:justify-center tw:rounded-md tw:px-1 tw:text-xs tw:font-medium tw:tabular-nums tw:text-sidebar-foreground',
+        'tw:peer-hover/menu-button:text-sidebar-accent-foreground tw:peer-data-[active=true]/menu-button:text-sidebar-accent-foreground',
+        'tw:peer-data-[size=sm]/menu-button:top-1',
+        'tw:peer-data-[size=default]/menu-button:top-1.5',
+        'tw:peer-data-[size=lg]/menu-button:top-2.5',
+        'tw:group-data-[collapsible=icon]:hidden',
         className,
       )}
       {...props}
@@ -673,14 +673,14 @@ function SidebarMenuSkeleton({
     <div
       ref={ref}
       data-sidebar="menu-skeleton"
-      className={cn('tw-flex tw-h-8 tw-items-center tw-gap-2 tw-rounded-md tw-px-2', className)}
+      className={cn('tw:flex tw:h-8 tw:items-center tw:gap-2 tw:rounded-md tw:px-2', className)}
       {...props}
     >
       {showIcon && (
-        <Skeleton className="tw-size-4 tw-rounded-md" data-sidebar="menu-skeleton-icon" />
+        <Skeleton className="tw:size-4 tw:rounded-md" data-sidebar="menu-skeleton-icon" />
       )}
       <Skeleton
-        className="tw-h-4 tw-max-w-[--skeleton-width] tw-flex-1"
+        className="tw:h-4 tw:max-w-[--skeleton-width] tw:flex-1"
         data-sidebar="menu-skeleton-text"
         style={
           // CSS custom property '--skeleton-width' is not in React.CSSProperties; cast is required
@@ -705,8 +705,8 @@ function SidebarMenuSub({
       ref={ref}
       data-sidebar="menu-sub"
       className={cn(
-        'tw-mx-3.5 tw-flex tw-min-w-0 tw-translate-x-px tw-flex-col tw-gap-1 tw-border-l tw-border-sidebar-border tw-px-2.5 tw-py-0.5',
-        'group-data-[collapsible=icon]:tw-hidden',
+        'tw:mx-3.5 tw:flex tw:min-w-0 tw:translate-x-px tw:flex-col tw:gap-1 tw:border-l tw:border-sidebar-border tw:px-2.5 tw:py-0.5',
+        'tw:group-data-[collapsible=icon]:hidden',
         className,
       )}
       {...props}
@@ -745,11 +745,11 @@ function SidebarMenuSubButton({
       data-size={size}
       data-active={isActive}
       className={cn(
-        'tw-flex tw-h-7 tw-min-w-0 tw--translate-x-px tw-items-center tw-gap-2 tw-overflow-hidden tw-rounded-md tw-px-2 tw-text-sidebar-foreground tw-outline-none tw-ring-sidebar-ring hover:tw-bg-sidebar-accent hover:tw-text-sidebar-accent-foreground focus-visible:tw-ring-2 active:tw-bg-sidebar-accent active:tw-text-sidebar-accent-foreground disabled:tw-pointer-events-none disabled:tw-opacity-50 aria-disabled:tw-pointer-events-none aria-disabled:tw-opacity-50 [&>span:last-child]:tw-truncate [&>svg]:tw-size-4 [&>svg]:tw-shrink-0 [&>svg]:tw-text-sidebar-accent-foreground',
-        'data-[active=true]:tw-bg-sidebar-accent data-[active=true]:tw-text-sidebar-accent-foreground',
-        size === 'sm' && 'tw-text-xs',
-        size === 'md' && 'tw-text-sm',
-        'group-data-[collapsible=icon]:tw-hidden',
+        'tw:flex tw:h-7 tw:min-w-0 tw:-translate-x-px tw:items-center tw:gap-2 tw:overflow-hidden tw:rounded-md tw:px-2 tw:text-sidebar-foreground tw:outline-none tw:ring-sidebar-ring tw:hover:bg-sidebar-accent tw:hover:text-sidebar-accent-foreground tw:focus-visible:ring-2 tw:active:bg-sidebar-accent tw:active:text-sidebar-accent-foreground tw:disabled:pointer-events-none tw:disabled:opacity-50 tw:aria-disabled:pointer-events-none tw:aria-disabled:opacity-50 tw:[&>span:last-child]:truncate tw:[&>svg]:size-4 tw:[&>svg]:shrink-0 tw:[&>svg]:text-sidebar-accent-foreground',
+        'tw:data-[active=true]:bg-sidebar-accent tw:data-[active=true]:text-sidebar-accent-foreground',
+        size === 'sm' && 'tw:text-xs',
+        size === 'md' && 'tw:text-sm',
+        'tw:group-data-[collapsible=icon]:hidden',
         className,
       )}
       {...props}

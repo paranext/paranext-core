@@ -34,7 +34,7 @@ export function ChapterGrid({
 
   return (
     <CommandGroup>
-      <div className={cn('tw-grid tw-grid-cols-6 tw-gap-1', className)}>
+      <div className={cn('tw:grid tw:grid-cols-6 tw:gap-1', className)}>
         {Array.from({ length: fetchEndChapter(bookId) }, (_, i) => i + 1).map((chapter) => (
           <CommandItem
             key={chapter}
@@ -42,13 +42,13 @@ export function ChapterGrid({
             onSelect={() => onChapterSelect(chapter)}
             ref={setChapterRef(chapter)}
             className={cn(
-              'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
+              'tw:h-8 tw:w-8 tw:cursor-pointer tw:justify-center tw:rounded-md tw:text-center tw:text-sm',
               {
-                'tw-bg-primary tw-text-primary-foreground':
+                'tw:bg-primary tw:text-primary-foreground':
                   bookId === scrRef.book && chapter === scrRef.chapterNum,
               },
               {
-                'tw-bg-muted/50 tw-text-muted-foreground/50': isChapterDimmed?.(chapter) ?? false,
+                'tw:bg-muted/50 tw:text-muted-foreground/50': isChapterDimmed?.(chapter) ?? false,
               },
             )}
           >

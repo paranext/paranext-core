@@ -62,16 +62,16 @@ export function VersionHistory({ id, versionHistory }: VersionHistoryProps) {
 
   return (
     <div className="pr-twp" id={id}>
-      <h3 className="tw-text-md tw-font-semibold">What`s New</h3>
-      <ul className="tw-list-disc tw-pl-5 tw-pr-4 tw-text-xs tw-text-foreground">
+      <h3 className="tw:text-md tw:font-semibold">What`s New</h3>
+      <ul className="tw:list-disc tw:pl-5 tw:pr-4 tw:text-xs tw:text-foreground">
         {(showAllVersions ? sortedEntries : sortedEntries.slice(0, 5)).map((entry) => (
-          <div key={entry[0]} className="tw-mt-3 tw-flex tw-justify-between">
-            <div className="tw-text-foreground">
-              <li className="tw-prose tw-text-xs">
+          <div key={entry[0]} className="tw:mt-3 tw:flex tw:justify-between">
+            <div className="tw:text-foreground">
+              <li className="tw:prose tw:text-xs">
                 <span>{entry[1].description}</span>
               </li>
             </div>
-            <div className="tw-justify-end tw-text-right">
+            <div className="tw:justify-end tw:text-right">
               <div>Version {entry[0]}</div>
               <div>{formatTimeString(entry[1].date)}</div>
             </div>
@@ -82,7 +82,7 @@ export function VersionHistory({ id, versionHistory }: VersionHistoryProps) {
         <button
           type="button"
           onClick={() => setShowAllVersions(!showAllVersions)}
-          className="tw-text-xs tw-text-foreground tw-underline"
+          className="tw:text-xs tw:text-foreground tw:underline"
         >
           {showAllVersions ? 'Show Less Version History' : 'Show All Version History'}
         </button>

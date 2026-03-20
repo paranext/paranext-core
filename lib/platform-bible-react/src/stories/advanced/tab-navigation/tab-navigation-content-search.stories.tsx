@@ -90,18 +90,18 @@ const createSampleContent = (searchValue: string) => {
       key: 'general',
       value: 'General',
       content: (
-        <div className="tw-space-y-2">
-          <h3 className="tw-text-lg tw-font-semibold">General Settings</h3>
-          <div className="tw-space-y-1">
+        <div className="tw:space-y-2">
+          <h3 className="tw:text-lg tw:font-semibold">General Settings</h3>
+          <div className="tw:space-y-1">
             {filterItems(generalItems, searchValue).map((item, index) => (
               // Items have no stable unique id; index is the only available key
               // eslint-disable-next-line react/no-array-index-key
-              <div key={index} className="tw-hover:bg-gray-50 tw-rounded tw-border tw-p-2">
+              <div key={index} className="tw:hover:bg-gray-50 tw:rounded tw:border tw:p-2">
                 {item}
               </div>
             ))}
             {filterItems(generalItems, searchValue).length === 0 && searchValue && (
-              <div className="tw-italic tw-text-muted-foreground">
+              <div className="tw:italic tw:text-muted-foreground">
                 No general settings match your search.
               </div>
             )}
@@ -113,18 +113,18 @@ const createSampleContent = (searchValue: string) => {
       key: 'security',
       value: 'Security',
       content: (
-        <div className="tw-space-y-2">
-          <h3 className="tw-text-lg tw-font-semibold">Security Settings</h3>
-          <div className="tw-space-y-1">
+        <div className="tw:space-y-2">
+          <h3 className="tw:text-lg tw:font-semibold">Security Settings</h3>
+          <div className="tw:space-y-1">
             {filterItems(securityItems, searchValue).map((item, index) => (
               // Items have no stable unique id; index is the only available key
               // eslint-disable-next-line react/no-array-index-key
-              <div key={index} className="tw-hover:bg-gray-50 tw-rounded tw-border tw-p-2">
+              <div key={index} className="tw:hover:bg-gray-50 tw:rounded tw:border tw:p-2">
                 {item}
               </div>
             ))}
             {filterItems(securityItems, searchValue).length === 0 && searchValue && (
-              <div className="tw-italic tw-text-muted-foreground">
+              <div className="tw:italic tw:text-muted-foreground">
                 No security settings match your search.
               </div>
             )}
@@ -136,18 +136,18 @@ const createSampleContent = (searchValue: string) => {
       key: 'advanced',
       value: 'Advanced',
       content: (
-        <div className="tw-space-y-2">
-          <h3 className="tw-text-lg tw-font-semibold">Advanced Settings</h3>
-          <div className="tw-space-y-1">
+        <div className="tw:space-y-2">
+          <h3 className="tw:text-lg tw:font-semibold">Advanced Settings</h3>
+          <div className="tw:space-y-1">
             {filterItems(advancedItems, searchValue).map((item, index) => (
               // Items have no stable unique id; index is the only available key
               // eslint-disable-next-line react/no-array-index-key
-              <div key={index} className="tw-hover:bg-gray-50 tw-rounded tw-border tw-p-2">
+              <div key={index} className="tw:hover:bg-gray-50 tw:rounded tw:border tw:p-2">
                 {item}
               </div>
             ))}
             {filterItems(advancedItems, searchValue).length === 0 && searchValue && (
-              <div className="tw-italic tw-text-muted-foreground">
+              <div className="tw:italic tw:text-muted-foreground">
                 No advanced settings match your search.
               </div>
             )}
@@ -174,7 +174,7 @@ function SearchableTabDemo({
   };
 
   return (
-    <div className="tw-h-96 tw-max-w-2xl tw-overflow-hidden tw-rounded tw-border">
+    <div className="tw:h-96 tw:max-w-2xl tw:overflow-hidden tw:rounded tw:border">
       <TabNavigationContentSearch
         tabList={createSampleContent(searchValue)}
         searchValue={searchValue}
@@ -226,24 +226,24 @@ export const DocumentationExample: Story = {
         key: 'getting-started',
         value: 'Getting Started',
         content: (
-          <div className="tw-space-y-4">
-            <h3 className="tw-text-lg tw-font-semibold">Getting Started Guide</h3>
-            <div className="tw-space-y-2">
-              <div className="tw-rounded tw-bg-blue-50 tw-p-3">
-                <h4 className="tw-font-medium">Installation</h4>
-                <p className="tw-text-sm tw-text-muted-foreground">
+          <div className="tw:space-y-4">
+            <h3 className="tw:text-lg tw:font-semibold">Getting Started Guide</h3>
+            <div className="tw:space-y-2">
+              <div className="tw:rounded tw:bg-blue-50 tw:p-3">
+                <h4 className="tw:font-medium">Installation</h4>
+                <p className="tw:text-sm tw:text-muted-foreground">
                   Learn how to install and set up the application for the first time.
                 </p>
               </div>
-              <div className="tw-rounded tw-bg-green-50 tw-p-3">
-                <h4 className="tw-font-medium">Quick Start</h4>
-                <p className="tw-text-sm tw-text-muted-foreground">
+              <div className="tw:rounded tw:bg-green-50 tw:p-3">
+                <h4 className="tw:font-medium">Quick Start</h4>
+                <p className="tw:text-sm tw:text-muted-foreground">
                   A 5-minute guide to get you up and running with basic features.
                 </p>
               </div>
-              <div className="tw-rounded tw-bg-purple-50 tw-p-3">
-                <h4 className="tw-font-medium">Tutorial</h4>
-                <p className="tw-text-sm tw-text-muted-foreground">
+              <div className="tw:rounded tw:bg-purple-50 tw:p-3">
+                <h4 className="tw:font-medium">Tutorial</h4>
+                <p className="tw:text-sm tw:text-muted-foreground">
                   Step-by-step walkthrough of common tasks and workflows.
                 </p>
               </div>
@@ -255,37 +255,37 @@ export const DocumentationExample: Story = {
         key: 'api',
         value: 'API Reference',
         content: (
-          <div className="tw-space-y-4">
-            <h3 className="tw-text-lg tw-font-semibold">API Documentation</h3>
-            <div className="tw-space-y-2">
-              <div className="tw-rounded tw-border tw-p-3">
-                <div className="tw-flex tw-items-center tw-gap-2">
-                  <span className="tw-rounded tw-bg-green-100 tw-px-2 tw-py-1 tw-text-xs tw-text-green-800">
+          <div className="tw:space-y-4">
+            <h3 className="tw:text-lg tw:font-semibold">API Documentation</h3>
+            <div className="tw:space-y-2">
+              <div className="tw:rounded tw:border tw:p-3">
+                <div className="tw:flex tw:items-center tw:gap-2">
+                  <span className="tw:rounded tw:bg-green-100 tw:px-2 tw:py-1 tw:text-xs tw:text-green-800">
                     GET
                   </span>
                   <code>/api/users</code>
                 </div>
-                <p className="tw-mt-1 tw-text-sm tw-text-muted-foreground">
+                <p className="tw:mt-1 tw:text-sm tw:text-muted-foreground">
                   Retrieve user information
                 </p>
               </div>
-              <div className="tw-rounded tw-border tw-p-3">
-                <div className="tw-flex tw-items-center tw-gap-2">
-                  <span className="tw-rounded tw-bg-blue-100 tw-px-2 tw-py-1 tw-text-xs tw-text-blue-800">
+              <div className="tw:rounded tw:border tw:p-3">
+                <div className="tw:flex tw:items-center tw:gap-2">
+                  <span className="tw:rounded tw:bg-blue-100 tw:px-2 tw:py-1 tw:text-xs tw:text-blue-800">
                     POST
                   </span>
                   <code>/api/projects</code>
                 </div>
-                <p className="tw-mt-1 tw-text-sm tw-text-muted-foreground">Create a new project</p>
+                <p className="tw:mt-1 tw:text-sm tw:text-muted-foreground">Create a new project</p>
               </div>
-              <div className="tw-rounded tw-border tw-p-3">
-                <div className="tw-flex tw-items-center tw-gap-2">
-                  <span className="tw-rounded tw-bg-orange-100 tw-px-2 tw-py-1 tw-text-xs tw-text-orange-800">
+              <div className="tw:rounded tw:border tw:p-3">
+                <div className="tw:flex tw:items-center tw:gap-2">
+                  <span className="tw:rounded tw:bg-orange-100 tw:px-2 tw:py-1 tw:text-xs tw:text-orange-800">
                     PUT
                   </span>
                   <code>/api/settings</code>
                 </div>
-                <p className="tw-mt-1 tw-text-sm tw-text-muted-foreground">
+                <p className="tw:mt-1 tw:text-sm tw:text-muted-foreground">
                   Update application settings
                 </p>
               </div>
@@ -297,24 +297,24 @@ export const DocumentationExample: Story = {
         key: 'troubleshooting',
         value: 'Troubleshooting',
         content: (
-          <div className="tw-space-y-4">
-            <h3 className="tw-text-lg tw-font-semibold">Common Issues</h3>
-            <div className="tw-space-y-3">
-              <div className="tw-border-l-4 tw-border-yellow-400 tw-pl-4">
-                <h4 className="tw-font-medium">Application won&apos;t start</h4>
-                <p className="tw-text-sm tw-text-muted-foreground">
+          <div className="tw:space-y-4">
+            <h3 className="tw:text-lg tw:font-semibold">Common Issues</h3>
+            <div className="tw:space-y-3">
+              <div className="tw:border-l-4 tw:border-yellow-400 tw:pl-4">
+                <h4 className="tw:font-medium">Application won&apos;t start</h4>
+                <p className="tw:text-sm tw:text-muted-foreground">
                   Check system requirements and verify installation integrity.
                 </p>
               </div>
-              <div className="tw-border-l-4 tw-border-red-400 tw-pl-4">
-                <h4 className="tw-font-medium">Login issues</h4>
-                <p className="tw-text-sm tw-text-muted-foreground">
+              <div className="tw:border-l-4 tw:border-red-400 tw:pl-4">
+                <h4 className="tw:font-medium">Login issues</h4>
+                <p className="tw:text-sm tw:text-muted-foreground">
                   Verify credentials and check network connectivity.
                 </p>
               </div>
-              <div className="tw-border-l-4 tw-border-blue-400 tw-pl-4">
-                <h4 className="tw-font-medium">Performance problems</h4>
-                <p className="tw-text-sm tw-text-muted-foreground">
+              <div className="tw:border-l-4 tw:border-blue-400 tw:pl-4">
+                <h4 className="tw:font-medium">Performance problems</h4>
+                <p className="tw:text-sm tw:text-muted-foreground">
                   Clear cache and check available system resources.
                 </p>
               </div>
@@ -329,7 +329,7 @@ export const DocumentationExample: Story = {
     };
 
     return (
-      <div className="tw-h-96 tw-max-w-3xl tw-overflow-hidden tw-rounded tw-border">
+      <div className="tw:h-96 tw:max-w-3xl tw:overflow-hidden tw:rounded tw:border">
         <TabNavigationContentSearch
           tabList={documentationTabs}
           searchValue={searchValue}
@@ -358,8 +358,8 @@ export const EmptyState: Story = {
         key: 'empty1',
         value: 'Tab One',
         content: (
-          <div className="tw-py-8 tw-text-center">
-            <p className="tw-text-muted-foreground">No content matches your search.</p>
+          <div className="tw:py-8 tw:text-center">
+            <p className="tw:text-muted-foreground">No content matches your search.</p>
           </div>
         ),
       },
@@ -367,8 +367,8 @@ export const EmptyState: Story = {
         key: 'empty2',
         value: 'Tab Two',
         content: (
-          <div className="tw-py-8 tw-text-center">
-            <p className="tw-text-muted-foreground">No results found.</p>
+          <div className="tw:py-8 tw:text-center">
+            <p className="tw:text-muted-foreground">No results found.</p>
           </div>
         ),
       },
@@ -379,7 +379,7 @@ export const EmptyState: Story = {
     };
 
     return (
-      <div className="tw-h-64 tw-max-w-2xl tw-overflow-hidden tw-rounded tw-border">
+      <div className="tw:h-64 tw:max-w-2xl tw:overflow-hidden tw:rounded tw:border">
         <TabNavigationContentSearch
           tabList={emptyTabs}
           searchValue={searchValue}
@@ -428,10 +428,10 @@ export const InteractiveDemo: Story = {
     };
 
     return (
-      <div className="tw-space-y-4">
-        <div className="tw-rounded tw-bg-blue-50 tw-p-4">
-          <h3 className="tw-mb-2 tw-font-semibold">Search Statistics</h3>
-          <div className="tw-space-y-1 tw-text-sm">
+      <div className="tw:space-y-4">
+        <div className="tw:rounded tw:bg-blue-50 tw:p-4">
+          <h3 className="tw:mb-2 tw:font-semibold">Search Statistics</h3>
+          <div className="tw:space-y-1 tw:text-sm">
             <div>Current search: &quot;{searchValue || 'None'}&quot;</div>
             <div>
               Results: {searchStats.matches} of {searchStats.total} items
@@ -439,7 +439,7 @@ export const InteractiveDemo: Story = {
           </div>
         </div>
 
-        <div className="tw-h-96 tw-max-w-2xl tw-overflow-hidden tw-rounded tw-border">
+        <div className="tw:h-96 tw:max-w-2xl tw:overflow-hidden tw:rounded tw:border">
           <TabNavigationContentSearch
             tabList={createSampleContent(searchValue)}
             searchValue={searchValue}

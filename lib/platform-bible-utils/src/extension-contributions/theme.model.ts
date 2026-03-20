@@ -39,7 +39,7 @@ export interface ThemeDefinition {
   /**
    * Theme colors and other CSS variable properties that adjust the looks of the application. These
    * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
-   * `tw-bg-primary`
+   * `tw:bg-primary`
    *
    * See the wiki's [Matching Application
    * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
@@ -50,7 +50,7 @@ export interface ThemeDefinition {
 /**
  * Theme colors and other CSS variable properties that adjust the looks of the application. These
  * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
- * `tw-bg-primary`
+ * `tw:bg-primary`
  *
  * See the wiki's [Matching Application
  * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
@@ -91,7 +91,7 @@ export interface ThemeCssVariables {
 const themeDefs = {
   themeCssVariables: {
     description:
-      "Theme colors and other CSS variable properties that adjust the looks of the application. These are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like `tw-bg-primary`\n\nSee the wiki's [Matching Application Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme) section for more information.",
+      "Theme colors and other CSS variable properties that adjust the looks of the application. These are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like `tw:bg-primary`\n\nSee the wiki's [Matching Application Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme) section for more information.",
     type: 'object',
     properties: {
       background: { type: 'string' },

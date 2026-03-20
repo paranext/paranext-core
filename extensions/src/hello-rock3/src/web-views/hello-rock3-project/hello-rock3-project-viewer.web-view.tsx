@@ -41,7 +41,7 @@ globalThis.webViewComponent = function HelloRock3ProjectViewer({
   }, [callerWebViewController, headerSize, headerColor]);
 
   return (
-    <div className="tw-m-3 [&>*]:tw-mb-3">
+    <div className="tw:m-3 tw:[&>*]:mb-3">
       {callerWebViewController && (
         <div>Click a name to select it in the Hello Third Rock Project web view!</div>
       )}
@@ -50,7 +50,7 @@ globalThis.webViewComponent = function HelloRock3ProjectViewer({
         return callerWebViewController ? (
           <div key={name}>
             <Button
-              className="tw-text-foreground"
+              className="tw:text-foreground"
               style={headerStyle}
               onClick={() => callerWebViewController?.focusName(name)}
             >

@@ -48,9 +48,9 @@ export function MarkdownRenderer({
     <div
       id={id}
       className={cn(
-        'pr-twp tw-prose',
+        'pr-twp tw:prose',
         {
-          'tw-line-clamp-3 tw-max-h-10 tw-overflow-hidden tw-text-ellipsis tw-break-words':
+          'tw:line-clamp-3 tw:max-h-10 tw:overflow-hidden tw:text-ellipsis tw:break-words':
             truncate,
         },
         className,

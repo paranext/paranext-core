@@ -139,7 +139,7 @@ export function UiLanguageSelector({
   };
 
   return (
-    <div id={id} className={cn('pr-twp tw-max-w-sm', className)}>
+    <div id={id} className={cn('pr-twp tw:max-w-sm', className)}>
       {/* Language Selector */}
       <Select
         name="uiLanguage"
@@ -166,8 +166,8 @@ export function UiLanguageSelector({
 
       {/* Fallback Language Button */}
       {primaryLanguage !== 'en' && (
-        <div className="tw-pt-3">
-          <Label className="tw-font-normal tw-text-muted-foreground">
+        <div className="tw:pt-3">
+          <Label className="tw:font-normal tw:text-muted-foreground">
             {formatReplacementString(fallbackLanguagesText, {
               fallbackLanguages:
                 fallbackLanguages?.length > 0

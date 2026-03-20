@@ -418,10 +418,10 @@ export const FootnoteEditorView: FootnoteEditorViewStory = {
         />
         <Popover open={showFootnoteEditor}>
           <PopoverAnchor
-            className="tw-absolute"
+            className="tw:absolute"
             style={{ top: popoverY ?? 0, left: popoverX ?? 0, height: popoverHeight, width: 0 }}
           />
-          <PopoverContent className="tw-w-max tw-min-w-[500px] tw-p-[10px]">
+          <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
             <FootnoteEditor
               noteKey={noteKey.current}
               noteOps={noteOps.current}

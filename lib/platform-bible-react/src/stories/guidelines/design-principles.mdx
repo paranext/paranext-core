@@ -41,8 +41,8 @@ Always pair background utility classes with their `-foreground` counterparts. Ne
 
 | Class                          | CSS Variable             | Use case                          |
 | ------------------------------ | ------------------------ | --------------------------------- |
-| `tw-text-primary-foreground`   | `--primary-foreground`   | Text **on** primary backgrounds   |
-| `tw-text-secondary-foreground` | `--secondary-foreground` | Text **on** secondary backgrounds |
+| `tw:text-primary-foreground`   | `--primary-foreground`   | Text **on** primary backgrounds   |
+| `tw:text-secondary-foreground` | `--secondary-foreground` | Text **on** secondary backgrounds |
 
 **Examples:**
 
@@ -112,7 +112,7 @@ Tooltips are required for every icon button and any control without a visible la
 <ExampleBlockGroup>
   <ExampleBlock
     variant="dont"
-    previewClassName="tw-pb-8"
+    previewClassName="tw:pb-8"
     preview={
   <Button variant="outline" size="icon" aria-label="Save" >
     <Save />
@@ -125,7 +125,7 @@ Tooltips are required for every icon button and any control without a visible la
   <ExampleBlock
     title="Avoid redundant tooltips"
     variant="dont"
-    previewClassName="tw-pb-8"
+    previewClassName="tw:pb-8"
     preview={
   <TooltipProvider>
     <Tooltip open>
@@ -146,7 +146,7 @@ Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an 
 <ExampleBlockGroup>
   <ExampleBlock
     variant="dont"
-    previewClassName="tw-pb-16"
+    previewClassName="tw:pb-16"
     preview={
   <TooltipProvider>
     <Tooltip open>
@@ -155,7 +155,7 @@ Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an 
           <Save />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" className="tw-max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
+      <TooltipContent side="bottom" className="tw:max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
     </Tooltip>
   </TooltipProvider>
 }
@@ -165,7 +165,7 @@ Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an 
 
   <ExampleBlock
     variant="do"
-    previewClassName="tw-pb-16"
+    previewClassName="tw:pb-16"
     preview={
   <TooltipProvider>
     <Tooltip open>
@@ -190,7 +190,7 @@ Render keyboard shortcut hints using the HTML `<kbd>` element, not plain text in
 <ExampleBlockGroup>
   <ExampleBlock
     variant="do"
-    preview={<span>Undo <kbd className="tw-rounded tw-border tw-border-border tw-bg-muted tw-px-1 tw-py-0.5 tw-text-xs tw-font-mono">
+    preview={<span>Undo <kbd className="tw:rounded tw:border tw:border-border tw:bg-muted tw:px-1 tw:py-0.5 tw:text-xs tw:font-mono">
 ⌘Z
 </kbd></span>}
     code="Undo <kbd>⌘</kbd><kbd>Z</kbd>"
@@ -206,7 +206,7 @@ Render keyboard shortcut hints using the HTML `<kbd>` element, not plain text in
 Caveat: The shared `Kbd` component doesn't exist yet and won't until after we upgrade shadcn/ui, so style `<kbd>` inline:
 
 ```tsx
-<kbd className="tw-rounded tw-border tw-border-border tw-bg-muted tw-px-1 tw-py-0.5 tw-text-xs tw-font-mono">
+<kbd className="tw:rounded tw:border tw:border-border tw:bg-muted tw:px-1 tw:py-0.5 tw:text-xs tw:font-mono">
   ⌘Z
 </kbd>
 ```

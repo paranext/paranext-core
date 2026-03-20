@@ -116,9 +116,9 @@ export function BlockFormatDropDown({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" className="" aria-label="Formatting options for block type">
-          <BlockMarkerIcon blockMarker={blockMarker} className="tw-me-2" />
+          <BlockMarkerIcon blockMarker={blockMarker} className="tw:me-2" />
           {blockFormatLabel(blockMarker)}
-          <ChevronDown className="tw-ms-2" />
+          <ChevronDown className="tw:ms-2" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent>
@@ -128,7 +128,7 @@ export function BlockFormatDropDown({
             className={`item block-marker ${dropDownActiveClass(blockMarker === itemBlockMarker)}`}
             onClick={() => editorRef.current?.formatPara(itemBlockMarker)}
           >
-            <BlockMarkerIcon blockMarker={itemBlockMarker} className="tw-me-2" />
+            <BlockMarkerIcon blockMarker={itemBlockMarker} className="tw:me-2" />
             <span className={`text usfm_${itemBlockMarker}`}>
               {
                 commonBlockMarkerToBlockNames[

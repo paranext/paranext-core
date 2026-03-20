@@ -56,7 +56,7 @@ export function Editor({
     // CUSTOM: Added `className` prop
     <div
       className={cn(
-        'pr-twp tw-overflow-hidden tw-rounded-lg tw-border tw-bg-background tw-shadow',
+        'pr-twp tw:overflow-hidden tw:rounded-lg tw:border tw:bg-background tw:shadow',
         className,
       )}
     >

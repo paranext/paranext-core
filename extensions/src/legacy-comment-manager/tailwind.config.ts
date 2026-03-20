@@ -98,7 +98,7 @@ const config: Config = {
             },
           },
         },
-        // Can use `tw-prose tw-prose-quoteless` to remove quotes on `blockquote`s
+        // Can use `tw:prose tw:prose-quoteless` to remove quotes on `blockquote`s
         // Thanks to RobinMalfait https://github.com/tailwindlabs/tailwindcss-typography/issues/66#issuecomment-756834635
         quoteless: {
           css: {

@@ -13,7 +13,7 @@ const meta: Meta<typeof FootnoteItem> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className={cn('formatted-font', 'tw-p-4')}>
+        <div className={cn('formatted-font', 'tw:p-4')}>
           <Story />
         </div>
       </ThemeProvider>

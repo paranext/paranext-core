@@ -161,7 +161,7 @@ export function FindHeaderDemo() {
   }, [scope, selectedBookIds, verseRefSetting]);
 
   return (
-    <div className="tw-space-y-3">
+    <div className="tw:space-y-3">
       {/* Find/Replace mode toggle */}
       <ToggleGroup
         type="single"
@@ -169,26 +169,26 @@ export function FindHeaderDemo() {
         onValueChange={(value) => {
           if (value === 'find' || value === 'replace') setActiveMode(value);
         }}
-        className="tw-w-fit tw-rounded-lg tw-bg-muted tw-p-1"
+        className="tw:w-fit tw:rounded-lg tw:bg-muted tw:p-1"
       >
         <ToggleGroupItem
           value="find"
-          className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
+          className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
         >
           {localizedStrings['%webView_find_findTab%']}
         </ToggleGroupItem>
         <ToggleGroupItem
           value="replace"
-          className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
+          className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
         >
           {localizedStrings['%webView_find_replaceTab%']}
         </ToggleGroupItem>
       </ToggleGroup>
 
       {/* Find input row */}
-      <div className="tw-flex tw-gap-2 tw-flex-wrap">
-        <div className="tw-relative tw-flex-1">
-          <TextSearch className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
+      <div className="tw:flex tw:gap-2 tw:flex-wrap">
+        <div className="tw:relative tw:flex-1">
+          <TextSearch className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:text-muted-foreground" />
           <Input
             id="search-term"
             value={searchTerm}
@@ -202,15 +202,15 @@ export function FindHeaderDemo() {
               }
             }}
             placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-            className={`tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
+            className={`tw:w-full tw:min-w-16 tw:text-ellipsis tw:!pl-8 ${searchTerm ? 'tw:!pe-8' : 'tw:!pr-4'}`}
           />
           {searchTerm && (
             <button
               type="button"
               onClick={() => setSearchTerm('')}
-              className="tw-absolute tw-end-2 tw-top-1/2 -tw-translate-y-1/2 tw-text-muted-foreground hover:tw-text-foreground tw-bg-transparent tw-border-0 tw-p-0 tw-cursor-pointer"
+              className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground tw:hover:text-foreground tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer"
             >
-              <X className="tw-h-4 tw-w-4" />
+              <X className="tw:h-4 tw:w-4" />
             </button>
           )}
         </div>
@@ -219,7 +219,7 @@ export function FindHeaderDemo() {
           onSearchItemSelect={setSearchTerm}
           ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
           groupHeading={localizedStrings['%webView_find_recent%']}
-          buttonClassName="tw-h-10 tw-w-10"
+          buttonClassName="tw:h-10 tw:w-10"
           buttonVariant="outline"
         />
 
@@ -265,7 +265,7 @@ export function FindHeaderDemo() {
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p className="tw-font-light">{localizedStrings['%webView_find_findInProject%']}</p>
+              <p className="tw:font-light">{localizedStrings['%webView_find_findInProject%']}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -274,8 +274,8 @@ export function FindHeaderDemo() {
       {/* Replace input row — shown in Replace mode */}
       {activeMode === 'replace' && (
         <>
-          <div className="tw-relative tw-flex-1">
-            <ArrowRight className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
+          <div className="tw:relative tw:flex-1">
+            <ArrowRight className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:text-muted-foreground" />
             <Input
               id="replace-term"
               value={replaceTerm}
@@ -283,39 +283,39 @@ export function FindHeaderDemo() {
                 setReplaceTerm(e.target.value)
               }
               placeholder={replaceLocalizedStrings['%webView_find_replaceTerm_placeholder%']}
-              className="tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4"
+              className="tw:w-full tw:min-w-16 tw:!pl-8 tw:!pr-4"
             />
           </div>
-          <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-flex-wrap">
-            <div className="tw-flex tw-items-center tw-gap-2">
+          <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:flex-wrap">
+            <div className="tw:flex tw:items-center tw:gap-2">
               <Checkbox
                 id="preserve-case"
                 checked={preserveCase}
                 onCheckedChange={(checked: boolean) => setPreserveCase(checked === true)}
               />
-              <Label htmlFor="preserve-case" className="tw-cursor-pointer">
+              <Label htmlFor="preserve-case" className="tw:cursor-pointer">
                 {replaceLocalizedStrings['%webView_find_preserveCase%']}
               </Label>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Info className="tw-h-3.5 tw-w-3.5 tw-text-muted-foreground tw-cursor-default" />
+                    <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground tw:cursor-default" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="tw-max-w-xs tw-whitespace-pre-line">
+                    <p className="tw:max-w-xs tw:whitespace-pre-line">
                       {replaceLocalizedStrings['%webView_find_preserveCase_tooltip%']}
                     </p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <div className="tw-flex tw-gap-2">
+            <div className="tw:flex tw:gap-2">
               <Button variant="outline" onClick={() => {}}>
-                <ReplaceAll className="tw-h-4 tw-w-4" />
+                <ReplaceAll className="tw:h-4 tw:w-4" />
                 {replaceLocalizedStrings['%webView_find_replaceAll%']}
               </Button>
               <Button onClick={() => {}}>
-                <Replace className="tw-h-4 tw-w-4" />
+                <Replace className="tw:h-4 tw:w-4" />
                 {replaceLocalizedStrings['%webView_find_replace%']}
               </Button>
             </div>
@@ -324,22 +324,22 @@ export function FindHeaderDemo() {
       )}
 
       {/* Scope selector row */}
-      <div className="tw-flex tw-items-center tw-justify-between">
+      <div className="tw:flex tw:items-center tw:justify-between">
         <Popover>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
               size="sm"
-              className="tw-h-auto tw-gap-1 tw-px-2 tw-py-1 tw-font-normal"
+              className="tw:h-auto tw:gap-1 tw:px-2 tw:py-1 tw:font-normal"
             >
-              <span className="tw-text-sm tw-text-muted-foreground">
+              <span className="tw:text-sm tw:text-muted-foreground">
                 {localizedStrings['%webView_find_showing%']}
               </span>
-              <span className="tw-text-sm tw-font-medium">{scopeDisplayText}</span>
-              <ChevronDown className="tw-h-3 tw-w-3 tw-text-muted-foreground" />
+              <span className="tw:text-sm tw:font-medium">{scopeDisplayText}</span>
+              <ChevronDown className="tw:h-3 tw:w-3 tw:text-muted-foreground" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="tw-w-auto tw-p-3">
+          <PopoverContent align="start" className="tw:w-auto tw:p-3">
             <ScopeSelector
               scope={scope}
               availableScopes={['chapter', 'book', 'selectedBooks']}
@@ -352,8 +352,8 @@ export function FindHeaderDemo() {
           </PopoverContent>
         </Popover>
         {demoTotalResults > 0 && (
-          <div className="tw-flex tw-items-center tw-gap-1">
-            <span className="tw-text-sm tw-text-muted-foreground tw-tabular-nums">
+          <div className="tw:flex tw:items-center tw:gap-1">
+            <span className="tw:text-sm tw:text-muted-foreground tw:tabular-nums">
               {formatReplacementString('{current} of {total}', {
                 current: focusedResultIndex !== undefined ? String(focusedResultIndex + 1) : '–',
                 total: String(demoTotalResults),
@@ -362,19 +362,19 @@ export function FindHeaderDemo() {
             <Button
               variant="ghost"
               size="icon"
-              className="tw-h-7 tw-w-7"
+              className="tw:h-7 tw:w-7"
               disabled={focusedResultIndex === undefined || focusedResultIndex === 0}
               onClick={() =>
                 setFocusedResultIndex((prev) => (prev !== undefined && prev > 0 ? prev - 1 : prev))
               }
               aria-label={localizedStrings['%webView_find_previousResult%']}
             >
-              <ChevronUp className="tw-h-4 tw-w-4" />
+              <ChevronUp className="tw:h-4 tw:w-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="tw-h-7 tw-w-7"
+              className="tw:h-7 tw:w-7"
               disabled={focusedResultIndex === demoTotalResults - 1}
               onClick={() =>
                 setFocusedResultIndex((prev) =>
@@ -383,7 +383,7 @@ export function FindHeaderDemo() {
               }
               aria-label={localizedStrings['%webView_find_nextResult%']}
             >
-              <ChevronDown className="tw-h-4 tw-w-4" />
+              <ChevronDown className="tw:h-4 tw:w-4" />
             </Button>
           </div>
         )}

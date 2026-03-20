@@ -112,7 +112,7 @@ export default function CommentList({
       aria-activedescendant={activeId ?? undefined}
       aria-label="Comments"
       className={cn(
-        'tw-flex tw-w-full tw-flex-col tw-space-y-3 tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+        'tw:flex tw:w-full tw:flex-col tw:space-y-3 tw:outline-none tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
 
         className,
       )}
@@ -123,7 +123,7 @@ export default function CommentList({
           key={thread.id}
           id={thread.id}
           className={cn({
-            'tw-opacity-60': thread.status === 'Resolved',
+            'tw:opacity-60': thread.status === 'Resolved',
           })}
         >
           <CommentThread

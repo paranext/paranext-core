@@ -73,12 +73,12 @@ export function TextField({
   onBlur,
 }: TextFieldProps) {
   return (
-    <div className={cn('tw-inline-grid tw-items-center tw-gap-1.5', { 'tw-w-full': isFullWidth })}>
+    <div className={cn('tw:inline-grid tw:items-center tw:gap-1.5', { 'tw:w-full': isFullWidth })}>
       <ShadLabel
         htmlFor={id}
         className={cn({
-          'tw-text-red-600': hasError,
-          'tw-hidden': !label,
+          'tw:text-red-600': hasError,
+          'tw:hidden': !label,
         })}
       >{`${label}${isRequired ? '*' : ''}`}</ShadLabel>
       <ShadInput
@@ -86,14 +86,14 @@ export function TextField({
         disabled={isDisabled}
         placeholder={placeholder}
         required={isRequired}
-        className={cn(className, { 'tw-border-red-600': hasError })}
+        className={cn(className, { 'tw:border-red-600': hasError })}
         defaultValue={defaultValue}
         value={value}
         onChange={onChange}
         onFocus={onFocus}
         onBlur={onBlur}
       />
-      <p className={cn({ 'tw-hidden': !helperText })}>{helperText}</p>
+      <p className={cn({ 'tw:hidden': !helperText })}>{helperText}</p>
     </div>
   );
 }

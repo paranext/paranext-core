@@ -55,7 +55,7 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 
 .dock-dropdown-menu {
   border: 1px solid hsl(var(--border));
-  border-radius: calc(var(--radius) - 2px); // tw-rounded-md
+  border-radius: calc(var(--radius) - 2px); // tw:rounded-md
 }
 
 .dock-dropdown-menu-item:hover {

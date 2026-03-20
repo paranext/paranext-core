@@ -90,12 +90,12 @@ export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
     return (
       <div
         className={cn(
-          'tw-mx-1 tw-my-1 tw-border-b-0 tw-border-e-0 tw-border-s-2 tw-border-t-0 tw-border-solid',
+          'tw:mx-1 tw:my-1 tw:border-b-0 tw:border-e-0 tw:border-s-2 tw:border-t-0 tw:border-solid',
           {
-            'tw-border-s-red-200': section === Section.OT,
-            'tw-border-s-purple-200': section === Section.NT,
-            'tw-border-s-indigo-200': section === Section.DC,
-            'tw-border-s-amber-200': section === Section.Extra,
+            'tw:border-s-red-200': section === Section.OT,
+            'tw:border-s-purple-200': section === Section.NT,
+            'tw:border-s-indigo-200': section === Section.DC,
+            'tw:border-s-amber-200': section === Section.Extra,
           },
         )}
       >
@@ -112,13 +112,13 @@ export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
           {showCheck && (
             <Check
               className={cn(
-                'tw-me-2 tw-h-4 tw-w-4 tw-flex-shrink-0',
-                isSelected ? 'tw-opacity-100' : 'tw-opacity-0',
+                'tw:me-2 tw:h-4 tw:w-4 tw:flex-shrink-0',
+                isSelected ? 'tw:opacity-100' : 'tw:opacity-0',
               )}
             />
           )}
-          <span className="tw-min-w-0 tw-flex-1">{bookDisplayName}</span>
-          <span className="tw-ms-2 tw-flex-shrink-0 tw-text-xs tw-text-muted-foreground">
+          <span className="tw:min-w-0 tw:flex-1">{bookDisplayName}</span>
+          <span className="tw:ms-2 tw:flex-shrink-0 tw:text-xs tw:text-muted-foreground">
             {bookDisplayId}
           </span>
         </CommandItem>

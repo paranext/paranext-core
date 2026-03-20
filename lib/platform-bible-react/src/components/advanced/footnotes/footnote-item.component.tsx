@@ -80,11 +80,11 @@ function renderContent(
       return (
         <span
           key={key}
-          className="tw-inline-flex tw-items-center tw-gap-1 tw-underline tw-decoration-destructive"
+          className="tw:inline-flex tw:items-center tw:gap-1 tw:underline tw:decoration-destructive"
         >
-          <AlertCircle className="tw-h-4 tw-w-4 tw-fill-destructive" />
+          <AlertCircle className="tw:h-4 tw:w-4 tw:fill-destructive" />
           <span>{footnotePart}</span>
-          <AlertCircle className="tw-h-4 tw-w-4 tw-fill-destructive" />
+          <AlertCircle className="tw:h-4 tw:w-4 tw:fill-destructive" />
         </span>
       );
     }
@@ -112,7 +112,7 @@ function renderMarkerObject(
         showMarkers && <span className="marker">{`\\${marker} `}</span>
       ) : (
         <AlertCircle
-          className="tw-text-error tw-mr-1 tw-inline-block tw-h-4 tw-w-4"
+          className="tw:text-error tw:mr-1 tw:inline-block tw:h-4 tw:w-4"
           aria-label="Missing marker"
         />
       )}
@@ -158,7 +158,7 @@ export function FootnoteItem({
   const footnoteCaller = caller && (
     // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
     // specific class name in case styling is needed.
-    <span className={cn('note-caller tw-inline-block', { formatted: isCallerFormatted })}>
+    <span className={cn('note-caller tw:inline-block', { formatted: isCallerFormatted })}>
       {caller}{' '}
     </span>
   );
@@ -169,21 +169,21 @@ export function FootnoteItem({
   const layoutClass = layout === 'horizontal' ? 'horizontal' : 'vertical';
   const markerClass = showMarkers ? 'marker-visible' : '';
   const footnoteBodyClass =
-    layout === 'horizontal' ? 'tw-col-span-1' : 'tw-col-span-2 tw-col-start-1 tw-row-start-2';
+    layout === 'horizontal' ? 'tw:col-span-1' : 'tw:col-span-2 tw:col-start-1 tw:row-start-2';
   const baseClasses = cn(layoutClass, markerClass);
 
   return (
     <>
-      <div className={cn('textual-note-header tw-col-span-1 tw-w-fit tw-text-nowrap', baseClasses)}>
+      <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
         {footnoteOpening}
         {footnoteCaller}
       </div>
-      <div className={cn('textual-note-header tw-col-span-1 tw-w-fit tw-text-nowrap', baseClasses)}>
+      <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
         {footnoteTargetRef}
       </div>
       <div
         className={cn(
-          'textual-note-body tw-flex tw-flex-col tw-gap-1',
+          'textual-note-body tw:flex tw:flex-col tw:gap-1',
           footnoteBodyClass,
           baseClasses,
         )}

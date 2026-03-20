@@ -145,7 +145,7 @@ export function CommentItem({
             onEditingChange?.(true);
           }}
         >
-          <Pencil className="tw-me-2 tw-h-4 tw-w-4" />
+          <Pencil className="tw:me-2 tw:h-4 tw:w-4" />
           {localizedStrings['%comment_editComment%']}
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -156,7 +156,7 @@ export function CommentItem({
             }
           }}
         >
-          <Trash2 className="tw-me-2 tw-h-4 tw-w-4" />
+          <Trash2 className="tw:me-2 tw:h-4 tw:w-4" />
           {localizedStrings['%comment_deleteComment%']}
         </DropdownMenuItem>
       </>
@@ -173,20 +173,20 @@ export function CommentItem({
 
   return (
     <div
-      className={cn('tw-flex tw-w-full tw-flex-row tw-items-baseline tw-gap-3 tw-space-y-3', {
-        'tw-text-sm': isReply,
+      className={cn('tw:flex tw:w-full tw:flex-row tw:items-baseline tw:gap-3 tw:space-y-3', {
+        'tw:text-sm': isReply,
       })}
     >
-      <Avatar className="tw-h-8 tw-w-8">
-        <AvatarFallback className="tw-text-xs tw-font-medium">{initials}</AvatarFallback>
+      <Avatar className="tw:h-8 tw:w-8">
+        <AvatarFallback className="tw:text-xs tw:font-medium">{initials}</AvatarFallback>
       </Avatar>
-      <div className="tw-flex tw-flex-1 tw-flex-col tw-gap-2">
-        <div className="tw-flex tw-w-full tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-x-2">
-          <p className="tw-text-sm tw-font-medium">{userLabel}</p>
-          <p className="tw-text-xs tw-font-normal tw-text-muted-foreground">{displayDate}</p>
-          <div className="tw-flex-1" />
+      <div className="tw:flex tw:flex-1 tw:flex-col tw:gap-2">
+        <div className="tw:flex tw:w-full tw:flex-row tw:flex-wrap tw:items-baseline tw:gap-x-2">
+          <p className="tw:text-sm tw:font-medium">{userLabel}</p>
+          <p className="tw:text-xs tw:font-normal tw:text-muted-foreground">{displayDate}</p>
+          <div className="tw:flex-1" />
           {isReply && comment.assignedUser !== undefined && (
-            <Badge variant="secondary" className="tw-text-xs tw-font-normal">
+            <Badge variant="secondary" className="tw:text-xs tw:font-normal">
               → {getAssignedUserDisplayName(comment.assignedUser, localizedStrings)}
             </Badge>
           )}
@@ -195,7 +195,7 @@ export function CommentItem({
           <div
             role="textbox"
             tabIndex={-1}
-            className="tw-flex tw-flex-col tw-gap-2"
+            className="tw:flex tw:flex-col tw:gap-2"
             ref={editContainerRef}
             onKeyDownCapture={(e) => {
               if (e.key === 'Escape') {
@@ -229,24 +229,24 @@ export function CommentItem({
                 // But we don't want it to look like there's a blockquote there. Target the
                 // lowest-level Lexical editor element by attribute so Tailwind can apply styles to
                 // the blockquote directly inside the editor.
-                '[&_[data-lexical-editor="true"]>blockquote]:tw-mt-0 [&_[data-lexical-editor="true"]>blockquote]:tw-border-s-0 [&_[data-lexical-editor="true"]>blockquote]:tw-ps-0 [&_[data-lexical-editor="true"]>blockquote]:tw-font-normal [&_[data-lexical-editor="true"]>blockquote]:tw-not-italic [&_[data-lexical-editor="true"]>blockquote]:tw-text-foreground',
+                'tw:[&_[data-lexical-editor="true"]>blockquote]:mt-0 tw:[&_[data-lexical-editor="true"]>blockquote]:border-s-0 tw:[&_[data-lexical-editor="true"]>blockquote]:ps-0 tw:[&_[data-lexical-editor="true"]>blockquote]:font-normal tw:[&_[data-lexical-editor="true"]>blockquote]:not-italic tw:[&_[data-lexical-editor="true"]>blockquote]:text-foreground',
               )}
               editorSerializedState={editorState}
               onSerializedChange={(value) => setEditorState(value)}
             />
-            <div className="tw-flex tw-flex-row tw-items-start tw-justify-end tw-gap-2">
+            <div className="tw:flex tw:flex-row tw:items-start tw:justify-end tw:gap-2">
               <Button
                 size="icon"
                 onClick={handleCancelEdit}
                 variant="outline"
-                className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
+                className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
               >
                 <X />
               </Button>
               <Button
                 size="icon"
                 onClick={handleSaveEdit}
-                className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
+                className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
                 disabled={!hasEditorContent(editorState)}
               >
                 <ArrowUp />
@@ -257,29 +257,29 @@ export function CommentItem({
         {!isEditing && (
           <>
             {comment.status === 'Resolved' && (
-              <div className="tw-text-sm tw-italic">
+              <div className="tw:text-sm tw:italic">
                 {localizedStrings['%comment_status_resolved%']}
               </div>
             )}
             {comment.status === 'Todo' && isReply && (
-              <div className="tw-text-sm tw-italic">
+              <div className="tw:text-sm tw:italic">
                 {localizedStrings['%comment_status_todo%']}
               </div>
             )}
             <div
               className={cn(
-                'tw-prose tw-items-start tw-gap-2 tw-break-words tw-text-sm tw-font-normal tw-text-foreground',
-                // tw-prose has a max width defined on it, that we choose to override
-                'tw-max-w-none',
+                'tw:prose tw:items-start tw:gap-2 tw:break-words tw:text-sm tw:font-normal tw:text-foreground',
+                // tw:prose has a max width defined on it, that we choose to override
+                'tw:max-w-none',
                 // Don't render blockquote on the first child. All comments are wrapped in blockquote
                 // that has text-align corresponding to LTR or RTL, so the blockquote is important.
                 // But we don't want it to look like there's a blockquote there. Apply styles to the
                 // blockquote directly inside this div.
-                '[&>blockquote]:tw-border-s-0 [&>blockquote]:tw-p-0 [&>blockquote]:tw-ps-0 [&>blockquote]:tw-font-normal [&>blockquote]:tw-not-italic [&>blockquote]:tw-text-foreground',
+                'tw:[&>blockquote]:border-s-0 tw:[&>blockquote]:p-0 tw:[&>blockquote]:ps-0 tw:[&>blockquote]:font-normal tw:[&>blockquote]:not-italic tw:[&>blockquote]:text-foreground',
                 // Don't render quotes on blockquotes
-                'tw-prose-quoteless',
+                'tw:prose-quoteless',
                 {
-                  'tw-line-clamp-3': !isThreadExpanded,
+                  'tw:line-clamp-3': !isThreadExpanded,
                 },
               )}
               // The comment content is stored in HTML so it needs to be set directly. To make sure
