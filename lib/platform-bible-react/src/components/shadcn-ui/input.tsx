@@ -15,21 +15,21 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
  * @param InputProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
  */
-export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
-    return (
-      <input
-        type={type}
-        className={cn(
-          'pr-twp tw-flex tw-h-10 tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-sm tw-ring-offset-background file:tw-border-0 file:tw-bg-transparent file:tw-text-sm file:tw-font-medium file:tw-text-foreground placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
-          className,
-        )}
-        ref={ref}
-        // Shadcn UI pattern: spreading props onto the element is necessary to forward all HTML attributes
-        // eslint-disable-next-line react/jsx-props-no-spreading
-        {...props}
-      />
-    );
-  },
-);
-Input.displayName = 'Input';
+export function Input({
+  className,
+  type,
+  ref,
+  ...props
+}: InputProps & { ref?: React.Ref<HTMLInputElement> }) {
+  return (
+    <input
+      type={type}
+      className={cn(
+        'pr-twp tw-flex tw-h-10 tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-sm tw-ring-offset-background file:tw-border-0 file:tw-bg-transparent file:tw-text-sm file:tw-font-medium file:tw-text-foreground placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
+        className,
+      )}
+      ref={ref}
+      {...props}
+    />
+  );
+}

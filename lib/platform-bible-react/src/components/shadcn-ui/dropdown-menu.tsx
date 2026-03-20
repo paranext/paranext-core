@@ -123,10 +123,15 @@ export function DropdownMenu({ variant = 'default', ...props }: DropdownMenuProp
 /* #endregion CUSTOM */
 
 /** @inheritdoc DropdownMenuProps */
-export const DropdownMenuSubTrigger = React.forwardRef<
-  React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,
-  DropdownMenuSubTriggerProps
->(({ className, inset, children, ...props }, ref) => {
+export function DropdownMenuSubTrigger({
+  className,
+  inset,
+  children,
+  ref,
+  ...props
+}: DropdownMenuSubTriggerProps & {
+  ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.SubTrigger>>;
+}) {
   const context = useMenuContext(); // CUSTOM use context to add variants
   return (
     <DropdownMenuPrimitive.SubTrigger
@@ -143,14 +148,17 @@ export const DropdownMenuSubTrigger = React.forwardRef<
       <ChevronRight className="tw-ml-auto tw-h-4 tw-w-4" />
     </DropdownMenuPrimitive.SubTrigger>
   );
-});
-DropdownMenuSubTrigger.displayName = DropdownMenuPrimitive.SubTrigger.displayName;
+}
 
 /** @inheritdoc DropdownMenuProps */
-export const DropdownMenuSubContent = React.forwardRef<
-  React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
-  DropdownMenuSubContentProps
->(({ className, children, ...props }, ref) => {
+export function DropdownMenuSubContent({
+  className,
+  children,
+  ref,
+  ...props
+}: DropdownMenuSubContentProps & {
+  ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.SubContent>>;
+}) {
   const dir: Direction = readDirection();
   return (
     <DropdownMenuPrimitive.SubContent
@@ -165,17 +173,21 @@ export const DropdownMenuSubContent = React.forwardRef<
       <div dir={dir}>{children}</div>
     </DropdownMenuPrimitive.SubContent>
   );
-});
-DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayName;
+}
 
 /* TODO: bug in shadcn component: DropdownMenuContent does not support a dir prop.
 For the content we can work around this by adding a div with dir, but that would not cause
 the scrollbar to appear left in an rtl layout (e.g. see book-chapter-control.component) */
 /** @inheritdoc DropdownMenuProps */
-export const DropdownMenuContent = React.forwardRef<
-  React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-  DropdownMenuContentProps
->(({ className, sideOffset = 4, children, ...props }, ref) => {
+export function DropdownMenuContent({
+  className,
+  sideOffset = 4,
+  children,
+  ref,
+  ...props
+}: DropdownMenuContentProps & {
+  ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.Content>>;
+}) {
   const dir: Direction = readDirection();
   return (
     <DropdownMenuPrimitive.Portal>
@@ -193,14 +205,17 @@ export const DropdownMenuContent = React.forwardRef<
       </DropdownMenuPrimitive.Content>
     </DropdownMenuPrimitive.Portal>
   );
-});
-DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
+}
 
 /** @inheritdoc DropdownMenuProps */
-export const DropdownMenuItem = React.forwardRef<
-  React.ElementRef<typeof DropdownMenuPrimitive.Item>,
-  DropdownMenuItemProps
->(({ className, inset, ...props }, ref) => {
+export function DropdownMenuItem({
+  className,
+  inset,
+  ref,
+  ...props
+}: DropdownMenuItemProps & {
+  ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.Item>>;
+}) {
   const dir: Direction = readDirection();
   const context = useMenuContext(); // CUSTOM use context to add variants
   return (
@@ -217,14 +232,18 @@ export const DropdownMenuItem = React.forwardRef<
       dir={dir}
     />
   );
-});
-DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
+}
 
 /** @inheritdoc DropdownMenuProps */
-export const DropdownMenuCheckboxItem = React.forwardRef<
-  React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
-  DropdownMenuCheckboxItemProps
->(({ className, children, checked, ...props }, ref) => {
+export function DropdownMenuCheckboxItem({
+  className,
+  children,
+  checked,
+  ref,
+  ...props
+}: DropdownMenuCheckboxItemProps & {
+  ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.CheckboxItem>>;
+}) {
   const dir: Direction = readDirection(); // CUSTOM RTL support
   const context = useMenuContext(); // CUSTOM use context to add variants
   return (
@@ -247,14 +266,17 @@ export const DropdownMenuCheckboxItem = React.forwardRef<
       {children}
     </DropdownMenuPrimitive.CheckboxItem>
   );
-});
-DropdownMenuCheckboxItem.displayName = DropdownMenuPrimitive.CheckboxItem.displayName;
+}
 
 /** @inheritdoc DropdownMenuProps */
-export const DropdownMenuRadioItem = React.forwardRef<
-  React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
-  DropdownMenuRadioItemProps
->(({ className, children, ...props }, ref) => {
+export function DropdownMenuRadioItem({
+  className,
+  children,
+  ref,
+  ...props
+}: DropdownMenuRadioItemProps & {
+  ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.RadioItem>>;
+}) {
   const dir: Direction = readDirection(); // CUSTOM RTL support
   const context = useMenuContext(); // CUSTOM use context to add variants
   return (
@@ -276,34 +298,42 @@ export const DropdownMenuRadioItem = React.forwardRef<
       {children}
     </DropdownMenuPrimitive.RadioItem>
   );
-});
-DropdownMenuRadioItem.displayName = DropdownMenuPrimitive.RadioItem.displayName;
+}
 
 /** @inheritdoc DropdownMenuProps */
-export const DropdownMenuLabel = React.forwardRef<
-  React.ElementRef<typeof DropdownMenuPrimitive.Label>,
-  DropdownMenuLabelProps
->(({ className, inset, ...props }, ref) => (
-  <DropdownMenuPrimitive.Label
-    ref={ref}
-    className={cn('tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold', inset && 'tw-pl-8', className)}
-    {...props}
-  />
-));
-DropdownMenuLabel.displayName = DropdownMenuPrimitive.Label.displayName;
+export function DropdownMenuLabel({
+  className,
+  inset,
+  ref,
+  ...props
+}: DropdownMenuLabelProps & {
+  ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.Label>>;
+}) {
+  return (
+    <DropdownMenuPrimitive.Label
+      ref={ref}
+      className={cn('tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold', inset && 'tw-pl-8', className)}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc DropdownMenuProps */
-export const DropdownMenuSeparator = React.forwardRef<
-  React.ElementRef<typeof DropdownMenuPrimitive.Separator>,
-  DropdownMenuSeparatorProps
->(({ className, ...props }, ref) => (
-  <DropdownMenuPrimitive.Separator
-    ref={ref}
-    className={cn('tw--mx-1 tw-my-1 tw-h-px tw-bg-muted', className)}
-    {...props}
-  />
-));
-DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
+export function DropdownMenuSeparator({
+  className,
+  ref,
+  ...props
+}: DropdownMenuSeparatorProps & {
+  ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.Separator>>;
+}) {
+  return (
+    <DropdownMenuPrimitive.Separator
+      ref={ref}
+      className={cn('tw--mx-1 tw-my-1 tw-h-px tw-bg-muted', className)}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc DropdownMenuProps */
 export function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortcutProps) {
@@ -316,4 +346,3 @@ export function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortc
     />
   );
 }
-DropdownMenuShortcut.displayName = 'DropdownMenuShortcut';

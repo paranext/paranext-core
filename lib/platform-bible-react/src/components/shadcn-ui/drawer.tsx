@@ -32,7 +32,6 @@ function Drawer({
     </DrawerContext.Provider>
   );
 }
-Drawer.displayName = 'Drawer';
 
 /** @inheritdoc Drawer */
 const DrawerTrigger = DrawerPrimitive.Trigger;
@@ -44,17 +43,21 @@ const DrawerPortal = DrawerPrimitive.Portal;
 const DrawerClose = DrawerPrimitive.Close;
 
 /** @inheritdoc Drawer */
-const DrawerOverlay = React.forwardRef<
-  React.ElementRef<typeof DrawerPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay>
->(({ className, ...props }, ref) => (
-  <DrawerPrimitive.Overlay
-    ref={ref}
-    className={cn('tw-fixed tw-inset-0 tw-z-50 tw-bg-black/80', className)}
-    {...props}
-  />
-));
-DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName;
+function DrawerOverlay({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay> & {
+  ref?: React.Ref<React.ComponentRef<typeof DrawerPrimitive.Overlay>>;
+}) {
+  return (
+    <DrawerPrimitive.Overlay
+      ref={ref}
+      className={cn('tw-fixed tw-inset-0 tw-z-50 tw-bg-black/80', className)}
+      {...props}
+    />
+  );
+}
 
 /* CUSTOM: Extend DrawerPrimitive.Content with additional props */
 interface DrawerContentProps
@@ -64,10 +67,15 @@ interface DrawerContentProps
 }
 
 /** @inheritdoc Drawer */
-const DrawerContent = React.forwardRef<
-  React.ElementRef<typeof DrawerPrimitive.Content>,
-  DrawerContentProps
->(({ className, children, hideDrawerHandle = false, ...props }, ref) => {
+function DrawerContent({
+  className,
+  children,
+  hideDrawerHandle = false,
+  ref,
+  ...props
+}: DrawerContentProps & {
+  ref?: React.Ref<React.ComponentRef<typeof DrawerPrimitive.Content>>;
+}) {
   // CUSTOM: Use context to provide direction to child components
   const { direction = 'bottom' } = React.useContext(DrawerContext);
 
@@ -113,8 +121,7 @@ const DrawerContent = React.forwardRef<
       </DrawerPrimitive.Content>
     </DrawerPortal>
   );
-});
-DrawerContent.displayName = 'DrawerContent';
+}
 
 /** @inheritdoc Drawer */
 function DrawerHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
@@ -125,7 +132,6 @@ function DrawerHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
     />
   );
 }
-DrawerHeader.displayName = 'DrawerHeader';
 
 /** @inheritdoc Drawer */
 function DrawerFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
@@ -133,33 +139,40 @@ function DrawerFooter({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
     <div className={cn('tw-mt-auto tw-flex tw-flex-col tw-gap-2 tw-p-4', className)} {...props} />
   );
 }
-DrawerFooter.displayName = 'DrawerFooter';
 
 /** @inheritdoc Drawer */
-const DrawerTitle = React.forwardRef<
-  React.ElementRef<typeof DrawerPrimitive.Title>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title>
->(({ className, ...props }, ref) => (
-  <DrawerPrimitive.Title
-    ref={ref}
-    className={cn('tw-text-lg tw-font-semibold tw-leading-none tw-tracking-tight', className)}
-    {...props}
-  />
-));
-DrawerTitle.displayName = DrawerPrimitive.Title.displayName;
+function DrawerTitle({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title> & {
+  ref?: React.Ref<React.ComponentRef<typeof DrawerPrimitive.Title>>;
+}) {
+  return (
+    <DrawerPrimitive.Title
+      ref={ref}
+      className={cn('tw-text-lg tw-font-semibold tw-leading-none tw-tracking-tight', className)}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Drawer */
-const DrawerDescription = React.forwardRef<
-  React.ElementRef<typeof DrawerPrimitive.Description>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Description>
->(({ className, ...props }, ref) => (
-  <DrawerPrimitive.Description
-    ref={ref}
-    className={cn('tw-text-sm tw-text-muted-foreground', className)}
-    {...props}
-  />
-));
-DrawerDescription.displayName = DrawerPrimitive.Description.displayName;
+function DrawerDescription({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Description> & {
+  ref?: React.Ref<React.ComponentRef<typeof DrawerPrimitive.Description>>;
+}) {
+  return (
+    <DrawerPrimitive.Description
+      ref={ref}
+      className={cn('tw-text-sm tw-text-muted-foreground', className)}
+      {...props}
+    />
+  );
+}
 
 export {
   Drawer,

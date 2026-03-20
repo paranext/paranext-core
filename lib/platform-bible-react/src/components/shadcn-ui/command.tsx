@@ -12,20 +12,24 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
  * UI documentation: https://ui.shadcn.com/docs/components/command See cmdk documentation:
  * https://cmdk.paco.me/
  */
-const Command = React.forwardRef<
-  React.ElementRef<typeof CommandPrimitive>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive
-    ref={ref}
-    className={cn(
-      'tw-flex tw-h-full tw-w-full tw-flex-col tw-overflow-hidden tw-rounded-md tw-bg-popover tw-text-popover-foreground',
-      className,
-    )}
-    {...props}
-  />
-));
-Command.displayName = CommandPrimitive.displayName;
+function Command({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive> & {
+  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive>>;
+}) {
+  return (
+    <CommandPrimitive
+      ref={ref}
+      className={cn(
+        'tw-flex tw-h-full tw-w-full tw-flex-col tw-overflow-hidden tw-rounded-md tw-bg-popover tw-text-popover-foreground',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 interface CommandDialogProps extends DialogProps {}
 
@@ -43,10 +47,13 @@ function CommandDialog({ children, ...props }: CommandDialogProps) {
 }
 
 /** @inheritdoc Command */
-const CommandInput = React.forwardRef<
-  React.ElementRef<typeof CommandPrimitive.Input>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, ...props }, ref) => {
+function CommandInput({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & {
+  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Input>>;
+}) {
   const dir: Direction = readDirection();
   return (
     <div className="tw-flex tw-items-center tw-border-b tw-px-3" dir={dir}>
@@ -61,80 +68,93 @@ const CommandInput = React.forwardRef<
       />
     </div>
   );
-});
-
-CommandInput.displayName = CommandPrimitive.Input.displayName;
+}
 
 /** @inheritdoc Command */
-const CommandList = React.forwardRef<
-  React.ElementRef<typeof CommandPrimitive.List>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.List>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive.List
-    ref={ref}
-    className={cn('tw-max-h-[300px] tw-overflow-y-auto tw-overflow-x-hidden', className)}
-    {...props}
-  />
-));
-
-CommandList.displayName = CommandPrimitive.List.displayName;
-
-/** @inheritdoc Command */
-const CommandEmpty = React.forwardRef<
-  React.ElementRef<typeof CommandPrimitive.Empty>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
->((props, ref) => (
-  <CommandPrimitive.Empty ref={ref} className="tw-py-6 tw-text-center tw-text-sm" {...props} />
-));
-
-CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
+function CommandList({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.List> & {
+  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.List>>;
+}) {
+  return (
+    <CommandPrimitive.List
+      ref={ref}
+      className={cn('tw-max-h-[300px] tw-overflow-y-auto tw-overflow-x-hidden', className)}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Command */
-const CommandGroup = React.forwardRef<
-  React.ElementRef<typeof CommandPrimitive.Group>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Group>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive.Group
-    ref={ref}
-    className={cn(
-      'tw-overflow-hidden tw-p-1 tw-text-foreground [&_[cmdk-group-heading]]:tw-px-2 [&_[cmdk-group-heading]]:tw-py-1.5 [&_[cmdk-group-heading]]:tw-text-xs [&_[cmdk-group-heading]]:tw-font-medium [&_[cmdk-group-heading]]:tw-text-muted-foreground',
-      className,
-    )}
-    {...props}
-  />
-));
-
-CommandGroup.displayName = CommandPrimitive.Group.displayName;
+function CommandEmpty({
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty> & {
+  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Empty>>;
+}) {
+  return (
+    <CommandPrimitive.Empty ref={ref} className="tw-py-6 tw-text-center tw-text-sm" {...props} />
+  );
+}
 
 /** @inheritdoc Command */
-const CommandSeparator = React.forwardRef<
-  React.ElementRef<typeof CommandPrimitive.Separator>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive.Separator
-    ref={ref}
-    className={cn('tw--mx-1 tw-h-px tw-bg-border', className)}
-    {...props}
-  />
-));
-CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
+function CommandGroup({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Group> & {
+  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Group>>;
+}) {
+  return (
+    <CommandPrimitive.Group
+      ref={ref}
+      className={cn(
+        'tw-overflow-hidden tw-p-1 tw-text-foreground [&_[cmdk-group-heading]]:tw-px-2 [&_[cmdk-group-heading]]:tw-py-1.5 [&_[cmdk-group-heading]]:tw-text-xs [&_[cmdk-group-heading]]:tw-font-medium [&_[cmdk-group-heading]]:tw-text-muted-foreground',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Command */
-const CommandItem = React.forwardRef<
-  React.ElementRef<typeof CommandPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive.Item
-    ref={ref}
-    className={cn(
-      'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none data-[disabled=true]:tw-pointer-events-none data-[selected=true]:tw-bg-accent data-[selected=true]:tw-text-accent-foreground data-[disabled=true]:tw-opacity-50',
-      className,
-    )}
-    {...props}
-  />
-));
+function CommandSeparator({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator> & {
+  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Separator>>;
+}) {
+  return (
+    <CommandPrimitive.Separator
+      ref={ref}
+      className={cn('tw--mx-1 tw-h-px tw-bg-border', className)}
+      {...props}
+    />
+  );
+}
 
-CommandItem.displayName = CommandPrimitive.Item.displayName;
+/** @inheritdoc Command */
+function CommandItem({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item> & {
+  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Item>>;
+}) {
+  return (
+    <CommandPrimitive.Item
+      ref={ref}
+      className={cn(
+        'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none data-[disabled=true]:tw-pointer-events-none data-[selected=true]:tw-bg-accent data-[selected=true]:tw-text-accent-foreground data-[disabled=true]:tw-opacity-50',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Command */
 function CommandShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
@@ -145,7 +165,6 @@ function CommandShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanE
     />
   );
 }
-CommandShortcut.displayName = 'CommandShortcut';
 
 export {
   Command,

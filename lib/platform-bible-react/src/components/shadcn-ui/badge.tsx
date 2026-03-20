@@ -49,14 +49,15 @@ export interface BadgeProps
  * @param BadgeProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
-const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
-  ({ className, variant, ...props }, ref) => {
-    return (
-      <div ref={ref} className={cn('pr-twp', badgeVariants({ variant }), className)} {...props} />
-    );
-  },
-);
-
-Badge.displayName = 'Badge';
+function Badge({
+  className,
+  variant,
+  ref,
+  ...props
+}: BadgeProps & { ref?: React.Ref<HTMLDivElement> }) {
+  return (
+    <div ref={ref} className={cn('pr-twp', badgeVariants({ variant }), className)} {...props} />
+  );
+}
 
 export { Badge, badgeVariants };

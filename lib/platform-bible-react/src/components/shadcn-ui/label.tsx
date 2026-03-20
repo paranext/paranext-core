@@ -21,10 +21,19 @@ const labelVariants = cva(
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/label}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
  */
-export const Label = React.forwardRef<
-  React.ElementRef<typeof LabelPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root> & VariantProps<typeof labelVariants>
->(({ className, ...props }, ref) => (
-  <LabelPrimitive.Root ref={ref} className={cn('pr-twp', labelVariants(), className)} {...props} />
-));
-Label.displayName = LabelPrimitive.Root.displayName;
+export function Label({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root> &
+  VariantProps<typeof labelVariants> & {
+    ref?: React.Ref<React.ComponentRef<typeof LabelPrimitive.Root>>;
+  }) {
+  return (
+    <LabelPrimitive.Root
+      ref={ref}
+      className={cn('pr-twp', labelVariants(), className)}
+      {...props}
+    />
+  );
+}

@@ -11,10 +11,13 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/switch}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/switch}
  */
-const Switch = React.forwardRef<
-  React.ElementRef<typeof SwitchPrimitives.Root>,
-  React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>
->(({ className, ...props }, ref) => {
+function Switch({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root> & {
+  ref?: React.Ref<React.ComponentRef<typeof SwitchPrimitives.Root>>;
+}) {
   const dir: Direction = readDirection();
   return (
     <SwitchPrimitives.Root
@@ -40,7 +43,6 @@ const Switch = React.forwardRef<
       />
     </SwitchPrimitives.Root>
   );
-});
-Switch.displayName = SwitchPrimitives.Root.displayName;
+}
 
 export { Switch };

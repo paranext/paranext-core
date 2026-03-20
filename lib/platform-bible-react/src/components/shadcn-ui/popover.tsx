@@ -21,10 +21,16 @@ const PopoverTrigger = PopoverPrimitive.Trigger;
 const PopoverAnchor = PopoverPrimitive.Anchor;
 
 /** @inheritdoc Popover */
-const PopoverContent = React.forwardRef<
-  React.ElementRef<typeof PopoverPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = 'center', sideOffset = 4, style, ...props }, ref) => {
+function PopoverContent({
+  className,
+  align = 'center',
+  sideOffset = 4,
+  style,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & {
+  ref?: React.Ref<React.ComponentRef<typeof PopoverPrimitive.Content>>;
+}) {
   const dir: Direction = readDirection();
   return (
     <PopoverPrimitive.Portal>
@@ -43,7 +49,6 @@ const PopoverContent = React.forwardRef<
       />
     </PopoverPrimitive.Portal>
   );
-});
-PopoverContent.displayName = PopoverPrimitive.Content.displayName;
+}
 
 export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor };

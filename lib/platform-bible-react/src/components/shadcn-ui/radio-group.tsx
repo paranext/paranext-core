@@ -13,10 +13,13 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
  * See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/radio-group See Radix UI
  * Documentation: https://www.radix-ui.com/primitives/docs/components/radio-group
  */
-const RadioGroup = React.forwardRef<
-  React.ElementRef<typeof RadioGroupPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root>
->(({ className, ...props }, ref) => {
+function RadioGroup({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root> & {
+  ref?: React.Ref<React.ComponentRef<typeof RadioGroupPrimitive.Root>>;
+}) {
   const dir: Direction = readDirection();
   return (
     <RadioGroupPrimitive.Root
@@ -26,14 +29,16 @@ const RadioGroup = React.forwardRef<
       dir={dir}
     />
   );
-});
-RadioGroup.displayName = RadioGroupPrimitive.Root.displayName;
+}
 
 /** @inheritdoc RadioGroup */
-const RadioGroupItem = React.forwardRef<
-  React.ElementRef<typeof RadioGroupPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item>
->(({ className, ...props }, ref) => {
+function RadioGroupItem({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item> & {
+  ref?: React.Ref<React.ComponentRef<typeof RadioGroupPrimitive.Item>>;
+}) {
   return (
     <RadioGroupPrimitive.Item
       ref={ref}
@@ -48,7 +53,6 @@ const RadioGroupItem = React.forwardRef<
       </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
   );
-});
-RadioGroupItem.displayName = RadioGroupPrimitive.Item.displayName;
+}
 
 export { RadioGroup, RadioGroupItem };

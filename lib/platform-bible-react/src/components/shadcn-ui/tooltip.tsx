@@ -18,37 +18,49 @@ const Tooltip = TooltipPrimitive.Root;
 
 // CUSTOM: TooltipTrigger is a button, so allow to use the button variants (avoids the need for a nested button)
 /** @inheritdoc Tooltip */
-const TooltipTrigger = React.forwardRef<
-  React.ElementRef<typeof TooltipPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger> & ButtonProps
->(({ className, variant, ...props }, ref) => (
-  <TooltipPrimitive.Trigger
-    ref={ref}
-    className={variant ? cn(buttonVariants({ variant }), className) : className}
-    {...props}
-  />
-));
-TooltipTrigger.displayName = TooltipPrimitive.Trigger.displayName;
-
-/** @inheritdoc Tooltip */
-const TooltipContent = React.forwardRef<
-  React.ElementRef<typeof TooltipPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
->(({ className, sideOffset = 4, style, ...props }, ref) => (
-  <TooltipPrimitive.Portal>
-    <TooltipPrimitive.Content
+function TooltipTrigger({
+  className,
+  variant,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger> &
+  ButtonProps & {
+    ref?: React.Ref<React.ComponentRef<typeof TooltipPrimitive.Trigger>>;
+  }) {
+  return (
+    <TooltipPrimitive.Trigger
       ref={ref}
-      sideOffset={sideOffset}
-      // CUSTOM z-index uses shared constant instead of default tw-z-50
-      style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
-      className={cn(
-        'pr-twp tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-px-3 tw-py-1.5 tw-text-sm tw-text-popover-foreground tw-shadow-md tw-animate-in tw-fade-in-0 tw-zoom-in-95 data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=closed]:tw-zoom-out-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
-        className,
-      )}
+      className={variant ? cn(buttonVariants({ variant }), className) : className}
       {...props}
     />
-  </TooltipPrimitive.Portal>
-));
-TooltipContent.displayName = TooltipPrimitive.Content.displayName;
+  );
+}
+
+/** @inheritdoc Tooltip */
+function TooltipContent({
+  className,
+  sideOffset = 4,
+  style,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content> & {
+  ref?: React.Ref<React.ComponentRef<typeof TooltipPrimitive.Content>>;
+}) {
+  return (
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Content
+        ref={ref}
+        sideOffset={sideOffset}
+        // CUSTOM z-index uses shared constant instead of default tw-z-50
+        style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
+        className={cn(
+          'pr-twp tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-px-3 tw-py-1.5 tw-text-sm tw-text-popover-foreground tw-shadow-md tw-animate-in tw-fade-in-0 tw-zoom-in-95 data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=closed]:tw-zoom-out-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
+          className,
+        )}
+        {...props}
+      />
+    </TooltipPrimitive.Portal>
+  );
+}
 
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };

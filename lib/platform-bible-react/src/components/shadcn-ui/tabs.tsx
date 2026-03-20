@@ -28,10 +28,13 @@ export type TabsContentProps = React.ComponentPropsWithoutRef<typeof TabsPrimiti
 };
 
 /** @inheritdoc Tabs */
-export const TabsList = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.List>,
-  TabsListProps
->(({ className, ...props }, ref) => {
+export function TabsList({
+  className,
+  ref,
+  ...props
+}: TabsListProps & {
+  ref?: React.Ref<React.ComponentRef<typeof TabsPrimitive.List>>;
+}) {
   const dir: Direction = readDirection();
   return (
     <TabsPrimitive.List
@@ -44,37 +47,44 @@ export const TabsList = React.forwardRef<
       dir={dir}
     />
   );
-});
-TabsList.displayName = TabsPrimitive.List.displayName;
+}
 
 /** @inheritdoc Tabs */
-export const TabsTrigger = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.Trigger>,
-  TabsTriggerProps
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      'pr-twp tw-inline-flex tw-items-center tw-justify-center tw-whitespace-nowrap tw-rounded-sm tw-px-3 tw-py-1.5 tw-text-sm tw-font-medium tw-ring-offset-background tw-transition-all hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50 data-[state=active]:tw-bg-background data-[state=active]:tw-text-foreground data-[state=active]:tw-shadow-sm',
-      className,
-    )}
-    {...props}
-  />
-));
-TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
+export function TabsTrigger({
+  className,
+  ref,
+  ...props
+}: TabsTriggerProps & {
+  ref?: React.Ref<React.ComponentRef<typeof TabsPrimitive.Trigger>>;
+}) {
+  return (
+    <TabsPrimitive.Trigger
+      ref={ref}
+      className={cn(
+        'pr-twp tw-inline-flex tw-items-center tw-justify-center tw-whitespace-nowrap tw-rounded-sm tw-px-3 tw-py-1.5 tw-text-sm tw-font-medium tw-ring-offset-background tw-transition-all hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50 data-[state=active]:tw-bg-background data-[state=active]:tw-text-foreground data-[state=active]:tw-shadow-sm',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Tabs */
-export const TabsContent = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.Content>,
-  TabsContentProps
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.Content
-    ref={ref}
-    className={cn(
-      'pr-twp tw-mt-2 tw-ring-offset-background focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2',
-      className,
-    )}
-    {...props}
-  />
-));
-TabsContent.displayName = TabsPrimitive.Content.displayName;
+export function TabsContent({
+  className,
+  ref,
+  ...props
+}: TabsContentProps & {
+  ref?: React.Ref<React.ComponentRef<typeof TabsPrimitive.Content>>;
+}) {
+  return (
+    <TabsPrimitive.Content
+      ref={ref}
+      className={cn(
+        'pr-twp tw-mt-2 tw-ring-offset-background focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
