@@ -1,11 +1,14 @@
-import { AsyncDatabase } from 'promised-sqlite3';
-import { OPEN_READWRITE, OPEN_READONLY, OPEN_FULLMUTEX } from 'sqlite3';
+import { join } from 'node:path';
+import { Worker } from 'node:worker_threads';
 import {
   databaseServiceNetworkObjectName,
   IDatabaseService,
   databaseServiceObjectToProxy,
   RunResult,
+  SqlValue,
   OpenDatabaseOptions,
+  SqlOutputRow,
+  NamedSqlParameters,
 } from '@shared/services/database.service-model';
 import { createSyncProxyForAsyncObject, startsWith } from 'platform-bible-utils';
 import { newNonce } from '@shared/utils/util';
@@ -13,41 +16,64 @@ import { getUriFromExtensionUri } from '@extension-host/services/asset-retrieval
 import { getPathFromUri } from '@node/utils/util';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { EXTENSION_ASSET_PROTOCOL_NAME } from '@shared/utils/extension-asset.utils';
+import { SqlQueryArgs, WorkerMessageTypes } from './database.worker';
 
-// FYI sqlite3 5.1.7 has a bug that prevents building properly in some cases:
-// https://github.com/TryGhost/node-sqlite3/issues/1748#issuecomment-1880671655
-// As such, we are fixed to 5.1.6 for now as of 19 May 2025.
+type WorkerMessage = { id: string; result?: unknown; error?: string };
+type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error) => void };
+
+/** Factory that creates the SQLite worker. Overridable in tests. */
+type WorkerFactory = () => Worker;
+
+const defaultWorkerFactory: WorkerFactory = () => {
+  // In development the extension-host runs TypeScript directly (no webpack), so point to the
+  // .ts source file and register tsx for TypeScript support in the worker thread.
+  // In production the worker is compiled by webpack to database.worker.js alongside the bundle.
+  const isDev = process.env.NODE_ENV === 'development';
+  const workerPath = join(__dirname, `database.worker.${isDev ? 'ts' : 'js'}`);
+  return new Worker(workerPath, isDev ? { execArgv: ['--require', 'tsx/cjs'] } : {});
+};
 
 class DatabaseService implements IDatabaseService {
-  #databases: Map<string, AsyncDatabase> = new Map();
+  #worker: Worker;
+  #pendingRequests: Map<string, PendingRequest> = new Map();
+
+  constructor(workerFactory: WorkerFactory = defaultWorkerFactory) {
+    this.#worker = workerFactory();
+
+    this.#worker.on('message', (message: WorkerMessage) => {
+      const pending = this.#pendingRequests.get(message.id);
+      if (!pending) return;
+      this.#pendingRequests.delete(message.id);
+      if (message.error !== undefined) {
+        pending.reject(new Error(message.error));
+      } else {
+        pending.resolve(message.result);
+      }
+    });
+
+    this.#worker.on('error', (error) => {
+      this.#pendingRequests.forEach(({ reject }) => reject(error));
+      this.#pendingRequests.clear();
+    });
+  }
 
   async openDatabase(
     extensionFileUri: string,
-    { readOnly, fullMutex }: OpenDatabaseOptions = {},
+    { readOnly }: OpenDatabaseOptions = {},
   ): Promise<string> {
     const databasePath = getPathFromUri(getUriFromExtensionUri(extensionFileUri));
 
-    let mode =
-      // Extension asset files are always read-only
-      !readOnly && !startsWith(extensionFileUri, EXTENSION_ASSET_PROTOCOL_NAME)
-        ? OPEN_READWRITE
-        : OPEN_READONLY;
+    // Extension asset files are always read-only
+    const isReadOnly = !!(readOnly || startsWith(extensionFileUri, EXTENSION_ASSET_PROTOCOL_NAME));
 
-    // The mode passed into the database is bitwise, so we must use it
-    // eslint-disable-next-line no-bitwise
-    if (fullMutex) mode |= OPEN_FULLMUTEX;
-
-    const db = await AsyncDatabase.open(databasePath, mode);
+    // The worker thread serializes all operations, so fullMutex is inherently satisfied
     const nonce = newNonce();
-    this.#databases.set(nonce, db);
+    await this.#sendRequest('open', { nonce, path: databasePath, readOnly: isReadOnly });
     return nonce;
   }
 
   async closeDatabase(databaseNonce: string): Promise<void> {
-    const db = this.#getDatabase(databaseNonce);
-
-    await db.close();
-    this.#databases.delete(databaseNonce);
+    await this.#sendRequest('close', { nonce: databaseNonce });
   }
 
   async attachDatabase(
@@ -55,52 +81,74 @@ class DatabaseService implements IDatabaseService {
     extensionFileUri: string,
     schemaName: string,
   ): Promise<void> {
-    const db = this.#getDatabase(databaseNonce);
-
-    await db.run(
-      `ATTACH DATABASE ? AS ?`,
-      getPathFromUri(getUriFromExtensionUri(extensionFileUri)),
-      schemaName,
-    );
+    const path = getPathFromUri(getUriFromExtensionUri(extensionFileUri));
+    await this.#sendRequest('attach', { nonce: databaseNonce, path, schemaName });
   }
 
   async detachDatabase(databaseNonce: string, schemaName: string): Promise<void> {
-    const db = this.#getDatabase(databaseNonce);
-
-    await db.run(`DETACH DATABASE ?`, schemaName);
+    await this.#sendRequest('detach', { nonce: databaseNonce, schemaName });
   }
 
-  async run(databaseNonce: string, query: string, ...args: unknown[]): Promise<RunResult> {
-    const db = this.#getDatabase(databaseNonce);
-
-    const { changes, lastID } = await db.run(query, ...args);
-
-    // SQLite returns a `Statement` object with these extra properties, but we just want the result
-    // info
-    return {
-      changes,
-      lastId: lastID,
-    };
+  async run(
+    databaseNonce: string,
+    query: string,
+    ...anonymousParameters: SqlValue[]
+  ): Promise<RunResult>;
+  async run(
+    databaseNonce: string,
+    query: string,
+    namedParameters: NamedSqlParameters,
+    ...anonymousParameters: SqlValue[]
+  ): Promise<RunResult>;
+  async run(databaseNonce: string, query: string, ...args: SqlQueryArgs): Promise<RunResult> {
+    return this.#sendRequest('run', {
+      nonce: databaseNonce,
+      query,
+      args,
+    });
   }
 
-  async select(databaseNonce: string, query: string, ...args: unknown[]): Promise<unknown[]> {
-    const db = this.#getDatabase(databaseNonce);
-
-    return db.all(query, ...args);
+  async select(
+    databaseNonce: string,
+    query: string,
+    ...anonymousParameters: SqlValue[]
+  ): Promise<SqlOutputRow[]>;
+  async select(
+    databaseNonce: string,
+    query: string,
+    namedParameters: NamedSqlParameters,
+    ...anonymousParameters: SqlValue[]
+  ): Promise<SqlOutputRow[]>;
+  async select(
+    databaseNonce: string,
+    query: string,
+    ...args: SqlQueryArgs
+  ): Promise<SqlOutputRow[]> {
+    return this.#sendRequest('select', {
+      nonce: databaseNonce,
+      query,
+      args,
+    });
   }
 
   async dispose(): Promise<boolean> {
-    await Promise.all([...this.#databases.values()].map((db) => db.close()));
-    this.#databases.clear();
+    await this.#sendRequest('dispose', {});
+    await this.#worker.terminate();
     return true;
   }
 
-  #getDatabase(databaseNonce: string): AsyncDatabase {
-    const db = this.#databases.get(databaseNonce);
-    if (!db) {
-      throw new Error(`Database with nonce "${databaseNonce}" is not open.`);
-    }
-    return db;
+  #sendRequest<T extends keyof WorkerMessageTypes>(
+    type: T,
+    messageParameters: WorkerMessageTypes[T]['parameters'],
+  ): Promise<WorkerMessageTypes[T]['result']> {
+    // The worker response is untyped (unknown). We trust the protocol defined in WorkerMessageTypes
+    // to guarantee the resolved value matches WorkerMessageTypes[T]['result'].
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return new Promise<unknown>((resolve, reject) => {
+      const id = newNonce();
+      this.#pendingRequests.set(id, { resolve, reject });
+      this.#worker.postMessage({ id, type, ...messageParameters });
+    }) as Promise<WorkerMessageTypes[T]['result']>;
   }
 }
 
