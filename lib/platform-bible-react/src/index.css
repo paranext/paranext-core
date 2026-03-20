@@ -1,6 +1,7 @@
-/* TW4 split imports — preflight omitted, scoped version imported separately */
+/* TW4 split imports — preflight omitted, scoped version imported separately.
+ * prefix(tw) must be on BOTH theme and utilities imports per TW4 docs. */
 @layer theme, base, components, utilities;
-@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/theme.css' layer(theme) prefix(tw);
 @import './scoped-preflight.css';
 @import 'tailwindcss/utilities.css' layer(utilities) prefix(tw);
 @config '../tailwind.config.ts';
