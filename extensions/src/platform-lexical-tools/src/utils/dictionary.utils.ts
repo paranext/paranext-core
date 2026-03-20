@@ -13,6 +13,7 @@ export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%platformLexicalTools_dictionary_domainTaxonomyLabel%',
   '%platformLexicalTools_dictionary_noResults%',
   '%platformLexicalTools_dictionary_occurrencesInChapterLabel%',
+  '%platformLexicalTools_dictionary_occurrencesInVerseLabel%',
   '%platformLexicalTools_dictionary_occurrencesForSenseLabel%',
   '%platformLexicalTools_dictionary_occurrencesToggleAll%',
   '%platformLexicalTools_dictionary_occurrencesToggleChapter%',

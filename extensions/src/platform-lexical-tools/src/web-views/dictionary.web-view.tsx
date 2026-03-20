@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Label,
   SearchBar,
@@ -33,6 +33,7 @@ globalThis.webViewComponent = function Dictionary({
   const [searchQuery, setSearchQuery] = useWebViewState<string>('searchQuery', '');
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+  const [selectedEntry, setSelectedEntry] = useState<Entry | undefined>(undefined);
 
   // ref.current expects null and not undefined when we pass it to the search input
   // eslint-disable-next-line no-null/no-null
@@ -88,6 +89,48 @@ globalThis.webViewComponent = function Dictionary({
         return matchesSearch;
       });
   }, [entriesById, searchQuery, scrRef]);
+
+  // Clear the selected entry if it is no longer in the filtered list (e.g. after a chapter change)
+  useEffect(() => {
+    if (
+      selectedEntry &&
+      !entriesFiltered.some(
+        (e) =>
+          e.id === selectedEntry.id &&
+          e.lexicalReferenceTextId === selectedEntry.lexicalReferenceTextId,
+      )
+    ) {
+      setSelectedEntry(undefined);
+    }
+  }, [entriesFiltered, selectedEntry]);
+
+  // Entry displayed in DictionaryEntryDisplay: always the single entry, or whatever is selected in the list
+  const displayedEntry = entriesFiltered.length === 1 ? entriesFiltered[0] : selectedEntry;
+
+  // Selector to fetch the full (unfiltered) data for the displayed entry
+  const displayedItemSelector: LexicalReferenceSelector = useMemo(
+    () =>
+      displayedEntry
+        ? {
+            itemId: displayedEntry.id,
+            lexicalReferenceTextId: displayedEntry.lexicalReferenceTextId,
+          }
+        : {},
+    [displayedEntry],
+  );
+
+  const [fullEntriesByIdPossiblyError] = useData(
+    displayedEntry !== undefined ? 'platformLexicalTools.lexicalReferenceService' : undefined,
+  ).EntriesById(displayedItemSelector, ENTRIES_DEFAULT);
+
+  // Extract the full entry for the displayed entry; the selector already filters by
+  // lexicalReferenceTextId so there will only be one matching entry array
+  const fullDisplayedEntry = useMemo(() => {
+    if (!displayedEntry) return undefined;
+    if (isPlatformError(fullEntriesByIdPossiblyError)) return undefined;
+    const entries = fullEntriesByIdPossiblyError[displayedEntry.id];
+    return entries?.[0];
+  }, [fullEntriesByIdPossiblyError, displayedEntry]);
 
   const onSelectOccurrence = useCallback(
     (scrRefOfOccurrence: SerializedVerseRef) => {
@@ -172,7 +215,7 @@ globalThis.webViewComponent = function Dictionary({
           <DictionaryEntryDisplay
             scriptureReferenceToFilterBy={scrRef}
             isDrawer={false}
-            dictionaryEntry={entriesFiltered[0]}
+            dictionaryEntry={fullDisplayedEntry ?? entriesFiltered[0]}
             onSelectOccurrence={onSelectOccurrence}
             onClickScrollToTop={scrollToTop}
           />
@@ -182,8 +225,12 @@ globalThis.webViewComponent = function Dictionary({
         <DictionaryList
           dictionaryData={entriesFiltered}
           scriptureReferenceToFilterBy={scrRef}
+          scope={scope}
+          selectedEntry={selectedEntry}
           onSelectOccurrence={onSelectOccurrence}
           onCharacterPress={onCharacterPress}
+          onEntrySelected={setSelectedEntry}
+          fullSelectedEntry={fullDisplayedEntry}
         />
       )}
     </div>

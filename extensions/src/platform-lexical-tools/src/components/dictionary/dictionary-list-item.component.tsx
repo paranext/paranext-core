@@ -10,6 +10,7 @@ import {
 } from 'platform-bible-react';
 import { Entry } from 'platform-lexical-tools';
 import {
+  DictionaryScope,
   getCombinedOccurrencesCountFromDictionaryEntrySenses,
   getFormatGlossesStringFromDictionaryEntrySenses,
 } from '../../utils/dictionary.utils';
@@ -24,6 +25,8 @@ type DictionaryListItemProps = {
   localizedStrings: LocalizationData;
   /** Scripture reference to filter the occurrences by */
   scrRef: SerializedVerseRef;
+  /** The current scope (chapter or verse) */
+  scope: DictionaryScope;
   /** Callback function to handle click on the entry */
   onClick: () => void;
 };
@@ -45,6 +48,7 @@ export function DictionaryListItem({
   isSelected,
   localizedStrings,
   scrRef,
+  scope,
   onClick,
 }: DictionaryListItemProps) {
   return (
@@ -76,7 +80,11 @@ export function DictionaryListItem({
               </TooltipTrigger>
               <TooltipContent>
                 <p>
-                  {localizedStrings['%platformLexicalTools_dictionary_occurrencesInChapterLabel%']}
+                  {scope === 'verse'
+                    ? localizedStrings['%platformLexicalTools_dictionary_occurrencesInVerseLabel%']
+                    : localizedStrings[
+                        '%platformLexicalTools_dictionary_occurrencesInChapterLabel%'
+                      ]}
                 </p>
               </TooltipContent>
             </Tooltip>
