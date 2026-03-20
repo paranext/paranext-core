@@ -33,7 +33,6 @@ import {
   SCOPE_SELECTOR_STRING_KEYS,
   ScopeSelector,
   Skeleton,
-  Spinner,
   ToggleGroup,
   ToggleGroupItem,
   Tooltip,
@@ -76,7 +75,6 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_cancelSearch%',
   '%webView_find_capitalization%',
   '%webView_find_errorOccurred%',
-  '%webView_find_findButton%',
   '%webView_find_findInProject%',
   '%webView_find_findTab%',
   '%webView_find_matchCase%',
@@ -108,7 +106,6 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
 ];
 
 const defaultBooksPresent: string = '';
-const defaultProjectName = '';
 const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
 const SEARCH_DEBOUNCE_DELAY_MS = 500;
@@ -225,9 +222,7 @@ global.webViewComponent = function FindWebView({
     activeMode === 'replace' ? projectId : undefined,
   );
 
-  const [localizedStrings, isLocalizedStringsLoading] = useLocalizedStrings(
-    useMemo(() => LOCALIZED_STRINGS, []),
-  );
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
 
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(
     useMemo(() => {
@@ -240,20 +235,6 @@ global.webViewComponent = function FindWebView({
       return Array.from(SEARCH_RESULT_LOCALIZED_STRING_KEYS);
     }, []),
   );
-
-  const [projectNamePossiblyError] = useProjectSetting(
-    projectId,
-    'platform.name',
-    defaultProjectName,
-  );
-
-  const projectName = useMemo(() => {
-    if (isPlatformError(projectNamePossiblyError)) {
-      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossiblyError)}`);
-      return defaultProjectName;
-    }
-    return projectNamePossiblyError;
-  }, [projectNamePossiblyError]);
 
   const isMountedRef = useRef(false);
   useEffect(() => {
@@ -936,10 +917,6 @@ global.webViewComponent = function FindWebView({
     }
   }, [focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
 
-  const findButtonText = isLocalizedStringsLoading
-    ? ''
-    : localizedStrings['%webView_find_findButton%'];
-
   const areFiltersActive =
     shouldMatchCase || wordRestriction !== 'none' || searchTextType !== 'all' || isRegexAllowed;
 
@@ -1070,28 +1047,6 @@ global.webViewComponent = function FindWebView({
               allowRegex: localizedStrings['%webView_find_allowRegex%'],
             }}
           />
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={() => handleStartSearch(true)}
-                  disabled={
-                    !isSearchQueryValid || searchStatus === 'running' || findButtonText === ''
-                  }
-                >
-                  {searchStatus === 'running' ? <Spinner /> : findButtonText}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="tw-font-light">
-                  {formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
-                    projectName,
-                  })}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
         </div>
 
         {/* Replace input row — shown in Replace mode */}
