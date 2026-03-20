@@ -4,14 +4,10 @@
 
 import { Config } from 'tailwindcss';
 import typography from '@tailwindcss/typography';
-import tailwindCssAnimate from 'tailwindcss-animate';
 
 const config: Config = {
-  content: ['./src/**/*.{js,ts,jsx,tsx}'],
-  // Prefix on all tailwind classes so they don't clash with built-in classes
-  // short for tailwind - we hope to have the same prefix as users of this library so the cn
-  // function that uses tailwind-merge can properly overwrite related tailwind classes
-  prefix: 'tw-',
+  // TW4: prefix is now handled by CSS `prefix(tw)` in tailwind.css
+  // TW4: content array removed — TW4 auto-detects source files
   // Theme from shadcn/ui
   theme: {
     container: {
@@ -98,7 +94,7 @@ const config: Config = {
             blockquote: {
               // The default quotes are encoded with 0o or \, and it makes them not display in our
               // environment. So override them with not encoded characters to make them work.
-              quotes: `"“""”""‘""’"`,
+              quotes: `"""""""'""'"`,
             },
           },
         },
@@ -116,8 +112,7 @@ const config: Config = {
   plugins: [
     // Prose styles as sensible defaults for markdown renderer component
     typography(),
-    // Animations in tailwind style
-    tailwindCssAnimate,
+    // TW4: tailwindCssAnimate removed — not needed with TW4
 
     // #endregion
   ],

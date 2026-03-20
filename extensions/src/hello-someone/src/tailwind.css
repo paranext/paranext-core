@@ -1,6 +1,6 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* TW4 imports with prefix */
+@import 'tailwindcss' prefix(tw);
+@config '../tailwind.config.ts';
 
 /* #region shared with https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css */
 

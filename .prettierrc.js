@@ -8,6 +8,8 @@ module.exports = {
   // prettier-plugin-jsdoc options
   tsdoc: true,
   plugins: ['prettier-plugin-jsdoc', 'prettier-plugin-tailwindcss'],
+  // TW4: prettier-plugin-tailwindcss needs to know the main CSS entry point for class sorting
+  tailwindStylesheet: './lib/platform-bible-react/src/index.css',
   overrides: [
     {
       files: '*.json',

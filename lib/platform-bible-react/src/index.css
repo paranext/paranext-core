@@ -1,14 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  /* Adding the preflight selector (pr-twp) to components was not changing the font as desired.
-  So this piece of code adds tw-font-sans everywhere we include preflight. */
-  .pr-twp {
-    @apply tw-font-sans;
-  }
-}
+/* TW4 split imports — preflight omitted, scoped version imported separately */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import './scoped-preflight.css';
+@import 'tailwindcss/utilities.css' layer(utilities) prefix(tw);
+@config '../tailwind.config.ts';
 
 /*
  * WARNING: These themes are also represented in paranext-core/src/shared/data/themes.data.json!
