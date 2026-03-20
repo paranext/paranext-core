@@ -28,9 +28,11 @@ const defaultWorkerFactory: WorkerFactory = () => {
   // In development the extension-host runs TypeScript directly (no webpack), so point to the
   // .ts source file and register tsx for TypeScript support in the worker thread.
   // In production the worker is compiled by webpack to database.worker.js alongside the bundle.
-  const isDev = process.env.NODE_ENV === 'development';
-  const workerPath = join(__dirname, `database.worker.${isDev ? 'ts' : 'js'}`);
-  return new Worker(workerPath, isDev ? { execArgv: ['--require', 'tsx/cjs'] } : {});
+  const workerPath = join(__dirname, `database.worker.${globalThis.isPackaged ? 'js' : 'ts'}`);
+  return new Worker(
+    workerPath,
+    globalThis.isPackaged ? {} : { execArgv: ['--require', 'tsx/cjs'] },
+  );
 };
 
 class DatabaseService implements IDatabaseService {
