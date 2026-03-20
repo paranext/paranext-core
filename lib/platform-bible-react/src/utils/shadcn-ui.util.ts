@@ -23,8 +23,8 @@ function splitClassSegments(cls: string): string[] {
 
   for (let i = 0; i < cls.length; i++) {
     const char = cls[i];
-    if (char === '[') bracketDepth++;
-    else if (char === ']') bracketDepth--;
+    if (char === '[') bracketDepth += 1;
+    else if (char === ']') bracketDepth -= 1;
 
     if (char === ':' && bracketDepth === 0) {
       segments.push(current);
@@ -45,10 +45,10 @@ function splitClassSegments(cls: string): string[] {
  *
  * - `tw-utility` → `tw:utility`
  * - `tw--utility` (negative form A) → `tw:-utility`
- * - `-tw-utility` (negative form B, with optional variant prefixes) → `tw:-utility` (variants
- *   moved before `tw:`)
- * - `!tw-utility` (important form, with optional variant prefixes) → `tw:!utility` (variants
- *   moved before `tw:`)
+ * - `-tw-utility` (negative form B, with optional variant prefixes) → `tw:-utility` (variants moved
+ *   before `tw:`)
+ * - `!tw-utility` (important form, with optional variant prefixes) → `tw:!utility` (variants moved
+ *   before `tw:`)
  *
  * TW4-style classes (`tw:*`) pass through unchanged.
  */
@@ -173,14 +173,15 @@ function restoreToOriginalFormat(normalizedClass: string, originalFormat: string
  * The resulting `classString` is `'tw:h-10 tw:bg-secondary tw:border-blue-500 tw:text-red-500
  * some-class'`
  *
- * - Notice that `'tw:bg-secondary'`, specified later, overwrote `'tw:bg-primary'`, specified
- *   earlier, because they are Tailwind classes that affect the same css property
+ * - Notice that `'tw:bg-secondary'`, specified later, overwrote `'tw:bg-primary'`, specified earlier,
+ *   because they are Tailwind classes that affect the same css property
  * - Notice that `'tw:text-red-500'`, specified later, overwrote `'tw:text-primary-foreground'`,
  *   specified earlier, because they are Tailwind classes that affect the same css property
  * - Notice that `'tw:h-20'`, specified later, did not overwrite `'tw:h-10'`, specified earlier,
  *   because `'tw:h-20'` is part of a conditional class object and its value evaluated to `false`;
  *   therefore it was not applied
  * - Notice that `'some-class'` was applied. This function is not limited only to Tailwind classes.
+ *
  *
  * @param inputs Class strings or `clsx` conditional class objects to merge. Tailwind classes
  *   specified later in the arguments overwrite similar Tailwind classes specified earlier in the
@@ -198,11 +199,11 @@ export function cn(...inputs: ClassValue[]) {
   const lastSeenOriginal = new Map<string, string>();
   const normalizedTokens: string[] = [];
 
-  for (const token of tokens) {
+  tokens.forEach((token) => {
     const info = normalizeTw3ToTw4(token);
     lastSeenOriginal.set(info.normalized, info.original);
     normalizedTokens.push(info.normalized);
-  }
+  });
 
   // twMerge (no prefix config) treats `tw:` as a modifier — dedup works correctly
   const merged = twMerge(normalizedTokens.join(' '));

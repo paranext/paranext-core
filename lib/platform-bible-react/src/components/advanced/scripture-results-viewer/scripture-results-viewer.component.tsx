@@ -403,7 +403,7 @@ export function ScriptureResultsViewer({
                   .filter((h) => h.column.columnDef.header)
                   .map((header) => (
                     /* For sticky column headers to work, we probably need to change the default definition of the shadcn Table component. See https://github.com/shadcn-ui/ui/issues/1151 */
-                    <TableHead key={header.id} colSpan={header.colSpan} className="top-0 tw:sticky">
+                    <TableHead key={header.id} colSpan={header.colSpan} className="tw:sticky top-0">
                       {header.isPlaceholder ? undefined : (
                         <div>
                           {header.column.getCanGroup() ? (
