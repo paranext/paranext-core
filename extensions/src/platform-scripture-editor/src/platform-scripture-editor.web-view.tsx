@@ -1049,12 +1049,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [usjFromPdpPossiblyError]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
-  // Lags one render behind saveUsjToPdpRaw. Updated in useEffect (after all useLayoutEffects),
-  // so when a useLayoutEffect fires during a chapter-change render (e.g. footnote-editor closing),
-  // this ref still holds the OLD chapter's setter — preventing saves to the wrong chapter.
-  const prevSaveUsjToPdpRawRef = useRef<typeof saveUsjToPdpRaw>(saveUsjToPdpRaw);
+  // Updated in useEffect (which runs after all useLayoutEffects), so this ref is stable for the
+  // entire layout phase of each render. If a useLayoutEffect fires during a chapter-change render
+  // (e.g. footnote-editor closing), this ref still holds the OLD chapter's setter — preventing
+  // footnote changes from being saved to the wrong chapter.
+  const saveUsjToPdpRawStableRef = useRef<typeof saveUsjToPdpRaw>(saveUsjToPdpRaw);
   useEffect(() => {
-    prevSaveUsjToPdpRawRef.current = saveUsjToPdpRaw;
+    saveUsjToPdpRawStableRef.current = saveUsjToPdpRaw;
   }, [saveUsjToPdpRaw]);
 
   /**
@@ -1096,11 +1097,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
     // `saveUsjToPdpIfUpdated` everywhere.
     async function saveUsjToPdpInternal(newUsj: Usj) {
-      // Capture the save function at call time. During a chapter-change useLayoutEffect (e.g.
-      // footnote-editor closing), prevSaveUsjToPdpRawRef.current still holds the old chapter's
-      // setter because the useEffect that updates it hasn't run yet.
-      const saveFn = prevSaveUsjToPdpRawRef.current;
-      if (!saveFn) return;
+      if (!saveUsjToPdpRawStableRef.current) return;
 
       // Don't start writing to the PDP again if we're in the middle of writing now
       if (currentlyWritingUsjToPdp.current) return;
@@ -1109,7 +1106,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       currentlyWritingUsjToPdp.current = true;
       usjSentToPdp.current = newUsj;
       try {
-        if (!(await saveFn(newUsj)) && currentlyWritingUsjToPdp.current) {
+        if (!(await saveUsjToPdpRawStableRef.current(newUsj)) && currentlyWritingUsjToPdp.current) {
           currentlyWritingUsjToPdp.current = false;
 
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
@@ -1172,58 +1169,49 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     closeFootnoteEditor(true);
   }, [closeFootnoteEditor]);
 
-  const openFootnoteEditorOnNewNote = useCallback(
-    (ops?: DeltaOp[], insertedNodeKey?: string) => {
-      if (insertedNodeKey && ops) {
-        // If we are already editing a note, then returns
-        if (editingNoteKey.current) return;
+  const openFootnoteEditorOnNewNote = useCallback((ops?: DeltaOp[], insertedNodeKey?: string) => {
+    if (insertedNodeKey && ops) {
+      // If we are already editing a note, then returns
+      if (editingNoteKey.current) return;
 
-        // Makes sure the node is a note
-        const noteOp = ops[1];
-        if (!isInsertEmbedOpOfType('note', noteOp)) return;
+      // Makes sure the node is a note
+      const noteOp = ops[1];
+      if (!isInsertEmbedOpOfType('note', noteOp)) return;
 
-        const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
-        // Note element must be defined
-        if (!noteElement) return;
+      const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
+      // Note element must be defined
+      if (!noteElement) return;
 
-        const targetRect = noteElement.getBoundingClientRect();
-        setNotePopoverAnchorX(targetRect.left);
-        setNotePopoverAnchorY(targetRect.top);
-        setNotePopoverAnchorHeight(targetRect.height);
-        editingNoteKey.current = insertedNodeKey;
-        editingNoteOps.current = [noteOp];
-        editingNoteIsNew.current = true;
-        setShowFootnoteEditor(true);
-      }
-    },
-    [editingNoteKey],
-  );
+      const targetRect = noteElement.getBoundingClientRect();
+      setNotePopoverAnchorX(targetRect.left);
+      setNotePopoverAnchorY(targetRect.top);
+      setNotePopoverAnchorHeight(targetRect.height);
+      editingNoteKey.current = insertedNodeKey;
+      editingNoteOps.current = [noteOp];
+      editingNoteIsNew.current = true;
+      setShowFootnoteEditor(true);
+    }
+  }, []);
 
   const handleEditorialUsjChange = useCallback(
     (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
       saveUsjToPdpIfUpdated(usj);
-      // replaceEmbedUpdate assigns a new Lexical node key; keep editingNoteKey in sync so
-      // subsequent saves use the correct key. A sync means the note was saved back to the parent
-      // editor, so it is no longer "new" (closing the editor should not delete it).
-      // Guard: only update when this is a replaceEmbedUpdate for our note, not a fresh note
-      // insertion. A fresh insertion has ops[1] as the note embed; replaceEmbedUpdate produces
-      // a different ops structure (a delete op at ops[1]).
-      if (editingNoteKey.current && insertedNodeKey && !isInsertEmbedOpOfType('note', ops?.[1])) {
-        editingNoteKey.current = insertedNodeKey;
-        editingNoteIsNew.current = false;
-      }
-      openFootnoteEditorOnNewNote(ops, insertedNodeKey);
-      // Close and discard if the note being edited was deleted from the main editor.
-      if (editingNoteKey.current && !editorRef.current?.getNoteOps(editingNoteKey.current))
-        closeFootnoteEditor(false); // false => the note caller is already gone.
+      if (editingNoteKey.current) {
+        // When the FootnoteEditor saves, Lexical emits a replaceEmbedUpdate. This triggers
+        // onUsjChange with an insertedNodeKey, but the ops differ from a fresh insertion:
+        // ops[1] is a delete op rather than the note embed.
+        //
+        // Detect this case (has insertedNodeKey but is not an insert op) and mark the note
+        // as no longer "new", so that closing the editor as part of the save does not
+        // delete the note the user just saved.
+        if (insertedNodeKey && !isInsertEmbedOpOfType('note', ops?.[1]))
+          editingNoteIsNew.current = false;
+        // Close the footnote editor and discard the note being edited if its caller was deleted in
+        // the main editor.
+        else if (!editorRef.current?.getNoteOps(editingNoteKey.current)) closeFootnoteEditor(false); // false => the note caller is already gone.
+      } else openFootnoteEditorOnNewNote(ops, insertedNodeKey);
     },
-    [
-      closeFootnoteEditor,
-      editingNoteIsNew,
-      editingNoteKey,
-      openFootnoteEditorOnNewNote,
-      saveUsjToPdpIfUpdated,
-    ],
+    [closeFootnoteEditor, openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
   );
 
   /**
@@ -1763,7 +1751,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             classNameForEditor="scripture-font"
             noteOps={editingNoteOps.current}
             noteKey={editingNoteKey.current}
-            noteKeyRef={editingNoteKey}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
             editorOptions={options}

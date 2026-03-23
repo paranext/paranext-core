@@ -19,7 +19,6 @@ import {
   useMemo,
   useRef,
   useState,
-  MutableRefObject,
   RefObject,
 } from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
@@ -46,13 +45,6 @@ export interface FootnoteEditorProps {
   classNameForEditor?: string;
   /** Delta ops for the current note being edited that are applied to the note editorial */
   noteOps: DeltaOpInsertNoteEmbed[] | undefined;
-  /**
-   * Called on every change to the footnote with the updated note ops. An implementation of this
-   * function is required only if the parent does not supply `parentEditorRef` or if some additional
-   * logic is needed to handle the changes. The note ops passed in this function are the full ops
-   * for the note, not just the changes since the last call.
-   */
-  onChange?: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
   /** External function to handle closing the footnote editor */
   onClose: () => void;
   /** The scripture reference for the parent editor */
@@ -66,17 +58,17 @@ export interface FootnoteEditorProps {
   /** Localized strings to be passed to the footnote editor component */
   localizedStrings: FootnoteEditorLocalizedStrings;
   /**
+   * Called on every change to the footnote with the updated note ops. An implementation of this
+   * function is required only if the parent does not supply `parentEditorRef` or if some additional
+   * logic is needed to handle the changes. The note ops passed in this function are the full ops
+   * for the note, not just the changes since the last call.
+   */
+  onChange?: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
+  /**
    * Ref to the parent editor. When provided, the footnote editor will apply changes directly to the
    * parent editor, so the client does not need to handle this in the `onChange` callback.
    */
   parentEditorRef?: RefObject<EditorRef | null>;
-  /**
-   * Mutable ref tracking the current Lexical node key of the note being edited in the parent
-   * editor. Must be kept in sync by the parent: after each call to `replaceEmbedUpdate` the parent
-   * editor fires `onUsjChange` with the newly assigned `insertedNodeKey`; the parent should write
-   * that value back into this ref so that subsequent saves use the correct key.
-   */
-  noteKeyRef?: MutableRefObject<string | undefined>;
 }
 
 /**
@@ -160,17 +152,14 @@ export default function FootnoteEditor({
   defaultMarkerMenuTrigger,
   localizedStrings,
   parentEditorRef,
-  noteKeyRef,
 }: FootnoteEditorProps) {
   // These refs must have default values of `null` to be accepted by the React elements as refs
-  // eslint-disable-next-line no-null/no-null
+  /* eslint-disable no-null/no-null */
   const editorRef = useRef<EditorRef | null>(null);
-  // eslint-disable-next-line no-null/no-null
   const editorParentRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line no-null/no-null
   const outerBorderRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
+  /* eslint-enable no-null/no-null */
 
   // Lock the container width to its natural rendered width so content changes (e.g. switching
   // language, undo/redo enabling) don't cause the popover to resize while editing.
@@ -295,13 +284,12 @@ export default function FootnoteEditor({
           currentNoteOp.insert.note.caller = caller;
         }
         onChange?.([currentNoteOp]);
-        const currentKey = noteKeyRef?.current ?? noteKey;
-        if (applyToParent && parentEditorRef && currentKey) {
-          parentEditorRef.current?.replaceEmbedUpdate(currentKey, [currentNoteOp]);
+        if (applyToParent && parentEditorRef && noteKey) {
+          parentEditorRef.current?.replaceEmbedUpdate(noteKey, [currentNoteOp]);
         }
       }
     },
-    [noteKey, noteKeyRef, onChange, parentEditorRef],
+    [noteKey, onChange, parentEditorRef],
   );
 
   const closeAndSave = useCallback(() => {
@@ -576,7 +564,7 @@ export default function FootnoteEditor({
             <EditorKeyboardShortcuts editorRef={editorRef}>
               <Editorial
                 options={options}
-                onStateChange={(state) => handleStateChange(state)}
+                onStateChange={handleStateChange}
                 onUsjChange={handleUsjChange}
                 defaultUsj={PARAGRAPH_USJ}
                 onScrRefChange={() => {}}
