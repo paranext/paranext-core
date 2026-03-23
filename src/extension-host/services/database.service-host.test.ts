@@ -40,9 +40,6 @@ vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { set: vi.fn() },
 }));
 
-// Prevent file resolution of the compiled worker script in tests
-vi.mock('./database.worker.ts?inline', () => ({ default: 'mock-worker-script' }));
-
 const { DatabaseService } = testingDatabaseService;
 
 // eslint-disable-next-line no-type-assertion/no-type-assertion
