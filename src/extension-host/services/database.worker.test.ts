@@ -575,4 +575,25 @@ describe('dispose', () => {
 
     expect(response.error).toBeUndefined();
   });
+
+  it('closes all databases even when one throws, and reports all errors', () => {
+    openDb('nonce1');
+    const db1 = getLastDb();
+    openDb('nonce2');
+    const db2 = getLastDb();
+    openDb('nonce3');
+    const db3 = getLastDb();
+
+    db2.close.mockImplementation(() => {
+      throw new Error('disk I/O error');
+    });
+
+    const response = send({ id: 'req', type: 'dispose' });
+
+    expect(db1.close).toHaveBeenCalledOnce();
+    expect(db2.close).toHaveBeenCalledOnce();
+    expect(db3.close).toHaveBeenCalledOnce();
+    expect(response.error).toContain('nonce2');
+    expect(response.error).toContain('disk I/O error');
+  });
 });
