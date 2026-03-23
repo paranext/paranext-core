@@ -1,4 +1,5 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
+import { ERROR_POPOVER_STRING_KEYS } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { Entry, Occurrence, Sense } from 'platform-lexical-tools';
 import { useEffect, useState } from 'react';
@@ -7,6 +8,7 @@ import { useEffect, useState } from 'react';
 const REMOVE_PARENTHETICAL_STATEMENTS_REGEX = /\([^()]*\)/g;
 
 export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  ...ERROR_POPOVER_STRING_KEYS,
   '%platformLexicalTools_dictionary_allOccurrencesLabel%',
   '%platformLexicalTools_dictionary_backToList%',
   '%platformLexicalTools_dictionary_definitionLabel%',
@@ -26,6 +28,8 @@ export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%platformLexicalTools_dictionary_sdbgCopyright%',
   '%platformLexicalTools_dictionary_sdbhCopyright%',
   '%platformLexicalTools_dictionary_trackProjectDropdownLabel%',
+  '%platformLexicalTools_dictionary_dataLoadError%',
+  '%platformLexicalTools_dictionary_viewErrorDetails%',
 ];
 
 /** Type for the dictionary scope */

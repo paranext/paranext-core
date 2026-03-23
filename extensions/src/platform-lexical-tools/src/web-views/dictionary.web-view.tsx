@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Button,
+  ErrorPopover,
   Label,
   SearchBar,
   Select,
@@ -59,16 +61,19 @@ globalThis.webViewComponent = function Dictionary({
   const [entriesByIdPossiblyError] = useData(
     'platformLexicalTools.lexicalReferenceService',
   ).EntriesById(selector, ENTRIES_DEFAULT);
-  // Handle a PlatformError if one comes in instead of lexical data
-  const entriesById = useMemo(() => {
-    if (!isPlatformError(entriesByIdPossiblyError)) return entriesByIdPossiblyError;
 
-    const errorMessage = getErrorMessage(entriesByIdPossiblyError);
-    logger.error(`Error getting entries by ID: ${errorMessage}`);
-    return ENTRIES_DEFAULT;
+  const entriesError = useMemo(() => {
+    if (!isPlatformError(entriesByIdPossiblyError)) return undefined;
+    logger.error(`Error getting entries by ID: ${getErrorMessage(entriesByIdPossiblyError)}`);
+    return entriesByIdPossiblyError;
   }, [entriesByIdPossiblyError]);
 
-  const isLoadingEntriesById = entriesById === ENTRIES_DEFAULT;
+  const entriesById: LexicalEntriesById = useMemo(() => {
+    if (isPlatformError(entriesByIdPossiblyError)) return ENTRIES_DEFAULT;
+    return entriesByIdPossiblyError;
+  }, [entriesByIdPossiblyError]);
+
+  const isLoadingEntriesById = !entriesError && entriesById === ENTRIES_DEFAULT;
 
   // Return all defined entries filtered by searchQuery
   const entriesFiltered = useMemo(() => {
@@ -205,7 +210,20 @@ globalThis.webViewComponent = function Dictionary({
           ))}
         </div>
       )}
-      {entriesFiltered.length === 0 && !isLoadingEntriesById && (
+      {entriesError && (
+        <div className="tw-m-4 tw-flex tw-items-center tw-gap-2">
+          <Label>{localizedStrings['%platformLexicalTools_dictionary_dataLoadError%']}</Label>
+          <ErrorPopover
+            errorDetails={getErrorMessage(entriesError)}
+            localizedStrings={localizedStrings}
+          >
+            <Button variant="link" className="tw-h-auto tw-p-0">
+              {localizedStrings['%platformLexicalTools_dictionary_viewErrorDetails%']}
+            </Button>
+          </ErrorPopover>
+        </div>
+      )}
+      {entriesFiltered.length === 0 && !isLoadingEntriesById && !entriesError && (
         <div className="tw-m-4 tw-flex tw-justify-center">
           <Label>{localizedStrings['%platformLexicalTools_dictionary_noResults%']}</Label>
         </div>
