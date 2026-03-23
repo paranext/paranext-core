@@ -146,6 +146,8 @@ function cancellableDelay(
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     const timeoutId = setTimeout(() => resolve(false), ms);
+    // We must write to cancelRef.current to expose the cancel function to the caller, which is the
+    // intended API of this function. The ref object itself is not reassigned.
     // eslint-disable-next-line no-param-reassign
     cancelRef.current = {
       cancel: () => {
@@ -807,10 +809,19 @@ global.webViewComponent = function FindWebView({
 
   // Fallback for startup search: if findPdp wasn't ready when the debounce fired on mount,
   // run the search as soon as findPdp becomes available (fires at most once).
+  // Set explicitSearchPendingRef so the debounce timer (still pending when findPdp was already
+  // available at mount) skips its redundant second call.
   useEffect(() => {
-    if (!findPdp || !initialSearchTriggeredRef.current || searchStatus !== undefined) return;
+    if (
+      !findPdp ||
+      !initialSearchTriggeredRef.current ||
+      searchStatus !== undefined ||
+      searchTerm.trim() === ''
+    )
+      return;
+    explicitSearchPendingRef.current = true;
     handleStartSearchRef.current();
-  }, [findPdp, searchStatus]);
+  }, [findPdp, searchStatus, searchTerm]);
 
   // Reset isPostReplaceSearch once the search finishes so a subsequent search in replace mode
   // (e.g. triggered by an external change) is not mistakenly treated as a post-replace search.
@@ -917,6 +928,7 @@ global.webViewComponent = function FindWebView({
 
         let revertSucceeded = false;
         if (isCancelled) {
+          if (!isMountedRef.current) return; // Unmount — keep the replacement, don't revert
           try {
             if (bookSnapshot !== undefined && usfmBookPdp) {
               revertSucceeded = await revertBookSnapshots(
@@ -1025,6 +1037,8 @@ global.webViewComponent = function FindWebView({
       visibleResultsList.forEach((r, i) => {
         const bookId = r.start.verseRef.book;
         if (!bookGroupMap.has(bookId)) bookGroupMap.set(bookId, { ranges: [], insertions: [] });
+        // TypeScript doesn't know that bookId is guaranteed to be in bookGroupMap here, but the
+        // preceding `if` ensures it was just inserted if missing, so the `!` assertion is safe.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         const group = bookGroupMap.get(bookId)!;
         group.ranges.push({ start: r.start, end: r.end });
@@ -1040,7 +1054,7 @@ global.webViewComponent = function FindWebView({
         count === 1
           ? localizedStrings['%webView_find_replacedOneOccurrence%']
           : formatReplacementString(localizedStrings['%webView_find_replacedNOccurrences%'], {
-              count,
+              count: count.toString(),
             }),
       );
 
@@ -1053,6 +1067,7 @@ global.webViewComponent = function FindWebView({
 
       let revertSucceeded = false;
       if (isCancelled) {
+        if (!isMountedRef.current) return; // Unmount — keep the replacement, don't revert
         if (bookSnapshots.size > 0 && usfmBookPdp) {
           revertSucceeded = await revertBookSnapshots(bookSnapshots, usfmBookPdp);
         } else {
@@ -1122,7 +1137,12 @@ global.webViewComponent = function FindWebView({
   }, [focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
 
   const handleNextResult = useCallback(() => {
-    if (focusedVisibleIndex >= visibleResults.length - 1) return;
+    if (visibleResults.length === 0) return;
+    if (focusedVisibleIndex >= visibleResults.length - 1) {
+      // Already at last result → wrap to first
+      handleFocusedResultChange(visibleResults[0].result, visibleResults[0].originalIndex);
+      return;
+    }
     const next = visibleResults[focusedVisibleIndex + 1];
     handleFocusedResultChange(next.result, next.originalIndex);
   }, [focusedVisibleIndex, visibleResults, handleFocusedResultChange]);
@@ -1456,7 +1476,7 @@ global.webViewComponent = function FindWebView({
                 variant="ghost"
                 size="icon"
                 className="tw-h-7 tw-w-7"
-                disabled={focusedVisibleIndex >= visibleResults.length - 1}
+                disabled={visibleResults.length === 0}
                 onClick={handleNextResult}
                 aria-label={localizedStrings['%webView_find_nextResult%']}
               >
@@ -1494,8 +1514,8 @@ global.webViewComponent = function FindWebView({
       <div
         ref={resultsContainerRef}
         className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto tw-pe-2"
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         // This div is a keyboard-navigable scroll container; tabIndex is required to receive focus for arrow-key navigation between results
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
         onScroll={handleResultsScroll}
         onKeyDown={handleResultsKeyDown}
