@@ -67,6 +67,7 @@ let nonceCounter: number;
 /** Get the event handler registered on the mock worker for a given event name */
 function getRegisteredHandler(event: 'message'): (msg: WorkerMessage) => void;
 function getRegisteredHandler(event: 'error'): (err: Error) => void;
+function getRegisteredHandler(event: 'exit'): (code: number) => void;
 function getRegisteredHandler(event: string): (arg: unknown) => void {
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const call = (mockWorkerOn.mock.calls as [string, (arg: unknown) => void][]).find(
@@ -444,6 +445,7 @@ describe('dispose', () => {
     respondError('Failed to close a database');
 
     await expect(disposePromise).rejects.toThrow('Failed to close a database');
+    expect(mockWorkerTerminate).toHaveBeenCalledOnce();
   });
 });
 
@@ -460,5 +462,19 @@ describe('worker error event', () => {
 
     await expect(runPromise).rejects.toThrow('Worker crashed unexpectedly');
     await expect(selectPromise).rejects.toThrow('Worker crashed unexpectedly');
+  });
+});
+
+describe('worker exit event', () => {
+  it('rejects all pending requests when the worker exits unexpectedly', async () => {
+    const service = createService();
+
+    const runPromise = service.run('some-nonce', 'SELECT 1');
+    const selectPromise = service.select('other-nonce', 'SELECT 2');
+
+    getRegisteredHandler('exit')(1);
+
+    await expect(runPromise).rejects.toThrow('Database worker exited unexpectedly with code 1');
+    await expect(selectPromise).rejects.toThrow('Database worker exited unexpectedly with code 1');
   });
 });

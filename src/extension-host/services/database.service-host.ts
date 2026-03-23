@@ -56,8 +56,11 @@ class DatabaseService implements IDatabaseService {
     });
 
     this.#worker.on('error', (error) => {
-      this.#pendingRequests.forEach(({ reject }) => reject(error));
-      this.#pendingRequests.clear();
+      this.#rejectAllPending(error);
+    });
+
+    this.#worker.on('exit', (code) => {
+      this.#rejectAllPending(new Error(`Database worker exited unexpectedly with code ${code}`));
     });
   }
 
@@ -142,6 +145,11 @@ class DatabaseService implements IDatabaseService {
       await this.#worker.terminate();
     }
     return true;
+  }
+
+  #rejectAllPending(error: Error): void {
+    this.#pendingRequests.forEach(({ reject }) => reject(error));
+    this.#pendingRequests.clear();
   }
 
   #sendRequest<T extends keyof WorkerMessageTypes>(
