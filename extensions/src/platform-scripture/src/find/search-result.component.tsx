@@ -96,6 +96,7 @@ export default function SearchResult({
   isReplacing,
 }: SearchResultProps) {
   // eslint-disable-next-line no-null/no-null
+  // useRef requires null as the initial value for DOM refs
   const cardRef = useRef<HTMLDivElement>(null);
 
   // We should avoid calculating context unless this result is selected to improve performance
