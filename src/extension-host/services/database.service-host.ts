@@ -31,7 +31,9 @@ const defaultWorkerFactory: WorkerFactory = () => {
   const workerPath = join(__dirname, `database.worker.${globalThis.isPackaged ? 'js' : 'ts'}`);
   return new Worker(
     workerPath,
-    globalThis.isPackaged ? {} : { execArgv: ['--require', 'tsx/cjs'] },
+    globalThis.isPackaged
+      ? {}
+      : { execArgv: ['--require', 'tsx/cjs', '--require', 'tsconfig-paths/register'] },
   );
 };
 
