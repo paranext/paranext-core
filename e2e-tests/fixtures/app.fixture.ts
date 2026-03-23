@@ -5,7 +5,12 @@ import {
   TestInfo,
   ConsoleMessage,
 } from '@playwright/test';
-import { launchElectronApp, teardownElectronApp, ElectronAppContext } from './helpers';
+import {
+  launchElectronApp,
+  teardownElectronApp,
+  ElectronAppContext,
+  PROCESS_READY_TIMEOUT,
+} from './helpers';
 
 export { expect } from '@playwright/test';
 
@@ -41,7 +46,7 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
   ],
 
   mainPage: async ({ electronApp }, use, testInfo: TestInfo) => {
-    const page = await electronApp.firstWindow();
+    const page = await electronApp.firstWindow({ timeout: PROCESS_READY_TIMEOUT });
 
     // The Page object is shared within a worker. Use named functions so listeners
     // can be removed after the test, preventing accumulation. Tests should NOT
@@ -58,7 +63,7 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
     await page.waitForLoadState('domcontentloaded');
 
     // Wait for React to mount
-    await page.waitForSelector('#root', { state: 'attached', timeout: 30_000 });
+    await page.waitForSelector('#root', { state: 'attached', timeout: PROCESS_READY_TIMEOUT });
 
     await use(page);
 
