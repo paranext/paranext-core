@@ -135,6 +135,27 @@ function applyPreserveCase(matchedText: string, replacementText: string): string
   return replacementText;
 }
 
+/**
+ * Returns a promise that resolves after `ms` milliseconds. The cancel function stored in
+ * `cancelRef` resolves the promise early; the resolved value is `true` when cancelled, `false` when
+ * the timeout elapsed naturally. Callers must clear `cancelRef.current` after awaiting.
+ */
+function cancellableDelay(
+  ms: number,
+  cancelRef: { current: { cancel: () => void } | undefined },
+): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    const timeoutId = setTimeout(() => resolve(false), ms);
+    // eslint-disable-next-line no-param-reassign
+    cancelRef.current = {
+      cancel: () => {
+        clearTimeout(timeoutId);
+        resolve(true);
+      },
+    };
+  });
+}
+
 global.webViewComponent = function FindWebView({
   projectId,
   useWebViewState,
@@ -852,6 +873,10 @@ global.webViewComponent = function FindWebView({
         ? applyPreserveCase(result.text ?? '', replaceTerm)
         : replaceTerm;
 
+      // Snapshot the book before replacing so revert can restore USFM exactly
+      const bookVerseRef = { book: result.start.verseRef.book, chapterNum: 1, verseNum: 0 };
+      const bookSnapshot = await usfmBookPdp?.getBookUSFM(bookVerseRef);
+
       setIsReplacing(true);
       try {
         await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
@@ -862,38 +887,25 @@ global.webViewComponent = function FindWebView({
         const replacedToastId = sonner(localizedStrings['%webView_find_replaced1Occurrence%']);
 
         // Cancellable 1-second wait before re-search
-        let isCancelled = false;
-        await new Promise<void>((resolve) => {
-          const timeoutId = setTimeout(resolve, 1000);
-          pendingReplaceRevertRef.current = {
-            cancel: () => {
-              isCancelled = true;
-              clearTimeout(timeoutId);
-              resolve();
-            },
-          };
-        });
+        const isCancelled = await cancellableDelay(1000, pendingReplaceRevertRef);
         pendingReplaceRevertRef.current = undefined;
 
         if (isCancelled) {
           try {
-            const revertEnd = {
-              verseRef: result.start.verseRef,
-              offset: (result.start.offset ?? 0) + usfmToInsert.length,
-            };
-            // Known limitation: result.text is plain text (not USFM), so inline markers
-            // (e.g. \add...\add*) within the matched range would be lost on revert.
-            // Replace All uses book USFM snapshots to avoid this; single-replace does not.
-            await replacePdp.replace([{ start: result.start, end: revertEnd }], result.text ?? '');
+            if (bookSnapshot !== undefined && usfmBookPdp) {
+              await usfmBookPdp.setBookUSFM(bookVerseRef, bookSnapshot);
+            } else {
+              logger.error('Error reverting replace: book snapshot unavailable');
+            }
+            sonner.dismiss(replacedToastId);
+            sonner(localizedStrings['%webView_find_replacementReverted%']);
+            if (isMountedRef.current)
+              setResults((prev) =>
+                prev.map((r, i) => (i === indexToReplace ? { ...r, isReplaced: false } : r)),
+              );
           } catch (revertError) {
             logger.error(`Error reverting replace: ${getErrorMessage(revertError)}`);
           }
-          sonner.dismiss(replacedToastId);
-          sonner(localizedStrings['%webView_find_replacementReverted%']);
-          if (isMountedRef.current)
-            setResults((prev) =>
-              prev.map((r, i) => (i === indexToReplace ? { ...r, isReplaced: false } : r)),
-            );
         } else {
           // Store the replaced index so the auto-select effect can advance to the next result
           // rather than jumping back to the first after the re-search completes.
@@ -916,6 +928,7 @@ global.webViewComponent = function FindWebView({
       replacePdp,
       replaceTerm,
       results,
+      usfmBookPdp,
     ],
   );
 
@@ -950,7 +963,6 @@ global.webViewComponent = function FindWebView({
       const visibleResultsList = allResults.filter((r) => !r.isHidden);
       if (visibleResultsList.length === 0) return;
 
-      const rangesToReplace = visibleResultsList.map((r) => ({ start: r.start, end: r.end }));
       const usfmToInsert = preserveCase
         ? visibleResultsList.map((r) => applyPreserveCase(r.text ?? '', replaceTerm))
         : replaceTerm;
@@ -967,10 +979,27 @@ global.webViewComponent = function FindWebView({
         }),
       );
 
-      // Note: replace() requires all ranges to be within the same book (platform-scripture API
-      // constraint). Multi-book scopes (e.g. selectedBooks) will fail here if results span books.
-      // A future improvement would group results by book and call replace() once per book.
-      await replacePdp.replace(rangesToReplace, usfmToInsert);
+      // Group results by book and call replace() once per book (API requires all ranges in same book).
+      const bookGroupMap = new Map<
+        string,
+        {
+          ranges: { start: HidableFindResult['start']; end: HidableFindResult['end'] }[];
+          insertions: string[];
+        }
+      >();
+      visibleResultsList.forEach((r, i) => {
+        const bookId = r.start.verseRef.book;
+        if (!bookGroupMap.has(bookId)) bookGroupMap.set(bookId, { ranges: [], insertions: [] });
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const group = bookGroupMap.get(bookId)!;
+        group.ranges.push({ start: r.start, end: r.end });
+        group.insertions.push(Array.isArray(usfmToInsert) ? usfmToInsert[i] : usfmToInsert);
+      });
+      await Promise.all(
+        [...bookGroupMap.values()].map(({ ranges, insertions }) =>
+          replacePdp.replace(ranges, preserveCase ? insertions : insertions[0]),
+        ),
+      );
       const count = visibleResultsList.length;
       const replacedAllToastId = sonner(
         count === 1
@@ -984,40 +1013,36 @@ global.webViewComponent = function FindWebView({
       setResults(allResults.map((r) => (r.isHidden ? r : { ...r, isReplaced: true })));
 
       // Cancellable 1-second wait before re-search
-      let isCancelled = false;
-      await new Promise<void>((resolve) => {
-        const timeoutId = setTimeout(resolve, 1000);
-        pendingReplaceRevertRef.current = {
-          cancel: () => {
-            isCancelled = true;
-            clearTimeout(timeoutId);
-            resolve();
-          },
-        };
-      });
+      const isCancelled = await cancellableDelay(1000, pendingReplaceRevertRef);
       pendingReplaceRevertRef.current = undefined;
 
       if (isCancelled) {
+        let revertSucceeded = false;
         if (bookSnapshots.size > 0 && usfmBookPdp) {
+          let allRevertedSuccessfully = true;
           await Promise.all(
             [...bookSnapshots].map(async ([bookId, snapshot]) => {
               try {
                 const verseRef = { book: bookId, chapterNum: 1, verseNum: 0 };
                 await usfmBookPdp.setBookUSFM(verseRef, snapshot);
               } catch (revertError) {
+                allRevertedSuccessfully = false;
                 logger.error(
                   `Error reverting replace all for book ${bookId}: ${getErrorMessage(revertError)}`,
                 );
               }
             }),
           );
+          revertSucceeded = allRevertedSuccessfully;
         } else {
           logger.error('Error reverting replace all: book snapshots unavailable');
         }
         sonner.dismiss(replacedAllToastId);
-        sonner(localizedStrings['%webView_find_replacementReverted%']);
-        if (isMountedRef.current)
-          setResults((prev) => prev.map((r) => ({ ...r, isReplaced: false })));
+        if (revertSucceeded) {
+          sonner(localizedStrings['%webView_find_replacementReverted%']);
+          if (isMountedRef.current)
+            setResults((prev) => prev.map((r) => ({ ...r, isReplaced: false })));
+        }
       }
       if (!isMountedRef.current) return;
       isPostReplaceSearchRef.current = true;
