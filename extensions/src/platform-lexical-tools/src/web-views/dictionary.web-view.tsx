@@ -18,8 +18,8 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { logger } from '@papi/frontend';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { DictionaryEntryDisplay } from '../components/dictionary/dictionary-entry-display.component';
+import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../utils/dictionary-ui.utils';
 import {
-  DICTIONARY_LOCALIZED_STRING_KEYS,
   DictionaryScope,
   getFormatGlossesStringFromDictionaryEntrySenses,
 } from '../utils/dictionary.utils';

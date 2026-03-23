@@ -8,10 +8,8 @@ import {
 } from 'platform-bible-react';
 import { useMemo } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import {
-  DICTIONARY_LOCALIZED_STRING_KEYS,
-  DictionaryProjectOption,
-} from '../../utils/dictionary.utils';
+import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../../utils/dictionary-ui.utils';
+import { DictionaryProjectOption } from '../../utils/dictionary.utils';
 
 /** Props for the TrackProjectDropdown component */
 type TrackProjectDropdownProps = {

@@ -11,11 +11,8 @@ import { useLocalizedStrings } from '@papi/frontend/react';
 import { RefObject, useRef } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { DictionaryEntryDisplay } from './dictionary-entry-display.component';
-import {
-  DICTIONARY_LOCALIZED_STRING_KEYS,
-  DictionaryScope,
-  useIsWideScreen,
-} from '../../utils/dictionary.utils';
+import { DICTIONARY_LOCALIZED_STRING_KEYS, useIsWideScreen } from '../../utils/dictionary-ui.utils';
+import { DictionaryScope } from '../../utils/dictionary.utils';
 import { DictionaryListItem } from './dictionary-list-item.component';
 
 function getEntryId(entry: Entry): string {
