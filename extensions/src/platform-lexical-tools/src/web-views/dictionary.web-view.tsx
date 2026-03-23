@@ -64,9 +64,14 @@ globalThis.webViewComponent = function Dictionary({
 
   const entriesError = useMemo(() => {
     if (!isPlatformError(entriesByIdPossiblyError)) return undefined;
-    logger.error(`Error getting entries by ID: ${getErrorMessage(entriesByIdPossiblyError)}`);
     return entriesByIdPossiblyError;
   }, [entriesByIdPossiblyError]);
+
+  useEffect(() => {
+    if (entriesError) {
+      logger.error(`Error getting entries by ID: ${getErrorMessage(entriesError)}`);
+    }
+  }, [entriesError]);
 
   const entriesById: LexicalEntriesById = useMemo(() => {
     if (isPlatformError(entriesByIdPossiblyError)) return ENTRIES_DEFAULT;
