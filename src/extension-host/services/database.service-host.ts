@@ -11,6 +11,7 @@ import {
   NamedSqlParameters,
 } from '@shared/services/database.service-model';
 import { createSyncProxyForAsyncObject, startsWith } from 'platform-bible-utils';
+import { logger } from '@shared/services/logger.service';
 import { newNonce } from '@shared/utils/util';
 import { getUriFromExtensionUri } from '@extension-host/services/asset-retrieval.service';
 import { getPathFromUri } from '@node/utils/util';
@@ -56,11 +57,14 @@ class DatabaseService implements IDatabaseService {
     });
 
     this.#worker.on('error', (error) => {
+      logger.error('Database worker crashed:', error);
       this.#rejectAllPending(error);
     });
 
     this.#worker.on('exit', (code) => {
-      this.#rejectAllPending(new Error(`Database worker exited unexpectedly with code ${code}`));
+      const error = new Error(`Database worker exited unexpectedly with code ${code}`);
+      logger.error(error.message);
+      this.#rejectAllPending(error);
     });
   }
 
