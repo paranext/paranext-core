@@ -8,7 +8,7 @@ import {
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: boolean };
@@ -17,6 +17,7 @@ export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: 
 const WORDS_AROUND_SEARCH_RESULT = 15;
 
 export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  '%general_cancel%',
   '%webView_find_copyReference%',
   '%webView_find_copyVerseText%',
   '%webView_find_copyReferenceAndVerseText%',
@@ -24,6 +25,7 @@ export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%webView_find_noVerseTextAvailable%',
   '%webView_find_loadingVerseText%',
   '%webView_find_replace%',
+  '%webView_find_replaced%',
 ];
 
 /** Props interface for the SearchResult component */
@@ -93,6 +95,9 @@ export default function SearchResult({
   isReplaceMode,
   isReplacing,
 }: SearchResultProps) {
+  // eslint-disable-next-line no-null/no-null
+  const cardRef = useRef<HTMLDivElement>(null);
+
   // We should avoid calculating context unless this result is selected to improve performance
   const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(isSelected);
   const [isProgressAnimating, setIsProgressAnimating] = useState(false);
@@ -110,6 +115,7 @@ export default function SearchResult({
   useEffect(() => {
     if (isSelected) {
       setShouldGetVerseText(true);
+      cardRef.current?.scrollIntoView({ block: 'nearest' });
     }
   }, [isSelected]);
 
@@ -234,24 +240,28 @@ export default function SearchResult({
       </div>
       {searchResult.isReplaced && (
         <>
-          <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">Replaced</span>
+          <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">
+            {localizedStrings['%webView_find_replaced%']}
+          </span>
           <div className="tw-flex-1 tw-h-1.5 tw-bg-red-200 tw-rounded-full tw-overflow-hidden">
             <div
               className="tw-h-full tw-bg-red-500 tw-rounded-full tw-transition-all tw-ease-linear tw-duration-1000"
               style={{ width: isProgressAnimating ? '100%' : '0%' }}
             />
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="tw-h-6 tw-shrink-0 tw-mr-10 tw-border-red-300 tw-text-red-500 hover:tw-border-red-500 hover:tw-text-red-700"
-            onClick={(e) => {
-              e.stopPropagation();
-              onCancelReplace?.();
-            }}
-          >
-            Cancel
-          </Button>
+          {onCancelReplace && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="tw-h-6 tw-shrink-0 tw-mr-10 tw-border-red-300 tw-text-red-500 hover:tw-border-red-500 hover:tw-text-red-700"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancelReplace();
+              }}
+            >
+              {localizedStrings['%general_cancel%']}
+            </Button>
+          )}
         </>
       )}
     </div>
@@ -264,24 +274,26 @@ export default function SearchResult({
   );
 
   return (
-    <ResultsCard
-      cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
-        searchResult.start.verseRef.verseNum
-      }${searchResult.text}${globalResultsIndex}`}
-      isHidden={searchResult.isHidden}
-      isSelected={isSelected}
-      className={searchResult.isReplaced ? '!tw-bg-red-100 dark:!tw-bg-red-950' : undefined}
-      onSelect={() => {
-        setShouldGetVerseText(true);
-        onResultClick(searchResult, globalResultsIndex);
-      }}
-      selectedButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
-      hoverButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
-      dropdownContent={searchResult.isReplaced ? undefined : dropdownContent}
-      showDropdownOnHover={!searchResult.isReplaced}
-      additionalSelectedContent={additionalSelectedContent}
-    >
-      {cardContent}
-    </ResultsCard>
+    <div ref={cardRef}>
+      <ResultsCard
+        cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
+          searchResult.start.verseRef.verseNum
+        }${searchResult.text}${globalResultsIndex}`}
+        isHidden={searchResult.isHidden}
+        isSelected={isSelected}
+        className={searchResult.isReplaced ? '!tw-bg-red-100 dark:!tw-bg-red-950' : undefined}
+        onSelect={() => {
+          setShouldGetVerseText(true);
+          onResultClick(searchResult, globalResultsIndex);
+        }}
+        selectedButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
+        hoverButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
+        dropdownContent={searchResult.isReplaced ? undefined : dropdownContent}
+        showDropdownOnHover={!searchResult.isReplaced}
+        additionalSelectedContent={additionalSelectedContent}
+      >
+        {cardContent}
+      </ResultsCard>
+    </div>
   );
 }

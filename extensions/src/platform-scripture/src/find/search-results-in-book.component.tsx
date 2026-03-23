@@ -92,6 +92,8 @@ export function SearchResultsInBook({
     }
   }, [usjBook, bookId]);
 
+  const firstReplacedIndex = results.findIndex((r) => r.isReplaced);
+
   return (
     <>
       {results.map((result, index) => (
@@ -105,7 +107,7 @@ export function SearchResultsInBook({
           onResultClick={onResultClick}
           onHideResult={onHideResult}
           onReplace={onReplace}
-          onCancelReplace={onCancelReplace}
+          onCancelReplace={index === firstReplacedIndex ? onCancelReplace : undefined}
           localizedStrings={localizedStrings}
           isReplaceMode={isReplaceMode}
           isReplacing={isReplacing}
