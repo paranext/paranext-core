@@ -450,7 +450,8 @@ global.webViewComponent = function FindWebView({
   // window.
   const isInitialAutoSearchRef = useRef(true);
   // Tracks whether the startup search (for a pre-filled search term) has already been triggered,
-  // so the findPdp-readiness effect below only fires once.
+  // so the findPdp-readiness effect below only fires once. Intentionally never reset: the fallback
+  // effect is a one-shot safety net for mount-time races and should not re-fire on project switch.
   const initialSearchTriggeredRef = useRef(false);
 
   const handleStartSearch = useCallback(
@@ -840,6 +841,7 @@ global.webViewComponent = function FindWebView({
 
   const handleReplace = useCallback(
     async (resultIndex?: number) => {
+      if (isReplacing) return;
       const indexToReplace = resultIndex ?? focusedResultIndex;
       if (indexToReplace === undefined || !replacePdp) return;
 
@@ -879,6 +881,9 @@ global.webViewComponent = function FindWebView({
               verseRef: result.start.verseRef,
               offset: (result.start.offset ?? 0) + usfmToInsert.length,
             };
+            // Known limitation: result.text is plain text (not USFM), so inline markers
+            // (e.g. \add...\add*) within the matched range would be lost on revert.
+            // Replace All uses book USFM snapshots to avoid this; single-replace does not.
             await replacePdp.replace([{ start: result.start, end: revertEnd }], result.text ?? '');
           } catch (revertError) {
             logger.error(`Error reverting replace: ${getErrorMessage(revertError)}`);
@@ -903,11 +908,19 @@ global.webViewComponent = function FindWebView({
         setIsReplacing(false);
       }
     },
-    [focusedResultIndex, localizedStrings, preserveCase, replacePdp, replaceTerm, results],
+    [
+      focusedResultIndex,
+      isReplacing,
+      localizedStrings,
+      preserveCase,
+      replacePdp,
+      replaceTerm,
+      results,
+    ],
   );
 
   const handleReplaceAll = useCallback(async () => {
-    if (!replacePdp) return;
+    if (isReplacing || !replacePdp) return;
 
     setIsReplacing(true);
     try {
@@ -942,14 +955,24 @@ global.webViewComponent = function FindWebView({
         ? visibleResultsList.map((r) => applyPreserveCase(r.text ?? '', replaceTerm))
         : replaceTerm;
 
-      // Snapshot the book USFM before replacing so cancel/revert can restore it exactly,
-      // avoiding stale-position errors from the post-replacement document state.
-      const bookVerseRef = visibleResultsList[0].start.verseRef;
-      const bookUsfmSnapshot = await usfmBookPdp?.getBookUSFM(bookVerseRef);
+      // Snapshot all affected books' USFM before replacing so cancel/revert can restore them
+      // exactly, avoiding stale-position errors from the post-replacement document state.
+      const uniqueBookIds = [...new Set(visibleResultsList.map((r) => r.start.verseRef.book))];
+      const bookSnapshots = new Map<string, string>();
+      await Promise.all(
+        uniqueBookIds.map(async (bookId) => {
+          const verseRef = { book: bookId, chapterNum: 1, verseNum: 0 };
+          const snapshot = await usfmBookPdp?.getBookUSFM(verseRef);
+          if (snapshot !== undefined) bookSnapshots.set(bookId, snapshot);
+        }),
+      );
 
+      // Note: replace() requires all ranges to be within the same book (platform-scripture API
+      // constraint). Multi-book scopes (e.g. selectedBooks) will fail here if results span books.
+      // A future improvement would group results by book and call replace() once per book.
       await replacePdp.replace(rangesToReplace, usfmToInsert);
       const count = visibleResultsList.length;
-      sonner(
+      const replacedAllToastId = sonner(
         count === 1
           ? localizedStrings['%webView_find_replaced1Occurrence%']
           : formatReplacementString(localizedStrings['%webView_find_replacedNOccurrences%'], {
@@ -975,15 +998,24 @@ global.webViewComponent = function FindWebView({
       pendingReplaceRevertRef.current = undefined;
 
       if (isCancelled) {
-        if (bookUsfmSnapshot !== undefined && usfmBookPdp) {
-          try {
-            await usfmBookPdp.setBookUSFM(bookVerseRef, bookUsfmSnapshot);
-          } catch (revertError) {
-            logger.error(`Error reverting replace all: ${getErrorMessage(revertError)}`);
-          }
+        if (bookSnapshots.size > 0 && usfmBookPdp) {
+          await Promise.all(
+            [...bookSnapshots].map(async ([bookId, snapshot]) => {
+              try {
+                const verseRef = { book: bookId, chapterNum: 1, verseNum: 0 };
+                await usfmBookPdp.setBookUSFM(verseRef, snapshot);
+              } catch (revertError) {
+                logger.error(
+                  `Error reverting replace all for book ${bookId}: ${getErrorMessage(revertError)}`,
+                );
+              }
+            }),
+          );
         } else {
-          logger.error('Error reverting replace all: book snapshot unavailable');
+          logger.error('Error reverting replace all: book snapshots unavailable');
         }
+        sonner.dismiss(replacedAllToastId);
+        sonner(localizedStrings['%webView_find_replacementReverted%']);
         if (isMountedRef.current)
           setResults((prev) => prev.map((r) => ({ ...r, isReplaced: false })));
       }
@@ -996,6 +1028,7 @@ global.webViewComponent = function FindWebView({
       setIsReplacing(false);
     }
   }, [
+    isReplacing,
     localizedStrings,
     preserveCase,
     replacePdp,
