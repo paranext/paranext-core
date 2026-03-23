@@ -92,6 +92,12 @@ function createMessageHandler(
   // eslint-disable-next-line @typescript-eslint/naming-convention
   DatabaseSyncImpl: DatabaseSyncConstructor = DatabaseSync,
 ): (message: WorkerMessage) => void {
+  function getDatabase(nonce: string): DatabaseSync {
+    const db = databases.get(nonce);
+    if (!db) throw new Error(`Database with nonce "${nonce}" is not open.`);
+    return db;
+  }
+
   return (message: WorkerMessage) => {
     const { id } = message;
     try {
@@ -105,30 +111,26 @@ function createMessageHandler(
         }
 
         case 'close': {
-          const db = databases.get(message.nonce);
-          if (!db) throw new Error(`Database with nonce "${message.nonce}" is not open.`);
+          const db = getDatabase(message.nonce);
           db.close();
           databases.delete(message.nonce);
           break;
         }
 
         case 'attach': {
-          const db = databases.get(message.nonce);
-          if (!db) throw new Error(`Database with nonce "${message.nonce}" is not open.`);
+          const db = getDatabase(message.nonce);
           db.prepare('ATTACH DATABASE ? AS ?').run(message.path, message.schemaName);
           break;
         }
 
         case 'detach': {
-          const db = databases.get(message.nonce);
-          if (!db) throw new Error(`Database with nonce "${message.nonce}" is not open.`);
+          const db = getDatabase(message.nonce);
           db.prepare('DETACH DATABASE ?').run(message.schemaName);
           break;
         }
 
         case 'run': {
-          const db = databases.get(message.nonce);
-          if (!db) throw new Error(`Database with nonce "${message.nonce}" is not open.`);
+          const db = getDatabase(message.nonce);
           const [namedOrFirst, ...positional] = message.args;
           let changes: number | bigint;
           let lastInsertRowid: number | bigint;
@@ -148,8 +150,7 @@ function createMessageHandler(
         }
 
         case 'select': {
-          const db = databases.get(message.nonce);
-          if (!db) throw new Error(`Database with nonce "${message.nonce}" is not open.`);
+          const db = getDatabase(message.nonce);
           const [namedOrFirst, ...positional] = message.args;
           if (isNamedParams(namedOrFirst)) {
             result = db
