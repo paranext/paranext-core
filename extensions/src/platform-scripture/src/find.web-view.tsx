@@ -33,6 +33,8 @@ import {
   SCOPE_SELECTOR_STRING_KEYS,
   ScopeSelector,
   Skeleton,
+  Sonner,
+  sonner,
   ToggleGroup,
   ToggleGroupItem,
   Tooltip,
@@ -177,7 +179,6 @@ global.webViewComponent = function FindWebView({
    * 'running', preventing the user from replacing with already-stale positions.
    */
   const [isReplacing, setIsReplacing] = useState(false);
-
   const [activeJobId, setActiveJobId] = useState<string>();
   const [searchProgress, setSearchProgress] = useState<number>(0);
   const [totalNumberOfResults, setTotalNumberOfResults] = useState<number>(0);
@@ -418,6 +419,10 @@ global.webViewComponent = function FindWebView({
     return `chapter:${verseRefSetting.book}:${verseRefSetting.chapterNum}`;
   }, [scope, selectedBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
 
+  // Stores a cancel function for a pending replace/replace-all operation (the 1-second window
+  // before the re-search fires). Calling it stops the timer and triggers a revert.
+  const pendingReplaceRevertRef = useRef<{ cancel: () => void } | undefined>(undefined);
+
   const isStartingSearchRef = useRef(false);
   // Set when the user explicitly starts a search (Enter/Find button) so the debounce timer that
   // may still be pending from the same keystroke skips its redundant restart.
@@ -425,9 +430,14 @@ global.webViewComponent = function FindWebView({
   // Tracks the index of the result that was just replaced so the auto-select effect can advance
   // focus to the next result instead of jumping back to the first.
   const pendingAdvanceIndexRef = useRef<number | undefined>(undefined);
-  // Skip auto-search on the initial render so that restoring a non-empty searchTerm from
-  // useWebViewState doesn't trigger an unwanted search before the user has interacted.
+  // On the initial render, skip the debounce-triggered auto-search only when searchTerm is empty.
+  // When searchTerm is non-empty (restored from state), let the search run so results appear on
+  // startup. A separate effect handles the case where findPdp isn't ready within the debounce
+  // window.
   const isInitialAutoSearchRef = useRef(true);
+  // Tracks whether the startup search (for a pre-filled search term) has already been triggered,
+  // so the findPdp-readiness effect below only fires once.
+  const initialSearchTriggeredRef = useRef(false);
 
   const handleStartSearch = useCallback(
     async (isExplicitSearch = false) => {
@@ -720,7 +730,10 @@ global.webViewComponent = function FindWebView({
   useEffect(() => {
     if (isInitialAutoSearchRef.current) {
       isInitialAutoSearchRef.current = false;
-      return undefined;
+      // Only skip the initial auto-search when the field is empty. When searchTerm is non-empty
+      // (e.g. restored from state), fall through so results appear immediately on startup.
+      if (searchTerm.trim() === '') return undefined;
+      initialSearchTriggeredRef.current = true;
     }
     debouncedHandleStartSearch.current();
   }, [
@@ -731,6 +744,13 @@ global.webViewComponent = function FindWebView({
     searchTextType,
     relevantScopeKey,
   ]);
+
+  // Fallback for startup search: if findPdp wasn't ready when the debounce fired on mount,
+  // run the search as soon as findPdp becomes available (fires at most once).
+  useEffect(() => {
+    if (!findPdp || !initialSearchTriggeredRef.current || searchStatus !== undefined) return;
+    handleStartSearchRef.current();
+  }, [findPdp, searchStatus]);
 
   // When scripture changes externally in Replace mode, auto-re-run find so positions stay fresh.
   useEffect(() => {
@@ -815,12 +835,41 @@ global.webViewComponent = function FindWebView({
       setIsReplacing(true);
       try {
         await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
-        // Store the replaced index so the auto-select effect can advance to the next result
-        // rather than jumping back to the first after the re-search completes.
-        pendingAdvanceIndexRef.current = indexToReplace;
-        // Re-run find immediately after replace so positions are fresh before the user can
-        // click replace again. isReplacing stays true until this completes, closing the gap
-        // between replace() returning and searchStatus becoming 'running'.
+        // Mark the replaced result with visual feedback before re-running the search
+        setResults((prev) =>
+          prev.map((r, i) => (i === indexToReplace ? { ...r, isReplaced: true } : r)),
+        );
+        sonner('Replaced 1 occurrence');
+
+        // Cancellable 1-second wait before re-search
+        let isCancelled = false;
+        await new Promise<void>((resolve) => {
+          const timeoutId = setTimeout(resolve, 1000);
+          pendingReplaceRevertRef.current = {
+            cancel: () => {
+              isCancelled = true;
+              clearTimeout(timeoutId);
+              resolve();
+            },
+          };
+        });
+        pendingReplaceRevertRef.current = undefined;
+
+        if (isCancelled) {
+          try {
+            await replacePdp.replace([{ start: result.start, end: result.end }], result.text ?? '');
+          } catch (revertError) {
+            logger.error(`Error reverting replace: ${getErrorMessage(revertError)}`);
+          }
+          if (isMountedRef.current)
+            setResults((prev) =>
+              prev.map((r, i) => (i === indexToReplace ? { ...r, isReplaced: false } : r)),
+            );
+        } else {
+          // Store the replaced index so the auto-select effect can advance to the next result
+          // rather than jumping back to the first after the re-search completes.
+          pendingAdvanceIndexRef.current = indexToReplace;
+        }
         await handleStartSearchRef.current();
       } catch (error) {
         logger.error(`Error replacing result: ${getErrorMessage(error)}`);
@@ -868,6 +917,37 @@ global.webViewComponent = function FindWebView({
         : replaceTerm;
 
       await replacePdp.replace(rangesToReplace, usfmToInsert);
+      const count = visibleResultsList.length;
+      sonner(`Replaced ${count} ${count === 1 ? 'occurrence' : 'occurrences'}`);
+
+      // Mark all visible results as replaced for visual feedback (red background + progress bar)
+      setResults(allResults.map((r) => (r.isHidden ? r : { ...r, isReplaced: true })));
+
+      // Cancellable 1-second wait before re-search
+      let isCancelled = false;
+      await new Promise<void>((resolve) => {
+        const timeoutId = setTimeout(resolve, 1000);
+        pendingReplaceRevertRef.current = {
+          cancel: () => {
+            isCancelled = true;
+            clearTimeout(timeoutId);
+            resolve();
+          },
+        };
+      });
+      pendingReplaceRevertRef.current = undefined;
+
+      if (isCancelled) {
+        const originalRanges = visibleResultsList.map((r) => ({ start: r.start, end: r.end }));
+        const originalTexts = visibleResultsList.map((r) => r.text ?? '');
+        try {
+          await replacePdp.replace(originalRanges, originalTexts);
+        } catch (revertError) {
+          logger.error(`Error reverting replace all: ${getErrorMessage(revertError)}`);
+        }
+        if (isMountedRef.current)
+          setResults((prev) => prev.map((r) => ({ ...r, isReplaced: false })));
+      }
       await handleStartSearchRef.current();
     } catch (error) {
       logger.error(`Error replacing all results: ${getErrorMessage(error)}`);
@@ -875,6 +955,10 @@ global.webViewComponent = function FindWebView({
       setIsReplacing(false);
     }
   }, [preserveCase, replacePdp, replaceTerm, retrieveFindJobUpdate, totalNumberOfResults]);
+
+  const handleCancelReplace = useCallback(() => {
+    pendingReplaceRevertRef.current?.cancel();
+  }, []);
 
   const visibleResults = useMemo(
     () =>
@@ -1215,6 +1299,7 @@ global.webViewComponent = function FindWebView({
               onReplace={(indexInBookResults) =>
                 handleReplace(bookResults[indexInBookResults].originalIndex)
               }
+              onCancelReplace={handleCancelReplace}
               localizedStrings={searchResultLocalizedStrings}
               isReplaceMode={activeMode === 'replace'}
               isReplacing={isReplacing}
@@ -1226,7 +1311,7 @@ global.webViewComponent = function FindWebView({
       {/* Status bar */}
       {searchStatus && (
         <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-4 tw-border-t tw-pt-4">
-          {searchStatus === 'running' && (
+          {searchStatus === 'running' && activeMode !== 'replace' && (
             <div className="tw-flex tw-items-center tw-gap-4">
               <Progress value={searchProgress} className="tw-w-64" />
               <Button onClick={() => handleStopSearch(false)}>
@@ -1247,6 +1332,7 @@ global.webViewComponent = function FindWebView({
           )}
         </div>
       )}
+      <Sonner />
     </div>
   );
 };
