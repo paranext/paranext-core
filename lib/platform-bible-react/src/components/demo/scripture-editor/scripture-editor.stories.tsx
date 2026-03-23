@@ -423,7 +423,6 @@ export const FootnoteEditorView: FootnoteEditorViewStory = {
               editorOptions={mergedOptions}
               defaultMarkerMenuTrigger={mergedOptions.markerMenuTrigger ?? '\\'}
               localizedStrings={localizedStrings.localizedStrings?.[args.language]}
-              noteKeyRef={noteKey}
               parentEditorRef={editorRef}
             />
           </PopoverContent>

@@ -694,19 +694,19 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
 	...`%${string}%`[],
-	"%footnoteEditor_callerDropdown_label%",
+	"%footnoteEditor_callerDropdown_item_custom%",
 	"%footnoteEditor_callerDropdown_item_generated%",
 	"%footnoteEditor_callerDropdown_item_hidden%",
-	"%footnoteEditor_callerDropdown_item_custom%",
+	"%footnoteEditor_callerDropdown_label%",
 	"%footnoteEditor_callerDropdown_tooltip%",
 	"%footnoteEditor_cancelButton_tooltip%",
 	"%footnoteEditor_copyButton_tooltip%",
-	"%footnoteEditor_saveButton_tooltip%",
 	"%footnoteEditor_noteType_crossReference_label%",
 	"%footnoteEditor_noteType_endNote_label%",
 	"%footnoteEditor_noteType_footnote_label%",
 	"%footnoteEditor_noteType_tooltip%",
 	"%footnoteEditor_noteTypeDropdown_label%",
+	"%footnoteEditor_saveButton_tooltip%",
 	"%undoButton_tooltip%",
 	"%redoButton_tooltip%"
 ];
@@ -720,13 +720,6 @@ export interface FootnoteEditorProps {
 	classNameForEditor?: string;
 	/** Delta ops for the current note being edited that are applied to the note editorial */
 	noteOps: DeltaOpInsertNoteEmbed[] | undefined;
-	/**
-	 * Called on every change to the footnote with the updated note ops. An implementation of this
-	 * function is required only if the parent does not supply `parentEditorRef` or if some additional
-	 * logic is needed to handle the changes. The note ops passed in this function are the full ops
-	 * for the note, not just the changes since the last call.
-	 */
-	onChange?: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
 	/** External function to handle closing the footnote editor */
 	onClose: () => void;
 	/** The scripture reference for the parent editor */
@@ -740,24 +733,24 @@ export interface FootnoteEditorProps {
 	/** Localized strings to be passed to the footnote editor component */
 	localizedStrings: FootnoteEditorLocalizedStrings;
 	/**
+	 * Called on every change to the footnote with the updated note ops. An implementation of this
+	 * function is required only if the parent does not supply `parentEditorRef` or if some additional
+	 * logic is needed to handle the changes. The note ops passed in this function are the full ops
+	 * for the note, not just the changes since the last call.
+	 */
+	onChange?: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
+	/**
 	 * Ref to the parent editor. When provided, the footnote editor will apply changes directly to the
 	 * parent editor, so the client does not need to handle this in the `onChange` callback.
 	 */
 	parentEditorRef?: React$1.RefObject<EditorRef | null>;
-	/**
-	 * Mutable ref tracking the current Lexical node key of the note being edited in the parent
-	 * editor. Must be kept in sync by the parent: after each call to `replaceEmbedUpdate` the parent
-	 * editor fires `onUsjChange` with the newly assigned `insertedNodeKey`; the parent should write
-	 * that value back into this ref so that subsequent saves use the correct key.
-	 */
-	noteKeyRef?: React$1.MutableRefObject<string | undefined>;
 }
 /**
  * Component to edit footnotes from within the editor component
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, noteKeyRef, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
