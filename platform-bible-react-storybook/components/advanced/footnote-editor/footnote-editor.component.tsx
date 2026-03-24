@@ -9,9 +9,18 @@ import {
   getDefaultViewOptions,
   HIDDEN_NOTE_CALLER,
   isInsertEmbedOpOfType,
+  StateChangeSnapshot,
 } from '@eten-tech-foundation/platform-editor';
 import { Check, Copy, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  RefObject,
+} from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -20,6 +29,7 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from '@/components/shadcn-ui/tooltip';
+import { UndoRedoButtons } from '@/components/basics/undo-redo-buttons.component';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
 import { EditorKeyboardShortcuts } from '@/components/basics/editor-keyboard-shortcuts.component';
@@ -35,12 +45,7 @@ export interface FootnoteEditorProps {
   classNameForEditor?: string;
   /** Delta ops for the current note being edited that are applied to the note editorial */
   noteOps: DeltaOpInsertNoteEmbed[] | undefined;
-  /** External function to handle saving changes to the footnote */
-  onSave: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
-  /**
-   * External function to handle closing the footnote editor. Gets called when the editor is closed
-   * without saving changes
-   */
+  /** External function to handle closing the footnote editor */
   onClose: () => void;
   /** The scripture reference for the parent editor */
   scrRef: SerializedVerseRef;
@@ -52,6 +57,18 @@ export interface FootnoteEditorProps {
   defaultMarkerMenuTrigger: string;
   /** Localized strings to be passed to the footnote editor component */
   localizedStrings: FootnoteEditorLocalizedStrings;
+  /**
+   * Called on every change to the footnote with the updated note ops. An implementation of this
+   * function is required only if the parent does not supply `parentEditorRef` or if some additional
+   * logic is needed to handle the changes. The note ops passed in this function are the full ops
+   * for the note, not just the changes since the last call.
+   */
+  onChange?: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
+  /**
+   * Ref to the parent editor. When provided, the footnote editor will apply changes directly to the
+   * parent editor, so the client does not need to handle this in the `onChange` callback.
+   */
+  parentEditorRef?: RefObject<EditorRef | null>;
 }
 
 /**
@@ -127,21 +144,33 @@ const PARAGRAPH_USJ: Usj = {
 export default function FootnoteEditor({
   classNameForEditor,
   noteOps,
-  onSave,
+  onChange,
   onClose,
   scrRef,
   noteKey,
   editorOptions,
   defaultMarkerMenuTrigger,
   localizedStrings,
+  parentEditorRef,
 }: FootnoteEditorProps) {
   // These refs must have default values of `null` to be accepted by the React elements as refs
-  // eslint-disable-next-line no-null/no-null
+  /* eslint-disable no-null/no-null */
   const editorRef = useRef<EditorRef | null>(null);
-  // eslint-disable-next-line no-null/no-null
   const editorParentRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line no-null/no-null
   const outerBorderRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  /* eslint-enable no-null/no-null */
+
+  // Lock the container width to its natural rendered width so content changes (e.g. switching
+  // language, undo/redo enabling) don't cause the popover to resize while editing.
+  // useLayoutEffect fires after DOM layout but before paint, so getBoundingClientRect() returns
+  // the natural width. The parent PopoverContent unmounts this component on close, so the effect
+  // re-runs fresh on each open.
+  useLayoutEffect(() => {
+    if (!containerRef.current) return;
+    const { width } = containerRef.current.getBoundingClientRect();
+    if (width > 0) containerRef.current.style.width = `${width}px`;
+  }, []);
 
   const [callerType, setCallerType] = useState<FootnoteCallerType>('generated');
   const [customCaller, setCustomCaller] = useState<string>('*');
@@ -149,6 +178,12 @@ export default function FootnoteEditor({
   const [noteType, setNoteType] = useState<string>('f');
 
   const [isTypeSwitchable, setIsTypeSwitchable] = useState<boolean>(false);
+  // Tracks whether the editor content matches the state when the note was first loaded, so we
+  // can disable Undo when there are no user edits left to undo
+  const [isAtInitialState, setIsAtInitialState] = useState<boolean>(true);
+  const [canRedo, setCanRedo] = useState(false);
+  const hasInitializedEditor = useRef(false);
+  const initialNoteOpsJson = useRef('');
 
   // These control the placement of the inline markers menu by setting the location of the anchor
   const [showMarkersMenu, setShowMarkersMenu] = useState<boolean>(false);
@@ -195,6 +230,8 @@ export default function FootnoteEditor({
   // When the component loads, applies the note ops to the current editor, gets the note ref and caller
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
+    hasInitializedEditor.current = false;
+    setIsAtInitialState(true);
     const noteOp = noteOps?.at(0);
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
       const rawCaller = noteOp.insert.note?.caller;
@@ -223,20 +260,64 @@ export default function FootnoteEditor({
     };
   }, [noteOps, noteKey]);
 
-  const handleSave = useCallback(() => {
-    const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
-    if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
-      if (currentNoteOp.insert.note) {
-        if (callerType === 'custom') {
-          currentNoteOp.insert.note.caller = customCaller;
-        } else {
-          currentNoteOp.insert.note.caller =
-            callerType === 'generated' ? GENERATOR_NOTE_CALLER : HIDDEN_NOTE_CALLER;
+  /**
+   * Gets the current note op from the editor, applies the given caller, calls onChange, and
+   * optionally applies the change to the parent editor via replaceEmbedUpdate.
+   */
+  const saveCurrentNoteOp = useCallback(
+    (
+      resolvedCallerType: FootnoteCallerType,
+      resolvedCustomCaller: string,
+      applyToParent = false,
+    ) => {
+      const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
+      if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
+        if (currentNoteOp.insert.note) {
+          let caller: string;
+          if (resolvedCallerType === 'custom') {
+            caller = resolvedCustomCaller;
+          } else if (resolvedCallerType === 'generated') {
+            caller = GENERATOR_NOTE_CALLER;
+          } else {
+            caller = HIDDEN_NOTE_CALLER;
+          }
+          currentNoteOp.insert.note.caller = caller;
+        }
+        onChange?.([currentNoteOp]);
+        if (applyToParent && parentEditorRef && noteKey) {
+          parentEditorRef.current?.replaceEmbedUpdate(noteKey, [currentNoteOp]);
         }
       }
-      onSave([currentNoteOp]);
+    },
+    [noteKey, onChange, parentEditorRef],
+  );
+
+  const closeAndSave = useCallback(() => {
+    saveCurrentNoteOp(callerType, customCaller, true);
+    onClose();
+  }, [callerType, customCaller, onClose, saveCurrentNoteOp]);
+
+  // Keep a stable ref to closeAndSave so the chapter-change effect below only needs to depend on
+  // scrRef.book and scrRef.chapterNum (not on caller state that changes during editing).
+  const closeAndSaveRef = useRef(closeAndSave);
+  useLayoutEffect(() => {
+    closeAndSaveRef.current = closeAndSave;
+  });
+
+  // Close when the book or chapter changes — verse changes don't require closing.
+  // useLayoutEffect runs before useEffect, so the save via replaceEmbedUpdate (which is a
+  // synchronous discrete Lexical update) completes before the parent editor's useEffect loads
+  // the new chapter's content.
+  const prevScrRefBookChapter = useRef({ book: scrRef.book, chapterNum: scrRef.chapterNum });
+  useLayoutEffect(() => {
+    if (
+      prevScrRefBookChapter.current.book !== scrRef.book ||
+      prevScrRefBookChapter.current.chapterNum !== scrRef.chapterNum
+    ) {
+      prevScrRefBookChapter.current = { book: scrRef.book, chapterNum: scrRef.chapterNum };
+      closeAndSaveRef.current();
     }
-  }, [callerType, customCaller, onSave]);
+  }, [scrRef.book, scrRef.chapterNum]);
 
   const handleCopy = () => {
     const editorInput = editorParentRef.current?.getElementsByClassName('editor-input')[0];
@@ -244,6 +325,22 @@ export default function FootnoteEditor({
       navigator.clipboard.writeText(editorInput.textContent);
     }
   };
+
+  const handleCallerTypeChange = useCallback(
+    (newCallerType: FootnoteCallerType) => {
+      setCallerType(newCallerType);
+      saveCurrentNoteOp(newCallerType, customCaller);
+    },
+    [customCaller, saveCurrentNoteOp],
+  );
+
+  const handleCustomCallerChange = useCallback(
+    (newCustomCaller: string) => {
+      setCustomCaller(newCustomCaller);
+      saveCurrentNoteOp(callerType, newCustomCaller);
+    },
+    [callerType, saveCurrentNoteOp],
+  );
 
   const handleNoteTypeChange = (value: string) => {
     setNoteType(value);
@@ -261,55 +358,76 @@ export default function FootnoteEditor({
         innerNoteOps?.forEach((op) => crossReferenceToFootnoteOp(op));
       }
 
-      // Inserts the new footnote/cross-reference and deletes the old one
+      // Inserts the new footnote/cross-reference and deletes the old one — triggers handleUsjChange
       editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
     }
   };
 
-  const handleUsjChange = (usj: Usj) => {
-    // Makes sure that the editor is focused when the usj changes
-    editorRef.current?.focus();
-    const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
-    if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
-      // Prevents adding additional note nodes or other nodes after the main footnote node
-      if (usj.content.length > 1) {
-        setTimeout(() => {
-          // Retains the first two nodes which are the added paragraph node (for now) and the
-          // footnote/cross-reference and deletes the unwanted node that was just inserted
-          editorRef.current?.applyUpdate([{ retain: 2 }, { delete: 1 }]);
-        }, 0);
-      }
-      const currentNoteType = noteOp.insert.note?.style;
-      const innerNoteOps = noteOp.insert.note?.contents?.ops;
-      if (!currentNoteType) setIsTypeSwitchable(false);
-
-      if (currentNoteType === 'x') {
-        setIsTypeSwitchable(
-          !!innerNoteOps?.every((op) => {
-            if (!op.attributes?.char) return true;
-            // The built-in type for the delta note ops does not contain the types for the attributes
-            // so have to cast it here
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            const nodeType = (op.attributes?.char as Record<string, string>).style;
-            return nodeType === 'xt' || nodeType === 'xo' || nodeType === 'xq';
-          }),
-        );
-      } else {
-        setIsTypeSwitchable(
-          !!innerNoteOps?.every((op) => {
-            if (!op.attributes?.char) return true;
-            // The built-in type for the delta note ops does not contain the types for the attributes
-            // so have to cast it here
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            const nodeType = (op.attributes?.char as Record<string, string>).style;
-            return nodeType === 'ft' || nodeType === 'fr' || nodeType === 'fq';
-          }),
-        );
-      }
-    } else {
-      setIsTypeSwitchable(false);
-    }
+  const handleStateChange = (state: StateChangeSnapshot) => {
+    setContextMarker(state.contextMarker);
+    setCanRedo(state.canRedo);
   };
+
+  const handleUsjChange = useCallback(
+    (usj: Usj) => {
+      const noteOp = editorRef.current?.getNoteOps(0)?.at(0);
+      if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
+        // Prevents adding additional note nodes or other nodes after the main footnote node
+        if (usj.content.length > 1) {
+          setTimeout(() => {
+            // Retains the first two nodes which are the added paragraph node (for now) and the
+            // footnote/cross-reference and deletes the unwanted node that was just inserted
+            editorRef.current?.applyUpdate([{ retain: 2 }, { delete: 1 }]);
+          }, 0);
+        }
+        const currentNoteType = noteOp.insert.note?.style;
+        const innerNoteOps = noteOp.insert.note?.contents?.ops;
+        if (!currentNoteType) setIsTypeSwitchable(false);
+
+        if (currentNoteType === 'x') {
+          setIsTypeSwitchable(
+            !!innerNoteOps?.every((op) => {
+              if (!op.attributes?.char) return true;
+              // The built-in type for the delta note ops does not contain the types for the attributes
+              // so have to cast it here
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              const nodeType = (op.attributes?.char as Record<string, string>).style;
+              return nodeType === 'xt' || nodeType === 'xo' || nodeType === 'xq';
+            }),
+          );
+        } else {
+          setIsTypeSwitchable(
+            !!innerNoteOps?.every((op) => {
+              if (!op.attributes?.char) return true;
+              // The built-in type for the delta note ops does not contain the types for the attributes
+              // so have to cast it here
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              const nodeType = (op.attributes?.char as Record<string, string>).style;
+              return nodeType === 'ft' || nodeType === 'fr' || nodeType === 'fq';
+            }),
+          );
+        }
+
+        // On the first call after loading a note, snapshot the initial state and skip auto-save
+        if (!hasInitializedEditor.current) {
+          hasInitializedEditor.current = true;
+          initialNoteOpsJson.current = JSON.stringify(noteOp);
+          setIsAtInitialState(true);
+          return;
+        }
+
+        // Track whether the user has undone all their edits back to the initial state
+        setIsAtInitialState(JSON.stringify(noteOp) === initialNoteOpsJson.current);
+
+        // Auto-save on every content change (does not apply to parent editor)
+        saveCurrentNoteOp(callerType, customCaller);
+      } else {
+        setIsTypeSwitchable(false);
+        setIsAtInitialState(true);
+      }
+    },
+    [callerType, customCaller, saveCurrentNoteOp],
+  );
 
   const showInlineMarkersMenu = useCallback(() => {
     // Only shows the markers menu if there is currently a selection in the editor and there are
@@ -382,7 +500,7 @@ export default function FootnoteEditor({
 
   return (
     <>
-      <div className="footnote-editor tw-grid tw-gap-[12px]">
+      <div ref={containerRef} className="footnote-editor tw-grid tw-gap-[12px]">
         <div className="tw-flex">
           <div className="tw-flex tw-gap-4">
             <FootnoteTypeDropdown
@@ -393,44 +511,46 @@ export default function FootnoteEditor({
             />
             <FootnoteCallerDropdown
               callerType={callerType}
-              updateCallerType={setCallerType}
+              updateCallerType={handleCallerTypeChange}
               customCaller={customCaller}
-              updateCustomCaller={setCustomCaller}
+              updateCustomCaller={handleCustomCallerChange}
               localizedStrings={localizedStrings}
             />
           </div>
           <div className="tw-flex tw-w-full tw-justify-end tw-gap-4">
+            <UndoRedoButtons
+              onUndoClick={() => editorRef.current?.undo()}
+              onRedoClick={() => editorRef.current?.redo()}
+              canUndo={!isAtInitialState}
+              canRedo={canRedo}
+              localizedStrings={localizedStrings}
+            />
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    onClick={onClose}
+                    onClick={closeAndSave}
                     className="tw-h-6 tw-w-6"
                     size="icon"
-                    variant="secondary"
+                    variant="ghost"
                   >
-                    <X />
+                    <Check />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{localizedStrings['%footnoteEditor_cancelButton_tooltip%']}</p>
+                  <p>{localizedStrings['%footnoteEditor_saveButton_tooltip%']}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    onClick={handleSave}
-                    className="tw-h-6 tw-w-6"
-                    size="icon"
-                    variant="default"
-                  >
-                    <Check />
+                  <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="ghost">
+                    <X />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {localizedStrings['%footnoteEditor_saveButton_tooltip%']}
+                  <p>{localizedStrings['%footnoteEditor_cancelButton_tooltip%']}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -444,7 +564,7 @@ export default function FootnoteEditor({
             <EditorKeyboardShortcuts editorRef={editorRef}>
               <Editorial
                 options={options}
-                onStateChange={(state) => setContextMarker(state.contextMarker)}
+                onStateChange={handleStateChange}
                 onUsjChange={handleUsjChange}
                 defaultUsj={PARAGRAPH_USJ}
                 onScrRefChange={() => {}}

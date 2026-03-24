@@ -17,37 +17,49 @@ export function EditorKeyboardShortcuts({ children, editorRef }: EditorKeyboardS
   // eslint-disable-next-line no-null/no-null
   const divRef = useRef<HTMLDivElement>(null);
 
-  // Listen for Ctrl+Z and Ctrl+Shift+Z for undo/redo
+  // Listen for the standard undo/redo shortcuts for the current OS.
   useEffect(() => {
     const isMac = /Macintosh/i.test(navigator.userAgent);
     const editorInput = divRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Listens for the control or if on mac, the meta key
-      if (
-        editorInput &&
-        document.activeElement === editorInput &&
-        (isMac ? event.metaKey : event.ctrlKey)
-      ) {
-        // Handles redo
-        if (
-          (event.shiftKey && event.key.toLowerCase() === 'z') ||
-          event.key.toLowerCase() === 'y'
-        ) {
-          event.preventDefault();
-          editorRef.current?.redo();
-          // Handles undo
-        } else if (event.key.toLowerCase() === 'z') {
+      if (!editorInput || document.activeElement !== editorInput) return;
+
+      const key = event.key.toLowerCase();
+
+      if (isMac) {
+        if (!event.metaKey) return;
+
+        // Undo: ⌘Z
+        if (!event.shiftKey && key === 'z') {
           event.preventDefault();
           editorRef.current?.undo();
+        }
+
+        // Redo: ⌘⇧Z
+        else if (event.shiftKey && key === 'z') {
+          event.preventDefault();
+          editorRef.current?.redo();
+        }
+      } else {
+        if (!event.ctrlKey) return;
+
+        // Undo: Ctrl+Z
+        if (!event.shiftKey && key === 'z') {
+          event.preventDefault();
+          editorRef.current?.undo();
+        }
+
+        // Redo: Ctrl+Y or Ctrl+Shift+Z
+        else if (key === 'y' || (event.shiftKey && key === 'z')) {
+          event.preventDefault();
+          editorRef.current?.redo();
         }
       }
     };
 
-    editorInput?.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      editorInput?.removeEventListener('keydown', handleKeyDown);
-    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [editorRef]);
 
   return <div ref={divRef}>{children}</div>;
