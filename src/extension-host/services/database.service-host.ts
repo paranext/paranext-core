@@ -63,10 +63,10 @@ class DatabaseService implements IDatabaseService {
     });
 
     this.#worker.on('exit', (code) => {
-      if (this.#isDisposing) return;
-      const error = new Error(`Database worker exited unexpectedly with code ${code}`);
-      logger.error(error.message);
-      this.#rejectAllPending(error);
+      if (!this.#isDisposing) {
+        logger.error(`Database worker exited unexpectedly with code ${code}`);
+      }
+      this.#rejectAllPending(new Error(`Database worker exited with code ${code}`));
     });
   }
 

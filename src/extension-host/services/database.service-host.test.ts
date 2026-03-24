@@ -495,21 +495,22 @@ describe('worker exit event', () => {
 
     getRegisteredHandler('exit')(1);
 
-    await expect(runPromise).rejects.toThrow('Database worker exited unexpectedly with code 1');
-    await expect(selectPromise).rejects.toThrow('Database worker exited unexpectedly with code 1');
+    await expect(runPromise).rejects.toThrow('Database worker exited with code 1');
+    await expect(selectPromise).rejects.toThrow('Database worker exited with code 1');
   });
 
-  it('does not reject pending requests when the worker exits during dispose', async () => {
+  it('rejects the pending dispose request when the worker exits before responding', async () => {
     const service = createService();
 
-    // Start dispose — this sets #isDisposing = true
+    // Start dispose — this sets #isDisposing = true and sends the dispose request
     const disposePromise = service.dispose();
 
-    // Simulate the worker exiting with code 0 (success) while dispose is in flight
-    getRegisteredHandler('exit')(0);
+    // Worker exits before sending a response (e.g. process.exit() called deep in the worker)
+    getRegisteredHandler('exit')(1);
 
-    // The exit handler should be suppressed; the dispose should still resolve normally
-    respondSuccess();
-    await expect(disposePromise).resolves.toBe(true);
+    // The pending request must be rejected so dispose() doesn't hang forever.
+    // terminate() should still be called via the finally block.
+    await expect(disposePromise).rejects.toThrow('Database worker exited with code 1');
+    expect(mockWorkerTerminate).toHaveBeenCalledOnce();
   });
 });
