@@ -119,7 +119,7 @@ function createMessageHandler(
   return (message: WorkerMessage) => {
     const { id } = message;
     try {
-      let result: unknown;
+      let result: WorkerMessageTypes[keyof WorkerMessageTypes]['result'] = undefined;
 
       switch (message.type) {
         case 'open': {
@@ -171,13 +171,20 @@ function createMessageHandler(
           const db = getDatabase(message.nonce);
           const [namedOrFirst, ...positional] = message.args;
           if (isNamedParams(namedOrFirst)) {
+            // Cast to SqlOutputRow[] since we exclude bigint/ArrayBuffer from our API for cross-process serialization
             result = db
               .prepare(message.query)
-              .all(sanitizeNamedParams(namedOrFirst), ...sanitizePositional(positional));
+              .all(
+                sanitizeNamedParams(namedOrFirst),
+                ...sanitizePositional(positional),
+              ) as SqlOutputRow[];
           } else {
             // If no args were passed in, don't pass any in. If there was at least one arg, pass it
             const allArgs = message.args.length > 0 ? [namedOrFirst, ...positional] : [];
-            result = db.prepare(message.query).all(...sanitizePositional(allArgs));
+            // Cast to SqlOutputRow[] since we exclude bigint/ArrayBuffer from our API for cross-process serialization
+            result = db
+              .prepare(message.query)
+              .all(...sanitizePositional(allArgs)) as SqlOutputRow[];
           }
           break;
         }

@@ -19,7 +19,15 @@ import { networkObjectService } from '@shared/services/network-object.service';
 import { EXTENSION_ASSET_PROTOCOL_NAME } from '@shared/utils/extension-asset.utils';
 import { SqlQueryArgs, WorkerMessageTypes } from './database.worker';
 
-type WorkerMessage = { id: string; result?: unknown; error?: string };
+/**
+ * Response message from the worker thread. Includes the request ID for correlation, the typed
+ * result (or undefined for void operations), and optional error.
+ */
+type WorkerMessage = {
+  id: string;
+  result?: WorkerMessageTypes[keyof WorkerMessageTypes]['result'];
+  error?: string;
+};
 type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error) => void };
 
 /** Factory that creates the SQLite worker. Overridable in tests. */
