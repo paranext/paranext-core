@@ -61,6 +61,7 @@ const config: StorybookConfig = {
         ...webpackConfig.resolve.alias,
         '@': join(__dirname, '../lib/platform-bible-react/src'),
         'platform-bible-react': join(__dirname, '../lib/platform-bible-react/src/index.ts'),
+        '.storybook': join(__dirname, '.'),
       };
     }
 
