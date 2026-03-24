@@ -1,10 +1,15 @@
 /**
- * Storybook decorator that applies localization This decorator loads localized strings from all
- * localization.json files and replaces %key% patterns in the rendered story with actual localized
- * text.
+ * Storybook localization utilities.
+ *
+ * Stories should resolve localization keys explicitly by calling getLocalizedStrings() and passing
+ * the results as props. This is more reliable than DOM-walking because it works for strings used in
+ * JavaScript logic (comparisons, conditionals, etc.) that never appear in the DOM.
+ *
+ * NOTE (issue #8): The imports below are hardcoded per-extension. If an extension is added,
+ * removed, or renamed, this file must be updated manually. A future improvement would be to use
+ * webpack require.context or a glob import to discover these files dynamically.
  */
 
-import React, { useEffect, useRef } from 'react';
 import libStrings from '../lib/platform-bible-react/src/localizedStrings.json';
 import platformScriptureStrings from '../extensions/src/platform-scripture/contributions/localizedStrings.json';
 import platformScriptureEditorStrings from '../extensions/src/platform-scripture-editor/contributions/localizedStrings.json';
@@ -20,7 +25,8 @@ import quickVerseStrings from '../extensions/src/quick-verse/contributions/local
 function buildLocalizationMap(): Record<string, string> {
   const map: Record<string, string> = {};
 
-  // Extract English strings from all localization files
+  // Extract English strings from all localization files. Warn on key collisions so conflicts are
+  // visible rather than silently resolved by last-writer-wins.
   [
     libStrings.localizedStrings.en,
     platformScriptureStrings.localizedStrings.en,
@@ -33,7 +39,15 @@ function buildLocalizationMap(): Record<string, string> {
     paraboxRegistrationStrings.localizedStrings.en,
     quickVerseStrings.localizedStrings.en,
   ].forEach((enStrings) => {
-    Object.assign(map, enStrings);
+    Object.entries(enStrings).forEach(([key, value]) => {
+      if (key in map && map[key] !== value) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[localization-decorator] Key collision: "${key}" already has value "${map[key]}", overwriting with "${value}"`,
+        );
+      }
+      map[key] = value;
+    });
   });
 
   return map;
@@ -47,83 +61,6 @@ export function getLocalizationMap(): Record<string, string> {
     localizationMap = buildLocalizationMap();
   }
   return localizationMap;
-}
-
-/** Type guard to check if a DOM node is a Text node */
-function isTextNode(node: Node): node is Text {
-  return node.nodeType === Node.TEXT_NODE;
-}
-
-/**
- * Replace localization keys (%key%) with their English strings Walks the DOM tree and replaces text
- * content
- */
-export function replaceLocalizationKeys(root: Node): void {
-  const map = getLocalizationMap();
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const nodesToProcess: Text[] = [];
-
-  // Collect all text nodes first to avoid modifying the tree while walking
-  let currentNode = walker.nextNode();
-  while (currentNode) {
-    if (isTextNode(currentNode)) nodesToProcess.push(currentNode);
-    currentNode = walker.nextNode();
-  }
-
-  // Process each text node
-  nodesToProcess.forEach((textNode) => {
-    let text = textNode.textContent ?? '';
-    let modified = false;
-
-    // Replace all %key% patterns with localized strings
-    text = text.replace(/%([a-zA-Z0-9_]+)%/g, (match, key) => {
-      const fullKey = `%${key}%`;
-      if (map[fullKey]) {
-        modified = true;
-        return map[fullKey];
-      }
-      return match; // Keep original if no translation found
-    });
-
-    if (modified) {
-      textNode.textContent = text;
-    }
-  });
-
-  // Also replace in attributes (like placeholders)
-  const allElements = root.querySelectorAll('*');
-  Array.from(allElements).forEach((element) => {
-    Array.from(element.attributes).forEach((attr) => {
-      const { name, value: originalValue } = attr;
-      const value = originalValue.replace(/%([a-zA-Z0-9_]+)%/g, (match, key) => {
-        const fullKey = `%${key}%`;
-        return map[fullKey] ?? match;
-      });
-
-      if (value !== originalValue) {
-        element.setAttribute(name, value);
-      }
-    });
-  });
-}
-
-/** React component that wraps a story and applies localization */
-function LocalizationWrapper({ children }: { children: React.ReactNode }) {
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (containerRef.current) {
-      replaceLocalizationKeys(containerRef.current);
-    }
-  });
-
-  return React.createElement('div', { ref: containerRef }, children);
-}
-
-/** Storybook decorator that applies localization */
-export function localizationDecorator(Story: React.ComponentType) {
-  return React.createElement(LocalizationWrapper, {}, React.createElement(Story));
 }
 
 /**

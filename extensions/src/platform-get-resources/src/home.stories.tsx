@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { HomeIcon } from 'lucide-react';
 import { CardTitle } from 'platform-bible-react';
 import type { SharedProjectsInfo } from 'platform-scripture';
-import { ReactElement, useState } from 'react';
+import { ReactElement, useEffect, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization-decorator';
 import { Home, HomeProps, LocalProjectInfo, HOME_STRING_KEYS } from './home.component';
 
@@ -91,19 +91,25 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
   );
   const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
 
-  setTimeout(() => {
-    setLocalProjectsAndResources(staticLocalProjectsAndResources);
-    setIsLoadingLocalProjects(false);
-  }, 500);
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setLocalProjectsAndResources(staticLocalProjectsAndResources);
+      setIsLoadingLocalProjects(false);
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, []);
 
   const [sharedProjectsAndResources, setSharedProjectsAndResources] = useState<SharedProjectsInfo>(
     {},
   );
   const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
-  setTimeout(() => {
-    setSharedProjectsAndResources(staticProjectsAndResources);
-    setIsLoadingRemoteProjects(false);
-  }, 2000);
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setSharedProjectsAndResources(staticProjectsAndResources);
+      setIsLoadingRemoteProjects(false);
+    }, 2000);
+    return () => clearTimeout(timeout);
+  }, []);
 
   return (
     <Story
