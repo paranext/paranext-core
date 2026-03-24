@@ -81,11 +81,20 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
       return markerMenuItems;
     }
 
-    return markerMenuItems.filter(
-      (markerItem) =>
-        markerItem.marker?.toLowerCase().includes(query) ||
-        markerItem.title.toLowerCase().includes(query),
+    // Puts items with markers that have direct inclusions of the search query at the top
+    const filteredMarkerMenuItems = markerMenuItems.filter((markerItem) =>
+      markerItem.marker?.toLowerCase().includes(query),
     );
+    // Then lists items with titles that includes the search query
+    filteredMarkerMenuItems.push(
+      ...markerMenuItems.filter(
+        (markerItem) =>
+          markerItem.title.toLowerCase().includes(query) &&
+          !filteredMarkerMenuItems.includes(markerItem),
+      ),
+    );
+
+    return filteredMarkerMenuItems;
   }, [commandSearch, markerMenuItems]);
 
   return (
