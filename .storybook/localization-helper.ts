@@ -17,12 +17,12 @@ import libStrings from '../lib/platform-bible-react/src/localizedStrings.json';
  * @returns Object with key->string mappings for the given keys
  */
 export function getLocalizedStrings(keys: string[]): Record<string, string> {
-  const englishStrings = libStrings.localizedStrings.en as Record<string, string>;
+  const englishStrings = Object.fromEntries(Object.entries(libStrings.localizedStrings.en));
   const result: Record<string, string> = {};
 
-  for (const key of keys) {
-    result[key] = englishStrings[key] || key; // Fallback to key if not found
-  }
+  keys.forEach((key) => {
+    result[key] = englishStrings[key] ?? key; // Fallback to key if not found
+  });
 
   return result;
 }
@@ -34,8 +34,8 @@ export function getLocalizedStrings(keys: string[]): Record<string, string> {
  * @returns The English string, or the key if not found
  */
 export function getLocalizedString(key: string): string {
-  const englishStrings = libStrings.localizedStrings.en as Record<string, string>;
-  return englishStrings[key] || key;
+  const englishStrings = Object.fromEntries(Object.entries(libStrings.localizedStrings.en));
+  return englishStrings[key] ?? key;
 }
 
 /**
@@ -51,4 +51,5 @@ export function getLocalizedString(key: string): string {
  * };
  * ```
  */
-export default { getLocalizedStrings, getLocalizedString };
+const localizationHelpers = { getLocalizedStrings, getLocalizedString };
+export default localizationHelpers;
