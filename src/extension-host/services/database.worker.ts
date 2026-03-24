@@ -48,6 +48,12 @@ export interface WorkerMessageTypes {
   dispose: { parameters: Record<string, never>; result: void };
 }
 
+/**
+ * Discriminated union type for all possible messages the worker can receive from the host. Each
+ * message has an `id` for request-response correlation, a `type` discriminant, and type-safe
+ * parameters determined by the `WorkerMessageTypes` mapping. This ensures each message handler
+ * receives exactly the parameters its operation requires.
+ */
 type WorkerMessage = {
   [K in keyof WorkerMessageTypes]: { id: string; type: K } & WorkerMessageTypes[K]['parameters'];
 }[keyof WorkerMessageTypes];
