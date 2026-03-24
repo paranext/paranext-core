@@ -33,10 +33,10 @@ export type SqlQueryArgsOrEmpty = SqlQueryArgs | [];
  * the sender) and its result type.
  */
 export interface WorkerMessageTypes {
-  open: { parameters: { nonce: string; path: string; readOnly: boolean }; result: void };
-  close: { parameters: { nonce: string }; result: void };
-  attach: { parameters: { nonce: string; path: string; schemaName: string }; result: void };
-  detach: { parameters: { nonce: string; schemaName: string }; result: void };
+  open: { parameters: { nonce: string; path: string; readOnly: boolean }; result: undefined };
+  close: { parameters: { nonce: string }; result: undefined };
+  attach: { parameters: { nonce: string; path: string; schemaName: string }; result: undefined };
+  detach: { parameters: { nonce: string; schemaName: string }; result: undefined };
   run: {
     parameters: { nonce: string; query: string; args: SqlQueryArgsOrEmpty };
     result: RunResult;
@@ -45,7 +45,7 @@ export interface WorkerMessageTypes {
     parameters: { nonce: string; query: string; args: SqlQueryArgsOrEmpty };
     result: SqlOutputRow[];
   };
-  dispose: { parameters: Record<string, never>; result: void };
+  dispose: { parameters: Record<string, never>; result: undefined };
 }
 
 /**
