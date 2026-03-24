@@ -223,7 +223,7 @@ globalThis.webViewComponent = function Dictionary({
             localizedStrings={localizedStrings}
           >
             <Button variant="link" className="tw-h-auto tw-p-0">
-              {localizedStrings['%platformLexicalTools_dictionary_viewErrorDetails%']}
+              {localizedStrings['%settings_errorMessages_viewError%']}
             </Button>
           </ErrorPopover>
         </div>
