@@ -15,11 +15,18 @@ import { parentPort } from 'node:worker_threads';
  * named-parameter object followed by optional positional SqlValues. Any of these may be `undefined`
  * and will be converted to `null` for SQLite binding.
  *
- * Note that this array may be empty although the type doesn't reflect this. The overloads in
- * `database.service-host.ts` don't like having an empty array as a valid `SqlQueryArgs` for some
- * reason, but we want to allow calls with no parameters.
+ * This type requires at least one element for compatibility with the overload implementation
+ * signature in `database.service-host.ts` (a rest parameter typed as `[] | [T, ...U[]]` breaks
+ * overload TS2394 checks). Use `SqlQueryArgsOrEmpty` for the worker message protocol, where zero
+ * parameters are valid.
  */
 export type SqlQueryArgs = [Record<string, SqlValue | undefined> | SqlValue, ...SqlValue[]];
+
+/**
+ * Like {@link SqlQueryArgs} but also allows an empty array, for use in the worker message protocol
+ * where a query with no parameters is valid.
+ */
+export type SqlQueryArgsOrEmpty = SqlQueryArgs | [];
 
 /**
  * Maps each worker message type to its parameters (excluding `id` and `type`, which are added by
@@ -30,9 +37,12 @@ export interface WorkerMessageTypes {
   close: { parameters: { nonce: string }; result: void };
   attach: { parameters: { nonce: string; path: string; schemaName: string }; result: void };
   detach: { parameters: { nonce: string; schemaName: string }; result: void };
-  run: { parameters: { nonce: string; query: string; args: SqlQueryArgs }; result: RunResult };
+  run: {
+    parameters: { nonce: string; query: string; args: SqlQueryArgsOrEmpty };
+    result: RunResult;
+  };
   select: {
-    parameters: { nonce: string; query: string; args: SqlQueryArgs };
+    parameters: { nonce: string; query: string; args: SqlQueryArgsOrEmpty };
     result: SqlOutputRow[];
   };
   dispose: { parameters: Record<string, never>; result: void };
@@ -49,7 +59,9 @@ type DatabaseSyncConstructor = new (path: string, options?: { readOnly?: boolean
  * Returns true when `arg` is a plain named-parameter object (not a primitive, null, or typed
  * array). Used to distinguish the named-parameter overload from the positional overload.
  */
-function isNamedParams(arg: SqlValue | Record<string, SqlValue>): arg is Record<string, SqlValue> {
+function isNamedParams(
+  arg: SqlValue | Record<string, SqlValue> | undefined,
+): arg is Record<string, SqlValue> {
   return typeof arg === 'object' && !!arg && !ArrayBuffer.isView(arg);
 }
 
