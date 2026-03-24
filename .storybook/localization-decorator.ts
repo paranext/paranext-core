@@ -20,56 +20,59 @@ import quickVerseStrings from '../extensions/src/quick-verse/contributions/local
 function buildLocalizationMap(): Record<string, string> {
   const map: Record<string, string> = {};
 
-  const allStringFiles = [
-    libStrings,
-    platformScriptureStrings,
-    platformScriptureEditorStrings,
-    platformGetResourcesStrings,
-    legacyCommentManagerStrings,
-    helloRock3Strings,
-    helloSomeoneStrings,
-    platformLexicalToolsStrings,
-    paraboxRegistrationStrings,
-    quickVerseStrings,
-  ];
-
   // Extract English strings from all localization files
-  for (const stringFile of allStringFiles) {
-    const englishStrings = (stringFile as any).localizedStrings?.en || {};
-    Object.assign(map, englishStrings);
-  }
+  [
+    libStrings.localizedStrings.en,
+    platformScriptureStrings.localizedStrings.en,
+    platformScriptureEditorStrings.localizedStrings.en,
+    platformGetResourcesStrings.localizedStrings.en,
+    legacyCommentManagerStrings.localizedStrings.en,
+    helloRock3Strings.localizedStrings.en,
+    helloSomeoneStrings.localizedStrings.en,
+    platformLexicalToolsStrings.localizedStrings.en,
+    paraboxRegistrationStrings.localizedStrings.en,
+    quickVerseStrings.localizedStrings.en,
+  ].forEach((enStrings) => {
+    Object.assign(map, enStrings);
+  });
 
   return map;
 }
 
-let localizationMap: Record<string, string> | null = null;
+let localizationMap: Record<string, string> | undefined;
 
 /** Get the localization map (lazy-loaded) */
-function getLocalizationMap(): Record<string, string> {
+export function getLocalizationMap(): Record<string, string> {
   if (!localizationMap) {
     localizationMap = buildLocalizationMap();
   }
   return localizationMap;
 }
 
+/** Type guard to check if a DOM node is a Text node */
+function isTextNode(node: Node): node is Text {
+  return node.nodeType === Node.TEXT_NODE;
+}
+
 /**
  * Replace localization keys (%key%) with their English strings Walks the DOM tree and replaces text
  * content
  */
-function replaceLocalizationKeys(root: Node): void {
+export function replaceLocalizationKeys(root: Node): void {
   const map = getLocalizationMap();
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodesToProcess: Text[] = [];
 
   // Collect all text nodes first to avoid modifying the tree while walking
-  let node: Text | null;
-  while ((node = walker.nextNode() as Text) !== null) {
-    nodesToProcess.push(node);
+  let currentNode = walker.nextNode();
+  while (currentNode) {
+    if (isTextNode(currentNode)) nodesToProcess.push(currentNode);
+    currentNode = walker.nextNode();
   }
 
   // Process each text node
-  for (const textNode of nodesToProcess) {
-    let text = textNode.textContent || '';
+  nodesToProcess.forEach((textNode) => {
+    let text = textNode.textContent ?? '';
     let modified = false;
 
     // Replace all %key% patterns with localized strings
@@ -85,29 +88,28 @@ function replaceLocalizationKeys(root: Node): void {
     if (modified) {
       textNode.textContent = text;
     }
-  }
+  });
 
   // Also replace in attributes (like placeholders)
   const allElements = root.querySelectorAll('*');
-  for (const element of allElements) {
-    for (const attr of element.attributes) {
-      let value = attr.value;
-      const originalValue = value;
-
-      value = value.replace(/%([a-zA-Z0-9_]+)%/g, (match, key) => {
+  Array.from(allElements).forEach((element) => {
+    Array.from(element.attributes).forEach((attr) => {
+      const { name, value: originalValue } = attr;
+      const value = originalValue.replace(/%([a-zA-Z0-9_]+)%/g, (match, key) => {
         const fullKey = `%${key}%`;
-        return map[fullKey] || match;
+        return map[fullKey] ?? match;
       });
 
       if (value !== originalValue) {
-        element.setAttribute(attr.name, value);
+        element.setAttribute(name, value);
       }
-    }
-  }
+    });
+  });
 }
 
 /** React component that wraps a story and applies localization */
 function LocalizationWrapper({ children }: { children: React.ReactNode }) {
+  // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -120,10 +122,8 @@ function LocalizationWrapper({ children }: { children: React.ReactNode }) {
 }
 
 /** Storybook decorator that applies localization */
-export function localizationDecorator(Story: any) {
-  return React.createElement(LocalizationWrapper, {
-    children: React.createElement(Story),
-  });
+export function localizationDecorator(Story: React.ComponentType) {
+  return React.createElement(LocalizationWrapper, {}, React.createElement(Story));
 }
 
 /**
@@ -142,9 +142,9 @@ export function getLocalizedStrings(keys: string[]): Record<string, string> {
   const map = getLocalizationMap();
   const result: Record<string, string> = {};
 
-  for (const key of keys) {
-    result[key] = map[key] || key; // Fallback to key if not found
-  }
+  keys.forEach((key) => {
+    result[key] = map[key] ?? key; // Fallback to key if not found
+  });
 
   return result;
 }
@@ -166,13 +166,6 @@ export function replaceLocalizationInText(text: string): string {
   const map = getLocalizationMap();
   return text.replace(/%([a-zA-Z0-9_]+)%/g, (match, key) => {
     const fullKey = `%${key}%`;
-    return map[fullKey] || match;
+    return map[fullKey] ?? match;
   });
 }
-
-export {
-  getLocalizationMap,
-  replaceLocalizationKeys,
-  getLocalizedStrings,
-  replaceLocalizationInText,
-};
