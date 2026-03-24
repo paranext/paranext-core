@@ -20,6 +20,7 @@ import {
   RecentSearches,
   Scope,
   ScopeSelector,
+  SCOPE_SELECTOR_STRING_KEYS,
   Spinner,
   ToggleGroup,
   ToggleGroupItem,
@@ -32,6 +33,7 @@ import {
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { formatReplacementString } from 'platform-bible-utils';
 import { SetStateAction, useEffect, useMemo, useState } from 'react';
+import { getLocalizedStrings } from '.storybook/localization-decorator.ts';
 import { FindFilters } from './find-filters.component';
 import { SearchTextType } from './find-types';
 
@@ -60,6 +62,55 @@ export function FindHeaderDemo() {
   const [replaceTerm, setReplaceTerm] = useState<string>('');
   const [preserveCase, setPreserveCase] = useState(false);
 
+  const filterLocalizedStrings = useMemo(
+    () =>
+      getLocalizedStrings([
+        '%webView_find_toggleFilters%',
+        '%webView_find_matchContentIn%',
+        '%webView_find_allText%',
+        '%webView_find_allText_tooltip%',
+        '%webView_find_verseTextOnly%',
+        '%webView_find_restrictions%',
+        '%webView_find_restrictions_none%',
+        '%webView_find_restrictions_wholeWord%',
+        '%webView_find_restrictions_startOfWord%',
+        '%webView_find_restrictions_endOfWord%',
+        '%webView_find_capitalization%',
+        '%webView_find_matchCase%',
+        '%webView_find_pattern%',
+        '%webView_find_allowRegex%',
+      ]),
+    [],
+  );
+
+  const replaceLocalizedStrings = useMemo(
+    () =>
+      getLocalizedStrings([
+        '%webView_find_replace%',
+        '%webView_find_replaceAll%',
+        '%webView_find_replaceTerm_placeholder%',
+        '%webView_find_preserveCase%',
+        '%webView_find_preserveCase_tooltip%',
+      ]),
+    [],
+  );
+
+  const localizedStrings = useMemo(
+    () =>
+      getLocalizedStrings([
+        '%webView_find_findTab%',
+        '%webView_find_replaceTab%',
+        '%webView_find_searchPlaceholder%',
+        '%webView_find_showRecentSearches%',
+        '%webView_find_recent%',
+        '%webView_find_findInProject%',
+        '%webView_find_showing%',
+        '%webView_find_previousResult%',
+        '%webView_find_nextResult%',
+      ]),
+    [],
+  );
+
   const [searchStatus, setSearchStatus] = useState<FindJobStatus | undefined>(undefined);
 
   // custom for demo
@@ -78,8 +129,8 @@ export function FindHeaderDemo() {
   // custom for demo
   const [findButtonText, setFindButtonText] = useState<string>('');
   useEffect(() => {
-    setTimeout(() => setFindButtonText('Finden'), 1000);
-  }, []);
+    setTimeout(() => setFindButtonText(localizedStrings['%webView_find_findTab%']), 1000);
+  }, [localizedStrings]);
 
   // custom for demo
   const handleStartSearch = () => {
@@ -124,13 +175,13 @@ export function FindHeaderDemo() {
           value="find"
           className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
         >
-          %webView_find_findTab%
+          {localizedStrings['%webView_find_findTab%']}
         </ToggleGroupItem>
         <ToggleGroupItem
           value="replace"
           className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
         >
-          %webView_find_replaceTab%
+          {localizedStrings['%webView_find_replaceTab%']}
         </ToggleGroupItem>
       </ToggleGroup>
 
@@ -150,7 +201,7 @@ export function FindHeaderDemo() {
                 handleStartSearch();
               }
             }}
-            placeholder="%webView_find_searchPlaceholder%"
+            placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
             className={`tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
           />
           {searchTerm && (
@@ -166,8 +217,8 @@ export function FindHeaderDemo() {
         <RecentSearches
           recentSearches={recentSearches}
           onSearchItemSelect={setSearchTerm}
-          ariaLabel="%webView_find_showRecentSearches%"
-          groupHeading="%webView_find_recent%"
+          ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
+          groupHeading={localizedStrings['%webView_find_recent%']}
           buttonClassName="tw-h-10 tw-w-10"
           buttonVariant="outline"
         />
@@ -183,20 +234,21 @@ export function FindHeaderDemo() {
           isRegexAllowed={isRegexAllowed}
           setIsRegexAllowed={setIsRegexAllowed}
           localizedStrings={{
-            toggleFilters: '%webView_find_toggleFilters%',
-            matchContentIn: '%webView_find_matchContentIn%',
-            allText: '%webView_find_allText%',
-            allTextTooltip: '%webView_find_allText_tooltip%',
-            verseTextOnly: '%webView_find_verseTextOnly%',
-            restrictions: '%webView_find_restrictions%',
-            restrictionNone: '%webView_find_restrictions_none%',
-            restrictionWholeWord: '%webView_find_restrictions_wholeWord%',
-            restrictionStartOfWord: '%webView_find_restrictions_startOfWord%',
-            restrictionEndOfWord: '%webView_find_restrictions_endOfWord%',
-            capitalization: '%webView_find_capitalization%',
-            matchCase: '%webView_find_matchCase%',
-            pattern: '%webView_find_pattern%',
-            allowRegex: '%webView_find_allowRegex%',
+            toggleFilters: filterLocalizedStrings['%webView_find_toggleFilters%'],
+            matchContentIn: filterLocalizedStrings['%webView_find_matchContentIn%'],
+            allText: filterLocalizedStrings['%webView_find_allText%'],
+            allTextTooltip: filterLocalizedStrings['%webView_find_allText_tooltip%'],
+            verseTextOnly: filterLocalizedStrings['%webView_find_verseTextOnly%'],
+            restrictions: filterLocalizedStrings['%webView_find_restrictions%'],
+            restrictionNone: filterLocalizedStrings['%webView_find_restrictions_none%'],
+            restrictionWholeWord: filterLocalizedStrings['%webView_find_restrictions_wholeWord%'],
+            restrictionStartOfWord:
+              filterLocalizedStrings['%webView_find_restrictions_startOfWord%'],
+            restrictionEndOfWord: filterLocalizedStrings['%webView_find_restrictions_endOfWord%'],
+            capitalization: filterLocalizedStrings['%webView_find_capitalization%'],
+            matchCase: filterLocalizedStrings['%webView_find_matchCase%'],
+            pattern: filterLocalizedStrings['%webView_find_pattern%'],
+            allowRegex: filterLocalizedStrings['%webView_find_allowRegex%'],
           }}
         />
 
@@ -213,7 +265,7 @@ export function FindHeaderDemo() {
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p className="tw-font-light">%webView_find_findInProject%</p>
+              <p className="tw-font-light">{localizedStrings['%webView_find_findInProject%']}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -230,7 +282,7 @@ export function FindHeaderDemo() {
               onChange={(e: { target: { value: SetStateAction<string> } }) =>
                 setReplaceTerm(e.target.value)
               }
-              placeholder="%webView_find_replaceTerm_placeholder%"
+              placeholder={replaceLocalizedStrings['%webView_find_replaceTerm_placeholder%']}
               className="tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4"
             />
           </div>
@@ -242,7 +294,7 @@ export function FindHeaderDemo() {
                 onCheckedChange={(checked: boolean) => setPreserveCase(checked === true)}
               />
               <Label htmlFor="preserve-case" className="tw-cursor-pointer">
-                %webView_find_preserveCase%
+                {replaceLocalizedStrings['%webView_find_preserveCase%']}
               </Label>
               <TooltipProvider>
                 <Tooltip>
@@ -251,7 +303,7 @@ export function FindHeaderDemo() {
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="tw-max-w-xs tw-whitespace-pre-line">
-                      %webView_find_preserveCase_tooltip%
+                      {replaceLocalizedStrings['%webView_find_preserveCase_tooltip%']}
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -260,11 +312,11 @@ export function FindHeaderDemo() {
             <div className="tw-flex tw-gap-2">
               <Button variant="outline" onClick={() => {}}>
                 <ReplaceAll className="tw-h-4 tw-w-4" />
-                %webView_find_replaceAll%
+                {replaceLocalizedStrings['%webView_find_replaceAll%']}
               </Button>
               <Button onClick={() => {}}>
                 <Replace className="tw-h-4 tw-w-4" />
-                %webView_find_replace%
+                {replaceLocalizedStrings['%webView_find_replace%']}
               </Button>
             </div>
           </div>
@@ -280,7 +332,9 @@ export function FindHeaderDemo() {
               size="sm"
               className="tw-h-auto tw-gap-1 tw-px-2 tw-py-1 tw-font-normal"
             >
-              <span className="tw-text-sm tw-text-muted-foreground">%webView_find_showing%</span>
+              <span className="tw-text-sm tw-text-muted-foreground">
+                {localizedStrings['%webView_find_showing%']}
+              </span>
               <span className="tw-text-sm tw-font-medium">{scopeDisplayText}</span>
               <ChevronDown className="tw-h-3 tw-w-3 tw-text-muted-foreground" />
             </Button>
@@ -292,7 +346,9 @@ export function FindHeaderDemo() {
               onScopeChange={setScope}
               selectedBookIds={selectedBookIds}
               onSelectedBookIdsChange={setSelectedBookIds}
-              localizedStrings={{}}
+              localizedStrings={getLocalizedStrings(
+                SCOPE_SELECTOR_STRING_KEYS as unknown as string[],
+              )}
               availableBookInfo={availableBookIds}
             />
           </PopoverContent>
@@ -313,7 +369,7 @@ export function FindHeaderDemo() {
               onClick={() =>
                 setFocusedResultIndex((prev) => (prev !== undefined && prev > 0 ? prev - 1 : prev))
               }
-              aria-label="%webView_find_previousResult%"
+              aria-label={localizedStrings['%webView_find_previousResult%']}
             >
               <ChevronUp className="tw-h-4 tw-w-4" />
             </Button>
@@ -327,7 +383,7 @@ export function FindHeaderDemo() {
                   prev === undefined ? 0 : Math.min(prev + 1, demoTotalResults - 1),
                 )
               }
-              aria-label="%webView_find_nextResult%"
+              aria-label={localizedStrings['%webView_find_nextResult%']}
             >
               <ChevronDown className="tw-h-4 tw-w-4" />
             </Button>

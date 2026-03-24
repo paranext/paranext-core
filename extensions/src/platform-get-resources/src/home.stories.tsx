@@ -3,51 +3,11 @@ import { HomeIcon } from 'lucide-react';
 import { CardTitle } from 'platform-bible-react';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { ReactElement, useState } from 'react';
-import { Home, HomeProps, LocalProjectInfo } from './home.component';
+import { getLocalizedStrings } from '../../../../.storybook/localization-decorator';
+import { Home, HomeProps, LocalProjectInfo, HOME_STRING_KEYS } from './home.component';
 
-/* This is a minimal set of Tailwind styles needed for the Home component to display correctly in Storybook
-Remove this when we can correctly import the tailwind styles
-Numbers are also different in Storybook due to a 50px margin left and right of the Story */
-const styles = `
-  @media (min-width: 868px) {
-    .md\\:\\!tw-table-cell {
-      display: table-cell !important;
-    }
-  }
-
-  @media (min-width: 740px) {
-    .sm\\:\\!tw-table-cell {
-      display: table-cell !important;
-    }
-  }
-
-  @media (max-width: 400px) {
-    .max-\\[300px\\]\\:tw-hidden {
-      display: none;
-    }
-    .max-\\[300px\\]\\:\\!tw-hidden {
-      display: none !important;
-    }
-    .max-\\[300px\\]\\:\\!tw-flex {
-      display: flex !important;
-    }
-    .max-\\[300px\\]\\:\\!tw-px-4 {
-      padding-left: 1rem !important;
-      padding-right: 1rem !important;
-    }
-  }
-
-  .tw-ps-2 {
-    padding-left: 0.5rem;
-  }
-
-  .tw-text-muted-foreground\\/70 {
-    color: hsl(var(--muted-foreground) / 0.7);
-  }
-`;
-const styleElement = document.createElement('style');
-styleElement.innerHTML = styles;
-document.head.appendChild(styleElement);
+// Get all localized strings needed by the Home component
+const localizedStrings = getLocalizedStrings([...HOME_STRING_KEYS]);
 
 const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
@@ -148,15 +108,7 @@ function DefaultHomeDecorator(Story: (update?: { args: HomeProps }) => ReactElem
   return (
     <Story
       args={{
-        localizedStringsWithLoadingState: [
-          {
-            '%resources_open%': 'Open',
-            '%resources_sync%': 'Sync',
-            '%resources_get%': 'Get',
-            '%resources_shortNameText%': 'Name',
-          },
-          false,
-        ],
+        localizedStringsWithLoadingState: [localizedStrings, false],
         localProjectsInfo: localProjectsAndResources,
         isLoadingLocalProjects,
         sharedProjectsInfo: sharedProjectsAndResources,
