@@ -85,24 +85,3 @@ export function getLocalizedStrings(keys: string[]): Record<string, string> {
 
   return result;
 }
-
-/**
- * Helper function for use in stories to replace keys in text
- *
- * Usage in story:
- *
- * ```tsx
- * import { replaceLocalizationInText } from '.storybook/localization-decorator';
- *
- * const args = {
- *   placeholder: replaceLocalizationInText('%webView_find_searchPlaceholder%'),
- * };
- * ```
- */
-export function replaceLocalizationInText(text: string): string {
-  const map = getLocalizationMap();
-  return text.replace(/%([a-zA-Z0-9_]+)%/g, (match, key) => {
-    const fullKey = `%${key}%`;
-    return map[fullKey] ?? match;
-  });
-}

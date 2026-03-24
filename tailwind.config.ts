@@ -4,6 +4,8 @@ import libConfig from './lib/platform-bible-react/tailwind.config';
 // Extend the library's Tailwind config (preserving all plugins: scopedPreflightStyles,
 // tailwindcss-animate, @tailwindcss/typography, @tailwindcss/container-queries) and
 // widen the content paths to cover the full monorepo.
+// NOTE: This is a shallow spread. If the library config gains nested objects that require
+// deep merging (e.g., theme extensions, nested plugin options), this will need updating.
 const config: Config = {
   ...libConfig,
   content: [

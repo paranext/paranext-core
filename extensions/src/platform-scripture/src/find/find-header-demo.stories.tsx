@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { FindHeaderDemo } from './find-header-demo.component';
+import { FindHeaderDemo } from './find-header-demo.stories-helper';
 
 const meta: Meta<typeof FindHeaderDemo> = {
   title: 'Bundled Extensions/find/FindHeaderDemo',
