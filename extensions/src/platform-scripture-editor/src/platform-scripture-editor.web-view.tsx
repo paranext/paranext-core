@@ -50,10 +50,8 @@ import {
   SelectMenuItemHandler,
   Spinner,
   TabToolbar,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
+  UNDO_REDO_BUTTONS_STRING_KEYS,
+  UndoRedoButtons,
   usePromise,
 } from 'platform-bible-react';
 import {
@@ -81,7 +79,7 @@ import {
 } from 'platform-scripture-editor';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
-import { ChevronDown, Redo, Undo } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import {
   getLocalizeKeysFromDecorations,
@@ -113,6 +111,7 @@ const EDITOR_LOAD_DELAY_TIME = 200;
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
+  ...UNDO_REDO_BUTTONS_STRING_KEYS,
   ...MARKER_MENU_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
@@ -125,8 +124,6 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
-  '%webView_platformScriptureEditor_undoButton_tooltip%',
-  '%webView_platformScriptureEditor_redoButton_tooltip%',
 ];
 
 /** Annotation type used for translator comments (kebab-case to match CSS class naming) */
@@ -229,6 +226,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const editingNoteKey = useRef<string>();
   const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+  /** True when the footnote editor was opened for a newly inserted note (not an existing one) */
+  const editingNoteIsNew = useRef(false);
 
   // These control the placement of the comment editor popover by setting the location of the anchor
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
@@ -914,7 +913,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [showMarkersMenu]);
 
-  // When the inline markers menu is showed, makes sure the search input is focused
+  // When the inline markers menu is shown, makes sure the search input is focused
   useEffect(() => {
     if (showMarkersMenu) {
       markerMenuSearchRef.current?.focus();
@@ -1051,6 +1050,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [usjFromPdpPossiblyError]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
+  // Updated in useEffect (which runs after all useLayoutEffects), so this ref is stable for the
+  // entire layout phase of each render. If a useLayoutEffect fires during a chapter-change render
+  // (e.g. footnote-editor closing), this ref still holds the OLD chapter's setter — preventing
+  // footnote changes from being saved to the wrong chapter.
+  const saveUsjToPdpRawStableRef = useRef<typeof saveUsjToPdpRaw>(saveUsjToPdpRaw);
+  useEffect(() => {
+    saveUsjToPdpRawStableRef.current = saveUsjToPdpRaw;
+  }, [saveUsjToPdpRaw]);
 
   /**
    * Creates a click handler for a comment annotation that opens the comment list and scrolls to the
@@ -1091,7 +1098,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
     // `saveUsjToPdpIfUpdated` everywhere.
     async function saveUsjToPdpInternal(newUsj: Usj) {
-      if (!saveUsjToPdpRaw) return;
+      if (!saveUsjToPdpRawStableRef.current) return;
 
       // Don't start writing to the PDP again if we're in the middle of writing now
       if (currentlyWritingUsjToPdp.current) return;
@@ -1100,7 +1107,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       currentlyWritingUsjToPdp.current = true;
       usjSentToPdp.current = newUsj;
       try {
-        if (!(await saveUsjToPdpRaw(newUsj)) && currentlyWritingUsjToPdp.current) {
+        if (!(await saveUsjToPdpRawStableRef.current(newUsj)) && currentlyWritingUsjToPdp.current) {
           currentlyWritingUsjToPdp.current = false;
 
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
@@ -1142,40 +1149,68 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [saveUsjToPdpRaw, usjFromPdp, projectName, localizedStrings]);
+  }, [usjFromPdp, projectName, localizedStrings]);
 
-  const openFootnoteEditorOnNewNote = useCallback(
-    (ops?: DeltaOp[], insertedNodeKey?: string) => {
-      if (insertedNodeKey && ops) {
-        // If we are already editing a note, then returns
-        if (editingNoteKey.current) return;
+  /**
+   * Close the footnote editor, optionally deleting the note from the main editor first. Pass
+   * `deleteIfNew = true` when the user explicitly discards (X button); pass `false` when the note
+   * was already deleted externally so there is nothing left to remove.
+   */
+  const closeFootnoteEditor = useCallback((deleteIfNew: boolean) => {
+    if (deleteIfNew && editingNoteIsNew.current && editingNoteKey.current)
+      editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, []);
+    editingNoteIsNew.current = false;
+    editingNoteKey.current = undefined;
+    editingNoteOps.current = undefined;
+    setShowFootnoteEditor(false);
+  }, []);
 
-        // Makes sure the node is a note
-        const noteOp = ops[1];
-        if (!isInsertEmbedOpOfType('note', noteOp)) return;
+  /** Called by FootnoteEditor's onClose prop (X button or save-then-close). */
+  const onFootnoteEditorClose = useCallback(() => {
+    closeFootnoteEditor(true);
+  }, [closeFootnoteEditor]);
 
-        const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
-        // Note element must be defined
-        if (!noteElement) return;
+  const openFootnoteEditorOnNewNote = useCallback((ops?: DeltaOp[], insertedNodeKey?: string) => {
+    if (insertedNodeKey && ops) {
+      // If we are already editing a note, then returns
+      if (editingNoteKey.current) return;
 
-        const targetRect = noteElement.getBoundingClientRect();
-        setNotePopoverAnchorX(targetRect.left);
-        setNotePopoverAnchorY(targetRect.top);
-        setNotePopoverAnchorHeight(targetRect.height);
-        editingNoteKey.current = insertedNodeKey;
-        editingNoteOps.current = [noteOp];
-        setShowFootnoteEditor(true);
-      }
-    },
-    [editingNoteKey],
-  );
+      // Makes sure the node is a note
+      const noteOp = ops[1];
+      if (!isInsertEmbedOpOfType('note', noteOp)) return;
+
+      const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
+      // Note element must be defined
+      if (!noteElement) return;
+
+      const targetRect = noteElement.getBoundingClientRect();
+      setNotePopoverAnchorX(targetRect.left);
+      setNotePopoverAnchorY(targetRect.top);
+      setNotePopoverAnchorHeight(targetRect.height);
+      editingNoteKey.current = insertedNodeKey;
+      editingNoteOps.current = [noteOp];
+      editingNoteIsNew.current = true;
+      setShowFootnoteEditor(true);
+    }
+  }, []);
 
   const handleEditorialUsjChange = useCallback(
     (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
       saveUsjToPdpIfUpdated(usj);
-      openFootnoteEditorOnNewNote(ops, insertedNodeKey);
+      if (editingNoteKey.current) {
+        // When the FootnoteEditor saves, Lexical emits a replaceEmbedUpdate. This triggers
+        // onUsjChange with an insertedNodeKey.
+        // Detect this case (has insertedNodeKey but is not an insert op) and mark the note
+        // as no longer "new", so that closing the editor as part of the save does not
+        // delete the note the user just saved.
+        if (insertedNodeKey && !isInsertEmbedOpOfType('note', ops?.[1]))
+          editingNoteIsNew.current = false;
+        // Close the footnote editor and discard the note being edited if its caller was deleted in
+        // the main editor.
+        else if (!editorRef.current?.getNoteOps(editingNoteKey.current)) closeFootnoteEditor(false); // false => the note caller is already gone.
+      } else openFootnoteEditorOnNewNote(ops, insertedNodeKey);
     },
-    [openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
+    [closeFootnoteEditor, openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
   );
 
   /**
@@ -1315,19 +1350,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       highlightedVerseElement?.classList.remove('highlighted');
     };
   }, [scrRef]);
-
-  const onFootnoteEditorClose = useCallback(() => {
-    editingNoteKey.current = undefined;
-    editingNoteOps.current = undefined;
-    setShowFootnoteEditor(false);
-  }, []);
-
-  const onFootnoteEditorSave = (newNoteOps: DeltaOp[]) => {
-    if (editingNoteKey.current) {
-      editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, newNoteOps);
-    }
-    onFootnoteEditorClose();
-  };
 
   const onCommentEditorCancel = useCallback(() => {
     // Remove the pending annotation if one was created
@@ -1559,44 +1581,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             />
             {!isReadOnlyEffective && (
               <>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        aria-label="Undo"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => editorRef.current?.undo()}
-                        disabled={!canUndo}
-                      >
-                        <Undo />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {localizedStrings['%webView_platformScriptureEditor_undoButton_tooltip%']} (
-                      {isMac ? '⌘' : 'Ctrl'} + z)
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        aria-label="Redo"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => editorRef.current?.redo()}
-                        disabled={!canRedo}
-                      >
-                        <Redo />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {localizedStrings['%webView_platformScriptureEditor_redoButton_tooltip%']} (
-                      {isMac ? '⌘' : 'Ctrl'} + Shift + y)
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <UndoRedoButtons
+                  className="tw-h-8"
+                  onUndoClick={() => editorRef.current?.undo()}
+                  onRedoClick={() => editorRef.current?.redo()}
+                  canUndo={canUndo}
+                  canRedo={canRedo}
+                  localizedStrings={localizedStrings}
+                />
+
                 {blockMarker !== undefined && (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1753,17 +1746,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             pointerEvents: 'none',
           }}
         />
-        <PopoverContent className="tw-w-[500px] tw-p-[10px]">
+        <PopoverContent className="tw-w-max tw-min-w-[500px] tw-p-[10px]">
           <FootnoteEditor
             classNameForEditor="scripture-font"
             noteOps={editingNoteOps.current}
             noteKey={editingNoteKey.current}
-            onSave={onFootnoteEditorSave}
             onClose={onFootnoteEditorClose}
             scrRef={scrRef}
             editorOptions={options}
             defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
             localizedStrings={localizedStrings}
+            parentEditorRef={editorRef}
           />
         </PopoverContent>
       </Popover>
