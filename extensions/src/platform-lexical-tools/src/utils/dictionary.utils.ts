@@ -1,31 +1,8 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { LocalizeKey } from 'platform-bible-utils';
 import { Entry, Occurrence, Sense } from 'platform-lexical-tools';
-import { useEffect, useState } from 'react';
 
 // Regex to remove any parenthetical statements (including nested)
 const REMOVE_PARENTHETICAL_STATEMENTS_REGEX = /\([^()]*\)/g;
-
-export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
-  '%platformLexicalTools_dictionary_allOccurrencesLabel%',
-  '%platformLexicalTools_dictionary_backToList%',
-  '%platformLexicalTools_dictionary_definitionLabel%',
-  '%platformLexicalTools_dictionary_domainTaxonomyLabel%',
-  '%platformLexicalTools_dictionary_noResults%',
-  '%platformLexicalTools_dictionary_occurrencesInChapterLabel%',
-  '%platformLexicalTools_dictionary_occurrencesForSenseLabel%',
-  '%platformLexicalTools_dictionary_occurrencesToggleAll%',
-  '%platformLexicalTools_dictionary_occurrencesToggleChapter%',
-  '%platformLexicalTools_dictionary_searchDictionary%',
-  '%platformLexicalTools_dictionary_sensesLabel%',
-  '%platformLexicalTools_dictionary_scopeSelector_chapter%',
-  '%platformLexicalTools_dictionary_scopeSelector_section%',
-  '%platformLexicalTools_dictionary_scopeSelector_verse%',
-  '%platformLexicalTools_dictionary_strongsCodeLabel%',
-  '%platformLexicalTools_dictionary_sdbgCopyright%',
-  '%platformLexicalTools_dictionary_sdbhCopyright%',
-  '%platformLexicalTools_dictionary_trackProjectDropdownLabel%',
-];
 
 /** Type for the dictionary scope */
 export type DictionaryScope = 'chapter' | 'section' | 'verse';
@@ -35,25 +12,6 @@ export type DictionaryOccurrenceView = 'chapter' | 'all';
 
 /** Type for the project options */
 export type DictionaryProjectOption = { projectId: string | undefined; projectShortName: string };
-
-export function useIsWideScreen() {
-  const [isWide, setIsWide] = useState(() => window.innerWidth >= 1024);
-
-  useEffect(() => {
-    // Matches Tailwind css lg breakpoint
-    const mediaQuery = window.matchMedia('(min-width: 1024px)');
-
-    const handler = (e: MediaQueryListEvent) => setIsWide(e.matches);
-    mediaQuery.addEventListener('change', handler);
-
-    // Set initial state
-    setIsWide(mediaQuery.matches);
-
-    return () => mediaQuery.removeEventListener('change', handler);
-  }, []);
-
-  return isWide;
-}
 
 /**
  * Takes a dictionary entry and returns an array of its glosses, with parenthetical statements

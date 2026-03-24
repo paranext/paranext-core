@@ -1,5 +1,7 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Button,
+  ErrorPopover,
   Label,
   SearchBar,
   Select,
@@ -8,19 +10,22 @@ import {
   SelectTrigger,
   SelectValue,
   Skeleton,
-  usePromise,
 } from 'platform-bible-react';
-import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
+import { useData, useLocalizedStrings } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
-import { Entry } from 'platform-lexical-tools';
+import { Entry, LexicalEntriesById, LexicalReferenceSelector } from 'platform-lexical-tools';
 import { SerializedVerseRef } from '@sillsdev/scripture';
+import { logger } from '@papi/frontend';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { DictionaryEntryDisplay } from '../components/dictionary/dictionary-entry-display.component';
+import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../utils/dictionary-ui.utils';
 import {
-  DICTIONARY_LOCALIZED_STRING_KEYS,
   DictionaryScope,
   getFormatGlossesStringFromDictionaryEntrySenses,
 } from '../utils/dictionary.utils';
 import { DictionaryList } from '../components/dictionary/dictionary-list.component';
+
+const ENTRIES_DEFAULT: LexicalEntriesById = {};
 
 globalThis.webViewComponent = function Dictionary({
   useWebViewScrollGroupScrRef,
@@ -30,6 +35,7 @@ globalThis.webViewComponent = function Dictionary({
   const [searchQuery, setSearchQuery] = useWebViewState<string>('searchQuery', '');
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+  const [selectedEntry, setSelectedEntry] = useState<Entry | undefined>(undefined);
 
   // ref.current expects null and not undefined when we pass it to the search input
   // eslint-disable-next-line no-null/no-null
@@ -38,54 +44,103 @@ globalThis.webViewComponent = function Dictionary({
   // eslint-disable-next-line no-null/no-null
   const dictionaryEntryRef = useRef<HTMLDivElement>(null);
 
-  const lexicalService = useDataProvider('platformLexicalTools.lexicalReferenceService');
-
   const scrollToTop = () => {
     dictionaryEntryRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const getEntriesById = useCallback(() => {
-    if (!lexicalService) return Promise.resolve(undefined);
-    return lexicalService.getEntriesById({});
-  }, [lexicalService]);
+  // Create selector for filtering entries by verse reference
+  const selector: LexicalReferenceSelector = useMemo(
+    () => ({
+      book: scrRef.book,
+      chapterNum: scrRef.chapterNum,
+      ...(scope === 'verse' && { verseNum: scrRef.verseNum }),
+    }),
+    [scrRef.book, scrRef.chapterNum, scrRef.verseNum, scope],
+  );
 
-  const [entriesById, isLoadingEntriesById] = usePromise(getEntriesById, undefined);
+  const [entriesByIdPossiblyError] = useData(
+    'platformLexicalTools.lexicalReferenceService',
+  ).EntriesById(selector, ENTRIES_DEFAULT);
 
-  // Return all defined entries filtered by scrRef and searchQuery
-  const allEntriesByScrRef = useMemo(() => {
-    if (!entriesById) return [];
-    // First filter entries by scrRef and scope
-    const filteredByScrRef = Object.values(entriesById ?? {})
+  const entriesError = useMemo(() => {
+    if (!isPlatformError(entriesByIdPossiblyError)) return undefined;
+    return entriesByIdPossiblyError;
+  }, [entriesByIdPossiblyError]);
+
+  useEffect(() => {
+    if (entriesError) {
+      logger.error(`Error getting entries by ID: ${getErrorMessage(entriesError)}`);
+    }
+  }, [entriesError]);
+
+  const entriesById: LexicalEntriesById = useMemo(() => {
+    if (isPlatformError(entriesByIdPossiblyError)) return ENTRIES_DEFAULT;
+    return entriesByIdPossiblyError;
+  }, [entriesByIdPossiblyError]);
+
+  const isLoadingEntriesById = !entriesError && entriesById === ENTRIES_DEFAULT;
+
+  // Return all defined entries filtered by searchQuery
+  const entriesFiltered = useMemo(() => {
+    if (entriesById === ENTRIES_DEFAULT) return [];
+
+    // Filter entries by searchQuery (verse reference filtering is now done on backend)
+    const search = searchQuery.toLowerCase();
+    return Object.values(entriesById ?? {})
       .flat()
       .filter((entry): entry is Entry => {
         if (!entry) return false;
-        return Object.values(entry.senses).some(
-          (sense) =>
-            sense?.occurrences &&
-            Object.values(sense.occurrences).some(
-              (occurrences) =>
-                occurrences?.some(
-                  (occurrence) =>
-                    occurrence.verseRef.book === scrRef.book &&
-                    occurrence.verseRef.chapterNum === scrRef.chapterNum &&
-                    (scope === 'verse' ? occurrence.verseRef.verseNum === scrRef.verseNum : true),
-                ), // TODO: Filter by section
-            ),
-        );
+        const matchesSearch =
+          entry.lemma.toLowerCase().includes(search) ||
+          entry.strongsCodes.some((code) => code.toLowerCase().includes(search)) ||
+          getFormatGlossesStringFromDictionaryEntrySenses(entry, scrRef)
+            .toLowerCase()
+            .includes(search);
+        return matchesSearch;
       });
+  }, [entriesById, searchQuery, scrRef]);
 
-    // Then filter the result by searchQuery
-    const search = searchQuery.toLowerCase();
-    return filteredByScrRef.filter((entry) => {
-      const matchesSearch =
-        entry.lemma.toLowerCase().includes(search) ||
-        entry.strongsCodes.some((code) => code.toLowerCase().includes(search)) ||
-        getFormatGlossesStringFromDictionaryEntrySenses(entry, scrRef)
-          .toLowerCase()
-          .includes(search);
-      return matchesSearch;
-    });
-  }, [entriesById, searchQuery, scrRef, scope]);
+  // Clear the selected entry if it is no longer in the filtered list (e.g. after a chapter change)
+  useEffect(() => {
+    if (
+      selectedEntry &&
+      !entriesFiltered.some(
+        (e) =>
+          e.id === selectedEntry.id &&
+          e.lexicalReferenceTextId === selectedEntry.lexicalReferenceTextId,
+      )
+    ) {
+      setSelectedEntry(undefined);
+    }
+  }, [entriesFiltered, selectedEntry]);
+
+  // Entry displayed in DictionaryEntryDisplay: always the single entry, or whatever is selected in the list
+  const displayedEntry = entriesFiltered.length === 1 ? entriesFiltered[0] : selectedEntry;
+
+  // Selector to fetch the full (unfiltered) data for the displayed entry
+  const displayedItemSelector: LexicalReferenceSelector = useMemo(
+    () =>
+      displayedEntry
+        ? {
+            itemId: displayedEntry.id,
+            lexicalReferenceTextId: displayedEntry.lexicalReferenceTextId,
+          }
+        : {},
+    [displayedEntry],
+  );
+
+  const [fullEntriesByIdPossiblyError] = useData(
+    displayedEntry !== undefined ? 'platformLexicalTools.lexicalReferenceService' : undefined,
+  ).EntriesById(displayedItemSelector, ENTRIES_DEFAULT);
+
+  // Extract the full entry for the displayed entry; the selector already filters by
+  // lexicalReferenceTextId so there will only be one matching entry array
+  const fullDisplayedEntry = useMemo(() => {
+    if (!displayedEntry) return undefined;
+    if (isPlatformError(fullEntriesByIdPossiblyError)) return undefined;
+    const entries = fullEntriesByIdPossiblyError[displayedEntry.id];
+    return entries?.[0];
+  }, [fullEntriesByIdPossiblyError, displayedEntry]);
 
   const onSelectOccurrence = useCallback(
     (scrRefOfOccurrence: SerializedVerseRef) => {
@@ -160,28 +215,45 @@ globalThis.webViewComponent = function Dictionary({
           ))}
         </div>
       )}
-      {allEntriesByScrRef.length === 0 && !isLoadingEntriesById && (
+      {entriesError && (
+        <div className="tw-m-4 tw-flex tw-items-center tw-gap-2">
+          <Label>{localizedStrings['%platformLexicalTools_dictionary_dataLoadError%']}</Label>
+          <ErrorPopover
+            errorDetails={getErrorMessage(entriesError)}
+            localizedStrings={localizedStrings}
+          >
+            <Button variant="link" className="tw-h-auto tw-p-0">
+              {localizedStrings['%settings_errorMessages_viewError%']}
+            </Button>
+          </ErrorPopover>
+        </div>
+      )}
+      {entriesFiltered.length === 0 && !isLoadingEntriesById && !entriesError && (
         <div className="tw-m-4 tw-flex tw-justify-center">
           <Label>{localizedStrings['%platformLexicalTools_dictionary_noResults%']}</Label>
         </div>
       )}
-      {allEntriesByScrRef.length === 1 && (
+      {entriesFiltered.length === 1 && (
         <div ref={dictionaryEntryRef} className="tw-overflow-y-auto tw-p-4">
           <DictionaryEntryDisplay
             scriptureReferenceToFilterBy={scrRef}
             isDrawer={false}
-            dictionaryEntry={allEntriesByScrRef[0]}
+            dictionaryEntry={fullDisplayedEntry ?? entriesFiltered[0]}
             onSelectOccurrence={onSelectOccurrence}
             onClickScrollToTop={scrollToTop}
           />
         </div>
       )}
-      {allEntriesByScrRef.length > 1 && (
+      {entriesFiltered.length > 1 && (
         <DictionaryList
-          dictionaryData={allEntriesByScrRef}
+          dictionaryData={entriesFiltered}
           scriptureReferenceToFilterBy={scrRef}
+          scope={scope}
+          selectedEntry={selectedEntry}
           onSelectOccurrence={onSelectOccurrence}
           onCharacterPress={onCharacterPress}
+          onEntrySelected={setSelectedEntry}
+          fullSelectedEntry={fullDisplayedEntry}
         />
       )}
     </div>

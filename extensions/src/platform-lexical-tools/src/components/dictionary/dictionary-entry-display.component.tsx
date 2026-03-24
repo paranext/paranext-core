@@ -14,8 +14,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
+import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../../utils/dictionary-ui.utils';
 import {
-  DICTIONARY_LOCALIZED_STRING_KEYS,
   getFormatGlossesStringFromDictionaryEntrySenses,
   getDeduplicatedOccurrencesFromSenses,
   DictionaryOccurrenceView,
