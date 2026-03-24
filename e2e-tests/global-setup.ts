@@ -121,7 +121,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
 
     // Wait for the dev server to be ready
     console.log(`Waiting for renderer dev server on port ${RENDERER_PORT}...`);
-    await waitForPort(RENDERER_PORT, 60_000);
+    await waitForPort(RENDERER_PORT, 120_000);
     console.log('Renderer dev server is ready.');
   }
 }

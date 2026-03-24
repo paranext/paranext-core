@@ -52,7 +52,7 @@ jobs:
       - name: Install icu4c on macOS
         if: ${{ matrix.os == env.OS_MACOS }}
         run: |
-          sudo port -v install icu @76.1_0 +universal
+          sudo port -v install icu @78.3_1 +universal
 
       - name: Fixup loader paths for icu4c
         if: ${{ matrix.os == env.OS_MACOS }}
@@ -60,7 +60,7 @@ jobs:
         # For example, libicuuc (shortened to "uc") depends on libicudata (shortened to "data")
         # Dependencies can be seen by running "dyld_info -dependents /path/to/something.dylib"
         run: |
-          ICU_VERSION=76
+          ICU_VERSION=78
           LIB_DEPENDENCIES="
           i18n data
           i18n uc

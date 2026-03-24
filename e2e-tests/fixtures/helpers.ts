@@ -5,7 +5,7 @@ import path from 'path';
 import WebSocket from 'ws';
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
-const PROCESS_READY_TIMEOUT = 60_000;
+export const PROCESS_READY_TIMEOUT = 120_000;
 
 /** Return value from {@link launchElectronApp}. */
 export interface ElectronAppContext {
