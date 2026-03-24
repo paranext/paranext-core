@@ -33,7 +33,7 @@ import {
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { formatReplacementString } from 'platform-bible-utils';
 import { SetStateAction, useEffect, useMemo, useState } from 'react';
-import { getLocalizedStrings } from '.storybook/localization-decorator.ts';
+import { getLocalizedStrings } from '../../../../../.storybook/localization-decorator';
 import { FindFilters } from './find-filters.component';
 import { SearchTextType } from './find-types';
 
@@ -346,9 +346,7 @@ export function FindHeaderDemo() {
               onScopeChange={setScope}
               selectedBookIds={selectedBookIds}
               onSelectedBookIdsChange={setSelectedBookIds}
-              localizedStrings={getLocalizedStrings(
-                SCOPE_SELECTOR_STRING_KEYS as unknown as string[],
-              )}
+              localizedStrings={getLocalizedStrings([...SCOPE_SELECTOR_STRING_KEYS])}
               availableBookInfo={availableBookIds}
             />
           </PopoverContent>
