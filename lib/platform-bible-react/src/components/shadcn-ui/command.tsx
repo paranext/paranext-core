@@ -27,14 +27,20 @@ const Command = React.forwardRef<
 ));
 Command.displayName = CommandPrimitive.displayName;
 
-interface CommandDialogProps extends DialogProps {}
+interface CommandDialogProps extends DialogProps {
+  /** Whether cmdk should filter items. Set to false when handling filtering externally. */
+  shouldFilter?: boolean;
+}
 
 /** @inheritdoc Command */
-function CommandDialog({ children, ...props }: CommandDialogProps) {
+function CommandDialog({ children, shouldFilter, ...props }: CommandDialogProps) {
   return (
     <Dialog {...props}>
       <DialogContent className="tw-overflow-hidden tw-p-0 tw-shadow-lg">
-        <Command className="[&_[cmdk-group-heading]]:tw-px-2 [&_[cmdk-group-heading]]:tw-font-medium [&_[cmdk-group-heading]]:tw-text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:tw-pt-0 [&_[cmdk-group]]:tw-px-2 [&_[cmdk-input-wrapper]_svg]:tw-h-5 [&_[cmdk-input-wrapper]_svg]:tw-w-5 [&_[cmdk-input]]:tw-h-12 [&_[cmdk-item]]:tw-px-2 [&_[cmdk-item]]:tw-py-3 [&_[cmdk-item]_svg]:tw-h-5 [&_[cmdk-item]_svg]:tw-w-5">
+        <Command
+          shouldFilter={shouldFilter}
+          className="[&_[cmdk-group-heading]]:tw-px-2 [&_[cmdk-group-heading]]:tw-font-medium [&_[cmdk-group-heading]]:tw-text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:tw-pt-0 [&_[cmdk-group]]:tw-px-2 [&_[cmdk-input-wrapper]_svg]:tw-h-5 [&_[cmdk-input-wrapper]_svg]:tw-w-5 [&_[cmdk-input]]:tw-h-12 [&_[cmdk-item]]:tw-px-2 [&_[cmdk-item]]:tw-py-3 [&_[cmdk-item]_svg]:tw-h-5 [&_[cmdk-item]_svg]:tw-w-5"
+        >
           {children}
         </Command>
       </DialogContent>
@@ -45,12 +51,15 @@ function CommandDialog({ children, ...props }: CommandDialogProps) {
 /** @inheritdoc Command */
 const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & {
+    /** Optional custom icon or element to replace the default search icon */
+    icon?: React.ReactNode;
+  }
+>(({ className, icon, ...props }, ref) => {
   const dir: Direction = readDirection();
   return (
     <div className="tw-flex tw-items-center tw-border-b tw-px-3" dir={dir}>
-      <Search className="tw-me-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+      {icon ?? <Search className="tw-me-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />}
       <CommandPrimitive.Input
         ref={ref}
         className={cn(
