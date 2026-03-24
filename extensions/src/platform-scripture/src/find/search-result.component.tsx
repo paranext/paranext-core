@@ -8,15 +8,16 @@ import {
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
 
-export type HidableFindResult = FindResult & { isHidden?: boolean };
+export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: boolean };
 
 /** How many words to show around the search result */
 const WORDS_AROUND_SEARCH_RESULT = 15;
 
 export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  '%general_cancel%',
   '%webView_find_copyReference%',
   '%webView_find_copyVerseText%',
   '%webView_find_copyReferenceAndVerseText%',
@@ -24,6 +25,7 @@ export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%webView_find_noVerseTextAvailable%',
   '%webView_find_loadingVerseText%',
   '%webView_find_replace%',
+  '%webView_find_replaced%',
 ];
 
 /** Props interface for the SearchResult component */
@@ -44,6 +46,8 @@ interface SearchResultProps {
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on this result */
   onReplace: (index: number) => void;
+  /** Callback to cancel/revert the pending replace for this result */
+  onCancelReplace?: () => void;
   /** Whether the find WebView is currently in replace mode */
   isReplaceMode: boolean;
   /** Whether a replace operation is currently in progress */
@@ -86,17 +90,33 @@ export default function SearchResult({
   onResultClick,
   onHideResult,
   onReplace,
+  onCancelReplace,
   localizedStrings,
   isReplaceMode,
   isReplacing,
 }: SearchResultProps) {
+  // useRef requires null as the initial value for DOM refs
+  // eslint-disable-next-line no-null/no-null
+  const cardRef = useRef<HTMLDivElement>(null);
+
   // We should avoid calculating context unless this result is selected to improve performance
   const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(isSelected);
+  const [isProgressAnimating, setIsProgressAnimating] = useState(false);
+
+  useEffect(() => {
+    if (!searchResult.isReplaced) {
+      setIsProgressAnimating(false);
+      return undefined;
+    }
+    const frame = requestAnimationFrame(() => setIsProgressAnimating(true));
+    return () => cancelAnimationFrame(frame);
+  }, [searchResult.isReplaced]);
 
   // When this result becomes selected, we should calculate the context if we haven't already
   useEffect(() => {
     if (isSelected) {
       setShouldGetVerseText(true);
+      cardRef.current?.scrollIntoView({ block: 'nearest' });
     }
   }, [isSelected]);
 
@@ -211,12 +231,40 @@ export default function SearchResult({
   );
 
   const cardContent = (
-    <div className="tw-text-xs tw-font-medium">
-      {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
-        searchResult.start.verseRef.book}{' '}
-      {searchResult.start.verseRef.chapterNum}:
-      {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}{' '}
-      <span className="scripture-font">{searchResult.text ?? ''}</span>
+    <div className="tw-text-xs tw-font-medium tw-flex tw-items-center tw-gap-2 tw-min-h-8">
+      <div className="tw-shrink-0">
+        {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
+          searchResult.start.verseRef.book}{' '}
+        {searchResult.start.verseRef.chapterNum}:
+        {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}{' '}
+        <span className="scripture-font">{searchResult.text ?? ''}</span>
+      </div>
+      {searchResult.isReplaced && (
+        <>
+          <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">
+            {localizedStrings['%webView_find_replaced%']}
+          </span>
+          <div className="tw-flex-1 tw-h-1.5 tw-bg-red-200 tw-rounded-full tw-overflow-hidden">
+            <div
+              className="tw-h-full tw-bg-red-500 tw-rounded-full tw-transition-all tw-ease-linear tw-duration-1000"
+              style={{ width: isProgressAnimating ? '100%' : '0%' }}
+            />
+          </div>
+          {onCancelReplace && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="tw-h-6 tw-shrink-0 tw-mr-10 tw-border-red-300 tw-text-red-500 hover:tw-border-red-500 hover:tw-text-red-700"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancelReplace();
+              }}
+            >
+              {localizedStrings['%general_cancel%']}
+            </Button>
+          )}
+        </>
+      )}
     </div>
   );
 
@@ -227,23 +275,26 @@ export default function SearchResult({
   );
 
   return (
-    <ResultsCard
-      cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
-        searchResult.start.verseRef.verseNum
-      }${searchResult.text}${globalResultsIndex}`}
-      isHidden={searchResult.isHidden}
-      isSelected={isSelected}
-      onSelect={() => {
-        setShouldGetVerseText(true);
-        onResultClick(searchResult, globalResultsIndex);
-      }}
-      selectedButtons={isReplaceMode ? replaceButton : undefined}
-      hoverButtons={isReplaceMode ? replaceButton : undefined}
-      dropdownContent={dropdownContent}
-      showDropdownOnHover
-      additionalSelectedContent={additionalSelectedContent}
-    >
-      {cardContent}
-    </ResultsCard>
+    <div ref={cardRef}>
+      <ResultsCard
+        cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
+          searchResult.start.verseRef.verseNum
+        }${searchResult.text}${globalResultsIndex}`}
+        isHidden={searchResult.isHidden}
+        isSelected={isSelected}
+        className={searchResult.isReplaced ? '!tw-bg-red-100 dark:!tw-bg-red-950' : undefined}
+        onSelect={() => {
+          setShouldGetVerseText(true);
+          onResultClick(searchResult, globalResultsIndex);
+        }}
+        selectedButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
+        hoverButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
+        dropdownContent={searchResult.isReplaced ? undefined : dropdownContent}
+        showDropdownOnHover={!searchResult.isReplaced}
+        additionalSelectedContent={additionalSelectedContent}
+      >
+        {cardContent}
+      </ResultsCard>
+    </div>
   );
 }
