@@ -62,6 +62,32 @@ type WorkerPort = Pick<NonNullable<typeof parentPort>, 'postMessage'>;
 type DatabaseSyncConstructor = new (path: string, options?: { readOnly?: boolean }) => DatabaseSync;
 
 /**
+ * Allowlist pattern for SQLite schema names (ATTACH/DETACH identifier positions). Only letters,
+ * digits, and underscores are permitted, and the name must not start with a digit. This matches
+ * SQLite's unquoted-identifier grammar and is deliberately strict to prevent SQL injection: schema
+ * names cannot be bound as `?` parameters because SQLite's grammar treats ATTACH/DETACH identifiers
+ * as names, not expressions.
+ *
+ * Intentionally does NOT allow SQLite reserved words (e.g. `main`, `temp`, `SELECT`) as schema
+ * names — SQLite itself rejects them when they appear unquoted in an identifier position.
+ */
+const VALID_SCHEMA_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+/**
+ * Validates a schema name for safe interpolation into ATTACH/DETACH SQL. Throws with a clear
+ * message if the name contains characters outside the strict allowlist. The validated name is
+ * returned as-is (unquoted) so SQLite will naturally reject reserved words used as identifiers.
+ */
+function validateSchemaName(name: string): string {
+  if (!VALID_SCHEMA_NAME_PATTERN.test(name)) {
+    throw new Error(
+      `Invalid schema name "${name}": must start with a letter or underscore and contain only letters, digits, and underscores`,
+    );
+  }
+  return name;
+}
+
+/**
  * Returns true when `arg` is a plain named-parameter object (not a primitive, null, or typed
  * array). Used to distinguish the named-parameter overload from the positional overload.
  */
@@ -137,13 +163,15 @@ function createMessageHandler(
 
         case 'attach': {
           const db = getDatabase(message.nonce);
-          db.prepare('ATTACH DATABASE ? AS ?').run(message.path, message.schemaName);
+          const attachIdent = validateSchemaName(message.schemaName);
+          db.prepare(`ATTACH DATABASE ? AS ${attachIdent}`).run(message.path);
           break;
         }
 
         case 'detach': {
           const db = getDatabase(message.nonce);
-          db.prepare('DETACH DATABASE ?').run(message.schemaName);
+          const detachIdent = validateSchemaName(message.schemaName);
+          db.prepare(`DETACH DATABASE ${detachIdent}`).run();
           break;
         }
 

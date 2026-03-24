@@ -159,7 +159,7 @@ describe('close', () => {
 });
 
 describe('attach', () => {
-  it('executes ATTACH DATABASE with the correct path and schema name', () => {
+  it('interpolates the schema name as a quoted identifier, not a parameter', () => {
     openDb('nonce1');
     const db = getLastDb();
 
@@ -171,9 +171,54 @@ describe('attach', () => {
       schemaName: 'other',
     });
 
-    expect(db.prepare).toHaveBeenCalledWith('ATTACH DATABASE ? AS ?');
-    expect(getLastStmt(db).run).toHaveBeenCalledWith('/other/db.sqlite', 'other');
+    // Schema name must be a quoted SQL identifier in the statement text, not a ?
+    // parameter — SQLite does not allow parameter markers in identifier positions.
+    expect(db.prepare).toHaveBeenCalledWith('ATTACH DATABASE ? AS other');
+    // The path remains a safe parameter binding; the schema name is not passed to run()
+    expect(getLastStmt(db).run).toHaveBeenCalledWith('/other/db.sqlite');
     expect(response.error).toBeUndefined();
+  });
+
+  it('rejects a schema name that contains characters outside [a-zA-Z_][a-zA-Z0-9_]*', () => {
+    openDb('nonce1');
+
+    const response = send({
+      id: 'req',
+      type: 'attach',
+      nonce: 'nonce1',
+      path: '/other/db.sqlite',
+      schemaName: 'bad; DROP TABLE users--',
+    });
+
+    expect(response.error).toMatch(/invalid schema name/i);
+  });
+
+  it('rejects a schema name that starts with a digit', () => {
+    openDb('nonce1');
+
+    const response = send({
+      id: 'req',
+      type: 'attach',
+      nonce: 'nonce1',
+      path: '/x.sqlite',
+      schemaName: '1bad',
+    });
+
+    expect(response.error).toMatch(/invalid schema name/i);
+  });
+
+  it('rejects an empty schema name', () => {
+    openDb('nonce1');
+
+    const response = send({
+      id: 'req',
+      type: 'attach',
+      nonce: 'nonce1',
+      path: '/x.sqlite',
+      schemaName: '',
+    });
+
+    expect(response.error).toMatch(/invalid schema name/i);
   });
 
   it('sends an error when the nonce is not open', () => {
@@ -190,15 +235,37 @@ describe('attach', () => {
 });
 
 describe('detach', () => {
-  it('executes DETACH DATABASE with the correct schema name', () => {
+  it('interpolates the schema name as a quoted identifier, not a parameter', () => {
     openDb('nonce1');
     const db = getLastDb();
 
     const response = send({ id: 'req', type: 'detach', nonce: 'nonce1', schemaName: 'mySchema' });
 
-    expect(db.prepare).toHaveBeenCalledWith('DETACH DATABASE ?');
-    expect(getLastStmt(db).run).toHaveBeenCalledWith('mySchema');
+    // Schema name must appear in the SQL text as a quoted identifier, not bound via ?
+    expect(db.prepare).toHaveBeenCalledWith('DETACH DATABASE mySchema');
+    expect(getLastStmt(db).run).toHaveBeenCalledWith();
     expect(response.error).toBeUndefined();
+  });
+
+  it('rejects a schema name that contains characters outside [a-zA-Z_][a-zA-Z0-9_]*', () => {
+    openDb('nonce1');
+
+    const response = send({
+      id: 'req',
+      type: 'detach',
+      nonce: 'nonce1',
+      schemaName: 'bad"quote',
+    });
+
+    expect(response.error).toMatch(/invalid schema name/i);
+  });
+
+  it('rejects an empty schema name', () => {
+    openDb('nonce1');
+
+    const response = send({ id: 'req', type: 'detach', nonce: 'nonce1', schemaName: '' });
+
+    expect(response.error).toMatch(/invalid schema name/i);
   });
 
   it('sends an error when the nonce is not open', () => {

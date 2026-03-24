@@ -7649,7 +7649,9 @@ declare module 'shared/services/database.service-model' {
      *   from `openDatabase`.
      * @param extensionFileUri - The file URI of the SQLite database to attach. This can only be an
      *   extension asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`.
-     * @param schemaName - The schema name to associate with the attached database.
+     * @param schemaName - The schema name to associate with the attached database. Must start with a
+     *   letter or underscore and contain only letters, digits, and underscores
+     *   (`[a-zA-Z_][a-zA-Z0-9_]*`). SQLite reserved words (e.g. `main`, `temp`) are not allowed.
      * @returns A promise that resolves when the database file is successfully attached.
      */
     attachDatabase(
@@ -7665,7 +7667,9 @@ declare module 'shared/services/database.service-model' {
      *
      * @param databaseNonce - The nonce of the database connection to detach from. You get this nonce
      *   from `openDatabase`.
-     * @param schemaName - The schema name to associate with the attached database.
+     * @param schemaName - The schema name of the attached database to detach. Must start with a
+     *   letter or underscore and contain only letters, digits, and underscores
+     *   (`[a-zA-Z_][a-zA-Z0-9_]*`). SQLite reserved words (e.g. `main`, `temp`) are not allowed.
      * @returns A promise that resolves when the database file is successfully detached.
      */
     detachDatabase(databaseNonce: string, schemaName: string): Promise<void>;
