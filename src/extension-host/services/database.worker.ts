@@ -119,7 +119,7 @@ function createMessageHandler(
   return (message: WorkerMessage) => {
     const { id } = message;
     try {
-      let result: WorkerMessageTypes[keyof WorkerMessageTypes]['result'] = undefined;
+      let result: WorkerMessageTypes[keyof WorkerMessageTypes]['result'];
 
       switch (message.type) {
         case 'open': {
@@ -172,6 +172,7 @@ function createMessageHandler(
           const [namedOrFirst, ...positional] = message.args;
           if (isNamedParams(namedOrFirst)) {
             // Cast to SqlOutputRow[] since we exclude bigint/ArrayBuffer from our API for cross-process serialization
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
             result = db
               .prepare(message.query)
               .all(
@@ -182,6 +183,7 @@ function createMessageHandler(
             // If no args were passed in, don't pass any in. If there was at least one arg, pass it
             const allArgs = message.args.length > 0 ? [namedOrFirst, ...positional] : [];
             // Cast to SqlOutputRow[] since we exclude bigint/ArrayBuffer from our API for cross-process serialization
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
             result = db
               .prepare(message.query)
               .all(...sanitizePositional(allArgs)) as SqlOutputRow[];
