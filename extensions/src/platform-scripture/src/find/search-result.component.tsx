@@ -231,7 +231,7 @@ export default function SearchResult({
   );
 
   const cardContent = (
-    <div className="tw-text-xs tw-font-medium tw-flex tw-items-center tw-gap-2">
+    <div className="tw-text-xs tw-font-medium tw-flex tw-items-center tw-gap-2 tw-min-h-8">
       <div className="tw-shrink-0">
         {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
           searchResult.start.verseRef.book}{' '}
