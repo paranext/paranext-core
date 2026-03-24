@@ -90,7 +90,7 @@ function createMessageHandler(
   port: WorkerPort,
   // This is a class constructor, so we are capitalizing it
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  DatabaseSyncImpl: DatabaseSyncConstructor = DatabaseSync,
+  DatabaseSyncImplementation: DatabaseSyncConstructor = DatabaseSync,
 ): (message: WorkerMessage) => void {
   function getDatabase(nonce: string): DatabaseSync {
     const db = databases.get(nonce);
@@ -105,7 +105,7 @@ function createMessageHandler(
 
       switch (message.type) {
         case 'open': {
-          const db = new DatabaseSyncImpl(message.path, { readOnly: message.readOnly });
+          const db = new DatabaseSyncImplementation(message.path, { readOnly: message.readOnly });
           databases.set(message.nonce, db);
           break;
         }

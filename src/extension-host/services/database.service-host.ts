@@ -41,6 +41,7 @@ const defaultWorkerFactory: WorkerFactory = () => {
 class DatabaseService implements IDatabaseService {
   #worker: Worker;
   #pendingRequests: Map<string, PendingRequest> = new Map();
+  #isDisposing = false;
 
   constructor(workerFactory: WorkerFactory = defaultWorkerFactory) {
     this.#worker = workerFactory();
@@ -62,6 +63,7 @@ class DatabaseService implements IDatabaseService {
     });
 
     this.#worker.on('exit', (code) => {
+      if (this.#isDisposing) return;
       const error = new Error(`Database worker exited unexpectedly with code ${code}`);
       logger.error(error.message);
       this.#rejectAllPending(error);
@@ -143,6 +145,7 @@ class DatabaseService implements IDatabaseService {
   }
 
   async dispose(): Promise<boolean> {
+    this.#isDisposing = true;
     try {
       await this.#sendRequest('dispose', {});
     } finally {

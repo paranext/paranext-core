@@ -117,6 +117,7 @@ beforeEach(() => {
 describe('openDatabase', () => {
   it('sends an open request to the worker with readOnly: false for non-asset URIs', async () => {
     const service = createService();
+
     const openPromise = service.openDatabase(NON_ASSET_URI);
 
     const msg = getLastRequest();
@@ -132,6 +133,7 @@ describe('openDatabase', () => {
 
   it('sends readOnly: true for an extension asset URI', async () => {
     const service = createService();
+
     const openPromise = service.openDatabase(EXTENSION_URI);
 
     const msg = getLastRequest();
@@ -144,6 +146,7 @@ describe('openDatabase', () => {
 
   it('sends readOnly: true when the readOnly option is true', async () => {
     const service = createService();
+
     const openPromise = service.openDatabase(NON_ASSET_URI, { readOnly: true });
 
     expect(getLastRequest().readOnly).toBe(true);
@@ -154,6 +157,7 @@ describe('openDatabase', () => {
 
   it('ignores fullMutex — worker thread provides inherent serialization', async () => {
     const service = createService();
+
     const openPromise = service.openDatabase(NON_ASSET_URI, { fullMutex: true });
 
     const msg = getLastRequest();
@@ -198,6 +202,7 @@ describe('openDatabase', () => {
 
   it('propagates errors from the worker', async () => {
     const service = createService();
+
     const openPromise = service.openDatabase(NON_ASSET_URI);
 
     respondError('File not found');
@@ -212,6 +217,7 @@ describe('closeDatabase', () => {
     const nonce = await openDb(service);
 
     const closePromise = service.closeDatabase(nonce);
+
     const msg = getLastRequest();
     expect(msg.type).toBe('close');
     expect(msg.nonce).toBe(nonce);
@@ -224,6 +230,7 @@ describe('closeDatabase', () => {
     const service = createService();
 
     const closePromise = service.closeDatabase('unknown-nonce');
+
     respondError('Database with nonce "unknown-nonce" is not open.');
 
     await expect(closePromise).rejects.toThrow('Database with nonce "unknown-nonce" is not open.');
@@ -239,6 +246,7 @@ describe('attachDatabase', () => {
     mockGetPathFromUri.mockReturnValue(attachPath);
 
     const attachPromise = service.attachDatabase(nonce, NON_ASSET_URI, 'mySchema');
+
     const msg = getLastRequest();
     expect(msg.type).toBe('attach');
     expect(msg.nonce).toBe(nonce);
@@ -260,6 +268,7 @@ describe('attachDatabase', () => {
     mockGetPathFromUri.mockReturnValue(attachPath);
 
     const attachPromise = service.attachDatabase(nonce, attachUri, 'schema');
+
     expect(mockGetUriFromExtensionUri).toHaveBeenCalledWith(attachUri);
     expect(mockGetPathFromUri).toHaveBeenCalledWith(attachResolvedUri);
 
@@ -271,6 +280,7 @@ describe('attachDatabase', () => {
     const service = createService();
 
     const attachPromise = service.attachDatabase('bad-nonce', NON_ASSET_URI, 'schema');
+
     respondError('Database with nonce "bad-nonce" is not open.');
 
     await expect(attachPromise).rejects.toThrow('Database with nonce "bad-nonce" is not open.');
@@ -283,6 +293,7 @@ describe('detachDatabase', () => {
     const nonce = await openDb(service);
 
     const detachPromise = service.detachDatabase(nonce, 'mySchema');
+
     const msg = getLastRequest();
     expect(msg.type).toBe('detach');
     expect(msg.nonce).toBe(nonce);
@@ -296,6 +307,7 @@ describe('detachDatabase', () => {
     const service = createService();
 
     const detachPromise = service.detachDatabase('bad-nonce', 'mySchema');
+
     respondError('Database with nonce "bad-nonce" is not open.');
 
     await expect(detachPromise).rejects.toThrow('Database with nonce "bad-nonce" is not open.');
@@ -308,6 +320,7 @@ describe('run', () => {
     const nonce = await openDb(service);
 
     const runPromise = service.run(nonce, 'DELETE FROM items WHERE id = ?', 5);
+
     const msg = getLastRequest();
     expect(msg.type).toBe('run');
     expect(msg.nonce).toBe(nonce);
@@ -323,6 +336,7 @@ describe('run', () => {
     const nonce = await openDb(service);
 
     const runPromise = service.run(nonce, 'UPDATE t SET a=?, b=? WHERE id=?', 'val1', 'val2', 10);
+
     expect(getLastRequest().args).toEqual(['val1', 'val2', 10]);
 
     respondSuccess({ changes: 1, lastId: 0 });
@@ -334,6 +348,7 @@ describe('run', () => {
     const nonce = await openDb(service);
 
     const runPromise = service.run(nonce, 'DELETE FROM items');
+
     expect(getLastRequest().args).toEqual([]);
 
     respondSuccess({ changes: 0, lastId: 0 });
@@ -345,6 +360,7 @@ describe('run', () => {
     const nonce = await openDb(service);
 
     const runPromise = service.run(nonce, 'INVALID SQL');
+
     respondError('SQL syntax error');
 
     await expect(runPromise).rejects.toThrow('SQL syntax error');
@@ -361,6 +377,7 @@ describe('select', () => {
     ];
 
     const selectPromise = service.select(nonce, 'SELECT * FROM items');
+
     const msg = getLastRequest();
     expect(msg.type).toBe('select');
     expect(msg.nonce).toBe(nonce);
@@ -376,6 +393,7 @@ describe('select', () => {
     const nonce = await openDb(service);
 
     const selectPromise = service.select(nonce, 'SELECT * FROM items WHERE id = ?', 1);
+
     expect(getLastRequest().args).toEqual([1]);
 
     respondSuccess([]);
@@ -387,6 +405,7 @@ describe('select', () => {
     const nonce = await openDb(service);
 
     const selectPromise = service.select(nonce, 'SELECT * FROM items WHERE id = ?', 9999);
+
     respondSuccess([]);
     expect(await selectPromise).toEqual([]);
   });
@@ -396,6 +415,7 @@ describe('select', () => {
     const nonce = await openDb(service);
 
     const selectPromise = service.select(nonce, 'SELECT * FROM nonexistent');
+
     respondError('Table does not exist');
 
     await expect(selectPromise).rejects.toThrow('Table does not exist');
@@ -407,6 +427,7 @@ describe('dispose', () => {
     const service = createService();
 
     const disposePromise = service.dispose();
+
     expect(getLastRequest().type).toBe('dispose');
 
     respondSuccess();
@@ -418,6 +439,7 @@ describe('dispose', () => {
     const service = createService();
 
     const disposePromise = service.dispose();
+
     // Worker has not responded yet
     expect(mockWorkerTerminate).not.toHaveBeenCalled();
 
@@ -431,6 +453,7 @@ describe('dispose', () => {
     const service = createService();
 
     const disposePromise = service.dispose();
+
     respondSuccess();
     expect(await disposePromise).toBe(true);
   });
@@ -439,6 +462,7 @@ describe('dispose', () => {
     const service = createService();
 
     const disposePromise = service.dispose();
+
     respondError('Failed to close a database');
 
     await expect(disposePromise).rejects.toThrow('Failed to close a database');

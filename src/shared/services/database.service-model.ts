@@ -27,6 +27,9 @@ export interface OpenDatabaseOptions {
   fullMutex?: boolean;
 }
 
+// Note: bigint and ArrayBuffer like Uint8Array types are intentionally not included in SqlValue
+// even though they are supported in node:sqlite because they are not JSON-serializable, and we need
+// to be able to serialize query parameters and results to pass between threads and across WebSocket
 /** A value that can be bound to a SQLite query parameter or returned from a query. */
 export type SqlValue = undefined | null | number | string;
 /** A record of named SQL parameters for a SQLite query. */
