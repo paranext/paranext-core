@@ -55,6 +55,46 @@ const config: StorybookConfig = {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { devServer, entry, output, ...rendererConfigSanitized } = rendererConfig;
 
+    // Inject postcss-loader into the renderer's CSS rules for Storybook only.
+    // postcss-loader is intentionally omitted from the shared renderer webpack configs so that
+    // Tailwind CSS is not processed in the Electron app build — only in Storybook.
+    if (rendererConfigSanitized.module?.rules) {
+      const rendererRules: RuleSetRule[] = rendererConfigSanitized.module.rules;
+      rendererConfigSanitized.module.rules = rendererRules.map((rule) => {
+        if (!rule || typeof rule !== 'object' || !Array.isArray(rule.use)) return rule;
+        const useArr = rule.use;
+        const cssIdx = useArr.findIndex(
+          (u) =>
+            u === 'css-loader' ||
+            (!!u &&
+              typeof u === 'object' &&
+              typeof u !== 'function' &&
+              'loader' in u &&
+              u.loader === 'css-loader'),
+        );
+        if (cssIdx === -1) return rule;
+        // Bump importLoaders by 1 on the css-loader options object if present
+        const newUse = useArr.map((u, i) => {
+          if (
+            i === cssIdx &&
+            !!u &&
+            typeof u === 'object' &&
+            typeof u !== 'function' &&
+            'options' in u &&
+            typeof u.options === 'object' &&
+            !!u.options &&
+            'importLoaders' in u.options &&
+            typeof u.options.importLoaders === 'number'
+          ) {
+            return { ...u, options: { ...u.options, importLoaders: u.options.importLoaders + 1 } };
+          }
+          return u;
+        });
+        newUse.splice(cssIdx + 1, 0, 'postcss-loader');
+        return { ...rule, use: newUse };
+      });
+    }
+
     // Add path mapping for platform-bible-react's @/ alias and resolve the package from source
     if (webpackConfig.resolve) {
       webpackConfig.resolve.alias = {

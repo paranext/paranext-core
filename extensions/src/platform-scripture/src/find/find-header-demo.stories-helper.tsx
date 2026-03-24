@@ -37,6 +37,42 @@ import { getLocalizedStrings } from '../../../../../.storybook/localization-deco
 import { FindFilters } from './find-filters.component';
 import { SearchTextType } from './find-types';
 
+const filterLocalizedStrings = getLocalizedStrings([
+  '%webView_find_toggleFilters%',
+  '%webView_find_matchContentIn%',
+  '%webView_find_allText%',
+  '%webView_find_allText_tooltip%',
+  '%webView_find_verseTextOnly%',
+  '%webView_find_restrictions%',
+  '%webView_find_restrictions_none%',
+  '%webView_find_restrictions_wholeWord%',
+  '%webView_find_restrictions_startOfWord%',
+  '%webView_find_restrictions_endOfWord%',
+  '%webView_find_capitalization%',
+  '%webView_find_matchCase%',
+  '%webView_find_pattern%',
+  '%webView_find_allowRegex%',
+]);
+
+const replaceLocalizedStrings = getLocalizedStrings([
+  '%webView_find_replace%',
+  '%webView_find_replaceAll%',
+  '%webView_find_replaceTerm_placeholder%',
+  '%webView_find_preserveCase%',
+  '%webView_find_preserveCase_tooltip%',
+]);
+
+const localizedStrings = getLocalizedStrings([
+  '%webView_find_findTab%',
+  '%webView_find_replaceTab%',
+  '%webView_find_searchPlaceholder%',
+  '%webView_find_showRecentSearches%',
+  '%webView_find_recent%',
+  '%webView_find_findInProject%',
+  '%webView_find_showing%',
+  '%webView_find_previousResult%',
+  '%webView_find_nextResult%',
+]);
 export function FindHeaderDemo() {
   const [searchTerm, setSearchTerm] = useState<string>('');
 
@@ -62,55 +98,6 @@ export function FindHeaderDemo() {
   const [replaceTerm, setReplaceTerm] = useState<string>('');
   const [preserveCase, setPreserveCase] = useState(false);
 
-  const filterLocalizedStrings = useMemo(
-    () =>
-      getLocalizedStrings([
-        '%webView_find_toggleFilters%',
-        '%webView_find_matchContentIn%',
-        '%webView_find_allText%',
-        '%webView_find_allText_tooltip%',
-        '%webView_find_verseTextOnly%',
-        '%webView_find_restrictions%',
-        '%webView_find_restrictions_none%',
-        '%webView_find_restrictions_wholeWord%',
-        '%webView_find_restrictions_startOfWord%',
-        '%webView_find_restrictions_endOfWord%',
-        '%webView_find_capitalization%',
-        '%webView_find_matchCase%',
-        '%webView_find_pattern%',
-        '%webView_find_allowRegex%',
-      ]),
-    [],
-  );
-
-  const replaceLocalizedStrings = useMemo(
-    () =>
-      getLocalizedStrings([
-        '%webView_find_replace%',
-        '%webView_find_replaceAll%',
-        '%webView_find_replaceTerm_placeholder%',
-        '%webView_find_preserveCase%',
-        '%webView_find_preserveCase_tooltip%',
-      ]),
-    [],
-  );
-
-  const localizedStrings = useMemo(
-    () =>
-      getLocalizedStrings([
-        '%webView_find_findTab%',
-        '%webView_find_replaceTab%',
-        '%webView_find_searchPlaceholder%',
-        '%webView_find_showRecentSearches%',
-        '%webView_find_recent%',
-        '%webView_find_findInProject%',
-        '%webView_find_showing%',
-        '%webView_find_previousResult%',
-        '%webView_find_nextResult%',
-      ]),
-    [],
-  );
-
   const [searchStatus, setSearchStatus] = useState<FindJobStatus | undefined>(undefined);
 
   // custom for demo
@@ -130,7 +117,7 @@ export function FindHeaderDemo() {
   const [findButtonText, setFindButtonText] = useState<string>('');
   useEffect(() => {
     setTimeout(() => setFindButtonText(localizedStrings['%webView_find_findTab%']), 1000);
-  }, [localizedStrings]);
+  }, []);
 
   // custom for demo
   const handleStartSearch = () => {
