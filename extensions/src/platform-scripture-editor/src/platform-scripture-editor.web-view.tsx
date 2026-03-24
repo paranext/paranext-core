@@ -1199,9 +1199,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       saveUsjToPdpIfUpdated(usj);
       if (editingNoteKey.current) {
         // When the FootnoteEditor saves, Lexical emits a replaceEmbedUpdate. This triggers
-        // onUsjChange with an insertedNodeKey, but the ops differ from a fresh insertion:
-        // ops[1] is a delete op rather than the note embed.
-        //
+        // onUsjChange with an insertedNodeKey.
         // Detect this case (has insertedNodeKey but is not an insert op) and mark the note
         // as no longer "new", so that closing the editor as part of the save does not
         // delete the note the user just saved.
