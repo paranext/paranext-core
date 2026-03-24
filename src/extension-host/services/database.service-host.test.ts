@@ -498,4 +498,18 @@ describe('worker exit event', () => {
     await expect(runPromise).rejects.toThrow('Database worker exited unexpectedly with code 1');
     await expect(selectPromise).rejects.toThrow('Database worker exited unexpectedly with code 1');
   });
+
+  it('does not reject pending requests when the worker exits during dispose', async () => {
+    const service = createService();
+
+    // Start dispose — this sets #isDisposing = true
+    const disposePromise = service.dispose();
+
+    // Simulate the worker exiting with code 0 (success) while dispose is in flight
+    getRegisteredHandler('exit')(0);
+
+    // The exit handler should be suppressed; the dispose should still resolve normally
+    respondSuccess();
+    await expect(disposePromise).resolves.toBe(true);
+  });
 });
