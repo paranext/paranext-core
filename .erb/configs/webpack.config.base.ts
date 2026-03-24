@@ -5,7 +5,7 @@ import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin';
 import webpackPaths from './webpack.paths';
 import releaseAppPackageInfo from '../../release/app/package.json';
 
-// peerDependencies might not be in package.json, but that's fine. Just account for that
+// dependencies might not be in package.json, but that's fine. Just account for that
 const releaseAppPackageInfoFull: typeof releaseAppPackageInfo & {
   dependencies?: Record<string, unknown>;
 } = releaseAppPackageInfo;
