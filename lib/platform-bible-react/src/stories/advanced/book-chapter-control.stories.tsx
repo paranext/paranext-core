@@ -389,7 +389,7 @@ export const BookSearchAndNavigation: Story = {
       const allButtons = within(dropdownContent).getAllByRole('button');
       const backButton = allButtons.find((btn) => !btn.hasAttribute('data-chapter-btn'));
       await expect(backButton).toBeTruthy();
-      await userEvent.click(backButton!);
+      if (backButton) await userEvent.click(backButton);
     });
 
     await step('Verify back navigation returns to search mode', async () => {

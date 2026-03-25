@@ -610,14 +610,15 @@ export function CommandNavigator({
                 const isMatched = topMatch?.chapterNum === chapter;
                 const isCurrent = resolvedBookId === scrRef.book && chapter === scrRef.chapterNum;
                 const isFocused = focusedChapter === i;
+                let variant: 'default' | 'secondary' | 'outline' = 'outline';
+                if (isFocused || isMatched) variant = 'default';
+                else if (isCurrent) variant = 'secondary';
                 return (
                   <Button
                     key={chapter}
                     data-chapter-btn
                     tabIndex={-1}
-                    variant={
-                      isFocused || isMatched ? 'default' : isCurrent ? 'secondary' : 'outline'
-                    }
+                    variant={variant}
                     onClick={() => handleChapterSelect(chapter)}
                     className={cn(
                       'tw-aspect-square tw-h-auto tw-p-0 tw-font-mono',
