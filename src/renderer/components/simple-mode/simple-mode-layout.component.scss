@@ -1,12 +1,24 @@
-.simple-mode-inset {
+.simple-mode-root {
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
 }
 
-.simple-mode-panels {
+.simple-mode-body {
   flex: 1;
+  overflow: hidden;
+  display: flex;
+  position: relative;
+}
+
+.simple-mode-inset {
+  flex: 1;
+  overflow: hidden;
+}
+
+.simple-mode-panels {
+  height: 100%;
   overflow: hidden;
 }
 
@@ -74,7 +86,9 @@
   font-size: 0.8rem;
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color 0.15s, color 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 
   &:hover {
     background: var(--accent, #e4e4e7);

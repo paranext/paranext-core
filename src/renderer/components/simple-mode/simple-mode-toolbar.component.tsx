@@ -6,7 +6,7 @@ import {
   Button,
   cn,
   getToolbarOSReservedSpaceClassName,
-  SidebarTrigger,
+  Toolbar,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -29,13 +29,9 @@ export type SimpleModeToolbarProps = {
   onTogglePanel: (panelId: SimplePanelId) => void;
   onShowExtraPanel: () => void;
   onHideExtraPanel: () => void;
-  /** Tabs currently in the tools panel */
   toolsTabs: SimpleTabDefinition[];
-  /** Tabs currently in the extra panel */
   extraTabs: SimpleTabDefinition[];
-  /** Move a tab to the extra panel */
   onMoveTabToExtra: (tabId: string) => void;
-  /** Move a tab back to tools */
   onMoveTabToTools: (tabId: string) => void;
 };
 
@@ -56,7 +52,6 @@ export function SimpleModeToolbar({
   onMoveTabToExtra,
   onMoveTabToTools,
 }: SimpleModeToolbarProps) {
-  // Scroll group / BCV control — same pattern as Power Mode toolbar
   const [scrollGroupIdInternal, setScrollGroupIdInternal] = useState<ScrollGroupId>(() =>
     JSON.parse(localStorage.getItem(scrollGroupIdLocalStorageKey) ?? '0'),
   );
@@ -77,7 +72,6 @@ export function SimpleModeToolbar({
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
-  // OS reserved space for window controls
   const [osPlatformToReserveSpaceFor] = usePromise(
     useCallback(async () => {
       const osPlatform: string | undefined = await sendCommand('platform.getOSPlatform');
@@ -91,128 +85,95 @@ export function SimpleModeToolbar({
 
   return (
     <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-      <div
+      <Toolbar
         className={cn(
-          'simple-mode-toolbar',
+          'tw-h-12 tw-bg-transparent',
           getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
         )}
-        style={{
-          height: 48,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          padding: '0 8px',
-          borderBottom: '1px solid var(--border, #e5e7eb)',
-          // eslint-disable-next-line no-restricted-syntax
-          WebkitAppRegion: 'drag',
-        }}
-      >
-        {/* Sidebar trigger */}
-        <SidebarTrigger
-          className="tw-h-8 tw-w-8 tw-flex-shrink-0"
-          style={{
-            // eslint-disable-next-line no-restricted-syntax
-            WebkitAppRegion: 'no-drag',
-          }}
-        />
+        shouldUseAsAppDragArea
+        onSelectMenuItem={() => {}}
+        appMenuAreaChildren={
+          <>
+            <img width={24} height={24} src={`${logo}`} alt="Platform.Bible logo" />
+            <span
+              className="tw-font-semibold tw-text-sm tw-whitespace-nowrap"
+              style={{ userSelect: 'none' }}
+            >
+              Platform.Bible
+            </span>
+          </>
+        }
+        configAreaChildren={
+          <div className="tw-flex tw-items-center tw-gap-1">
+            {PANEL_TOGGLES.map(({ id, icon: Icon, label }) => (
+              <Tooltip key={id}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={panelVisibility[id] ? 'default' : 'ghost'}
+                    size="icon"
+                    className="tw-h-8 tw-w-8"
+                    onClick={() => onTogglePanel(id)}
+                  >
+                    <Icon className="tw-h-4 tw-w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="tw-font-light">
+                    {panelVisibility[id] ? `Hide ${label}` : `Show ${label}`}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            ))}
 
-        {/* Logo */}
-        <img width={24} height={24} src={`${logo}`} alt="Platform.Bible logo" />
-        <span
-          className="tw-font-semibold tw-text-sm tw-whitespace-nowrap tw-mr-2"
-          style={{ userSelect: 'none' }}
-        >
-          Platform.Bible
-        </span>
+            {panelVisibility.extra ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="tw-h-8 tw-w-8"
+                    onClick={onHideExtraPanel}
+                  >
+                    <Minus className="tw-h-4 tw-w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="tw-font-light">Close extra panel</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <TabMoveDropdown
+                toolsTabs={toolsTabs}
+                extraTabs={extraTabs}
+                isExtraPanelOpen={panelVisibility.extra}
+                onMoveToExtra={onMoveTabToExtra}
+                onMoveToTools={onMoveTabToTools}
+                variant="plus"
+              />
+            )}
 
-        {/* BCV Control */}
-        <div
-          style={{
-            // eslint-disable-next-line no-restricted-syntax
-            WebkitAppRegion: 'no-drag',
-          }}
-        >
-          <BookChapterControl
-            scrRef={scrRef}
-            handleSubmit={setScrRef}
-            className="tw-w-80"
-            recentSearches={recentScriptureRefs}
-            onAddRecentSearch={addRecentScriptureRef}
-          />
-        </div>
-
-        {/* Spacer */}
-        <div className="tw-flex-1" />
-
-        {/* Layout toggle buttons */}
-        <div
-          className="tw-flex tw-items-center tw-gap-1"
-          style={{
-            // eslint-disable-next-line no-restricted-syntax
-            WebkitAppRegion: 'no-drag',
-          }}
-        >
-          {PANEL_TOGGLES.map(({ id, icon: Icon, label }) => (
-            <Tooltip key={id}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={panelVisibility[id] ? 'default' : 'ghost'}
-                  size="icon"
-                  className="tw-h-8 tw-w-8"
-                  onClick={() => onTogglePanel(id)}
-                >
-                  <Icon className="tw-h-4 tw-w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="tw-font-light">
-                  {panelVisibility[id] ? `Hide ${label}` : `Show ${label}`}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          ))}
-
-          {/* Plus / Minus button for extra panel */}
-          {panelVisibility.extra ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="tw-h-8 tw-w-8"
-                  onClick={onHideExtraPanel}
-                >
-                  <Minus className="tw-h-4 tw-w-4" />
+                <Button variant="ghost" size="icon" className="tw-h-8 tw-w-8">
+                  <EllipsisVertical className="tw-h-4 tw-w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="tw-font-light">Close extra panel</p>
+                <p className="tw-font-light">View options</p>
               </TooltipContent>
             </Tooltip>
-          ) : (
-            <TabMoveDropdown
-              toolsTabs={toolsTabs}
-              extraTabs={extraTabs}
-              isExtraPanelOpen={panelVisibility.extra}
-              onMoveToExtra={onMoveTabToExtra}
-              onMoveToTools={onMoveTabToTools}
-              variant="plus"
-            />
-          )}
-
-          {/* View options dropdown — placeholder */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="tw-h-8 tw-w-8">
-                <EllipsisVertical className="tw-h-4 tw-w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="tw-font-light">View options</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
+          </div>
+        }
+      >
+        {/* Center: BCV control */}
+        <BookChapterControl
+          scrRef={scrRef}
+          handleSubmit={setScrRef}
+          className="tw-w-80"
+          recentSearches={recentScriptureRefs}
+          onAddRecentSearch={addRecentScriptureRef}
+        />
+      </Toolbar>
     </TooltipProvider>
   );
 }

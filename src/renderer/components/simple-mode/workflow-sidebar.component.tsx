@@ -5,33 +5,28 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
-  SidebarHeader,
-  SidebarRail,
   SidebarSeparator,
 } from 'platform-bible-react';
 import { PenLine, RefreshCw, HelpCircle, CircleUserRound } from 'lucide-react';
 import { UserProfileDropdown } from '@renderer/components/user-profile-dropdown.component';
 
+const ICON_CLASS = 'tw-h-6 tw-w-6';
+
 /**
  * Sidebar content for Simple Mode.
  *
- * Renders inside the shadcn `Sidebar` shell provided by `simple-mode-layout.component.tsx`.
- * Currently only implements the Study & Draft workflow. Sync and Help are visible but
- * non-functional placeholders.
+ * Always collapsed to icon-only state with large icons. Rendered below the toolbar. Only Study &
+ * Draft workflow is implemented. Sync and Help are non-functional placeholders.
  */
 export function WorkflowSidebar() {
   return (
     <>
-      <SidebarHeader className="tw-p-2">
-        {/* Could hold a collapsed logo or brand mark in the future */}
-      </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton isActive tooltip="Study & Draft">
-                <PenLine />
-                <span>Study &amp; Draft</span>
+              <SidebarMenuButton isActive tooltip="Study & Draft" className="tw-h-10">
+                <PenLine className={ICON_CLASS} />
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -40,9 +35,8 @@ export function WorkflowSidebar() {
         <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton tooltip="Sync" disabled>
-                <RefreshCw />
-                <span>Sync</span>
+              <SidebarMenuButton tooltip="Sync" disabled className="tw-h-10">
+                <RefreshCw className={ICON_CLASS} />
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -51,24 +45,22 @@ export function WorkflowSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Help" disabled>
-              <HelpCircle />
-              <span>Help</span>
+            <SidebarMenuButton tooltip="Help" disabled className="tw-h-10">
+              <HelpCircle className={ICON_CLASS} />
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <UserProfileDropdown
+              side="right"
               trigger={
-                <SidebarMenuButton tooltip="Profile">
-                  <CircleUserRound />
-                  <span>Profile</span>
+                <SidebarMenuButton tooltip="Profile" className="tw-h-10">
+                  <CircleUserRound className={ICON_CLASS} />
                 </SidebarMenuButton>
               }
             />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-      <SidebarRail />
     </>
   );
 }

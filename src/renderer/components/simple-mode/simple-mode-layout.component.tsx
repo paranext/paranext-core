@@ -17,6 +17,8 @@ import {
   SIMPLE_MODE_TABS,
   getTabsForPanel,
 } from '@renderer/components/simple-mode/simple-mode-tab-config';
+import WebView from '@renderer/components/web-view.component';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import './simple-mode-layout.component.scss';
 
 /** IDs for the panels in simple mode */
@@ -46,8 +48,9 @@ function resolveTabDefs(tabIds: string[]): SimpleTabDefinition[] {
 }
 
 export function SimpleModeLayout() {
-  // Register Simple Mode's PapiDockLayout implementation with the webview service
-  useSimpleModeDockLayout();
+  // Register Simple Mode's PapiDockLayout implementation with the webview service.
+  // Returns a reactive webViewMap and dialogWebViews for rendering.
+  const { webViewMap, dialogWebViews, closeDialog } = useSimpleModeDockLayout();
 
   const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>({
     reference: true,
@@ -68,7 +71,6 @@ export function SimpleModeLayout() {
   };
 
   const hideExtraPanel = useCallback(() => {
-    // Move all extra-panel tabs back to tools
     setTabAssignments((prev) => ({
       ...prev,
       tools: [...prev.tools, ...prev.extra],
@@ -83,7 +85,6 @@ export function SimpleModeLayout() {
       tools: prev.tools.filter((id) => id !== tabId),
       extra: [...prev.extra, tabId],
     }));
-    // Auto-show extra panel if not visible
     setPanelVisibility((prev) => ({ ...prev, extra: true }));
   }, []);
 
@@ -95,7 +96,6 @@ export function SimpleModeLayout() {
         tools: [...prev.tools, tabId],
         extra: newExtra,
       };
-      // Auto-close extra panel if it becomes empty
       if (newExtra.length === 0) {
         setPanelVisibility((p) => ({ ...p, extra: false }));
       }
@@ -108,7 +108,6 @@ export function SimpleModeLayout() {
 
   const visiblePanelCount = Object.values(panelVisibility).filter(Boolean).length;
 
-  /** Toolbar end content for the extra panel — ellipsis dropdown for moving tabs */
   const extraPanelToolbarEnd = (
     <TabMoveDropdown
       toolsTabs={toolsTabs}
@@ -121,74 +120,107 @@ export function SimpleModeLayout() {
   );
 
   return (
-    <SidebarProvider defaultOpen={false}>
-      <Sidebar collapsible="icon">
-        <WorkflowSidebar />
-      </Sidebar>
-      <SidebarInset className="simple-mode-inset">
-        <SimpleModeToolbar
-          panelVisibility={panelVisibility}
-          onTogglePanel={togglePanel}
-          onShowExtraPanel={showExtraPanel}
-          onHideExtraPanel={hideExtraPanel}
-          toolsTabs={toolsTabs}
-          extraTabs={extraTabs}
-          onMoveTabToExtra={moveTabToExtra}
-          onMoveTabToTools={moveTabToTools}
-        />
-        <div className="simple-mode-panels">
-          {visiblePanelCount === 0 ? (
-            <div className="simple-mode-empty">No panels visible</div>
-          ) : (
-            <ResizablePanelGroup direction="horizontal">
-              {panelVisibility.reference && (
-                <>
-                  <ResizablePanel defaultSize={25} minSize={10}>
-                    <SimpleModePanel
-                      panelId="reference"
-                      tabs={resolveTabDefs(tabAssignments.reference)}
-                    />
-                  </ResizablePanel>
-                  {(panelVisibility.editor || panelVisibility.tools || panelVisibility.extra) && (
-                    <ResizableHandle withHandle />
+    <div className="simple-mode-root">
+      {/* Toolbar spans full width above sidebar */}
+      <SimpleModeToolbar
+        panelVisibility={panelVisibility}
+        onTogglePanel={togglePanel}
+        onShowExtraPanel={showExtraPanel}
+        onHideExtraPanel={hideExtraPanel}
+        toolsTabs={toolsTabs}
+        extraTabs={extraTabs}
+        onMoveTabToExtra={moveTabToExtra}
+        onMoveTabToTools={moveTabToTools}
+      />
+
+      {/* Sidebar + panels area below toolbar */}
+      <div className="simple-mode-body">
+        <SidebarProvider open={false} onOpenChange={() => {}}>
+          <Sidebar
+            collapsible="icon"
+            style={
+              {
+                '--sidebar-width-icon': '3.5rem',
+              } as React.CSSProperties
+            }
+          >
+            <WorkflowSidebar />
+          </Sidebar>
+          <SidebarInset className="simple-mode-inset">
+            <div className="simple-mode-panels">
+              {visiblePanelCount === 0 ? (
+                <div className="simple-mode-empty">No panels visible</div>
+              ) : (
+                <ResizablePanelGroup direction="horizontal">
+                  {panelVisibility.reference && (
+                    <>
+                      <ResizablePanel defaultSize={25} minSize={10}>
+                        <SimpleModePanel
+                          panelId="reference"
+                          tabs={resolveTabDefs(tabAssignments.reference)}
+                          webViewMap={webViewMap}
+                        />
+                      </ResizablePanel>
+                      {(panelVisibility.editor ||
+                        panelVisibility.tools ||
+                        panelVisibility.extra) && <ResizableHandle withHandle />}
+                    </>
                   )}
-                </>
-              )}
-              {panelVisibility.editor && (
-                <>
-                  <ResizablePanel defaultSize={35} minSize={10}>
-                    <SimpleModePanel
-                      panelId="editor"
-                      tabs={resolveTabDefs(tabAssignments.editor)}
-                    />
-                  </ResizablePanel>
-                  {(panelVisibility.tools || panelVisibility.extra) && (
-                    <ResizableHandle withHandle />
+                  {panelVisibility.editor && (
+                    <>
+                      <ResizablePanel defaultSize={35} minSize={10}>
+                        <SimpleModePanel
+                          panelId="editor"
+                          tabs={resolveTabDefs(tabAssignments.editor)}
+                          webViewMap={webViewMap}
+                        />
+                      </ResizablePanel>
+                      {(panelVisibility.tools || panelVisibility.extra) && (
+                        <ResizableHandle withHandle />
+                      )}
+                    </>
                   )}
-                </>
+                  {panelVisibility.tools && (
+                    <>
+                      <ResizablePanel defaultSize={panelVisibility.extra ? 25 : 40} minSize={10}>
+                        <SimpleModePanel panelId="tools" tabs={toolsTabs} webViewMap={webViewMap} />
+                      </ResizablePanel>
+                      {panelVisibility.extra && <ResizableHandle withHandle />}
+                    </>
+                  )}
+                  {panelVisibility.extra && (
+                    <ResizablePanel defaultSize={15} minSize={10}>
+                      <SimpleModePanel
+                        panelId="extra"
+                        tabs={extraTabs}
+                        toolbarEndContent={extraPanelToolbarEnd}
+                        webViewMap={webViewMap}
+                      />
+                    </ResizablePanel>
+                  )}
+                </ResizablePanelGroup>
               )}
-              {panelVisibility.tools && (
-                <>
-                  <ResizablePanel defaultSize={panelVisibility.extra ? 25 : 40} minSize={10}>
-                    <SimpleModePanel panelId="tools" tabs={toolsTabs} />
-                  </ResizablePanel>
-                  {panelVisibility.extra && <ResizableHandle withHandle />}
-                </>
-              )}
-              {panelVisibility.extra && (
-                <ResizablePanel defaultSize={15} minSize={10}>
-                  <SimpleModePanel
-                    panelId="extra"
-                    tabs={extraTabs}
-                    toolbarEndContent={extraPanelToolbarEnd}
-                  />
-                </ResizablePanel>
-              )}
-            </ResizablePanelGroup>
-          )}
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+            </div>
+          </SidebarInset>
+        </SidebarProvider>
+      </div>
+
+      {/* Float-type webviews rendered as centered blocking dialogs */}
+      {dialogWebViews.map((dialogWv) => (
+        <DialogPrimitive.Root
+          key={dialogWv.dialogId}
+          open
+          onOpenChange={() => closeDialog(dialogWv.dialogId)}
+        >
+          <DialogPrimitive.Portal>
+            <DialogPrimitive.Overlay className="tw-fixed tw-inset-0 tw-z-[200] tw-bg-black/50" />
+            <DialogPrimitive.Content className="tw-fixed tw-left-1/2 tw-top-1/2 tw-z-[201] tw--translate-x-1/2 tw--translate-y-1/2 tw-w-[600px] tw-h-[540px] tw-rounded-lg tw-border tw-bg-background tw-shadow-lg tw-overflow-hidden">
+              <WebView {...dialogWv} />
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
+      ))}
+    </div>
   );
 }
 

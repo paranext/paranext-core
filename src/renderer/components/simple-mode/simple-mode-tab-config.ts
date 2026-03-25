@@ -24,6 +24,8 @@ export type SimpleTabDefinition = {
   isPlaceholder: boolean;
   /** The default panel this tab belongs to */
   defaultPanel: SimplePanelId;
+  /** The webViewType to match against when a webview is opened by the platform */
+  webViewType?: string;
 };
 
 /**
@@ -40,6 +42,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: BookOpen,
     isPlaceholder: false,
     defaultPanel: 'reference',
+    webViewType: 'platformScriptureEditor.reactWebView',
   },
 
   // Editor panel — single tab, tab bar hidden
@@ -49,6 +52,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: PenLine,
     isPlaceholder: false,
     defaultPanel: 'editor',
+    webViewType: 'platformScriptureEditor.reactWebView',
   },
 
   // Tools/Resources panel — many tabs, tab bar shown
@@ -58,6 +62,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: BookOpenText,
     isPlaceholder: false,
     defaultPanel: 'tools',
+    webViewType: 'platformScriptureEditor.reactWebView',
   },
   {
     id: 'commentary',
@@ -65,6 +70,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: FileText,
     isPlaceholder: false,
     defaultPanel: 'tools',
+    webViewType: 'platformScriptureEditor.reactWebView',
   },
   {
     id: 'dictionary',
@@ -72,6 +78,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: LetterText,
     isPlaceholder: false,
     defaultPanel: 'tools',
+    webViewType: 'platformLexicalTools.dictionary',
   },
   {
     id: 'text-collection',
@@ -100,6 +107,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: Languages,
     isPlaceholder: false,
     defaultPanel: 'tools',
+    webViewType: 'platformScriptureEditor.reactWebView',
   },
   {
     id: 'comments',
@@ -107,6 +115,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: MessageSquare,
     isPlaceholder: false,
     defaultPanel: 'tools',
+    webViewType: 'legacyCommentManager.commentList',
   },
   {
     id: 'find',
@@ -114,6 +123,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: Search,
     isPlaceholder: false,
     defaultPanel: 'tools',
+    webViewType: 'platformScripture.find',
   },
   {
     id: 'ask-ai',

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { LayoutBase } from 'rc-dock';
 import {
   SavedTabInfo,
@@ -52,7 +52,6 @@ class SimpleModeTabStore {
   getWebViewDefinition(webViewId: string): WebViewDefinition | undefined {
     const tab = this.tabs.get(webViewId);
     if (!tab) return undefined;
-    // The webview definition is stored as tab.data
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     return tab.data as WebViewDefinition | undefined;
   }
@@ -63,36 +62,68 @@ class SimpleModeTabStore {
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const currentDef = tab.data as WebViewDefinition | undefined;
     if (!currentDef) return false;
-    // Merge update info into the definition
     tab.data = { ...currentDef, ...updateInfo };
     this.tabs.set(webViewId, tab);
     return true;
   }
 }
 
-/**
- * An empty layout for Simple Mode. Simple Mode does not use rc-dock's LayoutBase, but the interface
- * requires one.
- */
-const SIMPLE_MODE_EMPTY_LAYOUT: LayoutBase = {
-  dockbox: { mode: 'horizontal', children: [] },
+/** Reactive map of webViewId -> WebViewTabProps surfaced to the UI */
+export type WebViewMap = Record<string, WebViewTabProps>;
+
+/** Webviews that should be rendered as floating dialogs (from float-type layouts) */
+export type DialogWebView = WebViewTabProps & { dialogId: string };
+
+export type UseSimpleModeDockLayoutResult = {
+  webViewMap: WebViewMap;
+  /** Webviews that should be shown as centered blocking dialogs */
+  dialogWebViews: DialogWebView[];
+  /** Close/dismiss a dialog webview */
+  closeDialog: (dialogId: string) => void;
 };
 
 /**
  * Hook that creates a PapiDockLayout implementation for Simple Mode and registers it with the
  * web-view service on mount.
  *
- * Returns the tab store so the layout component can inspect registered webviews.
+ * Returns a reactive `webViewMap` so the layout can render real WebView components.
  */
-export function useSimpleModeDockLayout(): SimpleModeTabStore {
+export function useSimpleModeDockLayout(): UseSimpleModeDockLayoutResult {
   const storeRef = useRef(new SimpleModeTabStore());
   const onLayoutChangeRef = useRef<OnLayoutChangeRCDock | undefined>();
+  const [webViewMap, setWebViewMap] = useState<WebViewMap>({});
+  const [dialogWebViews, setDialogWebViews] = useState<DialogWebView[]>([]);
+
+  // Callback to update the reactive webview map when webviews are added/updated/removed
+  const notifyWebViewChange = useCallback((webView: WebViewTabProps) => {
+    setWebViewMap((prev) => ({
+      ...prev,
+      [webView.id]: webView,
+    }));
+  }, []);
+
+  const notifyWebViewRemove = useCallback((tabId: string) => {
+    setWebViewMap((prev) => {
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
+  }, []);
+
+  const addDialogWebView = useCallback((webView: WebViewTabProps) => {
+    setDialogWebViews((prev) => [...prev, { ...webView, dialogId: webView.id }]);
+  }, []);
+
+  const closeDialog = useCallback((dialogId: string) => {
+    setDialogWebViews((prev) => prev.filter((d) => d.dialogId !== dialogId));
+    // Also remove from the store
+    storeRef.current.removeTab(dialogId);
+  }, []);
 
   useEffect(() => {
     const store = storeRef.current;
 
     const dockLayout: PapiDockLayout = {
-      // No rc-dock in Simple Mode
       dockLayout: undefined,
       onLayoutChangeRef,
 
@@ -103,11 +134,9 @@ export function useSimpleModeDockLayout(): SimpleModeTabStore {
       ): Layout | undefined => {
         const existingTab = store.getTab(savedTabInfo.id);
         if (existingTab) {
-          // Update existing tab
           store.addOrUpdateTab({ ...existingTab, ...savedTabInfo });
           return undefined;
         }
-        // Create new tab info (minimal — real content comes from webview system)
         const newTab: TabInfo = {
           ...savedTabInfo,
           tabTitle: savedTabInfo.id,
@@ -124,12 +153,12 @@ export function useSimpleModeDockLayout(): SimpleModeTabStore {
       ): Layout | undefined => {
         const existingTab = store.getTab(webView.id);
         if (existingTab) {
-          // Update existing webview
           store.addOrUpdateTab({
             ...existingTab,
             data: webView,
             tabTitle: webView.title ?? webView.webViewType,
           });
+          notifyWebViewChange(webView);
           return undefined;
         }
         const newTab: TabInfo = {
@@ -140,15 +169,23 @@ export function useSimpleModeDockLayout(): SimpleModeTabStore {
           content: undefined,
         };
         store.addOrUpdateTab(newTab);
+
+        // Float-type layouts should be rendered as centered dialogs in Simple Mode
+        if (layout.type === 'float') {
+          addDialogWebView(webView);
+        } else {
+          notifyWebViewChange(webView);
+        }
         return layout;
       },
 
       removeTabFromDock: (tabId: string): boolean => {
-        return store.removeTab(tabId);
+        const removed = store.removeTab(tabId);
+        if (removed) notifyWebViewRemove(tabId);
+        return removed;
       },
 
       floatTabById: (_tabId: string): void => {
-        // Simple Mode does not support floating tabs
         logger.debug('SimpleModeLayout: floatTabById is not supported in Simple Mode');
       },
 
@@ -173,24 +210,27 @@ export function useSimpleModeDockLayout(): SimpleModeTabStore {
         updateInfo: WebViewDefinitionUpdateInfo,
         _shouldBringToFront = false,
       ): boolean => {
-        return store.updateWebViewDefinition(webViewId, updateInfo);
+        const result = store.updateWebViewDefinition(webViewId, updateInfo);
+        if (result) {
+          const def = store.getWebViewDefinition(webViewId);
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          if (def) notifyWebViewChange(def as WebViewTabProps);
+        }
+        return result;
       },
 
       getTabInfoByDirectionFromTab: (
         sourceTabId: string,
         _direction: DirectionFromTab,
       ): TabInfo | undefined => {
-        // Simple Mode has a flat list of tabs per panel — direction navigation is simplified
         const allTabs = store.getAllTabs();
         const sourceIndex = allTabs.findIndex((t) => t.id === sourceTabId);
         if (sourceIndex < 0) return undefined;
-        // Just return the next tab, wrapping around
         const nextIndex = (sourceIndex + 1) % allTabs.length;
         return allTabs[nextIndex];
       },
 
       getTabInfoByElement: (tabElement: Element): TabInfo | undefined => {
-        // Walk up the DOM to find the data-web-view-id attribute
         let el: Element | null = tabElement;
         while (el) {
           const webViewId = el.getAttribute('data-web-view-id');
@@ -206,15 +246,10 @@ export function useSimpleModeDockLayout(): SimpleModeTabStore {
 
       focusTab: (tabId: string): boolean => {
         const tab = store.getTab(tabId);
-        if (!tab) return false;
-        // In Simple Mode, focusing means the UI should activate this tab in its panel.
-        // The actual focus logic is handled by the React component state.
-        // For now, just return true to indicate the tab exists.
-        return true;
+        return !!tab;
       },
 
       loadLayout: (_layout: LayoutBase): void => {
-        // Simple Mode does not use rc-dock layouts
         logger.debug('SimpleModeLayout: loadLayout is a no-op in Simple Mode');
       },
 
@@ -229,7 +264,8 @@ export function useSimpleModeDockLayout(): SimpleModeTabStore {
     return () => {
       unsub();
     };
-  }, []);
+    // All callbacks are stable (useCallback with [])
+  }, [notifyWebViewChange, notifyWebViewRemove, addDialogWebView]);
 
-  return storeRef.current;
+  return { webViewMap, dialogWebViews, closeDialog };
 }
