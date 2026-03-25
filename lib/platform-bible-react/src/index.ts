@@ -7,6 +7,8 @@ export {
   BOOK_CHAPTER_CONTROL_STRING_KEYS,
   type BookChapterControlLocalizedStrings,
 } from './components/advanced/book-chapter-control/book-chapter-control.types';
+export { CommandNavigator } from './components/advanced/command-navigator/command-navigator.component';
+export type { CommandNavigatorProps } from './components/advanced/command-navigator/command-navigator.types';
 export { default as BookSelector } from './components/advanced/book-selector.component';
 export {
   BOOK_SELECTOR_STRING_KEYS,
@@ -192,6 +194,7 @@ export {
 export { default as Checkbox } from './components/shadcn-ui/checkbox';
 export {
   Command,
+  CommandDialog,
   CommandEmpty,
   CommandGroup,
   CommandInput,

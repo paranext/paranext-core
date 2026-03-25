@@ -18,7 +18,7 @@ import { themeServiceDataProviderName } from '@shared/services/theme.service-mod
 import { CircleUserRound, HomeIcon, Moon, Network, Sun } from 'lucide-react';
 import {
   Badge,
-  BookChapterControl,
+  BookChapterControl as CommandNavigator,
   Button,
   cn,
   getToolbarOSReservedSpaceClassName,
@@ -301,7 +301,7 @@ export function PlatformBibleToolbar() {
           )}
         </Tooltip>
       </TooltipProvider>
-      <BookChapterControl
+      <CommandNavigator
         scrRef={scrRef}
         handleSubmit={setScrRef}
         className="tw-w-96"

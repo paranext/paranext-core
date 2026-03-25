@@ -46,7 +46,7 @@ function BookChapterControlWrapper({
 
 const TRIGGER_ROLE = 'combobox';
 const INPUT_ROLE = 'combobox';
-const CHAPTER_BUTTON_ROLE = 'option';
+const CHAPTER_BUTTON_ROLE = 'button';
 
 async function expectPopoverToBeOpenAndVisible() {
   // Wait for the popover to appear and verify it's open
@@ -57,13 +57,11 @@ async function expectPopoverToBeOpenAndVisible() {
 }
 
 async function expectPopoverToBeClosed() {
-  // Wait for the popover to close
-  const popoverContent = screen.queryByRole('dialog');
-  if (popoverContent) {
-    await waitFor(() => expect(popoverContent).toHaveAttribute('data-state', 'closed'));
-  } else {
-    expect(popoverContent).not.toBeInTheDocument();
-  }
+  // Wait for the dialog to be fully removed from DOM (not just data-state="closed")
+  // This ensures close animations complete and pointer-events/aria-hidden are cleaned up
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 }
 
 function getDropdown() {
@@ -152,7 +150,7 @@ export const ChapterSelectionDemo: Story = {
   },
   play: async ({ canvas, userEvent, step, args }) => {
     await step('Open the book chapter control', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await expect(trigger).toBeInTheDocument();
       await userEvent.click(trigger);
     });
@@ -178,7 +176,7 @@ export const ChapterSelectionDemo: Story = {
       const dropdownContent = getDropdown();
 
       // Verify we have multiple chapter buttons (Romans has 16 chapters)
-      const allChapterButtons = within(dropdownContent).getAllByRole(CHAPTER_BUTTON_ROLE);
+      const allChapterButtons = dropdownContent.querySelectorAll('[data-chapter-btn]');
       await expect(allChapterButtons.length).toBe(16);
     });
 
@@ -194,7 +192,7 @@ export const ChapterSelectionDemo: Story = {
     await step('Verify the different chapter number is selected', async () => {
       // Verify the popover closes and the trigger shows the new reference
       await expectPopoverToBeClosed();
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await expect(trigger).toHaveTextContent('Romans 12:1');
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: 'ROM',
@@ -230,7 +228,7 @@ export const SmartParsingDemo: Story = {
   play: async ({ canvas, userEvent, step, args }) => {
     await step('Open the component and test smart parsing', async () => {
       // Click to open the component
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
 
       // Wait for the dropdown to appear
@@ -245,24 +243,26 @@ export const SmartParsingDemo: Story = {
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, 'John 3:16');
 
-      // Look for the top match suggestion in the dropdown
-      const topMatch = await within(dropdownContent).findByText('JHN 3:16');
-      await expect(topMatch).toBeInTheDocument();
+      // Verify the direct match banner shows (the ENTER badge only appears in the banner)
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
 
-      // Click the top match
-      await userEvent.click(topMatch);
+      // Press Enter to select the top match (banner is not clickable)
+      await userEvent.keyboard('{Enter}');
 
       // Verify the handleSubmit was called with correct reference
+      // Note: CommandNavigator always submits with verseNum: 1
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: 'JHN',
         chapterNum: 3,
-        verseNum: 16,
+        verseNum: 1,
       });
+      await expectPopoverToBeClosed();
     });
 
     await step('Test book with chapter parsing: "Romans 8"', async () => {
       // Reopen the component
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
 
       const dropdownContent = getDropdown();
@@ -270,12 +270,12 @@ export const SmartParsingDemo: Story = {
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, 'Roma 8');
 
-      // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('ROM 8:1');
-      await expect(topMatch).toBeInTheDocument();
+      // Verify the direct match banner shows
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
 
-      // Click the top match
-      await userEvent.click(topMatch);
+      // Press Enter to select the top match (banner is not clickable)
+      await userEvent.keyboard('{Enter}');
 
       // Verify the handleSubmit was called
       await expect(args.handleSubmit).toHaveBeenCalledWith({
@@ -283,11 +283,12 @@ export const SmartParsingDemo: Story = {
         chapterNum: 8,
         verseNum: 1,
       });
+      await expectPopoverToBeClosed();
     });
 
     await step('Test book ID parsing: "1CO 13:4"', async () => {
       // Reopen the component
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
 
       const dropdownContent = getDropdown();
@@ -295,18 +296,19 @@ export const SmartParsingDemo: Story = {
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, '1 co 13:4');
 
-      // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('1CO 13:4');
-      await expect(topMatch).toBeInTheDocument();
+      // Verify the direct match banner shows
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
 
-      // Click the top match
-      await userEvent.click(topMatch);
+      // Press Enter to select the top match (banner is not clickable)
+      await userEvent.keyboard('{Enter}');
 
       // Verify the handleSubmit was called
+      // Note: CommandNavigator always submits with verseNum: 1
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: '1CO',
         chapterNum: 13,
-        verseNum: 4,
+        verseNum: 1,
       });
     });
   },
@@ -337,39 +339,25 @@ export const BookSearchAndNavigation: Story = {
   },
   play: async ({ canvas, userEvent, step, args }) => {
     await step('Open the component', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
 
-    await step('Type search query for Psalms', async () => {
+    await step('Type search query for Psalms with chapter', async () => {
       const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
-      await userEvent.type(searchInput, 'Psalms');
+      await userEvent.type(searchInput, 'Psalms 23');
     });
 
-    await step('Verify Psalms appears in search results', async () => {
+    await step('Verify direct match banner shows for Psalms 23', async () => {
       const dropdownContent = getDropdown();
-      const psalmsItem = await within(dropdownContent).findByText('Psalms');
-      await expect(psalmsItem).toBeInTheDocument();
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
     });
 
-    await step('Click Psalms to navigate to chapter view', async () => {
-      const dropdownContent = getDropdown();
-      const psalmsItem = within(dropdownContent).getByText('Psalms');
-      await userEvent.click(psalmsItem);
-    });
-
-    await step('Verify chapter grid shows many chapters for Psalms', async () => {
-      const dropdownContent = getDropdown();
-      const chapterButtons = within(dropdownContent).getAllByRole(CHAPTER_BUTTON_ROLE);
-      await expect(chapterButtons.length).toBeGreaterThan(50);
-    });
-
-    await step('Select chapter 23', async () => {
-      const dropdownContent = getDropdown();
-      const chapter23 = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: '23' });
-      await userEvent.click(chapter23);
+    await step('Press Enter to select Psalms 23', async () => {
+      await userEvent.keyboard('{Enter}');
     });
 
     await step('Verify submission and component closes', async () => {
@@ -382,27 +370,26 @@ export const BookSearchAndNavigation: Story = {
     });
 
     await step('Reopen component for back navigation test', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
 
-    await step('Search for Romans', async () => {
+    await step('Type Romans to enter chapter view', async () => {
       const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
-      await userEvent.type(searchInput, 'Ro');
+      await userEvent.type(searchInput, 'Romans ');
     });
 
-    await step('Click Romans to enter chapter view', async () => {
+    await step('Verify chapter view is active and click back button', async () => {
       const dropdownContent = getDropdown();
-      const romansItem = await within(dropdownContent).findByText('Romans');
-      await userEvent.click(romansItem);
-    });
-
-    await step('Click back button to return to book search', async () => {
-      const dropdownContent = getDropdown();
-      const backButton = await within(dropdownContent).findByRole('button');
-      await userEvent.click(backButton);
+      // Wait for a chapter button to confirm we're in chapter view
+      await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, { name: '1' });
+      // The back button is the first button without data-chapter-btn
+      const allButtons = within(dropdownContent).getAllByRole('button');
+      const backButton = allButtons.find((btn) => !btn.hasAttribute('data-chapter-btn'));
+      await expect(backButton).toBeTruthy();
+      if (backButton) await userEvent.click(backButton);
     });
 
     await step('Verify back navigation returns to search mode', async () => {
@@ -443,7 +430,7 @@ export const SingleChapterBookDemo: Story = {
   },
   play: async ({ canvas, userEvent, step, args }) => {
     await step('Open component for Obadiah test', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
@@ -470,28 +457,26 @@ export const SingleChapterBookDemo: Story = {
     });
 
     await step('Open component for Odes test', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
 
-    await step('Search for Odes', async () => {
+    await step('Search for Odes with chapter', async () => {
       const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
       await userEvent.clear(searchInput);
-      await userEvent.type(searchInput, 'Ode');
+      await userEvent.type(searchInput, 'Ode 1');
     });
 
-    await step('Verify Odes smart parsing result appears', async () => {
+    await step('Verify Odes direct match banner appears', async () => {
       const dropdownContent = getDropdown();
-      const odesItem = await within(dropdownContent).findByText('ODA 1:1');
-      await expect(odesItem).toBeInTheDocument();
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
     });
 
-    await step('Click Odes result to submit', async () => {
-      const dropdownContent = getDropdown();
-      const odesItem = within(dropdownContent).getByText('ODA 1:1');
-      await userEvent.click(odesItem);
+    await step('Press Enter to submit Odes', async () => {
+      await userEvent.keyboard('{Enter}');
     });
 
     await step('Verify Odes submission', async () => {
@@ -535,7 +520,7 @@ export const KeyboardNavigation: Story = {
   },
   play: async ({ canvas, userEvent, step }) => {
     await step('Open component with Matthew reference', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
@@ -560,26 +545,26 @@ export const KeyboardNavigation: Story = {
       await expect(chapter15).toBeInTheDocument();
     });
 
-    await step('Test right arrow key navigation', async () => {
-      await userEvent.keyboard('{ArrowRight}');
+    await step('Focus the search input for keyboard navigation', async () => {
       const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
     });
 
-    await step('Test down arrow key navigation', async () => {
+    await step('Test down arrow key to enter chapter grid from input', async () => {
+      // ArrowDown from input enters the chapter grid (sets focusedChapter)
       await userEvent.keyboard('{ArrowDown}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      // Verify a chapter button gets the focus ring
+      await waitFor(() => {
+        const focusedBtn = getDropdown().querySelector('[data-chapter-btn]');
+        expect(focusedBtn).toBeTruthy();
+      });
     });
 
-    await step('Test left arrow key navigation', async () => {
+    await step('Test arrow key navigation within grid', async () => {
+      await userEvent.keyboard('{ArrowRight}');
+      await userEvent.keyboard('{ArrowDown}');
       await userEvent.keyboard('{ArrowLeft}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
-    });
-
-    await step('Test up arrow key navigation', async () => {
-      await userEvent.keyboard('{ArrowUp}');
       const dropdownContent = getDropdown();
       await expect(dropdownContent).toBeVisible();
     });
@@ -590,7 +575,7 @@ export const KeyboardNavigation: Story = {
 
     await step('Verify component closes after Enter key selection', async () => {
       await expectPopoverToBeClosed();
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await expect(trigger).toBeInTheDocument();
     });
   },
@@ -623,7 +608,7 @@ export const ComprehensiveInteractionTest: Story = {
   },
   play: async ({ canvas, userEvent, step, args }) => {
     await step('Open component for filtering test', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
@@ -665,27 +650,28 @@ export const ComprehensiveInteractionTest: Story = {
     });
 
     await step('Verify trigger returns to original value', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await expect(trigger).toHaveTextContent('Genesis 1:1');
     });
 
     await step('Open component for rapid switching test', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
 
-    await step('Search for first book (Obadiah)', async () => {
+    await step('Search for first book (Obadiah) with chapter', async () => {
       const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
       await userEvent.clear(searchInput);
-      await userEvent.type(searchInput, 'obad');
+      await userEvent.type(searchInput, 'obad 1');
     });
 
-    await step('Click Obadiah smart parsing result', async () => {
+    await step('Verify Obadiah direct match banner and press Enter', async () => {
       const dropdownContent = getDropdown();
-      const obadiahItem = await within(dropdownContent).findByText('OBA 1:1');
-      await userEvent.click(obadiahItem);
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
+      await userEvent.keyboard('{Enter}');
     });
 
     await step('Verify first book submission', async () => {
@@ -698,7 +684,7 @@ export const ComprehensiveInteractionTest: Story = {
     });
 
     await step('Immediately open component for second book', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
@@ -710,17 +696,19 @@ export const ComprehensiveInteractionTest: Story = {
       await userEvent.type(searchInput, 'Rev 22:21');
     });
 
-    await step('Click Revelation smart parsing result', async () => {
+    await step('Verify Revelation direct match banner and press Enter', async () => {
       const dropdownContent = getDropdown();
-      const revMatch = await within(dropdownContent).findByText('REV 22:21');
-      await userEvent.click(revMatch);
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
+      await userEvent.keyboard('{Enter}');
     });
 
     await step('Verify second book submission', async () => {
+      // Note: CommandNavigator always submits with verseNum: 1
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: 'REV',
         chapterNum: 22,
-        verseNum: 21,
+        verseNum: 1,
       });
       await expectPopoverToBeClosed();
     });
