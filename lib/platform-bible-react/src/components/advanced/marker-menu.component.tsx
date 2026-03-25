@@ -79,18 +79,15 @@ function MenuMarkerIcon({ icon, className }: { icon?: FC<MarkerIconProps>; class
 function MarkerMenuCommandItem({
   item,
   localizedStrings,
-  key,
 }: {
   item: MarkerMenuItem;
   localizedStrings: MarkerMenuLocalizedStrings;
-  key: string;
 }) {
   return (
     <CommandItem
       className="tw-flex tw-gap-2 hover:tw-bg-accent"
       disabled={item.isDisallowed || item.isDeprecated}
       onSelect={item.action}
-      key={key}
     >
       <div className="tw-w-8 tw-min-w-8">
         {item.marker ? (
