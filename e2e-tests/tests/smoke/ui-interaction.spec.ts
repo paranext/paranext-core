@@ -93,16 +93,17 @@ test.describe('UI Interaction', () => {
     await expect(trigger).toBeVisible({ timeout: 10_000 });
     await trigger.click();
 
-    // After the popover opens, a CommandInput (actual <input>) appears inside
-    const commandInput = mainPage.locator('[data-radix-popper-content-wrapper] input');
+    // After the dialog opens, a CommandInput (actual <input>) appears inside
+    const commandInput = mainPage.locator('[role="dialog"] input[cmdk-input]');
     await expect(commandInput).toBeVisible({ timeout: 5_000 });
     await commandInput.fill('Gen');
 
-    // A list of matching books should appear
-    const listItem = mainPage.locator('[cmdk-item]');
-    await expect(listItem.first()).toBeVisible({ timeout: 5_000 });
+    // "Gen" uniquely matches Genesis, so the chapter grid should appear
+    const chapterButton = mainPage.locator('[role="dialog"] [data-chapter-btn]');
+    await expect(chapterButton.first()).toBeVisible({ timeout: 5_000 });
 
-    // Close the popover to avoid leaking UI state into later tests
+    // Close the dialog (first Escape clears search, second closes dialog)
+    await mainPage.keyboard.press('Escape');
     await mainPage.keyboard.press('Escape');
     await expect(commandInput).not.toBeVisible({ timeout: 5_000 });
   });
