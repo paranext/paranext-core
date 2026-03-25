@@ -79,16 +79,18 @@ function MenuMarkerIcon({ icon, className }: { icon?: FC<MarkerIconProps>; class
 function MarkerMenuCommandItem({
   item,
   localizedStrings,
+  key,
 }: {
   item: MarkerMenuItem;
   localizedStrings: MarkerMenuLocalizedStrings;
+  key: string;
 }) {
   return (
     <CommandItem
       className="tw-flex tw-gap-2 hover:tw-bg-accent"
       disabled={item.isDisallowed || item.isDeprecated}
       onSelect={item.action}
-      key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
+      key={key}
     >
       <div className="tw-w-8 tw-min-w-8">
         {item.marker ? (
@@ -151,15 +153,27 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
         <CommandEmpty>{localizedStrings['%markerMenu_noResults%']}</CommandEmpty>
         <CommandGroup>
           {exactMatchItems.map((item) => (
-            <MarkerMenuCommandItem item={item} localizedStrings={localizedStrings} />
+            <MarkerMenuCommandItem
+              item={item}
+              localizedStrings={localizedStrings}
+              key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
+            />
           ))}
         </CommandGroup>
-        {titleMatchItems.length && exactMatchItems.length ? <CommandSeparator alwaysRender /> : ''}
-        <CommandGroup>
-          {titleMatchItems.map((item) => (
-            <MarkerMenuCommandItem item={item} localizedStrings={localizedStrings} />
-          ))}
-        </CommandGroup>
+        {titleMatchItems.length > 0 && (
+          <>
+            {exactMatchItems.length > 0 && <CommandSeparator alwaysRender />}
+            <CommandGroup>
+              {titleMatchItems.map((item) => (
+                <MarkerMenuCommandItem
+                  item={item}
+                  localizedStrings={localizedStrings}
+                  key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
+                />
+              ))}
+            </CommandGroup>
+          </>
+        )}
       </CommandList>
     </Command>
   );
