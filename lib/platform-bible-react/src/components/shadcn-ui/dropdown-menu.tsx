@@ -161,6 +161,7 @@ export const DropdownMenuSubContent = React.forwardRef<
       )}
       {...props}
     >
+      {/* CUSTOM wrap children in dir div for RTL support */}
       <div dir={dir}>{children}</div>
     </DropdownMenuPrimitive.SubContent>
   );
@@ -224,7 +225,7 @@ export const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
   DropdownMenuCheckboxItemProps
 >(({ className, children, checked, ...props }, ref) => {
-  const dir: Direction = readDirection();
+  const dir: Direction = readDirection(); // CUSTOM RTL support
   const context = useMenuContext(); // CUSTOM use context to add variants
   return (
     <DropdownMenuPrimitive.CheckboxItem
@@ -236,7 +237,7 @@ export const DropdownMenuCheckboxItem = React.forwardRef<
       )}
       checked={checked}
       {...props}
-      dir={dir}
+      dir={dir} // CUSTOM RTL support
     >
       <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
         <DropdownMenuPrimitive.ItemIndicator>
@@ -254,7 +255,7 @@ export const DropdownMenuRadioItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
   DropdownMenuRadioItemProps
 >(({ className, children, ...props }, ref) => {
-  const dir: Direction = readDirection();
+  const dir: Direction = readDirection(); // CUSTOM RTL support
   const context = useMenuContext(); // CUSTOM use context to add variants
   return (
     <DropdownMenuPrimitive.RadioItem
@@ -265,7 +266,7 @@ export const DropdownMenuRadioItem = React.forwardRef<
         menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
       )}
       {...props}
-      dir={dir}
+      dir={dir} // CUSTOM RTL support
     >
       <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
         <DropdownMenuPrimitive.ItemIndicator>

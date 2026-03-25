@@ -135,11 +135,22 @@ export type PlatformError = {
  *
  * @param error The error message as a string, an Error object, or a value to assign to the `cause`
  *   property of the returned PlatformError object
+ * @param code Optional machine-readable error code. See {@link PlatformErrorCode}.
  * @returns A new PlatformError object
  */
-export function newPlatformError(error?: unknown): PlatformError {
-  if (!error) return { message: '', platformErrorVersion: PLATFORM_ERROR_VERSION };
-  if (isString(error)) return { message: error, platformErrorVersion: PLATFORM_ERROR_VERSION };
+export function newPlatformError(error?: unknown, code?: PlatformErrorCode): PlatformError {
+  if (!error)
+    return {
+      message: '',
+      ...(code && { code }),
+      platformErrorVersion: PLATFORM_ERROR_VERSION,
+    };
+  if (isString(error))
+    return {
+      message: error,
+      ...(code && { code }),
+      platformErrorVersion: PLATFORM_ERROR_VERSION,
+    };
   if (typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
     const platformError: PlatformError = {
       message: error.message,
@@ -155,9 +166,15 @@ export function newPlatformError(error?: unknown): PlatformError {
     }
     if ('cause' in platformError)
       Object.defineProperty(platformError, 'cause', { enumerable: true });
+    if (code) platformError.code = code;
     return platformError;
   }
-  return { cause: error, message: '', platformErrorVersion: PLATFORM_ERROR_VERSION };
+  return {
+    cause: error,
+    message: '',
+    ...(code && { code }),
+    platformErrorVersion: PLATFORM_ERROR_VERSION,
+  };
 }
 
 /**

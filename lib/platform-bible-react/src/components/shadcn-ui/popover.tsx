@@ -36,6 +36,7 @@ const PopoverContent = React.forwardRef<
           'pr-twp tw-w-72 tw-rounded-md tw-border tw-bg-popover tw-p-4 tw-text-popover-foreground tw-shadow-md tw-outline-none data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
           className,
         )}
+        // CUSTOM z-index uses shared constant instead of default tw-z-50
         style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
         {...props}
         dir={dir}
