@@ -14,10 +14,13 @@
 import { FocusSubject } from '@shared/services/window.service-model';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
+import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { sendCommand } from '@shared/services/command.service';
 import {
+  formatReplacementString,
   isPlatformError,
+  LocalizeKey,
   newGuid,
   newPlatformError,
   ReferencedItem,
@@ -25,13 +28,14 @@ import {
   FAILED_PRECONDITION,
   RESOURCE_EXHAUSTED,
 } from 'platform-bible-utils';
-import type { PlatformError, PlatformErrorCode } from 'platform-bible-utils';
+import type { PlatformError } from 'platform-bible-utils';
 import {
   CommandPaletteRequest,
   IOverlayService,
   ModalDialogOptions,
   ModalDialogResponse,
   ModalDialogType,
+  OverlayEntry,
   PopoverContent,
   PopoverRequest,
 } from './overlay.service-model';
@@ -52,13 +56,6 @@ import {
   updateOverlayContent,
 } from './overlay-store';
 import { translateCoordinates, clampToViewport, isWebViewVisible } from './overlay-coordinates';
-
-/** Creates a PlatformError with the given message and error code */
-function newOverlayError(message: string, code: PlatformErrorCode): PlatformError {
-  const error = newPlatformError(message);
-  error.code = code;
-  return error;
-}
 
 // ── Debounce ──
 
@@ -178,6 +175,20 @@ function announceToScreenReader(message: string): void {
   }, 50);
 }
 
+/** Resolves a localization key and announces the result to screen readers */
+async function announceLocalizedToScreenReader(
+  key: LocalizeKey,
+  replacers?: Record<string, string>,
+): Promise<void> {
+  try {
+    const strings = await localizationService.getLocalizedStrings({ localizeKeys: [key] });
+    const localized = strings[key];
+    announceToScreenReader(replacers ? formatReplacementString(localized, replacers) : localized);
+  } catch {
+    announceToScreenReader(key);
+  }
+}
+
 // ── Auto-Dismiss Helpers ──
 
 /** Map of overlay ID to its auto-dismiss timer, cleared on manual dismissal */
@@ -202,31 +213,11 @@ const popoverPromises = new Map<
   }
 >();
 
-/** Dismiss all context menus (called on scroll, tab change, blur) */
-function dismissAllContextMenus(): void {
-  const allOverlays = getOverlays();
-  allOverlays.forEach((overlay) => {
-    if (overlay.type === 'contextMenu') {
-      resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
-    }
-  });
-}
-
-/** Dismiss all popovers (called on tab change) */
-function dismissAllPopovers(): void {
-  const allOverlays = getOverlays();
-  allOverlays.forEach((overlay) => {
-    if (overlay.type === 'popover') {
-      resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
-    }
-  });
-}
-
-/** Dismiss all command palettes (called on scroll, tab change, blur) */
-function dismissAllCommandPalettes(): void {
-  const allOverlays = getOverlays();
-  allOverlays.forEach((overlay) => {
-    if (overlay.type === 'commandPalette') {
+/** Dismiss all overlays matching any of the given types */
+function dismissAll(...types: OverlayEntry['type'][]): void {
+  const typeSet = new Set(types);
+  getOverlays().forEach((overlay) => {
+    if (typeSet.has(overlay.type)) {
       resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
     }
   });
@@ -266,18 +257,18 @@ async function showContextMenu(
   validateContextMenuItems(items);
 
   if (!isWebViewVisible(webViewId)) {
-    throw newOverlayError('Requesting WebView is not visible', FAILED_PRECONDITION);
+    throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
   }
 
   if (!debounceCheck('contextMenu', webViewId)) {
-    throw newOverlayError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
+    throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
   const existingOverlays = getOverlaysByWebView(webViewId).filter((o) => o.type === 'contextMenu');
   existingOverlays.forEach((existing) => {
     rejectAndRemoveOverlay(
       existing.id,
-      newOverlayError('Overlay was replaced by a new request', ABORTED),
+      newPlatformError('Overlay was replaced by a new request', ABORTED),
     );
     restoreFocus(existing.id);
   });
@@ -289,7 +280,7 @@ async function showContextMenu(
   const translatedPosition = translateCoordinates(webViewId, rawPosition);
   const clampedPosition = clampToViewport(translatedPosition, 4);
 
-  announceToScreenReader('Context menu opened');
+  announceLocalizedToScreenReader('%overlay_aria_contextMenuOpened%');
   lastOverlayCreatedAt = Date.now();
 
   const selectedCommand = await new Promise<string | undefined>((resolve, reject) => {
@@ -309,6 +300,7 @@ async function showContextMenu(
 
   if (selectedCommand) {
     try {
+      // The command string comes from menu contributions at runtime so it can't be statically typed
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       await (sendCommand as (cmd: string) => Promise<unknown>)(selectedCommand);
     } catch (error) {
@@ -335,7 +327,7 @@ export async function showModalDialogOverlay<T extends ModalDialogType>(
 
   // Leading-edge debounce
   if (!debounceCheck('modalDialog', webViewId)) {
-    throw newOverlayError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
+    throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
   // Replace any existing modal dialog from this webView (only modals, not other overlay types)
@@ -343,7 +335,7 @@ export async function showModalDialogOverlay<T extends ModalDialogType>(
   existingOverlays.forEach((existing) => {
     rejectAndRemoveOverlay(
       existing.id,
-      newOverlayError('Overlay was replaced by a new request', ABORTED),
+      newPlatformError('Overlay was replaced by a new request', ABORTED),
     );
     restoreFocus(existing.id);
   });
@@ -355,7 +347,7 @@ export async function showModalDialogOverlay<T extends ModalDialogType>(
 
   const title =
     'title' in options && typeof options.title === 'string' ? options.title : dialogType;
-  announceToScreenReader(`${title} dialog opened`);
+  announceLocalizedToScreenReader('%overlay_aria_dialogOpened%', { title });
 
   return new Promise<ModalDialogResponse[T] | undefined>((resolve, reject) => {
     addOverlay({
@@ -392,12 +384,12 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
 
   // Visibility check (popovers require visible WebView)
   if (!isWebViewVisible(webViewId)) {
-    throw newOverlayError('Requesting WebView is not visible', FAILED_PRECONDITION);
+    throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
   }
 
   // Leading-edge debounce: reject rapid re-triggers within cooldown window
   if (!debounceCheck('popover', webViewId)) {
-    throw newOverlayError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
+    throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
   // Replace any existing popover from this webView
@@ -405,7 +397,7 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
   existingOverlays.forEach((existing) => {
     rejectAndRemoveOverlay(
       existing.id,
-      newOverlayError('Overlay was replaced by a new request', ABORTED),
+      newPlatformError('Overlay was replaced by a new request', ABORTED),
     );
     restoreFocus(existing.id);
   });
@@ -459,7 +451,7 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
     },
   });
 
-  announceToScreenReader('Popover opened');
+  announceLocalizedToScreenReader('%overlay_aria_popoverOpened%');
 
   lastOverlayCreatedAt = Date.now();
 
@@ -535,12 +527,12 @@ async function showCommandPalette(
 
   // Visibility check (command palettes require visible WebView)
   if (!isWebViewVisible(webViewId)) {
-    throw newOverlayError('Requesting WebView is not visible', FAILED_PRECONDITION);
+    throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
   }
 
   // Leading-edge debounce: drop rapid re-triggers within 50ms
   if (!debounceCheck('commandPalette', webViewId)) {
-    throw newOverlayError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
+    throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
   // Replace any existing command palette from this webView
@@ -550,7 +542,7 @@ async function showCommandPalette(
   existingOverlays.forEach((existing) => {
     rejectAndRemoveOverlay(
       existing.id,
-      newOverlayError('Overlay was replaced by a new request', ABORTED),
+      newPlatformError('Overlay was replaced by a new request', ABORTED),
     );
     restoreFocus(existing.id);
   });
@@ -567,7 +559,7 @@ async function showCommandPalette(
     position = clampToViewport(translatedPosition, 4);
   }
 
-  announceToScreenReader('Command palette opened');
+  announceLocalizedToScreenReader('%overlay_aria_commandPaletteOpened%');
 
   lastOverlayCreatedAt = Date.now();
 
@@ -618,8 +610,7 @@ function registerAutoDismissListeners(): void {
       )
         return;
 
-      dismissAllContextMenus();
-      dismissAllPopovers();
+      dismissAll('contextMenu', 'popover');
     },
     { capture: true },
   );
@@ -629,8 +620,7 @@ function registerAutoDismissListeners(): void {
     // Skip if an overlay was just created — focus shifts from panel activation can trigger blur
     if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
 
-    dismissAllContextMenus();
-    dismissAllCommandPalettes();
+    dismissAll('contextMenu', 'commandPalette');
     // Popovers with dismissOnClickOutside: false may persist across blur
     const allOverlays = getOverlays();
     allOverlays.forEach((overlay) => {
@@ -657,9 +647,7 @@ function registerAutoDismissListeners(): void {
       // changes that would otherwise immediately dismiss the just-created context menu
       if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
 
-      dismissAllContextMenus();
-      dismissAllCommandPalettes();
-      dismissAllPopovers();
+      dismissAll('contextMenu', 'commandPalette', 'popover');
     })
     .catch((err) => logger.warn(`Failed to subscribe to window focus changes: ${err}`));
 }
