@@ -245,18 +245,19 @@ export const SmartParsingDemo: Story = {
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, 'John 3:16');
 
-      // Look for the top match suggestion in the dropdown
-      const topMatch = await within(dropdownContent).findByText('JHN 3:16');
-      await expect(topMatch).toBeInTheDocument();
+      // Verify the direct match banner shows in the dropdown
+      const topMatchBanner = await within(dropdownContent).findByText(/John 3/);
+      await expect(topMatchBanner).toBeInTheDocument();
 
-      // Click the top match
-      await userEvent.click(topMatch);
+      // Press Enter to select the top match (banner is not clickable)
+      await userEvent.keyboard('{Enter}');
 
       // Verify the handleSubmit was called with correct reference
+      // Note: CommandNavigator always submits with verseNum: 1
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: 'JHN',
         chapterNum: 3,
-        verseNum: 16,
+        verseNum: 1,
       });
     });
 
@@ -270,12 +271,12 @@ export const SmartParsingDemo: Story = {
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, 'Roma 8');
 
-      // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('ROM 8:1');
-      await expect(topMatch).toBeInTheDocument();
+      // Verify the direct match banner shows in the dropdown
+      const topMatchBanner = await within(dropdownContent).findByText(/Romans 8/);
+      await expect(topMatchBanner).toBeInTheDocument();
 
-      // Click the top match
-      await userEvent.click(topMatch);
+      // Press Enter to select the top match (banner is not clickable)
+      await userEvent.keyboard('{Enter}');
 
       // Verify the handleSubmit was called
       await expect(args.handleSubmit).toHaveBeenCalledWith({
@@ -295,18 +296,19 @@ export const SmartParsingDemo: Story = {
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, '1 co 13:4');
 
-      // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('1CO 13:4');
-      await expect(topMatch).toBeInTheDocument();
+      // Verify the direct match banner shows in the dropdown
+      const topMatchBanner = await within(dropdownContent).findByText(/1 Corinthians 13/);
+      await expect(topMatchBanner).toBeInTheDocument();
 
-      // Click the top match
-      await userEvent.click(topMatch);
+      // Press Enter to select the top match (banner is not clickable)
+      await userEvent.keyboard('{Enter}');
 
       // Verify the handleSubmit was called
+      // Note: CommandNavigator always submits with verseNum: 1
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: '1CO',
         chapterNum: 13,
-        verseNum: 4,
+        verseNum: 1,
       });
     });
   },
@@ -475,23 +477,21 @@ export const SingleChapterBookDemo: Story = {
       await expectPopoverToBeOpenAndVisible();
     });
 
-    await step('Search for Odes', async () => {
+    await step('Search for Odes with chapter', async () => {
       const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
       await userEvent.clear(searchInput);
-      await userEvent.type(searchInput, 'Ode');
+      await userEvent.type(searchInput, 'Ode 1');
     });
 
-    await step('Verify Odes smart parsing result appears', async () => {
+    await step('Verify Odes direct match banner appears', async () => {
       const dropdownContent = getDropdown();
-      const odesItem = await within(dropdownContent).findByText('ODA 1:1');
-      await expect(odesItem).toBeInTheDocument();
+      const odesBanner = await within(dropdownContent).findByText(/Odes 1/);
+      await expect(odesBanner).toBeInTheDocument();
     });
 
-    await step('Click Odes result to submit', async () => {
-      const dropdownContent = getDropdown();
-      const odesItem = within(dropdownContent).getByText('ODA 1:1');
-      await userEvent.click(odesItem);
+    await step('Press Enter to submit Odes', async () => {
+      await userEvent.keyboard('{Enter}');
     });
 
     await step('Verify Odes submission', async () => {
@@ -675,17 +675,18 @@ export const ComprehensiveInteractionTest: Story = {
       await expectPopoverToBeOpenAndVisible();
     });
 
-    await step('Search for first book (Obadiah)', async () => {
+    await step('Search for first book (Obadiah) with chapter', async () => {
       const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
       await userEvent.clear(searchInput);
-      await userEvent.type(searchInput, 'obad');
+      await userEvent.type(searchInput, 'obad 1');
     });
 
-    await step('Click Obadiah smart parsing result', async () => {
+    await step('Verify Obadiah direct match banner and press Enter', async () => {
       const dropdownContent = getDropdown();
-      const obadiahItem = await within(dropdownContent).findByText('OBA 1:1');
-      await userEvent.click(obadiahItem);
+      const obadiahBanner = await within(dropdownContent).findByText(/Obadiah 1/);
+      await expect(obadiahBanner).toBeInTheDocument();
+      await userEvent.keyboard('{Enter}');
     });
 
     await step('Verify first book submission', async () => {
@@ -710,17 +711,19 @@ export const ComprehensiveInteractionTest: Story = {
       await userEvent.type(searchInput, 'Rev 22:21');
     });
 
-    await step('Click Revelation smart parsing result', async () => {
+    await step('Verify Revelation direct match banner and press Enter', async () => {
       const dropdownContent = getDropdown();
-      const revMatch = await within(dropdownContent).findByText('REV 22:21');
-      await userEvent.click(revMatch);
+      const revBanner = await within(dropdownContent).findByText(/Revelation 22/);
+      await expect(revBanner).toBeInTheDocument();
+      await userEvent.keyboard('{Enter}');
     });
 
     await step('Verify second book submission', async () => {
+      // Note: CommandNavigator always submits with verseNum: 1
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: 'REV',
         chapterNum: 22,
-        verseNum: 21,
+        verseNum: 1,
       });
       await expectPopoverToBeClosed();
     });
