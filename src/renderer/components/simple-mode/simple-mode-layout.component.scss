@@ -10,6 +10,13 @@
   overflow: hidden;
   display: flex;
   position: relative;
+
+  /* Override sidebar's tw-h-svh (100svh) so it fits inside this container
+     instead of overflowing past the toolbar above. The sidebar wrapper div
+     has data-collapsible and its two child divs both use h-svh. */
+  [data-collapsible] > div {
+    height: 100% !important;
+  }
 }
 
 .simple-mode-inset {
