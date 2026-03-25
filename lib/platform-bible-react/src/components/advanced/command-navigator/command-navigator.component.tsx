@@ -10,13 +10,7 @@ import {
 } from '@/components/shadcn-ui/command';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import {
-  ArrowLeft,
-  BookOpenIcon,
-  ClockIcon,
-  CornerDownLeftIcon,
-  HashIcon,
-} from 'lucide-react';
+import { ArrowLeft, BookOpenIcon, ClockIcon, CornerDownLeftIcon, HashIcon } from 'lucide-react';
 import { formatScrRef, getSectionForBook, Section } from 'platform-bible-utils';
 import {
   getSectionLongName,
@@ -155,9 +149,8 @@ export function CommandNavigator({
         return;
       }
       // Show chapters for this book
-      const bookName =
-        localizedBookNames ?
-          getLocalizedBookName(bookId, localizedBookNames)
+      const bookName = localizedBookNames
+        ? getLocalizedBookName(bookId, localizedBookNames)
         : ALL_ENGLISH_BOOK_NAMES[bookId];
       setSearchQuery(`${bookName} `);
       setFocusedBookIndex(-1);
@@ -425,7 +418,8 @@ export function CommandNavigator({
     [otLong, ntLong, dcLong, extraLong],
   );
 
-  const showHistory = !searchQuery && !resolvedBookId && recentSearches && recentSearches.length > 0;
+  const showHistory =
+    !searchQuery && !resolvedBookId && recentSearches && recentSearches.length > 0;
 
   const resolvedBookChapters = resolvedBookId ? fetchEndChapter(resolvedBookId) : 0;
 
@@ -481,11 +475,7 @@ export function CommandNavigator({
       </Button>
 
       {/* Command dialog */}
-      <CommandDialog
-        open={isOpen}
-        onOpenChange={handleOpenChange}
-        shouldFilter={false}
-      >
+      <CommandDialog open={isOpen} onOpenChange={handleOpenChange} shouldFilter={false}>
         <CommandInput
           ref={inputRef}
           icon={
@@ -592,9 +582,7 @@ export function CommandNavigator({
                         : 'hover:tw-bg-accent hover:tw-text-accent-foreground',
                     )}
                   >
-                    <span>
-                      {formatScrRef(entry, 'English')}
-                    </span>
+                    <span>{formatScrRef(entry, 'English')}</span>
                     {isCurrent && (
                       <Badge variant="secondary" className="tw-text-[10px]">
                         Current
@@ -609,16 +597,15 @@ export function CommandNavigator({
 
         {/* Content: chapter grid or book list */}
         {resolvedBookId ? (
-          <div className="tw-max-h-[300px] tw-overflow-x-hidden tw-overflow-y-auto tw-p-4">
+          <div className="tw-max-h-[300px] tw-overflow-y-auto tw-overflow-x-hidden tw-p-4">
             <div
               ref={chapterGridRef}
-              className="tw-grid tw-grid-cols-5 sm:tw-grid-cols-8 md:tw-grid-cols-10 tw-gap-2"
+              className="tw-grid tw-grid-cols-5 tw-gap-2 sm:tw-grid-cols-8 md:tw-grid-cols-10"
             >
               {Array.from({ length: resolvedBookChapters }).map((_, i) => {
                 const chapter = i + 1;
                 const isMatched = topMatch?.chapterNum === chapter;
-                const isCurrent =
-                  resolvedBookId === scrRef.book && chapter === scrRef.chapterNum;
+                const isCurrent = resolvedBookId === scrRef.book && chapter === scrRef.chapterNum;
                 const isFocused = focusedChapter === i;
                 return (
                   <Button
@@ -626,9 +613,7 @@ export function CommandNavigator({
                     data-chapter-btn
                     tabIndex={-1}
                     variant={
-                      isFocused || isMatched ? 'default'
-                      : isCurrent ? 'secondary'
-                      : 'outline'
+                      isFocused || isMatched ? 'default' : isCurrent ? 'secondary' : 'outline'
                     }
                     onClick={() => handleChapterSelect(chapter)}
                     className={cn(
@@ -673,9 +658,7 @@ export function CommandNavigator({
             })}
 
             {filteredBooks.length === 0 && (
-              <CommandEmpty>
-                No books found matching &ldquo;{searchQuery}&rdquo;
-              </CommandEmpty>
+              <CommandEmpty>No books found matching &ldquo;{searchQuery}&rdquo;</CommandEmpty>
             )}
           </CommandList>
         )}
