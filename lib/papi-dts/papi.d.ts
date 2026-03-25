@@ -7285,266 +7285,6 @@ declare module 'shared/services/project-settings.service-model' {
     [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
   };
 }
-declare module '@papi/core' {
-  /** Exporting empty object so people don't have to put 'type' in their import statements */
-  const core: {};
-  export default core;
-  export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
-  export type { ExecutionToken } from 'node/models/execution-token.model';
-  export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
-  export type {
-    ExtensionIdentifier,
-    HashValues,
-    InstalledExtensions,
-    ManageExtensions,
-  } from 'shared/models/manage-extensions-privilege.model';
-  export type {
-    HandleUri,
-    RegisterUriHandler,
-    UriHandler,
-  } from 'shared/models/handle-uri-privilege.model';
-  export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
-  export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
-  export type {
-    IDataProvider,
-    IDisposableDataProvider,
-  } from 'shared/models/data-provider.interface';
-  export type {
-    DataProviderUpdateInstructions,
-    DataProviderDataType,
-    DataProviderSubscriberOptions,
-  } from 'shared/models/data-provider.model';
-  export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
-  export type { IDataProviderEngine } from 'shared/models/data-provider-engine.model';
-  export type { DialogOptions } from 'shared/models/dialog-options.model';
-  export type { DirectionFromTab } from 'shared/models/docking-framework.model';
-  export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
-  export type {
-    NotificationClickCommandHandler,
-    PlatformNotification,
-  } from 'shared/models/notification.service-model';
-  export type {
-    Components as ComponentsDocumentation,
-    MethodDocumentationWithoutName,
-    NetworkObjectDocumentation,
-    SingleMethodDocumentation,
-  } from 'shared/models/openrpc.model';
-  export type {
-    ExtensionDataScope,
-    MandatoryProjectDataTypes,
-  } from 'shared/models/project-data-provider.model';
-  export type { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
-  export type { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
-  export type { IBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
-  export type {
-    IProjectDataProviderFactory,
-    ProjectMetadataFilterOptions,
-  } from 'shared/models/project-data-provider-factory.interface';
-  export type {
-    ProjectDataProviderFactoryMetadataInfo,
-    ProjectMetadata,
-    ProjectMetadataWithoutFactoryInfo,
-  } from 'shared/models/project-metadata.model';
-  export type {
-    LocalizationData,
-    LocalizationSelector,
-    LocalizationSelectors,
-  } from 'shared/services/localization.service-model';
-  export type { NetworkObjectDetails } from 'shared/models/network-object.model';
-  export type { AppInfo } from 'shared/services/app.service-model';
-  export type { SettingValidator } from 'shared/services/settings.service-model';
-  export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  export type {
-    FocusSubject,
-    SetFocusSubject,
-    SetFocusSpecifier,
-  } from 'shared/services/window.service-model';
-  export type {
-    GetWebViewOptions,
-    OpenWebViewOptions,
-    SavedWebViewDefinition,
-    UseWebViewStateHook,
-    UseWebViewScrollGroupScrRefHook,
-    WebViewContentType,
-    WebViewDefinition,
-    WebViewProps,
-  } from 'shared/models/web-view.model';
-  export type {
-    IDisposableWebViewProvider,
-    IWebViewProvider,
-  } from 'shared/models/web-view-provider.model';
-  export type {
-    SimultaneousProjectSettingsChanges,
-    ProjectSettingValidator,
-  } from 'shared/services/project-settings.service-model';
-}
-declare module 'shared/services/menu-data.service-model' {
-  import {
-    OnDidDispose,
-    UnsubscriberAsync,
-    MultiColumnMenu,
-    ReferencedItem,
-    WebViewMenu,
-    Localized,
-    PlatformError,
-  } from 'platform-bible-utils';
-  import {
-    DataProviderDataType,
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from '@papi/core';
-  /**
-   *
-   * This name is used to register the menu data data provider on the papi. You can use this name to
-   * find the data provider when accessing it using the useData hook
-   */
-  export const menuDataServiceProviderName = 'platform.menuDataServiceDataProvider';
-  export const menuDataServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the menu data data provider on the papi. You can use this name to
-     * find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.menuDataServiceDataProvider';
-  }>;
-  export type MenuDataDataTypes = {
-    MainMenu: DataProviderDataType<undefined, Localized<MultiColumnMenu>, never>;
-    UnlocalizedMainMenu: DataProviderDataType<undefined, MultiColumnMenu, never>;
-    WebViewMenu: DataProviderDataType<ReferencedItem, Localized<WebViewMenu>, never>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [menuDataServiceProviderName]: IMenuDataService;
-    }
-  }
-  /**
-   *
-   * Service that allows to get and store menu data
-   */
-  export type IMenuDataService = {
-    /** Rebuild the menus with the latest inputs from all extensions. */
-    rebuildMenus(): Promise<void>;
-    /**
-     *
-     * Get localized menu content for the main menu
-     *
-     * @param mainMenuType Does not have to be defined
-     * @returns MultiColumnMenu object of localized main menu content
-     */
-    getMainMenu(mainMenuType: undefined): Promise<Localized<MultiColumnMenu>>;
-    /**
-     *
-     * Get localized menu content for the main menu
-     *
-     * @param mainMenuType Does not have to be defined
-     * @returns MultiColumnMenu object of localized main menu content
-     */
-    getMainMenu(): Promise<Localized<MultiColumnMenu>>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide menu items in contributions
-     */
-    setMainMenu(
-      mainMenuType: undefined,
-      value: never,
-    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
-    /**
-     * Subscribe to run a callback function when the localized main menu data is changed
-     *
-     * @param mainMenuType Does not have to be defined
-     * @param callback Function to run with the updated localized menuContent for this selector. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-     */
-    subscribeMainMenu(
-      mainMenuType: undefined,
-      callback: (menuContent: Localized<MultiColumnMenu> | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     *
-     * Get unlocalized menu content for the main menu
-     *
-     * @param mainMenuType Does not have to be defined
-     * @returns MultiColumnMenu object of unlocalized main menu content
-     */
-    getUnlocalizedMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
-    /**
-     *
-     * Get unlocalized menu content for the main menu
-     *
-     * @param mainMenuType Does not have to be defined
-     * @returns MultiColumnMenu object of unlocalized main menu content
-     */
-    getUnlocalizedMainMenu(): Promise<MultiColumnMenu>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide menu items in contributions
-     */
-    setUnlocalizedMainMenu(
-      mainMenuType: undefined,
-      value: never,
-    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
-    /**
-     * Subscribe to run a callback function when the unlocalized main menu data is changed
-     *
-     * @param mainMenuType Does not have to be defined
-     * @param callback Function to run with the updated unlocalized menuContent for this selector. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-     */
-    subscribeUnlocalizedMainMenu(
-      mainMenuType: undefined,
-      callback: (menuContent: MultiColumnMenu | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     * Get localized menu content for a web view
-     *
-     * @param webViewType The type of webview for which a menu should be retrieved
-     * @returns WebViewMenu object of web view menu content
-     */
-    getWebViewMenu(webViewType: ReferencedItem): Promise<Localized<WebViewMenu>>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide menu items in contributions
-     */
-    setWebViewMenu(
-      webViewType: ReferencedItem,
-      value: never,
-    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
-    /**
-     * Subscribe to run a callback function when the localized web view menu data is changed
-     *
-     * @param webViewType The type of webview for which a menu should be subscribed
-     * @param callback Function to run with the updated menuContent for this selector. If there is an
-     *   error while retrieving the updated data, the function will run with a {@link PlatformError}
-     *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an
-     *   error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-     */
-    subscribeWebViewMenu(
-      webViewType: ReferencedItem,
-      callback: (menuContent: Localized<WebViewMenu> | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-  } & OnDidDispose &
-    typeof menuDataServiceObjectToProxy &
-    IDataProvider<MenuDataDataTypes>;
-}
-declare module 'shared/services/menu-data.service' {
-  import { IMenuDataService } from 'shared/services/menu-data.service-model';
-  export const menuDataService: IMenuDataService;
-  export default menuDataService;
-}
 declare module 'shared/services/database.service-model' {
   export const databaseServiceNetworkObjectName = 'DatabaseService';
   export const databaseServiceObjectToProxy: Readonly<{}>;
@@ -7869,6 +7609,271 @@ declare module 'shared/services/database.service-model' {
       ...anonymousParameters: SqlValue[]
     ): Promise<SqlOutputRow[]>;
   } & typeof databaseServiceObjectToProxy;
+}
+declare module '@papi/core' {
+  /** Exporting empty object so people don't have to put 'type' in their import statements */
+  const core: {};
+  export default core;
+  export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
+  export type { ExecutionToken } from 'node/models/execution-token.model';
+  export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
+  export type {
+    ExtensionIdentifier,
+    HashValues,
+    InstalledExtensions,
+    ManageExtensions,
+  } from 'shared/models/manage-extensions-privilege.model';
+  export type {
+    HandleUri,
+    RegisterUriHandler,
+    UriHandler,
+  } from 'shared/models/handle-uri-privilege.model';
+  export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+  export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  export type {
+    IDataProvider,
+    IDisposableDataProvider,
+  } from 'shared/models/data-provider.interface';
+  export type {
+    DataProviderUpdateInstructions,
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+  } from 'shared/models/data-provider.model';
+  export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
+  export type { IDataProviderEngine } from 'shared/models/data-provider-engine.model';
+  export type { DialogOptions } from 'shared/models/dialog-options.model';
+  export type { DirectionFromTab } from 'shared/models/docking-framework.model';
+  export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
+  export type {
+    NotificationClickCommandHandler,
+    PlatformNotification,
+  } from 'shared/models/notification.service-model';
+  export type {
+    Components as ComponentsDocumentation,
+    MethodDocumentationWithoutName,
+    NetworkObjectDocumentation,
+    SingleMethodDocumentation,
+  } from 'shared/models/openrpc.model';
+  export type {
+    ExtensionDataScope,
+    MandatoryProjectDataTypes,
+  } from 'shared/models/project-data-provider.model';
+  export type { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
+  export type { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
+  export type { IBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
+  export type {
+    IProjectDataProviderFactory,
+    ProjectMetadataFilterOptions,
+  } from 'shared/models/project-data-provider-factory.interface';
+  export type {
+    ProjectDataProviderFactoryMetadataInfo,
+    ProjectMetadata,
+    ProjectMetadataWithoutFactoryInfo,
+  } from 'shared/models/project-metadata.model';
+  export type {
+    LocalizationData,
+    LocalizationSelector,
+    LocalizationSelectors,
+  } from 'shared/services/localization.service-model';
+  export type { NetworkObjectDetails } from 'shared/models/network-object.model';
+  export type { AppInfo } from 'shared/services/app.service-model';
+  export type { SettingValidator } from 'shared/services/settings.service-model';
+  export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  export type {
+    FocusSubject,
+    SetFocusSubject,
+    SetFocusSpecifier,
+  } from 'shared/services/window.service-model';
+  export type {
+    GetWebViewOptions,
+    OpenWebViewOptions,
+    SavedWebViewDefinition,
+    UseWebViewStateHook,
+    UseWebViewScrollGroupScrRefHook,
+    WebViewContentType,
+    WebViewDefinition,
+    WebViewProps,
+  } from 'shared/models/web-view.model';
+  export type {
+    IDisposableWebViewProvider,
+    IWebViewProvider,
+  } from 'shared/models/web-view-provider.model';
+  export type {
+    SimultaneousProjectSettingsChanges,
+    ProjectSettingValidator,
+  } from 'shared/services/project-settings.service-model';
+  export type {
+    SqlValue,
+    NamedSqlParameters,
+    SqlOutputRow,
+  } from 'shared/services/database.service-model';
+}
+declare module 'shared/services/menu-data.service-model' {
+  import {
+    OnDidDispose,
+    UnsubscriberAsync,
+    MultiColumnMenu,
+    ReferencedItem,
+    WebViewMenu,
+    Localized,
+    PlatformError,
+  } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from '@papi/core';
+  /**
+   *
+   * This name is used to register the menu data data provider on the papi. You can use this name to
+   * find the data provider when accessing it using the useData hook
+   */
+  export const menuDataServiceProviderName = 'platform.menuDataServiceDataProvider';
+  export const menuDataServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the menu data data provider on the papi. You can use this name to
+     * find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.menuDataServiceDataProvider';
+  }>;
+  export type MenuDataDataTypes = {
+    MainMenu: DataProviderDataType<undefined, Localized<MultiColumnMenu>, never>;
+    UnlocalizedMainMenu: DataProviderDataType<undefined, MultiColumnMenu, never>;
+    WebViewMenu: DataProviderDataType<ReferencedItem, Localized<WebViewMenu>, never>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [menuDataServiceProviderName]: IMenuDataService;
+    }
+  }
+  /**
+   *
+   * Service that allows to get and store menu data
+   */
+  export type IMenuDataService = {
+    /** Rebuild the menus with the latest inputs from all extensions. */
+    rebuildMenus(): Promise<void>;
+    /**
+     *
+     * Get localized menu content for the main menu
+     *
+     * @param mainMenuType Does not have to be defined
+     * @returns MultiColumnMenu object of localized main menu content
+     */
+    getMainMenu(mainMenuType: undefined): Promise<Localized<MultiColumnMenu>>;
+    /**
+     *
+     * Get localized menu content for the main menu
+     *
+     * @param mainMenuType Does not have to be defined
+     * @returns MultiColumnMenu object of localized main menu content
+     */
+    getMainMenu(): Promise<Localized<MultiColumnMenu>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
+     */
+    setMainMenu(
+      mainMenuType: undefined,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the localized main menu data is changed
+     *
+     * @param mainMenuType Does not have to be defined
+     * @param callback Function to run with the updated localized menuContent for this selector. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeMainMenu(
+      mainMenuType: undefined,
+      callback: (menuContent: Localized<MultiColumnMenu> | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Get unlocalized menu content for the main menu
+     *
+     * @param mainMenuType Does not have to be defined
+     * @returns MultiColumnMenu object of unlocalized main menu content
+     */
+    getUnlocalizedMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
+    /**
+     *
+     * Get unlocalized menu content for the main menu
+     *
+     * @param mainMenuType Does not have to be defined
+     * @returns MultiColumnMenu object of unlocalized main menu content
+     */
+    getUnlocalizedMainMenu(): Promise<MultiColumnMenu>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
+     */
+    setUnlocalizedMainMenu(
+      mainMenuType: undefined,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the unlocalized main menu data is changed
+     *
+     * @param mainMenuType Does not have to be defined
+     * @param callback Function to run with the updated unlocalized menuContent for this selector. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeUnlocalizedMainMenu(
+      mainMenuType: undefined,
+      callback: (menuContent: MultiColumnMenu | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     * Get localized menu content for a web view
+     *
+     * @param webViewType The type of webview for which a menu should be retrieved
+     * @returns WebViewMenu object of web view menu content
+     */
+    getWebViewMenu(webViewType: ReferencedItem): Promise<Localized<WebViewMenu>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
+     */
+    setWebViewMenu(
+      webViewType: ReferencedItem,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the localized web view menu data is changed
+     *
+     * @param webViewType The type of webview for which a menu should be subscribed
+     * @param callback Function to run with the updated menuContent for this selector. If there is an
+     *   error while retrieving the updated data, the function will run with a {@link PlatformError}
+     *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an
+     *   error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeWebViewMenu(
+      webViewType: ReferencedItem,
+      callback: (menuContent: Localized<WebViewMenu> | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof menuDataServiceObjectToProxy &
+    IDataProvider<MenuDataDataTypes>;
+}
+declare module 'shared/services/menu-data.service' {
+  import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  export const menuDataService: IMenuDataService;
+  export default menuDataService;
 }
 declare module 'shared/services/database.service' {
   import { IDatabaseService } from 'shared/services/database.service-model';

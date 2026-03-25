@@ -90,3 +90,8 @@ export type {
   SimultaneousProjectSettingsChanges,
   ProjectSettingValidator,
 } from '@shared/services/project-settings.service-model';
+export type {
+  SqlValue,
+  NamedSqlParameters,
+  SqlOutputRow,
+} from '@shared/services/database.service-model';
