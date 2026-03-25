@@ -46,7 +46,7 @@ function BookChapterControlWrapper({
 
 const TRIGGER_ROLE = 'combobox';
 const INPUT_ROLE = 'combobox';
-const CHAPTER_BUTTON_ROLE = 'option';
+const CHAPTER_BUTTON_ROLE = 'button';
 
 async function expectPopoverToBeOpenAndVisible() {
   // Wait for the popover to appear and verify it's open
@@ -152,7 +152,7 @@ export const ChapterSelectionDemo: Story = {
   },
   play: async ({ canvas, userEvent, step, args }) => {
     await step('Open the book chapter control', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await expect(trigger).toBeInTheDocument();
       await userEvent.click(trigger);
     });
@@ -178,7 +178,7 @@ export const ChapterSelectionDemo: Story = {
       const dropdownContent = getDropdown();
 
       // Verify we have multiple chapter buttons (Romans has 16 chapters)
-      const allChapterButtons = within(dropdownContent).getAllByRole(CHAPTER_BUTTON_ROLE);
+      const allChapterButtons = dropdownContent.querySelectorAll('[data-chapter-btn]');
       await expect(allChapterButtons.length).toBe(16);
     });
 
@@ -194,7 +194,7 @@ export const ChapterSelectionDemo: Story = {
     await step('Verify the different chapter number is selected', async () => {
       // Verify the popover closes and the trigger shows the new reference
       await expectPopoverToBeClosed();
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await expect(trigger).toHaveTextContent('Romans 12:1');
       await expect(args.handleSubmit).toHaveBeenCalledWith({
         book: 'ROM',
@@ -230,7 +230,7 @@ export const SmartParsingDemo: Story = {
   play: async ({ canvas, userEvent, step, args }) => {
     await step('Open the component and test smart parsing', async () => {
       // Click to open the component
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
 
       // Wait for the dropdown to appear
@@ -262,7 +262,7 @@ export const SmartParsingDemo: Story = {
 
     await step('Test book with chapter parsing: "Romans 8"', async () => {
       // Reopen the component
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
 
       const dropdownContent = getDropdown();
@@ -287,7 +287,7 @@ export const SmartParsingDemo: Story = {
 
     await step('Test book ID parsing: "1CO 13:4"', async () => {
       // Reopen the component
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
 
       const dropdownContent = getDropdown();
@@ -337,7 +337,7 @@ export const BookSearchAndNavigation: Story = {
   },
   play: async ({ canvas, userEvent, step, args }) => {
     await step('Open the component', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
@@ -362,7 +362,7 @@ export const BookSearchAndNavigation: Story = {
 
     await step('Verify chapter grid shows many chapters for Psalms', async () => {
       const dropdownContent = getDropdown();
-      const chapterButtons = within(dropdownContent).getAllByRole(CHAPTER_BUTTON_ROLE);
+      const chapterButtons = dropdownContent.querySelectorAll('[data-chapter-btn]');
       await expect(chapterButtons.length).toBeGreaterThan(50);
     });
 
@@ -382,7 +382,7 @@ export const BookSearchAndNavigation: Story = {
     });
 
     await step('Reopen component for back navigation test', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
@@ -443,7 +443,7 @@ export const SingleChapterBookDemo: Story = {
   },
   play: async ({ canvas, userEvent, step, args }) => {
     await step('Open component for Obadiah test', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
@@ -470,7 +470,7 @@ export const SingleChapterBookDemo: Story = {
     });
 
     await step('Open component for Odes test', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
@@ -535,7 +535,7 @@ export const KeyboardNavigation: Story = {
   },
   play: async ({ canvas, userEvent, step }) => {
     await step('Open component with Matthew reference', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
@@ -590,7 +590,7 @@ export const KeyboardNavigation: Story = {
 
     await step('Verify component closes after Enter key selection', async () => {
       await expectPopoverToBeClosed();
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await expect(trigger).toBeInTheDocument();
     });
   },
@@ -623,7 +623,7 @@ export const ComprehensiveInteractionTest: Story = {
   },
   play: async ({ canvas, userEvent, step, args }) => {
     await step('Open component for filtering test', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
@@ -665,12 +665,12 @@ export const ComprehensiveInteractionTest: Story = {
     });
 
     await step('Verify trigger returns to original value', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await expect(trigger).toHaveTextContent('Genesis 1:1');
     });
 
     await step('Open component for rapid switching test', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
@@ -698,7 +698,7 @@ export const ComprehensiveInteractionTest: Story = {
     });
 
     await step('Immediately open component for second book', async () => {
-      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      const trigger = canvas.getByRole(TRIGGER_ROLE, { hidden: true });
       await userEvent.click(trigger);
       await expectPopoverToBeOpenAndVisible();
     });
