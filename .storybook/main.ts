@@ -73,10 +73,16 @@ const config: StorybookConfig = {
               u.loader === 'css-loader'),
         );
         if (cssIdx === -1) return rule;
-        // Bump importLoaders by 1 on the css-loader options object if present
+        // Bump importLoaders by 1 so postcss-loader processes CSS @imports.
+        // Handles both the plain string form ('css-loader') and the object form ({ loader: 'css-loader', options: {...} }).
         const newUse = useArr.map((u, i) => {
+          if (i !== cssIdx) return u;
+          // Plain string form: convert to object with importLoaders: 1
+          if (u === 'css-loader') {
+            return { loader: 'css-loader', options: { importLoaders: 1 } };
+          }
+          // Object form: bump existing importLoaders count
           if (
-            i === cssIdx &&
             !!u &&
             typeof u === 'object' &&
             typeof u !== 'function' &&
@@ -101,7 +107,6 @@ const config: StorybookConfig = {
         ...webpackConfig.resolve.alias,
         '@': join(__dirname, '../lib/platform-bible-react/src'),
         'platform-bible-react': join(__dirname, '../lib/platform-bible-react/src/index.ts'),
-        '.storybook': join(__dirname, '.'),
       };
     }
 

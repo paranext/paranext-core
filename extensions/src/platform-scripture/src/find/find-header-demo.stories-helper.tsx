@@ -32,8 +32,8 @@ import {
 } from 'platform-bible-react';
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { formatReplacementString } from 'platform-bible-utils';
-import { SetStateAction, useEffect, useMemo, useState } from 'react';
-import { getLocalizedStrings } from '../../../../../.storybook/localization-decorator';
+import { SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
+import { getLocalizedStrings } from '../../../../../.storybook/localization-utils';
 import { FindFilters } from './find-filters.component';
 import { SearchTextType } from './find-types';
 
@@ -116,13 +116,24 @@ export function FindHeaderDemo() {
   // custom for demo
   const [findButtonText, setFindButtonText] = useState<string>('');
   useEffect(() => {
-    setTimeout(() => setFindButtonText(localizedStrings['%webView_find_findTab%']), 1000);
+    const timeout = setTimeout(
+      () => setFindButtonText(localizedStrings['%webView_find_findTab%']),
+      1000,
+    );
+    return () => clearTimeout(timeout);
   }, []);
 
   // custom for demo
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
   const handleStartSearch = () => {
     setSearchStatus('running');
-    setTimeout(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
       setSearchStatus('completed');
     }, 1000);
 
