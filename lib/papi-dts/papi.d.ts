@@ -6557,115 +6557,6 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
   export default useDialogCallback;
 }
-declare module 'shared/services/localization.service-model' {
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import {
-    DataProviderDataType,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { LanguageInfo } from 'platform-bible-react';
-  import {
-    LanguageStrings,
-    LocalizedStringDataContribution,
-    LocalizeKey,
-    OnDidDispose,
-  } from 'platform-bible-utils';
-  export type LocalizationData = LanguageStrings;
-  export type LocalizationSelector = {
-    localizeKey: LocalizeKey;
-    locales?: string[];
-  };
-  export type LocalizationSelectors = {
-    localizeKeys: LocalizeKey[];
-    locales?: string[];
-  };
-  /**
-   *
-   * This name is used to register the localization data provider on the papi. You can use this name
-   * to find the data provider when accessing it using the useData hook
-   */
-  export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
-  export const localizationServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the localization data provider on the papi. You can use this name
-     * to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.localizationDataServiceDataProvider';
-  }>;
-  export type LocalizationDataDataTypes = {
-    LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
-    LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
-    AvailableInterfaceLanguages: DataProviderDataType<
-      undefined,
-      Record<string, LanguageInfo>,
-      never
-    >;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [localizationServiceProviderName]: ILocalizationService;
-    }
-  }
-  /**
-   *
-   * Service that allows to get and store localizations
-   */
-  export type ILocalizationService = {
-    /**
-     * Look up localized string for specific localizeKey
-     *
-     * @param selector Made up of a string key that corresponds to a localized value and an array of
-     *   BCP 47 language codes
-     * @returns Localized string
-     */
-    getLocalizedString: (selector: LocalizationSelector) => Promise<string>;
-    /**
-     * Look up localized strings for all localizeKeys provided
-     *
-     * @param selectors An array of LocalizationSelectors. A LocalizationSelector is made up of a
-     *   string key that corresponds to a localized value and an array of BCP 47 language codes
-     * @returns Object whose keys are localizeKeys and values are localized strings
-     */
-    getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
-    /**
-     * Get a collection of known user-interface languages
-     *
-     * @returns All user-interface languages
-     */
-    getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
-    /**
-     * Get all localized string data currently loaded by the platform
-     *
-     * @returns All localized string data from all sources formatted a single, combined contribution
-     */
-    retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide localized strings in contributions
-     */
-    setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide localized strings in contributions
-     */
-    setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide new interface languages in contributions
-     */
-    setAvailableInterfaceLanguages(): Promise<
-      DataProviderUpdateInstructions<LocalizationDataDataTypes>
-    >;
-  } & OnDidDispose &
-    typeof localizationServiceObjectToProxy & {
-      /**
-       * This function is used to take a book number from a verse ref and return the localized name of
-       * the book so that the book name can be displayed in the UI language within the UI
-       */
-      getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
-    } & IDataProvider<LocalizationDataDataTypes>;
-}
 declare module 'shared/services/app.service-model' {
   /**
    * Information about the app that is currently running.
@@ -6713,577 +6604,6 @@ declare module 'shared/services/app.service-model' {
     getMarketingInfo(): Promise<MarketingInfo>;
   }
   export const appServiceNetworkObjectName = 'AppService';
-}
-declare module 'shared/data/platform.data' {
-  /**
-   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
-   * Platform.Bible core
-   */
-  export const PLATFORM_NAMESPACE = 'platform';
-  /** Query parameter passed to the renderer. Determines which log level to use */
-  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
-  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
-  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
-  /** ID of the default theme family for use in the application */
-  export const DEFAULT_THEME_FAMILY = '';
-  /** Type of the default theme for use in the application */
-  export const DEFAULT_THEME_TYPE = 'light';
-  /** Constants related to zoom factor of entire application */
-  export const DEFAULT_ZOOM_FACTOR = 1;
-  export const MIN_ZOOM_FACTOR = 0.5;
-  export const MAX_ZOOM_FACTOR = 3;
-}
-declare module 'shared/log-error.model' {
-  /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
-  export class LogError extends Error {
-    constructor(message?: string);
-  }
-  export default LogError;
-}
-declare module 'shared/services/localization.service' {
-  import { ILocalizationService } from 'shared/services/localization.service-model';
-  export const localizationService: ILocalizationService;
-  export default localizationService;
-}
-declare module 'shared/utils/settings-document-combiner-base' {
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import {
-    DocumentCombiner,
-    JsonDocumentLike,
-    Localized,
-    Setting,
-    SettingsGroup,
-  } from 'platform-bible-utils';
-  /**
-   * Information about one specific setting. Basically just {@link Setting} but with specific default
-   * type info
-   */
-  type SettingInfo<SettingName extends SettingNames> = Setting & {
-    default: SettingTypes[SettingName];
-  };
-  /** Information about all settings. Keys are setting keys, values are information for that setting */
-  type AllSettingsInfo = {
-    [SettingName in SettingNames]: SettingInfo<SettingName>;
-  };
-  export type SettingsContributionInfo = {
-    /** Map of extension name to that extension's provided settings groups if provided */
-    contributions: {
-      [extensionName: string]: SettingsGroup[] | undefined;
-    };
-    /**
-     * Map of setting name to setting definition. For type specificity and ease of accessing settings
-     * since they're a bit hard to find in `contributions`
-     */
-    settings: Partial<AllSettingsInfo>;
-  };
-  export type LocalizedSettingsContributionInfo = Localized<SettingsContributionInfo>;
-  export abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
-    /** Name for type of setting to use in error messages */
-    protected readonly settingTypeName: string;
-    /** Cached promise for getting the localized output */
-    private localizedOutputPromise;
-    constructor(baseDocument: JsonDocumentLike);
-    /**
-     * This method is intended to be layered over by a child class to expose the localized setting
-     * info.
-     *
-     * Get the current set of settings contribution info given all the input documents with all
-     * localized string keys localized properly.
-     *
-     * NOTE: If the input documents might have changed since the last time the settings contributions
-     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
-     * this getter. For example, if one of the input document objects changed and
-     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
-     * the current set of settings contributions. If all the input documents are static, then there is
-     * no need to ever rebuild once all the documents have been contributed to this combiner.
-     */
-    protected getLocalizedOutput(): Promise<LocalizedSettingsContributionInfo | undefined>;
-    protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
-    protected transformBaseDocumentAfterValidation(
-      baseDocument: JsonDocumentLike,
-    ): JsonDocumentLike;
-    protected validateContribution(documentName: string, document: JsonDocumentLike): void;
-    protected transformContributionAfterValidation(
-      documentName: string,
-      document: JsonDocumentLike,
-    ): JsonDocumentLike;
-    protected validateOutput(): void;
-    /** Validate the base and contribution documents against the JSON schema */
-    protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
-  }
-  export default SettingsDocumentCombinerBase;
-}
-declare module 'shared/services/settings.service-model' {
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import { OnDidDispose, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import {
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { LocalizedSettingsContributionInfo } from 'shared/utils/settings-document-combiner-base';
-  /** Name prefix for registered commands that call settings validators */
-  export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
-  /**
-   *
-   * This name is used to register the settings service data provider on the papi. You can use this
-   * name to find the data provider when accessing it using the useData hook
-   */
-  export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
-  export const settingsServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the settings service data provider on the papi. You can use this
-     * name to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.settingsServiceDataProvider';
-    /**
-     *
-     * Registers a function that validates whether a new setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator: <SettingName extends SettingNames>(
-      key: SettingName,
-      validator: SettingValidator<SettingName>,
-    ) => Promise<UnsubscriberAsync>;
-  }>;
-  /**
-   * SettingDataTypes handles getting and setting Platform.Bible core application and extension
-   * settings.
-   *
-   * Note: the unnamed (`''`) data type is not actually part of `SettingDataTypes` because the methods
-   * would not be able to create a generic type extending from `SettingNames` in order to return the
-   * specific setting type being requested. As such, `get`, `set`, `reset` and `subscribe` are all
-   * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
-   * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
-   * instead. However, do note that the unnamed data type (`''`) is fully functional.
-   *
-   * The closest possible representation of the unnamed (````) data type follows:
-   *
-   * ```typescript
-   * '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
-   * ```
-   */
-  export type SettingDataTypes = {};
-  export type AllSettingsData = {
-    [SettingName in SettingNames]: SettingTypes[SettingName];
-  };
-  /** Function that validates whether a new setting value should be allowed to be set */
-  export type SettingValidator<SettingName extends SettingNames> = (
-    newValue: SettingTypes[SettingName],
-    currentValue: SettingTypes[SettingName],
-    allChanges: Partial<SettingTypes>,
-  ) => Promise<boolean>;
-  /** Validators for all settings. Keys are setting keys, values are functions to validate new settings */
-  export type AllSettingsValidators = {
-    [SettingName in SettingNames]: SettingValidator<SettingName>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [settingsServiceDataProviderName]: ISettingsService;
-    }
-  }
-  /** */
-  export type ISettingsService = {
-    /**
-     * Retrieves the value of the specified setting
-     *
-     * @param key The string id of the setting for which the value is being retrieved
-     * @returns The value of the specified setting, parsed to an object. Returns default setting if
-     *   setting does not exist
-     * @throws If no default value is available for the setting.
-     */
-    get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
-    /**
-     * Validates the setting at the given key with the new value provided
-     *
-     * @param key The string id of the setting to validate
-     * @param newValue The value to validate
-     * @param currentValue The value already set to the setting
-     * @param allChanges
-     */
-    validateSetting<SettingName extends SettingNames>(
-      key: SettingName,
-      newValue: SettingTypes[SettingName],
-      currentValue: SettingTypes[SettingName],
-      allChanges?: Partial<SettingTypes>,
-    ): Promise<boolean>;
-    /**
-     * Sets the value of the specified setting
-     *
-     * @param key The string id of the setting for which the value is being set
-     * @param newSetting The value that is to be set for the specified key
-     * @returns Information that papi uses to interpret whether to send out updates. Defaults to
-     *   `true` (meaning send updates only for this data type).
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    set<SettingName extends SettingNames>(
-      key: SettingName,
-      newSetting: SettingTypes[SettingName],
-    ): Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
-    /**
-     * Removes the setting from memory and resets it to its default value
-     *
-     * @param key The string id of the setting for which the value is being removed
-     * @returns `true` if successfully reset the project setting. `false` otherwise
-     */
-    reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean>;
-    /**
-     * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
-     * callback function is executed.
-     *
-     * @param key The string id of the setting for which the value is being subscribed to
-     * @param callback The function that will be called whenever the specified setting is updated. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber that should be called whenever the subscription should be deleted
-     */
-    subscribe<SettingName extends SettingNames>(
-      key: SettingName,
-      callback: (newSetting: SettingTypes[SettingName] | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     *
-     * Registers a function that validates whether a new setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator<SettingName extends SettingNames>(
-      key: SettingName,
-      validator: SettingValidator<SettingName>,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     * Get the current set of settings contribution info given all the input documents with all
-     * localized string keys localized properly.
-     *
-     * @returns Localized project settings contribution info or undefined
-     */
-    getLocalizedSettingsContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined>;
-  } & OnDidDispose &
-    IDataProvider<SettingDataTypes> &
-    typeof settingsServiceObjectToProxy;
-}
-declare module 'shared/services/window.service-model' {
-  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
-  import {
-    DataProviderDataType,
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import { DirectionFromTab } from 'shared/models/docking-framework.model';
-  /**
-   *
-   * This name is used to register the window data provider on the papi. You can use this name to
-   * find the data provider when accessing it using the useData hook
-   */
-  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
-  export const windowServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the window data provider on the papi. You can use this name to
-     * find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.windowServiceDataProvider';
-  }>;
-  /** Focus of the app window is on a WebView iframe with the specified id */
-  export type FocusSubjectWebView = {
-    focusType: 'webView';
-    /** ID of the WebView in focus (its tab ID is the same) */
-    id: string;
-  };
-  /**
-   * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
-   *
-   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
-   * focused in the WebView's iframe
-   */
-  export type FocusSubjectTab = {
-    focusType: 'tab';
-    /** The type of tab. `webView` if it is a WebView tab. */
-    tabType: 'webView' | string;
-    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
-    id: string;
-  };
-  /** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
-  export type FocusSubjectOther = {
-    focusType: 'other';
-  };
-  /** Current item that is the subject of top-level app window focus */
-  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
-  /** Specific item that is intended to be focused in the top-level app window */
-  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
-  /** Instructions that indicate how to change the app window focus */
-  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
-  export type WindowDataTypes = {
-    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [windowServiceProviderName]: IWindowService;
-    }
-  }
-  /**
-   *
-   * Service that allows to interact with the main application window
-   */
-  export type IWindowService = {
-    /**
-     *
-     * Get information about the current subject of focus in the main app window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
-     */
-    getFocus(selector: undefined): Promise<FocusSubject>;
-    /**
-     *
-     * Get information about the current subject of focus in the main app window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
-     */
-    getFocus(): Promise<FocusSubject>;
-    /**
-     * Sets the subject of focus in the main app window.
-     *
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Sets the subject of focus in the main app window.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     *
-     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
-     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
-     *   `'detect'`.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      selector: undefined,
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Subscribe to run a callback function when the main app window's subject of focus is changed
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param callback Function to run with the updated localized menuContent for this selector. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-     */
-    subscribeFocus(
-      selector: undefined,
-      callback: (focusSubject: FocusSubject | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-  } & OnDidDispose &
-    typeof windowServiceObjectToProxy &
-    IDataProvider<WindowDataTypes>;
-}
-declare module 'shared/utils/project-settings-document-combiner' {
-  import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-  import {
-    JsonDocumentLike,
-    Localized,
-    ProjectSetting,
-    ProjectSettingsGroup,
-  } from 'platform-bible-utils';
-  import { SettingsDocumentCombinerBase } from 'shared/utils/settings-document-combiner-base';
-  /**
-   * Information about one specific setting. Basically just {@link Setting} but with specific default
-   * type info
-   */
-  type ProjectSettingInfo<ProjectSettingName extends ProjectSettingNames> = ProjectSetting & {
-    default: ProjectSettingTypes[ProjectSettingName];
-  };
-  /** Information about all settings. Keys are setting keys, values are information for that setting */
-  type AllProjectSettingsInfo = {
-    [ProjectSettingName in ProjectSettingNames]: ProjectSettingInfo<ProjectSettingName>;
-  };
-  export type ProjectSettingsContributionInfo = {
-    /** Map of extension name to that extension's provided settings groups if provided */
-    contributions: {
-      [extensionName: string]: ProjectSettingsGroup[] | undefined;
-    };
-    /**
-     * Map of setting name to setting definition. For type specificity and ease of accessing settings
-     * since they're a bit hard to find in `contributions`
-     */
-    settings: Partial<AllProjectSettingsInfo>;
-  };
-  export type LocalizedProjectSettingsContributionInfo = Localized<ProjectSettingsContributionInfo>;
-  export class ProjectSettingsDocumentCombiner extends SettingsDocumentCombinerBase {
-    protected readonly settingTypeName = 'Project Setting';
-    /**
-     * Get the current set of project settings contribution info given all the input documents.
-     * Localized string keys have not been localized to corresponding strings.
-     *
-     * NOTE: If the input documents might have changed since the last time the project settings
-     * contributions were retrieved, you can call `rebuild` to incorporate those document changes
-     * before calling this getter. For example, if one of the input document objects changed and
-     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
-     * the current set of project settings contributions. If all the input documents are static, then
-     * there is no need to ever rebuild once all the documents have been contributed to this
-     * combiner.
-     */
-    getProjectSettingsContributionInfo(): ProjectSettingsContributionInfo | undefined;
-    /**
-     * Get the current set of settings contribution info given all the input documents with all
-     * localized string keys localized properly.
-     *
-     * NOTE: If the input documents might have changed since the last time the settings contributions
-     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
-     * this getter. For example, if one of the input document objects changed and
-     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
-     * the current set of settings contributions. If all the input documents are static, then there is
-     * no need to ever rebuild once all the documents have been contributed to this combiner.
-     */
-    getLocalizedProjectSettingsContributionInfo(): Promise<
-      LocalizedProjectSettingsContributionInfo | undefined
-    >;
-    protected performSchemaValidation(document: JsonDocumentLike, docType: string): void;
-  }
-  export default ProjectSettingsDocumentCombiner;
-}
-declare module 'shared/services/project-settings.service-model' {
-  import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-  import { UnsubscriberAsync } from 'platform-bible-utils';
-  import { LocalizedProjectSettingsContributionInfo } from 'shared/utils/project-settings-document-combiner';
-  /** Name prefix for registered commands that call project settings validators */
-  export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
-  export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
-  export const projectSettingsServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * Registers a function that validates whether a new project setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator: <ProjectSettingName extends ProjectSettingNames>(
-      key: ProjectSettingName,
-      validator: ProjectSettingValidator<ProjectSettingName>,
-    ) => Promise<UnsubscriberAsync>;
-  }>;
-  /**
-   *
-   * Provides utility functions that project data providers should call when handling project settings
-   */
-  export interface IProjectSettingsService {
-    /**
-     * Calls registered project settings validators to determine whether or not a project setting
-     * change is valid.
-     *
-     * Every Project Data Provider **must** run this function when it receives a request to set a
-     * project setting before changing the value of the setting.
-     *
-     * @param newValue The new value requested to set the project setting value to
-     * @param currentValue The current project setting value
-     * @param key The project setting key being set
-     * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
-     *   whose setting is being changed
-     * @param allChanges All project settings changes being set in one batch
-     * @returns `true` if change is valid, `false` otherwise
-     */
-    isValid<ProjectSettingName extends ProjectSettingNames>(
-      key: ProjectSettingName,
-      newValue: ProjectSettingTypes[ProjectSettingName],
-      currentValue: ProjectSettingTypes[ProjectSettingName],
-      allChanges?: SimultaneousProjectSettingsChanges,
-    ): Promise<boolean>;
-    /**
-     * Gets default value for a project setting
-     *
-     * Every Project Data Providers **must** run this function when it receives a request to get a
-     * project setting if the project does not have a value for the project setting requested. It
-     * should return the response from this function directly, either the returned default value or
-     * throw.
-     *
-     * @param key The project setting key for which to get the default value
-     * @returns The default value for the setting if a default value is registered
-     * @throws If a default value is not registered for the setting
-     */
-    getDefault<ProjectSettingName extends ProjectSettingNames>(
-      key: ProjectSettingName,
-    ): Promise<ProjectSettingTypes[ProjectSettingName]>;
-    /**
-     *
-     * Registers a function that validates whether a new project setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator<ProjectSettingName extends ProjectSettingNames>(
-      key: ProjectSettingName,
-      validatorCallback: ProjectSettingValidator<ProjectSettingName>,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     * Get the current set of project settings contribution info given all the input documents with
-     * all localized string keys localized properly.
-     *
-     * @returns Localized project settings contribution info or undefined
-     */
-    getLocalizedContributionInfo(): Promise<LocalizedProjectSettingsContributionInfo | undefined>;
-  }
-  /**
-   * All project settings changes being set in one batch
-   *
-   * Project settings may be circularly dependent on one another, so multiple project settings may
-   * need to be changed at once in some cases
-   */
-  export type SimultaneousProjectSettingsChanges = {
-    [ProjectSettingName in ProjectSettingNames]?: {
-      /** The new value requested to set the project setting value to */
-      newValue: ProjectSettingTypes[ProjectSettingName];
-      /** The current project setting value */
-      currentValue: ProjectSettingTypes[ProjectSettingName];
-    };
-  };
-  /**
-   * Function that validates whether a new project setting value should be allowed to be set
-   *
-   * @param newValue The new value requested to set the project setting value to
-   * @param currentValue The current project setting value
-   * @param allChanges All project settings changes being set in one batch
-   */
-  export type ProjectSettingValidator<ProjectSettingName extends ProjectSettingNames> = (
-    newValue: ProjectSettingTypes[ProjectSettingName],
-    currentValue: ProjectSettingTypes[ProjectSettingName],
-    allChanges: SimultaneousProjectSettingsChanges,
-  ) => Promise<boolean>;
-  /**
-   * Validators for all project settings. Keys are setting keys, values are functions to validate new
-   * settings
-   */
-  export type AllProjectSettingsValidators = {
-    [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
-  };
 }
 declare module 'shared/services/database.service-model' {
   export const databaseServiceNetworkObjectName = 'DatabaseService';
@@ -7610,26 +6930,695 @@ declare module 'shared/services/database.service-model' {
     ): Promise<SqlOutputRow[]>;
   } & typeof databaseServiceObjectToProxy;
 }
+declare module 'shared/services/localization.service-model' {
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import {
+    DataProviderDataType,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { LanguageInfo } from 'platform-bible-react';
+  import {
+    LanguageStrings,
+    LocalizedStringDataContribution,
+    LocalizeKey,
+    OnDidDispose,
+  } from 'platform-bible-utils';
+  export type LocalizationData = LanguageStrings;
+  export type LocalizationSelector = {
+    localizeKey: LocalizeKey;
+    locales?: string[];
+  };
+  export type LocalizationSelectors = {
+    localizeKeys: LocalizeKey[];
+    locales?: string[];
+  };
+  /**
+   *
+   * This name is used to register the localization data provider on the papi. You can use this name
+   * to find the data provider when accessing it using the useData hook
+   */
+  export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
+  export const localizationServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the localization data provider on the papi. You can use this name
+     * to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.localizationDataServiceDataProvider';
+  }>;
+  export type LocalizationDataDataTypes = {
+    LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
+    LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
+    AvailableInterfaceLanguages: DataProviderDataType<
+      undefined,
+      Record<string, LanguageInfo>,
+      never
+    >;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [localizationServiceProviderName]: ILocalizationService;
+    }
+  }
+  /**
+   *
+   * Service that allows to get and store localizations
+   */
+  export type ILocalizationService = {
+    /**
+     * Look up localized string for specific localizeKey
+     *
+     * @param selector Made up of a string key that corresponds to a localized value and an array of
+     *   BCP 47 language codes
+     * @returns Localized string
+     */
+    getLocalizedString: (selector: LocalizationSelector) => Promise<string>;
+    /**
+     * Look up localized strings for all localizeKeys provided
+     *
+     * @param selectors An array of LocalizationSelectors. A LocalizationSelector is made up of a
+     *   string key that corresponds to a localized value and an array of BCP 47 language codes
+     * @returns Object whose keys are localizeKeys and values are localized strings
+     */
+    getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
+    /**
+     * Get a collection of known user-interface languages
+     *
+     * @returns All user-interface languages
+     */
+    getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
+    /**
+     * Get all localized string data currently loaded by the platform
+     *
+     * @returns All localized string data from all sources formatted a single, combined contribution
+     */
+    retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
+     */
+    setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
+     */
+    setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide new interface languages in contributions
+     */
+    setAvailableInterfaceLanguages(): Promise<
+      DataProviderUpdateInstructions<LocalizationDataDataTypes>
+    >;
+  } & OnDidDispose &
+    typeof localizationServiceObjectToProxy & {
+      /**
+       * This function is used to take a book number from a verse ref and return the localized name of
+       * the book so that the book name can be displayed in the UI language within the UI
+       */
+      getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
+    } & IDataProvider<LocalizationDataDataTypes>;
+}
+declare module 'shared/data/platform.data' {
+  /**
+   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
+   * Platform.Bible core
+   */
+  export const PLATFORM_NAMESPACE = 'platform';
+  /** Query parameter passed to the renderer. Determines which log level to use */
+  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
+  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
+  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /** ID of the default theme family for use in the application */
+  export const DEFAULT_THEME_FAMILY = '';
+  /** Type of the default theme for use in the application */
+  export const DEFAULT_THEME_TYPE = 'light';
+  /** Constants related to zoom factor of entire application */
+  export const DEFAULT_ZOOM_FACTOR = 1;
+  export const MIN_ZOOM_FACTOR = 0.5;
+  export const MAX_ZOOM_FACTOR = 3;
+}
+declare module 'shared/log-error.model' {
+  /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
+  export class LogError extends Error {
+    constructor(message?: string);
+  }
+  export default LogError;
+}
+declare module 'shared/services/localization.service' {
+  import { ILocalizationService } from 'shared/services/localization.service-model';
+  export const localizationService: ILocalizationService;
+  export default localizationService;
+}
+declare module 'shared/utils/settings-document-combiner-base' {
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  import {
+    DocumentCombiner,
+    JsonDocumentLike,
+    Localized,
+    Setting,
+    SettingsGroup,
+  } from 'platform-bible-utils';
+  /**
+   * Information about one specific setting. Basically just {@link Setting} but with specific default
+   * type info
+   */
+  type SettingInfo<SettingName extends SettingNames> = Setting & {
+    default: SettingTypes[SettingName];
+  };
+  /** Information about all settings. Keys are setting keys, values are information for that setting */
+  type AllSettingsInfo = {
+    [SettingName in SettingNames]: SettingInfo<SettingName>;
+  };
+  export type SettingsContributionInfo = {
+    /** Map of extension name to that extension's provided settings groups if provided */
+    contributions: {
+      [extensionName: string]: SettingsGroup[] | undefined;
+    };
+    /**
+     * Map of setting name to setting definition. For type specificity and ease of accessing settings
+     * since they're a bit hard to find in `contributions`
+     */
+    settings: Partial<AllSettingsInfo>;
+  };
+  export type LocalizedSettingsContributionInfo = Localized<SettingsContributionInfo>;
+  export abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
+    /** Name for type of setting to use in error messages */
+    protected readonly settingTypeName: string;
+    /** Cached promise for getting the localized output */
+    private localizedOutputPromise;
+    constructor(baseDocument: JsonDocumentLike);
+    /**
+     * This method is intended to be layered over by a child class to expose the localized setting
+     * info.
+     *
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * NOTE: If the input documents might have changed since the last time the settings contributions
+     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
+     * this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of settings contributions. If all the input documents are static, then there is
+     * no need to ever rebuild once all the documents have been contributed to this combiner.
+     */
+    protected getLocalizedOutput(): Promise<LocalizedSettingsContributionInfo | undefined>;
+    protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
+    protected transformBaseDocumentAfterValidation(
+      baseDocument: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateContribution(documentName: string, document: JsonDocumentLike): void;
+    protected transformContributionAfterValidation(
+      documentName: string,
+      document: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateOutput(): void;
+    /** Validate the base and contribution documents against the JSON schema */
+    protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
+  }
+  export default SettingsDocumentCombinerBase;
+}
+declare module 'shared/utils/project-settings-document-combiner' {
+  import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
+  import {
+    JsonDocumentLike,
+    Localized,
+    ProjectSetting,
+    ProjectSettingsGroup,
+  } from 'platform-bible-utils';
+  import { SettingsDocumentCombinerBase } from 'shared/utils/settings-document-combiner-base';
+  /**
+   * Information about one specific setting. Basically just {@link Setting} but with specific default
+   * type info
+   */
+  type ProjectSettingInfo<ProjectSettingName extends ProjectSettingNames> = ProjectSetting & {
+    default: ProjectSettingTypes[ProjectSettingName];
+  };
+  /** Information about all settings. Keys are setting keys, values are information for that setting */
+  type AllProjectSettingsInfo = {
+    [ProjectSettingName in ProjectSettingNames]: ProjectSettingInfo<ProjectSettingName>;
+  };
+  export type ProjectSettingsContributionInfo = {
+    /** Map of extension name to that extension's provided settings groups if provided */
+    contributions: {
+      [extensionName: string]: ProjectSettingsGroup[] | undefined;
+    };
+    /**
+     * Map of setting name to setting definition. For type specificity and ease of accessing settings
+     * since they're a bit hard to find in `contributions`
+     */
+    settings: Partial<AllProjectSettingsInfo>;
+  };
+  export type LocalizedProjectSettingsContributionInfo = Localized<ProjectSettingsContributionInfo>;
+  export class ProjectSettingsDocumentCombiner extends SettingsDocumentCombinerBase {
+    protected readonly settingTypeName = 'Project Setting';
+    /**
+     * Get the current set of project settings contribution info given all the input documents.
+     * Localized string keys have not been localized to corresponding strings.
+     *
+     * NOTE: If the input documents might have changed since the last time the project settings
+     * contributions were retrieved, you can call `rebuild` to incorporate those document changes
+     * before calling this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of project settings contributions. If all the input documents are static, then
+     * there is no need to ever rebuild once all the documents have been contributed to this
+     * combiner.
+     */
+    getProjectSettingsContributionInfo(): ProjectSettingsContributionInfo | undefined;
+    /**
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * NOTE: If the input documents might have changed since the last time the settings contributions
+     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
+     * this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of settings contributions. If all the input documents are static, then there is
+     * no need to ever rebuild once all the documents have been contributed to this combiner.
+     */
+    getLocalizedProjectSettingsContributionInfo(): Promise<
+      LocalizedProjectSettingsContributionInfo | undefined
+    >;
+    protected performSchemaValidation(document: JsonDocumentLike, docType: string): void;
+  }
+  export default ProjectSettingsDocumentCombiner;
+}
+declare module 'shared/services/project-settings.service-model' {
+  import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
+  import { UnsubscriberAsync } from 'platform-bible-utils';
+  import { LocalizedProjectSettingsContributionInfo } from 'shared/utils/project-settings-document-combiner';
+  /** Name prefix for registered commands that call project settings validators */
+  export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
+  export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
+  export const projectSettingsServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * Registers a function that validates whether a new project setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator: <ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+      validator: ProjectSettingValidator<ProjectSettingName>,
+    ) => Promise<UnsubscriberAsync>;
+  }>;
+  /**
+   *
+   * Provides utility functions that project data providers should call when handling project settings
+   */
+  export interface IProjectSettingsService {
+    /**
+     * Calls registered project settings validators to determine whether or not a project setting
+     * change is valid.
+     *
+     * Every Project Data Provider **must** run this function when it receives a request to set a
+     * project setting before changing the value of the setting.
+     *
+     * @param newValue The new value requested to set the project setting value to
+     * @param currentValue The current project setting value
+     * @param key The project setting key being set
+     * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
+     *   whose setting is being changed
+     * @param allChanges All project settings changes being set in one batch
+     * @returns `true` if change is valid, `false` otherwise
+     */
+    isValid<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+      newValue: ProjectSettingTypes[ProjectSettingName],
+      currentValue: ProjectSettingTypes[ProjectSettingName],
+      allChanges?: SimultaneousProjectSettingsChanges,
+    ): Promise<boolean>;
+    /**
+     * Gets default value for a project setting
+     *
+     * Every Project Data Providers **must** run this function when it receives a request to get a
+     * project setting if the project does not have a value for the project setting requested. It
+     * should return the response from this function directly, either the returned default value or
+     * throw.
+     *
+     * @param key The project setting key for which to get the default value
+     * @returns The default value for the setting if a default value is registered
+     * @throws If a default value is not registered for the setting
+     */
+    getDefault<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+    ): Promise<ProjectSettingTypes[ProjectSettingName]>;
+    /**
+     *
+     * Registers a function that validates whether a new project setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+      validatorCallback: ProjectSettingValidator<ProjectSettingName>,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     * Get the current set of project settings contribution info given all the input documents with
+     * all localized string keys localized properly.
+     *
+     * @returns Localized project settings contribution info or undefined
+     */
+    getLocalizedContributionInfo(): Promise<LocalizedProjectSettingsContributionInfo | undefined>;
+  }
+  /**
+   * All project settings changes being set in one batch
+   *
+   * Project settings may be circularly dependent on one another, so multiple project settings may
+   * need to be changed at once in some cases
+   */
+  export type SimultaneousProjectSettingsChanges = {
+    [ProjectSettingName in ProjectSettingNames]?: {
+      /** The new value requested to set the project setting value to */
+      newValue: ProjectSettingTypes[ProjectSettingName];
+      /** The current project setting value */
+      currentValue: ProjectSettingTypes[ProjectSettingName];
+    };
+  };
+  /**
+   * Function that validates whether a new project setting value should be allowed to be set
+   *
+   * @param newValue The new value requested to set the project setting value to
+   * @param currentValue The current project setting value
+   * @param allChanges All project settings changes being set in one batch
+   */
+  export type ProjectSettingValidator<ProjectSettingName extends ProjectSettingNames> = (
+    newValue: ProjectSettingTypes[ProjectSettingName],
+    currentValue: ProjectSettingTypes[ProjectSettingName],
+    allChanges: SimultaneousProjectSettingsChanges,
+  ) => Promise<boolean>;
+  /**
+   * Validators for all project settings. Keys are setting keys, values are functions to validate new
+   * settings
+   */
+  export type AllProjectSettingsValidators = {
+    [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
+  };
+}
+declare module 'shared/services/settings.service-model' {
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  import { OnDidDispose, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { LocalizedSettingsContributionInfo } from 'shared/utils/settings-document-combiner-base';
+  /** Name prefix for registered commands that call settings validators */
+  export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
+  /**
+   *
+   * This name is used to register the settings service data provider on the papi. You can use this
+   * name to find the data provider when accessing it using the useData hook
+   */
+  export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
+  export const settingsServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the settings service data provider on the papi. You can use this
+     * name to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.settingsServiceDataProvider';
+    /**
+     *
+     * Registers a function that validates whether a new setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator: <SettingName extends SettingNames>(
+      key: SettingName,
+      validator: SettingValidator<SettingName>,
+    ) => Promise<UnsubscriberAsync>;
+  }>;
+  /**
+   * SettingDataTypes handles getting and setting Platform.Bible core application and extension
+   * settings.
+   *
+   * Note: the unnamed (`''`) data type is not actually part of `SettingDataTypes` because the methods
+   * would not be able to create a generic type extending from `SettingNames` in order to return the
+   * specific setting type being requested. As such, `get`, `set`, `reset` and `subscribe` are all
+   * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
+   * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
+   * instead. However, do note that the unnamed data type (`''`) is fully functional.
+   *
+   * The closest possible representation of the unnamed (````) data type follows:
+   *
+   * ```typescript
+   * '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
+   * ```
+   */
+  export type SettingDataTypes = {};
+  export type AllSettingsData = {
+    [SettingName in SettingNames]: SettingTypes[SettingName];
+  };
+  /** Function that validates whether a new setting value should be allowed to be set */
+  export type SettingValidator<SettingName extends SettingNames> = (
+    newValue: SettingTypes[SettingName],
+    currentValue: SettingTypes[SettingName],
+    allChanges: Partial<SettingTypes>,
+  ) => Promise<boolean>;
+  /** Validators for all settings. Keys are setting keys, values are functions to validate new settings */
+  export type AllSettingsValidators = {
+    [SettingName in SettingNames]: SettingValidator<SettingName>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [settingsServiceDataProviderName]: ISettingsService;
+    }
+  }
+  /** */
+  export type ISettingsService = {
+    /**
+     * Retrieves the value of the specified setting
+     *
+     * @param key The string id of the setting for which the value is being retrieved
+     * @returns The value of the specified setting, parsed to an object. Returns default setting if
+     *   setting does not exist
+     * @throws If no default value is available for the setting.
+     */
+    get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
+    /**
+     * Validates the setting at the given key with the new value provided
+     *
+     * @param key The string id of the setting to validate
+     * @param newValue The value to validate
+     * @param currentValue The value already set to the setting
+     * @param allChanges
+     */
+    validateSetting<SettingName extends SettingNames>(
+      key: SettingName,
+      newValue: SettingTypes[SettingName],
+      currentValue: SettingTypes[SettingName],
+      allChanges?: Partial<SettingTypes>,
+    ): Promise<boolean>;
+    /**
+     * Sets the value of the specified setting
+     *
+     * @param key The string id of the setting for which the value is being set
+     * @param newSetting The value that is to be set for the specified key
+     * @returns Information that papi uses to interpret whether to send out updates. Defaults to
+     *   `true` (meaning send updates only for this data type).
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    set<SettingName extends SettingNames>(
+      key: SettingName,
+      newSetting: SettingTypes[SettingName],
+    ): Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
+    /**
+     * Removes the setting from memory and resets it to its default value
+     *
+     * @param key The string id of the setting for which the value is being removed
+     * @returns `true` if successfully reset the project setting. `false` otherwise
+     */
+    reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean>;
+    /**
+     * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
+     * callback function is executed.
+     *
+     * @param key The string id of the setting for which the value is being subscribed to
+     * @param callback The function that will be called whenever the specified setting is updated. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribe<SettingName extends SettingNames>(
+      key: SettingName,
+      callback: (newSetting: SettingTypes[SettingName] | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Registers a function that validates whether a new setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator<SettingName extends SettingNames>(
+      key: SettingName,
+      validator: SettingValidator<SettingName>,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * @returns Localized project settings contribution info or undefined
+     */
+    getLocalizedSettingsContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined>;
+  } & OnDidDispose &
+    IDataProvider<SettingDataTypes> &
+    typeof settingsServiceObjectToProxy;
+}
+declare module 'shared/services/window.service-model' {
+  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { DirectionFromTab } from 'shared/models/docking-framework.model';
+  /**
+   *
+   * This name is used to register the window data provider on the papi. You can use this name to
+   * find the data provider when accessing it using the useData hook
+   */
+  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
+  export const windowServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the window data provider on the papi. You can use this name to
+     * find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.windowServiceDataProvider';
+  }>;
+  /** Focus of the app window is on a WebView iframe with the specified id */
+  export type FocusSubjectWebView = {
+    focusType: 'webView';
+    /** ID of the WebView in focus (its tab ID is the same) */
+    id: string;
+  };
+  /**
+   * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
+   *
+   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
+   * focused in the WebView's iframe
+   */
+  export type FocusSubjectTab = {
+    focusType: 'tab';
+    /** The type of tab. `webView` if it is a WebView tab. */
+    tabType: 'webView' | string;
+    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
+    id: string;
+  };
+  /** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
+  export type FocusSubjectOther = {
+    focusType: 'other';
+  };
+  /** Current item that is the subject of top-level app window focus */
+  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+  /** Specific item that is intended to be focused in the top-level app window */
+  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
+  /** Instructions that indicate how to change the app window focus */
+  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
+  export type WindowDataTypes = {
+    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [windowServiceProviderName]: IWindowService;
+    }
+  }
+  /**
+   *
+   * Service that allows to interact with the main application window
+   */
+  export type IWindowService = {
+    /**
+     *
+     * Get information about the current subject of focus in the main app window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the main app window's current subject of focus
+     */
+    getFocus(selector: undefined): Promise<FocusSubject>;
+    /**
+     *
+     * Get information about the current subject of focus in the main app window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the main app window's current subject of focus
+     */
+    getFocus(): Promise<FocusSubject>;
+    /**
+     * Sets the subject of focus in the main app window.
+     *
+     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Sets the subject of focus in the main app window.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     *
+     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
+     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
+     *   `'detect'`.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      selector: undefined,
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the main app window's subject of focus is changed
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the updated localized menuContent for this selector. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeFocus(
+      selector: undefined,
+      callback: (focusSubject: FocusSubject | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof windowServiceObjectToProxy &
+    IDataProvider<WindowDataTypes>;
+}
 declare module '@papi/core' {
   /** Exporting empty object so people don't have to put 'type' in their import statements */
   const core: {};
   export default core;
   export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
   export type { ExecutionToken } from 'node/models/execution-token.model';
-  export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
-  export type {
-    ExtensionIdentifier,
-    HashValues,
-    InstalledExtensions,
-    ManageExtensions,
-  } from 'shared/models/manage-extensions-privilege.model';
-  export type {
-    HandleUri,
-    RegisterUriHandler,
-    UriHandler,
-  } from 'shared/models/handle-uri-privilege.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  export type { IBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
   export type {
     IDataProvider,
     IDisposableDataProvider,
@@ -7643,7 +7632,23 @@ declare module '@papi/core' {
   export type { IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
   export type { DirectionFromTab } from 'shared/models/docking-framework.model';
-  export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
+  export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
+  export type {
+    HandleUri,
+    RegisterUriHandler,
+    UriHandler,
+  } from 'shared/models/handle-uri-privilege.model';
+  export type {
+    ExtensionIdentifier,
+    HashValues,
+    InstalledExtensions,
+    ManageExtensions,
+  } from 'shared/models/manage-extensions-privilege.model';
+  export type {
+    NetworkableObject,
+    NetworkObject,
+    NetworkObjectDetails,
+  } from 'shared/models/network-object.model';
   export type {
     NotificationClickCommandHandler,
     PlatformNotification,
@@ -7660,7 +7665,6 @@ declare module '@papi/core' {
   } from 'shared/models/project-data-provider.model';
   export type { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
   export type { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
-  export type { IBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
   export type {
     IProjectDataProviderFactory,
     ProjectMetadataFilterOptions,
@@ -7670,20 +7674,6 @@ declare module '@papi/core' {
     ProjectMetadata,
     ProjectMetadataWithoutFactoryInfo,
   } from 'shared/models/project-metadata.model';
-  export type {
-    LocalizationData,
-    LocalizationSelector,
-    LocalizationSelectors,
-  } from 'shared/services/localization.service-model';
-  export type { NetworkObjectDetails } from 'shared/models/network-object.model';
-  export type { AppInfo } from 'shared/services/app.service-model';
-  export type { SettingValidator } from 'shared/services/settings.service-model';
-  export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  export type {
-    FocusSubject,
-    SetFocusSubject,
-    SetFocusSpecifier,
-  } from 'shared/services/window.service-model';
   export type {
     GetWebViewOptions,
     OpenWebViewOptions,
@@ -7698,15 +7688,28 @@ declare module '@papi/core' {
     IDisposableWebViewProvider,
     IWebViewProvider,
   } from 'shared/models/web-view-provider.model';
+  export type { AppInfo } from 'shared/services/app.service-model';
+  export type {
+    NamedSqlParameters,
+    SqlOutputRow,
+    SqlValue,
+  } from 'shared/services/database.service-model';
+  export type {
+    LocalizationData,
+    LocalizationSelector,
+    LocalizationSelectors,
+  } from 'shared/services/localization.service-model';
   export type {
     SimultaneousProjectSettingsChanges,
     ProjectSettingValidator,
   } from 'shared/services/project-settings.service-model';
+  export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  export type { SettingValidator } from 'shared/services/settings.service-model';
   export type {
-    SqlValue,
-    NamedSqlParameters,
-    SqlOutputRow,
-  } from 'shared/services/database.service-model';
+    FocusSubject,
+    SetFocusSubject,
+    SetFocusSpecifier,
+  } from 'shared/services/window.service-model';
 }
 declare module 'shared/services/menu-data.service-model' {
   import {
