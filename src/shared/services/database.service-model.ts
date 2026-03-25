@@ -22,7 +22,8 @@ export interface OpenDatabaseOptions {
    * See more information about this option in [the SQLite
    * documentation](https://www.sqlite.org/c3ref/open.html)
    *
-   * @deprecated 10 March 2026 - Node's built-in `sqlite` module does not support this option
+   * @deprecated 10 March 2026 - All SQLite calls are now executed sequentially in a single worker
+   *   thread, which provides mutual exclusion semantics regardless of this flag.
    */
   fullMutex?: boolean;
 }
