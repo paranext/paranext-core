@@ -5,7 +5,7 @@ import WebView from '@renderer/components/web-view.component';
 import { SimplePanelId } from './simple-mode-layout.component';
 import { SimpleTabDefinition, getTabsForPanel } from './simple-mode-tab-config';
 import { PlaceholderTab } from './placeholder-tab.component';
-import { WebViewMap } from './use-simple-mode-dock-layout.hook';
+import { WebViewMap, TabWebViewIds } from './use-simple-mode-dock-layout.hook';
 
 export type SimpleModePanelProps = {
   panelId: SimplePanelId;
@@ -13,21 +13,11 @@ export type SimpleModePanelProps = {
   tabs?: SimpleTabDefinition[];
   /** Extra toolbar content to render on the right side of the tab bar */
   toolbarEndContent?: React.ReactNode;
-  /** Map of webViewId -> WebViewTabProps for rendering real webviews */
+  /** All webview definitions keyed by webview UUID */
   webViewMap: WebViewMap;
+  /** Maps simple-mode tab id -> webview UUID */
+  tabWebViewIds: TabWebViewIds;
 };
-
-/**
- * Find the first WebViewTabProps in the map whose webViewType matches the tab's webViewType.
- * Returns undefined if no match.
- */
-function findWebViewForTab(
-  tab: SimpleTabDefinition,
-  webViewMap: WebViewMap,
-): WebViewTabProps | undefined {
-  if (!tab.webViewType) return undefined;
-  return Object.values(webViewMap).find((wv) => wv.webViewType === tab.webViewType);
-}
 
 /**
  * Generic panel component for Simple Mode.
@@ -35,13 +25,14 @@ function findWebViewForTab(
  * - Shows a tab bar only when the panel has 2+ tabs.
  * - When a single tab is assigned, it fills the panel with no tab bar.
  * - Uses `display: none` for inactive tabs to preserve iframe state.
- * - Renders real WebView components for non-placeholder tabs that have a matching webview.
+ * - Renders real WebView components for non-placeholder tabs that have been opened.
  */
 export function SimpleModePanel({
   panelId,
   tabs: tabsProp,
   toolbarEndContent,
   webViewMap,
+  tabWebViewIds,
 }: SimpleModePanelProps) {
   const tabs = tabsProp ?? getTabsForPanel(panelId);
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0]?.id ?? '');
@@ -50,7 +41,6 @@ export function SimpleModePanel({
 
   return (
     <div className="simple-mode-panel">
-      {/* Tab bar — only shown when 2+ tabs */}
       {showTabBar && (
         <div className="simple-mode-panel-tabbar">
           <div className="simple-mode-panel-tabs">
@@ -80,10 +70,14 @@ export function SimpleModePanel({
         </div>
       )}
 
-      {/* Content area — all tabs rendered, inactive hidden via display:none */}
       <div className="simple-mode-panel-content">
         {tabs.map((tab) => {
-          const webViewProps = findWebViewForTab(tab, webViewMap);
+          // Look up the webview UUID for this tab, then get the webview props
+          const webViewId = tabWebViewIds?.[tab.id];
+          const webViewProps: WebViewTabProps | undefined = webViewId
+            ? webViewMap[webViewId]
+            : undefined;
+
           return (
             <div
               key={tab.id}

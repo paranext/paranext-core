@@ -10,7 +10,7 @@ import {
 import { PenLine, RefreshCw, HelpCircle, CircleUserRound } from 'lucide-react';
 import { UserProfileDropdown } from '@renderer/components/user-profile-dropdown.component';
 
-const ICON_CLASS = 'tw-h-6 tw-w-6';
+const ICON_CLASS = 'tw-h-7 tw-w-7';
 
 /**
  * Sidebar content for Simple Mode.

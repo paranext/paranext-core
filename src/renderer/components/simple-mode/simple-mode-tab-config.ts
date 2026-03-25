@@ -24,7 +24,7 @@ export type SimpleTabDefinition = {
   isPlaceholder: boolean;
   /** The default panel this tab belongs to */
   defaultPanel: SimplePanelId;
-  /** The webViewType to match against when a webview is opened by the platform */
+  /** The webViewType to open for this tab. Each tab with a webViewType gets its own instance. */
   webViewType?: string;
 };
 
@@ -42,7 +42,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: BookOpen,
     isPlaceholder: false,
     defaultPanel: 'reference',
-    webViewType: 'platformScriptureEditor.reactWebView',
+    webViewType: 'platformScriptureEditor.react',
   },
 
   // Editor panel — single tab, tab bar hidden
@@ -52,7 +52,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: PenLine,
     isPlaceholder: false,
     defaultPanel: 'editor',
-    webViewType: 'platformScriptureEditor.reactWebView',
+    webViewType: 'platformScriptureEditor.react',
   },
 
   // Tools/Resources panel — many tabs, tab bar shown
@@ -62,7 +62,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: BookOpenText,
     isPlaceholder: false,
     defaultPanel: 'tools',
-    webViewType: 'platformScriptureEditor.reactWebView',
+    webViewType: 'platformScriptureEditor.react',
   },
   {
     id: 'commentary',
@@ -70,7 +70,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: FileText,
     isPlaceholder: false,
     defaultPanel: 'tools',
-    webViewType: 'platformScriptureEditor.reactWebView',
+    webViewType: 'platformScriptureEditor.react',
   },
   {
     id: 'dictionary',
@@ -107,7 +107,7 @@ export const SIMPLE_MODE_TABS: SimpleTabDefinition[] = [
     icon: Languages,
     isPlaceholder: false,
     defaultPanel: 'tools',
-    webViewType: 'platformScriptureEditor.reactWebView',
+    webViewType: 'platformScriptureEditor.react',
   },
   {
     id: 'comments',

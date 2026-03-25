@@ -50,7 +50,7 @@ function resolveTabDefs(tabIds: string[]): SimpleTabDefinition[] {
 export function SimpleModeLayout() {
   // Register Simple Mode's PapiDockLayout implementation with the webview service.
   // Returns a reactive webViewMap and dialogWebViews for rendering.
-  const { webViewMap, dialogWebViews, closeDialog } = useSimpleModeDockLayout();
+  const { webViewMap, tabWebViewIds, dialogWebViews, closeDialog } = useSimpleModeDockLayout();
 
   const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>({
     reference: true,
@@ -140,7 +140,7 @@ export function SimpleModeLayout() {
             collapsible="icon"
             style={
               {
-                '--sidebar-width-icon': '3.5rem',
+                '--sidebar-width-icon': '4rem',
               } as React.CSSProperties
             }
           >
@@ -159,6 +159,7 @@ export function SimpleModeLayout() {
                           panelId="reference"
                           tabs={resolveTabDefs(tabAssignments.reference)}
                           webViewMap={webViewMap}
+                          tabWebViewIds={tabWebViewIds}
                         />
                       </ResizablePanel>
                       {(panelVisibility.editor ||
@@ -173,6 +174,7 @@ export function SimpleModeLayout() {
                           panelId="editor"
                           tabs={resolveTabDefs(tabAssignments.editor)}
                           webViewMap={webViewMap}
+                          tabWebViewIds={tabWebViewIds}
                         />
                       </ResizablePanel>
                       {(panelVisibility.tools || panelVisibility.extra) && (
@@ -183,7 +185,12 @@ export function SimpleModeLayout() {
                   {panelVisibility.tools && (
                     <>
                       <ResizablePanel defaultSize={panelVisibility.extra ? 25 : 40} minSize={10}>
-                        <SimpleModePanel panelId="tools" tabs={toolsTabs} webViewMap={webViewMap} />
+                        <SimpleModePanel
+                          panelId="tools"
+                          tabs={toolsTabs}
+                          webViewMap={webViewMap}
+                          tabWebViewIds={tabWebViewIds}
+                        />
                       </ResizablePanel>
                       {panelVisibility.extra && <ResizableHandle withHandle />}
                     </>
@@ -195,6 +202,7 @@ export function SimpleModeLayout() {
                         tabs={extraTabs}
                         toolbarEndContent={extraPanelToolbarEnd}
                         webViewMap={webViewMap}
+                        tabWebViewIds={tabWebViewIds}
                       />
                     </ResizablePanel>
                   )}

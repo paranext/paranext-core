@@ -10,16 +10,12 @@ import {
   PapiDockLayout,
 } from '@shared/models/docking-framework.model';
 import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
-import { registerDockLayout } from '@renderer/services/web-view.service-host';
+import { registerDockLayout, openWebView } from '@renderer/services/web-view.service-host';
 import { testLayout } from '@renderer/testing/test-layout.data';
 import { logger } from '@shared/services/logger.service';
+import { SIMPLE_MODE_TABS } from './simple-mode-tab-config';
 
-/**
- * Internal store for tabs managed by Simple Mode.
- *
- * Simple Mode does not use rc-dock, so we maintain our own map of tab info and webview definitions.
- * This satisfies the PapiDockLayout interface so the webview service continues to work.
- */
+/** Internal store for tabs managed by Simple Mode. */
 class SimpleModeTabStore {
   private tabs = new Map<string, TabInfo>();
 
@@ -68,14 +64,20 @@ class SimpleModeTabStore {
   }
 }
 
-/** Reactive map of webViewId -> WebViewTabProps surfaced to the UI */
+/** Reactive map of webViewId (UUID) -> WebViewTabProps */
 export type WebViewMap = Record<string, WebViewTabProps>;
 
-/** Webviews that should be rendered as floating dialogs (from float-type layouts) */
+/** Map of simpleTabId -> webViewId so panels know which webview to render for each tab */
+export type TabWebViewIds = Record<string, string>;
+
+/** Webviews that should be rendered as floating dialogs */
 export type DialogWebView = WebViewTabProps & { dialogId: string };
 
 export type UseSimpleModeDockLayoutResult = {
+  /** All webview definitions keyed by their UUID */
   webViewMap: WebViewMap;
+  /** Maps each simple-mode tab id to its opened webview UUID */
+  tabWebViewIds: TabWebViewIds;
   /** Webviews that should be shown as centered blocking dialogs */
   dialogWebViews: DialogWebView[];
   /** Close/dismiss a dialog webview */
@@ -83,18 +85,18 @@ export type UseSimpleModeDockLayoutResult = {
 };
 
 /**
- * Hook that creates a PapiDockLayout implementation for Simple Mode and registers it with the
- * web-view service on mount.
- *
- * Returns a reactive `webViewMap` so the layout can render real WebView components.
+ * Hook that creates a PapiDockLayout implementation for Simple Mode, registers it with the web-view
+ * service, and opens webviews for all non-placeholder tabs on mount.
  */
 export function useSimpleModeDockLayout(): UseSimpleModeDockLayoutResult {
   const storeRef = useRef(new SimpleModeTabStore());
   const onLayoutChangeRef = useRef<OnLayoutChangeRCDock | undefined>();
   const [webViewMap, setWebViewMap] = useState<WebViewMap>({});
+  const [tabWebViewIds, setTabWebViewIds] = useState<TabWebViewIds>({});
   const [dialogWebViews, setDialogWebViews] = useState<DialogWebView[]>([]);
+  /** Track which simple tab IDs we're currently opening webviews for, to avoid duplicates */
+  const openingTabsRef = useRef(new Set<string>());
 
-  // Callback to update the reactive webview map when webviews are added/updated/removed
   const notifyWebViewChange = useCallback((webView: WebViewTabProps) => {
     setWebViewMap((prev) => ({
       ...prev,
@@ -116,10 +118,10 @@ export function useSimpleModeDockLayout(): UseSimpleModeDockLayoutResult {
 
   const closeDialog = useCallback((dialogId: string) => {
     setDialogWebViews((prev) => prev.filter((d) => d.dialogId !== dialogId));
-    // Also remove from the store
     storeRef.current.removeTab(dialogId);
   }, []);
 
+  // Register the PapiDockLayout implementation
   useEffect(() => {
     const store = storeRef.current;
 
@@ -170,7 +172,6 @@ export function useSimpleModeDockLayout(): UseSimpleModeDockLayoutResult {
         };
         store.addOrUpdateTab(newTab);
 
-        // Float-type layouts should be rendered as centered dialogs in Simple Mode
         if (layout.type === 'float') {
           addDialogWebView(webView);
         } else {
@@ -261,11 +262,49 @@ export function useSimpleModeDockLayout(): UseSimpleModeDockLayoutResult {
     };
 
     const unsub = registerDockLayout(dockLayout);
+
+    // After registering, open webviews for all non-placeholder tabs
+    openWebViewsForTabs();
+
     return () => {
       unsub();
     };
-    // All callbacks are stable (useCallback with [])
-  }, [notifyWebViewChange, notifyWebViewRemove, addDialogWebView]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  return { webViewMap, dialogWebViews, closeDialog };
+  /**
+   * Opens a webview for each non-placeholder simple-mode tab that has a webViewType. Each tab gets
+   * its own webview instance. The mapping simpleTabId -> webViewId is stored in tabWebViewIds so
+   * panels can look up which WebView to render.
+   */
+  async function openWebViewsForTabs(): Promise<void> {
+    const tabsToOpen = SIMPLE_MODE_TABS.filter((t) => !t.isPlaceholder && t.webViewType);
+
+    for (const tab of tabsToOpen) {
+      if (openingTabsRef.current.has(tab.id)) continue;
+      openingTabsRef.current.add(tab.id);
+
+      try {
+        // Open the webview — this will trigger addWebViewToDock which populates webViewMap
+        const webViewId = await openWebView(
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          tab.webViewType!,
+          { type: 'tab' },
+        );
+
+        if (webViewId) {
+          // Record the mapping: this simple tab ID uses this webview UUID
+          setTabWebViewIds((prev) => ({ ...prev, [tab.id]: webViewId }));
+        } else {
+          logger.warn(
+            `SimpleModeLayout: Failed to open webview for tab "${tab.id}" (type: ${tab.webViewType})`,
+          );
+        }
+      } catch (e) {
+        logger.warn(`SimpleModeLayout: Error opening webview for tab "${tab.id}": ${e}`);
+      }
+    }
+  }
+
+  return { webViewMap, tabWebViewIds, dialogWebViews, closeDialog };
 }

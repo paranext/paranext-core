@@ -1,6 +1,7 @@
 import logo from '@assets/icon.png';
 import { useScrollGroupScrRef, useRecentScriptureRefs } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
 import {
   BookChapterControl,
   Button,
@@ -15,7 +16,7 @@ import {
 } from 'platform-bible-react';
 import { ScrollGroupId } from 'platform-bible-utils';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { BookOpen, PenLine, Wrench, Minus, EllipsisVertical } from 'lucide-react';
+import { BookOpen, PenLine, Wrench, Minus, Settings2, ChevronDown } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { PanelVisibility, SimplePanelId } from './simple-mode-layout.component';
 import { SimpleTabDefinition } from './simple-mode-tab-config';
@@ -155,7 +156,7 @@ export function SimpleModeToolbar({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="tw-h-8 tw-w-8">
-                  <EllipsisVertical className="tw-h-4 tw-w-4" />
+                  <Settings2 className="tw-h-4 tw-w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -165,7 +166,28 @@ export function SimpleModeToolbar({
           </div>
         }
       >
-        {/* Center: BCV control */}
+        {/* Center: project selector + BCV control */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              className="tw-h-8 tw-gap-1 tw-text-sm tw-font-normal tw-max-w-[180px]"
+              onClick={async () => {
+                try {
+                  await sendCommand('platformScriptureEditor.openScriptureEditor', undefined);
+                } catch (e) {
+                  logger.warn(`Error opening project selector: ${e}`);
+                }
+              }}
+            >
+              <span className="tw-truncate">Select Project</span>
+              <ChevronDown className="tw-h-3.5 tw-w-3.5 tw-shrink-0 tw-opacity-50" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="tw-font-light">Open project</p>
+          </TooltipContent>
+        </Tooltip>
         <BookChapterControl
           scrRef={scrRef}
           handleSubmit={setScrRef}
