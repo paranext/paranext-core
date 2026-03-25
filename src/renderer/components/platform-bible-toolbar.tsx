@@ -164,7 +164,7 @@ export function PlatformBibleToolbar() {
 
   let themeButtonTooltip = localizedStrings['%toolbar_theme_loading%'];
   if (!isThemeLoadedNotError)
-    themeButtonTooltip = localizedStrings['%tooltip_theme_loading_error%'];
+    themeButtonTooltip = localizedStrings['%toolbar_theme_loading_error%'];
   else if (theme.type === 'dark') {
     themeButtonTooltip = localizedStrings['%toolbar_theme_change_to_light%'];
   } else {
