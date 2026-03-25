@@ -73,6 +73,8 @@ const localizedStrings = getLocalizedStrings([
   '%webView_find_previousResult%',
   '%webView_find_nextResult%',
 ]);
+
+const scopeSelectorLocalizedStrings = getLocalizedStrings([...SCOPE_SELECTOR_STRING_KEYS]);
 export function FindHeaderDemo() {
   const [searchTerm, setSearchTerm] = useState<string>('');
 
@@ -124,7 +126,7 @@ export function FindHeaderDemo() {
   }, []);
 
   // custom for demo
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -344,7 +346,7 @@ export function FindHeaderDemo() {
               onScopeChange={setScope}
               selectedBookIds={selectedBookIds}
               onSelectedBookIdsChange={setSelectedBookIds}
-              localizedStrings={getLocalizedStrings([...SCOPE_SELECTOR_STRING_KEYS])}
+              localizedStrings={scopeSelectorLocalizedStrings}
               availableBookInfo={availableBookIds}
             />
           </PopoverContent>

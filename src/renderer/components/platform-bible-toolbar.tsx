@@ -162,10 +162,12 @@ export function PlatformBibleToolbar() {
 
   const isThemeLoadedNotError = theme !== DEFAULT_THEME_VALUE && !isPlatformError(theme);
 
-  let themeButtonTooltip = localizedStrings['%toolbar_theme_loading%'];
-  if (!isThemeLoadedNotError)
+  let themeButtonTooltip: string;
+  if (theme === DEFAULT_THEME_VALUE) {
+    themeButtonTooltip = localizedStrings['%toolbar_theme_loading%'];
+  } else if (isPlatformError(theme)) {
     themeButtonTooltip = localizedStrings['%toolbar_theme_loading_error%'];
-  else if (theme.type === 'dark') {
+  } else if (theme.type === 'dark') {
     themeButtonTooltip = localizedStrings['%toolbar_theme_change_to_light%'];
   } else {
     themeButtonTooltip = localizedStrings['%toolbar_theme_change_to_dark%'];
