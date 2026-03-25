@@ -48,9 +48,12 @@ export function CommandNavigator({
   const [focusedBookIndex, setFocusedBookIndex] = useState(-1);
   const [focusedChapter, setFocusedChapter] = useState(-1);
 
-  const inputRef = useRef<HTMLInputElement>(undefined);
-  const listRef = useRef<HTMLDivElement>(undefined);
-  const chapterGridRef = useRef<HTMLDivElement>(undefined);
+  // eslint-disable-next-line no-null/no-null
+  const inputRef = useRef<HTMLInputElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const listRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const chapterGridRef = useRef<HTMLDivElement>(null);
 
   // #region Available books and filtering
 
