@@ -1,17 +1,15 @@
 import type { Config } from 'tailwindcss';
 import libConfig from './lib/platform-bible-react/tailwind.config';
 
-// Extend the library's Tailwind config (preserving all plugins: scopedPreflightStyles,
-// tailwindcss-animate, @tailwindcss/typography, @tailwindcss/container-queries) and
-// widen the content paths to cover the full monorepo.
-// NOTE: This is a shallow spread. If the library config gains nested objects that require
-// deep merging (e.g., theme extensions, nested plugin options), this will need updating.
+// Use the library config as a Tailwind preset so its theme, plugins, and other settings are
+// deep-merged correctly. Only override content to cover the full monorepo including .storybook/.
 const config: Config = {
-  ...libConfig,
+  presets: [libConfig],
   content: [
     './src/**/*.{js,ts,jsx,tsx}',
     './extensions/src/**/*.{js,ts,jsx,tsx}',
     './lib/platform-bible-react/src/**/*.{js,ts,jsx,tsx}',
+    './.storybook/**/*.{ts,tsx}',
   ],
 };
 
