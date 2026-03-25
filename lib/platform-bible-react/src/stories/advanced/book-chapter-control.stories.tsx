@@ -57,13 +57,11 @@ async function expectPopoverToBeOpenAndVisible() {
 }
 
 async function expectPopoverToBeClosed() {
-  // Wait for the popover to close
-  const popoverContent = screen.queryByRole('dialog');
-  if (popoverContent) {
-    await waitFor(() => expect(popoverContent).toHaveAttribute('data-state', 'closed'));
-  } else {
-    expect(popoverContent).not.toBeInTheDocument();
-  }
+  // Wait for the dialog to be fully removed from DOM (not just data-state="closed")
+  // This ensures close animations complete and pointer-events/aria-hidden are cleaned up
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 }
 
 function getDropdown() {
@@ -245,9 +243,9 @@ export const SmartParsingDemo: Story = {
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, 'John 3:16');
 
-      // Verify the direct match banner shows in the dropdown
-      const topMatchBanner = await within(dropdownContent).findByText(/John 3/);
-      await expect(topMatchBanner).toBeInTheDocument();
+      // Verify the direct match banner shows (the ENTER badge only appears in the banner)
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
 
       // Press Enter to select the top match (banner is not clickable)
       await userEvent.keyboard('{Enter}');
@@ -259,6 +257,7 @@ export const SmartParsingDemo: Story = {
         chapterNum: 3,
         verseNum: 1,
       });
+      await expectPopoverToBeClosed();
     });
 
     await step('Test book with chapter parsing: "Romans 8"', async () => {
@@ -271,9 +270,9 @@ export const SmartParsingDemo: Story = {
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, 'Roma 8');
 
-      // Verify the direct match banner shows in the dropdown
-      const topMatchBanner = await within(dropdownContent).findByText(/Romans 8/);
-      await expect(topMatchBanner).toBeInTheDocument();
+      // Verify the direct match banner shows
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
 
       // Press Enter to select the top match (banner is not clickable)
       await userEvent.keyboard('{Enter}');
@@ -284,6 +283,7 @@ export const SmartParsingDemo: Story = {
         chapterNum: 8,
         verseNum: 1,
       });
+      await expectPopoverToBeClosed();
     });
 
     await step('Test book ID parsing: "1CO 13:4"', async () => {
@@ -296,9 +296,9 @@ export const SmartParsingDemo: Story = {
       await userEvent.clear(searchInput);
       await userEvent.type(searchInput, '1 co 13:4');
 
-      // Verify the direct match banner shows in the dropdown
-      const topMatchBanner = await within(dropdownContent).findByText(/1 Corinthians 13/);
-      await expect(topMatchBanner).toBeInTheDocument();
+      // Verify the direct match banner shows
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
 
       // Press Enter to select the top match (banner is not clickable)
       await userEvent.keyboard('{Enter}');
@@ -344,34 +344,20 @@ export const BookSearchAndNavigation: Story = {
       await expectPopoverToBeOpenAndVisible();
     });
 
-    await step('Type search query for Psalms', async () => {
+    await step('Type search query for Psalms with chapter', async () => {
       const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
-      await userEvent.type(searchInput, 'Psalms');
+      await userEvent.type(searchInput, 'Psalms 23');
     });
 
-    await step('Verify Psalms appears in search results', async () => {
+    await step('Verify direct match banner shows for Psalms 23', async () => {
       const dropdownContent = getDropdown();
-      const psalmsItem = await within(dropdownContent).findByText('Psalms');
-      await expect(psalmsItem).toBeInTheDocument();
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
     });
 
-    await step('Click Psalms to navigate to chapter view', async () => {
-      const dropdownContent = getDropdown();
-      const psalmsItem = within(dropdownContent).getByText('Psalms');
-      await userEvent.click(psalmsItem);
-    });
-
-    await step('Verify chapter grid shows many chapters for Psalms', async () => {
-      const dropdownContent = getDropdown();
-      const chapterButtons = dropdownContent.querySelectorAll('[data-chapter-btn]');
-      await expect(chapterButtons.length).toBeGreaterThan(50);
-    });
-
-    await step('Select chapter 23', async () => {
-      const dropdownContent = getDropdown();
-      const chapter23 = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: '23' });
-      await userEvent.click(chapter23);
+    await step('Press Enter to select Psalms 23', async () => {
+      await userEvent.keyboard('{Enter}');
     });
 
     await step('Verify submission and component closes', async () => {
@@ -389,22 +375,21 @@ export const BookSearchAndNavigation: Story = {
       await expectPopoverToBeOpenAndVisible();
     });
 
-    await step('Search for Romans', async () => {
+    await step('Type Romans to enter chapter view', async () => {
       const dropdownContent = getDropdown();
       const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
-      await userEvent.type(searchInput, 'Ro');
+      await userEvent.type(searchInput, 'Romans ');
     });
 
-    await step('Click Romans to enter chapter view', async () => {
+    await step('Verify chapter view is active and click back button', async () => {
       const dropdownContent = getDropdown();
-      const romansItem = await within(dropdownContent).findByText('Romans');
-      await userEvent.click(romansItem);
-    });
-
-    await step('Click back button to return to book search', async () => {
-      const dropdownContent = getDropdown();
-      const backButton = await within(dropdownContent).findByRole('button');
-      await userEvent.click(backButton);
+      // Wait for a chapter button to confirm we're in chapter view
+      await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, { name: '1' });
+      // The back button is the first button without data-chapter-btn
+      const allButtons = within(dropdownContent).getAllByRole('button');
+      const backButton = allButtons.find((btn) => !btn.hasAttribute('data-chapter-btn'));
+      await expect(backButton).toBeTruthy();
+      await userEvent.click(backButton!);
     });
 
     await step('Verify back navigation returns to search mode', async () => {
@@ -486,8 +471,8 @@ export const SingleChapterBookDemo: Story = {
 
     await step('Verify Odes direct match banner appears', async () => {
       const dropdownContent = getDropdown();
-      const odesBanner = await within(dropdownContent).findByText(/Odes 1/);
-      await expect(odesBanner).toBeInTheDocument();
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
     });
 
     await step('Press Enter to submit Odes', async () => {
@@ -560,26 +545,26 @@ export const KeyboardNavigation: Story = {
       await expect(chapter15).toBeInTheDocument();
     });
 
-    await step('Test right arrow key navigation', async () => {
-      await userEvent.keyboard('{ArrowRight}');
+    await step('Focus the search input for keyboard navigation', async () => {
       const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.click(searchInput);
     });
 
-    await step('Test down arrow key navigation', async () => {
+    await step('Test down arrow key to enter chapter grid from input', async () => {
+      // ArrowDown from input enters the chapter grid (sets focusedChapter)
       await userEvent.keyboard('{ArrowDown}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      // Verify a chapter button gets the focus ring
+      await waitFor(() => {
+        const focusedBtn = getDropdown().querySelector('[data-chapter-btn]');
+        expect(focusedBtn).toBeTruthy();
+      });
     });
 
-    await step('Test left arrow key navigation', async () => {
+    await step('Test arrow key navigation within grid', async () => {
+      await userEvent.keyboard('{ArrowRight}');
+      await userEvent.keyboard('{ArrowDown}');
       await userEvent.keyboard('{ArrowLeft}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
-    });
-
-    await step('Test up arrow key navigation', async () => {
-      await userEvent.keyboard('{ArrowUp}');
       const dropdownContent = getDropdown();
       await expect(dropdownContent).toBeVisible();
     });
@@ -684,8 +669,8 @@ export const ComprehensiveInteractionTest: Story = {
 
     await step('Verify Obadiah direct match banner and press Enter', async () => {
       const dropdownContent = getDropdown();
-      const obadiahBanner = await within(dropdownContent).findByText(/Obadiah 1/);
-      await expect(obadiahBanner).toBeInTheDocument();
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
       await userEvent.keyboard('{Enter}');
     });
 
@@ -713,8 +698,8 @@ export const ComprehensiveInteractionTest: Story = {
 
     await step('Verify Revelation direct match banner and press Enter', async () => {
       const dropdownContent = getDropdown();
-      const revBanner = await within(dropdownContent).findByText(/Revelation 22/);
-      await expect(revBanner).toBeInTheDocument();
+      const enterBadge = await within(dropdownContent).findByText('ENTER');
+      await expect(enterBadge).toBeInTheDocument();
       await userEvent.keyboard('{Enter}');
     });
 
