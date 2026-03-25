@@ -69,14 +69,14 @@ export const Default: Story = {
         subtitle: 'indent level 1 (with first line indent)',
         // eslint-disable-next-line no-alert
         action: () => alert('Indented Paragraph marker selected!'),
-        isDisallowed: true,
+        isDisallowed: false,
       },
       {
         marker: 'ph',
         title: 'Indented paragraph with hanging indent',
         // eslint-disable-next-line no-alert
         action: () => alert('Indented paragraph with hanging indent marker selected!'),
-        isDeprecated: true,
+        isDeprecated: false,
       },
     ],
   },
