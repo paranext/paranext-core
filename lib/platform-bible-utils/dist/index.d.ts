@@ -864,9 +864,10 @@ export type PlatformError = {
  *
  * @param error The error message as a string, an Error object, or a value to assign to the `cause`
  *   property of the returned PlatformError object
+ * @param code Optional machine-readable error code. See {@link PlatformErrorCode}.
  * @returns A new PlatformError object
  */
-export declare function newPlatformError(error?: unknown): PlatformError;
+export declare function newPlatformError(error?: unknown, code?: PlatformErrorCode): PlatformError;
 /**
  * Checks if the provided value is a PlatformError object.
  *

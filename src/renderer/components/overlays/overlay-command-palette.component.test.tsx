@@ -1,10 +1,8 @@
 import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import {
-  OverlayCommandPalettePresentational,
-  OverlayCommandPaletteItem,
-} from './overlay-command-palette.component';
+import { OverlayCommandPalettePresentational } from './overlay-command-palette.component';
+import { CommandPaletteItem } from '../../services/overlays/overlay.service-model';
 
 beforeAll(() => {
   // Radix Popover uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
@@ -22,7 +20,7 @@ beforeAll(() => {
 });
 
 describe('OverlayCommandPalettePresentational', () => {
-  const sampleItems: OverlayCommandPaletteItem[] = [
+  const sampleItems: CommandPaletteItem[] = [
     { id: 'open', label: 'Open File' },
     { id: 'save', label: 'Save File' },
     { id: 'close', label: 'Close Tab' },
@@ -115,7 +113,7 @@ describe('OverlayCommandPalettePresentational', () => {
 
     it('should not call onSelect when a disabled item is clicked', () => {
       const onSelect = vi.fn();
-      const items: OverlayCommandPaletteItem[] = [
+      const items: CommandPaletteItem[] = [
         { id: 'disabled-item', label: 'Cannot Click', disabled: true },
       ];
 
@@ -232,7 +230,7 @@ describe('OverlayCommandPalettePresentational', () => {
 
   describe('grouped items', () => {
     it('should render group headings when items have group keys', () => {
-      const groupedItems: OverlayCommandPaletteItem[] = [
+      const groupedItems: CommandPaletteItem[] = [
         { id: 'open', label: 'Open File', group: 'File' },
         { id: 'save', label: 'Save File', group: 'File' },
         { id: 'find', label: 'Find', group: 'Edit' },

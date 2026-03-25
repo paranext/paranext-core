@@ -32,28 +32,10 @@ import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-util
 
 // ── Public Types ──
 
-/** A single item in the command palette */
-export type OverlayCommandPaletteItem = {
-  /** Unique identifier returned when this item is selected */
-  id: string;
-  /** Primary display text */
-  label: string | LocalizeKey;
-  /** Secondary description text displayed below the label */
-  description?: string | LocalizeKey;
-  /** Optional icon displayed to the left of the label */
-  icon?: string;
-  /** Optional badge text (e.g., "Deprecated", "Disallowed") */
-  badge?: string | LocalizeKey;
-  /** Optional group key for visual sectioning with group headers */
-  group?: string;
-  /** Whether the item is grayed out and non-selectable. Defaults to false. */
-  disabled?: boolean;
-};
-
 /** Props for the presentational OverlayCommandPalettePresentational component */
 export type OverlayCommandPalettePresentationalProps = {
   /** The selectable items to display */
-  items: OverlayCommandPaletteItem[];
+  items: CommandPaletteItem[];
   /** Document-relative position for the palette anchor. Omit for centered mode. */
   position?: { x: number; y: number };
   /** Optional anchor dimensions */
@@ -86,7 +68,7 @@ function PaletteItem({
   item,
   onSelect,
 }: {
-  item: OverlayCommandPaletteItem;
+  item: CommandPaletteItem;
   onSelect: (id: string) => void;
 }) {
   // Build a searchable value from label + description + badge for cmdk filtering
@@ -129,11 +111,11 @@ function GroupedItems({
   items,
   onSelect,
 }: {
-  items: OverlayCommandPaletteItem[];
+  items: CommandPaletteItem[];
   onSelect: (id: string) => void;
 }) {
   const grouped = useMemo(() => {
-    const groups = new Map<string, OverlayCommandPaletteItem[]>();
+    const groups = new Map<string, CommandPaletteItem[]>();
     items.forEach((item) => {
       const key = item.group ?? '';
       const arr = groups.get(key);

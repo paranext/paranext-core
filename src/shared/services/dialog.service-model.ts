@@ -1,4 +1,6 @@
 import {
+  ALERT_DIALOG_TYPE,
+  CONFIRM_DIALOG_TYPE,
   DialogTabTypes,
   DialogTypes,
   SelectProjectDialogOptions,
@@ -10,6 +12,28 @@ import {
  * Prompt the user for responses with dialogs
  */
 export interface DialogService {
+  /**
+   * Shows an alert dialog
+   *
+   * @param dialogType The alert dialog type
+   * @param options Options for the alert dialog including prompt text
+   * @returns Returns `true` when the user acknowledges, or `undefined` if cancelled
+   */
+  showDialog(
+    dialogType: typeof ALERT_DIALOG_TYPE,
+    options: DialogTypes[typeof ALERT_DIALOG_TYPE]['options'],
+  ): Promise<DialogTypes[typeof ALERT_DIALOG_TYPE]['responseType'] | undefined>;
+  /**
+   * Shows a confirm dialog
+   *
+   * @param dialogType The confirm dialog type
+   * @param options Options for the confirm dialog including prompt text
+   * @returns Returns `true` if confirmed, `false` if declined or cancelled
+   */
+  showDialog(
+    dialogType: typeof CONFIRM_DIALOG_TYPE,
+    options: DialogTypes[typeof CONFIRM_DIALOG_TYPE]['options'],
+  ): Promise<DialogTypes[typeof CONFIRM_DIALOG_TYPE]['responseType'] | undefined>;
   /**
    * Shows a dialog to the user and prompts the user to respond
    *

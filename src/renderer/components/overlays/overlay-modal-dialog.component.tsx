@@ -44,31 +44,12 @@ const FALLBACK_TITLE_DIALOG = 'Dialog';
 
 // ── Public Types ──
 
-/** The supported modal dialog types */
-export type OverlayModalDialogType = 'alert' | 'confirm';
-
-/** Options for each modal dialog type, keyed by dialog type */
-export interface OverlayModalDialogOptions {
-  alert: {
-    title?: string | LocalizeKey;
-    message: string | LocalizeKey;
-    okLabel?: string | LocalizeKey;
-  };
-  confirm: {
-    title?: string | LocalizeKey;
-    message: string | LocalizeKey;
-    okLabel?: string | LocalizeKey;
-    cancelLabel?: string | LocalizeKey;
-    destructive?: boolean;
-  };
-}
-
 /** Props for the presentational OverlayModalDialogPresentational component */
 export type OverlayModalDialogPresentationalProps = {
   /** Which dialog variant to render */
-  dialogType: OverlayModalDialogType;
+  dialogType: ModalDialogType;
   /** Type-specific dialog configuration */
-  options: OverlayModalDialogOptions[OverlayModalDialogType];
+  options: ModalDialogOptions[ModalDialogType];
   /** Called when the dialog resolves with a result */
   onResolve: (result: unknown) => void;
   /** Called when the dialog is dismissed without a result */
@@ -82,7 +63,7 @@ function AlertDialogBody({
   options,
   onOk,
 }: {
-  options: OverlayModalDialogOptions['alert'];
+  options: ModalDialogOptions['alert'];
   onOk: () => void;
 }) {
   return (
@@ -101,7 +82,7 @@ function ConfirmDialogBody({
   onOk,
   onCancel,
 }: {
-  options: OverlayModalDialogOptions['confirm'];
+  options: ModalDialogOptions['confirm'];
   onOk: () => void;
   onCancel: () => void;
 }) {
@@ -121,11 +102,11 @@ function ConfirmDialogBody({
 }
 
 /** Determines the appropriate ARIA role for the dialog */
-function getDialogRole(dialogType: OverlayModalDialogType): 'alertdialog' | 'dialog' {
+function getDialogRole(dialogType: ModalDialogType): 'alertdialog' | 'dialog' {
   return dialogType === 'alert' || dialogType === 'confirm' ? 'alertdialog' : 'dialog';
 }
 
-function getFallbackTitle(dialogType: OverlayModalDialogType): string {
+function getFallbackTitle(dialogType: ModalDialogType): string {
   switch (dialogType) {
     case 'alert':
       return FALLBACK_TITLE_ALERT;
@@ -137,8 +118,8 @@ function getFallbackTitle(dialogType: OverlayModalDialogType): string {
 }
 
 function renderDialogBody(
-  dialogType: OverlayModalDialogType,
-  options: OverlayModalDialogOptions[OverlayModalDialogType],
+  dialogType: ModalDialogType,
+  options: ModalDialogOptions[ModalDialogType],
   onResolve: (result: unknown) => void,
   handleCancel: () => void,
 ): ReactNode {
@@ -148,7 +129,7 @@ function renderDialogBody(
         <AlertDialogBody
           // TS can't narrow options union via dialogType; switch case guarantees the type
           // eslint-disable-next-line no-type-assertion/no-type-assertion
-          options={options as OverlayModalDialogOptions['alert']}
+          options={options as ModalDialogOptions['alert']}
           onOk={() => onResolve(true)}
         />
       );
@@ -157,7 +138,7 @@ function renderDialogBody(
         <ConfirmDialogBody
           // TS can't narrow options union via dialogType; switch case guarantees the type
           // eslint-disable-next-line no-type-assertion/no-type-assertion
-          options={options as OverlayModalDialogOptions['confirm']}
+          options={options as ModalDialogOptions['confirm']}
           onOk={() => onResolve(true)}
           onCancel={handleCancel}
         />

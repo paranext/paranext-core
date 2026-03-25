@@ -72,6 +72,12 @@ vi.mock('@shared/services/window.service', () => ({
   },
 }));
 
+vi.mock('@shared/services/localization.service', () => ({
+  localizationService: {
+    getLocalizedStrings: vi.fn(() => Promise.resolve({})),
+  },
+}));
+
 // Import the service after mocks are set up
 // eslint-disable-next-line import/first
 import { overlayService, resetDebounceState, showModalDialogOverlay } from './overlay.service-host';
@@ -698,6 +704,8 @@ describe('overlay.service-host', () => {
       vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
       const promise = overlayService.showContextMenu('ext.testWebView', 'aria-webview');
 
+      // Flush getWebViewMenu promise, then announceLocalizedToScreenReader's getLocalizedStrings
+      await Promise.resolve();
       await Promise.resolve();
 
       const region = document.querySelector('[aria-live="assertive"]');

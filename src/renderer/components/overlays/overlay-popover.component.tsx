@@ -27,41 +27,10 @@ import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-util
 
 // ── Public Types ──
 
-/** An action button displayed at the bottom of a card-type popover */
-export type OverlayPopoverAction = {
-  id: string;
-  label: string | LocalizeKey;
-  variant?: 'default' | 'destructive' | 'secondary';
-};
-
-/**
- * The content to display inside a popover. Discriminated union on `type`:
- *
- * - `'text'` — Simple text with an optional title and a plain-text body.
- * - `'markdown'` — Markdown content rendered with full formatting support.
- * - `'card'` — A card with title, body text, and action buttons.
- */
-export type OverlayPopoverContentType =
-  | {
-      type: 'text';
-      title?: string | LocalizeKey;
-      body: string | LocalizeKey;
-    }
-  | {
-      type: 'markdown';
-      markdown: string | LocalizeKey;
-    }
-  | {
-      type: 'card';
-      title?: string | LocalizeKey;
-      body: string | LocalizeKey;
-      actions: OverlayPopoverAction[];
-    };
-
 /** Props for the presentational OverlayPopoverPresentational component */
 export type OverlayPopoverPresentationalProps = {
   /** The content to display inside the popover */
-  content: OverlayPopoverContentType;
+  content: PopoverContentModel;
   /** Document-relative position for the popover anchor */
   position: { x: number; y: number };
   /** Optional anchor dimensions */
@@ -98,7 +67,7 @@ function PopoverTitle({ title }: { title?: string }) {
 function TextContentRenderer({
   content,
 }: {
-  content: Extract<OverlayPopoverContentType, { type: 'text' }>;
+  content: Extract<PopoverContentModel, { type: 'text' }>;
 }) {
   return (
     <>
@@ -112,7 +81,7 @@ function TextContentRenderer({
 function MarkdownContentRenderer({
   content,
 }: {
-  content: Extract<OverlayPopoverContentType, { type: 'markdown' }>;
+  content: Extract<PopoverContentModel, { type: 'markdown' }>;
 }) {
   return <MarkdownRenderer markdown={content.markdown} className="tw-prose-sm" />;
 }
@@ -122,7 +91,7 @@ function CardContentRenderer({
   content,
   onAction,
 }: {
-  content: Extract<OverlayPopoverContentType, { type: 'card' }>;
+  content: Extract<PopoverContentModel, { type: 'card' }>;
   onAction: (actionId: string) => void;
 }) {
   return (
@@ -150,7 +119,7 @@ function PopoverBody({
   content,
   onAction,
 }: {
-  content: OverlayPopoverContentType;
+  content: PopoverContentModel;
   onAction: (actionId: string) => void;
 }) {
   switch (content.type) {

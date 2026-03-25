@@ -14,6 +14,7 @@ import { readDirection } from '@/utils/dir-helper.util';
  */
 const Dialog = DialogPrimitive.Root;
 
+// CUSTOM JSDoc comments added to all sub-components for documentation
 /** Button or element that opens the dialog when clicked. */
 const DialogTrigger = DialogPrimitive.Trigger;
 
