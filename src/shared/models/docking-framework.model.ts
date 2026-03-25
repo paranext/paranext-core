@@ -204,8 +204,14 @@ export type OnLayoutChangeRCDock = (
 
 /** Properties related to the dock layout */
 export type PapiDockLayout = {
-  /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
-  dockLayout: DockLayout;
+  /**
+   * The rc-dock dock layout React element ref. Used to perform operations on the layout.
+   *
+   * @deprecated Use the `find` and `loadLayout` methods on `PapiDockLayout` instead of accessing
+   *   the raw DockLayout. This property will be removed once all call sites are migrated. It may be
+   *   `undefined` in layout implementations that do not use rc-dock (e.g., Simple Mode).
+   */
+  dockLayout: DockLayout | undefined;
   /**
    * A ref to a function that runs when the layout changes. We set this ref to our
    * {@link onLayoutChange} function
@@ -344,4 +350,19 @@ export type PapiDockLayout = {
    * service is currently all shared code. Refactor should happen in #203
    */
   testLayout: LayoutBase;
+  /**
+   * Find a tab by ID or by a predicate function. Replaces direct access to
+   * `dockLayout.dockLayout.find()`.
+   *
+   * @param idOrPredicate A tab ID string, or a predicate function that receives each item in the
+   *   layout and returns `true` for the desired match
+   * @returns The found tab info, or `undefined` if not found
+   */
+  find: (idOrPredicate: string | ((item: unknown) => boolean)) => TabInfo | undefined;
+  /**
+   * Load a layout into the dock. Replaces direct access to `dockLayout.dockLayout.loadLayout()`.
+   *
+   * @param layout The layout to load
+   */
+  loadLayout: (layout: LayoutBase) => void;
 };

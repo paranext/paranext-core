@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import DockLayout from 'rc-dock';
+import DockLayout, { LayoutBase } from 'rc-dock';
 import { Filter } from 'rc-dock/lib/Algorithm';
 
 import {
@@ -99,6 +99,22 @@ export function PlatformDockLayout() {
         getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
       focusTab: (tabId: string) => focusTab(dockLayoutRef.current, tabId),
       testLayout,
+      find: (idOrPredicate: string | ((item: unknown) => boolean)) => {
+        const result = dockLayoutRef.current.find(
+          // rc-dock's find accepts string | ((item) => boolean)
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          idOrPredicate as Parameters<DockLayout['find']>[0],
+        );
+        if (result && isTab(result)) {
+          // We know tabs in the dock layout are RCDockTabInfo
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          return result as RCDockTabInfo;
+        }
+        return undefined;
+      },
+      loadLayout: (layout: LayoutBase) => {
+        dockLayoutRef.current.loadLayout(layout);
+      },
     });
     return () => {
       unsub();
