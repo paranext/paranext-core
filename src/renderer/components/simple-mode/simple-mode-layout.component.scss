@@ -1,0 +1,116 @@
+.simple-mode-inset {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.simple-mode-panels {
+  flex: 1;
+  overflow: hidden;
+}
+
+.simple-mode-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted-foreground, #888);
+  font-size: 1.1rem;
+}
+
+/* Panel component */
+.simple-mode-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--background, #fff);
+}
+
+.simple-mode-panel-tabbar {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  min-height: 36px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  background: var(--muted, #f4f4f5);
+  padding: 0 4px;
+  gap: 2px;
+}
+
+.simple-mode-panel-tabs {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow-x: auto;
+  gap: 2px;
+
+  /* Hide scrollbar */
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.simple-mode-panel-toolbar-end {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.simple-mode-tab-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground, #71717a);
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+
+  &:hover {
+    background: var(--accent, #e4e4e7);
+    color: var(--accent-foreground, #18181b);
+  }
+}
+
+.simple-mode-tab-button-active {
+  background: var(--background, #fff);
+  color: var(--foreground, #09090b);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.simple-mode-tab-label {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.simple-mode-panel-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.simple-mode-panel-tab-content {
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.simple-mode-panel-webview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  color: var(--muted-foreground, #888);
+}

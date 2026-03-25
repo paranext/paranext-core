@@ -641,7 +641,7 @@ async function loadLayout(layout?: LayoutBase): Promise<void> {
   const dockLayoutVar = await getDockLayout();
   const layoutToLoad = layout || getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
 
-  dockLayoutVar.dockLayout.loadLayout(layoutToLoad);
+  dockLayoutVar.loadLayout(layoutToLoad);
   if (layout) {
     // A layout was provided, meaning this is a layout change. Since `dockLayout.loadLayout` doesn't
     // run `onLayoutChange`, we run it manually
@@ -1540,21 +1540,17 @@ export const openWebView = async (
   // Find existing webView if one exists and handle it if it does
   if (optionsDefaulted.existingId) {
     // Expect this to be a tab.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const existingWebView = (await getDockLayout()).dockLayout.find(
+    const existingWebView = (await getDockLayout()).findTab(
       optionsDefaulted.existingId === '?'
         ? // If they provided '?', that means look for any webview with a matching webViewType
           (item) => {
-            // This is not a webview
-            if (!('data' in item)) return false;
-
-            // Find any webview with the specified webViewType. Type assert the unknown `data`.
+            // Find any webview with the specified webViewType
             // eslint-disable-next-line no-type-assertion/no-type-assertion
-            return (item.data as WebViewDefinition).webViewType === webViewType;
+            return (item.data as WebViewDefinition | undefined)?.webViewType === webViewType;
           }
         : // If they provided any other string, look for a webview with that ID
           optionsDefaulted.existingId,
-    ) as TabInfo | undefined;
+    );
 
     // If we found an existing WebView, handle it and return it
     if (existingWebView) {
