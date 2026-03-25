@@ -48,9 +48,9 @@ export function CommandNavigator({
   const [focusedBookIndex, setFocusedBookIndex] = useState(-1);
   const [focusedChapter, setFocusedChapter] = useState(-1);
 
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const chapterGridRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(undefined);
+  const listRef = useRef<HTMLDivElement>(undefined);
+  const chapterGridRef = useRef<HTMLDivElement>(undefined);
 
   // #region Available books and filtering
 
@@ -193,9 +193,9 @@ export function CommandNavigator({
     if (!isOpen) return undefined;
     const timer = setTimeout(() => {
       if (!listRef.current || searchQuery) return;
-      const currentBookBtn = listRef.current.querySelector(
+      const currentBookBtn = listRef.current.querySelector<HTMLElement>(
         `[data-book-id="${scrRef.book}"]`,
-      ) as HTMLElement;
+      );
       if (currentBookBtn) {
         currentBookBtn.scrollIntoView({ block: 'center', behavior: 'instant' });
       }
@@ -209,12 +209,12 @@ export function CommandNavigator({
 
   const getGridCols = useCallback((): number => {
     if (!chapterGridRef.current) return 10;
-    const buttons = chapterGridRef.current.querySelectorAll('[data-chapter-btn]');
+    const buttons = chapterGridRef.current.querySelectorAll<HTMLElement>('[data-chapter-btn]');
     if (buttons.length < 2) return 1;
-    const firstTop = (buttons[0] as HTMLElement).offsetTop;
+    const firstTop = buttons[0].offsetTop;
     let cols = 0;
-    for (let i = 0; i < buttons.length; i++) {
-      if ((buttons[i] as HTMLElement).offsetTop === firstTop) cols++;
+    for (let i = 0; i < buttons.length; i += 1) {
+      if (buttons[i].offsetTop === firstTop) cols += 1;
       else break;
     }
     return cols || 1;
@@ -386,8 +386,8 @@ export function CommandNavigator({
     if (!chapterGridRef.current) return;
     const targetChapter = focusedChapter >= 0 ? focusedChapter : undefined;
     if (targetChapter === undefined) return;
-    const buttons = chapterGridRef.current.querySelectorAll('[data-chapter-btn]');
-    const el = buttons[targetChapter] as HTMLElement;
+    const buttons = chapterGridRef.current.querySelectorAll<HTMLElement>('[data-chapter-btn]');
+    const el = buttons[targetChapter];
     if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [focusedChapter]);
 
@@ -563,7 +563,7 @@ export function CommandNavigator({
               </span>
             </div>
             <div className="tw-flex tw-flex-col tw-gap-1">
-              {recentSearches!.map((entry) => {
+              {recentSearches?.map((entry) => {
                 const isCurrent =
                   entry.book === scrRef.book && entry.chapterNum === scrRef.chapterNum;
                 return (
@@ -630,11 +630,11 @@ export function CommandNavigator({
         ) : (
           <CommandList ref={listRef} id={id}>
             {/* Book list grouped by testament */}
-            {Object.entries(filteredBooksByType).map(([type, books]) => {
+            {([Section.OT, Section.NT, Section.DC, Section.Extra] as const).map((type) => {
+              const books = filteredBooksByType[type];
               if (books.length === 0) return undefined;
               return (
-                // eslint-disable-next-line no-type-assertion/no-type-assertion
-                <CommandGroup key={type} heading={getSectionLabel(type as Section)}>
+                <CommandGroup key={type} heading={getSectionLabel(type)}>
                   {books.map((bookId) => {
                     const globalIdx = filteredBooks.indexOf(bookId);
                     const isFocused = focusedBookIndex === globalIdx;
