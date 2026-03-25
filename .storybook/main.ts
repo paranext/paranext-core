@@ -94,6 +94,19 @@ const config: StorybookConfig = {
           ) {
             return { ...u, options: { ...u.options, importLoaders: u.options.importLoaders + 1 } };
           }
+          // Object form without importLoaders: add importLoaders: 1
+          if (
+            !!u &&
+            typeof u === 'object' &&
+            typeof u !== 'function' &&
+            'loader' in u &&
+            u.loader === 'css-loader' &&
+            (!('options' in u) || typeof u.options !== 'function')
+          ) {
+            const existingOptions =
+              'options' in u && typeof u.options === 'object' ? (u.options ?? {}) : {};
+            return { ...u, options: { ...existingOptions, importLoaders: 1 } };
+          }
           return u;
         });
         newUse.splice(cssIdx + 1, 0, 'postcss-loader');
