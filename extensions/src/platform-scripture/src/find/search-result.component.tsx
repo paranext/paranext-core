@@ -1,5 +1,5 @@
 import { logger } from '@papi/frontend';
-import { Copy, X } from 'lucide-react';
+import { ArrowRight, Copy, X } from 'lucide-react';
 import { Button, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
 import {
   getErrorMessage,
@@ -10,6 +10,7 @@ import {
 import { FindResult } from 'platform-scripture';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
+import { applyPreserveCase } from './find.utils';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: boolean };
 
@@ -28,6 +29,14 @@ export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%webView_find_replaced%',
 ];
 
+/** Configuration for replacement operations */
+export interface ReplaceConfig {
+  /** The replacement string to use */
+  term: string;
+  /** Whether to apply preserve-case transformation to the replacement */
+  preserveCase: boolean;
+}
+
 /** Props interface for the SearchResult component */
 interface SearchResultProps {
   /** The search result data to display */
@@ -39,7 +48,7 @@ interface SearchResultProps {
   /** UsjReaderWriter for the book this search result occurred in */
   usjReaderWriter: UsjReaderWriter | undefined;
   /** Map of book IDs to their localized display names */
-  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
   /** Callback function called when the user clicks on this search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
@@ -52,6 +61,8 @@ interface SearchResultProps {
   isReplaceMode: boolean;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
+  /** Configuration for replacement preview (used in replace mode) */
+  replaceConfig?: ReplaceConfig;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -94,6 +105,7 @@ export default function SearchResult({
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  replaceConfig,
 }: SearchResultProps) {
   // useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
@@ -242,14 +254,21 @@ export default function SearchResult({
     </>
   );
 
+  let previewReplacement: string | undefined;
+  if (isReplaceMode && !searchResult.isReplaced && replaceConfig) {
+    previewReplacement = replaceConfig.preserveCase
+      ? applyPreserveCase(searchResult.text ?? '', replaceConfig.term)
+      : replaceConfig.term;
+  }
+
+  const bookData = localizedBookData.get(searchResult.start.verseRef.book);
+
   const cardContent = (
     <div className="tw-text-xs tw-font-medium tw-flex tw-items-center tw-gap-2 tw-min-h-8">
-      <div className="tw-shrink-0">
-        {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
-          searchResult.start.verseRef.book}{' '}
+      <div className="tw-shrink-0 tw-font-semibold">
+        {bookData?.localizedName ?? bookData?.localizedId ?? searchResult.start.verseRef.book}{' '}
         {searchResult.start.verseRef.chapterNum}:
-        {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}{' '}
-        <span className="scripture-font">{searchResult.text ?? ''}</span>
+        {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}
       </div>
       {searchResult.isReplaced && (
         <>
@@ -281,6 +300,25 @@ export default function SearchResult({
   );
 
   const additionalSelectedContent = (
+    <div className="tw-text-xs tw-font-normal tw-text-muted-foreground scripture-font">
+      {getFocusedVerseText()}
+    </div>
+    <>
+      <div className="tw-text-xs tw-m-1 tw-font-normal tw-text-muted-foreground scripture-font">
+        {getFocusedVerseText()}
+      </div>
+      {previewReplacement !== undefined && (
+        <div className="tw-flex tw-items-center tw-gap-1.5 tw-text-xs">
+          <span className="scripture-font tw-line-through tw-text-muted-foreground">
+            {searchResult.text ?? ''}
+          </span>
+          <ArrowRight className="tw-h-3 tw-w-3 tw-shrink-0 rtl:tw-rotate-180" />
+          <span className="scripture-font tw-inline-block tw-min-w-3 tw-rounded-sm tw-bg-red-100 tw-px-1 tw-text-red-600 dark:tw-bg-red-950 dark:tw-text-red-400">
+            {previewReplacement}
+          </span>
+        </div>
+      )}
+    </>
     <div className="tw-text-xs tw-m-1 tw-font-normal tw-text-muted-foreground scripture-font">
       {getFocusedVerseText()}
     </div>
@@ -294,7 +332,7 @@ export default function SearchResult({
         }${searchResult.text}${globalResultsIndex}`}
         isHidden={searchResult.isHidden}
         isSelected={isSelected}
-        className={searchResult.isReplaced ? '!tw-bg-red-100 dark:!tw-bg-red-950' : undefined}
+        className={`tw-border-0 tw-rounded-none${searchResult.isReplaced ? ' !tw-bg-red-100 dark:!tw-bg-red-950' : ''}`}
         onSelect={() => onResultClick(searchResult, globalResultsIndex)}
         selectedButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
         hoverButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
