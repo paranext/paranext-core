@@ -11,6 +11,7 @@ import { logger } from '@papi/frontend';
 import { LocalizedBookData } from './find-types';
 import SearchResult, {
   HidableFindResult,
+  ReplaceConfig,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './search-result.component';
 
@@ -22,7 +23,7 @@ type SearchResultsInBookProps = {
   /** The list of search results in this book */
   results: HidableFindResult[];
   /** Map of book IDs to their localized display names */
-  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
   /** The index of the currently focused/selected result in this list */
   focusedResultIndex: number | undefined;
   /** Callback function called when the user clicks on a search result */
@@ -35,6 +36,8 @@ type SearchResultsInBookProps = {
   onCancelReplace?: () => void;
   /** Whether the find WebView is currently in replace mode */
   isReplaceMode: boolean;
+  /** Configuration for replacement preview (used in replace mode) */
+  replaceConfig?: ReplaceConfig;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
   localizedStrings: {
@@ -56,6 +59,7 @@ export function SearchResultsInBook({
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  replaceConfig,
 }: SearchResultsInBookProps) {
   const verseRefForBook = useMemo(() => {
     return {
@@ -111,6 +115,7 @@ export function SearchResultsInBook({
           localizedStrings={localizedStrings}
           isReplaceMode={isReplaceMode}
           isReplacing={isReplacing}
+          replaceConfig={replaceConfig}
         />
       ))}
     </>
