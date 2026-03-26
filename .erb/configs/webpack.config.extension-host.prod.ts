@@ -14,6 +14,11 @@ deleteSourceMaps();
 const configuration: webpack.Configuration = {
   entry: {
     'extension-host': path.join(webpackPaths.srcExtensionHostPath, 'extension-host.ts'),
+    'database.worker': path.join(
+      webpackPaths.srcExtensionHostPath,
+      'services',
+      'database.worker.ts',
+    ),
   },
 
   output: {
@@ -39,7 +44,7 @@ const extensionHostConfig = mergeWithCustomize({
     // We don't want main's DefinePlugin so we can have different ones
     if (key === 'plugins') {
       return [
-        ...a.filter((plugin) => {
+        ...a.filter((plugin: object) => {
           if (!(plugin instanceof webpack.DefinePlugin)) return true;
           return false;
         }),

@@ -14,9 +14,6 @@
     "rebuild": "node -r ts-node/register ../../.erb/scripts/electron-rebuild.js",
     "postinstall": "npm run rebuild"
   },
-  "dependencies": {
-    "sqlite3": "5.1.6"
-  },
   "volta": {
     "extends": "../../package.json"
   }

@@ -49,7 +49,7 @@ const jsdocSources = new Map<string, Source>();
 const jsdocDestinations = new Set<Destination>();
 
 // Find all sources and destinations in one pass through the file
-const jsdocRegex = /\/\*\*(?: *\n[\s]*?\*)*?[\s]*?JSDOC (SOURCE|DESTINATION) (\w+)[\s\S]*?\*\//g;
+const jsdocRegex = /\/\*\*(?: *\n[\s]*?\*)*?[\s]*?JSDOC (SOURCE|DESTINATION) ([\w.]+)[\s\S]*?\*\//g;
 let hitFatalError = false;
 let match = jsdocRegex.exec(papiDTS);
 // When no regex match is found, null is returned
@@ -95,7 +95,7 @@ if (hitFatalError) exit(-1);
 
 // Remove all the "JSDOC SOURCE targetName" portions of the comments as a final clean up
 papiDTS = papiDTS.replace(
-  /\/\*\*(?: *\n[\s]*?\*)*?[\s]*JSDOC SOURCE \w+(?:\n \*(?! ))?(\n?)/g,
+  /\/\*\*(?: *\n[\s]*?\*)*?[\s]*JSDOC SOURCE [\w.]+(?:\n \*(?! ))?(\n?)/g,
   '/**$1',
 );
 
