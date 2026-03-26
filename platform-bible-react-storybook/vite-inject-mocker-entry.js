@@ -4170,6 +4170,12 @@ video:where(.pr-twp,.pr-twp *) {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
 }
+.\\[\\&\\>span\\]\\:tw-flex-1>span {
+  flex: 1 1 0%;
+}
+.\\[\\&\\>span\\]\\:tw-text-start>span {
+  text-align: start;
+}
 .\\[\\&\\>svg\\+div\\]\\:tw-translate-y-\\[-3px\\]>svg+div {
   --tw-translate-y: -3px;
   transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
