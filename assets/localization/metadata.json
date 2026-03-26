@@ -5,6 +5,27 @@
   "%about_db_ip_attribution_terms%": {
     "fallbackKey": "%Paratext.Base.SplashScreen.Splash_Load.&quot;Terms&quot;%"
   },
+  "%data_loading_error_paratextData_internet_disabled%": {
+    "deprecationInfo": {
+      "date": "2025-09-24",
+      "message": "We made the internet settings its own page so the localized string needs to indicate that. The new localized string key is %data_loading_error_internetAccess_disabled%."
+    }
+  },
+  "%footnoteEditor_callerDropdown_label%": {
+    "fallbackKey": "%Paratext.Base.ScriptureEditor.NoteCallerForm.NoteCallerForm.Text%"
+  },
+  "%footnoteEditor_cancelButton_tooltip%": {
+    "fallbackKey": "%general_cancel%"
+  },
+  "%footnoteEditor_noteType_crossReference_label%": {
+    "fallbackKey": "%Paratext.TextForm.crossReferenceToolStripMenuItem.Text%"
+  },
+  "%footnoteEditor_noteType_endNote_label%": {
+    "fallbackKey": "%Paratext.TextForm.endNoteToolStripMenuItem.Text%"
+  },
+  "%footnoteEditor_noteType_footnote_label%": {
+    "fallbackKey": "%Paratext.TextForm.footnoteToolStripMenuItem.Text%"
+  },
   "%general_cancel%": {
     "fallbackKey": "%MainForm_90%"
   },
@@ -22,6 +43,10 @@
   },
   "%project_settings_project_group1_label%": {
     "fallbackKey": "%project_settings_platform_group1_label%"
+  },
+  "%redoButton_tooltip%": {
+    "notes": "The tooltip text for the redo button in the common undo/redo control used in various editors.",
+    "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiRedo.ToolTipText%"
   },
   "%resources_type_ER%": {
     "fallbackKey": "%ProjectType_17%"
@@ -65,14 +90,12 @@
       "message": "This exists to test deprecating localized strings. Do not remove or use."
     }
   },
+  "%undoButton_tooltip%": {
+    "notes": "The tooltip text for the undo button in the common undo/redo control used in various editors.",
+    "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
+  },
   "%yes%": {
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
     "fallbackKey": "%confirm%"
-  },
-  "%data_loading_error_paratextData_internet_disabled%": {
-    "deprecationInfo": {
-      "date": "2025-09-24",
-      "message": "We made the internet settings its own page so the localized string needs to indicate that. The new localized string key is %data_loading_error_internetAccess_disabled%."
-    }
   }
 }

@@ -3,7 +3,7 @@ import { HomeIcon } from 'lucide-react';
 import { CardTitle } from 'platform-bible-react';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { ReactElement, useEffect, useState } from 'react';
-import { getLocalizedStrings } from '../../../../.storybook/localization-utils';
+import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import { Home, HomeProps, LocalProjectInfo, HOME_STRING_KEYS } from './home.component';
 
 // Get all localized strings needed by the Home component

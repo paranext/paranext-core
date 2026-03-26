@@ -3,7 +3,8 @@ import {
   UndoRedoButtons,
   type UndoRedoButtonsLocalizedStrings,
 } from '@/components/basics/undo-redo-buttons.component';
-import standardStrings from '@/localizedStrings.json';
+import enStrings from '../../../../../assets/localization/en.json';
+import esStrings from '../../../../../assets/localization/es.json';
 
 const meta: Meta<typeof UndoRedoButtons> = {
   title: 'Basics/UndoRedoButtons',
@@ -38,8 +39,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const defaultLocalizedStrings: UndoRedoButtonsLocalizedStrings = {
-  '%undoButton_tooltip%': standardStrings.localizedStrings.en['%undoButton_tooltip%'],
-  '%redoButton_tooltip%': standardStrings.localizedStrings.en['%redoButton_tooltip%'],
+  '%undoButton_tooltip%': enStrings['%undoButton_tooltip%'],
+  '%redoButton_tooltip%': enStrings['%redoButton_tooltip%'],
 };
 
 export const Default: Story = {
@@ -107,8 +108,8 @@ export const CustomLocalizedStrings: Story = {
     canUndo: true,
     canRedo: true,
     localizedStrings: {
-      '%undoButton_tooltip%': standardStrings.localizedStrings.es['%undoButton_tooltip%'],
-      '%redoButton_tooltip%': standardStrings.localizedStrings.es['%redoButton_tooltip%'],
+      '%undoButton_tooltip%': esStrings['%undoButton_tooltip%'],
+      '%redoButton_tooltip%': esStrings['%redoButton_tooltip%'],
     },
   },
   parameters: {

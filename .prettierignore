@@ -49,9 +49,6 @@ dist
 # lib/platform-bible-react
 # lib/platform-bible-utils
 
-# config files not included in tsconfig
-postcss.config.js
-
 # generated files
 package-lock.json
 bin

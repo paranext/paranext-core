@@ -6,9 +6,9 @@
  * JavaScript logic (comparisons, conditionals, etc.) that never appear in the DOM.
  */
 
-import libStrings from '../lib/platform-bible-react/src/localizedStrings.json';
+import type { LocalizedStringDataContribution, LanguageStrings } from 'platform-bible-utils';
 
-type LocalizedStringsFile = { localizedStrings: { en: Record<string, string> } };
+import coreEnStrings from '../assets/localization/en.json';
 
 // Dynamically discover all extension localized string files via webpack's require.context.
 // This eliminates the need to manually update this file when extensions are added or renamed.
@@ -19,7 +19,7 @@ const extensionStringsCtx = (require as any).context(
   '../extensions/src',
   true,
   /contributions\/localizedStrings\.json$/,
-);
+) as ((key: string) => LocalizedStringDataContribution) & { keys: () => string[] };
 
 /** Build a map of all localization keys to English strings */
 function buildLocalizationMap(): Record<string, string> {
@@ -27,30 +27,26 @@ function buildLocalizationMap(): Record<string, string> {
 
   // Extract English strings from a localization file. Warn on key collisions so conflicts are
   // visible rather than silently resolved by last-writer-wins.
-  const addStrings = (enStrings: Record<string, string>) => {
+  const addStrings = (enStrings: LanguageStrings) => {
     Object.entries(enStrings).forEach(([key, value]: [string, string]) => {
       if (key in map && map[key] !== value) {
         // Intentional warning to surface key conflicts during Storybook development.
         // eslint-disable-next-line no-console
         console.warn(
-          `[localization-utils] Key collision: "${key}" already has value "${map[key]}", overwriting with "${value}"`,
+          `[localization.utils] Key collision: "${key}" already has value "${map[key]}", overwriting with "${value}"`,
         );
       }
       map[key] = value;
     });
   };
 
-  // Add library strings
-  // The JSON import lacks type information; cast to the known shape so we can safely access it.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  addStrings((libStrings as LocalizedStringsFile).localizedStrings.en);
+  // Add core base strings
+  addStrings(coreEnStrings);
 
   // Add all extension strings dynamically
   extensionStringsCtx.keys().forEach((key: string) => {
-    // webpack's require.context returns `any`; cast to the known shape to access its properties.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const mod = extensionStringsCtx(key) as LocalizedStringsFile;
-    addStrings(mod.localizedStrings.en);
+    const mod = extensionStringsCtx(key);
+    addStrings(mod.localizedStrings?.en ?? {});
   });
 
   return map;
@@ -72,7 +68,7 @@ export function getLocalizationMap(): Record<string, string> {
  * Usage in story:
  *
  * ```tsx
- * import { getLocalizedStrings } from '.storybook/localization-utils';
+ * import { getLocalizedStrings } from '.storybook/localization.utils';
  *
  * const strings = getLocalizedStrings(['%key1%', '%key2%']);
  * // returns { '%key1%': 'English text 1', '%key2%': 'English text 2' }

@@ -24,7 +24,13 @@ import {
 import '@/components/demo/scripture-editor/scripture-editor.stories.css';
 import FootnoteEditor from '@/components/advanced/footnote-editor/footnote-editor.component';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
-import localizedStrings from '@/localizedStrings.json';
+import enStrings from '../../../../../../assets/localization/en.json';
+import esStrings from '../../../../../../assets/localization/es.json';
+
+const localizedStringsByLanguage: Record<string, Record<string, string>> = {
+  en: enStrings,
+  es: esStrings,
+};
 
 const defaultScrRef: SerializedVerseRef = { book: 'PSA', chapterNum: 1, verseNum: 1 };
 
@@ -422,7 +428,7 @@ export const FootnoteEditorView: FootnoteEditorViewStory = {
               scrRef={args.scrRef ?? defaultScrRef}
               editorOptions={mergedOptions}
               defaultMarkerMenuTrigger={mergedOptions.markerMenuTrigger ?? '\\'}
-              localizedStrings={localizedStrings.localizedStrings?.[args.language]}
+              localizedStrings={localizedStringsByLanguage[args.language]}
               parentEditorRef={editorRef}
             />
           </PopoverContent>
