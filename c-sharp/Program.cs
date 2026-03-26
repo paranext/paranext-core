@@ -16,6 +16,7 @@ public static class Program
     {
         Console.WriteLine("Paranext data provider starting up");
         Thread.CurrentThread.Name = "Main";
+        var startupStopwatch = Stopwatch.StartNew();
 
         var listener = new ConsoleTraceListener
         {
@@ -32,14 +33,23 @@ public static class Program
         using PapiClient papi = new();
         try
         {
+            Console.WriteLine(
+                $"Startup timing: ConnectAsync starting at {startupStopwatch.ElapsedMilliseconds}ms"
+            );
             if (!await papi.ConnectAsync())
             {
                 Console.WriteLine("Paranext data provider could not connect");
                 return;
             }
+            Console.WriteLine(
+                $"Startup timing: ConnectAsync done at {startupStopwatch.ElapsedMilliseconds}ms"
+            );
 
             // Initialize the shared store early since papi uses it
             await SharedStoreService.InitializeAsync(papi);
+            Console.WriteLine(
+                $"Startup timing: SharedStoreService.InitializeAsync done at {startupStopwatch.ElapsedMilliseconds}ms"
+            );
             papi.SetSharedStore(SharedStoreService.GetSharedStore());
 
             // Log the ParatextData.dll assembly version then change it to 10.<our semver>
@@ -49,25 +59,43 @@ public static class Program
                 $"ParatextData.dll assembly version: {ParatextInfo.ParatextVersion}. Changing to {appVersion}"
             );
             ParatextInfo.ParatextVersion = appVersion;
+            Console.WriteLine(
+                $"Startup timing: AppInfo/version done at {startupStopwatch.ElapsedMilliseconds}ms"
+            );
 
             var paratextProjects = new LocalParatextProjects();
 
             // Adapted from Paratext's `Program.StaticInitialization`
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
+            Console.WriteLine(
+                $"Startup timing: ParatextDataSettings.Initialize done at {startupStopwatch.ElapsedMilliseconds}ms"
+            );
             PtxUtilsDataSettings.Initialize(new PersistedPtxUtilsSettings(papi));
+            Console.WriteLine(
+                $"Startup timing: PtxUtilsDataSettings.Initialize done at {startupStopwatch.ElapsedMilliseconds}ms"
+            );
 
             SettingsService.Initialize(papi);
+            Console.WriteLine(
+                $"Startup timing: SettingsService done at {startupStopwatch.ElapsedMilliseconds}ms"
+            );
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var inventoryDataProvider = new InventoryDataProvider(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
+            Console.WriteLine(
+                $"Startup timing: Task.WhenAll starting at {startupStopwatch.ElapsedMilliseconds}ms"
+            );
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
                 dblResources.RegisterDataProviderAsync(),
                 paratextRegistrationService.InitializeAsync()
+            );
+            Console.WriteLine(
+                $"Startup timing: Task.WhenAll done at {startupStopwatch.ElapsedMilliseconds}ms"
             );
 
             // Things that only run in our "noisy dev mode" go here

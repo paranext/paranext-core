@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Xml;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Users;
@@ -75,11 +76,22 @@ internal class LocalParatextProjects
             if (_isInitialized)
                 return;
 
+            var initStopwatch = Stopwatch.StartNew();
+
             // Make sure the necessary directory and files exist for the project root folder
             SetUpProjectRootFolder();
+            Console.WriteLine(
+                $"LocalParatextProjects timing: SetUpProjectRootFolder done at {initStopwatch.ElapsedMilliseconds}ms"
+            );
 
             // Set up the ScrTextCollection and read the projects in that folder
+            Console.WriteLine(
+                $"LocalParatextProjects timing: ParatextGlobals.Initialize starting at {initStopwatch.ElapsedMilliseconds}ms"
+            );
             ParatextGlobals.Initialize(ProjectRootFolder);
+            Console.WriteLine(
+                $"LocalParatextProjects timing: ParatextGlobals.Initialize done at {initStopwatch.ElapsedMilliseconds}ms"
+            );
 
             Console.WriteLine(
                 $"Projects loaded from {ProjectRootFolder}: {string.Join(",", GetScrTexts().Select(scrText => scrText.Name))}"
