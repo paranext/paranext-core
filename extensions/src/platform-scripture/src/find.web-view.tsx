@@ -63,6 +63,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FindFilters } from './find/find-filters.component';
 import { LocalizedBookData, SearchTextType } from './find/find-types';
+import { applyPreserveCase } from './find/find.utils';
 import {
   HidableFindResult,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
@@ -114,26 +115,6 @@ const defaultBooksPresent: string = '';
 const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
 const SEARCH_DEBOUNCE_DELAY_MS = 500;
-
-/**
- * Applies preserve-case transformation to the replacement text based on the casing of the matched
- * text:
- *
- * - ALL CAPS match → ALL CAPS replacement
- * - Title Case match (first letter capital) → Title Case replacement
- * - Otherwise → replacement as-is
- */
-function applyPreserveCase(matchedText: string, replacementText: string): string {
-  if (!replacementText || !matchedText) return replacementText;
-  if (matchedText === matchedText.toUpperCase() && matchedText !== matchedText.toLowerCase()) {
-    return replacementText.toUpperCase();
-  }
-  const firstChar = matchedText[0];
-  if (firstChar === firstChar.toUpperCase() && firstChar !== firstChar.toLowerCase()) {
-    return replacementText[0].toUpperCase() + replacementText.slice(1);
-  }
-  return replacementText;
-}
 
 /**
  * Returns a promise that resolves after `ms` milliseconds. The cancel function stored in
@@ -1540,6 +1521,11 @@ global.webViewComponent = function FindWebView({
                 focusedResultIndex={bookResults.findIndex(
                   ({ originalIndex }) => originalIndex === focusedResultIndex,
                 )}
+                replaceConfig={
+                  activeMode === 'replace' && replaceTerm
+                    ? { term: replaceTerm, preserveCase }
+                    : undefined
+                }
                 onResultClick={(result, indexInBookResults) =>
                   handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
                 }
