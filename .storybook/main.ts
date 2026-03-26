@@ -72,7 +72,7 @@ const config: StorybookConfig = {
               'loader' in u &&
               u.loader === 'css-loader'),
         );
-        if (cssIdx === -1) return rule;
+        if (cssIdx < 0) return rule;
         // Bump importLoaders by 1 so postcss-loader processes CSS @imports.
         // Handles both the plain string form ('css-loader') and the object form ({ loader: 'css-loader', options: {...} }).
         const newUse = useArr.map((u, i) => {

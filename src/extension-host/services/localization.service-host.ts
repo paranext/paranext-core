@@ -28,7 +28,6 @@ import {
   waitForResyncContributions,
 } from '@extension-host/services/contribution.service';
 import { LanguageInfo } from 'platform-bible-react';
-import platformBibleReactLocalizedStrings from 'platform-bible-react/localizedStrings.json';
 import { Canon } from '@sillsdev/scripture';
 
 /**
@@ -109,10 +108,8 @@ async function getLocalizedFileUris(): Promise<string[]> {
 /** Load the contents of all localization files from disk */
 async function loadAllLocalizationData() {
   const localizeFileUris = await getLocalizedFileUris();
-  // Initialize with platform-bible-react library strings as defaults; platform asset strings take precedence
   const baseLocalizedStringsDoc: LocalizedStringDataContribution = {
-    localizedStrings: { ...(platformBibleReactLocalizedStrings.localizedStrings ?? {}) },
-    metadata: platformBibleReactLocalizedStrings.metadata,
+    localizedStrings: {},
   };
 
   await Promise.all(

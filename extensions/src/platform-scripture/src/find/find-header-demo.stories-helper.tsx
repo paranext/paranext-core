@@ -33,7 +33,7 @@ import {
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { formatReplacementString } from 'platform-bible-utils';
 import { SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
-import { getLocalizedStrings } from '../../../../../.storybook/localization-utils';
+import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { FindFilters } from './find-filters.component';
 import { SearchTextType } from './find-types';
 

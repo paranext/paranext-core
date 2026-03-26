@@ -1,9 +1,11 @@
 // PostCSS configuration for Storybook (not used by the Electron app build)
-const config = {
+import type { Config } from 'postcss-load-config';
+
+const config: Config = {
   plugins: {
     tailwindcss: {},
     autoprefixer: {},
   },
 };
 
-module.exports = config;
+export default config;
