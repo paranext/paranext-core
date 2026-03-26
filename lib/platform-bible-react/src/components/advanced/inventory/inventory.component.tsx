@@ -16,6 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { Scope } from '@/components/utils/scripture.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { deepEqual, isString, LocalizedStringValue } from 'platform-bible-utils';
@@ -377,7 +383,7 @@ export function Inventory({
           onValueChange={(value) => handleStatusFilterChange(value)}
           defaultValue={statusFilter}
         >
-          <SelectTrigger className="tw-m-1">
+          <SelectTrigger className="tw-m-1 tw-w-auto tw-flex-1">
             <SelectValue placeholder="Select filter" />
           </SelectTrigger>
           <SelectContent>
@@ -388,7 +394,7 @@ export function Inventory({
           </SelectContent>
         </Select>
         <Select onValueChange={(value) => handleScopeChange(value)} defaultValue={scope}>
-          <SelectTrigger className="tw-m-1">
+          <SelectTrigger className="tw-m-1 tw-w-auto tw-flex-1">
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>
           <SelectContent>
@@ -398,7 +404,7 @@ export function Inventory({
           </SelectContent>
         </Select>
         <Input
-          className="tw-m-1 tw-rounded-md tw-border"
+          className="tw-m-1 tw-flex-1 tw-rounded-md tw-border"
           placeholder={filterText}
           value={textFilter}
           onChange={(event) => {
@@ -406,18 +412,27 @@ export function Inventory({
           }}
         />
         {additionalItemsLabels && (
-          <div className="tw-m-1 tw-flex tw-items-center tw-rounded-md tw-border">
-            <Checkbox
-              className="tw-m-1"
-              checked={showAdditionalItems}
-              onCheckedChange={(checked: boolean) => {
-                setShowAdditionalItems(checked);
-              }}
-            />
-            <Label className="tw-m-1 tw-flex-shrink-0 tw-whitespace-nowrap">
-              {additionalItemsLabels?.checkboxText ?? showAdditionalItemsText}
-            </Label>
-          </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="tw-m-1 tw-flex tw-min-w-[26px] tw-w-fit tw-items-center tw-rounded-md tw-border">
+                  <Checkbox
+                    className="tw-m-1 tw-flex-shrink-0"
+                    checked={showAdditionalItems}
+                    onCheckedChange={(checked: boolean) => {
+                      setShowAdditionalItems(checked);
+                    }}
+                  />
+                  <Label className="tw-m-1 tw-truncate">
+                    {additionalItemsLabels?.checkboxText ?? showAdditionalItemsText}
+                  </Label>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                {additionalItemsLabels?.checkboxText ?? showAdditionalItemsText}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </div>
       <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
