@@ -415,7 +415,7 @@ export function Inventory({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="tw-m-1 tw-flex tw-min-w-[26px] tw-w-fit tw-items-center tw-rounded-md tw-border">
+                <div className="tw-m-1 tw-flex tw-w-fit tw-min-w-[26px] tw-items-center tw-rounded-md tw-border">
                   <Checkbox
                     className="tw-m-1 tw-flex-shrink-0"
                     checked={showAdditionalItems}
