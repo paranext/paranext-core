@@ -1,5 +1,5 @@
 import { cn } from '@/utils/shadcn-ui.util';
-import { MoreHorizontal, MoreVertical } from 'lucide-react';
+import { MoreVertical } from 'lucide-react';
 import React, { ReactNode, useRef } from 'react';
 import { Button } from '../shadcn-ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../shadcn-ui/dropdown-menu';
