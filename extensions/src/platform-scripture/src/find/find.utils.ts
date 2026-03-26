@@ -6,6 +6,26 @@ import {
 import { FindOptions } from 'platform-scripture';
 
 /**
+ * Applies preserve-case transformation to the replacement text based on the casing of the matched
+ * text:
+ *
+ * - ALL CAPS match → ALL CAPS replacement
+ * - Title Case match (first letter capital) → Title Case replacement
+ * - Otherwise → replacement as-is
+ */
+export function applyPreserveCase(matchedText: string, replacementText: string): string {
+  if (!replacementText || !matchedText) return replacementText;
+  if (matchedText === matchedText.toUpperCase() && matchedText !== matchedText.toLowerCase()) {
+    return replacementText.toUpperCase();
+  }
+  const firstChar = matchedText[0];
+  if (firstChar === firstChar.toUpperCase() && firstChar !== firstChar.toLowerCase()) {
+    return replacementText[0].toUpperCase() + replacementText.slice(1);
+  }
+  return replacementText;
+}
+
+/**
  * Character categorizer settings fetched from the project's `platformScripture.*` settings, used to
  * build project-specific find/replace regex patterns.
  */
