@@ -4,6 +4,7 @@ import { createUuid } from '@node/utils/crypto-util';
 import { getAppDir } from '@node/utils/util';
 import { ExecutionToken } from '@node/models/execution-token.model';
 import { executionTokenService } from '@node/services/execution-token.service';
+import '@extension-host/global-this.model';
 import { extensionStorageService, setExtensionUris } from './extension-storage.service';
 
 const extensionName = 'storageTestExtName';
