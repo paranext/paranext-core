@@ -130,6 +130,9 @@ const zoomOut = async () => {
 
 // Prevent multiple instances because an instance launched after the first is likely a URL redirect
 // to our protocol client. We handle URI redirects below in `second-instance`
+// Note that one way to check if the application is launched via deep link in dev on Windows is to
+// check if process.cwd is `C:\WINDOWS\system32`. No idea if this might propagate to the other
+// environments to be a good check for when we allow multiple windows
 
 /** Whether this is the first instance of this application. */
 const isFirstInstance = app.requestSingleInstanceLock();
@@ -377,8 +380,7 @@ async function main() {
       webPreferences: {
         preload: app.isPackaged
           ? path.join(__dirname, 'preload.js')
-          : // process.cwd() in dev is the repo root
-            path.join(process.cwd(), '.erb/dll/preload.js'),
+          : path.join(globalThis.resourcesPath, '.erb/dll/preload.js'),
       },
     });
 
