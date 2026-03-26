@@ -377,8 +377,12 @@ export function Inventory({
   }, [selectedItem, showAdditionalItems, reducedTableData]);
 
   return (
-    <div id={id} className="pr-twp tw-flex tw-h-full tw-flex-col">
-      <div className="tw-flex tw-items-stretch">
+    <div id={id} className="pr-twp tw-h-full tw-overflow-auto">
+      <div className="tw-flex tw-h-full tw-w-full tw-min-w-min tw-flex-col">
+        {/* contain: inline-size excludes toolbar from wrapper's min-width calculation
+            so the checkbox label can truncate before the scrollbar appears */}
+        {/* eslint-disable-next-line react/forbid-dom-props */}
+        <div className="tw-flex tw-items-stretch" style={{ contain: 'inline-size' }}>
         <Select
           onValueChange={(value) => handleStatusFilterChange(value)}
           defaultValue={statusFilter}
@@ -435,26 +439,27 @@ export function Inventory({
           </TooltipProvider>
         )}
       </div>
-      <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
-        <DataTable
-          columns={allColumns}
-          data={filteredTableData}
-          onRowClickHandler={rowClickHandler}
-          stickyHeader
-          isLoading={areInventoryItemsLoading}
-          noResultsMessage={noResultsText}
-        />
-      </div>
-      {occurrenceData.length > 0 && (
         <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
-          <OccurrencesTable
-            classNameForText={classNameForVerseText}
-            occurrenceData={occurrenceData}
-            setScriptureReference={setVerseRef}
-            localizedStrings={localizedStrings}
+          <DataTable
+            columns={allColumns}
+            data={filteredTableData}
+            onRowClickHandler={rowClickHandler}
+            stickyHeader
+            isLoading={areInventoryItemsLoading}
+            noResultsMessage={noResultsText}
           />
         </div>
-      )}
+        {occurrenceData.length > 0 && (
+          <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
+            <OccurrencesTable
+              classNameForText={classNameForVerseText}
+              occurrenceData={occurrenceData}
+              setScriptureReference={setVerseRef}
+              localizedStrings={localizedStrings}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
