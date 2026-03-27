@@ -151,7 +151,6 @@ export default function CommentEditor({
           onAcceptClick={handleSave}
           canAccept={hasEditorContent(editorState)}
           localizedStrings={localizedStrings}
-          variant="secondary"
         />
       </div>
 

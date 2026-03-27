@@ -164,6 +164,12 @@ export { EditorKeyboardShortcuts } from './components/basics/editor-keyboard-sho
 export { ErrorDump } from './components/basics/error-dump.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
 export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
+export { default as CancelAcceptButtons } from './components/basics/cancel-accept-buttons.component';
+export { CANCEL_ACCEPT_BUTTONS_STRING_KEYS } from './components/basics/cancel-accept-buttons.component';
+export type {
+  CancelAcceptButtonsLocalizedStrings,
+  CancelAcceptButtonsProps,
+} from './components/basics/cancel-accept-buttons.component';
 export { default as UndoRedoButtons } from './components/basics/undo-redo-buttons.component';
 export { UNDO_REDO_BUTTONS_STRING_KEYS } from './components/basics/undo-redo-buttons.component';
 export type {

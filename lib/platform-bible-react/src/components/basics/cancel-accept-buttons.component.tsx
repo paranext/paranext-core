@@ -1,4 +1,4 @@
-import { Button, type ButtonProps } from '@/components/shadcn-ui/button';
+import { Button } from '@/components/shadcn-ui/button';
 import { ButtonGroup, ButtonGroupSeparator } from '@/components/shadcn-ui/button-group';
 import {
   Tooltip,
@@ -32,8 +32,6 @@ export type CancelAcceptButtonsProps = {
   onCancelClick: () => void;
   /** Function to call when Accept is clicked. */
   onAcceptClick: () => void;
-  /** Whether the Cancel button is enabled. */
-  canCancel?: boolean;
   /** Whether the Accept button is enabled. */
   canAccept?: boolean;
   /**
@@ -43,8 +41,6 @@ export type CancelAcceptButtonsProps = {
   localizedStrings?: CancelAcceptButtonsLocalizedStrings;
   /** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
   className?: string;
-  /** Variant for the buttons. Defaults to "ghost". */
-  variant?: ButtonProps['variant'];
 };
 
 /**
@@ -54,15 +50,12 @@ export type CancelAcceptButtonsProps = {
 export function CancelAcceptButtons({
   onCancelClick,
   onAcceptClick,
-  canCancel = true,
   canAccept = true,
   localizedStrings = {},
   className = 'tw-h-6 tw-w-6',
-  variant = 'ghost',
 }: CancelAcceptButtonsProps) {
   const cancelLocalized = localizeString(localizedStrings, '%cancelButton_tooltip%');
   const acceptLocalized = localizeString(localizedStrings, '%acceptButton_tooltip%');
-  const getsSeparator = variant === 'secondary' || variant === 'default';
 
   return (
     <ButtonGroup>
@@ -74,8 +67,7 @@ export function CancelAcceptButtons({
               className={className}
               size="icon"
               onClick={onCancelClick}
-              disabled={!canCancel}
-              variant={variant}
+              variant="secondary"
             >
               <X />
             </Button>
@@ -85,7 +77,7 @@ export function CancelAcceptButtons({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      {getsSeparator && <ButtonGroupSeparator />}
+      <ButtonGroupSeparator />
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -95,7 +87,6 @@ export function CancelAcceptButtons({
               size="icon"
               onClick={onAcceptClick}
               disabled={!canAccept}
-              variant={variant}
             >
               <Check />
             </Button>

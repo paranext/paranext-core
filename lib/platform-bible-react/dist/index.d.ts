@@ -1727,6 +1727,38 @@ export declare function EditorKeyboardShortcuts({ children, editorRef, canUndo, 
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
  * localized strings and pass them into the localizedStrings prop of this component.
  */
+export declare const CANCEL_ACCEPT_BUTTONS_STRING_KEYS: readonly [
+	"%cancelButton_tooltip%",
+	"%acceptButton_tooltip%"
+];
+export type CancelAcceptButtonsLocalizedStrings = {
+	[key in (typeof CANCEL_ACCEPT_BUTTONS_STRING_KEYS)[number]]?: string;
+};
+export type CancelAcceptButtonsProps = {
+	/** Function to call when Cancel is clicked. */
+	onCancelClick: () => void;
+	/** Function to call when Accept is clicked. */
+	onAcceptClick: () => void;
+	/** Whether the Accept button is enabled. */
+	canAccept?: boolean;
+	/**
+	 * Localized strings for button tooltips and aria-labels. Falls back to the key itself if not
+	 * provided.
+	 */
+	localizedStrings?: CancelAcceptButtonsLocalizedStrings;
+	/** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
+	className?: string;
+};
+/**
+ * Cancel and Accept buttons with tooltips in a ButtonGroup. Suitable for use in any editor toolbar.
+ * Tooltip text defaults to the localization key if no localized strings are provided.
+ */
+export declare function CancelAcceptButtons({ onCancelClick, onAcceptClick, canAccept, localizedStrings, className, }: CancelAcceptButtonsProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component.
+ */
 export declare const UNDO_REDO_BUTTONS_STRING_KEYS: readonly [
 	"%undoButton_tooltip%",
 	"%redoButton_tooltip%"

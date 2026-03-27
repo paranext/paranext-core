@@ -174,6 +174,7 @@ export default function FootnoteEditor({
   }, []);
 
   const [callerType, setCallerType] = useState<FootnoteCallerType>('generated');
+  const [originalCallerType, setOriginalCallerType] = useState<FootnoteCallerType>('generated');
   const [customCaller, setCustomCaller] = useState<string>('*');
 
   const [noteType, setNoteType] = useState<string>('f');
@@ -246,6 +247,7 @@ export default function FootnoteEditor({
         setCustomCaller(rawCaller);
       }
       setCallerType(parsedCallerType);
+      setOriginalCallerType(parsedCallerType);
       // Assigns note type
       setNoteType(noteOp.insert.note?.style ?? 'f');
       timeout = setTimeout(() => {
@@ -529,7 +531,7 @@ export default function FootnoteEditor({
             <CancelAcceptButtons
               onCancelClick={onClose}
               onAcceptClick={closeAndSave}
-              canAccept={!isAtInitialState}
+              canAccept={!isAtInitialState || originalCallerType !== callerType}
               localizedStrings={localizedStrings}
             />
           </div>
