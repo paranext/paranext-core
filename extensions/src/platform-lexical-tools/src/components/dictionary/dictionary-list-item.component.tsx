@@ -91,7 +91,7 @@ export function DictionaryListItem({
           </TooltipProvider>
         </div>
 
-        <div className="tw-flex tw-items-center tw-gap-2 tw-mt-0.5">
+        <div className="tw-flex tw-items-center tw-gap-2 tw-mt-0.5 tw-overflow-hidden">
           <p className="tw-text-sm tw-text-muted-foreground tw-truncate">
             {getFormatGlossesStringFromDictionaryEntrySenses(entry, scrRef)}
           </p>
