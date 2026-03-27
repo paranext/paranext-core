@@ -377,8 +377,7 @@ async function main() {
       webPreferences: {
         preload: app.isPackaged
           ? path.join(__dirname, 'preload.js')
-          : // process.cwd() in dev is the repo root
-            path.join(process.cwd(), '.erb/dll/preload.js'),
+          : path.join(globalThis.resourcesPath, '.erb/dll/preload.js'),
       },
     });
 

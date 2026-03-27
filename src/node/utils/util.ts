@@ -67,8 +67,7 @@ export function resolveHtmlPath(htmlFileName: string) {
 export const getAppDir = memoizeOne((): string => {
   return globalThis.isPackaged
     ? path.join(os.homedir(), '/.platform.bible')
-    : // process.cwd() in dev is the repo root
-      path.join(process.cwd(), 'dev-appdata');
+    : path.join(globalThis.resourcesPath, 'dev-appdata');
 });
 
 // FOR SCHEME DOCUMENTATION, SEE Uri JSDOC
