@@ -14,6 +14,7 @@ import { applyPreserveCase } from './find.utils';
 import {
   getFindHighlightClasses,
   getReplaceHighlightClasses,
+  preserveTrailingSpaces,
   renderWithInvisibleChars,
 } from './replace-preview-styles';
 import { DEFAULT_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
@@ -300,7 +301,7 @@ export default function SearchResult({
   const getReplacePreviewElement = (): JSX.Element | null => {
     if (previewReplacement === undefined) return null;
 
-    const findText = displayText(searchResult.text ?? '');
+    const findText = displayText(preserveTrailingSpaces(searchResult.text ?? ''));
     const replaceText = displayText(previewReplacement);
 
     if (previewOptions.layout === 'inline') {
@@ -317,7 +318,7 @@ export default function SearchResult({
       return (
         <div className={`tw-text-muted-foreground ${fontClass}`}>
           {displayText(textParts.beforeText)}
-          <span className={findClass}>{displayText(textParts.text)}</span>
+          <span className={findClass}>{displayText(preserveTrailingSpaces(textParts.text))}</span>
           <span className={replaceClass}>{replaceText}</span>
           {displayText(textParts.afterText)}
         </div>
