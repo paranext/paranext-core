@@ -14,11 +14,11 @@ async function openCommandPalette(mainPage: Page, frame: Frame) {
   return palette;
 }
 
-test.describe('Overlay Command Palette', () => {
-  test('opens with expected items', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
+test('overlay command palette rendering and interaction', async ({ mainPage }) => {
+  await waitForAppReady(mainPage);
+  const frame = await findHelloRock3Frame(mainPage);
 
+  await test.step('opens with expected items', async () => {
     const palette = await openCommandPalette(mainPage, frame);
 
     // Verify search input is present
@@ -35,10 +35,7 @@ test.describe('Overlay Command Palette', () => {
     await mainPage.keyboard.press('Escape');
   });
 
-  test('search filters items', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
-
+  await test.step('search filters items', async () => {
     const palette = await openCommandPalette(mainPage, frame);
 
     // Type to filter
@@ -57,10 +54,7 @@ test.describe('Overlay Command Palette', () => {
     await mainPage.keyboard.press('Escape');
   });
 
-  test('selecting an item dismisses the palette', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
-
+  await test.step('selecting an item dismisses the palette', async () => {
     const palette = await openCommandPalette(mainPage, frame);
 
     // Click an item
@@ -70,20 +64,14 @@ test.describe('Overlay Command Palette', () => {
     await expect(palette).not.toBeVisible({ timeout: 5_000 });
   });
 
-  test('Escape dismisses the palette', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
-
+  await test.step('Escape dismisses the palette', async () => {
     const palette = await openCommandPalette(mainPage, frame);
 
     await mainPage.keyboard.press('Escape');
     await expect(palette).not.toBeVisible({ timeout: 3_000 });
   });
 
-  test('keyboard navigation works', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
-
+  await test.step('keyboard navigation works', async () => {
     const palette = await openCommandPalette(mainPage, frame);
 
     // Arrow down to navigate

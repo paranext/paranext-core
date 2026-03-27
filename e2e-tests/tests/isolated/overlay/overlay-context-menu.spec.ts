@@ -11,12 +11,11 @@ async function openContextMenu(mainPage: Page, frame: Frame) {
   return menu;
 }
 
-test.describe('Overlay Context Menu', () => {
-  test('opens with expected items on right-click in WebView', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
+test('overlay context menu rendering and interaction', async ({ mainPage }) => {
+  await waitForAppReady(mainPage);
+  const frame = await findHelloRock3Frame(mainPage);
 
-    // Right-click the title area inside the iframe to trigger handleContextMenu
+  await test.step('opens with expected items on right-click in WebView', async () => {
     const menu = await openContextMenu(mainPage, frame);
 
     // Verify expected menu items from hello-rock3's contextMenu contributions
@@ -29,33 +28,14 @@ test.describe('Overlay Context Menu', () => {
     await mainPage.keyboard.press('Escape');
   });
 
-  test('clicking a menu item dismisses the menu', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
-
-    const menu = await openContextMenu(mainPage, frame);
-
-    // Click "Open Scripture Editor" - a simple action item
-    await menu.getByRole('menuitem', { name: 'Open Scripture Editor' }).click();
-
-    // Menu should be dismissed after item selection
-    await expect(menu).not.toBeVisible({ timeout: 5_000 });
-  });
-
-  test('dismissed on Escape key', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
-
+  await test.step('dismissed on Escape key', async () => {
     const menu = await openContextMenu(mainPage, frame);
 
     await mainPage.keyboard.press('Escape');
     await expect(menu).not.toBeVisible({ timeout: 3_000 });
   });
 
-  test('submenu expands to show sub-items', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
-
+  await test.step('submenu expands to show sub-items', async () => {
     const menu = await openContextMenu(mainPage, frame);
 
     // Move the mouse directly to the submenu trigger using low-level mouse.move().
@@ -80,10 +60,7 @@ test.describe('Overlay Context Menu', () => {
     await mainPage.keyboard.press('Escape');
   });
 
-  test('keyboard navigation highlights items', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
-
+  await test.step('keyboard navigation highlights items', async () => {
     const menu = await openContextMenu(mainPage, frame);
 
     // Arrow down should highlight menu items (Radix sets data-highlighted attribute)
@@ -98,5 +75,17 @@ test.describe('Overlay Context Menu', () => {
     // Escape to dismiss
     await mainPage.keyboard.press('Escape');
     await expect(menu).not.toBeVisible({ timeout: 3_000 });
+  });
+
+  // This step is last because clicking "Open Scripture Editor" opens a new dock tab,
+  // which could steal focus from the Hello Rock3 tab and break subsequent steps.
+  await test.step('clicking a menu item dismisses the menu', async () => {
+    const menu = await openContextMenu(mainPage, frame);
+
+    // Click "Open Scripture Editor" - a simple action item
+    await menu.getByRole('menuitem', { name: 'Open Scripture Editor' }).click();
+
+    // Menu should be dismissed after item selection
+    await expect(menu).not.toBeVisible({ timeout: 5_000 });
   });
 });

@@ -71,14 +71,7 @@ export interface DialogTypes {
   [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
 }
 
-/** Dialog types that render as rc-dock floating tabs (have a DialogDefinition) */
-export type TabDialogTypes =
-  | typeof ABOUT_DIALOG_TYPE
-  | typeof SELECT_PROJECT_DIALOG_TYPE
-  | typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE
-  | typeof SELECT_BOOKS_DIALOG_TYPE;
-
-/** All dialog types including overlay-routed dialogs */
+/** All dialog types that have DialogDefinition entries */
 export type DialogTabTypes = keyof DialogTypes;
 
 /** Types related to a specific dialog */
@@ -97,7 +90,7 @@ export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
   props: DialogProps<TReturnType> & TOptions;
 };
 
-export type DialogDefinition<DialogTabType extends TabDialogTypes> = Readonly<
+export type DialogDefinition<DialogTabType extends DialogTabTypes> = Readonly<
   DialogDefinitionBase & {
     /**
      * Type of tab - indicates what kind of built-in dock layout tab this dialog definition

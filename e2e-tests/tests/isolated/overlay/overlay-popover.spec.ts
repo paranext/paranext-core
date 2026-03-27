@@ -2,16 +2,16 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
 import { findHelloRock3Frame, DEFAULT_PERSON_NAME } from './overlay-helpers';
 
-test.describe('Overlay Popover', () => {
-  test('hover on greeting shows markdown popover with expected content', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
+test('overlay popover rendering and interaction', async ({ mainPage }) => {
+  await waitForAppReady(mainPage);
+  const frame = await findHelloRock3Frame(mainPage);
 
-    // The greeting element has cursor: help style and triggers a popover on hover.
-    // The hello-rock3 code uses a 400ms hover delay before showing the popover.
-    const greetingEl = frame.locator('[style*="cursor"]');
-    await expect(greetingEl).toBeVisible({ timeout: 10_000 });
+  // The greeting element has cursor: help style and triggers a popover on hover.
+  // The hello-rock3 code uses a 400ms hover delay before showing the popover.
+  const greetingEl = frame.locator('[style*="cursor"]');
+  await expect(greetingEl).toBeVisible({ timeout: 10_000 });
 
+  await test.step('hover on greeting shows markdown popover with expected content', async () => {
     // Hover to trigger the popover
     await greetingEl.hover();
 
@@ -20,7 +20,7 @@ test.describe('Overlay Popover', () => {
     const popover = mainPage.locator('[data-overlay-popover]');
     await expect(popover).toBeVisible({ timeout: 5_000 });
 
-    // Verify the popover content — a markdown type with person details.
+    // Verify the popover content - a markdown type with person details.
     // Title is "About {name}" rendered as a markdown heading.
     await expect(popover).toContainText('About');
     await expect(popover).toContainText(DEFAULT_PERSON_NAME);
@@ -35,13 +35,7 @@ test.describe('Overlay Popover', () => {
     await expect(popover).not.toBeVisible({ timeout: 5_000 });
   });
 
-  test('popover reappears after dismissal and re-hover', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
-
-    const greetingEl = frame.locator('[style*="cursor"]');
-    await expect(greetingEl).toBeVisible({ timeout: 10_000 });
-
+  await test.step('popover reappears after dismissal and re-hover', async () => {
     // Show the popover
     await greetingEl.hover();
     const popover = mainPage.locator('[data-overlay-popover]');

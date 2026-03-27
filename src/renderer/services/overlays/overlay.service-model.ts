@@ -7,61 +7,8 @@
  */
 
 import { LocalizeKey, PlatformError } from 'platform-bible-utils';
+import type { ReactElement } from 'react';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
-
-// ── Modal Dialog Types ──
-
-/**
- * The supported modal dialog types. Each type has corresponding options in
- * {@link ModalDialogOptions} and a result type in {@link ModalDialogResponse}:
- *
- * - `'alert'` — Informational dialog with a single OK button. Always resolves `true`.
- * - `'confirm'` — Yes/no dialog. Resolves `true` (OK) or `false` (Cancel).
- */
-export type ModalDialogType = 'alert' | 'confirm';
-
-/**
- * Options for each modal dialog type, keyed by {@link ModalDialogType}. Use as
- * `ModalDialogOptions[T]` where `T extends ModalDialogType` to get the options for a specific
- * dialog type.
- */
-export interface ModalDialogOptions {
-  /** Options for an alert dialog (informational, single OK button) */
-  alert: {
-    /** Optional title displayed at the top of the dialog */
-    title?: string | LocalizeKey;
-    /** The message body displayed in the dialog */
-    message: string | LocalizeKey;
-    /** Custom label for the OK button. Defaults to a localized "OK". */
-    okLabel?: string | LocalizeKey;
-  };
-  /** Options for a confirm dialog (OK/Cancel) */
-  confirm: {
-    /** Optional title displayed at the top of the dialog */
-    title?: string | LocalizeKey;
-    /** The message body displayed in the dialog */
-    message: string | LocalizeKey;
-    /** Custom label for the OK button. Defaults to a localized "OK". */
-    okLabel?: string | LocalizeKey;
-    /** Custom label for the Cancel button. Defaults to a localized "Cancel". */
-    cancelLabel?: string | LocalizeKey;
-    /** Whether to style the OK button as a destructive action (e.g., red) */
-    destructive?: boolean;
-  };
-}
-
-/**
- * Response types for each modal dialog type, keyed by {@link ModalDialogType}. Use as
- * `ModalDialogResponse[T]` where `T extends ModalDialogType` to get the result type. The service
- * method returns `ModalDialogResponse[T] | undefined`, where `undefined` means the dialog was
- * dismissed without a response.
- */
-export interface ModalDialogResponse {
-  /** Alert dialogs always resolve `true` (the user acknowledged the message) */
-  alert: true;
-  /** Confirm dialogs resolve `true` for OK, `false` for Cancel */
-  confirm: boolean;
-}
 
 // ── Popover Types ──
 
@@ -319,14 +266,13 @@ export type OverlayEntry =
       id: string;
       /** The WebView that requested this overlay. Used to enforce one-per-type-per-WebView. */
       webViewId: string;
-      /** Which dialog variant to render */
-      dialogType: ModalDialogType;
-      /** Type-specific dialog configuration */
-      options: ModalDialogOptions[ModalDialogType];
+      /** The dialog React component to render inside the modal shell */
+      Component: (props: Record<string, unknown>) => ReactElement;
+      /** Pre-built props for the component (DialogProps + dialog options, already localized) */
+      props: Record<string, unknown>;
       /**
        * Settles the caller's promise with the dialog result. Typed as `unknown` because the generic
-       * `T` from `showModalDialogOverlay<T>` is not preserved in the store entry; the service
-       * widens it.
+       * return type is not preserved in the store entry.
        */
       resolve: (result: unknown) => void;
       /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */

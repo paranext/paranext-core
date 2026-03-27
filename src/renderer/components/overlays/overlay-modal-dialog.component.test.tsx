@@ -1,150 +1,41 @@
 import { vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { OverlayModalDialogPresentational } from './overlay-modal-dialog.component';
 
-describe('OverlayModalDialogPresentational', () => {
-  describe('confirm dialog', () => {
-    it('should call onResolve(false) when Cancel is clicked', () => {
-      const onResolve = vi.fn();
-      const onDismiss = vi.fn();
+import type { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
+import { OverlayModalDialog } from './overlay-modal-dialog.component';
 
-      render(
-        <OverlayModalDialogPresentational
-          dialogType="confirm"
-          options={{ message: 'Are you sure?', cancelLabel: 'Cancel', okLabel: 'OK' }}
-          onResolve={onResolve}
-          onDismiss={onDismiss}
-        />,
-      );
+// Mock the overlay store
+vi.mock('@renderer/services/overlays/overlay-store', () => ({
+  resolveAndRemoveOverlay: vi.fn(),
+}));
 
-      const cancelButton = screen.getByRole('button', { name: 'Cancel' });
-      fireEvent.click(cancelButton);
+function createMockOverlay(
+  componentContent: string,
+  overrides?: Partial<Extract<OverlayEntry, { type: 'modalDialog' }>>,
+): Extract<OverlayEntry, { type: 'modalDialog' }> {
+  return {
+    type: 'modalDialog',
+    id: 'test-overlay',
+    webViewId: 'test-webview',
+    Component: () => <div data-testid="mock-component">{componentContent}</div>,
+    props: {},
+    resolve: vi.fn(),
+    reject: vi.fn(),
+    ...overrides,
+  };
+}
 
-      expect(onResolve).toHaveBeenCalledWith(false);
-      expect(onDismiss).not.toHaveBeenCalled();
-    });
-
-    it('should call onResolve(true) when OK is clicked', () => {
-      const onResolve = vi.fn();
-      const onDismiss = vi.fn();
-
-      render(
-        <OverlayModalDialogPresentational
-          dialogType="confirm"
-          options={{ message: 'Are you sure?', cancelLabel: 'Cancel', okLabel: 'OK' }}
-          onResolve={onResolve}
-          onDismiss={onDismiss}
-        />,
-      );
-
-      const okButton = screen.getByRole('button', { name: 'OK' });
-      fireEvent.click(okButton);
-
-      expect(onResolve).toHaveBeenCalledWith(true);
-      expect(onDismiss).not.toHaveBeenCalled();
-    });
-
-    it('should call onDismiss when Escape is pressed (not onResolve)', () => {
-      const onResolve = vi.fn();
-      const onDismiss = vi.fn();
-
-      render(
-        <OverlayModalDialogPresentational
-          dialogType="confirm"
-          options={{ message: 'Are you sure?', cancelLabel: 'Cancel', okLabel: 'OK' }}
-          onResolve={onResolve}
-          onDismiss={onDismiss}
-        />,
-      );
-
-      // Radix Dialog fires onOpenChange(false) on Escape, which should call onDismiss
-      fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' });
-
-      expect(onDismiss).toHaveBeenCalled();
-      expect(onResolve).not.toHaveBeenCalled();
-    });
+describe('OverlayModalDialog', () => {
+  it('renders the provided component', () => {
+    const overlay = createMockOverlay('Hello from component');
+    render(<OverlayModalDialog overlay={overlay} />);
+    expect(screen.getByTestId('mock-component')).toHaveTextContent('Hello from component');
   });
 
-  describe('destructive confirm dialog', () => {
-    it('should render the OK button with destructive variant', () => {
-      render(
-        <OverlayModalDialogPresentational
-          dialogType="confirm"
-          options={{
-            message: 'Delete everything?',
-            cancelLabel: 'Cancel',
-            okLabel: 'Delete',
-            destructive: true,
-          }}
-          onResolve={vi.fn()}
-          onDismiss={vi.fn()}
-        />,
-      );
-
-      const deleteButton = screen.getByRole('button', { name: 'Delete' });
-      // The destructive variant adds a specific class; verify it is present
-      expect(deleteButton.className).toMatch(/destructive/);
-    });
-  });
-
-  describe('alert dialog', () => {
-    it('should call onResolve(true) when OK is clicked', () => {
-      const onResolve = vi.fn();
-      const onDismiss = vi.fn();
-
-      render(
-        <OverlayModalDialogPresentational
-          dialogType="alert"
-          options={{ message: 'Something happened' }}
-          onResolve={onResolve}
-          onDismiss={onDismiss}
-        />,
-      );
-
-      const okButton = screen.getByRole('button', { name: 'OK' });
-      fireEvent.click(okButton);
-
-      expect(onResolve).toHaveBeenCalledWith(true);
-      expect(onDismiss).not.toHaveBeenCalled();
-    });
-
-    it('should call onResolve(true) when Enter is pressed', () => {
-      const onResolve = vi.fn();
-      const onDismiss = vi.fn();
-
-      render(
-        <OverlayModalDialogPresentational
-          dialogType="alert"
-          options={{ message: 'Something happened' }}
-          onResolve={onResolve}
-          onDismiss={onDismiss}
-        />,
-      );
-
-      fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Enter' });
-
-      expect(onResolve).toHaveBeenCalledWith(true);
-      expect(onDismiss).not.toHaveBeenCalled();
-    });
-
-    it('should call onDismiss when Escape is pressed', () => {
-      const onResolve = vi.fn();
-      const onDismiss = vi.fn();
-
-      render(
-        <OverlayModalDialogPresentational
-          dialogType="alert"
-          options={{ message: 'Something happened' }}
-          onResolve={onResolve}
-          onDismiss={onDismiss}
-        />,
-      );
-
-      fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' });
-
-      expect(onDismiss).toHaveBeenCalled();
-      expect(onResolve).not.toHaveBeenCalled();
-    });
+  it('renders inside a dialog with modal backdrop', () => {
+    const overlay = createMockOverlay('Content');
+    render(<OverlayModalDialog overlay={overlay} />);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

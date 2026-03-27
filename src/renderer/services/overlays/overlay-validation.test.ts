@@ -6,7 +6,6 @@ import {
   validateCommandPaletteRequest,
   validateContextMenuItems,
   validateMenuItems,
-  validateModalDialogOptions,
   validatePopoverRequest,
 } from './overlay-validation';
 
@@ -149,62 +148,6 @@ describe('overlay-validation', () => {
       ];
       // At depth 2, submenus should be rejected (max 2 levels)
       expectValidationError(() => validateMenuItems(items, 2));
-    });
-  });
-
-  describe('validateModalDialogOptions', () => {
-    describe('alert', () => {
-      it('should pass for valid alert options', () => {
-        expect(() =>
-          validateModalDialogOptions('alert', { message: 'Are you sure?' }),
-        ).not.toThrow();
-      });
-
-      it('should pass for alert with title and okLabel', () => {
-        expect(() =>
-          validateModalDialogOptions('alert', {
-            title: 'Warning',
-            message: 'Something happened',
-            okLabel: 'Dismiss',
-          }),
-        ).not.toThrow();
-      });
-
-      it('should throw for alert with message exceeding 500 chars', () => {
-        expectValidationError(
-          () => validateModalDialogOptions('alert', { message: 'a'.repeat(501) }),
-          'Label exceeds maximum length of 500 characters',
-        );
-      });
-
-      it('should throw for alert with title exceeding 500 chars', () => {
-        expectValidationError(() =>
-          validateModalDialogOptions('alert', { title: 'a'.repeat(501), message: 'Valid message' }),
-        );
-      });
-    });
-
-    describe('confirm', () => {
-      it('should pass for valid confirm options', () => {
-        expect(() =>
-          validateModalDialogOptions('confirm', { message: 'Delete this item?' }),
-        ).not.toThrow();
-      });
-
-      it('should pass for confirm with destructive flag', () => {
-        expect(() =>
-          validateModalDialogOptions('confirm', {
-            message: 'This is permanent',
-            destructive: true,
-          }),
-        ).not.toThrow();
-      });
-
-      it('should throw for confirm with okLabel exceeding 500 chars', () => {
-        expectValidationError(() =>
-          validateModalDialogOptions('confirm', { message: 'Valid', okLabel: 'a'.repeat(501) }),
-        );
-      });
     });
   });
 

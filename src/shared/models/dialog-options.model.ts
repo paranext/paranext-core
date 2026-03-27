@@ -18,10 +18,17 @@ export type DialogOptions = {
    * Default depends on the dialog
    */
   prompt?: string | LocalizeKey;
+  /** Whether to render as a modal overlay instead of an rc-dock floating tab. Defaults to false. */
+  modal?: boolean;
 };
 
 /** Keys of properties on {@link DialogOptions} that should be localized if they are LocalizeKeys */
-export const DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS = ['title', 'prompt'] as const;
+export const DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS: readonly string[] = [
+  'title',
+  'prompt',
+  'okLabel',
+  'cancelLabel',
+];
 
 /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
 export type DialogData = DialogOptions & {
