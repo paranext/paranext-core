@@ -1880,6 +1880,9 @@ video:where(.pr-twp,.pr-twp *) {
 .tw-min-w-\\[215px\\] {
   min-width: 215px;
 }
+.tw-min-w-\\[26px\\] {
+  min-width: 26px;
+}
 .tw-min-w-\\[500px\\] {
   min-width: 500px;
 }
@@ -1888,6 +1891,9 @@ video:where(.pr-twp,.pr-twp *) {
 }
 .tw-min-w-\\[var\\(--radix-select-trigger-width\\)\\] {
   min-width: var(--radix-select-trigger-width);
+}
+.tw-min-w-min {
+  min-width: min-content;
 }
 .tw-max-w-2xl {
   max-width: 42rem;
