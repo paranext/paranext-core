@@ -1,10 +1,10 @@
 .about-scroll-container {
   display: flex;
   flex-direction: column;
-  justify-content: center;
   width: 100%;
   height: 100%;
   overflow-y: auto; // Allow scrolling if content is too tall
+  overflow-x: hidden; // Prevent horizontal scrollbar at small widths
 }
 
 .about-content {
@@ -12,8 +12,14 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  margin-block: auto; // Center vertically when content fits, collapse when it overflows
+  width: 100%; // Fill container so padding shrinks content at small widths
   max-width: 448px; // tw-max-w-md equivalent
-  padding-inline: clamp(1rem, 10vw, 4rem);
+  padding-inline: clamp(
+    1rem,
+    10%,
+    4rem
+  ); // Use % instead of vw to be relative to dialog, not viewport
   padding-block: clamp(1rem, 10vh, 4rem);
   gap: 0.25rem;
   text-wrap: pretty; // Keeps things like URLs from breaking awkwardly
@@ -32,7 +38,7 @@
 .about-logo {
   // svg
   height: auto; // Maintain aspect ratio
-  width: 110%; // Overshoot the container width to account for ink weight
+  max-width: 110%; // Overshoot the container width to account for ink weight, but allow shrinking
   padding-block-end: clamp(1rem, 10vw, 2rem); // Space below logo
   align-self: center;
 }
