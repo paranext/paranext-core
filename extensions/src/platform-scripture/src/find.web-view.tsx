@@ -452,7 +452,7 @@ global.webViewComponent = function FindWebView({
   // #region Search related functions
 
   const isSearchQueryValid = useMemo(() => {
-    if (searchTerm === '') return false;
+    if (searchTerm.trim() === '') return false;
     if (scope === 'selectedBooks' && selectedBookIds.length === 0) return false;
     return true;
   }, [scope, searchTerm, selectedBookIds]);
@@ -808,7 +808,7 @@ global.webViewComponent = function FindWebView({
       isInitialAutoSearchRef.current = false;
       // Only skip the initial auto-search when the field is empty. When searchTerm is non-empty
       // (e.g. restored from state), fall through so results appear immediately on startup.
-      if (searchTerm === '') return undefined;
+      if (searchTerm.trim() === '') return undefined;
       initialSearchTriggeredRef.current = true;
     }
     debouncedHandleStartSearch.current();
@@ -840,7 +840,7 @@ global.webViewComponent = function FindWebView({
       !findPdp ||
       !initialSearchTriggeredRef.current ||
       searchStatus !== undefined ||
-      searchTerm === ''
+      searchTerm.trim() === ''
     )
       return;
     explicitSearchPendingRef.current = true;
