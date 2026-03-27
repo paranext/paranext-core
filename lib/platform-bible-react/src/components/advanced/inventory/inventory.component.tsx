@@ -16,6 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { Scope } from '@/components/utils/scripture.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { deepEqual, isString, LocalizedStringValue } from 'platform-bible-utils';
@@ -371,75 +377,89 @@ export function Inventory({
   }, [selectedItem, showAdditionalItems, reducedTableData]);
 
   return (
-    <div id={id} className="pr-twp tw-flex tw-h-full tw-flex-col">
-      <div className="tw-flex tw-items-stretch">
-        <Select
-          onValueChange={(value) => handleStatusFilterChange(value)}
-          defaultValue={statusFilter}
-        >
-          <SelectTrigger className="tw-m-1">
-            <SelectValue placeholder="Select filter" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{allItemsText}</SelectItem>
-            <SelectItem value="approved">{approvedItemsText}</SelectItem>
-            <SelectItem value="unapproved">{unapprovedItemsText}</SelectItem>
-            <SelectItem value="unknown">{unknownItemsText}</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select onValueChange={(value) => handleScopeChange(value)} defaultValue={scope}>
-          <SelectTrigger className="tw-m-1">
-            <SelectValue placeholder="Select scope" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="book">{scopeBookText}</SelectItem>
-            <SelectItem value="chapter">{scopeChapterText}</SelectItem>
-            <SelectItem value="verse">{scopeVerseText}</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input
-          className="tw-m-1 tw-rounded-md tw-border"
-          placeholder={filterText}
-          value={textFilter}
-          onChange={(event) => {
-            setTextFilter(event.target.value);
-          }}
-        />
-        {additionalItemsLabels && (
-          <div className="tw-m-1 tw-flex tw-items-center tw-rounded-md tw-border">
-            <Checkbox
-              className="tw-m-1"
-              checked={showAdditionalItems}
-              onCheckedChange={(checked: boolean) => {
-                setShowAdditionalItems(checked);
-              }}
+    <div id={id} className="pr-twp tw-h-full tw-overflow-auto">
+      <div className="tw-flex tw-h-full tw-w-full tw-min-w-min tw-flex-col">
+        {/* contain: inline-size excludes toolbar from wrapper's min-width calculation
+            so the checkbox label can truncate before the scrollbar appears */}
+        {/* eslint-disable-next-line react/forbid-dom-props */}
+        <div className="tw-flex tw-items-stretch" style={{ contain: 'inline-size' }}>
+          <Select
+            onValueChange={(value) => handleStatusFilterChange(value)}
+            defaultValue={statusFilter}
+          >
+            <SelectTrigger className="tw-m-1 tw-w-auto tw-flex-1">
+              <SelectValue placeholder="Select filter" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{allItemsText}</SelectItem>
+              <SelectItem value="approved">{approvedItemsText}</SelectItem>
+              <SelectItem value="unapproved">{unapprovedItemsText}</SelectItem>
+              <SelectItem value="unknown">{unknownItemsText}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select onValueChange={(value) => handleScopeChange(value)} defaultValue={scope}>
+            <SelectTrigger className="tw-m-1 tw-w-auto tw-flex-1">
+              <SelectValue placeholder="Select scope" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="book">{scopeBookText}</SelectItem>
+              <SelectItem value="chapter">{scopeChapterText}</SelectItem>
+              <SelectItem value="verse">{scopeVerseText}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            className="tw-m-1 tw-flex-1 tw-rounded-md tw-border"
+            placeholder={filterText}
+            value={textFilter}
+            onChange={(event) => {
+              setTextFilter(event.target.value);
+            }}
+          />
+          {additionalItemsLabels && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="tw-m-1 tw-flex tw-w-fit tw-min-w-[26px] tw-items-center tw-rounded-md tw-border">
+                    <Checkbox
+                      className="tw-m-1 tw-flex-shrink-0"
+                      checked={showAdditionalItems}
+                      onCheckedChange={(checked: boolean) => {
+                        setShowAdditionalItems(checked);
+                      }}
+                    />
+                    <Label className="tw-m-1 tw-truncate">
+                      {additionalItemsLabels?.checkboxText ?? showAdditionalItemsText}
+                    </Label>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {additionalItemsLabels?.checkboxText ?? showAdditionalItemsText}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
+        <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
+          <DataTable
+            columns={allColumns}
+            data={filteredTableData}
+            onRowClickHandler={rowClickHandler}
+            stickyHeader
+            isLoading={areInventoryItemsLoading}
+            noResultsMessage={noResultsText}
+          />
+        </div>
+        {occurrenceData.length > 0 && (
+          <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
+            <OccurrencesTable
+              classNameForText={classNameForVerseText}
+              occurrenceData={occurrenceData}
+              setScriptureReference={setVerseRef}
+              localizedStrings={localizedStrings}
             />
-            <Label className="tw-m-1 tw-flex-shrink-0 tw-whitespace-nowrap">
-              {additionalItemsLabels?.checkboxText ?? showAdditionalItemsText}
-            </Label>
           </div>
         )}
       </div>
-      <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
-        <DataTable
-          columns={allColumns}
-          data={filteredTableData}
-          onRowClickHandler={rowClickHandler}
-          stickyHeader
-          isLoading={areInventoryItemsLoading}
-          noResultsMessage={noResultsText}
-        />
-      </div>
-      {occurrenceData.length > 0 && (
-        <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
-          <OccurrencesTable
-            classNameForText={classNameForVerseText}
-            occurrenceData={occurrenceData}
-            setScriptureReference={setVerseRef}
-            localizedStrings={localizedStrings}
-          />
-        </div>
-      )}
     </div>
   );
 }
