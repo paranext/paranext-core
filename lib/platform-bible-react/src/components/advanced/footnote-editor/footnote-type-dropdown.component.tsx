@@ -7,15 +7,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/shadcn-ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider } from '@/components/shadcn-ui/tooltip';
+import { TooltipTrigger } from '@radix-ui/react-tooltip';
 import { FunctionSquare, SquareSigma, SquareX } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
-import { Z_INDEX_FOOTNOTE_EDITOR } from '@/components/z-index';
 import { FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 interface FootnoteTypeDropdownProps {
@@ -29,25 +24,21 @@ const renderNoteTypeButtonContent = (
   noteType: string,
   localizedStrings: FootnoteEditorLocalizedStrings,
 ) => {
-  if (noteType === 'f') {
-    return (
-      <>
-        <FunctionSquare /> {localizedStrings['%footnoteEditor_noteType_footnote_label%']}
-      </>
-    );
-  }
+  let Icon = SquareX;
+  let label = localizedStrings['%footnoteEditor_noteType_crossReference_label%'];
 
-  if (noteType === 'fe') {
-    return (
-      <>
-        <SquareSigma /> {localizedStrings['%footnoteEditor_noteType_endNote_label%']}
-      </>
-    );
+  if (noteType === 'f') {
+    Icon = FunctionSquare;
+    label = localizedStrings['%footnoteEditor_noteType_footnote_label%'];
+  } else if (noteType === 'fe') {
+    Icon = SquareSigma;
+    label = localizedStrings['%footnoteEditor_noteType_endNote_label%'];
   }
 
   return (
     <>
-      <SquareX /> {localizedStrings['%footnoteEditor_noteType_crossReference_label%']}
+      <Icon className="tw-h-4 tw-w-4 tw-shrink-0" />
+      <span className="tw-truncate">{label}</span>
     </>
   );
 };
@@ -82,7 +73,10 @@ export function FootnoteTypeDropdown({
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="tw:h-6">
+              <Button
+                variant="outline"
+                className="tw-h-6 tw-min-w-0 tw-gap-1 tw-overflow-hidden tw-px-1.5"
+              >
                 {renderNoteTypeButtonContent(noteType, localizedStrings)}
               </Button>
             </DropdownMenuTrigger>
@@ -92,7 +86,7 @@ export function FootnoteTypeDropdown({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <DropdownMenuContent style={{ zIndex: Z_INDEX_FOOTNOTE_EDITOR }}>
+      <DropdownMenuContent className="tw-z-[300]">
         <DropdownMenuLabel>
           {localizedStrings['%footnoteEditor_noteTypeDropdown_label%']}
         </DropdownMenuLabel>
@@ -101,7 +95,7 @@ export function FootnoteTypeDropdown({
           disabled={noteType !== 'x' && !isTypeSwitchable}
           checked={noteType === 'x'}
           onCheckedChange={() => handleNoteTypeChange('x')}
-          className="tw:gap-2"
+          className="tw-gap-2"
         >
           <SquareX />
           <span>{localizedStrings['%footnoteEditor_noteType_crossReference_label%']}</span>
@@ -110,7 +104,7 @@ export function FootnoteTypeDropdown({
           disabled={noteType === 'x' && !isTypeSwitchable}
           checked={noteType === 'f'}
           onCheckedChange={() => handleNoteTypeChange('f')}
-          className="tw:gap-2"
+          className="tw-gap-2"
         >
           <FunctionSquare />
           <span>{localizedStrings['%footnoteEditor_noteType_footnote_label%']}</span>
@@ -119,7 +113,7 @@ export function FootnoteTypeDropdown({
           disabled={noteType === 'x' && !isTypeSwitchable}
           checked={noteType === 'fe'}
           onCheckedChange={() => handleNoteTypeChange('fe')}
-          className="tw:gap-2"
+          className="tw-gap-2"
         >
           <SquareSigma />
           <span>{localizedStrings['%footnoteEditor_noteType_endNote_label%']}</span>

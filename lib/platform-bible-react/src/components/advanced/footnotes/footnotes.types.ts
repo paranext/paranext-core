@@ -1,4 +1,5 @@
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
+import React from 'react';
 
 export type FootnoteLayout = 'horizontal' | 'vertical';
 
@@ -31,6 +32,10 @@ export interface FootnoteItemProps {
    * is being used.
    */
   formatCaller?: (caller: string | undefined) => string | undefined;
+  /** Whether this item shows an edit button (when the parent editor is in edit mode) */
+  isEditable?: boolean;
+  /** Called when the edit button on this item is clicked */
+  onEditClick?: () => void;
 }
 
 /** Interface defining the properties for the FootnoteList component */
@@ -75,4 +80,20 @@ export interface FootnoteListProps {
   formatCaller?: (caller: string | undefined, index: number) => string | undefined;
   /** Callback to handle clicking/selecting a footnote in the list */
   onFootnoteSelected?: (footnote: MarkerObject, index: number, listId: string | number) => void;
+  /** Whether footnotes are editable (shows edit buttons, enables double-click to edit) */
+  isEditable?: boolean;
+  /** The index of the footnote currently being edited inline, or undefined if none */
+  editingFootnoteIndex?: number;
+  /** Called when the user requests to edit a footnote (double-click or edit button) */
+  onFootnoteEditRequested?: (
+    footnote: MarkerObject,
+    index: number,
+    listId: string | number,
+  ) => void;
+  /**
+   * Render function that returns the inline editor for a given footnote index. Called only when
+   * `editingFootnoteIndex` matches the index. This keeps `FootnoteList` decoupled from
+   * `FootnoteEditor` and its dependencies.
+   */
+  footnoteEditorRenderer?: (index: number) => React.ReactNode;
 }

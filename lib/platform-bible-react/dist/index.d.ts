@@ -643,6 +643,10 @@ export interface FootnoteItemProps {
 	 * is being used.
 	 */
 	formatCaller?: (caller: string | undefined) => string | undefined;
+	/** Whether this item shows an edit button (when the parent editor is in edit mode) */
+	isEditable?: boolean;
+	/** Called when the edit button on this item is clicked */
+	onEditClick?: () => void;
 }
 /** Interface defining the properties for the FootnoteList component */
 export interface FootnoteListProps {
@@ -686,6 +690,18 @@ export interface FootnoteListProps {
 	formatCaller?: (caller: string | undefined, index: number) => string | undefined;
 	/** Callback to handle clicking/selecting a footnote in the list */
 	onFootnoteSelected?: (footnote: MarkerObject, index: number, listId: string | number) => void;
+	/** Whether footnotes are editable (shows edit buttons, enables double-click to edit) */
+	isEditable?: boolean;
+	/** The index of the footnote currently being edited inline, or undefined if none */
+	editingFootnoteIndex?: number;
+	/** Called when the user requests to edit a footnote (double-click or edit button) */
+	onFootnoteEditRequested?: (footnote: MarkerObject, index: number, listId: string | number) => void;
+	/**
+	 * Render function that returns the inline editor for a given footnote index. Called only when
+	 * `editingFootnoteIndex` matches the index. This keeps `FootnoteList` decoupled from
+	 * `FootnoteEditor` and its dependencies.
+	 */
+	footnoteEditorRenderer?: (index: number) => React$1.ReactNode;
 }
 /**
  * Object containing all keys used for localization in the FootnoteEditor component. If you're using
@@ -749,17 +765,22 @@ export interface FootnoteEditorProps {
 	 * parent editor, so the client does not need to handle this in the `onChange` callback.
 	 */
 	parentEditorRef?: React$1.RefObject<EditorRef | null>;
+	/**
+	 * When true, the editor is rendered inline (e.g., inside the footnote pane) rather than inside a
+	 * popover. Skips width-locking so the editor fills its container naturally.
+	 */
+	inline?: boolean;
 }
 /**
  * Component to edit footnotes from within the editor component
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, inline, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
-export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
+export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, isEditable, onEditClick, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
-export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
+export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, isEditable, editingFootnoteIndex, onFootnoteEditRequested, footnoteEditorRenderer, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */

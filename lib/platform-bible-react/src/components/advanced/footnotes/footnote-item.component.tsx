@@ -1,7 +1,8 @@
 import React from 'react';
 import { MarkerContent, MarkerObject } from '@eten-tech-foundation/scripture-utilities';
-import { AlertCircle } from 'lucide-react';
-import { cn } from '@/utils/shadcn-ui/utils';
+import { AlertCircle, Pencil } from 'lucide-react';
+import { cn } from '@/utils/shadcn-ui.util';
+import { Button } from '@/components/shadcn-ui/button';
 import { FootnoteItemProps } from './footnotes.types';
 
 function makeKey(parentMarker: string | undefined, content?: MarkerContent[]): string {
@@ -80,11 +81,11 @@ function renderContent(
       return (
         <span
           key={key}
-          className="tw:inline-flex tw:items-center tw:gap-1 tw:underline tw:decoration-destructive"
+          className="tw-inline-flex tw-items-center tw-gap-1 tw-underline tw-decoration-destructive"
         >
-          <AlertCircle className="tw:h-4 tw:w-4 tw:fill-destructive" />
+          <AlertCircle className="tw-h-4 tw-w-4 tw-fill-destructive" />
           <span>{footnotePart}</span>
-          <AlertCircle className="tw:h-4 tw:w-4 tw:fill-destructive" />
+          <AlertCircle className="tw-h-4 tw-w-4 tw-fill-destructive" />
         </span>
       );
     }
@@ -112,7 +113,7 @@ function renderMarkerObject(
         showMarkers && <span className="marker">{`\\${marker} `}</span>
       ) : (
         <AlertCircle
-          className="tw:text-error tw:mr-1 tw:inline-block tw:h-4 tw:w-4"
+          className="tw-text-error tw-mr-1 tw-inline-block tw-h-4 tw-w-4"
           aria-label="Missing marker"
         />
       )}
@@ -130,6 +131,8 @@ export function FootnoteItem({
   layout = 'horizontal',
   formatCaller,
   showMarkers = true,
+  isEditable,
+  onEditClick,
 }: FootnoteItemProps) {
   const caller = formatCaller ? formatCaller(footnote.caller) : footnote.caller;
   const isCallerFormatted = caller !== footnote.caller;
@@ -158,7 +161,7 @@ export function FootnoteItem({
   const footnoteCaller = caller && (
     // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
     // specific class name in case styling is needed.
-    <span className={cn('note-caller tw:inline-block', { formatted: isCallerFormatted })}>
+    <span className={cn('note-caller tw-inline-block', { formatted: isCallerFormatted })}>
       {caller}{' '}
     </span>
   );
@@ -169,27 +172,37 @@ export function FootnoteItem({
   const layoutClass = layout === 'horizontal' ? 'horizontal' : 'vertical';
   const markerClass = showMarkers ? 'marker-visible' : '';
   const footnoteBodyClass =
-    layout === 'horizontal' ? 'tw:col-span-1' : 'tw:col-span-2 tw:col-start-1 tw:row-start-2';
+    layout === 'horizontal' ? 'tw-col-span-1' : 'tw-col-span-2 tw-col-start-1 tw-row-start-2';
   const baseClasses = cn(layoutClass, markerClass);
 
   return (
     <>
-      <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
+      <div className={cn('textual-note-header tw-col-span-1 tw-w-fit tw-text-nowrap', baseClasses)}>
         {footnoteOpening}
         {footnoteCaller}
       </div>
-      <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
+      <div className={cn('textual-note-header tw-col-span-1 tw-w-fit tw-text-nowrap', baseClasses)}>
         {footnoteTargetRef}
       </div>
-      <div
-        className={cn(
-          'textual-note-body tw:flex tw:flex-col tw:gap-1',
-          footnoteBodyClass,
-          baseClasses,
-        )}
-      >
-        {remainingContent && remainingContent.length > 0 && (
-          <>{renderParagraphs(footnote.marker, remainingContent, showMarkers, footnoteClosing)}</>
+      <div className={cn('textual-note-body tw-flex tw-gap-1', footnoteBodyClass, baseClasses)}>
+        <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-gap-1">
+          {remainingContent && remainingContent.length > 0 && (
+            <>{renderParagraphs(footnote.marker, remainingContent, showMarkers, footnoteClosing)}</>
+          )}
+        </div>
+        {isEditable && onEditClick && (
+          <Button
+            aria-label="Edit footnote"
+            className="tw-h-5 tw-w-5 tw-shrink-0 tw-opacity-0 focus-visible:tw-opacity-100 group-hover/footnote-item:tw-opacity-100"
+            size="icon"
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditClick();
+            }}
+          >
+            <Pencil className="tw-h-3 tw-w-3" />
+          </Button>
         )}
       </div>
     </>

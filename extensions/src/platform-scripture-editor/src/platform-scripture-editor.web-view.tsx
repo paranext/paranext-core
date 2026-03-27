@@ -25,7 +25,6 @@ import {
   useProjectDataProvider,
   useProjectSetting,
   useRecentScriptureRefs,
-  useSetting,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { CommandHandlers, CommandNames } from 'papi-shared-types';
@@ -88,7 +87,6 @@ import {
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
-import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
@@ -120,11 +118,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
     .map((item) => item[1].description)
     .filter((item) => !!item),
   '%paragraphMenu_misc_markerDescription%',
-  '%versionHistoryCommit_beforeInsertFootnote%',
-  '%versionHistoryCommit_beforeInsertCrossReference%',
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
-  '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_permissions_format%',
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
@@ -136,6 +131,11 @@ const ANNOTATION_TYPE_TRANSLATOR_COMMENT = 'translator-comment';
 
 /** Annotation ID used for a pending comment that hasn't been saved yet */
 const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
+
+/** Annotation type used to highlight the footnote caller being edited */
+const ANNOTATION_TYPE_EDITING_NOTE = 'editing-note';
+/** Annotation ID for the footnote caller being edited */
+const EDITING_NOTE_ANNOTATION_ID = 'editing-note-caller';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
@@ -223,21 +223,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
-  // These control the placement of the footnote editor popover by setting the location of the anchor
-  const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>(false);
-  const [notePopoverAnchorX, setNotePopoverAnchorX] = useState<number>();
-  const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
-  const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
+  // State for inline footnote editing in the footnote pane
+  const [editingFootnoteIndex, setEditingFootnoteIndex] = useState<number | undefined>();
 
-  const editingNoteKey = useRef<string | undefined>(undefined);
-  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[] | undefined>(undefined);
+  const editingNoteKey = useRef<string>();
+  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
   /** True when the footnote editor was opened for a newly inserted note (not an existing one) */
   const editingNoteIsNew = useRef(false);
 
   // These control the placement of the comment editor popover by setting the location of the anchor
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
-  /** Remembers the last assignee chosen so the next new comment pre-selects the same user */
-  const [lastAssignedUser, setLastAssignedUser] = useState<string | undefined>();
   const [commentPopoverAnchorX, setCommentPopoverAnchorX] = useState<number>();
   const [commentPopoverAnchorY, setCommentPopoverAnchorY] = useState<number>();
   const [commentPopoverAnchorHeight, setCommentPopoverAnchorHeight] = useState<number>();
@@ -251,7 +246,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // The refs needs to start out with null for it to work as a element ref
   // eslint-disable-next-line no-null/no-null
   const markerMenuSearchRef = useRef<HTMLInputElement>(null);
-  // The refs needs to start out with null for it to work as a element ref
   // eslint-disable-next-line no-null/no-null
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
@@ -339,13 +333,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return textDirectionPossiblyError || defaultTextDirection;
   }, [textDirectionPossiblyError]);
 
-  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
-
-  const isPowerMode = useMemo(() => {
-    if (isPlatformError(interfaceModePossiblyError)) return false;
-    return interfaceModePossiblyError === 'power';
-  }, [interfaceModePossiblyError]);
-
   const textDirectionEffective = useMemo(() => {
     // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
     if (projectName === 'OHEBGRK')
@@ -371,28 +358,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return commentsPdp.canUserCreateComments();
   }, [commentsPdp]);
   const [canUserCreateComments] = usePromise(fetchCanUserCreateComments, false);
-
-  const nodeOptions = useMemo<UsjNodeOptions>(
-    () => ({
-      noteCallerOnClick: isReadOnly
-        ? undefined
-        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
-            if (!isCollapsed || editingNoteKey.current) return;
-
-            const noteOp = getNoteOps()?.at(0);
-            if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
-
-            const targetRect = event.currentTarget.getBoundingClientRect();
-            setNotePopoverAnchorX(targetRect.left);
-            setNotePopoverAnchorY(targetRect.top);
-            setNotePopoverAnchorHeight(targetRect.height);
-            editingNoteKey.current = noteNodeKey;
-            editingNoteOps.current = [noteOp];
-            setShowFootnoteEditor(true);
-          },
-    }),
-    [isReadOnly, editingNoteKey],
-  );
 
   /**
    * Whether the editor is effectively read-only, considering both the isReadOnly flag and the view
@@ -455,6 +420,81 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
 
+  /** Find the numeric note index for a given node key by comparing ops. */
+  const findNoteIndexForKey = useCallback((noteNodeKey: string): number => {
+    const keyOps = editorRef.current?.getNoteOps(noteNodeKey);
+    if (!keyOps) return -1;
+    const keyOpsJson = JSON.stringify(keyOps);
+    for (let i = 0; i < 1000; i += 1) {
+      const ops = editorRef.current?.getNoteOps(i);
+      if (!ops) return -1;
+      if (JSON.stringify(ops) === keyOpsJson) return i;
+    }
+    return -1;
+  }, []);
+
+  /**
+   * Scroll the note caller element back into view and set a temporary highlight annotation. Uses a
+   * delay to allow the footnote pane resize to settle before scrolling.
+   */
+  const highlightAndScrollToNoteCaller = useCallback((noteNodeKey: string) => {
+    // Set a temporary annotation to highlight the caller being edited.
+    // Use selectNote to place the selection at the note, then capture the range.
+    editorRef.current?.selectNote(noteNodeKey);
+    const selection = editorRef.current?.getSelection();
+    if (selection?.start) {
+      const annotationRange: AnnotationRange = {
+        start: selection.start,
+        end: selection.end ?? selection.start,
+      };
+      editorRef.current?.setAnnotation(
+        annotationRange,
+        ANNOTATION_TYPE_EDITING_NOTE,
+        EDITING_NOTE_ANNOTATION_ID,
+      );
+    }
+
+    // After pane resize settles, scroll the note caller element back into view
+    setTimeout(() => {
+      const noteElement = editorRef.current?.getElementByKey(noteNodeKey);
+      noteElement?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 200);
+  }, []);
+
+  const nodeOptions = useMemo<UsjNodeOptions>(
+    () => ({
+      noteCallerOnClick: isReadOnly
+        ? undefined
+        : (_event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+            if (!isCollapsed || editingNoteKey.current) return;
+
+            const noteOp = getNoteOps()?.at(0);
+            if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
+
+            editingNoteKey.current = noteNodeKey;
+            editingNoteOps.current = [noteOp];
+
+            const noteIndex = findNoteIndexForKey(noteNodeKey);
+            setEditingFootnoteIndex(noteIndex >= 0 ? noteIndex : undefined);
+
+            // Ensure footnote pane is visible
+            if (!footnotesPaneVisibleRef.current) {
+              setFootnotesPaneVisible(true);
+            }
+
+            // Highlight the caller and scroll it into view after pane resize
+            highlightAndScrollToNoteCaller(noteNodeKey);
+          },
+    }),
+    [
+      isReadOnly,
+      editingNoteKey,
+      findNoteIndexForKey,
+      setFootnotesPaneVisible,
+      highlightAndScrollToNoteCaller,
+    ],
+  );
+
   /**
    * Function to run to set the editor's USJ content. Also clears annotation info because setting
    * the editor's USJ silently removes all annotations
@@ -480,7 +520,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           class:
             // We don't want this `div` in our document flow, so we functionally get rid of it with
             // `display: contents`
-            'tw:contents',
+            'tw-contents',
         },
       }),
     [],
@@ -693,57 +733,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'insertFootnoteAtSelection': {
-          // Commits a snapshot of the project to the version history
-          if (projectId)
-            try {
-              await papi.commands.sendCommand(
-                'paratextBibleSendReceive.commitChanges',
-                projectId,
-                localizedStrings['%versionHistoryCommit_beforeInsertFootnote%'],
-                true,
-              );
-            } catch (err: unknown) {
-              const errMessage = getErrorMessage(err);
-              // Requires the `commitChanges` command handler to throw
-              // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
-              // successfully handle if this command is not implemented in the application version
-              if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
-                logger.info(errMessage);
-              } else {
-                logger.warn(
-                  `Error committing changes to version history before inserting footnote: ${getErrorMessage(err)}`,
-                );
-              }
-            }
-
           editorRef.current?.insertMarker('f');
           break;
         }
         case 'insertCrossReferenceAtSelection': {
-          // Commits a snapshot of the project to the version history
-
-          if (projectId)
-            try {
-              await papi.commands.sendCommand(
-                'paratextBibleSendReceive.commitChanges',
-                projectId,
-                localizedStrings['%versionHistoryCommit_beforeInsertCrossReference%'],
-                true,
-              );
-            } catch (err: unknown) {
-              const errMessage = getErrorMessage(err);
-              // Requires the `commitChanges` command handler to throw
-              // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
-              // successfully handle if this command is not implemented in the application version
-              if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
-                logger.info(errMessage);
-              } else {
-                logger.warn(
-                  `Error committing changes to version history before inserting cross-reference: ${getErrorMessage(err)}`,
-                );
-              }
-            }
-
           editorRef.current?.insertMarker('x');
           break;
         }
@@ -928,8 +921,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setFootnotesPaneVisible,
     setViewType,
     viewOptions.markerMode,
-    localizedStrings,
-    projectId,
   ]);
 
   const inlineMarkerMenuItems = useMemo(
@@ -1148,6 +1139,82 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editorRef.current?.selectNote(index);
   }, []);
 
+  /**
+   * Close the footnote editor, optionally deleting the note from the main editor first. Pass
+   * `deleteIfNew = true` when the user explicitly discards (X button); pass `false` when the note
+   * was already deleted externally so there is nothing left to remove.
+   */
+  const closeFootnoteEditor = useCallback((deleteIfNew: boolean) => {
+    if (deleteIfNew && editingNoteIsNew.current && editingNoteKey.current)
+      editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, []);
+    // Remove the temporary highlight annotation from the note caller
+    editorRef.current?.removeAnnotation(ANNOTATION_TYPE_EDITING_NOTE, EDITING_NOTE_ANNOTATION_ID);
+    editingNoteIsNew.current = false;
+    editingNoteKey.current = undefined;
+    editingNoteOps.current = undefined;
+    setEditingFootnoteIndex(undefined);
+  }, []);
+
+  /** Called by FootnoteEditor's onClose prop (X button or save-then-close). */
+  const onFootnoteEditorClose = useCallback(() => {
+    closeFootnoteEditor(true);
+  }, [closeFootnoteEditor]);
+
+  /**
+   * Handle a footnote edit request from the footnote pane (double-click or edit button). Uses
+   * programmatic DOM click on the note caller to obtain the node key needed for
+   * `replaceEmbedUpdate`.
+   */
+  const handleFootnoteEditRequested = useCallback((index: number) => {
+    if (editingNoteKey.current) return; // Already editing
+
+    const noteOps = editorRef.current?.getNoteOps(index);
+    if (!noteOps) return;
+    const noteOp = noteOps.at(0);
+    if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
+
+    // Find the note caller DOM elements and programmatically click the nth one to
+    // trigger noteCallerOnClick, which provides the node key
+    const editorContainer = editorContainerRef.current;
+    if (editorContainer) {
+      const noteCallers = editorContainer.querySelectorAll('.immutable-note-caller > button');
+      if (noteCallers[index]) {
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        (noteCallers[index] as HTMLElement).click();
+        return;
+      }
+    }
+
+    // Fallback: open editor without node key (save will use onChange only)
+    editingNoteKey.current = undefined;
+    editingNoteOps.current = [noteOp];
+    editingNoteIsNew.current = false;
+    setEditingFootnoteIndex(index);
+
+    // Also select the note in the main editor to scroll to it
+    allowScrollForInternalRef.current = true;
+    editorRef.current?.selectNote(index);
+  }, []);
+
+  /** Render function for the inline footnote editor in the footnote pane. */
+  const footnoteEditorRenderer = useCallback(
+    () => (
+      <FootnoteEditor
+        inline
+        classNameForEditor="scripture-font"
+        noteOps={editingNoteOps.current}
+        noteKey={editingNoteKey.current}
+        onClose={onFootnoteEditorClose}
+        scrRef={scrRef}
+        editorOptions={options}
+        defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
+        localizedStrings={localizedStrings}
+        parentEditorRef={editorRef}
+      />
+    ),
+    [scrRef, options, localizedStrings, onFootnoteEditorClose],
+  );
+
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
     function saveUsjToPdpIfUpdatedInternal(usjFromEditor = editorRef.current?.getUsj()) {
@@ -1171,26 +1238,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       currentlyWritingUsjToPdp.current = true;
       usjSentToPdp.current = newUsj;
       try {
-        const saveResult = await saveUsjToPdpRawStableRef.current(newUsj);
-
-        // Prompts the PDP to commit changes to the version history once a day if the save was successfully
-        if (saveResult && projectId) {
-          try {
-            await papi.commands.sendCommand('paratextBibleSendReceive.commitDaily', projectId);
-          } catch (err: unknown) {
-            const errMessage = getErrorMessage(err);
-            // Requires the `commitChanges` command handler to throw
-            // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
-            // successfully handle if this command is not implemented in the application version
-            if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
-              logger.info(errMessage);
-            } else {
-              logger.warn(
-                `Error committing version history after saving USJ to PDP: ${getErrorMessage(err)}`,
-              );
-            }
-          }
-        } else if (!saveResult && currentlyWritingUsjToPdp.current) {
+        if (!(await saveUsjToPdpRawStableRef.current(newUsj)) && currentlyWritingUsjToPdp.current) {
           currentlyWritingUsjToPdp.current = false;
 
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
@@ -1232,50 +1280,54 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [usjFromPdp, projectName, localizedStrings, projectId]);
+  }, [usjFromPdp, projectName, localizedStrings]);
 
-  /**
-   * Close the footnote editor, optionally deleting the note from the main editor first. Pass
-   * `deleteIfNew = true` when the user explicitly discards (X button); pass `false` when the note
-   * was already deleted externally so there is nothing left to remove.
-   */
-  const closeFootnoteEditor = useCallback((deleteIfNew: boolean) => {
-    if (deleteIfNew && editingNoteIsNew.current && editingNoteKey.current)
-      editorRef.current?.replaceEmbedUpdate(editingNoteKey.current, []);
-    editingNoteIsNew.current = false;
-    editingNoteKey.current = undefined;
-    editingNoteOps.current = undefined;
-    setShowFootnoteEditor(false);
-  }, []);
-
-  /** Called by FootnoteEditor's onClose prop (X button or save-then-close). */
-  const onFootnoteEditorClose = useCallback(() => {
-    closeFootnoteEditor(true);
-  }, [closeFootnoteEditor]);
-
-  const openFootnoteEditorOnNewNote = useCallback((ops?: DeltaOp[], insertedNodeKey?: string) => {
-    if (insertedNodeKey && ops) {
-      // If we are already editing a note, then returns
-      if (editingNoteKey.current) return;
-
-      // Makes sure the node is a note
-      const noteOp = ops[1];
-      if (!isInsertEmbedOpOfType('note', noteOp)) return;
-
-      const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
-      // Note element must be defined
-      if (!noteElement) return;
-
-      const targetRect = noteElement.getBoundingClientRect();
-      setNotePopoverAnchorX(targetRect.left);
-      setNotePopoverAnchorY(targetRect.top);
-      setNotePopoverAnchorHeight(targetRect.height);
-      editingNoteKey.current = insertedNodeKey;
-      editingNoteOps.current = [noteOp];
-      editingNoteIsNew.current = true;
-      setShowFootnoteEditor(true);
+  // Close inline editor when read-only mode is activated
+  useEffect(() => {
+    if (isReadOnlyEffective && editingFootnoteIndex !== undefined) {
+      closeFootnoteEditor(false);
     }
-  }, []);
+  }, [isReadOnlyEffective, editingFootnoteIndex, closeFootnoteEditor]);
+
+  // Close inline editor when footnote pane is hidden
+  useEffect(() => {
+    if (!footnotesPaneVisible && editingFootnoteIndex !== undefined) {
+      closeFootnoteEditor(false);
+    }
+  }, [footnotesPaneVisible, editingFootnoteIndex, closeFootnoteEditor]);
+
+  const openFootnoteEditorOnNewNote = useCallback(
+    (ops?: DeltaOp[], insertedNodeKey?: string) => {
+      if (insertedNodeKey && ops) {
+        // If we are already editing a note, then returns
+        if (editingNoteKey.current) return;
+
+        // Makes sure the node is a note
+        const noteOp = ops[1];
+        if (!isInsertEmbedOpOfType('note', noteOp)) return;
+
+        const noteElement = editorRef.current?.getElementByKey(insertedNodeKey);
+        // Note element must be defined
+        if (!noteElement) return;
+
+        editingNoteKey.current = insertedNodeKey;
+        editingNoteOps.current = [noteOp];
+        editingNoteIsNew.current = true;
+
+        const noteIndex = findNoteIndexForKey(insertedNodeKey);
+        setEditingFootnoteIndex(noteIndex >= 0 ? noteIndex : undefined);
+
+        // Ensure footnote pane is visible
+        if (!footnotesPaneVisibleRef.current) {
+          setFootnotesPaneVisible(true);
+        }
+
+        // Highlight the caller and scroll it into view after pane resize
+        highlightAndScrollToNoteCaller(insertedNodeKey);
+      }
+    },
+    [findNoteIndexForKey, setFootnotesPaneVisible, highlightAndScrollToNoteCaller],
+  );
 
   const handleEditorialUsjChange = useCallback(
     (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
@@ -1285,15 +1337,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // onUsjChange with an insertedNodeKey.
         // Detect this case (has insertedNodeKey but is not an insert op) and mark the note
         // as no longer "new", so that closing the editor as part of the save does not
-        // delete the note the user just saved.
-        if (insertedNodeKey && !isInsertEmbedOpOfType('note', ops?.[1]))
+        // delete the note the user just saved. Also update the key to track the new node.
+        if (insertedNodeKey && !isInsertEmbedOpOfType('note', ops?.[1])) {
+          editingNoteKey.current = insertedNodeKey;
           editingNoteIsNew.current = false;
+        }
         // Close the footnote editor and discard the note being edited if its caller was deleted in
         // the main editor.
         else if (!editorRef.current?.getNoteOps(editingNoteKey.current)) closeFootnoteEditor(false); // false => the note caller is already gone.
-      } else openFootnoteEditorOnNewNote(ops, insertedNodeKey);
+      } else if (editingFootnoteIndex === undefined) {
+        // Only open editor for new notes when we're not already editing inline
+        openFootnoteEditorOnNewNote(ops, insertedNodeKey);
+      }
     },
-    [closeFootnoteEditor, openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
+    [closeFootnoteEditor, editingFootnoteIndex, openFootnoteEditorOnNewNote, saveUsjToPdpIfUpdated],
   );
 
   /**
@@ -1340,15 +1397,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [scrRef, webViewId],
   );
 
-  // Sync editor content with PDP data and track write completion
-  useEditorPdpSync({
-    usjFromPdp,
-    editorRef,
-    usjSentToPdp,
-    setEditorUsj,
-    currentlyWritingUsjToPdp,
-    saveUsjToPdpIfUpdated,
-  });
+  // Update the editor if a change comes in from the PDP
+  // Note: this will run every time we get data from the PDP whether or not it is different than it
+  // was previously. We need to know when data comes in so we can set
+  // `currentlyWritingUsjToPdp.current` to `false` appropriately
+  useEffect(() => {
+    if (!usjFromPdp || !editorRef.current) return;
+
+    // The PDP informed us of updates, so writing to it must be complete (if we were writing)
+    currentlyWritingUsjToPdp.current = false;
+
+    // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
+    // has the best data. This could happen if the selected chapter changed or something other than
+    // the editor wrote to the PDP.
+    if (!areUsjContentsEqualExceptWhitespace(usjFromPdp, usjSentToPdp.current)) {
+      usjSentToPdp.current = usjFromPdp;
+      setEditorUsj.current(usjFromPdp);
+    }
+    // If the editor has updates that the PDP hasn't recorded, save them to the PDP
+    else saveUsjToPdpIfUpdated();
+  }, [saveUsjToPdpIfUpdated, usjFromPdp]);
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
@@ -1498,7 +1566,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
 
         pendingCommentAnnotationRange.current = undefined;
-        if (assignedUser !== undefined) setLastAssignedUser(assignedUser);
         setShowCommentEditor(false);
       } catch (error) {
         logger.error(`Error creating comment: ${getErrorMessage(error)}`);
@@ -1589,25 +1656,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   function renderEditor() {
     /* Workaround to pull in platform-bible-react styles into the editor */
-    const workaround = <Button className="tw:hidden" />;
+    const workaround = <Button className="tw-hidden" />;
 
     // When not rendering the editor component itself, make sure not to try to apply the scripture-font
     // in the useEffect above
 
-    // No project selected — render an empty state instead of the loading spinner. Without this
-    // branch the editor would stay on the spinner forever in Platform.Bible's simple mode when
-    // started without a pre-selected project.
-    if (!projectId) {
-      return (
-        <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
-          {workaround}
-          {localizedStrings['%webView_platformScriptureEditor_emptyState_noProject%']}
-        </div>
-      );
-    }
     if (!bookExists) {
       return (
-        <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
+        <div className="tw-flex tw-items-center tw-justify-center tw-h-full tw-px-4">
           {workaround}
           {isReadOnly
             ? localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
@@ -1617,7 +1673,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
     if (!usjFromPdp || usjFromPdp === defaultUsj) {
       return (
-        <div className="tw:flex tw:items-center tw:justify-center tw:h-full">
+        <div className="tw-flex tw-items-center tw-justify-center tw-h-full">
           <Spinner />
         </div>
       );
@@ -1647,39 +1703,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     );
   }
 
-  const bcvControls = isPowerMode ? (
-    <BookChapterControl
-      scrRef={scrRef}
-      handleSubmit={setScrRefWithScroll}
-      getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
-      recentSearches={recentScriptureRefs}
-      onAddRecentSearch={addRecentScriptureRef}
-    />
-  ) : undefined;
-
-  const scrollGroupSelector = isPowerMode ? (
-    <ScrollGroupSelector
-      availableScrollGroupIds={availableScrollGroupIds}
-      scrollGroupId={scrollGroupId}
-      onChangeScrollGroupId={setScrollGroupId}
-      localizedStrings={scrollGroupLocalizedStrings}
-    />
-  ) : undefined;
-
   return (
-    <div className="tw:flex tw:flex-col tw:h-screen">
+    <div className="tw-flex tw-flex-col tw-h-screen">
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
         projectMenuData={webViewMenu.topMenu}
-        className="scripture-editor-tab-nav tw:block tw:z-10"
+        className="scripture-editor-tab-nav tw-block tw-z-10"
         startAreaChildren={
           <>
-            {bcvControls}
+            <BookChapterControl
+              scrRef={scrRef}
+              handleSubmit={setScrRefWithScroll}
+              getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+              recentSearches={recentScriptureRefs}
+              onAddRecentSearch={addRecentScriptureRef}
+            />
             {!isReadOnlyEffective && (
               <>
                 <UndoRedoButtons
-                  className="tw:h-8"
+                  className="tw-h-8"
                   onUndoClick={() => editorRef.current?.undo()}
                   onRedoClick={() => editorRef.current?.redo()}
                   canUndo={canUndo}
@@ -1691,7 +1734,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
-                        className="tw:h-8"
+                        className="tw-h-8"
                         aria-label="Paragraph Selection"
                         title="Paragraph Selection"
                         variant="outline"
@@ -1706,7 +1749,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                         <ChevronDown />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="tw:p-0 tw:w-96">
+                    <PopoverContent className="tw-p-0 tw-w-96">
                       <MarkerMenu
                         localizedStrings={localizedStrings}
                         markerMenuItems={paragraphSwitcherMenuItems}
@@ -1718,20 +1761,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             )}
           </>
         }
-        endAreaChildren={scrollGroupSelector}
+        endAreaChildren={
+          <ScrollGroupSelector
+            availableScrollGroupIds={availableScrollGroupIds}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+            localizedStrings={scrollGroupLocalizedStrings}
+          />
+        }
       />
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
       <div
         ref={editorContainerRef}
-        className="tw:h-auto tw:flex-1 tw:min-h-0 tw:overflow-auto"
+        className="tw-h-auto tw-flex-1 tw-min-h-0 tw-overflow-auto"
         dir={options.textDirection}
       >
         {/* Containers */}
         {Object.entries(decorations.containers ?? {}).reduce(
           (children, [id, decoration]) => (
             <div
-              className="tw:h-full"
+              className="tw-h-full"
               data-container-id={id}
               key={`container-${id}`}
               style={decoration.style}
@@ -1739,8 +1789,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               {children}
             </div>
           ),
-          <div className="tw:flex tw:flex-col tw:h-full">
-            <div className="tw:flex-grow tw:min-h-0 tw:m-1 tw:flex tw:flex-col tw:gap-1">
+          <div className="tw-flex tw-flex-col tw-h-full">
+            <div className="tw-flex-grow tw-min-h-0 tw-m-1 tw-flex tw-flex-col tw-gap-1">
               {Object.entries(decorations.headers ?? {}).map(([id, header]) => (
                 // Headers
                 <Alert
@@ -1753,7 +1803,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 >
                   {header.iconUrl && (
                     <img
-                      className="tw:h-4 tw:w-4"
+                      className="tw-h-4 tw-w-4"
                       src={header.iconUrl}
                       alt={
                         header.iconAltText
@@ -1769,7 +1819,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                     <AlertDescription>
                       <MarkdownRenderer
                         anchorTarget="_blank"
-                        className="tw:max-w-none tw:text-sm"
+                        className="tw-max-w-none tw-text-sm"
                         markdown={decorationsLocalizedStrings[header.descriptionMd]}
                       />
                     </AlertDescription>
@@ -1783,6 +1833,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   onFootnoteSelected={handleFootnoteSelected}
                   useWebViewState={useWebViewState}
                   showMarkers={options.view?.markerMode !== 'hidden'}
+                  isEditable={!isReadOnlyEffective}
+                  editingFootnoteIndex={editingFootnoteIndex}
+                  onFootnoteEditRequested={handleFootnoteEditRequested}
+                  footnoteEditorRenderer={footnoteEditorRenderer}
                 >
                   {/* Render the editor inside the container decorations without re-mounting on re-parent */}
                   <OutPortal node={editorPortalNode} />
@@ -1800,7 +1854,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/** Inline markers menu components */}
       <Popover open={showMarkersMenu}>
         <PopoverAnchor
-          className="tw:absolute"
+          className="tw-absolute"
           style={{
             top: markersMenuAnchorY,
             left: markersMenuAnchorX,
@@ -1810,7 +1864,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }}
         />
         <PopoverContent
-          className="tw:w-[500px] tw:p-0"
+          className="tw-w-[500px] tw-p-0"
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -1823,37 +1877,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           />
         </PopoverContent>
       </Popover>
-      {/** Footnote editor components */}
-      <Popover open={showFootnoteEditor}>
-        <PopoverAnchor
-          className="tw:absolute"
-          style={{
-            top: notePopoverAnchorY,
-            left: notePopoverAnchorX,
-            // This height makes it so that visually the popover displays below the current line where the footnote is
-            height: notePopoverAnchorHeight,
-            width: 0,
-            pointerEvents: 'none',
-          }}
-        />
-        <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
-          <FootnoteEditor
-            classNameForEditor="scripture-font"
-            noteOps={editingNoteOps.current}
-            noteKey={editingNoteKey.current}
-            onClose={onFootnoteEditorClose}
-            scrRef={scrRef}
-            editorOptions={options}
-            defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}
-            localizedStrings={localizedStrings}
-            parentEditorRef={editorRef}
-          />
-        </PopoverContent>
-      </Popover>
       {/** Comment editor for creating new comment threads */}
       <Popover open={showCommentEditor}>
         <PopoverAnchor
-          className="tw:absolute"
+          className="tw-absolute"
           style={{
             top: commentPopoverAnchorY,
             left: commentPopoverAnchorX,
@@ -1862,13 +1889,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             pointerEvents: 'none',
           }}
         />
-        <PopoverContent className="tw:w-[400px] tw:p-[10px]">
+        <PopoverContent className="tw-w-[400px] tw-p-[10px]">
           <CommentEditor
             assignableUsers={commentEditorAssignableUsers}
             onSave={onCommentEditorSave}
             onClose={onCommentEditorCancel}
             localizedStrings={localizedStrings}
-            initialAssignedUser={lastAssignedUser}
           />
         </PopoverContent>
       </Popover>
