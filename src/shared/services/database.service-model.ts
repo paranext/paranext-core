@@ -21,9 +21,28 @@ export interface OpenDatabaseOptions {
    *
    * See more information about this option in [the SQLite
    * documentation](https://www.sqlite.org/c3ref/open.html)
+   *
+   * @deprecated 10 March 2026 - All SQLite calls are now executed sequentially in a single worker
+   *   thread, which provides mutual exclusion semantics regardless of this flag.
    */
   fullMutex?: boolean;
 }
+
+// Note: bigint and ArrayBuffer like Uint8Array types are intentionally not included in SqlValue
+// even though they are supported in node:sqlite because they are not JSON-serializable, and we need
+// to be able to serialize query parameters and results to pass between threads and across WebSocket.
+// null is included as a convenience because node:sqlite accepts null, so it would be somewhat
+// confusing not to accept null here. We allow wide input and adjust to the right types internally
+/** A value that can be bound to a SQLite query parameter or returned from a query. */
+export type SqlValue = undefined | null | number | string;
+/** A record of named SQL parameters for a SQLite query. */
+export type NamedSqlParameters = Record<string, SqlValue>;
+/**
+ * A record of SQL output values for each column for a single row output from a SQLite query. The
+ * keys of the object are the column names, and the values are the corresponding SQL values in this
+ * row.
+ */
+export type SqlOutputRow = Record<string, SqlValue>;
 
 /**
  * Information about the result of a query execution. This is the result of a query that modifies
@@ -47,7 +66,7 @@ export interface RunResult {
  * can also attach and detach databases to the current database connection instance using
  * `attachDatabase` and `detachDatabase`.
  *
- * [A database connection](https://www.sqlite.org/c3ref/open.html) is an instance of sqlite3 pointed
+ * [A database connection](https://www.sqlite.org/c3ref/open.html) is an instance of SQLite pointed
  * to a database file. There may be multiple instances of database connections pointing to the same
  * file, and one instance of a database connection may have additional database files attached to
  * it.
@@ -95,7 +114,9 @@ export type IDatabaseService = {
    *   from `openDatabase`.
    * @param extensionFileUri - The file URI of the SQLite database to attach. This can only be an
    *   extension asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`.
-   * @param schemaName - The schema name to associate with the attached database.
+   * @param schemaName - The schema name to associate with the attached database. Must start with a
+   *   letter or underscore and contain only letters, digits, and underscores
+   *   (`[a-zA-Z_][a-zA-Z0-9_]*`). SQLite reserved words (e.g. `main`, `temp`) are not allowed.
    * @returns A promise that resolves when the database file is successfully attached.
    */
   attachDatabase(
@@ -112,33 +133,67 @@ export type IDatabaseService = {
    *
    * @param databaseNonce - The nonce of the database connection to detach from. You get this nonce
    *   from `openDatabase`.
-   * @param schemaName - The schema name to associate with the attached database.
+   * @param schemaName - The schema name of the attached database to detach. Must start with a
+   *   letter or underscore and contain only letters, digits, and underscores
+   *   (`[a-zA-Z_][a-zA-Z0-9_]*`). SQLite reserved words (e.g. `main`, `temp`) are not allowed.
    * @returns A promise that resolves when the database file is successfully detached.
    */
   detachDatabase(databaseNonce: string, schemaName: string): Promise<void>;
 
   /**
+   * JSDOC SOURCE databaseService.run
+   *
    * Execute a query on a specific database connection instance and receive some information about
    * changes you made.
    *
    * This method is used for queries that modify the database such as `INSERT`, `UPDATE`, `DELETE`,
    * and some `PRAGMA` queries. For queries that return data like `SELECT`, use `select`.
    *
+   * @example Using anonymous parameters:
+   *
+   * ```ts
+   * const { lastId, changes } = await databaseService.run(
+   *   databaseNonce,
+   *   'INSERT INTO users (name, age) VALUES (?, ?)',
+   *   'John Doe',
+   *   30,
+   * );
+   * ```
+   *
+   * @example Using named parameters:
+   *
+   * ```ts
+   * const { lastId, changes } = await databaseService.run(
+   *   databaseNonce,
+   *   'INSERT INTO users (name, age) VALUES ($name, $age)',
+   *   { $name: 'John Doe', $age: 30 },
+   * );
+   * ```
+   *
    * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
    *   `openDatabase`.
    * @param query - The SQL query to execute.
-   * @param args - Optional arguments to pass into the query. You can use `?` in the query and
-   *   specify arguments to replace those `?`s in order, or you can use named parameters like `$id`
-   *   and pass in an object whose keys match the named parameters and whose values are the argument
-   *   values you would like to pass into the parameters. Parameters are not allowed to be used for
-   *   table or column names. See [`sqlite3`'s documentation on
-   *   `run`](https://github.com/TryGhost/node-sqlite3/wiki/API#runsql--param---callback) for more
-   *   information about various ways to pass in arguments.
+   * @param namedParameters - An optional object whose keys match named parameters in the query
+   *   (e.g. `$id`) and whose values are the argument values you would like to pass into the
+   *   corresponding named parameters. Parameters are not allowed to be used for table or column
+   *   names. See [`SQLite`'s documentation on binding values
+   *   parameters](https://www.sqlite.org/c3ref/bind_blob.html) for more information about various
+   *   ways to pass in arguments.
+   * @param anonymousParameters - Zero or more argument values to bind to `?` positional parameters.
    * @returns A promise that resolves to the result of the query execution.
    */
-  run(databaseNonce: string, query: string, ...args: unknown[]): Promise<RunResult>;
+  run(databaseNonce: string, query: string, ...anonymousParameters: SqlValue[]): Promise<RunResult>;
+  /** JSDOC DESTINATION databaseService.run */
+  run(
+    databaseNonce: string,
+    query: string,
+    namedParameters: NamedSqlParameters,
+    ...anonymousParameters: SqlValue[]
+  ): Promise<RunResult>;
 
   /**
+   * JSDOC SOURCE databaseService.select
+   *
    * Execute a query on a specific database connection instance and receive all rows returned from
    * the query.
    *
@@ -148,17 +203,50 @@ export type IDatabaseService = {
    * Note: This method is not only for `SELECT` queries but is for any queries that return data. It
    * is named `select` for ease of association.
    *
+   * @example Using anonymous parameters:
+   *
+   * ```ts
+   * const rows = await databaseService.select(
+   *   databaseNonce,
+   *   'SELECT name, age FROM users WHERE age > ?',
+   *   18,
+   * );
+   * // rows is of type SqlOutputRow[], where each row has the shape { name: string, age: number }
+   * ```
+   *
+   * @example Using named parameters:
+   *
+   * ```ts
+   * const rows = await databaseService.select(
+   *   databaseNonce,
+   *   'SELECT name, age FROM users WHERE age > $minAge',
+   *   { $minAge: 18 },
+   * );
+   * // rows is of type SqlOutputRow[], where each row has the shape { name: string, age: number }
+   * ```
+   *
    * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
    *   `openDatabase`.
    * @param query - The SQL query to execute.
-   * @param args - Optional arguments to pass into the query. You can use `?` in the query and
-   *   specify arguments to replace those `?`s in order, or you can use named parameters like `$id`
-   *   and pass in an object whose keys match the named parameters and whose values are the argument
-   *   values you would like to pass into the parameters. Parameters are not allowed to be used for
-   *   table or column names. See [`sqlite3`'s documentation on
-   *   `run`](https://github.com/TryGhost/node-sqlite3/wiki/API#runsql--param---callback) for more
-   *   information about various ways to pass in arguments.
+   * @param namedParameters - An optional object whose keys match named parameters in the query
+   *   (e.g. `$id`) and whose values are the argument values you would like to pass into the
+   *   corresponding named parameters. Parameters are not allowed to be used for table or column
+   *   names. See [`SQLite`'s documentation on binding values
+   *   parameters](https://www.sqlite.org/c3ref/bind_blob.html) for more information about various
+   *   ways to pass in arguments.
+   * @param anonymousParameters - Zero or more argument values to bind to `?` positional parameters.
    * @returns A promise that resolves to an array of rows retrieved by the query.
    */
-  select(databaseNonce: string, query: string, ...args: unknown[]): Promise<unknown[]>;
+  select(
+    databaseNonce: string,
+    query: string,
+    ...anonymousParameters: SqlValue[]
+  ): Promise<SqlOutputRow[]>;
+  /** JSDOC DESTINATION databaseService.select */
+  select(
+    databaseNonce: string,
+    query: string,
+    namedParameters: NamedSqlParameters,
+    ...anonymousParameters: SqlValue[]
+  ): Promise<SqlOutputRow[]>;
 } & typeof databaseServiceObjectToProxy;

@@ -18,8 +18,8 @@ import { isNoisyDevModeEnvVariableSet } from '@node/utils/util';
 
 globalThis.processType = ProcessType.Main;
 globalThis.isPackaged = app.isPackaged;
-// process.cwd() in dev is the repo root
-globalThis.resourcesPath = app.isPackaged ? process.resourcesPath : process.cwd();
+// app.getAppPath() in dev is the repo root
+globalThis.resourcesPath = app.isPackaged ? process.resourcesPath : app.getAppPath();
 globalThis.logLevel =
   // Assert the extracted type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
