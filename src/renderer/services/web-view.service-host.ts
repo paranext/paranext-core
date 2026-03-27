@@ -1132,23 +1132,30 @@ globalThis.resetWebViewStateById = resetWebViewStateSync;
 // #region openWebView and reloadWebView
 
 /**
- * Creates a new WebView or reloads an existing one based on the saved WebView definition.
+ * Prepares a fully-formed WebView definition by calling the provider and processing the content
+ * (HTML wrapping, CSP, imports injection, theme styles). Does NOT add the webview to the dock
+ * layout. Used by Simple mode to render WebViews directly.
  *
- * @param savedWebViewDefinition Saved WebView definition to pass to
- *   {@link IWebViewProvider.getWebView} to open or reload the WebView with
- *   `savedWebViewDefinition.id`
- * @param layout Information about where you want the new web view to go. Defaults to adding as a
- *   tab. Does nothing on an existing WebView
- * @param optionsDefaulted Options that affect what this method does. **YOU MUST RUN
+ * @param savedWebViewDefinition The saved WebView definition to prepare
+ * @param optionsDefaulted Options that affect how the WebView is created. **YOU MUST RUN
  *   {@link getWebViewOptionsDefaults} ON THIS OBJECT BEFORE PASSING IT IN!**
- * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
- *   not create a WebView for this request.
+ * @returns The fully processed WebViewTabProps, or undefined if the provider did not create one
  */
-async function openOrReloadWebView(
+export async function prepareWebViewDefinition(
   savedWebViewDefinition: SavedWebViewDefinition,
-  layout: Layout = { type: 'tab' },
   optionsDefaulted: OpenWebViewOptions = {},
-): Promise<WebViewId | undefined> {
+): Promise<WebViewTabProps | undefined> {
+  return prepareWebViewDefinitionInternal(savedWebViewDefinition, optionsDefaulted);
+}
+
+/**
+ * Internal implementation of prepareWebViewDefinition. Called by both the exported function and
+ * openOrReloadWebView.
+ */
+async function prepareWebViewDefinitionInternal(
+  savedWebViewDefinition: SavedWebViewDefinition,
+  optionsDefaulted: OpenWebViewOptions = {},
+): Promise<WebViewTabProps | undefined> {
   const { webViewType } = savedWebViewDefinition;
 
   // Get the WebView definition from the webview provider
@@ -1177,11 +1184,6 @@ async function openOrReloadWebView(
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) allowScripts = webView.allowScripts ?? true;
   /** Default allowSameOrigin to true */
   const allowSameOrigin = webView.allowSameOrigin ?? true;
-  /**
-   * Only allow connecting to `papi-extension:` and `https:` urls. For HTML and React WebViews, this
-   * controls the `frame-src` directive and therefore which urls can be iframe `src`es in the
-   * WebView. For URL WebViews, this controls what urls the WebView can be.
-   */
   let { allowedFrameSources } = webView;
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL && allowedFrameSources)
     allowedFrameSources = allowedFrameSources.filter(
@@ -1191,9 +1193,7 @@ async function openOrReloadWebView(
         startsWith(hostValue, 'http://localhost:'),
     );
 
-  // Validate the WebViewDefinition to make sure it is acceptable
-  // If this is a URL WebView, it must match at least one of its `allowedFrameSources` Regex strings
-  // if any are supplied
+  // Validate URL WebView
   if (
     contentType === WEB_VIEW_CONTENT_TYPE.URL &&
     allowedFrameSources &&
@@ -1203,25 +1203,10 @@ async function openOrReloadWebView(
       `getWebView: URL WebView content ${webView.content} did not match any of its allowedFrameSources!`,
     );
 
-  if (webView.state)
-    // The web view provider might have updated the web view state, so save it
-    setFullWebViewStateById(webView.id, webView.state);
+  if (webView.state) setFullWebViewStateById(webView.id, webView.state);
 
-  // Get theme styles
   const theme = localThemeService.getCurrentThemeSync();
 
-  // `webViewRequire`, `getWebViewStateById`, `setWebViewStateById` and `resetWebViewStateById` below are defined in `src\renderer\global-this-web-view.model.ts`
-  // `useWebViewState` below is defined in `src\shared\global-this.model.ts`
-  // We have to bind `useWebViewState` to the current `window` context because calls within PAPI don't have access to a webview's `window` context
-  /**
-   * String that sets up 'import' statements in the webview to pull in libraries and clear out
-   * internet access and such
-   *
-   * WARNING: `window.top` is not deletable as a security feature (websites need to know if they are
-   * running embedded in an iframe), so the child iframes are NOT isolated from their parents. We
-   * perform a number of tasks to mitigate this issue, but it would be very nice to find a way to
-   * properly delete `window.top`
-   */
   const imports = `
   // Set up WebView imports
   window.papi = window.parent.papi;
@@ -1286,40 +1271,25 @@ async function openOrReloadWebView(
   })();
   `;
 
-  /** Nonce used to allow scripts and styles to run */
-  // TODO: Generating nonces every time causes webviews to rerender every time `getWebView` is used
-  // on an existing webview such as when the extension host is restarted. Should we save webview
-  // nonces so the `content` can be the same and not have to rerender?
-  // Or this could solve the problem as well https://github.com/paranext/paranext-core/issues/282
   const srcNonce = newNonce();
 
-  // Build the contents of the iframe
   let webViewContent: string;
-  /** CSP for allowing only certain scripts and styles */
   let specificSrcPolicy: string;
   switch (contentType) {
     case WEB_VIEW_CONTENT_TYPE.HTML:
-      // Add wrapping to turn a plain string into an iframe
       webViewContent = webView.content.includes('<html')
         ? webView.content
         : `<html><head></head><body>${webView.content}</body></html>`;
-      // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
       specificSrcPolicy = "'unsafe-inline'";
       break;
     case WEB_VIEW_CONTENT_TYPE.URL:
       webViewContent = webView.content;
-      // CSP does not apply to these webViews. If we ever add a `csp` attribute to WebView iframes,
-      // we might need to add this URL's schema to the CSP
       specificSrcPolicy = '';
       break;
     default: {
-      // Defaults to React webview definition.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const reactWebView = webView as WebViewDefinitionReact;
 
-      // Add the component as a script
-      // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
-      // reactWebView.contents. Doing so would mess up debugging web views
       webViewContent = `
         <html>
           <head>
@@ -1397,69 +1367,6 @@ async function openOrReloadWebView(
     }
   }
 
-  /**
-   * Content security policy header for the webview - controls what resources scripts and other
-   * things can access.
-   *
-   * Design decisions and guiding principles at
-   * https://github.com/paranext/paranext/wiki/Content-Security-Policy-Design
-   *
-   * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
-   *
-   * Please uncomment the image creation arbitrary code execution in `evil.js`'s WebView when you
-   * make changes so we can double check it is still successfully blocked.
-   */
-  // default-src 'none' so things can't happen unless we allow them
-  // script-src-elem allows script tags but not in-line attribute scripts. Using this instead of
-  //   just `script-src` for lower chance of arbitrary code execution (and because index.ejs CSP has
-  //   it)
-  //   'self' so scripts can be loaded from us
-  //   'wasm-unsafe-eval' because webview iframes want to use wasm
-  //   papi-extension: so scripts can be loaded from installed extensions
-  //     TODO: this probably doesn't work right now because it is purposely not included in the CSP
-  //     in index.ejs. Test this once we fix webview code to be retrieved from the backend paranext-core#89
-  //   ${specificSrcPolicy} so we can load the specific scripts needed from the iframe
-  // style-src allows them to use style/link tags and style attributes on tags
-  //   'self' so styles can be loaded from us
-  //   papi-extension: so scripts can be loaded from installed extensions
-  //   'unsafe-inline' because that's how bundled libraries' styles are loaded in :( like MUI
-  // frame-src determines what iframes can be loaded
-  //   This is derived from the WebViewDefinition's `allowedFrameSources`. WebViews must specify
-  //   the host values they want to be listed here. Since this CSP inherits from the `index.ejs`
-  //   CSP, these values must be within 'self', papi-extension:, and https:
-  //   See `index.ejs` for more info on why these sources are allowed
-  // object-src 'none' to prevent insecure object and embed until we have a reason to use them
-  // worker-src determines from where they can run web workers
-  //   'none' - we can consider changing if someone gives us a reason to run workers in the renderer
-  // manifest-src determines what manifest can be loaded for this iframe
-  //   for now, inherit 'none' from default-src - not sure why they would need a manifest
-  // connect-src only communicate over the network through JS APIs as we allow
-  //   'self' so the iframe can only communicate over the internet with us and not outside the
-  //   iframe
-  //   Note: because webview iframes are on same origin as parent window, they can still use things
-  //   that are imported to their script via the imports string above and can call the parent
-  //   window's objects directly. Objects passed through from the parent window still have full
-  //   internet access. We must essentially assume they can find a way to access the internet
-  //   through the same connect-src as index.ejs. However, it is probably best for them to use only
-  //   things we give them from parent, so might as well keep it restricted here.
-  // img-src load images
-  //   'self' so images can be loaded from us
-  //   papi-extension: so images can be loaded from installed extensions
-  //   https: so they can load images over secure connections
-  //   data: so they can load data urls
-  // media-src load audio, video, etc
-  //   'self' so media can be loaded from us
-  //   papi-extension: so media can be loaded from installed extensions
-  //   https: so media can be loaded over secure connections
-  //   data: so they can load data urls
-  // font-src load fonts
-  //   'self' so fonts can be loaded from us
-  //   papi-extension: so fonts can be loaded from installed extensions
-  //   https: so fonts can be loaded over secure connections
-  //   data: so they can load data urls
-  // form-action 'self' lets the form submit to us
-  //    TODO: not sure if this is needed. If we can attach handlers to forms, we can probably remove
-  //    this
   const contentSecurityPolicy = `<meta http-equiv="Content-Security-Policy"
     content="
       default-src 'none';
@@ -1475,11 +1382,9 @@ async function openOrReloadWebView(
       form-action 'self';
     ">`;
 
-  // Add some elements at the start of the head to give access to papi, CSP, styles, etc.
   const headStart = indexOf(webViewContent, '<head');
   const headEnd = indexOf(webViewContent, '>', headStart);
 
-  // Inject the CSP, styles, and import scripts into the html if it is not a URL iframe
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
     const themeStylesheet = `<style nonce="${srcNonce}" id="${THEME_STYLE_ELEMENT_ID}" data-theme-id="${theme.id}">${getStylesheetForTheme(theme)}</style>`;
 
@@ -1497,7 +1402,7 @@ async function openOrReloadWebView(
     ${themeStylesheet}${substring(webViewContent, headEnd + 1)}`;
   }
 
-  const finalWebView: WebViewTabProps = {
+  return {
     ...webView,
     contentType,
     content: webViewContent,
@@ -1505,6 +1410,32 @@ async function openOrReloadWebView(
     allowSameOrigin,
     allowedFrameSources,
   };
+}
+
+/**
+ * Creates a new WebView or reloads an existing one based on the saved WebView definition.
+ *
+ * @param savedWebViewDefinition Saved WebView definition to pass to
+ *   {@link IWebViewProvider.getWebView} to open or reload the WebView with
+ *   `savedWebViewDefinition.id`
+ * @param layout Information about where you want the new web view to go. Defaults to adding as a
+ *   tab. Does nothing on an existing WebView
+ * @param optionsDefaulted Options that affect what this method does. **YOU MUST RUN
+ *   {@link getWebViewOptionsDefaults} ON THIS OBJECT BEFORE PASSING IT IN!**
+ * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
+ *   not create a WebView for this request.
+ */
+async function openOrReloadWebView(
+  savedWebViewDefinition: SavedWebViewDefinition,
+  layout: Layout = { type: 'tab' },
+  optionsDefaulted: OpenWebViewOptions = {},
+): Promise<WebViewId | undefined> {
+  const finalWebView = await prepareWebViewDefinitionInternal(
+    savedWebViewDefinition,
+    optionsDefaulted,
+  );
+
+  if (!finalWebView) return undefined;
 
   const finalLayout = (await getDockLayout()).addWebViewToDock(
     finalWebView,
@@ -1524,7 +1455,7 @@ async function openOrReloadWebView(
       webView: convertWebViewDefinitionToSaved(finalWebView),
     });
 
-  return webView.id;
+  return finalWebView.id;
 }
 
 /** See {@link WebViewServiceType.openWebView} */
@@ -1599,6 +1530,35 @@ export async function reloadWebView(
 
   // If the web view is found, open it again with the same ID
   return openOrReloadWebView(existingSavedWebView, undefined, getWebViewOptionsDefaults(options));
+}
+
+/**
+ * Creates a standalone WebView definition without adding it to the dock layout. Used by Simple mode
+ * to render WebViews directly in React components.
+ *
+ * @param webViewType The type of WebView to create
+ * @param options Options for creating the WebView (e.g. projectId, isReadOnly)
+ * @returns The WebView ID and fully processed WebViewTabProps, or undefined if the provider
+ *   declined
+ */
+export async function createStandaloneWebView(
+  webViewType: WebViewType,
+  options: OpenWebViewOptions & Record<string, unknown> = {},
+): Promise<{ id: WebViewId; definition: WebViewTabProps } | undefined> {
+  await waitForInitialize();
+
+  const id = newGuid();
+  const savedDefinition: SavedWebViewDefinition = {
+    id,
+    webViewType,
+    ...options,
+  };
+
+  const optionsDefaulted = { ...options, bringToFront: false };
+  const definition = await prepareWebViewDefinitionInternal(savedDefinition, optionsDefaulted);
+  if (!definition) return undefined;
+
+  return { id, definition };
 }
 
 // #endregion openWebView and reloadWebView
