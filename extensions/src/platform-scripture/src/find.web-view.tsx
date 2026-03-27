@@ -64,6 +64,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FindFilters } from './find/find-filters.component';
 import { LocalizedBookData, SearchTextType } from './find/find-types';
 import { applyPreserveCase } from './find/find.utils';
+import { ReplacePreviewOptions } from './find/replace-preview-options.component';
+import { DEFAULT_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import {
   HidableFindResult,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
@@ -109,6 +111,23 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_showRecentSearches%',
   '%webView_find_toggleFilters%',
   '%webView_find_verseTextOnly%',
+  '%webView_find_previewOptions_toggle%',
+  '%webView_find_previewOptions_layout%',
+  '%webView_find_previewOptions_layout_arrow%',
+  '%webView_find_previewOptions_layout_inline%',
+  '%webView_find_previewOptions_layout_block%',
+  '%webView_find_previewOptions_shape%',
+  '%webView_find_previewOptions_shape_bar%',
+  '%webView_find_previewOptions_shape_rounded%',
+  '%webView_find_previewOptions_shape_plain%',
+  '%webView_find_previewOptions_color%',
+  '%webView_find_previewOptions_color_redCyan%',
+  '%webView_find_previewOptions_color_redGreen%',
+  '%webView_find_previewOptions_color_greyBlue%',
+  '%webView_find_previewOptions_monospace%',
+  '%webView_find_previewOptions_monospaceDescription%',
+  '%webView_find_previewOptions_showInvisible%',
+  '%webView_find_previewOptions_showInvisibleDescription%',
 ];
 
 const defaultBooksPresent: string = '';
@@ -198,6 +217,13 @@ global.webViewComponent = function FindWebView({
   const [activeMode, setActiveMode] = useWebViewState<'find' | 'replace'>('findActiveMode', 'find');
   const [replaceTerm, setReplaceTerm] = useWebViewState<string>('findReplaceTerm', '');
   const [preserveCase, setPreserveCase] = useWebViewState<boolean>('findPreserveCase', false);
+  const [storedPreviewOptions, setStoredPreviewOptions] = useWebViewState<PreviewOptions>(
+    'findPreviewOptions',
+    DEFAULT_PREVIEW_OPTIONS,
+  );
+  // Spread-merge with defaults so that adding new fields in future versions doesn't break
+  // stored values that were saved before those fields existed
+  const previewOptions: PreviewOptions = { ...DEFAULT_PREVIEW_OPTIONS, ...storedPreviewOptions };
   /**
    * True while a replace operation is executing (including the mandatory re-find afterward). Keeps
    * replace buttons disabled during the gap between replace() completing and searchStatus becoming
@@ -426,7 +452,7 @@ global.webViewComponent = function FindWebView({
   // #region Search related functions
 
   const isSearchQueryValid = useMemo(() => {
-    if (searchTerm.trim() === '') return false;
+    if (searchTerm === '') return false;
     if (scope === 'selectedBooks' && selectedBookIds.length === 0) return false;
     return true;
   }, [scope, searchTerm, selectedBookIds]);
@@ -476,6 +502,8 @@ global.webViewComponent = function FindWebView({
   // so the findPdp-readiness effect below only fires once. Intentionally never reset: the fallback
   // effect is a one-shot safety net for mount-time races and should not re-fire on project switch.
   const initialSearchTriggeredRef = useRef(false);
+  // Skips adding to history on the initial render of the options-change effect.
+  const isInitialOptionsRenderRef = useRef(true);
 
   const handleStartSearch = useCallback(
     async (isExplicitSearch = false) => {
@@ -759,6 +787,11 @@ global.webViewComponent = function FindWebView({
   // memoized callback identity changed (it has many dependencies).
   const handleStartSearchRef = useRef(handleStartSearch);
   handleStartSearchRef.current = handleStartSearch;
+  // Refs so the options-change effect can read the latest values without depending on them.
+  const addRecentSearchItemRef = useRef(addRecentSearchItem);
+  addRecentSearchItemRef.current = addRecentSearchItem;
+  const searchTermRef = useRef(searchTerm);
+  searchTermRef.current = searchTerm;
   const debouncedHandleStartSearch = useRef(
     debounce(() => {
       if (explicitSearchPendingRef.current) {
@@ -775,7 +808,7 @@ global.webViewComponent = function FindWebView({
       isInitialAutoSearchRef.current = false;
       // Only skip the initial auto-search when the field is empty. When searchTerm is non-empty
       // (e.g. restored from state), fall through so results appear immediately on startup.
-      if (searchTerm.trim() === '') return undefined;
+      if (searchTerm === '') return undefined;
       initialSearchTriggeredRef.current = true;
     }
     debouncedHandleStartSearch.current();
@@ -788,6 +821,16 @@ global.webViewComponent = function FindWebView({
     relevantScopeKey,
   ]);
 
+  // When search options change (not the search term itself), add the current term to history if
+  // non-empty — the user is intentionally refining how to search for it.
+  useEffect(() => {
+    if (isInitialOptionsRenderRef.current) {
+      isInitialOptionsRenderRef.current = false;
+      return;
+    }
+    if (searchTermRef.current) addRecentSearchItemRef.current(searchTermRef.current);
+  }, [shouldMatchCase, wordRestriction, isRegexAllowed, searchTextType, relevantScopeKey]);
+
   // Fallback for startup search: if findPdp wasn't ready when the debounce fired on mount,
   // run the search as soon as findPdp becomes available (fires at most once).
   // Set explicitSearchPendingRef so the debounce timer (still pending when findPdp was already
@@ -797,7 +840,7 @@ global.webViewComponent = function FindWebView({
       !findPdp ||
       !initialSearchTriggeredRef.current ||
       searchStatus !== undefined ||
-      searchTerm.trim() === ''
+      searchTerm === ''
     )
       return;
     explicitSearchPendingRef.current = true;
@@ -851,6 +894,7 @@ global.webViewComponent = function FindWebView({
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
+      if (searchTerm) addRecentSearchItem(searchTerm);
       if (editorWebViewId && editorWebViewController) {
         // In Find mode, focus the editor so the user can read in context.
         // In Replace mode, keep focus in the Find WebView so replace term stays editable.
@@ -865,7 +909,14 @@ global.webViewComponent = function FindWebView({
           .catch((e) => logger.warn(`Find: selectRange failed: ${getErrorMessage(e)}`));
       }
     },
-    [activeMode, editorWebViewController, editorWebViewId, setVerseRefSetting],
+    [
+      activeMode,
+      addRecentSearchItem,
+      editorWebViewController,
+      editorWebViewId,
+      searchTerm,
+      setVerseRefSetting,
+    ],
   );
 
   const handleHideResult = useCallback((index: number) => {
@@ -1435,6 +1486,49 @@ global.webViewComponent = function FindWebView({
               />
             </PopoverContent>
           </Popover>
+          {activeMode === 'replace' && (
+            <ReplacePreviewOptions
+              previewOptions={previewOptions}
+              setPreviewOptions={setStoredPreviewOptions}
+              localizedStrings={{
+                togglePreviewOptions:
+                  localizedStrings['%webView_find_previewOptions_toggle%'] ?? 'View',
+                layout: localizedStrings['%webView_find_previewOptions_layout%'] ?? 'Layout',
+                layoutArrow:
+                  localizedStrings['%webView_find_previewOptions_layout_arrow%'] ?? 'Arrow',
+                layoutInline:
+                  localizedStrings['%webView_find_previewOptions_layout_inline%'] ?? 'Inline',
+                layoutBlock:
+                  localizedStrings['%webView_find_previewOptions_layout_block%'] ?? 'Block',
+                highlightShape:
+                  localizedStrings['%webView_find_previewOptions_shape%'] ?? 'Highlight Shape',
+                highlightShapeBar:
+                  localizedStrings['%webView_find_previewOptions_shape_bar%'] ?? 'Bar border',
+                highlightShapeRounded:
+                  localizedStrings['%webView_find_previewOptions_shape_rounded%'] ?? 'Rounded',
+                highlightShapePlain:
+                  localizedStrings['%webView_find_previewOptions_shape_plain%'] ?? 'Plain',
+                color: localizedStrings['%webView_find_previewOptions_color%'] ?? 'Color',
+                colorRedCyan:
+                  localizedStrings['%webView_find_previewOptions_color_redCyan%'] ?? 'Red / Cyan',
+                colorRedGreen:
+                  localizedStrings['%webView_find_previewOptions_color_redGreen%'] ?? 'Red / Green',
+                colorGreyBlue:
+                  localizedStrings['%webView_find_previewOptions_color_greyBlue%'] ?? 'Grey / Blue',
+                monospace:
+                  localizedStrings['%webView_find_previewOptions_monospace%'] ?? 'Monospace',
+                monospaceDescription:
+                  localizedStrings['%webView_find_previewOptions_monospaceDescription%'] ??
+                  'Use fixed-width font',
+                showInvisible:
+                  localizedStrings['%webView_find_previewOptions_showInvisible%'] ??
+                  'Show invisible',
+                showInvisibleDescription:
+                  localizedStrings['%webView_find_previewOptions_showInvisibleDescription%'] ??
+                  'Show symbols for whitespace',
+              }}
+            />
+          )}
           {visibleResults.length > 0 && (
             <div className="tw-flex tw-items-center tw-gap-1">
               <span className="tw-text-sm tw-text-muted-foreground tw-tabular-nums">
@@ -1539,6 +1633,7 @@ global.webViewComponent = function FindWebView({
                 localizedStrings={searchResultLocalizedStrings}
                 isReplaceMode={activeMode === 'replace'}
                 isReplacing={isReplacing}
+                previewOptions={previewOptions}
               />
             );
           });
