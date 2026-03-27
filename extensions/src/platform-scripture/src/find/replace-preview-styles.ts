@@ -67,7 +67,7 @@ export function getFindHighlightClasses(
   const shapeClass = SHAPE_CLASSES[shape];
   const borderClass = shape !== 'plain' ? c.border : '';
   return [
-    'tw-inline tw-px-0.5',
+    'tw-inline tw-px-0.5 tw-whitespace-pre-wrap',
     showLineThrough ? 'tw-line-through' : '',
     c.bg,
     c.text,
@@ -89,7 +89,9 @@ export function getReplaceHighlightClasses(
   const c = REPLACE_COLOR_CLASSES[color];
   const shapeClass = SHAPE_CLASSES[shape];
   const borderClass = shape !== 'plain' ? c.border : '';
-  return ['tw-inline tw-px-0.5', c.bg, c.text, shapeClass, borderClass].filter(Boolean).join(' ');
+  return ['tw-inline tw-px-0.5 tw-whitespace-pre-wrap', c.bg, c.text, shapeClass, borderClass]
+    .filter(Boolean)
+    .join(' ');
 }
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
@@ -120,4 +122,14 @@ const INVISIBLE_CHAR_REGEX =
  */
 export function renderWithInvisibleChars(text: string): string {
   return text.replace(INVISIBLE_CHAR_REGEX, (ch) => INVISIBLE_CHAR_SYMBOLS[ch] ?? ch);
+}
+
+/**
+ * Replaces trailing spaces with non-breaking spaces so they receive background-color and
+ * text-decoration styling inside the highlighted find span. Since `\u00a0` is in
+ * {@link INVISIBLE_CHAR_SYMBOLS}, `renderWithInvisibleChars` will still render it as `·` when
+ * `showInvisible` is enabled.
+ */
+export function preserveTrailingSpaces(text: string): string {
+  return text.replace(/ +$/, (spaces) => '\u00a0'.repeat(spaces.length));
 }
