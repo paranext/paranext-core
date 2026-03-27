@@ -1,5 +1,11 @@
 {
   "metadata": {
+    "%acceptButton_tooltip%": {
+      "fallbackKey": "%footnoteEditor_saveButton_tooltip%"
+    },
+    "%cancelButton_tooltip%": {
+      "fallbackKey": "%footnoteEditor_cancelButton_tooltip%"
+    },
     "%footnoteEditor_callerDropdown_label%": {
       "fallbackKey": "%Paratext.Base.ScriptureEditor.NoteCallerForm.NoteCallerForm.Text%"
     },
@@ -26,6 +32,8 @@
   },
   "localizedStrings": {
     "en": {
+      "%acceptButton_tooltip%": "Save",
+      "%cancelButton_tooltip%": "Cancel",
       "%footnoteEditor_callerDropdown_item_custom%": "Custom",
       "%footnoteEditor_callerDropdown_item_generated%": "Auto-generated",
       "%footnoteEditor_callerDropdown_item_hidden%": "Hidden",
@@ -233,6 +241,8 @@
       "%undoButton_tooltip%": "Undo"
     },
     "es": {
+      "%acceptButton_tooltip%": "Guardar",
+      "%cancelButton_tooltip%": "Cancelar",
       "%footnoteEditor_callerDropdown_item_custom%": "personalizado",
       "%footnoteEditor_callerDropdown_item_generated%": "automáticamente generado",
       "%footnoteEditor_callerDropdown_item_hidden%": "escondido",

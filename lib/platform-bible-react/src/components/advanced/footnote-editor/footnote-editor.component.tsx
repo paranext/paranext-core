@@ -1,4 +1,5 @@
 import { Button } from '@/components/shadcn-ui/button';
+import { CancelAcceptButtons } from '@/components/basics/cancel-accept-buttons.component';
 import {
   DeltaOp,
   DeltaOpInsertNoteEmbed,
@@ -11,7 +12,7 @@ import {
   isInsertEmbedOpOfType,
   StateChangeSnapshot,
 } from '@eten-tech-foundation/platform-editor';
-import { Check, Copy, X } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -525,35 +526,12 @@ export default function FootnoteEditor({
               canRedo={canRedo}
               localizedStrings={localizedStrings}
             />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={closeAndSave}
-                    className="tw-h-6 tw-w-6"
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <Check />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{localizedStrings['%footnoteEditor_saveButton_tooltip%']}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="ghost">
-                    <X />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{localizedStrings['%footnoteEditor_cancelButton_tooltip%']}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <CancelAcceptButtons
+              onCancelClick={onClose}
+              onAcceptClick={closeAndSave}
+              canAccept={!isAtInitialState}
+              localizedStrings={localizedStrings}
+            />
           </div>
         </div>
         <div
@@ -561,7 +539,11 @@ export default function FootnoteEditor({
           className="tw-relative tw-rounded-[6px] tw-border-2 tw-border-ring"
         >
           <div className={classNameForEditor}>
-            <EditorKeyboardShortcuts editorRef={editorRef}>
+            <EditorKeyboardShortcuts
+              editorRef={editorRef}
+              canUndo={!isAtInitialState}
+              canRedo={canRedo}
+            >
               <Editorial
                 options={options}
                 onStateChange={handleStateChange}

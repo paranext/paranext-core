@@ -4,9 +4,9 @@ import CommentEditor from './comment-editor.component';
 import { CommentEditorLocalizedStrings } from './comment-editor.types';
 
 const commentEditorLocalizedStrings: CommentEditorLocalizedStrings = {
+  '%acceptButton_tooltip%': 'Save comment',
+  '%cancelButton_tooltip%': 'Cancel',
   '%commentEditor_placeholder%': 'Type your comment here...',
-  '%commentEditor_saveButton_tooltip%': 'Save comment',
-  '%commentEditor_cancelButton_tooltip%': 'Cancel',
   '%commentEditor_assignTo_label%': 'Assign to',
   '%commentEditor_unassigned%': 'Unassigned',
   '%commentEditor_team%': 'Team',

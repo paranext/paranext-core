@@ -195,11 +195,11 @@ export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearc
  */
 export declare const COMMENT_EDITOR_STRING_KEYS: readonly [
 	"%commentEditor_placeholder%",
-	"%commentEditor_saveButton_tooltip%",
-	"%commentEditor_cancelButton_tooltip%",
 	"%commentEditor_assignTo_label%",
 	"%commentEditor_unassigned%",
-	"%commentEditor_team%"
+	"%commentEditor_team%",
+	"%cancelButton_tooltip%",
+	"%acceptButton_tooltip%"
 ];
 /** Localized strings needed for the comment editor component */
 export type CommentEditorLocalizedStrings = {
@@ -715,7 +715,9 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%footnoteEditor_noteTypeDropdown_label%",
 	"%footnoteEditor_saveButton_tooltip%",
 	"%undoButton_tooltip%",
-	"%redoButton_tooltip%"
+	"%redoButton_tooltip%",
+	"%cancelButton_tooltip%",
+	"%acceptButton_tooltip%"
 ];
 export type FootnoteEditorLocalizedStrings = {
 	[localizedKey in (typeof FOOTNOTE_EDITOR_STRING_KEYS)[number]]: string;
@@ -1708,15 +1710,18 @@ export type ComboBoxProps<T> = {
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 type EditorKeyboardShortcutsProps = React$1.PropsWithChildren & {
+	/** The `editorRef` of the editor that this undo/redo plugin is applied to */
 	editorRef: React$1.MutableRefObject<EditorRef | null>;
+	/** Whether the Undo button is enabled. */
+	canUndo?: boolean;
+	/** Whether the Redo button is enabled. */
+	canRedo?: boolean;
 };
 /**
  * Component that provides common undo/redo capability for a scripture `Editorial` component. Must
  * have the `Editorial` component instance as a child of this component.
- *
- * @param editorRef The `editorRef` of the editor that this undo/redo plugin is applied to
  */
-export declare function EditorKeyboardShortcuts({ children, editorRef }: EditorKeyboardShortcutsProps): import("react/jsx-runtime").JSX.Element;
+export declare function EditorKeyboardShortcuts({ children, editorRef, canUndo, canRedo, }: EditorKeyboardShortcutsProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
