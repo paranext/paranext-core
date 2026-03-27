@@ -2230,6 +2230,20 @@ interface InputProps extends React$1.InputHTMLAttributes<HTMLInputElement> {
  */
 export declare const Input: React$1.ForwardRefExoticComponent<InputProps & React$1.RefAttributes<HTMLInputElement>>;
 /**
+ * Props for the Kbd component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/kbd}
+ */
+export type KbdProps = React$1.HTMLAttributes<HTMLElement>;
+/**
+ * The Kbd component displays keyboard keys or shortcuts. The component is built and styled by
+ * Shadcn UI.
+ *
+ * @param KbdProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/kbd}
+ */
+export declare const Kbd: React$1.ForwardRefExoticComponent<KbdProps & React$1.RefAttributes<HTMLElement>>;
+/**
  * The Label component renders an accessible label associated with controls. This components is
  * built on Radix UI primitives and styled with Shadcn UI.
  *
