@@ -5,12 +5,7 @@
 
 import { newPlatformError, INVALID_ARGUMENT } from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
-import {
-  CommandPaletteRequest,
-  ModalDialogOptions,
-  ModalDialogType,
-  PopoverRequest,
-} from './overlay.service-model';
+import { CommandPaletteRequest, PopoverRequest } from './overlay.service-model';
 
 /** Throws a PlatformError with INVALID_ARGUMENT code */
 function throwValidationError(message: string): never {
@@ -159,27 +154,4 @@ export function validateCommandPaletteRequest(request: CommandPaletteRequest): v
   if (request.maxHeight !== undefined && request.maxHeight <= 0) {
     throwValidationError('maxHeight must be greater than 0');
   }
-}
-
-/**
- * Validates modal dialog options based on dialog type.
- *
- * @param dialogType The type of dialog (alert, confirm)
- * @param options The dialog options to validate
- * @throws PlatformError with code INVALID_ARGUMENT if validation fails
- */
-export function validateModalDialogOptions<T extends ModalDialogType>(
-  dialogType: T,
-  options: ModalDialogOptions[T],
-): void {
-  // Validate that message is present (required for all dialog types)
-  if (!('message' in options) || !options.message) {
-    throwValidationError(`${dialogType} dialog requires a message`);
-  }
-
-  // Validate labels common to all dialog types
-  if ('title' in options) validateLabelLength(options.title);
-  if ('message' in options) validateLabelLength(options.message);
-  if ('okLabel' in options) validateLabelLength(options.okLabel);
-  if ('cancelLabel' in options) validateLabelLength(options.cancelLabel);
 }

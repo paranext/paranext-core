@@ -6,6 +6,12 @@ vi.mock('@renderer/services/overlays/overlay.service-host', () => ({
   showModalDialogOverlay: mockShowModalDialogOverlay,
 }));
 
+// Mock overlay store (resolveAndRemoveOverlay/rejectAndRemoveOverlay imported by dialog.service-host)
+vi.mock('@renderer/services/overlays/overlay-store', () => ({
+  resolveAndRemoveOverlay: vi.fn(),
+  rejectAndRemoveOverlay: vi.fn(),
+}));
+
 // Mock web-view service (needed by dialog service initialize)
 const mockCloseTab = vi.fn();
 vi.mock('@renderer/services/web-view.service-host', () => ({
@@ -28,6 +34,35 @@ vi.mock('@shared/services/logger.service', () => ({
     warn: vi.fn(),
     error: vi.fn(),
   },
+}));
+
+// Mock dialog index with Component mocks for routing tests
+// eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+const MockAlertComponent = vi.fn(() => undefined as any);
+// eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+const MockConfirmComponent = vi.fn(() => undefined as any);
+const mockDialogs = {
+  'platform.aboutDialog': { tabType: 'platform.aboutDialog', Component: vi.fn() },
+  'platform.selectProject': { tabType: 'platform.selectProject', Component: vi.fn() },
+  'platform.selectMultipleProjects': {
+    tabType: 'platform.selectMultipleProjects',
+    Component: vi.fn(),
+  },
+  'platform.selectBooks': { tabType: 'platform.selectBooks', Component: vi.fn() },
+  'platform.alert': {
+    tabType: 'platform.alert',
+    dialogRole: 'alertdialog',
+    Component: MockAlertComponent,
+  },
+  'platform.confirm': {
+    tabType: 'platform.confirm',
+    dialogRole: 'alertdialog',
+    Component: MockConfirmComponent,
+  },
+};
+vi.mock('@renderer/components/dialogs/index', () => ({
+  DIALOGS: mockDialogs,
+  default: mockDialogs,
 }));
 
 // Capture the showDialog handler from registerRequestHandler
@@ -100,8 +135,9 @@ describe('dialog.service-host', () => {
     const { registerCommand } = await import('@shared/services/command.service');
     vi.mocked(registerCommand).mockResolvedValue(vi.fn());
 
-    const { aggregateUnsubscriberAsyncs } = await import('platform-bible-utils');
+    const { aggregateUnsubscriberAsyncs, newGuid } = await import('platform-bible-utils');
     vi.mocked(aggregateUnsubscriberAsyncs).mockReturnValue(vi.fn());
+    vi.mocked(newGuid).mockReturnValue('mock-guid');
 
     mockCloseTab.mockResolvedValue(true);
 
@@ -113,50 +149,49 @@ describe('dialog.service-host', () => {
   });
 
   describe('modal dialog routing', () => {
-    it('routes alert dialog to showModalDialogOverlay with prompt mapped to message', async () => {
+    it('routes dialog with modal:true to showModalDialogOverlay', async () => {
       mockShowModalDialogOverlay.mockResolvedValue(true);
 
       await capturedShowDialog('platform.alert', {
-        title: 'Test Alert',
+        prompt: 'Alert message',
+        modal: true,
+      });
+
+      expect(mockShowModalDialogOverlay).toHaveBeenCalledWith(
+        MockAlertComponent,
+        expect.objectContaining({
+          prompt: 'Alert message',
+          modal: true,
+          isDialog: true,
+          role: 'alertdialog',
+        }),
+        expect.any(Function),
+        'dialog-service',
+      );
+    });
+
+    it('routes dialog without modal flag to rc-dock tab', async () => {
+      const { addTab } = await import('@renderer/services/web-view.service-host');
+      vi.mocked(addTab).mockResolvedValue(undefined);
+
+      const { resolveDialogRequest } = await import('./dialog.service-host');
+
+      // Don't await - it won't resolve until manually resolved
+      const dialogPromise = capturedShowDialog('platform.alert', {
         prompt: 'Alert message',
       });
 
-      expect(mockShowModalDialogOverlay).toHaveBeenCalledWith('alert', {
-        message: 'Alert message',
-        title: 'Test Alert',
-        okLabel: undefined,
-      });
-    });
-
-    it('routes confirm dialog to showModalDialogOverlay preserving all options', async () => {
-      mockShowModalDialogOverlay.mockResolvedValue(true);
-
-      await capturedShowDialog('platform.confirm', {
-        prompt: 'Are you sure?',
-        okLabel: 'Delete',
-        cancelLabel: 'Keep',
-        destructive: true,
+      // Allow microtasks to settle
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
       });
 
-      expect(mockShowModalDialogOverlay).toHaveBeenCalledWith('confirm', {
-        message: 'Are you sure?',
-        title: undefined,
-        okLabel: 'Delete',
-        cancelLabel: 'Keep',
-        destructive: true,
-      });
-    });
+      expect(mockShowModalDialogOverlay).not.toHaveBeenCalled();
+      expect(addTab).toHaveBeenCalled();
 
-    it('throws when alert dialog is called without options', async () => {
-      await expect(capturedShowDialog('platform.alert')).rejects.toThrow(
-        'Options are required to show an alert dialog',
-      );
-    });
-
-    it('throws when confirm dialog is called without options', async () => {
-      await expect(capturedShowDialog('platform.confirm')).rejects.toThrow(
-        'Options are required to show a confirm dialog',
-      );
+      // Clean up: resolve the dialog request so it doesn't leak into subsequent tests
+      resolveDialogRequest('mock-guid', undefined);
+      await dialogPromise;
     });
   });
 

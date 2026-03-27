@@ -5681,9 +5681,11 @@ declare module 'shared/models/dialog-options.model' {
      * Default depends on the dialog
      */
     prompt?: string | LocalizeKey;
+    /** Whether to render as a modal overlay instead of an rc-dock floating tab. Defaults to false. */
+    modal?: boolean;
   };
   /** Keys of properties on {@link DialogOptions} that should be localized if they are LocalizeKeys */
-  export const DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS: readonly ['title', 'prompt'];
+  export const DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS: readonly string[];
   /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
   export type DialogData = DialogOptions & {
     isDialog: true;
@@ -5717,6 +5719,15 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
     minWidth?: number;
     /** The minimum height to which the dialog can be set in CSS `px` units */
     minHeight?: number;
+    /**
+     * The ARIA role to use when this dialog is rendered as a modal overlay.
+     *
+     * - `'alertdialog'` for dialogs that interrupt the user and require acknowledgment (alert, confirm)
+     * - `'dialog'` for general-purpose dialogs (selection, about, etc.)
+     *
+     * Defaults to `'dialog'`
+     */
+    dialogRole?: 'dialog' | 'alertdialog';
     /**
      * The function used to load the dialog into the dock layout. Default uses the `Component` field
      * and passes in the `DialogProps`
@@ -5843,13 +5854,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
     [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
   }
-  /** Dialog types that render as rc-dock floating tabs (have a DialogDefinition) */
-  export type TabDialogTypes =
-    | typeof ABOUT_DIALOG_TYPE
-    | typeof SELECT_PROJECT_DIALOG_TYPE
-    | typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE
-    | typeof SELECT_BOOKS_DIALOG_TYPE;
-  /** All dialog types including overlay-routed dialogs */
+  /** All dialog types that have DialogDefinition entries */
   export type DialogTabTypes = keyof DialogTypes;
   /** Types related to a specific dialog */
   export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
@@ -5866,7 +5871,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     /** Props provided to the dialog component */
     props: DialogProps<TReturnType> & TOptions;
   };
-  export type DialogDefinition<DialogTabType extends TabDialogTypes> = Readonly<
+  export type DialogDefinition<DialogTabType extends DialogTabTypes> = Readonly<
     DialogDefinitionBase & {
       /**
        * Type of tab - indicates what kind of built-in dock layout tab this dialog definition
@@ -5890,8 +5895,6 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
 }
 declare module 'shared/services/dialog.service-model' {
   import {
-    ALERT_DIALOG_TYPE,
-    CONFIRM_DIALOG_TYPE,
     DialogTabTypes,
     DialogTypes,
     SelectProjectDialogOptions,
@@ -5901,28 +5904,6 @@ declare module 'shared/services/dialog.service-model' {
    * Prompt the user for responses with dialogs
    */
   export interface DialogService {
-    /**
-     * Shows an alert dialog
-     *
-     * @param dialogType The alert dialog type
-     * @param options Options for the alert dialog including prompt text
-     * @returns Returns `true` when the user acknowledges, or `undefined` if cancelled
-     */
-    showDialog(
-      dialogType: typeof ALERT_DIALOG_TYPE,
-      options: DialogTypes[typeof ALERT_DIALOG_TYPE]['options'],
-    ): Promise<DialogTypes[typeof ALERT_DIALOG_TYPE]['responseType'] | undefined>;
-    /**
-     * Shows a confirm dialog
-     *
-     * @param dialogType The confirm dialog type
-     * @param options Options for the confirm dialog including prompt text
-     * @returns Returns `true` if confirmed, `false` if declined or cancelled
-     */
-    showDialog(
-      dialogType: typeof CONFIRM_DIALOG_TYPE,
-      options: DialogTypes[typeof CONFIRM_DIALOG_TYPE]['options'],
-    ): Promise<DialogTypes[typeof CONFIRM_DIALOG_TYPE]['responseType'] | undefined>;
     /**
      * Shows a dialog to the user and prompts the user to respond
      *
@@ -6610,1059 +6591,6 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
   export default useDialogCallback;
 }
-declare module 'shared/services/app.service-model' {
-  /**
-   * Information about the app that is currently running.
-   *
-   * All of the information in this object is static and is determined at build time. It will not
-   * change throughout the lifetime of the app or across runs of the same build.
-   */
-  export type AppInfo = Readonly<{
-    /**
-     * Programmatic name of the application
-     *
-     * @example `platform-bible`.
-     *
-     * Note: this is an identifier for the application, not this application's executable file name
-     */
-    name: string;
-    /**
-     * Version of the app. This is in [semver](https://semver.org/) format.
-     *
-     * @example `0.3.0`
-     *
-     * @example `1.2.3-ordered.info.here+additional.unordered.info.here123`
-     */
-    version: string;
-    /**
-     * URI scheme that this application handles. Navigating to a URI with this scheme will open this
-     * application. This application will handle the URI as it sees fit. For example, the URI may be
-     * handled by an extension - see {@link ElevatedPrivileges.handleUri } for more information.
-     *
-     * This is the same as {@link AppInfo.name}.
-     */
-    uriScheme: string;
-  }>;
-  export type MarketingInfo = Readonly<{
-    marketingVersion: string;
-    marketingVersionMoniker: string;
-  }>;
-  /**
-   *
-   * Provides information about this app like name and version.
-   */
-  export interface IAppService {
-    /** Retrieve information about the application that is currently running like name and version. */
-    getAppInfo(): Promise<AppInfo>;
-    getMarketingInfo(): Promise<MarketingInfo>;
-  }
-  export const appServiceNetworkObjectName = 'AppService';
-}
-declare module 'shared/services/database.service-model' {
-  export const databaseServiceNetworkObjectName = 'DatabaseService';
-  export const databaseServiceObjectToProxy: Readonly<{}>;
-  /**
-   * Options for opening a SQLite database connection. These options are passed to the SQLite `open`
-   * method.
-   *
-   * See more information about these options in [the SQLite
-   * documentation](https://www.sqlite.org/c3ref/open.html)
-   */
-  export interface OpenDatabaseOptions {
-    /**
-     * Whether the database connection should be read-only and prevent writing. Defaults to `false`
-     * for non-extension asset files. However, extension asset files are always read-only and cannot
-     * be edited.
-     */
-    readOnly?: boolean;
-    /**
-     * Whether the database should only allow one database connection to access it at one time.
-     * Defaults to `false`.
-     *
-     * See more information about this option in [the SQLite
-     * documentation](https://www.sqlite.org/c3ref/open.html)
-     *
-     * @deprecated 10 March 2026 - All SQLite calls are now executed sequentially in a single worker
-     *   thread, which provides mutual exclusion semantics regardless of this flag.
-     */
-    fullMutex?: boolean;
-  }
-  /** A value that can be bound to a SQLite query parameter or returned from a query. */
-  export type SqlValue = undefined | null | number | string;
-  /** A record of named SQL parameters for a SQLite query. */
-  export type NamedSqlParameters = Record<string, SqlValue>;
-  /**
-   * A record of SQL output values for each column for a single row output from a SQLite query. The
-   * keys of the object are the column names, and the values are the corresponding SQL values in this
-   * row.
-   */
-  export type SqlOutputRow = Record<string, SqlValue>;
-  /**
-   * Information about the result of a query execution. This is the result of a query that modifies
-   * the database such as `INSERT`, `UPDATE`, `DELETE`, and some `PRAGMA` queries.
-   */
-  export interface RunResult {
-    /** The last row id that was inserted by the query. This is only available for `INSERT` queries. */
-    lastId: number;
-    /**
-     * The number of rows that were changed or deleted by `UPDATE` or `DELETE` queries. This does not
-     * include inserted rows
-     */
-    changes: number;
-  }
-  /**
-   *
-   * Service that allows to interact with SQLite databases. You can create an instance of a SQLite
-   * database connection using `openDatabase`, and then run queries on it using `run` or `select`. You
-   * can also attach and detach databases to the current database connection instance using
-   * `attachDatabase` and `detachDatabase`.
-   *
-   * [A database connection](https://www.sqlite.org/c3ref/open.html) is an instance of SQLite pointed
-   * to a database file. There may be multiple instances of database connections pointing to the same
-   * file, and one instance of a database connection may have additional database files attached to
-   * it.
-   *
-   * Make sure to call `closeDatabase` on any database connection you open with `openDatabase` to
-   * avoid memory leaks.
-   */
-  export type IDatabaseService = {
-    /**
-     * Open a database file into a new database connection instance. Only those who have the returned
-     * `nonce` can access this database connection, so only share it with those you trust.
-     *
-     * WARNING: You must call `closeDatabase` on any database you open with this method. If you do
-     * not, you will leak memory, and indeterminate behavior may occur. Read more from [SQLite
-     * documentation](https://www.sqlite.org/c3ref/close.html)
-     *
-     * @param extensionFileUri - The file URL of the SQLite database. This can only be an extension
-     *   asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`.
-     * @param options - Options for opening the database
-     * @returns A nonce that must be used to access this newly opened database connection with other
-     *   methods.
-     */
-    openDatabase(extensionFileUri: string, options?: OpenDatabaseOptions): Promise<string>;
-    /**
-     * Close an instance of a database connection.
-     *
-     * WARNING: You must call this method to close every instance of a database connection you open
-     * with `openDatabase`.
-     *
-     * @param databaseNonce - The nonce of the database connection to close. You get this nonce from
-     *   `openDatabase`.
-     */
-    closeDatabase(databaseNonce: string): Promise<void>;
-    /**
-     * Attach a database file to an existing open database connection instance.
-     *
-     * Runs the SQLite [`ATTACH DATABASE`](https://sqlite.org/lang_attach.html) command on the
-     * database connection associated with the provided nonce.
-     *
-     * WARNING: Each database connection instance can have at most 10 attached databases.
-     *
-     * @param databaseNonce - The nonce of the database connection to attach to. You get this nonce
-     *   from `openDatabase`.
-     * @param extensionFileUri - The file URI of the SQLite database to attach. This can only be an
-     *   extension asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`.
-     * @param schemaName - The schema name to associate with the attached database. Must start with a
-     *   letter or underscore and contain only letters, digits, and underscores
-     *   (`[a-zA-Z_][a-zA-Z0-9_]*`). SQLite reserved words (e.g. `main`, `temp`) are not allowed.
-     * @returns A promise that resolves when the database file is successfully attached.
-     */
-    attachDatabase(
-      databaseNonce: string,
-      extensionFileUri: string,
-      schemaName: string,
-    ): Promise<void>;
-    /**
-     * Detach a database file from an existing open database connection instance.
-     *
-     * Runs the SQLite [`DETACH DATABASE`](https://sqlite.org/lang_detach.html) command on the
-     * database associated with the provided nonce.
-     *
-     * @param databaseNonce - The nonce of the database connection to detach from. You get this nonce
-     *   from `openDatabase`.
-     * @param schemaName - The schema name of the attached database to detach. Must start with a
-     *   letter or underscore and contain only letters, digits, and underscores
-     *   (`[a-zA-Z_][a-zA-Z0-9_]*`). SQLite reserved words (e.g. `main`, `temp`) are not allowed.
-     * @returns A promise that resolves when the database file is successfully detached.
-     */
-    detachDatabase(databaseNonce: string, schemaName: string): Promise<void>;
-    /**
-     *
-     * Execute a query on a specific database connection instance and receive some information about
-     * changes you made.
-     *
-     * This method is used for queries that modify the database such as `INSERT`, `UPDATE`, `DELETE`,
-     * and some `PRAGMA` queries. For queries that return data like `SELECT`, use `select`.
-     *
-     * @example Using anonymous parameters:
-     *
-     * ```ts
-     * const { lastId, changes } = await databaseService.run(
-     *   databaseNonce,
-     *   'INSERT INTO users (name, age) VALUES (?, ?)',
-     *   'John Doe',
-     *   30,
-     * );
-     * ```
-     *
-     * @example Using named parameters:
-     *
-     * ```ts
-     * const { lastId, changes } = await databaseService.run(
-     *   databaseNonce,
-     *   'INSERT INTO users (name, age) VALUES ($name, $age)',
-     *   { $name: 'John Doe', $age: 30 },
-     * );
-     * ```
-     *
-     * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
-     *   `openDatabase`.
-     * @param query - The SQL query to execute.
-     * @param namedParameters - An optional object whose keys match named parameters in the query
-     *   (e.g. `$id`) and whose values are the argument values you would like to pass into the
-     *   corresponding named parameters. Parameters are not allowed to be used for table or column
-     *   names. See [`SQLite`'s documentation on binding values
-     *   parameters](https://www.sqlite.org/c3ref/bind_blob.html) for more information about various
-     *   ways to pass in arguments.
-     * @param anonymousParameters - Zero or more argument values to bind to `?` positional parameters.
-     * @returns A promise that resolves to the result of the query execution.
-     */
-    run(
-      databaseNonce: string,
-      query: string,
-      ...anonymousParameters: SqlValue[]
-    ): Promise<RunResult>;
-    /**
-     *
-     * Execute a query on a specific database connection instance and receive some information about
-     * changes you made.
-     *
-     * This method is used for queries that modify the database such as `INSERT`, `UPDATE`, `DELETE`,
-     * and some `PRAGMA` queries. For queries that return data like `SELECT`, use `select`.
-     *
-     * @example Using anonymous parameters:
-     *
-     * ```ts
-     * const { lastId, changes } = await databaseService.run(
-     *   databaseNonce,
-     *   'INSERT INTO users (name, age) VALUES (?, ?)',
-     *   'John Doe',
-     *   30,
-     * );
-     * ```
-     *
-     * @example Using named parameters:
-     *
-     * ```ts
-     * const { lastId, changes } = await databaseService.run(
-     *   databaseNonce,
-     *   'INSERT INTO users (name, age) VALUES ($name, $age)',
-     *   { $name: 'John Doe', $age: 30 },
-     * );
-     * ```
-     *
-     * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
-     *   `openDatabase`.
-     * @param query - The SQL query to execute.
-     * @param namedParameters - An optional object whose keys match named parameters in the query
-     *   (e.g. `$id`) and whose values are the argument values you would like to pass into the
-     *   corresponding named parameters. Parameters are not allowed to be used for table or column
-     *   names. See [`SQLite`'s documentation on binding values
-     *   parameters](https://www.sqlite.org/c3ref/bind_blob.html) for more information about various
-     *   ways to pass in arguments.
-     * @param anonymousParameters - Zero or more argument values to bind to `?` positional parameters.
-     * @returns A promise that resolves to the result of the query execution.
-     */
-    run(
-      databaseNonce: string,
-      query: string,
-      namedParameters: NamedSqlParameters,
-      ...anonymousParameters: SqlValue[]
-    ): Promise<RunResult>;
-    /**
-     *
-     * Execute a query on a specific database connection instance and receive all rows returned from
-     * the query.
-     *
-     * This method is used for queries that return data like `SELECT` and some `PRAGMA` queries. For
-     * queries that modify the database such as `INSERT`, `UPDATE`, and `DELETE`, use `run`.
-     *
-     * Note: This method is not only for `SELECT` queries but is for any queries that return data. It
-     * is named `select` for ease of association.
-     *
-     * @example Using anonymous parameters:
-     *
-     * ```ts
-     * const rows = await databaseService.select(
-     *   databaseNonce,
-     *   'SELECT name, age FROM users WHERE age > ?',
-     *   18,
-     * );
-     * // rows is of type SqlOutputRow[], where each row has the shape { name: string, age: number }
-     * ```
-     *
-     * @example Using named parameters:
-     *
-     * ```ts
-     * const rows = await databaseService.select(
-     *   databaseNonce,
-     *   'SELECT name, age FROM users WHERE age > $minAge',
-     *   { $minAge: 18 },
-     * );
-     * // rows is of type SqlOutputRow[], where each row has the shape { name: string, age: number }
-     * ```
-     *
-     * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
-     *   `openDatabase`.
-     * @param query - The SQL query to execute.
-     * @param namedParameters - An optional object whose keys match named parameters in the query
-     *   (e.g. `$id`) and whose values are the argument values you would like to pass into the
-     *   corresponding named parameters. Parameters are not allowed to be used for table or column
-     *   names. See [`SQLite`'s documentation on binding values
-     *   parameters](https://www.sqlite.org/c3ref/bind_blob.html) for more information about various
-     *   ways to pass in arguments.
-     * @param anonymousParameters - Zero or more argument values to bind to `?` positional parameters.
-     * @returns A promise that resolves to an array of rows retrieved by the query.
-     */
-    select(
-      databaseNonce: string,
-      query: string,
-      ...anonymousParameters: SqlValue[]
-    ): Promise<SqlOutputRow[]>;
-    /**
-     *
-     * Execute a query on a specific database connection instance and receive all rows returned from
-     * the query.
-     *
-     * This method is used for queries that return data like `SELECT` and some `PRAGMA` queries. For
-     * queries that modify the database such as `INSERT`, `UPDATE`, and `DELETE`, use `run`.
-     *
-     * Note: This method is not only for `SELECT` queries but is for any queries that return data. It
-     * is named `select` for ease of association.
-     *
-     * @example Using anonymous parameters:
-     *
-     * ```ts
-     * const rows = await databaseService.select(
-     *   databaseNonce,
-     *   'SELECT name, age FROM users WHERE age > ?',
-     *   18,
-     * );
-     * // rows is of type SqlOutputRow[], where each row has the shape { name: string, age: number }
-     * ```
-     *
-     * @example Using named parameters:
-     *
-     * ```ts
-     * const rows = await databaseService.select(
-     *   databaseNonce,
-     *   'SELECT name, age FROM users WHERE age > $minAge',
-     *   { $minAge: 18 },
-     * );
-     * // rows is of type SqlOutputRow[], where each row has the shape { name: string, age: number }
-     * ```
-     *
-     * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
-     *   `openDatabase`.
-     * @param query - The SQL query to execute.
-     * @param namedParameters - An optional object whose keys match named parameters in the query
-     *   (e.g. `$id`) and whose values are the argument values you would like to pass into the
-     *   corresponding named parameters. Parameters are not allowed to be used for table or column
-     *   names. See [`SQLite`'s documentation on binding values
-     *   parameters](https://www.sqlite.org/c3ref/bind_blob.html) for more information about various
-     *   ways to pass in arguments.
-     * @param anonymousParameters - Zero or more argument values to bind to `?` positional parameters.
-     * @returns A promise that resolves to an array of rows retrieved by the query.
-     */
-    select(
-      databaseNonce: string,
-      query: string,
-      namedParameters: NamedSqlParameters,
-      ...anonymousParameters: SqlValue[]
-    ): Promise<SqlOutputRow[]>;
-  } & typeof databaseServiceObjectToProxy;
-}
-declare module 'shared/services/localization.service-model' {
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import {
-    DataProviderDataType,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { LanguageInfo } from 'platform-bible-react';
-  import {
-    LanguageStrings,
-    LocalizedStringDataContribution,
-    LocalizeKey,
-    OnDidDispose,
-  } from 'platform-bible-utils';
-  export type LocalizationData = LanguageStrings;
-  export type LocalizationSelector = {
-    localizeKey: LocalizeKey;
-    locales?: string[];
-  };
-  export type LocalizationSelectors = {
-    localizeKeys: LocalizeKey[];
-    locales?: string[];
-  };
-  /**
-   *
-   * This name is used to register the localization data provider on the papi. You can use this name
-   * to find the data provider when accessing it using the useData hook
-   */
-  export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
-  export const localizationServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the localization data provider on the papi. You can use this name
-     * to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.localizationDataServiceDataProvider';
-  }>;
-  export type LocalizationDataDataTypes = {
-    LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
-    LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
-    AvailableInterfaceLanguages: DataProviderDataType<
-      undefined,
-      Record<string, LanguageInfo>,
-      never
-    >;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [localizationServiceProviderName]: ILocalizationService;
-    }
-  }
-  /**
-   *
-   * Service that allows to get and store localizations
-   */
-  export type ILocalizationService = {
-    /**
-     * Look up localized string for specific localizeKey
-     *
-     * @param selector Made up of a string key that corresponds to a localized value and an array of
-     *   BCP 47 language codes
-     * @returns Localized string
-     */
-    getLocalizedString: (selector: LocalizationSelector) => Promise<string>;
-    /**
-     * Look up localized strings for all localizeKeys provided
-     *
-     * @param selectors An array of LocalizationSelectors. A LocalizationSelector is made up of a
-     *   string key that corresponds to a localized value and an array of BCP 47 language codes
-     * @returns Object whose keys are localizeKeys and values are localized strings
-     */
-    getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
-    /**
-     * Get a collection of known user-interface languages
-     *
-     * @returns All user-interface languages
-     */
-    getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
-    /**
-     * Get all localized string data currently loaded by the platform
-     *
-     * @returns All localized string data from all sources formatted a single, combined contribution
-     */
-    retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide localized strings in contributions
-     */
-    setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide localized strings in contributions
-     */
-    setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide new interface languages in contributions
-     */
-    setAvailableInterfaceLanguages(): Promise<
-      DataProviderUpdateInstructions<LocalizationDataDataTypes>
-    >;
-  } & OnDidDispose &
-    typeof localizationServiceObjectToProxy & {
-      /**
-       * This function is used to take a book number from a verse ref and return the localized name of
-       * the book so that the book name can be displayed in the UI language within the UI
-       */
-      getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
-    } & IDataProvider<LocalizationDataDataTypes>;
-}
-declare module 'shared/data/platform.data' {
-  /**
-   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
-   * Platform.Bible core
-   */
-  export const PLATFORM_NAMESPACE = 'platform';
-  /** Query parameter passed to the renderer. Determines which log level to use */
-  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
-  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
-  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
-  /** ID of the default theme family for use in the application */
-  export const DEFAULT_THEME_FAMILY = '';
-  /** Type of the default theme for use in the application */
-  export const DEFAULT_THEME_TYPE = 'light';
-  /** Constants related to zoom factor of entire application */
-  export const DEFAULT_ZOOM_FACTOR = 1;
-  export const MIN_ZOOM_FACTOR = 0.5;
-  export const MAX_ZOOM_FACTOR = 3;
-}
-declare module 'shared/log-error.model' {
-  /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
-  export class LogError extends Error {
-    constructor(message?: string);
-  }
-  export default LogError;
-}
-declare module 'shared/services/localization.service' {
-  import { ILocalizationService } from 'shared/services/localization.service-model';
-  export const localizationService: ILocalizationService;
-  export default localizationService;
-}
-declare module 'shared/utils/settings-document-combiner-base' {
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import {
-    DocumentCombiner,
-    JsonDocumentLike,
-    Localized,
-    Setting,
-    SettingsGroup,
-  } from 'platform-bible-utils';
-  /**
-   * Information about one specific setting. Basically just {@link Setting} but with specific default
-   * type info
-   */
-  type SettingInfo<SettingName extends SettingNames> = Setting & {
-    default: SettingTypes[SettingName];
-  };
-  /** Information about all settings. Keys are setting keys, values are information for that setting */
-  type AllSettingsInfo = {
-    [SettingName in SettingNames]: SettingInfo<SettingName>;
-  };
-  export type SettingsContributionInfo = {
-    /** Map of extension name to that extension's provided settings groups if provided */
-    contributions: {
-      [extensionName: string]: SettingsGroup[] | undefined;
-    };
-    /**
-     * Map of setting name to setting definition. For type specificity and ease of accessing settings
-     * since they're a bit hard to find in `contributions`
-     */
-    settings: Partial<AllSettingsInfo>;
-  };
-  export type LocalizedSettingsContributionInfo = Localized<SettingsContributionInfo>;
-  export abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
-    /** Name for type of setting to use in error messages */
-    protected readonly settingTypeName: string;
-    /** Cached promise for getting the localized output */
-    private localizedOutputPromise;
-    constructor(baseDocument: JsonDocumentLike);
-    /**
-     * This method is intended to be layered over by a child class to expose the localized setting
-     * info.
-     *
-     * Get the current set of settings contribution info given all the input documents with all
-     * localized string keys localized properly.
-     *
-     * NOTE: If the input documents might have changed since the last time the settings contributions
-     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
-     * this getter. For example, if one of the input document objects changed and
-     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
-     * the current set of settings contributions. If all the input documents are static, then there is
-     * no need to ever rebuild once all the documents have been contributed to this combiner.
-     */
-    protected getLocalizedOutput(): Promise<LocalizedSettingsContributionInfo | undefined>;
-    protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
-    protected transformBaseDocumentAfterValidation(
-      baseDocument: JsonDocumentLike,
-    ): JsonDocumentLike;
-    protected validateContribution(documentName: string, document: JsonDocumentLike): void;
-    protected transformContributionAfterValidation(
-      documentName: string,
-      document: JsonDocumentLike,
-    ): JsonDocumentLike;
-    protected validateOutput(): void;
-    /** Validate the base and contribution documents against the JSON schema */
-    protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
-  }
-  export default SettingsDocumentCombinerBase;
-}
-declare module 'shared/utils/project-settings-document-combiner' {
-  import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-  import {
-    JsonDocumentLike,
-    Localized,
-    ProjectSetting,
-    ProjectSettingsGroup,
-  } from 'platform-bible-utils';
-  import { SettingsDocumentCombinerBase } from 'shared/utils/settings-document-combiner-base';
-  /**
-   * Information about one specific setting. Basically just {@link Setting} but with specific default
-   * type info
-   */
-  type ProjectSettingInfo<ProjectSettingName extends ProjectSettingNames> = ProjectSetting & {
-    default: ProjectSettingTypes[ProjectSettingName];
-  };
-  /** Information about all settings. Keys are setting keys, values are information for that setting */
-  type AllProjectSettingsInfo = {
-    [ProjectSettingName in ProjectSettingNames]: ProjectSettingInfo<ProjectSettingName>;
-  };
-  export type ProjectSettingsContributionInfo = {
-    /** Map of extension name to that extension's provided settings groups if provided */
-    contributions: {
-      [extensionName: string]: ProjectSettingsGroup[] | undefined;
-    };
-    /**
-     * Map of setting name to setting definition. For type specificity and ease of accessing settings
-     * since they're a bit hard to find in `contributions`
-     */
-    settings: Partial<AllProjectSettingsInfo>;
-  };
-  export type LocalizedProjectSettingsContributionInfo = Localized<ProjectSettingsContributionInfo>;
-  export class ProjectSettingsDocumentCombiner extends SettingsDocumentCombinerBase {
-    protected readonly settingTypeName = 'Project Setting';
-    /**
-     * Get the current set of project settings contribution info given all the input documents.
-     * Localized string keys have not been localized to corresponding strings.
-     *
-     * NOTE: If the input documents might have changed since the last time the project settings
-     * contributions were retrieved, you can call `rebuild` to incorporate those document changes
-     * before calling this getter. For example, if one of the input document objects changed and
-     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
-     * the current set of project settings contributions. If all the input documents are static, then
-     * there is no need to ever rebuild once all the documents have been contributed to this
-     * combiner.
-     */
-    getProjectSettingsContributionInfo(): ProjectSettingsContributionInfo | undefined;
-    /**
-     * Get the current set of settings contribution info given all the input documents with all
-     * localized string keys localized properly.
-     *
-     * NOTE: If the input documents might have changed since the last time the settings contributions
-     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
-     * this getter. For example, if one of the input document objects changed and
-     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
-     * the current set of settings contributions. If all the input documents are static, then there is
-     * no need to ever rebuild once all the documents have been contributed to this combiner.
-     */
-    getLocalizedProjectSettingsContributionInfo(): Promise<
-      LocalizedProjectSettingsContributionInfo | undefined
-    >;
-    protected performSchemaValidation(document: JsonDocumentLike, docType: string): void;
-  }
-  export default ProjectSettingsDocumentCombiner;
-}
-declare module 'shared/services/project-settings.service-model' {
-  import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-  import { UnsubscriberAsync } from 'platform-bible-utils';
-  import { LocalizedProjectSettingsContributionInfo } from 'shared/utils/project-settings-document-combiner';
-  /** Name prefix for registered commands that call project settings validators */
-  export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
-  export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
-  export const projectSettingsServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * Registers a function that validates whether a new project setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator: <ProjectSettingName extends ProjectSettingNames>(
-      key: ProjectSettingName,
-      validator: ProjectSettingValidator<ProjectSettingName>,
-    ) => Promise<UnsubscriberAsync>;
-  }>;
-  /**
-   *
-   * Provides utility functions that project data providers should call when handling project settings
-   */
-  export interface IProjectSettingsService {
-    /**
-     * Calls registered project settings validators to determine whether or not a project setting
-     * change is valid.
-     *
-     * Every Project Data Provider **must** run this function when it receives a request to set a
-     * project setting before changing the value of the setting.
-     *
-     * @param newValue The new value requested to set the project setting value to
-     * @param currentValue The current project setting value
-     * @param key The project setting key being set
-     * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
-     *   whose setting is being changed
-     * @param allChanges All project settings changes being set in one batch
-     * @returns `true` if change is valid, `false` otherwise
-     */
-    isValid<ProjectSettingName extends ProjectSettingNames>(
-      key: ProjectSettingName,
-      newValue: ProjectSettingTypes[ProjectSettingName],
-      currentValue: ProjectSettingTypes[ProjectSettingName],
-      allChanges?: SimultaneousProjectSettingsChanges,
-    ): Promise<boolean>;
-    /**
-     * Gets default value for a project setting
-     *
-     * Every Project Data Providers **must** run this function when it receives a request to get a
-     * project setting if the project does not have a value for the project setting requested. It
-     * should return the response from this function directly, either the returned default value or
-     * throw.
-     *
-     * @param key The project setting key for which to get the default value
-     * @returns The default value for the setting if a default value is registered
-     * @throws If a default value is not registered for the setting
-     */
-    getDefault<ProjectSettingName extends ProjectSettingNames>(
-      key: ProjectSettingName,
-    ): Promise<ProjectSettingTypes[ProjectSettingName]>;
-    /**
-     *
-     * Registers a function that validates whether a new project setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator<ProjectSettingName extends ProjectSettingNames>(
-      key: ProjectSettingName,
-      validatorCallback: ProjectSettingValidator<ProjectSettingName>,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     * Get the current set of project settings contribution info given all the input documents with
-     * all localized string keys localized properly.
-     *
-     * @returns Localized project settings contribution info or undefined
-     */
-    getLocalizedContributionInfo(): Promise<LocalizedProjectSettingsContributionInfo | undefined>;
-  }
-  /**
-   * All project settings changes being set in one batch
-   *
-   * Project settings may be circularly dependent on one another, so multiple project settings may
-   * need to be changed at once in some cases
-   */
-  export type SimultaneousProjectSettingsChanges = {
-    [ProjectSettingName in ProjectSettingNames]?: {
-      /** The new value requested to set the project setting value to */
-      newValue: ProjectSettingTypes[ProjectSettingName];
-      /** The current project setting value */
-      currentValue: ProjectSettingTypes[ProjectSettingName];
-    };
-  };
-  /**
-   * Function that validates whether a new project setting value should be allowed to be set
-   *
-   * @param newValue The new value requested to set the project setting value to
-   * @param currentValue The current project setting value
-   * @param allChanges All project settings changes being set in one batch
-   */
-  export type ProjectSettingValidator<ProjectSettingName extends ProjectSettingNames> = (
-    newValue: ProjectSettingTypes[ProjectSettingName],
-    currentValue: ProjectSettingTypes[ProjectSettingName],
-    allChanges: SimultaneousProjectSettingsChanges,
-  ) => Promise<boolean>;
-  /**
-   * Validators for all project settings. Keys are setting keys, values are functions to validate new
-   * settings
-   */
-  export type AllProjectSettingsValidators = {
-    [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
-  };
-}
-declare module 'shared/services/settings.service-model' {
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import { OnDidDispose, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import {
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { LocalizedSettingsContributionInfo } from 'shared/utils/settings-document-combiner-base';
-  /** Name prefix for registered commands that call settings validators */
-  export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
-  /**
-   *
-   * This name is used to register the settings service data provider on the papi. You can use this
-   * name to find the data provider when accessing it using the useData hook
-   */
-  export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
-  export const settingsServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the settings service data provider on the papi. You can use this
-     * name to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.settingsServiceDataProvider';
-    /**
-     *
-     * Registers a function that validates whether a new setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator: <SettingName extends SettingNames>(
-      key: SettingName,
-      validator: SettingValidator<SettingName>,
-    ) => Promise<UnsubscriberAsync>;
-  }>;
-  /**
-   * SettingDataTypes handles getting and setting Platform.Bible core application and extension
-   * settings.
-   *
-   * Note: the unnamed (`''`) data type is not actually part of `SettingDataTypes` because the methods
-   * would not be able to create a generic type extending from `SettingNames` in order to return the
-   * specific setting type being requested. As such, `get`, `set`, `reset` and `subscribe` are all
-   * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
-   * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
-   * instead. However, do note that the unnamed data type (`''`) is fully functional.
-   *
-   * The closest possible representation of the unnamed (````) data type follows:
-   *
-   * ```typescript
-   * '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
-   * ```
-   */
-  export type SettingDataTypes = {};
-  export type AllSettingsData = {
-    [SettingName in SettingNames]: SettingTypes[SettingName];
-  };
-  /** Function that validates whether a new setting value should be allowed to be set */
-  export type SettingValidator<SettingName extends SettingNames> = (
-    newValue: SettingTypes[SettingName],
-    currentValue: SettingTypes[SettingName],
-    allChanges: Partial<SettingTypes>,
-  ) => Promise<boolean>;
-  /** Validators for all settings. Keys are setting keys, values are functions to validate new settings */
-  export type AllSettingsValidators = {
-    [SettingName in SettingNames]: SettingValidator<SettingName>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [settingsServiceDataProviderName]: ISettingsService;
-    }
-  }
-  /** */
-  export type ISettingsService = {
-    /**
-     * Retrieves the value of the specified setting
-     *
-     * @param key The string id of the setting for which the value is being retrieved
-     * @returns The value of the specified setting, parsed to an object. Returns default setting if
-     *   setting does not exist
-     * @throws If no default value is available for the setting.
-     */
-    get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
-    /**
-     * Validates the setting at the given key with the new value provided
-     *
-     * @param key The string id of the setting to validate
-     * @param newValue The value to validate
-     * @param currentValue The value already set to the setting
-     * @param allChanges
-     */
-    validateSetting<SettingName extends SettingNames>(
-      key: SettingName,
-      newValue: SettingTypes[SettingName],
-      currentValue: SettingTypes[SettingName],
-      allChanges?: Partial<SettingTypes>,
-    ): Promise<boolean>;
-    /**
-     * Sets the value of the specified setting
-     *
-     * @param key The string id of the setting for which the value is being set
-     * @param newSetting The value that is to be set for the specified key
-     * @returns Information that papi uses to interpret whether to send out updates. Defaults to
-     *   `true` (meaning send updates only for this data type).
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    set<SettingName extends SettingNames>(
-      key: SettingName,
-      newSetting: SettingTypes[SettingName],
-    ): Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
-    /**
-     * Removes the setting from memory and resets it to its default value
-     *
-     * @param key The string id of the setting for which the value is being removed
-     * @returns `true` if successfully reset the project setting. `false` otherwise
-     */
-    reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean>;
-    /**
-     * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
-     * callback function is executed.
-     *
-     * @param key The string id of the setting for which the value is being subscribed to
-     * @param callback The function that will be called whenever the specified setting is updated. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber that should be called whenever the subscription should be deleted
-     */
-    subscribe<SettingName extends SettingNames>(
-      key: SettingName,
-      callback: (newSetting: SettingTypes[SettingName] | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     *
-     * Registers a function that validates whether a new setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator<SettingName extends SettingNames>(
-      key: SettingName,
-      validator: SettingValidator<SettingName>,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     * Get the current set of settings contribution info given all the input documents with all
-     * localized string keys localized properly.
-     *
-     * @returns Localized project settings contribution info or undefined
-     */
-    getLocalizedSettingsContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined>;
-  } & OnDidDispose &
-    IDataProvider<SettingDataTypes> &
-    typeof settingsServiceObjectToProxy;
-}
-declare module 'shared/services/window.service-model' {
-  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
-  import {
-    DataProviderDataType,
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import { DirectionFromTab } from 'shared/models/docking-framework.model';
-  /**
-   *
-   * This name is used to register the window data provider on the papi. You can use this name to
-   * find the data provider when accessing it using the useData hook
-   */
-  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
-  export const windowServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the window data provider on the papi. You can use this name to
-     * find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.windowServiceDataProvider';
-  }>;
-  /** Focus of the app window is on a WebView iframe with the specified id */
-  export type FocusSubjectWebView = {
-    focusType: 'webView';
-    /** ID of the WebView in focus (its tab ID is the same) */
-    id: string;
-  };
-  /**
-   * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
-   *
-   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
-   * focused in the WebView's iframe
-   */
-  export type FocusSubjectTab = {
-    focusType: 'tab';
-    /** The type of tab. `webView` if it is a WebView tab. */
-    tabType: 'webView' | string;
-    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
-    id: string;
-  };
-  /** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
-  export type FocusSubjectOther = {
-    focusType: 'other';
-  };
-  /** Current item that is the subject of top-level app window focus */
-  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
-  /** Specific item that is intended to be focused in the top-level app window */
-  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
-  /** Instructions that indicate how to change the app window focus */
-  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
-  export type WindowDataTypes = {
-    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [windowServiceProviderName]: IWindowService;
-    }
-  }
-  /**
-   *
-   * Service that allows to interact with the main application window
-   */
-  export type IWindowService = {
-    /**
-     *
-     * Get information about the current subject of focus in the main app window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
-     */
-    getFocus(selector: undefined): Promise<FocusSubject>;
-    /**
-     *
-     * Get information about the current subject of focus in the main app window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
-     */
-    getFocus(): Promise<FocusSubject>;
-    /**
-     * Sets the subject of focus in the main app window.
-     *
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Sets the subject of focus in the main app window.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     *
-     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
-     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
-     *   `'detect'`.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      selector: undefined,
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Subscribe to run a callback function when the main app window's subject of focus is changed
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param callback Function to run with the updated localized menuContent for this selector. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-     */
-    subscribeFocus(
-      selector: undefined,
-      callback: (focusSubject: FocusSubject | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-  } & OnDidDispose &
-    typeof windowServiceObjectToProxy &
-    IDataProvider<WindowDataTypes>;
-}
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
   import { NetworkObject } from 'shared/models/network-object.model';
   /**
@@ -7876,6 +6804,372 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    */
   export const useData: UseDataHook;
   export default useData;
+}
+declare module 'shared/data/platform.data' {
+  /**
+   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
+   * Platform.Bible core
+   */
+  export const PLATFORM_NAMESPACE = 'platform';
+  /** Query parameter passed to the renderer. Determines which log level to use */
+  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
+  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
+  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /** ID of the default theme family for use in the application */
+  export const DEFAULT_THEME_FAMILY = '';
+  /** Type of the default theme for use in the application */
+  export const DEFAULT_THEME_TYPE = 'light';
+  /** Constants related to zoom factor of entire application */
+  export const DEFAULT_ZOOM_FACTOR = 1;
+  export const MIN_ZOOM_FACTOR = 0.5;
+  export const MAX_ZOOM_FACTOR = 3;
+}
+declare module 'shared/log-error.model' {
+  /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
+  export class LogError extends Error {
+    constructor(message?: string);
+  }
+  export default LogError;
+}
+declare module 'shared/services/localization.service-model' {
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import {
+    DataProviderDataType,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { LanguageInfo } from 'platform-bible-react';
+  import {
+    LanguageStrings,
+    LocalizedStringDataContribution,
+    LocalizeKey,
+    OnDidDispose,
+  } from 'platform-bible-utils';
+  export type LocalizationData = LanguageStrings;
+  export type LocalizationSelector = {
+    localizeKey: LocalizeKey;
+    locales?: string[];
+  };
+  export type LocalizationSelectors = {
+    localizeKeys: LocalizeKey[];
+    locales?: string[];
+  };
+  /**
+   *
+   * This name is used to register the localization data provider on the papi. You can use this name
+   * to find the data provider when accessing it using the useData hook
+   */
+  export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
+  export const localizationServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the localization data provider on the papi. You can use this name
+     * to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.localizationDataServiceDataProvider';
+  }>;
+  export type LocalizationDataDataTypes = {
+    LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
+    LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
+    AvailableInterfaceLanguages: DataProviderDataType<
+      undefined,
+      Record<string, LanguageInfo>,
+      never
+    >;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [localizationServiceProviderName]: ILocalizationService;
+    }
+  }
+  /**
+   *
+   * Service that allows to get and store localizations
+   */
+  export type ILocalizationService = {
+    /**
+     * Look up localized string for specific localizeKey
+     *
+     * @param selector Made up of a string key that corresponds to a localized value and an array of
+     *   BCP 47 language codes
+     * @returns Localized string
+     */
+    getLocalizedString: (selector: LocalizationSelector) => Promise<string>;
+    /**
+     * Look up localized strings for all localizeKeys provided
+     *
+     * @param selectors An array of LocalizationSelectors. A LocalizationSelector is made up of a
+     *   string key that corresponds to a localized value and an array of BCP 47 language codes
+     * @returns Object whose keys are localizeKeys and values are localized strings
+     */
+    getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
+    /**
+     * Get a collection of known user-interface languages
+     *
+     * @returns All user-interface languages
+     */
+    getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
+    /**
+     * Get all localized string data currently loaded by the platform
+     *
+     * @returns All localized string data from all sources formatted a single, combined contribution
+     */
+    retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
+     */
+    setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
+     */
+    setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide new interface languages in contributions
+     */
+    setAvailableInterfaceLanguages(): Promise<
+      DataProviderUpdateInstructions<LocalizationDataDataTypes>
+    >;
+  } & OnDidDispose &
+    typeof localizationServiceObjectToProxy & {
+      /**
+       * This function is used to take a book number from a verse ref and return the localized name of
+       * the book so that the book name can be displayed in the UI language within the UI
+       */
+      getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
+    } & IDataProvider<LocalizationDataDataTypes>;
+}
+declare module 'shared/services/localization.service' {
+  import { ILocalizationService } from 'shared/services/localization.service-model';
+  export const localizationService: ILocalizationService;
+  export default localizationService;
+}
+declare module 'shared/utils/settings-document-combiner-base' {
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  import {
+    DocumentCombiner,
+    JsonDocumentLike,
+    Localized,
+    Setting,
+    SettingsGroup,
+  } from 'platform-bible-utils';
+  /**
+   * Information about one specific setting. Basically just {@link Setting} but with specific default
+   * type info
+   */
+  type SettingInfo<SettingName extends SettingNames> = Setting & {
+    default: SettingTypes[SettingName];
+  };
+  /** Information about all settings. Keys are setting keys, values are information for that setting */
+  type AllSettingsInfo = {
+    [SettingName in SettingNames]: SettingInfo<SettingName>;
+  };
+  export type SettingsContributionInfo = {
+    /** Map of extension name to that extension's provided settings groups if provided */
+    contributions: {
+      [extensionName: string]: SettingsGroup[] | undefined;
+    };
+    /**
+     * Map of setting name to setting definition. For type specificity and ease of accessing settings
+     * since they're a bit hard to find in `contributions`
+     */
+    settings: Partial<AllSettingsInfo>;
+  };
+  export type LocalizedSettingsContributionInfo = Localized<SettingsContributionInfo>;
+  export abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
+    /** Name for type of setting to use in error messages */
+    protected readonly settingTypeName: string;
+    /** Cached promise for getting the localized output */
+    private localizedOutputPromise;
+    constructor(baseDocument: JsonDocumentLike);
+    /**
+     * This method is intended to be layered over by a child class to expose the localized setting
+     * info.
+     *
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * NOTE: If the input documents might have changed since the last time the settings contributions
+     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
+     * this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of settings contributions. If all the input documents are static, then there is
+     * no need to ever rebuild once all the documents have been contributed to this combiner.
+     */
+    protected getLocalizedOutput(): Promise<LocalizedSettingsContributionInfo | undefined>;
+    protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
+    protected transformBaseDocumentAfterValidation(
+      baseDocument: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateContribution(documentName: string, document: JsonDocumentLike): void;
+    protected transformContributionAfterValidation(
+      documentName: string,
+      document: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateOutput(): void;
+    /** Validate the base and contribution documents against the JSON schema */
+    protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
+  }
+  export default SettingsDocumentCombinerBase;
+}
+declare module 'shared/services/settings.service-model' {
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  import { OnDidDispose, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { LocalizedSettingsContributionInfo } from 'shared/utils/settings-document-combiner-base';
+  /** Name prefix for registered commands that call settings validators */
+  export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
+  /**
+   *
+   * This name is used to register the settings service data provider on the papi. You can use this
+   * name to find the data provider when accessing it using the useData hook
+   */
+  export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
+  export const settingsServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the settings service data provider on the papi. You can use this
+     * name to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.settingsServiceDataProvider';
+    /**
+     *
+     * Registers a function that validates whether a new setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator: <SettingName extends SettingNames>(
+      key: SettingName,
+      validator: SettingValidator<SettingName>,
+    ) => Promise<UnsubscriberAsync>;
+  }>;
+  /**
+   * SettingDataTypes handles getting and setting Platform.Bible core application and extension
+   * settings.
+   *
+   * Note: the unnamed (`''`) data type is not actually part of `SettingDataTypes` because the methods
+   * would not be able to create a generic type extending from `SettingNames` in order to return the
+   * specific setting type being requested. As such, `get`, `set`, `reset` and `subscribe` are all
+   * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
+   * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
+   * instead. However, do note that the unnamed data type (`''`) is fully functional.
+   *
+   * The closest possible representation of the unnamed (````) data type follows:
+   *
+   * ```typescript
+   * '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
+   * ```
+   */
+  export type SettingDataTypes = {};
+  export type AllSettingsData = {
+    [SettingName in SettingNames]: SettingTypes[SettingName];
+  };
+  /** Function that validates whether a new setting value should be allowed to be set */
+  export type SettingValidator<SettingName extends SettingNames> = (
+    newValue: SettingTypes[SettingName],
+    currentValue: SettingTypes[SettingName],
+    allChanges: Partial<SettingTypes>,
+  ) => Promise<boolean>;
+  /** Validators for all settings. Keys are setting keys, values are functions to validate new settings */
+  export type AllSettingsValidators = {
+    [SettingName in SettingNames]: SettingValidator<SettingName>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [settingsServiceDataProviderName]: ISettingsService;
+    }
+  }
+  /** */
+  export type ISettingsService = {
+    /**
+     * Retrieves the value of the specified setting
+     *
+     * @param key The string id of the setting for which the value is being retrieved
+     * @returns The value of the specified setting, parsed to an object. Returns default setting if
+     *   setting does not exist
+     * @throws If no default value is available for the setting.
+     */
+    get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
+    /**
+     * Validates the setting at the given key with the new value provided
+     *
+     * @param key The string id of the setting to validate
+     * @param newValue The value to validate
+     * @param currentValue The value already set to the setting
+     * @param allChanges
+     */
+    validateSetting<SettingName extends SettingNames>(
+      key: SettingName,
+      newValue: SettingTypes[SettingName],
+      currentValue: SettingTypes[SettingName],
+      allChanges?: Partial<SettingTypes>,
+    ): Promise<boolean>;
+    /**
+     * Sets the value of the specified setting
+     *
+     * @param key The string id of the setting for which the value is being set
+     * @param newSetting The value that is to be set for the specified key
+     * @returns Information that papi uses to interpret whether to send out updates. Defaults to
+     *   `true` (meaning send updates only for this data type).
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    set<SettingName extends SettingNames>(
+      key: SettingName,
+      newSetting: SettingTypes[SettingName],
+    ): Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
+    /**
+     * Removes the setting from memory and resets it to its default value
+     *
+     * @param key The string id of the setting for which the value is being removed
+     * @returns `true` if successfully reset the project setting. `false` otherwise
+     */
+    reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean>;
+    /**
+     * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
+     * callback function is executed.
+     *
+     * @param key The string id of the setting for which the value is being subscribed to
+     * @param callback The function that will be called whenever the specified setting is updated. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribe<SettingName extends SettingNames>(
+      key: SettingName,
+      callback: (newSetting: SettingTypes[SettingName] | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Registers a function that validates whether a new setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator<SettingName extends SettingNames>(
+      key: SettingName,
+      validator: SettingValidator<SettingName>,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * @returns Localized project settings contribution info or undefined
+     */
+    getLocalizedSettingsContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined>;
+  } & OnDidDispose &
+    IDataProvider<SettingDataTypes> &
+    typeof settingsServiceObjectToProxy;
 }
 declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';
@@ -8493,56 +7787,8 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * behalf.
    */
   import { LocalizeKey, PlatformError } from 'platform-bible-utils';
+  import type { ReactElement } from 'react';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
-  /**
-   * The supported modal dialog types. Each type has corresponding options in
-   * {@link ModalDialogOptions} and a result type in {@link ModalDialogResponse}:
-   *
-   * - `'alert'` — Informational dialog with a single OK button. Always resolves `true`.
-   * - `'confirm'` — Yes/no dialog. Resolves `true` (OK) or `false` (Cancel).
-   */
-  export type ModalDialogType = 'alert' | 'confirm';
-  /**
-   * Options for each modal dialog type, keyed by {@link ModalDialogType}. Use as
-   * `ModalDialogOptions[T]` where `T extends ModalDialogType` to get the options for a specific
-   * dialog type.
-   */
-  export interface ModalDialogOptions {
-    /** Options for an alert dialog (informational, single OK button) */
-    alert: {
-      /** Optional title displayed at the top of the dialog */
-      title?: string | LocalizeKey;
-      /** The message body displayed in the dialog */
-      message: string | LocalizeKey;
-      /** Custom label for the OK button. Defaults to a localized "OK". */
-      okLabel?: string | LocalizeKey;
-    };
-    /** Options for a confirm dialog (OK/Cancel) */
-    confirm: {
-      /** Optional title displayed at the top of the dialog */
-      title?: string | LocalizeKey;
-      /** The message body displayed in the dialog */
-      message: string | LocalizeKey;
-      /** Custom label for the OK button. Defaults to a localized "OK". */
-      okLabel?: string | LocalizeKey;
-      /** Custom label for the Cancel button. Defaults to a localized "Cancel". */
-      cancelLabel?: string | LocalizeKey;
-      /** Whether to style the OK button as a destructive action (e.g., red) */
-      destructive?: boolean;
-    };
-  }
-  /**
-   * Response types for each modal dialog type, keyed by {@link ModalDialogType}. Use as
-   * `ModalDialogResponse[T]` where `T extends ModalDialogType` to get the result type. The service
-   * method returns `ModalDialogResponse[T] | undefined`, where `undefined` means the dialog was
-   * dismissed without a response.
-   */
-  export interface ModalDialogResponse {
-    /** Alert dialogs always resolve `true` (the user acknowledged the message) */
-    alert: true;
-    /** Confirm dialogs resolve `true` for OK, `false` for Cancel */
-    confirm: boolean;
-  }
   /**
    * An action button displayed at the bottom of a `'card'`-type popover. When clicked, the popover
    * resolves with this action's `id` via {@link IOverlayService.onPopoverDismissed}.
@@ -8802,14 +8048,13 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         id: string;
         /** The WebView that requested this overlay. Used to enforce one-per-type-per-WebView. */
         webViewId: string;
-        /** Which dialog variant to render */
-        dialogType: ModalDialogType;
-        /** Type-specific dialog configuration */
-        options: ModalDialogOptions[ModalDialogType];
+        /** The dialog React component to render inside the modal shell */
+        Component: (props: Record<string, unknown>) => ReactElement;
+        /** Pre-built props for the component (DialogProps + dialog options, already localized) */
+        props: Record<string, unknown>;
         /**
          * Settles the caller's promise with the dialog result. Typed as `unknown` because the generic
-         * `T` from `showModalDialogOverlay<T>` is not preserved in the store entry; the service
-         * widens it.
+         * return type is not preserved in the store entry.
          */
         resolve: (result: unknown) => void;
         /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
@@ -8869,6 +8114,693 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     commandPalette: string | undefined;
   };
 }
+declare module 'shared/services/app.service-model' {
+  /**
+   * Information about the app that is currently running.
+   *
+   * All of the information in this object is static and is determined at build time. It will not
+   * change throughout the lifetime of the app or across runs of the same build.
+   */
+  export type AppInfo = Readonly<{
+    /**
+     * Programmatic name of the application
+     *
+     * @example `platform-bible`.
+     *
+     * Note: this is an identifier for the application, not this application's executable file name
+     */
+    name: string;
+    /**
+     * Version of the app. This is in [semver](https://semver.org/) format.
+     *
+     * @example `0.3.0`
+     *
+     * @example `1.2.3-ordered.info.here+additional.unordered.info.here123`
+     */
+    version: string;
+    /**
+     * URI scheme that this application handles. Navigating to a URI with this scheme will open this
+     * application. This application will handle the URI as it sees fit. For example, the URI may be
+     * handled by an extension - see {@link ElevatedPrivileges.handleUri } for more information.
+     *
+     * This is the same as {@link AppInfo.name}.
+     */
+    uriScheme: string;
+  }>;
+  export type MarketingInfo = Readonly<{
+    marketingVersion: string;
+    marketingVersionMoniker: string;
+  }>;
+  /**
+   *
+   * Provides information about this app like name and version.
+   */
+  export interface IAppService {
+    /** Retrieve information about the application that is currently running like name and version. */
+    getAppInfo(): Promise<AppInfo>;
+    getMarketingInfo(): Promise<MarketingInfo>;
+  }
+  export const appServiceNetworkObjectName = 'AppService';
+}
+declare module 'shared/services/database.service-model' {
+  export const databaseServiceNetworkObjectName = 'DatabaseService';
+  export const databaseServiceObjectToProxy: Readonly<{}>;
+  /**
+   * Options for opening a SQLite database connection. These options are passed to the SQLite `open`
+   * method.
+   *
+   * See more information about these options in [the SQLite
+   * documentation](https://www.sqlite.org/c3ref/open.html)
+   */
+  export interface OpenDatabaseOptions {
+    /**
+     * Whether the database connection should be read-only and prevent writing. Defaults to `false`
+     * for non-extension asset files. However, extension asset files are always read-only and cannot
+     * be edited.
+     */
+    readOnly?: boolean;
+    /**
+     * Whether the database should only allow one database connection to access it at one time.
+     * Defaults to `false`.
+     *
+     * See more information about this option in [the SQLite
+     * documentation](https://www.sqlite.org/c3ref/open.html)
+     *
+     * @deprecated 10 March 2026 - All SQLite calls are now executed sequentially in a single worker
+     *   thread, which provides mutual exclusion semantics regardless of this flag.
+     */
+    fullMutex?: boolean;
+  }
+  /** A value that can be bound to a SQLite query parameter or returned from a query. */
+  export type SqlValue = undefined | null | number | string;
+  /** A record of named SQL parameters for a SQLite query. */
+  export type NamedSqlParameters = Record<string, SqlValue>;
+  /**
+   * A record of SQL output values for each column for a single row output from a SQLite query. The
+   * keys of the object are the column names, and the values are the corresponding SQL values in this
+   * row.
+   */
+  export type SqlOutputRow = Record<string, SqlValue>;
+  /**
+   * Information about the result of a query execution. This is the result of a query that modifies
+   * the database such as `INSERT`, `UPDATE`, `DELETE`, and some `PRAGMA` queries.
+   */
+  export interface RunResult {
+    /** The last row id that was inserted by the query. This is only available for `INSERT` queries. */
+    lastId: number;
+    /**
+     * The number of rows that were changed or deleted by `UPDATE` or `DELETE` queries. This does not
+     * include inserted rows
+     */
+    changes: number;
+  }
+  /**
+   *
+   * Service that allows to interact with SQLite databases. You can create an instance of a SQLite
+   * database connection using `openDatabase`, and then run queries on it using `run` or `select`. You
+   * can also attach and detach databases to the current database connection instance using
+   * `attachDatabase` and `detachDatabase`.
+   *
+   * [A database connection](https://www.sqlite.org/c3ref/open.html) is an instance of SQLite pointed
+   * to a database file. There may be multiple instances of database connections pointing to the same
+   * file, and one instance of a database connection may have additional database files attached to
+   * it.
+   *
+   * Make sure to call `closeDatabase` on any database connection you open with `openDatabase` to
+   * avoid memory leaks.
+   */
+  export type IDatabaseService = {
+    /**
+     * Open a database file into a new database connection instance. Only those who have the returned
+     * `nonce` can access this database connection, so only share it with those you trust.
+     *
+     * WARNING: You must call `closeDatabase` on any database you open with this method. If you do
+     * not, you will leak memory, and indeterminate behavior may occur. Read more from [SQLite
+     * documentation](https://www.sqlite.org/c3ref/close.html)
+     *
+     * @param extensionFileUri - The file URL of the SQLite database. This can only be an extension
+     *   asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`.
+     * @param options - Options for opening the database
+     * @returns A nonce that must be used to access this newly opened database connection with other
+     *   methods.
+     */
+    openDatabase(extensionFileUri: string, options?: OpenDatabaseOptions): Promise<string>;
+    /**
+     * Close an instance of a database connection.
+     *
+     * WARNING: You must call this method to close every instance of a database connection you open
+     * with `openDatabase`.
+     *
+     * @param databaseNonce - The nonce of the database connection to close. You get this nonce from
+     *   `openDatabase`.
+     */
+    closeDatabase(databaseNonce: string): Promise<void>;
+    /**
+     * Attach a database file to an existing open database connection instance.
+     *
+     * Runs the SQLite [`ATTACH DATABASE`](https://sqlite.org/lang_attach.html) command on the
+     * database connection associated with the provided nonce.
+     *
+     * WARNING: Each database connection instance can have at most 10 attached databases.
+     *
+     * @param databaseNonce - The nonce of the database connection to attach to. You get this nonce
+     *   from `openDatabase`.
+     * @param extensionFileUri - The file URI of the SQLite database to attach. This can only be an
+     *   extension asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`.
+     * @param schemaName - The schema name to associate with the attached database. Must start with a
+     *   letter or underscore and contain only letters, digits, and underscores
+     *   (`[a-zA-Z_][a-zA-Z0-9_]*`). SQLite reserved words (e.g. `main`, `temp`) are not allowed.
+     * @returns A promise that resolves when the database file is successfully attached.
+     */
+    attachDatabase(
+      databaseNonce: string,
+      extensionFileUri: string,
+      schemaName: string,
+    ): Promise<void>;
+    /**
+     * Detach a database file from an existing open database connection instance.
+     *
+     * Runs the SQLite [`DETACH DATABASE`](https://sqlite.org/lang_detach.html) command on the
+     * database associated with the provided nonce.
+     *
+     * @param databaseNonce - The nonce of the database connection to detach from. You get this nonce
+     *   from `openDatabase`.
+     * @param schemaName - The schema name of the attached database to detach. Must start with a
+     *   letter or underscore and contain only letters, digits, and underscores
+     *   (`[a-zA-Z_][a-zA-Z0-9_]*`). SQLite reserved words (e.g. `main`, `temp`) are not allowed.
+     * @returns A promise that resolves when the database file is successfully detached.
+     */
+    detachDatabase(databaseNonce: string, schemaName: string): Promise<void>;
+    /**
+     *
+     * Execute a query on a specific database connection instance and receive some information about
+     * changes you made.
+     *
+     * This method is used for queries that modify the database such as `INSERT`, `UPDATE`, `DELETE`,
+     * and some `PRAGMA` queries. For queries that return data like `SELECT`, use `select`.
+     *
+     * @example Using anonymous parameters:
+     *
+     * ```ts
+     * const { lastId, changes } = await databaseService.run(
+     *   databaseNonce,
+     *   'INSERT INTO users (name, age) VALUES (?, ?)',
+     *   'John Doe',
+     *   30,
+     * );
+     * ```
+     *
+     * @example Using named parameters:
+     *
+     * ```ts
+     * const { lastId, changes } = await databaseService.run(
+     *   databaseNonce,
+     *   'INSERT INTO users (name, age) VALUES ($name, $age)',
+     *   { $name: 'John Doe', $age: 30 },
+     * );
+     * ```
+     *
+     * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
+     *   `openDatabase`.
+     * @param query - The SQL query to execute.
+     * @param namedParameters - An optional object whose keys match named parameters in the query
+     *   (e.g. `$id`) and whose values are the argument values you would like to pass into the
+     *   corresponding named parameters. Parameters are not allowed to be used for table or column
+     *   names. See [`SQLite`'s documentation on binding values
+     *   parameters](https://www.sqlite.org/c3ref/bind_blob.html) for more information about various
+     *   ways to pass in arguments.
+     * @param anonymousParameters - Zero or more argument values to bind to `?` positional parameters.
+     * @returns A promise that resolves to the result of the query execution.
+     */
+    run(
+      databaseNonce: string,
+      query: string,
+      ...anonymousParameters: SqlValue[]
+    ): Promise<RunResult>;
+    /**
+     *
+     * Execute a query on a specific database connection instance and receive some information about
+     * changes you made.
+     *
+     * This method is used for queries that modify the database such as `INSERT`, `UPDATE`, `DELETE`,
+     * and some `PRAGMA` queries. For queries that return data like `SELECT`, use `select`.
+     *
+     * @example Using anonymous parameters:
+     *
+     * ```ts
+     * const { lastId, changes } = await databaseService.run(
+     *   databaseNonce,
+     *   'INSERT INTO users (name, age) VALUES (?, ?)',
+     *   'John Doe',
+     *   30,
+     * );
+     * ```
+     *
+     * @example Using named parameters:
+     *
+     * ```ts
+     * const { lastId, changes } = await databaseService.run(
+     *   databaseNonce,
+     *   'INSERT INTO users (name, age) VALUES ($name, $age)',
+     *   { $name: 'John Doe', $age: 30 },
+     * );
+     * ```
+     *
+     * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
+     *   `openDatabase`.
+     * @param query - The SQL query to execute.
+     * @param namedParameters - An optional object whose keys match named parameters in the query
+     *   (e.g. `$id`) and whose values are the argument values you would like to pass into the
+     *   corresponding named parameters. Parameters are not allowed to be used for table or column
+     *   names. See [`SQLite`'s documentation on binding values
+     *   parameters](https://www.sqlite.org/c3ref/bind_blob.html) for more information about various
+     *   ways to pass in arguments.
+     * @param anonymousParameters - Zero or more argument values to bind to `?` positional parameters.
+     * @returns A promise that resolves to the result of the query execution.
+     */
+    run(
+      databaseNonce: string,
+      query: string,
+      namedParameters: NamedSqlParameters,
+      ...anonymousParameters: SqlValue[]
+    ): Promise<RunResult>;
+    /**
+     *
+     * Execute a query on a specific database connection instance and receive all rows returned from
+     * the query.
+     *
+     * This method is used for queries that return data like `SELECT` and some `PRAGMA` queries. For
+     * queries that modify the database such as `INSERT`, `UPDATE`, and `DELETE`, use `run`.
+     *
+     * Note: This method is not only for `SELECT` queries but is for any queries that return data. It
+     * is named `select` for ease of association.
+     *
+     * @example Using anonymous parameters:
+     *
+     * ```ts
+     * const rows = await databaseService.select(
+     *   databaseNonce,
+     *   'SELECT name, age FROM users WHERE age > ?',
+     *   18,
+     * );
+     * // rows is of type SqlOutputRow[], where each row has the shape { name: string, age: number }
+     * ```
+     *
+     * @example Using named parameters:
+     *
+     * ```ts
+     * const rows = await databaseService.select(
+     *   databaseNonce,
+     *   'SELECT name, age FROM users WHERE age > $minAge',
+     *   { $minAge: 18 },
+     * );
+     * // rows is of type SqlOutputRow[], where each row has the shape { name: string, age: number }
+     * ```
+     *
+     * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
+     *   `openDatabase`.
+     * @param query - The SQL query to execute.
+     * @param namedParameters - An optional object whose keys match named parameters in the query
+     *   (e.g. `$id`) and whose values are the argument values you would like to pass into the
+     *   corresponding named parameters. Parameters are not allowed to be used for table or column
+     *   names. See [`SQLite`'s documentation on binding values
+     *   parameters](https://www.sqlite.org/c3ref/bind_blob.html) for more information about various
+     *   ways to pass in arguments.
+     * @param anonymousParameters - Zero or more argument values to bind to `?` positional parameters.
+     * @returns A promise that resolves to an array of rows retrieved by the query.
+     */
+    select(
+      databaseNonce: string,
+      query: string,
+      ...anonymousParameters: SqlValue[]
+    ): Promise<SqlOutputRow[]>;
+    /**
+     *
+     * Execute a query on a specific database connection instance and receive all rows returned from
+     * the query.
+     *
+     * This method is used for queries that return data like `SELECT` and some `PRAGMA` queries. For
+     * queries that modify the database such as `INSERT`, `UPDATE`, and `DELETE`, use `run`.
+     *
+     * Note: This method is not only for `SELECT` queries but is for any queries that return data. It
+     * is named `select` for ease of association.
+     *
+     * @example Using anonymous parameters:
+     *
+     * ```ts
+     * const rows = await databaseService.select(
+     *   databaseNonce,
+     *   'SELECT name, age FROM users WHERE age > ?',
+     *   18,
+     * );
+     * // rows is of type SqlOutputRow[], where each row has the shape { name: string, age: number }
+     * ```
+     *
+     * @example Using named parameters:
+     *
+     * ```ts
+     * const rows = await databaseService.select(
+     *   databaseNonce,
+     *   'SELECT name, age FROM users WHERE age > $minAge',
+     *   { $minAge: 18 },
+     * );
+     * // rows is of type SqlOutputRow[], where each row has the shape { name: string, age: number }
+     * ```
+     *
+     * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
+     *   `openDatabase`.
+     * @param query - The SQL query to execute.
+     * @param namedParameters - An optional object whose keys match named parameters in the query
+     *   (e.g. `$id`) and whose values are the argument values you would like to pass into the
+     *   corresponding named parameters. Parameters are not allowed to be used for table or column
+     *   names. See [`SQLite`'s documentation on binding values
+     *   parameters](https://www.sqlite.org/c3ref/bind_blob.html) for more information about various
+     *   ways to pass in arguments.
+     * @param anonymousParameters - Zero or more argument values to bind to `?` positional parameters.
+     * @returns A promise that resolves to an array of rows retrieved by the query.
+     */
+    select(
+      databaseNonce: string,
+      query: string,
+      namedParameters: NamedSqlParameters,
+      ...anonymousParameters: SqlValue[]
+    ): Promise<SqlOutputRow[]>;
+  } & typeof databaseServiceObjectToProxy;
+}
+declare module 'shared/utils/project-settings-document-combiner' {
+  import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
+  import {
+    JsonDocumentLike,
+    Localized,
+    ProjectSetting,
+    ProjectSettingsGroup,
+  } from 'platform-bible-utils';
+  import { SettingsDocumentCombinerBase } from 'shared/utils/settings-document-combiner-base';
+  /**
+   * Information about one specific setting. Basically just {@link Setting} but with specific default
+   * type info
+   */
+  type ProjectSettingInfo<ProjectSettingName extends ProjectSettingNames> = ProjectSetting & {
+    default: ProjectSettingTypes[ProjectSettingName];
+  };
+  /** Information about all settings. Keys are setting keys, values are information for that setting */
+  type AllProjectSettingsInfo = {
+    [ProjectSettingName in ProjectSettingNames]: ProjectSettingInfo<ProjectSettingName>;
+  };
+  export type ProjectSettingsContributionInfo = {
+    /** Map of extension name to that extension's provided settings groups if provided */
+    contributions: {
+      [extensionName: string]: ProjectSettingsGroup[] | undefined;
+    };
+    /**
+     * Map of setting name to setting definition. For type specificity and ease of accessing settings
+     * since they're a bit hard to find in `contributions`
+     */
+    settings: Partial<AllProjectSettingsInfo>;
+  };
+  export type LocalizedProjectSettingsContributionInfo = Localized<ProjectSettingsContributionInfo>;
+  export class ProjectSettingsDocumentCombiner extends SettingsDocumentCombinerBase {
+    protected readonly settingTypeName = 'Project Setting';
+    /**
+     * Get the current set of project settings contribution info given all the input documents.
+     * Localized string keys have not been localized to corresponding strings.
+     *
+     * NOTE: If the input documents might have changed since the last time the project settings
+     * contributions were retrieved, you can call `rebuild` to incorporate those document changes
+     * before calling this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of project settings contributions. If all the input documents are static, then
+     * there is no need to ever rebuild once all the documents have been contributed to this
+     * combiner.
+     */
+    getProjectSettingsContributionInfo(): ProjectSettingsContributionInfo | undefined;
+    /**
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * NOTE: If the input documents might have changed since the last time the settings contributions
+     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
+     * this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of settings contributions. If all the input documents are static, then there is
+     * no need to ever rebuild once all the documents have been contributed to this combiner.
+     */
+    getLocalizedProjectSettingsContributionInfo(): Promise<
+      LocalizedProjectSettingsContributionInfo | undefined
+    >;
+    protected performSchemaValidation(document: JsonDocumentLike, docType: string): void;
+  }
+  export default ProjectSettingsDocumentCombiner;
+}
+declare module 'shared/services/project-settings.service-model' {
+  import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
+  import { UnsubscriberAsync } from 'platform-bible-utils';
+  import { LocalizedProjectSettingsContributionInfo } from 'shared/utils/project-settings-document-combiner';
+  /** Name prefix for registered commands that call project settings validators */
+  export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
+  export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
+  export const projectSettingsServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * Registers a function that validates whether a new project setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator: <ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+      validator: ProjectSettingValidator<ProjectSettingName>,
+    ) => Promise<UnsubscriberAsync>;
+  }>;
+  /**
+   *
+   * Provides utility functions that project data providers should call when handling project settings
+   */
+  export interface IProjectSettingsService {
+    /**
+     * Calls registered project settings validators to determine whether or not a project setting
+     * change is valid.
+     *
+     * Every Project Data Provider **must** run this function when it receives a request to set a
+     * project setting before changing the value of the setting.
+     *
+     * @param newValue The new value requested to set the project setting value to
+     * @param currentValue The current project setting value
+     * @param key The project setting key being set
+     * @param projectInterfaces The `projectInterface`s supported by the calling PDP for the project
+     *   whose setting is being changed
+     * @param allChanges All project settings changes being set in one batch
+     * @returns `true` if change is valid, `false` otherwise
+     */
+    isValid<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+      newValue: ProjectSettingTypes[ProjectSettingName],
+      currentValue: ProjectSettingTypes[ProjectSettingName],
+      allChanges?: SimultaneousProjectSettingsChanges,
+    ): Promise<boolean>;
+    /**
+     * Gets default value for a project setting
+     *
+     * Every Project Data Providers **must** run this function when it receives a request to get a
+     * project setting if the project does not have a value for the project setting requested. It
+     * should return the response from this function directly, either the returned default value or
+     * throw.
+     *
+     * @param key The project setting key for which to get the default value
+     * @returns The default value for the setting if a default value is registered
+     * @throws If a default value is not registered for the setting
+     */
+    getDefault<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+    ): Promise<ProjectSettingTypes[ProjectSettingName]>;
+    /**
+     *
+     * Registers a function that validates whether a new project setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator<ProjectSettingName extends ProjectSettingNames>(
+      key: ProjectSettingName,
+      validatorCallback: ProjectSettingValidator<ProjectSettingName>,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     * Get the current set of project settings contribution info given all the input documents with
+     * all localized string keys localized properly.
+     *
+     * @returns Localized project settings contribution info or undefined
+     */
+    getLocalizedContributionInfo(): Promise<LocalizedProjectSettingsContributionInfo | undefined>;
+  }
+  /**
+   * All project settings changes being set in one batch
+   *
+   * Project settings may be circularly dependent on one another, so multiple project settings may
+   * need to be changed at once in some cases
+   */
+  export type SimultaneousProjectSettingsChanges = {
+    [ProjectSettingName in ProjectSettingNames]?: {
+      /** The new value requested to set the project setting value to */
+      newValue: ProjectSettingTypes[ProjectSettingName];
+      /** The current project setting value */
+      currentValue: ProjectSettingTypes[ProjectSettingName];
+    };
+  };
+  /**
+   * Function that validates whether a new project setting value should be allowed to be set
+   *
+   * @param newValue The new value requested to set the project setting value to
+   * @param currentValue The current project setting value
+   * @param allChanges All project settings changes being set in one batch
+   */
+  export type ProjectSettingValidator<ProjectSettingName extends ProjectSettingNames> = (
+    newValue: ProjectSettingTypes[ProjectSettingName],
+    currentValue: ProjectSettingTypes[ProjectSettingName],
+    allChanges: SimultaneousProjectSettingsChanges,
+  ) => Promise<boolean>;
+  /**
+   * Validators for all project settings. Keys are setting keys, values are functions to validate new
+   * settings
+   */
+  export type AllProjectSettingsValidators = {
+    [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
+  };
+}
+declare module 'shared/services/window.service-model' {
+  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { DirectionFromTab } from 'shared/models/docking-framework.model';
+  /**
+   *
+   * This name is used to register the window data provider on the papi. You can use this name to
+   * find the data provider when accessing it using the useData hook
+   */
+  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
+  export const windowServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the window data provider on the papi. You can use this name to
+     * find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.windowServiceDataProvider';
+  }>;
+  /** Focus of the app window is on a WebView iframe with the specified id */
+  export type FocusSubjectWebView = {
+    focusType: 'webView';
+    /** ID of the WebView in focus (its tab ID is the same) */
+    id: string;
+  };
+  /**
+   * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
+   *
+   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
+   * focused in the WebView's iframe
+   */
+  export type FocusSubjectTab = {
+    focusType: 'tab';
+    /** The type of tab. `webView` if it is a WebView tab. */
+    tabType: 'webView' | string;
+    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
+    id: string;
+  };
+  /** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
+  export type FocusSubjectOther = {
+    focusType: 'other';
+  };
+  /** Current item that is the subject of top-level app window focus */
+  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+  /** Specific item that is intended to be focused in the top-level app window */
+  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
+  /** Instructions that indicate how to change the app window focus */
+  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
+  export type WindowDataTypes = {
+    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [windowServiceProviderName]: IWindowService;
+    }
+  }
+  /**
+   *
+   * Service that allows to interact with the main application window
+   */
+  export type IWindowService = {
+    /**
+     *
+     * Get information about the current subject of focus in the main app window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the main app window's current subject of focus
+     */
+    getFocus(selector: undefined): Promise<FocusSubject>;
+    /**
+     *
+     * Get information about the current subject of focus in the main app window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the main app window's current subject of focus
+     */
+    getFocus(): Promise<FocusSubject>;
+    /**
+     * Sets the subject of focus in the main app window.
+     *
+     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Sets the subject of focus in the main app window.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     *
+     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
+     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
+     *   `'detect'`.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      selector: undefined,
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the main app window's subject of focus is changed
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the updated localized menuContent for this selector. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeFocus(
+      selector: undefined,
+      callback: (focusSubject: FocusSubject | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof windowServiceObjectToProxy &
+    IDataProvider<WindowDataTypes>;
+}
 declare module '@papi/core' {
   /** Exporting empty object so people don't have to put 'type' in their import statements */
   const core: {};
@@ -8877,6 +8809,14 @@ declare module '@papi/core' {
   export type { ExecutionToken } from 'node/models/execution-token.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  export type {
+    CommandPaletteItem,
+    CommandPaletteRequest,
+    IOverlayService,
+    PopoverAction,
+    PopoverContent,
+    PopoverRequest,
+  } from 'renderer/services/overlays/overlay.service-model';
   export type { IBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
   export type {
     IDataProvider,
@@ -8969,17 +8909,6 @@ declare module '@papi/core' {
     SetFocusSubject,
     SetFocusSpecifier,
   } from 'shared/services/window.service-model';
-  export type {
-    CommandPaletteItem,
-    CommandPaletteRequest,
-    IOverlayService,
-    ModalDialogOptions,
-    ModalDialogResponse,
-    ModalDialogType,
-    PopoverAction,
-    PopoverContent,
-    PopoverRequest,
-  } from 'renderer/services/overlays/overlay.service-model';
 }
 declare module 'shared/services/menu-data.service-model' {
   import {
@@ -10180,8 +10109,6 @@ declare module 'renderer/services/overlays/overlay-validation' {
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   import {
     CommandPaletteRequest,
-    ModalDialogOptions,
-    ModalDialogType,
     PopoverRequest,
   } from 'renderer/services/overlays/overlay.service-model';
   /**
@@ -10213,17 +10140,6 @@ declare module 'renderer/services/overlays/overlay-validation' {
    * @throws PlatformError with code INVALID_ARGUMENT if validation fails
    */
   export function validateCommandPaletteRequest(request: CommandPaletteRequest): void;
-  /**
-   * Validates modal dialog options based on dialog type.
-   *
-   * @param dialogType The type of dialog (alert, confirm)
-   * @param options The dialog options to validate
-   * @throws PlatformError with code INVALID_ARGUMENT if validation fails
-   */
-  export function validateModalDialogOptions<T extends ModalDialogType>(
-    dialogType: T,
-    options: ModalDialogOptions[T],
-  ): void;
 }
 declare module 'renderer/services/overlays/overlay-coordinates' {
   /**
@@ -10298,26 +10214,28 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
   ): boolean;
 }
 declare module 'renderer/services/overlays/overlay.service-host' {
-  import {
-    IOverlayService,
-    ModalDialogOptions,
-    ModalDialogResponse,
-    ModalDialogType,
-  } from 'renderer/services/overlays/overlay.service-model';
+  import type { ReactElement } from 'react';
+  import { IOverlayService } from 'renderer/services/overlays/overlay.service-model';
   /** Resets debounce tracking state. Exported for use in tests only. */
   export function resetDebounceState(): void;
   /**
-   * Shows a modal dialog overlay. Called internally by the dialog service host. Not exposed on PAPI.
+   * Shows a modal dialog overlay with any dialog component. Called internally by the dialog service
+   * host. Not exposed on PAPI.
    *
+   * @param Component The dialog React component to render inside the modal shell
+   * @param props Pre-built props for the component (DialogProps + options, already localized)
+   * @param webViewId The WebView that initiated the request. Defaults to 'dialog-service'.
+   * @returns The dialog result, or undefined if dismissed
    * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
    *   debounce cooldown
    * @internal
    */
-  export function showModalDialogOverlay<T extends ModalDialogType>(
-    dialogType: T,
-    options: ModalDialogOptions[T],
+  export function showModalDialogOverlay<TReturn>(
+    Component: (props: Record<string, unknown>) => ReactElement,
+    props: Record<string, unknown>,
+    onOverlayCreated?: (overlayId: string) => void,
     webViewId?: string,
-  ): Promise<ModalDialogResponse[T] | undefined>;
+  ): Promise<TReturn | undefined>;
   /** The overlay service instance exposed on papi */
   export const overlayService: IOverlayService;
   /** Initialize the overlay service. Called during renderer startup. */

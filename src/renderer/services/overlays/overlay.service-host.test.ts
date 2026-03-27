@@ -7,12 +7,7 @@ import {
 } from 'platform-bible-utils';
 import { sendCommand } from '@shared/services/command.service';
 import { menuDataService } from '@shared/services/menu-data.service';
-import {
-  CommandPaletteRequest,
-  ModalDialogOptions,
-  PopoverContent,
-  PopoverRequest,
-} from './overlay.service-model';
+import { CommandPaletteRequest, PopoverContent, PopoverRequest } from './overlay.service-model';
 import { getOverlays, getOverlayById, clearAllOverlays } from './overlay-store';
 import { isWebViewVisible } from './overlay-coordinates';
 
@@ -23,7 +18,6 @@ const DEBOUNCE_COOLDOWN_MS = 50;
 vi.mock('./overlay-validation', () => ({
   validateCommandPaletteRequest: vi.fn(),
   validateContextMenuItems: vi.fn(),
-  validateModalDialogOptions: vi.fn(),
   validatePopoverRequest: vi.fn(),
 }));
 
@@ -219,13 +213,16 @@ describe('overlay.service-host', () => {
   });
 
   describe('modal dialogs', () => {
-    it('should create an overlay entry of type modalDialog for alert', () => {
-      const options: ModalDialogOptions['alert'] = {
-        message: 'Something happened',
-      };
+    const MockDialogComponent = vi.fn(
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      () => undefined as any,
+    );
+
+    it('should create an overlay entry of type modalDialog', () => {
+      const props = { prompt: 'Something happened', isDialog: true };
 
       // Start the promise but don't await yet (it waits for user interaction)
-      const promise = showModalDialogOverlay('alert', options, 'test-webview');
+      const promise = showModalDialogOverlay(MockDialogComponent, props, undefined, 'test-webview');
 
       // Verify an overlay entry was created in the store
       const overlays = getOverlays();
@@ -235,20 +232,18 @@ describe('overlay.service-host', () => {
       // Type is verified by the assertion above
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const modalOverlay = overlay as Extract<typeof overlay, { type: 'modalDialog' }>;
-      expect(modalOverlay.dialogType).toBe('alert');
-      expect(modalOverlay.options).toBe(options);
+      expect(modalOverlay.Component).toBe(MockDialogComponent);
+      expect(modalOverlay.props).toEqual(props);
 
       // Clean up: resolve the promise so the test doesn't hang
       modalOverlay.resolve(true);
       return promise;
     });
 
-    it('should create an overlay entry of type modalDialog for confirm', () => {
-      const options: ModalDialogOptions['confirm'] = {
-        message: 'Are you sure?',
-      };
+    it('should create an overlay entry with confirm props', () => {
+      const props = { prompt: 'Are you sure?', isDialog: true };
 
-      const promise = showModalDialogOverlay('confirm', options, 'test-webview');
+      const promise = showModalDialogOverlay(MockDialogComponent, props, undefined, 'test-webview');
 
       const overlays = getOverlays();
       expect(overlays).toHaveLength(1);
@@ -257,8 +252,8 @@ describe('overlay.service-host', () => {
       // Type is verified by the assertion above; TS can't narrow OverlayEntry union from .type check
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const modalOverlay = overlay as Extract<typeof overlay, { type: 'modalDialog' }>;
-      expect(modalOverlay.dialogType).toBe('confirm');
-      expect(modalOverlay.options).toBe(options);
+      expect(modalOverlay.Component).toBe(MockDialogComponent);
+      expect(modalOverlay.props).toEqual(props);
 
       // Clean up
       modalOverlay.resolve(false);
@@ -268,21 +263,27 @@ describe('overlay.service-host', () => {
     it('should replace existing modal from same webView', async () => {
       vi.useFakeTimers();
 
-      const options1: ModalDialogOptions['alert'] = {
-        message: 'First dialog',
-      };
-      const options2: ModalDialogOptions['confirm'] = {
-        message: 'Second dialog',
-      };
+      const props1 = { prompt: 'First dialog', isDialog: true };
+      const props2 = { prompt: 'Second dialog', isDialog: true };
 
       // Show first modal - it will be rejected when second replaces it
-      const promise1 = showModalDialogOverlay('alert', options1, 'test-webview');
+      const promise1 = showModalDialogOverlay(
+        MockDialogComponent,
+        props1,
+        undefined,
+        'test-webview',
+      );
 
       // Advance past debounce cooldown so the second call is accepted
       vi.advanceTimersByTime(DEBOUNCE_COOLDOWN_MS);
 
       // Show second modal from same webView
-      const promise2 = showModalDialogOverlay('confirm', options2, 'test-webview');
+      const promise2 = showModalDialogOverlay(
+        MockDialogComponent,
+        props2,
+        undefined,
+        'test-webview',
+      );
 
       // First should be rejected with ABORTED
       await expect(promise1).rejects.toSatisfy(
@@ -293,8 +294,9 @@ describe('overlay.service-host', () => {
       const overlays = getOverlays();
       const modalOverlays = overlays.filter((o) => o.type === 'modalDialog');
       expect(modalOverlays).toHaveLength(1);
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       const remaining = modalOverlays[0];
-      expect(remaining.dialogType).toBe('confirm');
+      expect(remaining.props).toEqual(props2);
 
       // Clean up
       remaining.resolve(false);
@@ -303,16 +305,14 @@ describe('overlay.service-host', () => {
     });
 
     it('should resolve when dialog is resolved', async () => {
-      const options: ModalDialogOptions['confirm'] = {
-        message: 'Confirm?',
-      };
+      const props = { prompt: 'Confirm?', isDialog: true };
 
-      const promise = showModalDialogOverlay('confirm', options, 'test-webview');
+      const promise = showModalDialogOverlay(MockDialogComponent, props, undefined, 'test-webview');
 
       const overlays = getOverlays();
       expect(overlays).toHaveLength(1);
 
-      // Simulate dialog resolution — only modalDialog overlays exist in this test
+      // Simulate dialog resolution - only modalDialog overlays exist in this test
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const modalOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'modalDialog' }>;
       modalOverlay.resolve(true);
@@ -321,12 +321,10 @@ describe('overlay.service-host', () => {
       expect(result).toBe(true);
     });
 
-    it('should resolve with true when alert dialog is acknowledged', async () => {
-      const options: ModalDialogOptions['alert'] = {
-        message: 'Info',
-      };
+    it('should resolve with true when dialog is acknowledged', async () => {
+      const props = { prompt: 'Info', isDialog: true };
 
-      const promise = showModalDialogOverlay('alert', options, 'test-webview');
+      const promise = showModalDialogOverlay(MockDialogComponent, props, undefined, 'test-webview');
 
       const overlays = getOverlays();
       // Only modalDialog overlays exist in this test; TS can't narrow the union
@@ -338,12 +336,10 @@ describe('overlay.service-host', () => {
       expect(result).toBe(true);
     });
 
-    it('should resolve with undefined when alert dialog is dismissed without response', async () => {
-      const options: ModalDialogOptions['alert'] = {
-        message: 'Info',
-      };
+    it('should resolve with undefined when dialog is dismissed without response', async () => {
+      const props = { prompt: 'Info', isDialog: true };
 
-      const promise = showModalDialogOverlay('alert', options, 'test-webview');
+      const promise = showModalDialogOverlay(MockDialogComponent, props, undefined, 'test-webview');
 
       const overlays = getOverlays();
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -779,8 +775,12 @@ describe('overlay.service-host', () => {
       // windowService.getFocus and setFocus are mocked at the top
       const { windowService } = await import('@shared/services/window.service');
 
-      const options: ModalDialogOptions['alert'] = { message: 'Focus test' };
-      const promise = showModalDialogOverlay('alert', options, 'focus-webview');
+      const MockFocusComponent = vi.fn(
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+        () => undefined as any,
+      );
+      const props = { prompt: 'Focus test', isDialog: true };
+      const promise = showModalDialogOverlay(MockFocusComponent, props, undefined, 'focus-webview');
 
       // saveFocus should have been called (getFocus is async, allow it to resolve)
       await Promise.resolve();

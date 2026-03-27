@@ -204,8 +204,15 @@ declare module 'papi-shared-types' {
   } from 'hello-rock3';
 
   export interface CommandHandlers {
+    /**
+     * Simple function to return `Hello Third Rock!`. Also counts up how many times anyone has
+     * called this function and sends events notifying subscribers when someone has called this
+     * function.
+     */
     'helloRock3.helloRock3': () => string;
+    /** Opens a sample alert dialog. */
     'helloRock3.showContextMenuAlert': () => Promise<void>;
+    /** Throws an exception with a message including the given string to test exception handling */
     'helloRock3.helloException': (message: string) => void;
     /**
      * Opens a new Hello Rock3 Project WebView and returns the WebView id
