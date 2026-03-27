@@ -14,6 +14,7 @@ import SearchResult, {
   ReplaceConfig,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './search-result.component';
+import { PreviewOptions } from './replace-preview-types';
 
 type SearchResultsInBookProps = {
   /** The ID of the project being searched */
@@ -40,6 +41,8 @@ type SearchResultsInBookProps = {
   replaceConfig?: ReplaceConfig;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
+  /** Options controlling how the replace preview is displayed */
+  previewOptions?: PreviewOptions;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -60,6 +63,7 @@ export function SearchResultsInBook({
   isReplaceMode,
   isReplacing,
   replaceConfig,
+  previewOptions,
 }: SearchResultsInBookProps) {
   const verseRefForBook = useMemo(() => {
     return {
@@ -116,6 +120,7 @@ export function SearchResultsInBook({
           isReplaceMode={isReplaceMode}
           isReplacing={isReplacing}
           replaceConfig={replaceConfig}
+          previewOptions={previewOptions}
         />
       ))}
     </>

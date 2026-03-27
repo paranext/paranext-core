@@ -1,5 +1,5 @@
 import { logger } from '@papi/frontend';
-import { ArrowRight, Copy, X } from 'lucide-react';
+import { ArrowRight, Copy, Minus, Plus, X } from 'lucide-react';
 import { Button, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
 import {
   getErrorMessage,
@@ -11,6 +11,12 @@ import { FindResult } from 'platform-scripture';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
 import { applyPreserveCase } from './find.utils';
+import {
+  getFindHighlightClasses,
+  getReplaceHighlightClasses,
+  renderWithInvisibleChars,
+} from './replace-preview-styles';
+import { DEFAULT_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: boolean };
 
@@ -63,6 +69,8 @@ interface SearchResultProps {
   isReplacing: boolean;
   /** Configuration for replacement preview (used in replace mode) */
   replaceConfig?: ReplaceConfig;
+  /** Options controlling how the replace preview is displayed */
+  previewOptions?: PreviewOptions;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -106,13 +114,16 @@ export default function SearchResult({
   isReplaceMode,
   isReplacing,
   replaceConfig,
+  previewOptions = DEFAULT_PREVIEW_OPTIONS,
 }: SearchResultProps) {
   // useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // We should avoid calculating context unless this result is selected to improve performance
-  const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(isSelected);
+  // Inline layout needs context for every result; arrow/block only compute on selection
+  const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(
+    isSelected || previewOptions.layout === 'inline',
+  );
   const [isProgressAnimating, setIsProgressAnimating] = useState(false);
 
   useEffect(() => {
@@ -131,6 +142,13 @@ export default function SearchResult({
       cardRef.current?.scrollIntoView({ block: 'nearest' });
     }
   }, [isSelected]);
+
+  // When layout switches to inline, enable context calculation for this result
+  useEffect(() => {
+    if (previewOptions.layout === 'inline') {
+      setShouldGetVerseText(true);
+    }
+  }, [previewOptions.layout]);
 
   // Determine the text to show before the search result, the search result, and the text after
   const textParts = useMemo(() => {
@@ -162,8 +180,8 @@ export default function SearchResult({
   }, [usjReaderWriter, searchResult, shouldCalculateContext]);
 
   /**
-   * Highlights the search term within the verse text by wrapping the specified occurrence in a
-   * <strong> tag. If the component is not selected, returns the plain verse text.
+   * Highlights the search term within the verse text using a background-color span so that leading
+   * and trailing spaces in the match are visually included in the highlight.
    *
    * @returns The verse text with the search term highlighted, or plain text if not selected
    */
@@ -175,7 +193,7 @@ export default function SearchResult({
     return (
       <>
         {beforeText}
-        <strong>{text}</strong>
+        <span className={findHighlightClass}>{text}</span>
         {afterText}
       </>
     );
@@ -249,60 +267,143 @@ export default function SearchResult({
       : replaceConfig.term;
   }
 
+  /** Applies the showInvisible option to a string */
+  const displayText = (text: string) =>
+    previewOptions.showInvisible ? renderWithInvisibleChars(text) : text;
+
+  /** Returns the font class based on the monospace option */
+  const fontClass = previewOptions.monospace ? 'tw-font-mono' : 'scripture-font';
+
+  const { highlightShape, color } = previewOptions;
+  const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
+  const findHighlightClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape, false)}`;
+  const replaceClass = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape)}`;
+
+  /**
+   * Renders the replace preview element for all results. Layout determines the visual style:
+   *
+   * - Arrow: [find-strikethrough] → [replace]
+   * - Inline: [before][find-strikethrough][replace][after] embedded in verse context
+   * - Block: two lines with - (find) and + (replace); context only when selected
+   */
+  const getReplacePreviewElement = (): JSX.Element | null => {
+    if (previewReplacement === undefined) return null;
+
+    const findText = displayText(searchResult.text ?? '');
+    const replaceText = displayText(previewReplacement);
+
+    if (previewOptions.layout === 'inline') {
+      // Falls back to arrow if context not yet loaded
+      if (!textParts) {
+        return (
+          <div className="tw-flex tw-items-center tw-gap-1.5">
+            <span className={findClass}>{findText}</span>
+            <ArrowRight className="tw-h-3 tw-w-3 tw-shrink-0 rtl:tw-rotate-180" />
+            <span className={replaceClass}>{replaceText}</span>
+          </div>
+        );
+      }
+      return (
+        <div className={`tw-text-muted-foreground ${fontClass}`}>
+          {displayText(textParts.beforeText)}
+          <span className={findClass}>{displayText(textParts.text)}</span>
+          <span className={replaceClass}>{replaceText}</span>
+          {displayText(textParts.afterText)}
+        </div>
+      );
+    }
+
+    if (previewOptions.layout === 'block') {
+      const hasContext = isSelected && textParts;
+      const before = hasContext ? displayText(textParts.beforeText) : '';
+      const after = hasContext ? displayText(textParts.afterText) : '';
+      return (
+        <div className="tw-space-y-0.5">
+          <div className="tw-flex tw-items-baseline tw-gap-1">
+            <Minus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-gray-500" />
+            <span className={`tw-text-muted-foreground ${fontClass}`}>
+              {before}
+              <span className={findClass}>{findText}</span>
+              {after}
+            </span>
+          </div>
+          <div className="tw-flex tw-items-baseline tw-gap-1">
+            <Plus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-gray-500" />
+            <span className={`tw-text-muted-foreground ${fontClass}`}>
+              {before}
+              <span className={replaceClass}>{replaceText}</span>
+              {after}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // Default: arrow layout
+    return (
+      <div className="tw-flex tw-items-center tw-gap-1.5">
+        <span className={findClass}>{findText}</span>
+        <ArrowRight className="tw-h-3 tw-w-3 tw-shrink-0 rtl:tw-rotate-180" />
+        <span className={replaceClass}>{replaceText}</span>
+      </div>
+    );
+  };
+
   const bookData = localizedBookData.get(searchResult.start.verseRef.book);
 
   const cardContent = (
-    <div className="tw-text-xs tw-font-medium tw-flex tw-items-center tw-gap-2 tw-min-h-8">
-      <div className="tw-shrink-0 tw-font-semibold">
-        {bookData?.localizedName ?? bookData?.localizedId ?? searchResult.start.verseRef.book}{' '}
-        {searchResult.start.verseRef.chapterNum}:
-        {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}
+    <div className="tw-flex tw-flex-col tw-gap-1.5">
+      <div className="tw-text-xs tw-font-medium tw-flex tw-items-center tw-gap-2 tw-min-h-8">
+        <div className="tw-shrink-0 tw-font-semibold">
+          {bookData?.localizedName ?? bookData?.localizedId ?? searchResult.start.verseRef.book}{' '}
+          {searchResult.start.verseRef.chapterNum}:
+          {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}
+        </div>
+        {searchResult.isReplaced && (
+          <>
+            <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">
+              {localizedStrings['%webView_find_replaced%']}
+            </span>
+            <div className="tw-flex-1 tw-h-1.5 tw-bg-red-200 tw-rounded-full tw-overflow-hidden">
+              <div
+                className="tw-h-full tw-bg-red-500 tw-rounded-full tw-transition-all tw-ease-linear tw-duration-1000"
+                style={{ width: isProgressAnimating ? '100%' : '0%' }}
+              />
+            </div>
+            {onCancelReplace && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="tw-h-6 tw-shrink-0 tw-mr-10 tw-border-red-300 tw-text-red-500 hover:tw-border-red-500 hover:tw-text-red-700"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCancelReplace();
+                }}
+              >
+                {localizedStrings['%general_cancel%']}
+              </Button>
+            )}
+          </>
+        )}
       </div>
-      {searchResult.isReplaced && (
-        <>
-          <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">
-            {localizedStrings['%webView_find_replaced%']}
-          </span>
-          <div className="tw-flex-1 tw-h-1.5 tw-bg-red-200 tw-rounded-full tw-overflow-hidden">
-            <div
-              className="tw-h-full tw-bg-red-500 tw-rounded-full tw-transition-all tw-ease-linear tw-duration-1000"
-              style={{ width: isProgressAnimating ? '100%' : '0%' }}
-            />
-          </div>
-          {onCancelReplace && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="tw-h-6 tw-shrink-0 tw-mr-10 tw-border-red-300 tw-text-red-500 hover:tw-border-red-500 hover:tw-text-red-700"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCancelReplace();
-              }}
-            >
-              {localizedStrings['%general_cancel%']}
-            </Button>
-          )}
-        </>
-      )}
+      {/* Preview shown when selected and in replace mode (except arrow, which appears below verse text when selected) */}
+      {previewOptions.layout !== 'arrow' && isSelected && getReplacePreviewElement()}
     </div>
   );
 
+  // Verse text context is shown when selected.
+  // Inline layout embeds context in the preview above; block shows context in the preview above when selected.
+  // Only arrow layout (and find-only mode) needs separate verse text in additionalSelectedContent.
+  const showVerseTextInAdditional = !isReplaceMode || previewOptions.layout === 'arrow';
+
   const additionalSelectedContent = (
     <>
-      <div className="tw-text-xs tw-font-normal tw-text-muted-foreground scripture-font">
-        {getFocusedVerseText()}
-      </div>
-      {previewReplacement !== undefined && (
-        <div className="tw-flex tw-items-center tw-gap-1.5 tw-text-xs">
-          <span className="scripture-font tw-line-through tw-text-muted-foreground">
-            {searchResult.text ?? ''}
-          </span>
-          <ArrowRight className="tw-h-3 tw-w-3 tw-shrink-0 rtl:tw-rotate-180" />
-          <span className="scripture-font tw-inline-block tw-min-w-3 tw-rounded-sm tw-bg-red-100 tw-px-1 tw-text-red-600 dark:tw-bg-red-950 dark:tw-text-red-400">
-            {previewReplacement}
-          </span>
+      {showVerseTextInAdditional && (
+        <div className="tw-font-normal tw-text-muted-foreground scripture-font">
+          {getFocusedVerseText()}
         </div>
       )}
+      {isReplaceMode && previewOptions.layout === 'arrow' && getReplacePreviewElement()}
     </>
   );
 
