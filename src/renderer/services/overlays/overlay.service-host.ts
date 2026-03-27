@@ -29,12 +29,10 @@ import {
   RESOURCE_EXHAUSTED,
 } from 'platform-bible-utils';
 import type { PlatformError } from 'platform-bible-utils';
+import type { ReactElement } from 'react';
 import {
   CommandPaletteRequest,
   IOverlayService,
-  ModalDialogOptions,
-  ModalDialogResponse,
-  ModalDialogType,
   OverlayEntry,
   PopoverContent,
   PopoverRequest,
@@ -43,7 +41,6 @@ import { convertContributionToContextMenuItems } from './overlay-menu-converter'
 import {
   validateCommandPaletteRequest,
   validateContextMenuItems,
-  validateModalDialogOptions,
   validatePopoverRequest,
 } from './overlay-validation';
 import {
@@ -312,19 +309,23 @@ async function showContextMenu(
 }
 
 /**
- * Shows a modal dialog overlay. Called internally by the dialog service host. Not exposed on PAPI.
+ * Shows a modal dialog overlay with any dialog component. Called internally by the dialog service
+ * host. Not exposed on PAPI.
  *
+ * @param Component The dialog React component to render inside the modal shell
+ * @param props Pre-built props for the component (DialogProps + options, already localized)
+ * @param webViewId The WebView that initiated the request. Defaults to 'dialog-service'.
+ * @returns The dialog result, or undefined if dismissed
  * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
  *   debounce cooldown
  * @internal
  */
-export async function showModalDialogOverlay<T extends ModalDialogType>(
-  dialogType: T,
-  options: ModalDialogOptions[T],
+export async function showModalDialogOverlay<TReturn>(
+  Component: (props: Record<string, unknown>) => ReactElement,
+  props: Record<string, unknown>,
+  onOverlayCreated?: (overlayId: string) => void,
   webViewId: string = 'dialog-service',
-): Promise<ModalDialogResponse[T] | undefined> {
-  validateModalDialogOptions(dialogType, options);
-
+): Promise<TReturn | undefined> {
   // Leading-edge debounce
   if (!debounceCheck('modalDialog', webViewId)) {
     throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
@@ -345,24 +346,26 @@ export async function showModalDialogOverlay<T extends ModalDialogType>(
   // Save current focus state for later restoration
   saveFocus(overlayId);
 
-  const title =
-    'title' in options && typeof options.title === 'string' ? options.title : dialogType;
+  const title = typeof props.title === 'string' ? props.title : 'Dialog';
   announceLocalizedToScreenReader('%overlay_aria_dialogOpened%', { title });
 
-  return new Promise<ModalDialogResponse[T] | undefined>((resolve, reject) => {
+  // Notify the caller of the overlay ID so they can wire up dismiss callbacks
+  onOverlayCreated?.(overlayId);
+
+  return new Promise<TReturn | undefined>((resolve, reject) => {
     addOverlay({
       type: 'modalDialog',
       id: overlayId,
       webViewId,
-      dialogType,
-      options,
+      Component,
+      props,
       // Generic T resolve can't be assigned to unknown resolve without widening
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       resolve: ((result: unknown) => {
         restoreFocus(overlayId);
         // Cast unknown result back to the generic dialog response type
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        resolve(result as ModalDialogResponse[T] | undefined);
+        resolve(result as TReturn | undefined);
       }) as (result: unknown) => void,
       reject,
     });

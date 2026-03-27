@@ -2,19 +2,20 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
 import { findHelloRock3Frame, DEFAULT_PERSON_NAME } from './overlay-helpers';
 
-test.describe('Overlay Modal Dialog', () => {
-  test('confirm dialog shows with backdrop, correct content, and ARIA role', async ({
-    mainPage,
-  }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
+test('overlay modal dialog rendering and interaction via WebView triggers', async ({
+  mainPage,
+}) => {
+  await waitForAppReady(mainPage);
+  const frame = await findHelloRock3Frame(mainPage);
 
+  // The delete button text contains the default person name from settings.json.
+  const deleteButton = frame
+    .locator('button')
+    .filter({ hasText: new RegExp(DEFAULT_PERSON_NAME, 'i') });
+  await expect(deleteButton).toBeVisible({ timeout: 10_000 });
+
+  await test.step('confirm dialog shows with backdrop, correct content, and ARIA role', async () => {
     // Click the delete button inside the WebView to trigger a confirm dialog.
-    // The button text contains the default person name from settings.json.
-    const deleteButton = frame
-      .locator('button')
-      .filter({ hasText: new RegExp(DEFAULT_PERSON_NAME, 'i') });
-    await expect(deleteButton).toBeVisible({ timeout: 10_000 });
     await deleteButton.click();
 
     // The confirm dialog should render in the parent document
@@ -47,15 +48,7 @@ test.describe('Overlay Modal Dialog', () => {
     await expect(dialog).not.toBeVisible({ timeout: 3_000 });
   });
 
-  test('Cancel button and Escape key both dismiss the dialog', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
-
-    const deleteButton = frame
-      .locator('button')
-      .filter({ hasText: new RegExp(DEFAULT_PERSON_NAME, 'i') });
-    await expect(deleteButton).toBeVisible({ timeout: 10_000 });
-
+  await test.step('Cancel button and Escape key both dismiss the dialog', async () => {
     // Test 1: Cancel button dismisses
     await deleteButton.click();
     let dialog = mainPage.locator('[data-overlay-modal-dialog]');
@@ -73,10 +66,7 @@ test.describe('Overlay Modal Dialog', () => {
     await expect(dialog).not.toBeVisible({ timeout: 3_000 });
   });
 
-  test('alert dialog via context menu chaining', async ({ mainPage }) => {
-    await waitForAppReady(mainPage);
-    const frame = await findHelloRock3Frame(mainPage);
-
+  await test.step('alert dialog via context menu chaining', async () => {
     // Right-click to open context menu
     await frame.locator('.title').click({ button: 'right' });
     const menu = mainPage.locator('[role="menu"]').first();

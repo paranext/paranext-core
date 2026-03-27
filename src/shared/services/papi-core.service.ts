@@ -6,6 +6,14 @@ export type { ExecutionActivationContext } from '@extension-host/extension-types
 export type { ExecutionToken } from '@node/models/execution-token.model';
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
+export type {
+  CommandPaletteItem,
+  CommandPaletteRequest,
+  IOverlayService,
+  PopoverAction,
+  PopoverContent,
+  PopoverRequest,
+} from '@renderer/services/overlays/overlay.service-model';
 export type { IBaseProjectDataProviderEngine } from '@shared/models/base-project-data-provider-engine.model';
 export type {
   IDataProvider,
@@ -98,14 +106,3 @@ export type {
   SetFocusSubject,
   SetFocusSpecifier,
 } from '@shared/services/window.service-model';
-export type {
-  CommandPaletteItem,
-  CommandPaletteRequest,
-  IOverlayService,
-  ModalDialogOptions,
-  ModalDialogResponse,
-  ModalDialogType,
-  PopoverAction,
-  PopoverContent,
-  PopoverRequest,
-} from '@renderer/services/overlays/overlay.service-model';
