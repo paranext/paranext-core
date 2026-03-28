@@ -1,10 +1,21 @@
 import { ReplacePreviewColor, ReplacePreviewHighlightShape } from './replace-preview-types';
 
-// Shape class lookup — all classes are complete literals so Tailwind content scanning picks them up
+// Shape class lookup — all classes are complete literals so Tailwind content scanning picks them up.
+// Bar uses box-shadow (via --tw-ring-color) instead of CSS borders because a global
+// `* { border-color: hsl(var(--border)) }` rule in app.component.scss sits outside any CSS layer
+// and therefore overrides all Tailwind border-color utilities. Ring/shadow is unaffected.
 const SHAPE_CLASSES: Record<ReplacePreviewHighlightShape, string> = {
-  bar: 'tw-border-t-2 tw-border-b-2',
+  bar: 'tw-shadow-[inset_0_2px_0_0_var(--tw-ring-color),inset_0_-2px_0_0_var(--tw-ring-color)]',
   rounded: 'tw-rounded-sm tw-ring-1 tw-ring-inset',
   plain: '',
+};
+
+/** Lighter amber/gold color classes used for the find highlight in the verse text context area. */
+const GOLD_FIND_COLOR = {
+  bg: 'tw-bg-amber-100 dark:tw-bg-amber-900',
+  text: 'tw-text-amber-700 dark:tw-text-amber-300',
+  // Sets --tw-ring-color used by both the bar shadow and the rounded ring
+  border: 'tw-ring-amber-600 dark:tw-ring-amber-400',
 };
 
 // Color classes for the FIND (old) highlight
@@ -50,6 +61,26 @@ const REPLACE_COLOR_CLASSES: Record<
     border: 'tw-border-blue-400 dark:tw-border-blue-600 tw-ring-blue-400 dark:tw-ring-blue-600',
   },
 };
+
+/**
+ * Returns Tailwind class string for the gold/amber find highlight used in the verse text context
+ * area. Respects the current highlight shape but always uses the lighter amber/gold color scheme.
+ *
+ * @param shape The highlight shape to apply
+ */
+export function getGoldFindHighlightClasses(shape: ReplacePreviewHighlightShape): string {
+  const shapeClass = SHAPE_CLASSES[shape];
+  const borderClass = shape !== 'plain' ? GOLD_FIND_COLOR.border : '';
+  return [
+    'tw-inline tw-px-0.5 tw-whitespace-pre-wrap',
+    GOLD_FIND_COLOR.bg,
+    GOLD_FIND_COLOR.text,
+    shapeClass,
+    borderClass,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
 
 /**
  * Returns Tailwind class string for the FIND (old) highlight span. All class values are complete
@@ -113,8 +144,15 @@ const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
   '~': '·', // USFM non-breaking space tilde
 };
 
+// The regex intentionally mixes regular spaces and Unicode zero-width/whitespace code points in one
+// character class. ESLint flags this as "misleading" because some of these code points (e.g.
+// \u200d ZERO WIDTH JOINER) are normally combiners that modify adjacent characters rather than
+// standing alone, so grouping them with ordinary characters in `[...]` can look unintentional.
+// Here it is intentional: we want a single pass that catches every invisible/whitespace variant.
+/* eslint-disable no-misleading-character-class */
 const INVISIBLE_CHAR_REGEX =
   /[ \u00a0\u200b\u200c\u200d\u200e\u200f\u2060\u202f\u2009\u200a\u2002\u2003\u3000~]/g;
+/* eslint-enable no-misleading-character-class */
 
 /**
  * Replaces invisible/whitespace characters with visible stand-in symbols. Regular visible

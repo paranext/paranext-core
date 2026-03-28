@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "label": "%settings_platformScripture_find_label%",
+    "properties": {
+      "platformScripture.findRecentSearches": {
+        "label": "%settings_platformScripture_findRecentSearches_label%",
+        "default": [],
+        "isHidden": true
+      },
+      "platformScripture.findLastSearchTerm": {
+        "label": "%settings_platformScripture_findLastSearchTerm_label%",
+        "default": "",
+        "isHidden": true
+      }
+    }
+  }
+]

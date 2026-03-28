@@ -4,43 +4,20 @@ import {
   useLocalizedStrings,
   useProjectDataProvider,
   useProjectSetting,
+  useSetting,
   useWebViewController,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
-  ArrowRight,
-  ChevronDown,
-  ChevronUp,
-  Info,
-  Replace,
-  ReplaceAll,
-  TextSearch,
-  X,
-} from 'lucide-react';
-import {
   Button,
   Card,
   CardContent,
-  Checkbox,
-  Input,
-  Label,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   Progress,
-  RecentSearches,
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
-  ScopeSelector,
   Skeleton,
   Sonner,
   sonner,
-  ToggleGroup,
-  ToggleGroupItem,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
   useRecentSearches,
 } from 'platform-bible-react';
 import {
@@ -61,10 +38,9 @@ import {
   WordRestriction,
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FindFilters } from './find/find-filters.component';
+import { FindHeader } from './find/find-header.component';
 import { LocalizedBookData, SearchTextType } from './find/find-types';
 import { applyPreserveCase } from './find/find.utils';
-import { ReplacePreviewOptions } from './find/replace-preview-options.component';
 import { DEFAULT_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import {
   HidableFindResult,
@@ -134,6 +110,7 @@ const defaultBooksPresent: string = '';
 const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
 const SEARCH_DEBOUNCE_DELAY_MS = 500;
+const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 
 /**
  * Returns a promise that resolves after `ms` milliseconds. The cancel function stored in
@@ -191,9 +168,48 @@ global.webViewComponent = function FindWebView({
     undefined,
   );
 
-  const [recentSearches, setRecentSearches] = useWebViewState<string[]>('findRecentSearches', []);
+  const [recentSearchesPossiblyError, setRecentSearches] = useSetting(
+    'platformScripture.findRecentSearches',
+    [],
+  );
+  const recentSearches = useMemo(
+    () => (isPlatformError(recentSearchesPossiblyError) ? [] : recentSearchesPossiblyError),
+    [recentSearchesPossiblyError],
+  );
 
   const addRecentSearchItem = useRecentSearches(recentSearches, setRecentSearches);
+
+  // Track items added locally so the history dropdown updates immediately (useSetting is async).
+  const [pendingHistory, setPendingHistory] = useState<string[]>([]);
+  // Once settings confirm the addition, retire it from the pending list.
+  useEffect(() => {
+    setPendingHistory((prev) => prev.filter((s) => !recentSearches.includes(s)));
+  }, [recentSearches]);
+  // Merge pending additions with persisted history, deduplicating throughout.
+  const localRecentSearches = useMemo(
+    () =>
+      [...pendingHistory, ...recentSearches]
+        .filter((s, i, arr) => arr.indexOf(s) === i)
+        .slice(0, 15),
+    [pendingHistory, recentSearches],
+  );
+
+  const addToHistory = useCallback(
+    (term: string) => {
+      if (!term) return;
+      setPendingHistory((prev) => [term, ...prev.filter((s) => s !== term)]);
+      addRecentSearchItem(term);
+    },
+    [addRecentSearchItem],
+  );
+
+  const [lastSearchTermPossiblyError, setLastSearchTermSetting] = useSetting(
+    'platformScripture.findLastSearchTerm',
+    '',
+  );
+  const lastSearchTermSetting = isPlatformError(lastSearchTermPossiblyError)
+    ? ''
+    : lastSearchTermPossiblyError;
 
   const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
     'findSelectedBookIds',
@@ -307,6 +323,27 @@ global.webViewComponent = function FindWebView({
       isMountedRef.current = false;
     };
   }, []);
+
+  // Restore the last search term from settings when the webview first loads with an empty field
+  const searchTermRestoredRef = useRef(false);
+  useEffect(() => {
+    if (searchTermRestoredRef.current) return;
+    if (lastSearchTermSetting) {
+      searchTermRestoredRef.current = true;
+      if (!searchTerm) setSearchTerm(lastSearchTermSetting);
+    }
+  }, [lastSearchTermSetting, searchTerm, setSearchTerm]);
+
+  // Persist the current search term to settings so it survives session restarts
+  const saveSearchTermTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    if (!searchTermRestoredRef.current) return;
+    clearTimeout(saveSearchTermTimeoutRef.current);
+    saveSearchTermTimeoutRef.current = setTimeout(() => {
+      setLastSearchTermSetting(searchTerm);
+    }, 1000);
+    return () => clearTimeout(saveSearchTermTimeoutRef.current);
+  }, [searchTerm, setLastSearchTermSetting]);
 
   // #region Get available books and their localizations
 
@@ -504,6 +541,10 @@ global.webViewComponent = function FindWebView({
   const initialSearchTriggeredRef = useRef(false);
   // Skips adding to history on the initial render of the options-change effect.
   const isInitialOptionsRenderRef = useRef(true);
+  // Tracks the last search term reached by growing/typing (not deleting). Used so that clearing
+  // the field character-by-character saves the full term ("god") to history rather than the partial
+  // React state value from the previous render ("g").
+  const lastTypedSearchTermRef = useRef(searchTerm);
 
   const handleStartSearch = useCallback(
     async (isExplicitSearch = false) => {
@@ -521,7 +562,7 @@ global.webViewComponent = function FindWebView({
       isStartingSearchRef.current = true;
 
       try {
-        if (isExplicitSearch) addRecentSearchItem(searchTerm);
+        if (isExplicitSearch) addToHistory(searchTerm);
 
         await abandonFindJob();
         if (!isMountedRef.current) return;
@@ -565,7 +606,7 @@ global.webViewComponent = function FindWebView({
     },
     [
       abandonFindJob,
-      addRecentSearchItem,
+      addToHistory,
       beginFindJob,
       findPdp,
       findScope,
@@ -788,8 +829,8 @@ global.webViewComponent = function FindWebView({
   const handleStartSearchRef = useRef(handleStartSearch);
   handleStartSearchRef.current = handleStartSearch;
   // Refs so the options-change effect can read the latest values without depending on them.
-  const addRecentSearchItemRef = useRef(addRecentSearchItem);
-  addRecentSearchItemRef.current = addRecentSearchItem;
+  const addToHistoryRef = useRef(addToHistory);
+  addToHistoryRef.current = addToHistory;
   const searchTermRef = useRef(searchTerm);
   searchTermRef.current = searchTerm;
   const debouncedHandleStartSearch = useRef(
@@ -801,6 +842,18 @@ global.webViewComponent = function FindWebView({
       handleStartSearchRef.current();
     }, SEARCH_DEBOUNCE_DELAY_MS),
   );
+  const debouncedAddToHistory = useRef(
+    debounce(() => {
+      if (searchTermRef.current) addToHistoryRef.current(searchTermRef.current);
+    }, HISTORY_DEBOUNCE_DELAY_MS),
+  );
+
+  // Save search term to history on unmount (closing the tab or application)
+  useEffect(() => {
+    return () => {
+      if (searchTermRef.current) addToHistoryRef.current(searchTermRef.current);
+    };
+  }, []);
 
   // Auto-search with debounce when the search term or any filter changes
   useEffect(() => {
@@ -821,6 +874,11 @@ global.webViewComponent = function FindWebView({
     relevantScopeKey,
   ]);
 
+  // Save search term to history after 5 seconds of typing inactivity
+  useEffect(() => {
+    if (searchTerm) debouncedAddToHistory.current();
+  }, [searchTerm]);
+
   // When search options change (not the search term itself), add the current term to history if
   // non-empty — the user is intentionally refining how to search for it.
   useEffect(() => {
@@ -828,7 +886,7 @@ global.webViewComponent = function FindWebView({
       isInitialOptionsRenderRef.current = false;
       return;
     }
-    if (searchTermRef.current) addRecentSearchItemRef.current(searchTermRef.current);
+    if (searchTermRef.current) addToHistoryRef.current(searchTermRef.current);
   }, [shouldMatchCase, wordRestriction, isRegexAllowed, searchTextType, relevantScopeKey]);
 
   // Fallback for startup search: if findPdp wasn't ready when the debounce fired on mount,
@@ -869,14 +927,11 @@ global.webViewComponent = function FindWebView({
 
   // #endregion
 
-  // Auto-select first result when switching to Replace mode, or advance to the next result
-  // after a replace operation instead of jumping back to the first.
+  // Auto-select the first result when results first arrive (both Find and Replace modes).
+  // In Replace mode, also handles advancing focus after a replace operation.
   useEffect(() => {
-    if (activeMode === 'replace' && results.length > 0 && focusedResultIndex === undefined) {
-      if (pendingAdvanceIndexRef.current === undefined) {
-        const firstVisibleIndex = results.findIndex((r) => !r.isHidden);
-        if (firstVisibleIndex >= 0) setFocusedResultIndex(firstVisibleIndex);
-      } else {
+    if (results.length > 0 && focusedResultIndex === undefined) {
+      if (activeMode === 'replace' && pendingAdvanceIndexRef.current !== undefined) {
         // Wait until the search finishes so all results are available before picking the target.
         if (searchStatus === 'running') return;
         const targetIndex = pendingAdvanceIndexRef.current;
@@ -886,6 +941,9 @@ global.webViewComponent = function FindWebView({
         const nextIndex = results.findIndex((r, i) => i >= targetIndex && !r.isHidden);
         const indexToFocus = nextIndex >= 0 ? nextIndex : results.findIndex((r) => !r.isHidden);
         if (indexToFocus >= 0) setFocusedResultIndex(indexToFocus);
+      } else {
+        const firstVisibleIndex = results.findIndex((r) => !r.isHidden);
+        if (firstVisibleIndex >= 0) setFocusedResultIndex(firstVisibleIndex);
       }
     }
   }, [activeMode, focusedResultIndex, results, searchStatus]);
@@ -894,13 +952,8 @@ global.webViewComponent = function FindWebView({
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
-      if (searchTerm) addRecentSearchItem(searchTerm);
+      if (searchTerm) addToHistory(searchTerm);
       if (editorWebViewId && editorWebViewController) {
-        // In Find mode, focus the editor so the user can read in context.
-        // In Replace mode, keep focus in the Find WebView so replace term stays editable.
-        if (activeMode === 'find') {
-          papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
-        }
         editorWebViewController
           .selectRange({
             start: searchResult.start,
@@ -909,14 +962,26 @@ global.webViewComponent = function FindWebView({
           .catch((e) => logger.warn(`Find: selectRange failed: ${getErrorMessage(e)}`));
       }
     },
-    [
-      activeMode,
-      addRecentSearchItem,
-      editorWebViewController,
-      editorWebViewId,
-      searchTerm,
-      setVerseRefSetting,
-    ],
+    [addToHistory, editorWebViewController, editorWebViewId, searchTerm, setVerseRefSetting],
+  );
+
+  /** Navigate to a result AND shift focus to the editor (double-click / reference-click). */
+  const handleOpenAtResult = useCallback(
+    (searchResult: HidableFindResult, index: number) => {
+      setFocusedResultIndex(index);
+      setVerseRefSetting(searchResult.start.verseRef);
+      if (searchTerm) addToHistory(searchTerm);
+      if (editorWebViewId && editorWebViewController) {
+        papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        editorWebViewController
+          .selectRange({
+            start: searchResult.start,
+            end: searchResult.end,
+          })
+          .catch((e) => logger.warn(`Find: selectRange failed: ${getErrorMessage(e)}`));
+      }
+    },
+    [addToHistory, editorWebViewController, editorWebViewId, searchTerm, setVerseRefSetting],
   );
 
   const handleHideResult = useCallback((index: number) => {
@@ -1304,263 +1369,123 @@ global.webViewComponent = function FindWebView({
   return (
     <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-gap-4 tw-p-4 tw-min-w-[10rem] tw-max-h-screen">
       {/* Header with searchbar and filters */}
-      <div className="tw-space-y-3">
-        {/* Find/Replace mode toggle */}
-        <ToggleGroup
-          type="single"
-          value={activeMode}
-          onValueChange={(value) => {
-            if (value === 'find' || value === 'replace') setActiveMode(value);
-          }}
-          className="tw-w-fit tw-rounded-lg tw-bg-muted tw-p-1"
-        >
-          <ToggleGroupItem
-            value="find"
-            className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
-          >
-            {localizedStrings['%webView_find_findTab%']}
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="replace"
-            className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
-          >
-            {localizedStrings['%webView_find_replaceTab%']}
-          </ToggleGroupItem>
-        </ToggleGroup>
-
-        {/* Find input row */}
-        <div className="tw-flex tw-gap-2 tw-flex-wrap">
-          <div className="tw-relative tw-flex-1">
-            <TextSearch className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
-            <Input
-              id="search-term"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleStartSearch(true);
-                }
-              }}
-              placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-              className={`tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 scripture-font ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchTerm('');
-                  handleStopSearch(true);
-                }}
-                className="tw-absolute tw-end-2 tw-top-1/2 -tw-translate-y-1/2 tw-text-muted-foreground hover:tw-text-foreground tw-bg-transparent tw-border-0 tw-p-0 tw-cursor-pointer"
-              >
-                <X className="tw-h-4 tw-w-4" />
-              </button>
-            )}
-          </div>
-          <RecentSearches
-            classNameForItems="scripture-font"
-            recentSearches={recentSearches}
-            onSearchItemSelect={setSearchTerm}
-            ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
-            groupHeading={localizedStrings['%webView_find_recent%']}
-            buttonClassName="tw-h-10 tw-w-10"
-            buttonVariant="outline"
-          />
-
-          <FindFilters
-            areFiltersActive={areFiltersActive}
-            searchTextType={searchTextType}
-            setSearchTextType={setSearchTextType}
-            wordRestriction={wordRestriction}
-            setWordRestriction={setWordRestriction}
-            shouldMatchCase={shouldMatchCase}
-            setShouldMatchCase={setShouldMatchCase}
-            isRegexAllowed={isRegexAllowed}
-            setIsRegexAllowed={setIsRegexAllowed}
-            localizedStrings={{
-              toggleFilters: localizedStrings['%webView_find_toggleFilters%'],
-              matchContentIn: localizedStrings['%webView_find_matchContentIn%'],
-              allText: localizedStrings['%webView_find_allText%'],
-              allTextTooltip: localizedStrings['%webView_find_allText_tooltip%'],
-              verseTextOnly: localizedStrings['%webView_find_verseTextOnly%'],
-              restrictions: localizedStrings['%webView_find_restrictions%'],
-              restrictionNone: localizedStrings['%webView_find_restrictions_none%'],
-              restrictionWholeWord: localizedStrings['%webView_find_restrictions_wholeWord%'],
-              restrictionStartOfWord: localizedStrings['%webView_find_restrictions_startOfWord%'],
-              restrictionEndOfWord: localizedStrings['%webView_find_restrictions_endOfWord%'],
-              capitalization: localizedStrings['%webView_find_capitalization%'],
-              matchCase: localizedStrings['%webView_find_matchCase%'],
-              pattern: localizedStrings['%webView_find_pattern%'],
-              allowRegex: localizedStrings['%webView_find_allowRegex%'],
-            }}
-          />
-        </div>
-
-        {/* Replace input row — shown in Replace mode */}
-        {activeMode === 'replace' && (
-          <>
-            <div className="tw-relative tw-flex-1">
-              <ArrowRight className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
-              <Input
-                id="replace-term"
-                value={replaceTerm}
-                onChange={(e) => setReplaceTerm(e.target.value)}
-                placeholder={localizedStrings['%webView_find_replaceTerm_placeholder%']}
-                className="tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4 scripture-font"
-              />
-            </div>
-            <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-flex-wrap">
-              <div className="tw-flex tw-items-center tw-gap-2">
-                <Checkbox
-                  id="preserve-case"
-                  checked={preserveCase}
-                  onCheckedChange={(checked) => setPreserveCase(checked === true)}
-                />
-                <Label htmlFor="preserve-case" className="tw-cursor-pointer">
-                  {localizedStrings['%webView_find_preserveCase%']}
-                </Label>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Info className="tw-h-3.5 tw-w-3.5 tw-text-muted-foreground tw-cursor-default" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="tw-max-w-xs tw-whitespace-pre-line">
-                        {localizedStrings['%webView_find_preserveCase_tooltip%']}
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              <div className="tw-flex tw-gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleReplaceAll}
-                  disabled={
-                    visibleResults.length === 0 || searchStatus === 'running' || isReplacing
-                  }
-                >
-                  <ReplaceAll className="tw-h-4 tw-w-4" />
-                  {localizedStrings['%webView_find_replaceAll%']}
-                </Button>
-                <Button
-                  onClick={() => handleReplace()}
-                  disabled={
-                    focusedResultIndex === undefined || searchStatus === 'running' || isReplacing
-                  }
-                >
-                  <Replace className="tw-h-4 tw-w-4" />
-                  {localizedStrings['%webView_find_replace%']}
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Scope selector row */}
-        <div className="tw-flex tw-items-center tw-justify-between">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="tw-h-auto tw-gap-1 tw-px-2 tw-py-1 tw-font-normal"
-              >
-                <span className="tw-text-sm tw-text-muted-foreground">
-                  {localizedStrings['%webView_find_showing%']}
-                </span>
-                <span className="tw-text-sm tw-font-medium">{scopeDisplayText}</span>
-                <ChevronDown className="tw-h-3 tw-w-3 tw-text-muted-foreground" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="tw-w-auto tw-p-3">
-              <ScopeSelector
-                scope={scope}
-                availableScopes={['chapter', 'book', 'selectedBooks']}
-                onScopeChange={setScope}
-                availableBookInfo={booksPresent}
-                selectedBookIds={selectedBookIds}
-                onSelectedBookIdsChange={setSelectedBookIds}
-                localizedStrings={scopeSelectorLocalizedStrings}
-                localizedBookNames={localizedBookData}
-              />
-            </PopoverContent>
-          </Popover>
-          {activeMode === 'replace' && (
-            <ReplacePreviewOptions
-              previewOptions={previewOptions}
-              setPreviewOptions={setStoredPreviewOptions}
-              localizedStrings={{
-                togglePreviewOptions:
-                  localizedStrings['%webView_find_previewOptions_toggle%'] ?? 'View',
-                layout: localizedStrings['%webView_find_previewOptions_layout%'] ?? 'Layout',
-                layoutArrow:
-                  localizedStrings['%webView_find_previewOptions_layout_arrow%'] ?? 'Arrow',
-                layoutInline:
-                  localizedStrings['%webView_find_previewOptions_layout_inline%'] ?? 'Inline',
-                layoutBlock:
-                  localizedStrings['%webView_find_previewOptions_layout_block%'] ?? 'Block',
-                highlightShape:
-                  localizedStrings['%webView_find_previewOptions_shape%'] ?? 'Highlight Shape',
-                highlightShapeBar:
-                  localizedStrings['%webView_find_previewOptions_shape_bar%'] ?? 'Bar border',
-                highlightShapeRounded:
-                  localizedStrings['%webView_find_previewOptions_shape_rounded%'] ?? 'Rounded',
-                highlightShapePlain:
-                  localizedStrings['%webView_find_previewOptions_shape_plain%'] ?? 'Plain',
-                color: localizedStrings['%webView_find_previewOptions_color%'] ?? 'Color',
-                colorRedCyan:
-                  localizedStrings['%webView_find_previewOptions_color_redCyan%'] ?? 'Red / Cyan',
-                colorRedGreen:
-                  localizedStrings['%webView_find_previewOptions_color_redGreen%'] ?? 'Red / Green',
-                colorGreyBlue:
-                  localizedStrings['%webView_find_previewOptions_color_greyBlue%'] ?? 'Grey / Blue',
-                monospace:
-                  localizedStrings['%webView_find_previewOptions_monospace%'] ?? 'Monospace',
-                monospaceDescription:
-                  localizedStrings['%webView_find_previewOptions_monospaceDescription%'] ??
-                  'Use fixed-width font',
-                showInvisible:
-                  localizedStrings['%webView_find_previewOptions_showInvisible%'] ??
-                  'Show invisible',
-                showInvisibleDescription:
-                  localizedStrings['%webView_find_previewOptions_showInvisibleDescription%'] ??
-                  'Show symbols for whitespace',
-              }}
-            />
-          )}
-          {visibleResults.length > 0 && (
-            <div className="tw-flex tw-items-center tw-gap-1">
-              <span className="tw-text-sm tw-text-muted-foreground tw-tabular-nums">
-                {formatReplacementString(localizedStrings['%general_countOfTotal%'], {
-                  count: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',
-                  total: String(visibleResults.length),
-                })}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="tw-h-7 tw-w-7"
-                disabled={visibleResults.length === 0}
-                onClick={handlePreviousResult}
-                aria-label={localizedStrings['%webView_find_previousResult%']}
-              >
-                <ChevronUp className="tw-h-4 tw-w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="tw-h-7 tw-w-7"
-                disabled={visibleResults.length === 0}
-                onClick={handleNextResult}
-                aria-label={localizedStrings['%webView_find_nextResult%']}
-              >
-                <ChevronDown className="tw-h-4 tw-w-4" />
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
+      <FindHeader
+        searchTerm={searchTerm}
+        onSearchTermChange={(value) => {
+          if (!value) {
+            if (lastTypedSearchTermRef.current) addToHistory(lastTypedSearchTermRef.current);
+          } else if (value.length >= searchTerm.length) {
+            lastTypedSearchTermRef.current = value;
+          }
+          setSearchTerm(value);
+        }}
+        onAddToHistory={() => {
+          lastTypedSearchTermRef.current = searchTerm;
+          addToHistory(searchTerm);
+        }}
+        onSearchSubmit={() => handleStartSearch(true)}
+        onSearchClear={() => handleStopSearch(true)}
+        recentSearches={localRecentSearches}
+        onRecentSearchSelect={setSearchTerm}
+        areFiltersActive={areFiltersActive}
+        searchTextType={searchTextType}
+        onSearchTextTypeChange={setSearchTextType}
+        wordRestriction={wordRestriction}
+        onWordRestrictionChange={setWordRestriction}
+        shouldMatchCase={shouldMatchCase}
+        onShouldMatchCaseChange={setShouldMatchCase}
+        isRegexAllowed={isRegexAllowed}
+        onIsRegexAllowedChange={setIsRegexAllowed}
+        filterStrings={{
+          toggleFilters: localizedStrings['%webView_find_toggleFilters%'] ?? '',
+          matchContentIn: localizedStrings['%webView_find_matchContentIn%'] ?? '',
+          allText: localizedStrings['%webView_find_allText%'] ?? '',
+          allTextTooltip: localizedStrings['%webView_find_allText_tooltip%'] ?? '',
+          verseTextOnly: localizedStrings['%webView_find_verseTextOnly%'] ?? '',
+          restrictions: localizedStrings['%webView_find_restrictions%'] ?? '',
+          restrictionNone: localizedStrings['%webView_find_restrictions_none%'] ?? '',
+          restrictionWholeWord: localizedStrings['%webView_find_restrictions_wholeWord%'] ?? '',
+          restrictionStartOfWord: localizedStrings['%webView_find_restrictions_startOfWord%'] ?? '',
+          restrictionEndOfWord: localizedStrings['%webView_find_restrictions_endOfWord%'] ?? '',
+          capitalization: localizedStrings['%webView_find_capitalization%'] ?? '',
+          matchCase: localizedStrings['%webView_find_matchCase%'] ?? '',
+          pattern: localizedStrings['%webView_find_pattern%'] ?? '',
+          allowRegex: localizedStrings['%webView_find_allowRegex%'] ?? '',
+        }}
+        activeMode={activeMode}
+        onActiveModeChange={setActiveMode}
+        replaceTerm={replaceTerm}
+        onReplaceTermChange={setReplaceTerm}
+        preserveCase={preserveCase}
+        onPreserveCaseChange={setPreserveCase}
+        onReplace={() => handleReplace()}
+        onReplaceAll={handleReplaceAll}
+        isReplacing={isReplacing}
+        replaceEnabled={focusedResultIndex !== undefined && searchStatus !== 'running'}
+        replaceAllEnabled={visibleResults.length > 0 && searchStatus !== 'running'}
+        scope={scope}
+        onScopeChange={setScope}
+        selectedBookIds={selectedBookIds}
+        onSelectedBookIdsChange={setSelectedBookIds}
+        scopeDisplayText={scopeDisplayText}
+        availableBookInfo={booksPresent}
+        localizedBookNames={localizedBookData}
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        scopeSelectorStrings={scopeSelectorLocalizedStrings as Record<string, string | undefined>}
+        previewOptions={previewOptions}
+        onPreviewOptionsChange={setStoredPreviewOptions}
+        previewOptionsStrings={{
+          togglePreviewOptions: localizedStrings['%webView_find_previewOptions_toggle%'] ?? 'View',
+          layout: localizedStrings['%webView_find_previewOptions_layout%'] ?? 'Layout',
+          layoutArrow: localizedStrings['%webView_find_previewOptions_layout_arrow%'] ?? 'Arrow',
+          layoutInline: localizedStrings['%webView_find_previewOptions_layout_inline%'] ?? 'Inline',
+          layoutBlock: localizedStrings['%webView_find_previewOptions_layout_block%'] ?? 'Block',
+          highlightShape:
+            localizedStrings['%webView_find_previewOptions_shape%'] ?? 'Highlight Shape',
+          highlightShapeBar:
+            localizedStrings['%webView_find_previewOptions_shape_bar%'] ?? 'Bar border',
+          highlightShapeRounded:
+            localizedStrings['%webView_find_previewOptions_shape_rounded%'] ?? 'Rounded',
+          highlightShapePlain:
+            localizedStrings['%webView_find_previewOptions_shape_plain%'] ?? 'Plain',
+          color: localizedStrings['%webView_find_previewOptions_color%'] ?? 'Color',
+          colorRedCyan:
+            localizedStrings['%webView_find_previewOptions_color_redCyan%'] ?? 'Red / Cyan',
+          colorRedGreen:
+            localizedStrings['%webView_find_previewOptions_color_redGreen%'] ?? 'Red / Green',
+          colorGreyBlue:
+            localizedStrings['%webView_find_previewOptions_color_greyBlue%'] ?? 'Grey / Blue',
+          monospace: localizedStrings['%webView_find_previewOptions_monospace%'] ?? 'Monospace',
+          monospaceDescription:
+            localizedStrings['%webView_find_previewOptions_monospaceDescription%'] ??
+            'Use fixed-width font',
+          showInvisible:
+            localizedStrings['%webView_find_previewOptions_showInvisible%'] ?? 'Show invisible',
+          showInvisibleDescription:
+            localizedStrings['%webView_find_previewOptions_showInvisibleDescription%'] ??
+            'Show symbols for whitespace',
+        }}
+        visibleResultsCount={visibleResults.length}
+        focusedVisibleIndex={focusedVisibleIndex}
+        onPreviousResult={handlePreviousResult}
+        onNextResult={handleNextResult}
+        localizedStrings={{
+          findTab: localizedStrings['%webView_find_findTab%'],
+          replaceTab: localizedStrings['%webView_find_replaceTab%'],
+          searchPlaceholder: localizedStrings['%webView_find_searchPlaceholder%'],
+          showRecentSearches: localizedStrings['%webView_find_showRecentSearches%'],
+          recent: localizedStrings['%webView_find_recent%'],
+          replacePlaceholder: localizedStrings['%webView_find_replaceTerm_placeholder%'],
+          preserveCase: localizedStrings['%webView_find_preserveCase%'],
+          preserveCaseTooltip: localizedStrings['%webView_find_preserveCase_tooltip%'],
+          replaceAll: localizedStrings['%webView_find_replaceAll%'],
+          replace: localizedStrings['%webView_find_replace%'],
+          showing: localizedStrings['%webView_find_showing%'],
+          countOfTotal: localizedStrings['%general_countOfTotal%'],
+          previousResult: localizedStrings['%webView_find_previousResult%'],
+          nextResult: localizedStrings['%webView_find_nextResult%'],
+        }}
+      />
 
       {/* Search Results Placeholder */}
       {results && results.length === 0 && searchStatus === 'running' && (
@@ -1588,7 +1513,7 @@ global.webViewComponent = function FindWebView({
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={resultsContainerRef}
-        className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto tw-pe-2"
+        className="tw-min-h-48 tw-flex-1 tw-overflow-y-auto tw-pe-2"
         // This div is a keyboard-navigable scroll container; tabIndex is required to receive focus for arrow-key navigation between results
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
@@ -1622,6 +1547,15 @@ global.webViewComponent = function FindWebView({
                 }
                 onResultClick={(result, indexInBookResults) =>
                   handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onResultFocus={(result, indexInBookResults) =>
+                  handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onResultDoubleClick={(result, indexInBookResults) =>
+                  handleOpenAtResult(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onResultReferenceClick={(result, indexInBookResults) =>
+                  handleOpenAtResult(result, bookResults[indexInBookResults].originalIndex)
                 }
                 onHideResult={(indexInBookResults) =>
                   handleHideResult(bookResults[indexInBookResults].originalIndex)

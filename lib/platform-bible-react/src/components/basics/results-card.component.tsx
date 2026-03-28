@@ -56,6 +56,9 @@ export function ResultsCard({
 }: ResultsCardProps) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter' || event.key === ' ') {
+      // Only handle keyboard activation on the card itself, not on focusable children
+      // (e.g. buttons inside the card). Child elements handle their own keyboard events.
+      if (event.target !== event.currentTarget) return;
       event.preventDefault();
       onSelect();
     }
