@@ -11,6 +11,7 @@
     ".erb/mocks",
     ".erb/scripts",
     ".storybook/*.ts",
+    ".storybook/mocks/*.ts",
     "src",
     "assets",
     "e2e-tests"
