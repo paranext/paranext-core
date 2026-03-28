@@ -29,6 +29,15 @@ type SearchResultsInBookProps = {
   focusedResultIndex: number | undefined;
   /** Callback function called when the user clicks on a search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
+  /** Callback function called when a search result card receives focus (e.g. Tab navigation) */
+  onResultFocus?: (searchResult: HidableFindResult, index: number) => void;
+  /** Callback function called when the user double-clicks a search result (focus shifts to editor) */
+  onResultDoubleClick?: (searchResult: HidableFindResult, index: number) => void;
+  /**
+   * Callback function called when the user clicks the scripture reference in a result (focus shifts
+   * to editor)
+   */
+  onResultReferenceClick?: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss a result */
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on a result */
@@ -56,6 +65,9 @@ export function SearchResultsInBook({
   localizedBookData,
   focusedResultIndex,
   onResultClick,
+  onResultFocus,
+  onResultDoubleClick,
+  onResultReferenceClick,
   onHideResult,
   onReplace,
   onCancelReplace,
@@ -113,6 +125,9 @@ export function SearchResultsInBook({
           usjReaderWriter={usjReaderWriter}
           localizedBookData={localizedBookData}
           onResultClick={onResultClick}
+          onResultFocus={onResultFocus}
+          onResultDoubleClick={onResultDoubleClick}
+          onResultReferenceClick={onResultReferenceClick}
           onHideResult={onHideResult}
           onReplace={onReplace}
           onCancelReplace={index === firstReplacedIndex ? onCancelReplace : undefined}

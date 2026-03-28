@@ -45,7 +45,7 @@ function ReplacePreviewOptionsDemo() {
         }}
       />
       <pre className="tw-text-xs tw-text-muted-foreground">
-        {JSON.stringify(previewOptions, null, 2)}
+        {JSON.stringify(previewOptions, undefined, 2)}
       </pre>
     </div>
   );
@@ -240,7 +240,7 @@ const meta: Meta = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <div className="tw-p-4">
+      <div className="pr-twp tw-p-4">
         <Story />
       </div>
     ),

@@ -163,3 +163,9 @@
   }
 }
 /* #endregion */
+
+/* Reset placeholder font to the UI font for scripture font inputs */
+.scripture-font::placeholder,
+.pr-twp.scripture-font::placeholder {
+  font-family: 'Google Sans', 'Cardo', 'Noto Sans Syriac', sans-serif;
+}

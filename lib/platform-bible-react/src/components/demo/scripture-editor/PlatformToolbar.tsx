@@ -89,8 +89,11 @@ export function PlatformToolbar({
   canRedo = false,
   blockMarker,
 }: PlatformToolbarProps) {
+  // @ts-expect-error insertMarker not yet in EditorRef type definitions for current package version
   const handleInsertFootnote = () => editorRef.current?.insertMarker('f');
+  // @ts-expect-error insertMarker not yet in EditorRef type definitions for current package version
   const handleInsertCrossReference = () => editorRef.current?.insertMarker('x');
+  // @ts-expect-error insertMarker not yet in EditorRef type definitions for current package version
   const handleInsertEndnote = () => editorRef.current?.insertMarker('fe');
 
   const onSelectProjectMenuItem: SelectMenuItemHandler = (selectedMenuItem) => {
