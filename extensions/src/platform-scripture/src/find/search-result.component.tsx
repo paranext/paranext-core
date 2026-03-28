@@ -13,6 +13,7 @@ import { LocalizedBookData } from './find-types';
 import { applyPreserveCase } from './find.utils';
 import {
   getFindHighlightClasses,
+  getGoldFindHighlightClasses,
   getReplaceHighlightClasses,
   preserveTrailingSpaces,
   renderWithInvisibleChars,
@@ -58,6 +59,12 @@ interface SearchResultProps {
   localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
   /** Callback function called when the user clicks on this search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
+  /** Callback function called when this result card receives browser focus (e.g. Tab navigation) */
+  onResultFocus?: (searchResult: HidableFindResult, index: number) => void;
+  /** Callback called on double-click: focus shifts to the editor at this match */
+  onResultDoubleClick?: (searchResult: HidableFindResult, index: number) => void;
+  /** Callback called when the scripture reference label is clicked: focus shifts to the editor */
+  onResultReferenceClick?: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss this result */
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on this result */
@@ -108,6 +115,9 @@ export default function SearchResult({
   usjReaderWriter,
   localizedBookData,
   onResultClick,
+  onResultFocus,
+  onResultDoubleClick,
+  onResultReferenceClick,
   onHideResult,
   onReplace,
   onCancelReplace,
@@ -191,6 +201,24 @@ export default function SearchResult({
     }
   }, [usjReaderWriter, searchResult, shouldCalculateContext]);
 
+  /** Applies the showInvisible option to a string */
+  const displayText = (text: string) =>
+    previewOptions.showInvisible ? renderWithInvisibleChars(text) : text;
+
+  /** Returns the font class based on the monospace option */
+  const fontClass = previewOptions.monospace ? 'tw-font-mono' : 'scripture-font';
+
+  const { highlightShape, color } = previewOptions;
+  const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
+  const findHighlightClass = `${fontClass} ${getGoldFindHighlightClasses(highlightShape)}`;
+  const replaceClass = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape)}`;
+
+  /**
+   * Break-all when invisible chars are shown (spaces replaced with ·, no wrap points), break-words
+   * otherwise
+   */
+  const breakClass = previewOptions.showInvisible ? 'tw-break-all' : 'tw-break-words';
+
   /**
    * Highlights the search term within the verse text using a background-color span so that leading
    * and trailing spaces in the match are visually included in the highlight.
@@ -204,9 +232,9 @@ export default function SearchResult({
 
     return (
       <>
-        {beforeText}
-        <span className={findHighlightClass}>{text}</span>
-        {afterText}
+        {displayText(beforeText)}
+        <span className={findHighlightClass}>{displayText(preserveTrailingSpaces(text))}</span>
+        {displayText(afterText)}
       </>
     );
   };
@@ -242,6 +270,13 @@ export default function SearchResult({
       variant="outline"
       size="sm"
       disabled={isReplacing}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          onReplace(globalResultsIndex);
+        }
+      }}
       onClick={(e) => {
         e.stopPropagation();
         onReplace(globalResultsIndex);
@@ -279,18 +314,6 @@ export default function SearchResult({
       : replaceConfig.term;
   }
 
-  /** Applies the showInvisible option to a string */
-  const displayText = (text: string) =>
-    previewOptions.showInvisible ? renderWithInvisibleChars(text) : text;
-
-  /** Returns the font class based on the monospace option */
-  const fontClass = previewOptions.monospace ? 'tw-font-mono' : 'scripture-font';
-
-  const { highlightShape, color } = previewOptions;
-  const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
-  const findHighlightClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape, false)}`;
-  const replaceClass = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape)}`;
-
   /**
    * Renders the replace preview element for all results. Layout determines the visual style:
    *
@@ -298,8 +321,8 @@ export default function SearchResult({
    * - Inline: [before][find-strikethrough][replace][after] embedded in verse context
    * - Block: two lines with - (find) and + (replace); context only when selected
    */
-  const getReplacePreviewElement = (): JSX.Element | null => {
-    if (previewReplacement === undefined) return null;
+  const getReplacePreviewElement = () => {
+    if (previewReplacement === undefined) return undefined;
 
     const findText = displayText(preserveTrailingSpaces(searchResult.text ?? ''));
     const replaceText = displayText(previewReplacement);
@@ -308,15 +331,15 @@ export default function SearchResult({
       // Falls back to arrow if context not yet loaded
       if (!textParts) {
         return (
-          <div className="tw-flex tw-items-center tw-gap-1.5">
-            <span className={findClass}>{findText}</span>
+          <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-1.5">
+            <span className={`${findClass} tw-min-w-0 ${breakClass}`}>{findText}</span>
             <ArrowRight className="tw-h-3 tw-w-3 tw-shrink-0 rtl:tw-rotate-180" />
-            <span className={replaceClass}>{replaceText}</span>
+            <span className={`${replaceClass} tw-min-w-0 ${breakClass}`}>{replaceText}</span>
           </div>
         );
       }
       return (
-        <div className={`tw-text-muted-foreground ${fontClass}`}>
+        <div className={`tw-text-muted-foreground ${fontClass} ${breakClass}`}>
           {displayText(textParts.beforeText)}
           <span className={findClass}>{displayText(preserveTrailingSpaces(textParts.text))}</span>
           <span className={replaceClass}>{replaceText}</span>
@@ -332,16 +355,16 @@ export default function SearchResult({
       return (
         <div className="tw-space-y-0.5">
           <div className="tw-flex tw-items-baseline tw-gap-1">
-            <Minus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-gray-500" />
-            <span className={`tw-text-muted-foreground ${fontClass}`}>
+            <Minus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-gray-400 dark:tw-text-gray-500" />
+            <span className={`tw-text-muted-foreground tw-min-w-0 ${breakClass} ${fontClass}`}>
               {before}
               <span className={findClass}>{findText}</span>
               {after}
             </span>
           </div>
           <div className="tw-flex tw-items-baseline tw-gap-1">
-            <Plus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-gray-500" />
-            <span className={`tw-text-muted-foreground ${fontClass}`}>
+            <Plus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-gray-700 dark:tw-text-gray-300" />
+            <span className={`tw-text-foreground tw-min-w-0 ${breakClass} ${fontClass}`}>
               {before}
               <span className={replaceClass}>{replaceText}</span>
               {after}
@@ -353,10 +376,10 @@ export default function SearchResult({
 
     // Default: arrow layout
     return (
-      <div className="tw-flex tw-items-center tw-gap-1.5">
-        <span className={findClass}>{findText}</span>
+      <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-1.5">
+        <span className={`${findClass} tw-min-w-0 ${breakClass}`}>{findText}</span>
         <ArrowRight className="tw-h-3 tw-w-3 tw-shrink-0 rtl:tw-rotate-180" />
-        <span className={replaceClass}>{replaceText}</span>
+        <span className={`${replaceClass} tw-min-w-0 ${breakClass}`}>{replaceText}</span>
       </div>
     );
   };
@@ -365,12 +388,21 @@ export default function SearchResult({
 
   const cardContent = (
     <div className="tw-flex tw-flex-col tw-gap-1.5">
-      <div className="tw-text-xs tw-font-medium tw-flex tw-items-center tw-gap-2 tw-min-h-8">
-        <div className="tw-shrink-0 tw-font-semibold">
+      <div className="tw-text-sm tw-font-medium tw-flex tw-items-center tw-gap-2 tw-min-h-8">
+        <button
+          type="button"
+          className="tw-shrink-0 tw-font-semibold tw-cursor-pointer tw-border-0 tw-bg-transparent tw-p-0 tw-text-inherit hover:tw-underline"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShouldGetVerseText(true);
+            onResultReferenceClick?.(searchResult, globalResultsIndex);
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
           {bookData?.localizedName ?? bookData?.localizedId ?? searchResult.start.verseRef.book}{' '}
           {searchResult.start.verseRef.chapterNum}:
           {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}
-        </div>
+        </button>
         {searchResult.isReplaced && (
           <>
             <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">
@@ -411,7 +443,9 @@ export default function SearchResult({
   const additionalSelectedContent = (
     <>
       {showVerseTextInAdditional && (
-        <div className="tw-font-normal tw-text-muted-foreground scripture-font">
+        <div
+          className={`tw-font-normal tw-text-muted-foreground scripture-font ${previewOptions.showInvisible ? 'tw-break-all' : 'tw-break-words'}`}
+        >
           {getFocusedVerseText()}
         </div>
       )}
@@ -420,14 +454,44 @@ export default function SearchResult({
   );
 
   return (
-    <div ref={cardRef}>
+    <div
+      ref={cardRef}
+      className="pr-twp"
+      onDoubleClick={() => onResultDoubleClick?.(searchResult, globalResultsIndex)}
+      onFocus={(e) => {
+        // Only fire when focus enters from outside the card (e.g. Tab key navigation),
+        // not when focus moves between elements already inside it.
+        const isInsideCard =
+          e.relatedTarget instanceof Node && cardRef.current?.contains(e.relatedTarget) === true;
+        if (!isInsideCard) {
+          onResultFocus?.(searchResult, globalResultsIndex);
+        }
+      }}
+      onKeyDownCapture={(e) => {
+        // When the card div itself is focused (not a child button) and the card is already selected
+        // in replace mode, Enter/Space should execute the replace rather than re-selecting (which
+        // would just move the editor cursor without doing the replace).
+        if (
+          isSelected &&
+          isReplaceMode &&
+          !searchResult.isReplaced &&
+          !isReplacing &&
+          (e.key === 'Enter' || e.key === ' ') &&
+          !(e.target instanceof HTMLButtonElement)
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          onReplace(globalResultsIndex);
+        }
+      }}
+    >
       <ResultsCard
         cardKey={`${searchResult.start.verseRef.book + searchResult.start.verseRef.chapterNum}:${
           searchResult.start.verseRef.verseNum
         }${searchResult.text}${globalResultsIndex}`}
         isHidden={searchResult.isHidden}
         isSelected={isSelected}
-        className={`tw-border-0 tw-rounded-none${searchResult.isReplaced ? ' !tw-bg-red-100 dark:!tw-bg-red-950' : ''}`}
+        className={`tw-rounded-none${searchResult.isReplaced ? ' !tw-bg-red-100 dark:!tw-bg-red-950' : ''}`}
         onSelect={() => onResultClick(searchResult, globalResultsIndex)}
         selectedButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
         hoverButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
