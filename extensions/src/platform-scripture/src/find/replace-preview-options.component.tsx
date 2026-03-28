@@ -1,4 +1,5 @@
-import { AlignJustify, ArrowRight, Eye, LayoutTemplate } from 'lucide-react';
+import React from 'react';
+import { ArrowRight, Eye } from 'lucide-react';
 import {
   Button,
   Label,
@@ -16,7 +17,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { getFindHighlightClasses, getReplaceHighlightClasses } from './replace-preview-styles';
+import {
+  getFindHighlightClasses,
+  getGoldFindHighlightClasses,
+  getReplaceHighlightClasses,
+} from './replace-preview-styles';
 import {
   DEFAULT_PREVIEW_OPTIONS,
   PreviewOptions,
@@ -71,10 +76,47 @@ type ReplacePreviewOptionsProps = {
   localizedStrings: ReplacePreviewOptionsStrings;
 };
 
+function InlineLayoutIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <line x1="3" y1="8" x2="21" y2="8" />
+      <line x1="3" y1="14" x2="14" y2="14" />
+      <line x1="3" y1="20" x2="14" y2="20" />
+    </svg>
+  );
+}
+
+function BlockLayoutIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect x="3" y="3" width="18" height="18" rx="1" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+    </svg>
+  );
+}
+
 const LAYOUT_ICONS: Record<ReplacePreviewLayout, React.ReactNode> = {
   arrow: <ArrowRight className="tw-h-4 tw-w-4" />,
-  inline: <AlignJustify className="tw-h-4 tw-w-4" />,
-  block: <LayoutTemplate className="tw-h-4 tw-w-4" />,
+  inline: <InlineLayoutIcon className="tw-h-4 tw-w-4" />,
+  block: <BlockLayoutIcon className="tw-h-4 tw-w-4" />,
 };
 
 /** Small styled swatch used to preview highlight shapes and colors inside the picker */
@@ -193,7 +235,7 @@ export function ReplacePreviewOptions({
                   className="tw-flex tw-flex-1 tw-cursor-pointer tw-items-center tw-justify-between tw-text-sm tw-font-normal"
                 >
                   {label}
-                  <Swatch findClass={getFindHighlightClasses(color, value)} />
+                  <Swatch findClass={getGoldFindHighlightClasses(value)} />
                 </Label>
               </div>
             ))}
