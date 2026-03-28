@@ -193,7 +193,7 @@
     "electron-builder": "^26.0.16",
     "electron-devtools-installer": "^4.0.0",
     "electron-to-chromium": "^1.5.171",
-    "electronmon": "^2.0.3",
+    "electronmon": "^2.0.4",
     "eslint": "^8.57.1",
     "eslint-config-airbnb": "^19.0.4",
     "eslint-config-prettier": "^9.0.0",
