@@ -222,7 +222,7 @@ export function FindHeader({
               }
             }}
             placeholder={localizedStrings.searchPlaceholder}
-            className={`tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 scripture-font ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
+            className={`tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
           />
           {searchTerm && (
             <button
@@ -239,7 +239,7 @@ export function FindHeader({
           )}
         </div>
         <RecentSearches
-          classNameForItems="scripture-font"
+          classNameForItems=""
           recentSearches={recentSearches}
           onSearchItemSelect={onRecentSearchSelect}
           ariaLabel={localizedStrings.showRecentSearches}
@@ -271,7 +271,7 @@ export function FindHeader({
               value={replaceTerm}
               onChange={(e) => onReplaceTermChange(e.target.value)}
               placeholder={localizedStrings.replacePlaceholder}
-              className="tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4 scripture-font"
+              className="tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4"
             />
           </div>
           <div className="tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-2">
@@ -317,44 +317,46 @@ export function FindHeader({
 
       {/* Scope selector row */}
       <div className="tw-flex tw-items-center tw-justify-between">
-        <div className="tw-min-w-0 tw-overflow-hidden">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="tw-h-auto tw-max-w-full tw-gap-1 tw-overflow-hidden tw-px-2 tw-py-1 tw-font-normal"
-              >
-                <span className="tw-shrink-0 tw-text-sm tw-text-muted-foreground">
-                  {localizedStrings.showing}
-                </span>
-                <span className="tw-min-w-0 tw-truncate tw-text-sm tw-font-medium">
-                  {scopeDisplayText}
-                </span>
-                <ChevronDown className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="tw-w-auto tw-p-3">
-              <ScopeSelector
-                scope={scope}
-                availableScopes={['chapter', 'book', 'selectedBooks']}
-                onScopeChange={onScopeChange}
-                availableBookInfo={availableBookInfo}
-                selectedBookIds={selectedBookIds}
-                onSelectedBookIdsChange={onSelectedBookIdsChange}
-                localizedStrings={scopeSelectorStrings}
-                localizedBookNames={localizedBookNames}
-              />
-            </PopoverContent>
-          </Popover>
+        <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-1 tw-overflow-hidden">
+          <div className="tw-min-w-0 tw-overflow-hidden">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="tw-h-auto tw-max-w-full tw-gap-1 tw-overflow-hidden tw-px-2 tw-py-1 tw-font-normal"
+                >
+                  <span className="tw-shrink-0 tw-text-sm tw-text-muted-foreground">
+                    {localizedStrings.showing}
+                  </span>
+                  <span className="tw-min-w-0 tw-truncate tw-text-sm tw-font-medium">
+                    {scopeDisplayText}
+                  </span>
+                  <ChevronDown className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="tw-w-auto tw-p-3">
+                <ScopeSelector
+                  scope={scope}
+                  availableScopes={['chapter', 'book', 'selectedBooks']}
+                  onScopeChange={onScopeChange}
+                  availableBookInfo={availableBookInfo}
+                  selectedBookIds={selectedBookIds}
+                  onSelectedBookIdsChange={onSelectedBookIdsChange}
+                  localizedStrings={scopeSelectorStrings}
+                  localizedBookNames={localizedBookNames}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          {activeMode === 'replace' && (
+            <ReplacePreviewOptions
+              previewOptions={previewOptions}
+              setPreviewOptions={onPreviewOptionsChange}
+              localizedStrings={previewOptionsStrings}
+            />
+          )}
         </div>
-        {activeMode === 'replace' && (
-          <ReplacePreviewOptions
-            previewOptions={previewOptions}
-            setPreviewOptions={onPreviewOptionsChange}
-            localizedStrings={previewOptionsStrings}
-          />
-        )}
         {visibleResultsCount > 0 && (
           <div className="tw-flex tw-items-center tw-gap-1">
             <span className="tw-tabular-nums tw-text-sm tw-text-muted-foreground">

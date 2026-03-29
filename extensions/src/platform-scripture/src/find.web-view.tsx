@@ -948,11 +948,19 @@ global.webViewComponent = function FindWebView({
     }
   }, [activeMode, focusedResultIndex, results, searchStatus]);
 
+  // Remove the find-result-highlight annotation when the editor changes or the find panel closes
+  useEffect(() => {
+    const currentController = editorWebViewController;
+    return () => {
+      currentController?.runAnnotationAction('find-current-result', 'removed').catch(() => {});
+    };
+  }, [editorWebViewController]);
+
   const handleFocusedResultChange = useCallback(
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
-      setVerseRefSetting(searchResult.start.verseRef);
       if (searchTerm) addToHistory(searchTerm);
+      setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
         editorWebViewController
           .selectRange({
@@ -960,7 +968,16 @@ global.webViewComponent = function FindWebView({
             end: searchResult.end,
           })
           .catch((e) => logger.warn(`Find: selectRange failed: ${getErrorMessage(e)}`));
+        editorWebViewController
+          .setAnnotation(
+            { start: searchResult.start, end: searchResult.end },
+            'find-result-highlight',
+            'find-current-result',
+          )
+          .catch((e) => logger.warn(`Find: setAnnotation failed: ${getErrorMessage(e)}`));
       }
+      // Return focus to the results container so arrow-key navigation works after a single click
+      setTimeout(() => resultsContainerRef.current?.focus(), 0);
     },
     [addToHistory, editorWebViewController, editorWebViewId, searchTerm, setVerseRefSetting],
   );
