@@ -195,7 +195,7 @@ export default function SearchResult({
     previewOptions.showInvisible ? renderWithInvisibleChars(text) : text;
 
   /** Returns the font class based on the monospace option */
-  const fontClass = previewOptions.monospace ? 'tw-font-mono' : 'scripture-font';
+  const fontClass = previewOptions.monospace ? 'tw-font-mono' : '';
 
   const { highlightShape, color } = previewOptions;
   const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
@@ -433,7 +433,7 @@ export default function SearchResult({
     <>
       {showVerseTextInAdditional && (
         <div
-          className={`tw-font-normal tw-text-muted-foreground scripture-font ${previewOptions.showInvisible ? 'tw-break-all' : 'tw-break-words'}`}
+          className={`tw-font-normal tw-text-muted-foreground ${previewOptions.showInvisible ? 'tw-break-all' : 'tw-break-words'}`}
         >
           {getFocusedVerseText()}
         </div>
