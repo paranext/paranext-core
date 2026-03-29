@@ -1,5 +1,6 @@
 import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
+import { getErrorMessage } from 'platform-bible-utils';
 import { CheckResultsInvalidated } from 'platform-scripture';
 import {
   ChecksSidePanelWebViewOptions,
@@ -477,6 +478,16 @@ export async function activate(context: ExecutionActivationContext) {
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );
+
+  // Register find-result-highlight annotation style for use in Scripture editors (fire-and-forget)
+  papi.dataProviders
+    .get('platformScriptureEditor.annotationStyle')
+    .then((dp) =>
+      dp?.registerAnnotationStyle('find-result-highlight', {
+        backgroundColor: 'rgba(251, 191, 36, 0.4)',
+      }),
+    )
+    .catch((e) => logger.debug(`platformScripture: find annotation style: ${getErrorMessage(e)}`));
 
   logger.debug('platformScripture is finished activating!');
 }
