@@ -312,6 +312,8 @@ async function sendPapiRequestOnce<T>(
       if (parsed.error) {
         reject(new Error(`PAPI error: ${JSON.stringify(parsed.error)}`));
       } else {
+        // JSON-RPC `result` is untyped at the protocol layer; callers choose `T` (e.g. OpenRPC from
+        // rpc.discover). There is no runtime validator here, so we assert to match the generic.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         resolve(parsed.result as T);
       }
