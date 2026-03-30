@@ -37,7 +37,7 @@ Returns `true` if:
    `extensions/` — i.e. `parentDir === 'extensions' || parentDir.startsWith('extensions/')`.
    This guards against accidentally touching lock files in `lib/*` or other workspaces. **and**
 2. The parent directory matches one of the workspace glob patterns in the root `package.json`
-   `workspaces` array, using `minimatch`.
+   `workspaces` array, using `minimatch` (added as an explicit dependency to `extensions/package.json`).
 
 This prevents accidentally deleting `package-lock.json` files that are genuinely in use (e.g.,
 standalone tools outside the workspace).
@@ -157,6 +157,7 @@ formatExtensionFolder (for each extensionsBasedOnTemplate entry)
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `extensions/lib/git.util.ts`              | Add `isUnusedWorkspacePackageLock`, `resolvePackageLockConflicts`, `formatExtensionsRoot`; update `formatExtensionFolder` |
 | `extensions/lib/update-from-templates.ts` | Call `resolvePackageLockConflicts` in catch blocks; call `formatExtensionsRoot` after multi-template merge                |
+| `extensions/package.json`                 | Add `minimatch` as a dependency                                                                                           |
 
 ## Not in scope
 
