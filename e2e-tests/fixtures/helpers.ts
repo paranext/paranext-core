@@ -62,7 +62,9 @@ export async function launchElectronApp(): Promise<ElectronAppContext> {
   // binary to run as plain Node.js. We must omit it (do not set it to undefined:
   // Playwright's env type is Record<string, string>).
   // NODE_ENV=development so the renderer loads from the webpack dev server.
-  const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...restEnv } = process.env;
+  // Omit ELECTRON_RUN_AS_NODE so the Electron child does not inherit it.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { ELECTRON_RUN_AS_NODE, ...restEnv } = process.env;
   const env = {
     ...restEnv,
     NODE_ENV: 'development',
@@ -263,9 +265,7 @@ export async function waitForAppReady(page: Page, timeout = 60_000): Promise<voi
     timeout,
   });
   await page.waitForFunction(
-    () =>
-      (globalThis as { __paranextDialogServiceCommandsReady?: boolean })
-        .__paranextDialogServiceCommandsReady === true,
+    () => Reflect.get(globalThis, 'paranextDialogServiceCommandsReady') === true,
     { timeout },
   );
 }
