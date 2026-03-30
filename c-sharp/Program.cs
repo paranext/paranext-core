@@ -1,12 +1,14 @@
 using System.Diagnostics;
 using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.NetworkObjects;
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.DigitalBibleLibrary;
 using Paranext.DataProvider.Services;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
 using PtxUtils;
+using PtxUtils.Progress;
 
 namespace Paranext.DataProvider;
 
@@ -28,6 +30,10 @@ public static class Program
         // Log all trace messages to the console
         Trace.Listeners.Add(listener);
         Trace.AutoFlush = true;
+
+        // Tell `ProgressUtils` to run "UI" code and "run later" code immediately as a simple
+        // implementation so we don't miss `ParatextData` code that needs to run.
+        ProgressUtils.Implementation = new ProgressUtilsRunImmediately();
 
         using PapiClient papi = new();
         try
