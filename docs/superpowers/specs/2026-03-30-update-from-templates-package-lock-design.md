@@ -33,10 +33,11 @@ isUnusedWorkspacePackageLock(repoRootRelativePath: string): Promise<boolean>
 
 Returns `true` if:
 
-1. The path's parent directory is somewhere under `extensions/` in the repo (i.e. starts with
-   `extensions/`), **and**
+1. The path's parent directory (via `path.dirname`) is `extensions` exactly, OR begins with
+   `extensions/` — i.e. `parentDir === 'extensions' || parentDir.startsWith('extensions/')`.
+   This guards against accidentally touching lock files in `lib/*` or other workspaces. **and**
 2. The parent directory matches one of the workspace glob patterns in the root `package.json`
-   `workspaces` array, using `minimatch`
+   `workspaces` array, using `minimatch`.
 
 This prevents accidentally deleting `package-lock.json` files that are genuinely in use (e.g.,
 standalone tools outside the workspace).
@@ -49,7 +50,8 @@ New exported async function called from the `catch` blocks of `git subtree pull`
 
 **Algorithm:**
 
-1. Run `git status --porcelain` (v1 format).
+1. Run `git status --porcelain` (v1 format — intentionally different from `checkForWorkingChanges`
+   which uses `--porcelain=v2`; v1 is simpler for conflict-code parsing).
 2. Parse every line: first two characters are the XY status code; the rest (after one space) is
    the repo-root-relative path.
 3. Identify conflict lines — those whose XY code is one of:
@@ -58,12 +60,13 @@ New exported async function called from the `catch` blocks of `git subtree pull`
    - `packageLockConflicts` — conflict lines where path ends with `package-lock.json` **and**
      `isUnusedWorkspacePackageLock` returns `true`
    - `otherConflicts` — all other conflict lines
-5. For each entry in `packageLockConflicts`: run `git rm <path>`.
+5. For each entry in `packageLockConflicts`: run `git rm <path>`. If any `git rm` throws, the
+   error propagates immediately (no partial-success swallowing).
    - Works for both `UU` (both modified — file on disk with conflict markers) and `DU`
      (deleted by us, modified by them — git leaves their version on disk during the conflict).
 6. Return `{ resolved: number; remainingConflicts: string[] }`.
    - `resolved` = number of `package-lock.json` files successfully removed and staged
-   - `remainingConflicts` = paths of non-`package-lock.json` conflicted files
+   - `remainingConflicts` = paths of all other conflicted files (not `package-lock.json`)
 
 ### 3. Catch block logic (`update-from-templates.ts`)
 
@@ -74,6 +77,8 @@ single-template merge.
 resolved, remainingConflicts = await resolvePackageLockConflicts()
 
 if resolved > 0 and remainingConflicts.length === 0:
+    // MERGE_HEAD exists; git prepared a commit message for this squash merge.
+    // --no-edit reuses that message without opening an editor.
     await execCommand('git commit --no-edit')
     log: "Auto-resolved package-lock.json conflicts by deleting unused lock files. Continuing."
     // do NOT return 1 — continue the script
@@ -82,7 +87,13 @@ else if resolved > 0 and remainingConflicts.length > 0:
     log: "Auto-resolved package-lock.json conflicts, but other conflicts remain: <list>"
     return 1
 
-else:  // resolved === 0 (no conflict lines at all — error was something else)
+else if resolved === 0 and remainingConflicts.length > 0:
+    // Conflicts exist but none were package-lock.json — nothing was auto-resolved
+    log: "Merge conflicts in: <remainingConflicts list>"
+    log original error
+    return 1
+
+else:  // resolved === 0, remainingConflicts.length === 0 — not a conflict error
     log original error
     return 1
 ```
@@ -122,7 +133,8 @@ git subtree pull (multi-template)
                   ├── only package-lock.json conflicts → git commit --no-edit
                   │     → log auto-resolution → formatExtensionsRoot()
                   ├── package-lock.json + other conflicts → log remaining, return 1
-                  └── no conflict lines → log original error, return 1
+                  ├── no package-lock.json conflicts, but other conflicts → log conflicts + original error, return 1
+                  └── no conflict lines at all → log original error, return 1
 
 for each extension:
   git subtree pull (single-template)
@@ -131,7 +143,8 @@ for each extension:
                     ├── only package-lock.json conflicts → git commit --no-edit
                     │     → log auto-resolution → extensionsBasedOnTemplate.push(ext)
                     ├── package-lock.json + other conflicts → log remaining, return 1
-                    └── no conflict lines → (existing error handling unchanged)
+                    ├── no package-lock.json conflicts, but other conflicts → log conflicts + original error, return 1
+                    └── no conflict lines at all → (existing error handling unchanged)
 
 formatExtensionFolder (for each extensionsBasedOnTemplate entry)
   → delete <ext>/package-lock.json if present and is unused workspace lock file
