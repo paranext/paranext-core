@@ -1,5 +1,4 @@
 import { Meta } from '@storybook/addon-docs/blocks';
-import { Badge } from '@/components/shadcn-ui/badge';
 
 <Meta title="Guidelines/UI Work Item Lifecycle" />
 
@@ -19,19 +18,12 @@ Every Jira work item has a **UX review** property. It is **open** by default. A 
 
 The property should be set during **grooming** to reflect which applies:
 
-<dl className="tw-my-4 tw-grid tw-grid-cols-[auto_1fr] tw-items-baseline tw-gap-x-4 tw-gap-y-3">
-  <dt><Badge variant="outline">open</Badge></dt>
-  <dd className="tw-m-0">Default — not yet assessed</dd>
-
-  <dt><Badge variant="secondary">needs review</Badge></dt>
-  <dd className="tw-m-0">Developer is ready for UX review</dd>
-
-  <dt><Badge>done</Badge></dt>
-  <dd className="tw-m-0">UX review completed and approved</dd>
-
-  <dt><Badge variant="muted">review not needed</Badge></dt>
-  <dd className="tw-m-0">UX sign-off explicitly not required for this item</dd>
-</dl>
+| State | Meaning |
+| --- | --- |
+| `open` | Default — not yet assessed |
+| `needs review` | Developer is ready for UX review |
+| `done` | UX review completed and approved |
+| `review not needed` | UX sign-off explicitly not required for this item |
 
 ### Acceptance criteria
 
