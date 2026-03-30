@@ -35,7 +35,9 @@ export function generateInlineMarkerMenuListItems(
           action: () => {
             // `insertMarker` is a planned but not yet released method in the platform-editor API
             // eslint-disable-next-line no-type-assertion/no-type-assertion
-            const editorWithInsertMarker = editorRef.current as unknown as { insertMarker?: (m: string) => void };
+            const editorWithInsertMarker = editorRef.current as unknown as {
+              insertMarker?: (m: string) => void;
+            };
             editorWithInsertMarker?.insertMarker?.(marker);
             closeMarkersMenu();
           },
