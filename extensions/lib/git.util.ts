@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
 import replaceInFile from 'replace-in-file';
+import { minimatch } from 'minimatch';
 import { subtreeRootFolder } from '../webpack/webpack.util';
 
 const execAsync = promisify(exec);
@@ -158,6 +159,30 @@ export async function fetchFromSingleTemplate() {
     return false;
   }
   return true;
+}
+
+/**
+ * Returns true if the given repo-root-relative path is a `package-lock.json` file whose parent
+ * directory is an npm workspace under `extensions/`. Such files are unused (because the folder is a
+ * workspace) and are safe to delete automatically.
+ *
+ * @param repoRootRelativePath Repo-root-relative path, e.g.
+ *   `extensions/src/hello-rock3/package-lock.json`
+ */
+export async function isUnusedWorkspacePackageLock(repoRootRelativePath: string): Promise<boolean> {
+  if (path.basename(repoRootRelativePath) !== 'package-lock.json') return false;
+  const parentDir = path.dirname(repoRootRelativePath);
+
+  // Must be the extensions root or somewhere inside it
+  if (parentDir !== 'extensions' && !parentDir.startsWith('extensions/')) return false;
+
+  // Must match a workspace pattern from the root package.json
+  const rootPackageJsonPath = path.resolve(path.join(__dirname, '..', '..', 'package.json'));
+  const rootPackageContent = await fs.readFile(rootPackageJsonPath, 'utf-8');
+  const rootPackageJson = JSON.parse(rootPackageContent) as { workspaces?: string[] };
+  const workspaces = rootPackageJson.workspaces ?? [];
+
+  return workspaces.some((pattern) => minimatch(parentDir, pattern));
 }
 
 /** Globs to ignore when replacing stuff while formatting extensions */
