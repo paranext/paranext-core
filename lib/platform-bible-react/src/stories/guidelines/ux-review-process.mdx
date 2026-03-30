@@ -8,40 +8,9 @@ Guidelines for developers on how to submit work for UX review on Paratext 10.
 
 ---
 
-## Submitting a review request
+## Part 1: Working on a ticket
 
-Post UX review requests in the **#ux-review-simple** channel in the **Paratext Discord** — not the Platform Bible Discord.
-
-Include the following in your request:
-
-- A link to the **Jira ticket** — full URL, e.g. `https://paratextstudio.atlassian.net/browse/PT-3901`, not just `PT-3901`
-- A link to the **GitHub PR**
-- A brief description of what was done
-
-Also include a link to the Jira ticket **in the PR description**, so the ticket is traceable from the code change.
-
----
-
-## Getting UX approval
-
-For UX to approve a UI change, one of the following is required:
-
-- **Before/after videos** of the change (posted in the PR or Jira ticket), or
-- A **call with UX** to walk through the change together
-
-If neither is provided, UX approval cannot be given.
-
----
-
-## Demo videos
-
-Post demo videos or screen recordings **directly in the GitHub PR description** or **in the Jira ticket**. Do not use Google Drive — videos there are harder to access and don't stay attached to the artifact being reviewed.
-
----
-
-## Task management
-
-### Subtasks and engineering splits
+### Task management
 
 Tasks are sometimes split into subtasks for engineering reasons. When this happens:
 
@@ -53,9 +22,7 @@ Tasks are sometimes split into subtasks for engineering reasons. When this happe
 
 Every UI work item should have a **Storybook deliverable** — a story or documentation page that demonstrates the component or interaction. This makes the work reviewable, testable, and shareable without needing to run the full app.
 
----
-
-## Acceptance criteria
+### Acceptance criteria
 
 Checkboxes on a Jira ticket assert that the developer **did the thing** — not that it has been verified. Checking a box is a claim, not a sign-off.
 
@@ -63,19 +30,11 @@ Verification is the responsibility of:
 
 | What | Who verifies |
 | --- | --- |
-| Code correctness | Code reviewer |
-| UI elements | UX reviewer |
+| Code quality | Code reviewer |
+| User interface and experience | UX reviewer |
 | Functional behavior | QA / testing |
 
-Before requesting a UX review, update the ticket:
-
-- Check off or explicitly declare which acceptance criteria you believe are fulfilled.
-- If any criteria were intentionally deferred or are out of scope, say so explicitly.
-- Don't leave reviewers guessing about what was done.
-
----
-
-## Linking to reference UI
+### Linking to reference UI
 
 When your PR description references other parts of the UI for comparison (e.g., "spacing matches the comments panel"), provide **specific file paths**, not just names. This allows reviewers and AI-assisted review tools to actually locate and verify those references.
 
@@ -84,3 +43,40 @@ When your PR description references other parts of the UI for comparison (e.g., 
 
 **Helpful:**
 > "Adjusted spacing to match the toolbar in the comments panel (`src/components/comments/CommentsPanel.tsx`) and the find UI bar (`src/components/find/FindBar.tsx`)."
+
+---
+
+## Part 2: Requesting a review
+
+### Before submitting
+
+Update the Jira ticket:
+
+- Check off or explicitly declare which acceptance criteria you believe are fulfilled.
+- If any criteria were intentionally deferred or are out of scope, say so explicitly and make new work items for them.
+- Don't leave reviewers guessing about what was done.
+
+### Submitting the request
+
+Post UX review requests in the **#ux-review-simple** channel in the **Paratext Discord** — not the Platform Bible Discord.
+
+Include the following in your request:
+
+- A link to the **Jira ticket** — full URL, e.g. `https://paratextstudio.atlassian.net/browse/PT-3901`, not just `PT-3901`
+- A link to the **GitHub PR**
+- A brief description of what was done
+
+Also include a link to the Jira ticket **in the PR description**, so the ticket is traceable from the code change.
+
+### Demo videos
+
+Post demo videos or screen recordings **directly in the GitHub PR description** or **in the Jira ticket**. Do not use Google Drive — videos there are harder to access and don't stay attached to the artifact being reviewed.
+
+### Getting UX approval
+
+For UX to approve a UI change, one of the following is required:
+
+- **Before/after videos** of the change (posted in the PR or Jira ticket), or
+- A **call with UX** to walk through the change together
+
+If neither is provided, UX approval cannot be given.
