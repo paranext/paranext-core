@@ -185,6 +185,62 @@ export async function isUnusedWorkspacePackageLock(repoRootRelativePath: string)
   return workspaces.some((pattern) => minimatch(parentDir, pattern));
 }
 
+/** Git status --porcelain v1 XY codes that indicate an unmerged (conflict) entry */
+const CONFLICT_XY_CODES = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
+
+/**
+ * After a `git subtree pull` fails, call this to auto-resolve any conflicts that are solely unused
+ * workspace `package-lock.json` files.
+ *
+ * Uses `git status --porcelain` (v1 format) — intentionally different from `checkForWorkingChanges`
+ * which uses `--porcelain=v2`. V1 is simpler for conflict-code parsing.
+ *
+ * For each conflicted `package-lock.json` that passes {@link isUnusedWorkspacePackageLock}, runs
+ * `git rm <path>` to delete and stage the file. Works for both:
+ *
+ * - `UU` (both modified): file is on disk with conflict markers
+ * - `DU` (deleted by us, modified by them): git leaves their version on disk during the conflict
+ *
+ * @returns `resolved` — number of lock files removed and staged. `remainingConflicts` —
+ *   repo-root-relative paths of all OTHER conflicted files.
+ */
+export async function resolvePackageLockConflicts(): Promise<{
+  resolved: number;
+  remainingConflicts: string[];
+}> {
+  const status = await execCommand('git status --porcelain', { quiet: true });
+
+  const lines = status.stdout.split('\n').filter((line) => line.length > 0);
+  const conflictLines = lines.filter((line) => CONFLICT_XY_CODES.has(line.slice(0, 2)));
+
+  const packageLockPaths: string[] = [];
+  const otherConflictPaths: string[] = [];
+
+  await Promise.all(
+    conflictLines.map(async (line) => {
+      const filePath = line.slice(3); // skip "XY "
+      if (
+        // Fast path: skip async file I/O for the many non-lock files in a typical conflict set
+        filePath.endsWith('package-lock.json') &&
+        (await isUnusedWorkspacePackageLock(filePath))
+      ) {
+        packageLockPaths.push(filePath);
+      } else {
+        otherConflictPaths.push(filePath);
+      }
+    }),
+  );
+
+  // Remove and stage each conflicted package-lock.json. Errors propagate immediately.
+  // eslint-disable-next-line no-restricted-syntax
+  for (const filePath of packageLockPaths) {
+    // eslint-disable-next-line no-await-in-loop
+    await execCommand(`git rm "${filePath}"`);
+  }
+
+  return { resolved: packageLockPaths.length, remainingConflicts: otherConflictPaths };
+}
+
 /** Globs to ignore when replacing stuff while formatting extensions */
 const replaceInFileIgnoreGlobs = [
   '**/node_modules/**/*',
