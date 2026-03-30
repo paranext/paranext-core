@@ -1,28 +1,16 @@
 import { Meta } from '@storybook/addon-docs/blocks';
 
-<Meta title="Guidelines/UX Review Process" />
+<Meta title="Guidelines/UI Work Item Lifecycle" />
 
-# UX Review Process
+# UI Work Item Lifecycle
 
 *Written by Alex Mercado, UX*
 
-Guidelines for developers on how to submit work for UX review on Paratext 10.
+How a UI work item moves from grooming to done on Paratext 10.
 
 ---
 
-## Part 1: Working on a ticket
-
-### Task management
-
-Tasks are sometimes split into subtasks for engineering reasons. When this happens:
-
-- Subtasks with less definition can be treated as **check-ins** rather than full approvals.
-- The **parent task** is still the unit that requires UX approval.
-- Don't block subtask PRs waiting for full UX sign-off, but do make sure the parent task gets a complete UX review before it closes.
-
-### Storybook deliverables
-
-Every UI work item should have a **Storybook deliverable** — a story or documentation page that demonstrates the component or interaction. This makes the work reviewable, testable, and shareable without needing to run the full app.
+## Part 1: Setting up the work item
 
 ### Jira UX review property
 
@@ -41,15 +29,31 @@ The property should be set during **grooming** to reflect which applies:
 
 ### Acceptance criteria
 
-Checkboxes on a Jira ticket assert that the developer **did the thing** — not that it has been verified. Checking a box is a claim, not a sign-off.
+Checkboxes on a Jira work item assert that the developer **did the thing** — not that it has been verified. Checking a box is a claim, not a sign-off.
 
 Verification is the responsibility of:
 
 | What | Who verifies | Where to post | Notes |
 | --- | --- | --- | --- |
 | Code quality | Code reviewer | New [#reviews](https://ptb.discord.com/channels/1064938364597436416/1369016160485511222) thread on Platform.Bible Discord | Review happens in Reviewable (built on [GitHub](https://github.com/paranext)) |
-| User interface and experience | UX reviewer | New [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) thread on Paratext Discord — one thread per issue | Subtasks receive a directional review; parent tasks require full UX approval. |
+| User interface and experience | UX reviewer | New [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) thread on Paratext Discord — one thread per issue | Subtasks receive a directional review; parent work items require full UX approval. |
 | Functional behavior | QA / testing | New [#10-simple-testing](https://ptb.discord.com/channels/892072317436448768/1451251686709395548) or [#10-power-testing](https://ptb.discord.com/channels/892072317436448768/1451251722340139141) thread on Paratext Discord — one thread per item | Testing happens independently after the code is marked done. |
+
+---
+
+## Part 2: Working on the work item
+
+### Task management
+
+Work items are sometimes split into subtasks for engineering reasons. When this happens:
+
+- Subtasks with less definition can be treated as **check-ins** rather than full approvals.
+- The **parent work item** is still the unit that requires UX approval.
+- Don't block subtask PRs waiting for full UX sign-off, but do make sure the parent work item gets a complete UX review before it closes.
+
+### Storybook deliverables
+
+Every UI work item should have a **Storybook deliverable** — a story or documentation page that demonstrates the component or interaction. This makes the work reviewable, testable, and shareable without needing to run the full app.
 
 ### Linking to reference UI
 
@@ -63,11 +67,11 @@ When your PR description references other parts of the UI for comparison (e.g., 
 
 ---
 
-## Part 2: Requesting a review
+## Part 3: Requesting a review
 
 ### Before submitting
 
-Update the Jira ticket:
+Update the Jira work item:
 
 - Check off or explicitly declare which acceptance criteria you believe are fulfilled.
 - If any criteria were intentionally deferred or are out of scope, say so explicitly and make new work items for them.
@@ -81,21 +85,21 @@ Post in a new thread in [#review-ux](https://ptb.discord.com/channels/8920723174
 
 Include the following in your post:
 
-- A link to the **Jira ticket** — full URL, e.g. `https://paratextstudio.atlassian.net/browse/PT-3901`, not just `PT-3901`
+- A link to the **Jira work item** — full URL, e.g. `https://paratextstudio.atlassian.net/browse/PT-3901`, not just `PT-3901`
 - A link to the **GitHub PR**
 - A brief description of what was done
 
-Also include a link to the Jira ticket **in the PR description**, so the ticket is traceable from the code change.
+Also include a link to the Jira work item **in the PR description**, so it is traceable from the code change.
 
 ### Demo videos
 
-Post demo videos or screen recordings **directly in the GitHub PR description** or **in the Jira ticket**. Do not use Google Drive — videos there are harder to access and don't stay attached to the artifact being reviewed.
+Post demo videos or screen recordings **directly in the GitHub PR description** or **in the Jira work item**. Do not use Google Drive — videos there are harder to access and don't stay attached to the artifact being reviewed.
 
 ### Getting UX approval
 
 For UX to approve a UI change, one of the following is required:
 
-- **Before/after videos** of the change (posted in the PR or Jira ticket), or
+- **Before/after videos** of the change (posted in the PR or Jira work item), or
 - A **call with UX** to walk through the change together
 
 If neither is provided, UX approval cannot be given.
