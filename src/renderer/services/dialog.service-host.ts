@@ -410,10 +410,6 @@ export async function startDialogService(): Promise<void> {
   // Wait to successfully register all requests
   const unsubscribeRequests = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
 
-  // The dock layout can paint before this async service finishes; menu items that invoke
-  // `platform.about` and similar commands must not run until registration completes (E2E reads this).
-  globalThis.paranextDialogServiceCommandsReady = true;
-
   // On closing, try to remove request listeners
   // TODO: should do this on the server when the connection closes or when the server exits as well
   window.addEventListener('beforeunload', async () => {

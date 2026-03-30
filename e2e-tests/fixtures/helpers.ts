@@ -5,6 +5,17 @@ import path from 'path';
 import WebSocket from 'ws';
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
+
+/** Keep in sync with `GET_METHODS` in `src/shared/data/rpc.model.ts`. */
+const GET_METHODS = 'rpc.discover';
+
+/**
+ * Same serialized request type as `registerCommand('platform.about', ...)` in command.service
+ * (`command` + `:` + `platform.about`).
+ */
+const PLATFORM_ABOUT_COMMAND = 'command:platform.about';
+
+const RPC_DISCOVER_POLL_INTERVAL_MS = 250;
 export const PROCESS_READY_TIMEOUT = 120_000;
 
 /** Return value from {@link launchElectronApp}. */
@@ -254,6 +265,97 @@ export async function sendPapiCommand<T = unknown>(
   });
 }
 
+type OpenRpcDiscoverResult = {
+  methods?: { name: string }[];
+};
+
+/**
+ * Send a single JSON-RPC request where `method` is a PAPI request type (e.g. `rpc.discover`). Opens
+ * a connection, sends one request, waits for the matching response id, then closes.
+ */
+async function sendPapiRequestOnce<T>(
+  method: string,
+  params: unknown[] = [],
+  port: number = DEFAULT_WEBSOCKET_PORT,
+  perRequestTimeoutMs = 10_000,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const ws = new WebSocket(`ws://localhost:${port}`);
+    const timeout = setTimeout(() => {
+      ws.close();
+      reject(new Error(`PAPI request "${method}" timed out after ${perRequestTimeoutMs}ms`));
+    }, perRequestTimeoutMs);
+
+    ws.on('open', () => {
+      const request = {
+        jsonrpc: '2.0',
+        id: 1,
+        method,
+        params,
+      };
+      ws.send(JSON.stringify(request));
+    });
+
+    ws.on('message', (data) => {
+      let parsed: { id?: number; error?: unknown; result?: unknown };
+      try {
+        parsed = JSON.parse(data.toString());
+      } catch (err) {
+        clearTimeout(timeout);
+        ws.close();
+        reject(err);
+        return;
+      }
+      if (parsed.id !== 1) return;
+      clearTimeout(timeout);
+      ws.close();
+      if (parsed.error) {
+        reject(new Error(`PAPI error: ${JSON.stringify(parsed.error)}`));
+      } else {
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        resolve(parsed.result as T);
+      }
+    });
+
+    ws.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Poll `rpc.discover` until `methodName` appears in `result.methods` or `timeoutMs` elapses. Uses
+ * the same registration map as the live PAPI server (renderer-registered commands included).
+ */
+export async function waitForPapiMethodRegistered(
+  methodName: string,
+  port: number = DEFAULT_WEBSOCKET_PORT,
+  timeoutMs = 60_000,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const remaining = timeoutMs - (Date.now() - start);
+    try {
+      const result = await sendPapiRequestOnce<OpenRpcDiscoverResult>(
+        GET_METHODS,
+        [],
+        port,
+        Math.min(10_000, Math.max(1000, remaining)),
+      );
+      if (result.methods?.some((m) => m.name === methodName)) return;
+    } catch {
+      /* next poll */
+    }
+    const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
+    if (sleepMs <= 0) break;
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, sleepMs);
+    });
+  }
+  throw new Error(`PAPI method "${methodName}" not listed in rpc.discover within ${timeoutMs}ms`);
+}
+
 /**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
  * platform-dock layout to appear, then for the dialog service to finish registering menu commands
@@ -264,8 +366,5 @@ export async function waitForAppReady(page: Page, timeout = 60_000): Promise<voi
     state: 'attached',
     timeout,
   });
-  await page.waitForFunction(
-    () => Reflect.get(globalThis, 'paranextDialogServiceCommandsReady') === true,
-    { timeout },
-  );
+  await waitForPapiMethodRegistered(PLATFORM_ABOUT_COMMAND, DEFAULT_WEBSOCKET_PORT, timeout);
 }

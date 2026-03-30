@@ -68,11 +68,6 @@ declare global {
   var updateWebViewDefinition: UpdateWebViewDefinition;
   /** Indicates whether test code meant just for developers to see should be run */
   var isNoisyDevModeEnabled: boolean;
-  /**
-   * True after the dialog service registers commands such as `platform.about`. Used by E2E
-   * `waitForAppReady` (dock can paint before this async work finishes).
-   */
-  var paranextDialogServiceCommandsReady: boolean | undefined;
 }
 /* eslint-enable */
 
