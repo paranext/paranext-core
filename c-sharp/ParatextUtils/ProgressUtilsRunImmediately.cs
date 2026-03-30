@@ -71,7 +71,10 @@ public class ProgressUtilsRunImmediately : ProgressUtils
 
     protected override BackgroundExecution CurrentExecutingBackgroundSingleAsyncInternal(
         BackgroundExecutionAction action
-    ) => throw new NotImplementedException();
+    ) =>
+        throw new NotImplementedException(
+            "Background execution methods are not currently used by ParatextData.dll"
+        );
 
     protected override void ExecuteInBackgroundSingleAsyncInternal(
         IComponent parentControl,
@@ -80,7 +83,10 @@ public class ProgressUtilsRunImmediately : ProgressUtils
         BackgroundExecutionAction action,
         ThreadStart cancelAction,
         ExceptionHandlerDelegate exceptionHandler
-    ) => throw new NotImplementedException();
+    ) =>
+        throw new NotImplementedException(
+            "Background execution methods are not currently used by ParatextData.dll"
+        );
 
     protected override BackgroundExecution ExecuteInBackgroundInternal(
         IComponent parentControl,
@@ -90,10 +96,14 @@ public class ProgressUtilsRunImmediately : ProgressUtils
         ThreadStart cancelAction,
         ExceptionHandlerDelegate exceptionHandler,
         // This is copied directly from `DoNothingProgressUtils` and is how the abstract method
-        // `ProgressUtils.ExecuteInBackgroundInternal` is declared. If it becomes a problem, we can
-        // deal with it then
+        // `ProgressUtils.ExecuteInBackgroundInternal` is declared.
+        // Background execution methods are not currently used by ParatextData.dll, so we don't
+        // need to implement these. If they become needed in the future, we can add support then.
 #pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
         ProgressBarOptions options = null
 #pragma warning restore CS8625 // Cannot convert null literal to non-nullable reference type.
-    ) => throw new NotImplementedException();
+    ) =>
+        throw new NotImplementedException(
+            "Background execution methods are not currently used by ParatextData.dll"
+        );
 }
