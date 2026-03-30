@@ -4,21 +4,24 @@ import { Meta } from '@storybook/addon-docs/blocks';
 
 # UI Review
 
+A UI work item can only be moved to `Done` once its UX review property is set to `done` or `review not needed`. This article covers what that review looks like and how to get there.
+
 *Written by Alex Mercado, UX*
 
-A UI work item can only be moved to Done once its UX review property is set to `done` or `review not needed`. This article covers what that review looks like and how to get there.
+
 
 ---
 
-## Before you request a review
+## Request a UX review
 
+### Pre-Review Checklist
 - [ ] Acceptance criteria are checked off or explicitly declared in the Jira work item
 - [ ] Jira UX review property is set to `needs review`
-- [ ] A Storybook story or documentation page exists for the work
-- [ ] The PR description links to any reference UI using specific file paths and [Storybook](https://paranext.github.io/paranext-core/platform-bible-react-storybook/) links
-- [ ] A before/after video or screen recording is posted in the PR description or Jira work item
+- [ ] Storybook stories or documentation demonstrate the work
+- [ ] The PR description links to any reference UIs using specific file paths and [Storybook](https://paranext.github.io/paranext-core/platform-bible-react-storybook/) links
+- [ ] (optional) A narrated before/after video or screen recording is posted in the PR description or Jira work item, or else a meeting is requested
 
-## Submitting the request
+### Submitting the request
 
 Post in a new thread in [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) on the Paratext Discord. Include:
 
@@ -38,10 +41,10 @@ Every Jira work item has a **UX review** property, set during grooming:
 
 | State | Meaning |
 | --- | --- |
-| `open` | Default — not yet assessed |
-| `needs review` | Developer is ready for UX review |
+| `open` | **Default** — not yet assessed or decision deferred |
+| `needs review` | Changes affect the user experience enough to need a UX review |
 | `done` | UX review completed and approved |
-| `review not needed` | UX sign-off explicitly not required for this item |
+| `review not needed` | UX approval explicitly not required |
 
 ### Acceptance criteria
 
@@ -55,9 +58,9 @@ Verification is the responsibility of:
 | User interface and experience | UX reviewer | New [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) thread on Paratext Discord — one thread per issue | Subtasks receive a directional review; parent work items require full UX approval. |
 | Functional behavior | QA / testing | New [#10-simple-testing](https://ptb.discord.com/channels/892072317436448768/1451251686709395548) or [#10-power-testing](https://ptb.discord.com/channels/892072317436448768/1451251722340139141) thread on Paratext Discord — one thread per item | Testing happens independently after the code is marked done. |
 
-### Task management
+### Subtask reviews
 
-Work items are sometimes split into subtasks for engineering reasons. Subtasks can be treated as **check-ins** rather than full approvals — the parent work item is still the unit that requires UX sign-off. Don't block subtask PRs waiting for full UX approval, but make sure the parent gets a complete review before it closes.
+Work items are sometimes split into subtasks for engineering reasons. Subtask UX reviews can be treated as **check-ins** rather than full approvals — the parent work item is still the unit that requires UX sign-off. Don't block subtask PRs waiting for full UX approval, but make sure the parent gets a complete review before it closes.
 
 ### Storybook deliverables
 
@@ -72,12 +75,3 @@ When your PR description references other parts of the UI for comparison, provid
 
 **Helpful:**
 > "Adjusted padding to match the [SearchBar](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/basics-searchbar--docs) (`lib/platform-bible-react/src/components/basics/search-bar.component.tsx`) and the [TabToolbar](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/advanced-tabtoolbar--docs) (`lib/platform-bible-react/src/components/advanced/tab-toolbar/tab-toolbar.component.tsx`)."
-
-### Getting UX approval
-
-For UX to approve a UI change, one of the following is required:
-
-- **Before/after videos** of the change (posted in the PR or Jira work item), or
-- A **call with UX** to walk through the change together
-
-If neither is provided, UX approval cannot be given.
