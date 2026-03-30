@@ -24,6 +24,21 @@ Tasks are sometimes split into subtasks for engineering reasons. When this happe
 
 Every UI work item should have a **Storybook deliverable** — a story or documentation page that demonstrates the component or interaction. This makes the work reviewable, testable, and shareable without needing to run the full app.
 
+### Jira UX review property
+
+Every Jira work item has a **UX review** property. It is **open** by default.
+
+**A work item can only be moved to done if the UX review property is set to done or review not needed.**
+
+The property should be set during **grooming** to reflect which applies:
+
+| State | Meaning |
+| --- | --- |
+| Open | Default — not yet assessed |
+| Needs review | Developer is ready for UX review |
+| Done | UX review completed and approved |
+| Review not needed | UX sign-off explicitly not required for this item |
+
 ### Acceptance criteria
 
 Checkboxes on a Jira ticket assert that the developer **did the thing** — not that it has been verified. Checking a box is a claim, not a sign-off.
@@ -32,9 +47,9 @@ Verification is the responsibility of:
 
 | What | Who verifies | Where to post | Notes |
 | --- | --- | --- | --- |
-| Code quality | Code reviewer | `#platform-bible-reviews` in the Platform.Bible Discord | Review happens in Reviewable (built on GitHub) |
-| User interface and experience | UX reviewer | `#ux-review-simple` in the Paratext Discord — one thread per issue | Post when the Jira UX review checkbox is set to "needs review." Subtasks receive a directional review; parent tasks require full UX approval. |
-| Functional behavior | QA / testing | `#pt10-simple-testing` or `#pt10-power-testing` in the Paratext Discord — one thread per item | Testing happens independently after the code is marked done. |
+| Code quality | Code reviewer | New [#reviews](https://ptb.discord.com/channels/1064938364597436416/1369016160485511222) thread on Platform.Bible Discord | Review happens in Reviewable (built on [GitHub](https://github.com/paranext)) |
+| User interface and experience | UX reviewer | New [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) thread on Paratext Discord — one thread per issue | Subtasks receive a directional review; parent tasks require full UX approval. |
+| Functional behavior | QA / testing | New [#10-simple-testing](https://ptb.discord.com/channels/892072317436448768/1451251686709395548) or [#10-power-testing](https://ptb.discord.com/channels/892072317436448768/1451251722340139141) thread on Paratext Discord — one thread per item | Testing happens independently after the code is marked done. |
 
 ### Linking to reference UI
 
@@ -58,11 +73,13 @@ Update the Jira ticket:
 - If any criteria were intentionally deferred or are out of scope, say so explicitly and make new work items for them.
 - Don't leave reviewers guessing about what was done.
 
+Then set the **UX review property** to **needs review**.
+
 ### Submitting the request
 
-Post UX review requests in the **#ux-review-simple** channel in the **Paratext Discord** — not the Platform Bible Discord.
+Post in a new thread in [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) on the Paratext Discord.
 
-Include the following in your request:
+Include the following in your post:
 
 - A link to the **Jira ticket** — full URL, e.g. `https://paratextstudio.atlassian.net/browse/PT-3901`, not just `PT-3901`
 - A link to the **GitHub PR**
