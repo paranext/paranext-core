@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "@sillsdev/scripture": "^2.0.3",
+    "minimatch": "^9.0.9",
     "platform-bible-utils": "file:../lib/platform-bible-utils"
   },
   "devDependencies": {
