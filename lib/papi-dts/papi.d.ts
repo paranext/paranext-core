@@ -2888,8 +2888,13 @@ declare module 'shared/models/docking-framework.model' {
   ) => Promise<void>;
   /** Properties related to the dock layout */
   export type PapiDockLayout = {
-    /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
-    dockLayout: DockLayout;
+    /**
+     * The rc-dock dock layout React element ref. Used to perform operations on the layout.
+     *
+     * Only available in Power Mode (rc-dock based layout). Simple Mode does not use rc-dock. Prefer
+     * using the abstracted methods on this type instead of accessing this directly.
+     */
+    dockLayout?: DockLayout;
     /**
      * A ref to a function that runs when the layout changes. We set this ref to our
      * {@link onLayoutChange} function
@@ -3019,6 +3024,20 @@ declare module 'shared/models/docking-framework.model' {
      * @returns `true` if successfully found tab to update, `false` otherwise
      */
     focusTab: (tabId: string) => boolean;
+    /**
+     * Load a layout into the dock layout.
+     *
+     * @param layout The layout to load
+     */
+    loadLayout: (layout: LayoutBase) => void;
+    /**
+     * Find a tab in the layout by its ID or by a predicate function.
+     *
+     * @param idOrFilter The ID of the tab to find, or a function that returns true for the desired
+     *   tab
+     * @returns The tab info if found, or undefined
+     */
+    findTab: (idOrFilter: string | ((item: SavedTabInfo) => boolean)) => TabInfo | undefined;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *

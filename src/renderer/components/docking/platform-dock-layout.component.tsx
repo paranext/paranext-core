@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import DockLayout from 'rc-dock';
+import DockLayout, { LayoutBase } from 'rc-dock';
 import { Filter } from 'rc-dock/lib/Algorithm';
 
 import {
@@ -98,6 +98,21 @@ export function PlatformDockLayout() {
       getTabInfoById: (tabId: string) =>
         getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
       focusTab: (tabId: string) => focusTab(dockLayoutRef.current, tabId),
+      loadLayout: (layout: LayoutBase) => dockLayoutRef.current.loadLayout(layout),
+      findTab: (idOrFilter: string | ((item: SavedTabInfo) => boolean)) => {
+        const found = dockLayoutRef.current.find(
+          typeof idOrFilter === 'function'
+            ? // rc-dock's find expects (item) => boolean where item has 'data' etc.
+              // We adapt our SavedTabInfo predicate to work with rc-dock's items
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              (item) => isTab(item) && idOrFilter(item as unknown as SavedTabInfo)
+            : idOrFilter,
+        );
+        if (!found) return undefined;
+        if (!isTab(found)) return undefined;
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        return found as unknown as TabInfo;
+      },
       testLayout,
     });
     return () => {
