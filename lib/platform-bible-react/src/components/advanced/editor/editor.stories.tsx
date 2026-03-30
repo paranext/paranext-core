@@ -51,12 +51,12 @@ export const WithCustomPlaceholder: Story = {
 export const WithHtmlContent: StoryObj = {
   render: () => {
     const originalHtml = `<p>This is a note with <b>bold text</b> and <i>italic text</i>.</p><p>It also has <u>underlined</u> and <s>strikethrough</s> text.</p><p>This is a <color name="red">paragraph</color> with some <language name="es-015-vaidika">Paratext</language> <strikethrough>specific</strikethrough> tags</p>`;
-    // Storybook render functions are not React components, so hooks must be called with this disable
+    // Storybook render functions don't look like React components, so hooks must be called with this disable
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const [editorState, setEditorState] = useState<SerializedEditorState>(
       htmlToEditorState(originalHtml),
     );
-    // Storybook render function (not a component) - hooks are valid but ESLint cannot detect it
+    // Storybook render functions don't look like React components, so hooks must be called with this disable
     // eslint-disable-next-line react-hooks/rules-of-hooks
     const [htmlOutput, setHtmlOutput] = useState<string>('');
 
