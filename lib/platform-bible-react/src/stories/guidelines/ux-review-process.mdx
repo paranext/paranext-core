@@ -1,0 +1,60 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/UX Review Process" />
+
+# UX Review Process
+
+Guidelines for developers on how to submit work for UX review on Paratext 10.
+
+---
+
+## Submitting a review request
+
+Post UX review requests in the **#ux-review-simple** channel in the **Paratext Discord** — not the Platform Bible Discord.
+
+Include the following in your request:
+
+- A link to the **Jira ticket** — full URL, e.g. `https://paratextstudio.atlassian.net/browse/PT-3901`, not just `PT-3901`
+- A link to the **GitHub PR**
+- A brief description of what was done
+
+Also include a link to the Jira ticket **in the PR description**, so the ticket is traceable from the code change.
+
+---
+
+## Getting UX approval
+
+For UX to approve a UI change, one of the following is required:
+
+- **Before/after videos** of the change (posted in the PR or Jira ticket), or
+- A **call with UX** to walk through the change together
+
+If neither is provided, UX approval cannot be given.
+
+---
+
+## Demo videos
+
+Post demo videos or screen recordings **directly in the GitHub PR description** or **in the Jira ticket**. Do not use Google Drive — videos there are harder to access and don't stay attached to the artifact being reviewed.
+
+---
+
+## Updating the Jira ticket
+
+Before requesting a UX review:
+
+- Check off or explicitly declare which **acceptance criteria** you believe are fulfilled.
+- If any criteria were intentionally deferred or are out of scope, say so explicitly.
+- Don't leave reviewers guessing about what was done.
+
+---
+
+## Linking to reference UI
+
+When your PR description references other parts of the UI for comparison (e.g., "spacing matches the comments panel"), provide **specific file paths**, not just names. This allows reviewers and AI-assisted review tools to actually locate and verify those references.
+
+**Unhelpful:**
+> "Adjusted spacing to be consistent with the rest of the platform."
+
+**Helpful:**
+> "Adjusted spacing to match the toolbar in the comments panel (`src/components/comments/CommentsPanel.tsx`) and the find UI bar (`src/components/find/FindBar.tsx`)."
