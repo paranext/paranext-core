@@ -1,22 +1,40 @@
 import { Meta } from '@storybook/addon-docs/blocks';
 
-<Meta title="Guidelines/UI Work Item Lifecycle" />
+<Meta title="Guidelines/UI Review" />
 
-# UI Work Item Lifecycle
+# UI Review
 
 *Written by Alex Mercado, UX*
 
-How a UI work item moves from grooming to done on Paratext 10.
+A UI work item can only be moved to Done once its UX review property is set to `done` or `review not needed`. This article covers what that review looks like and how to get there.
 
 ---
 
-## Part 1: Setting up the work item
+## Before you request a review
+
+- [ ] Acceptance criteria are checked off or explicitly declared in the Jira work item
+- [ ] Jira UX review property is set to `needs review`
+- [ ] A Storybook story or documentation page exists for the work
+- [ ] The PR description links to any reference UI using specific file paths and [Storybook](https://paranext.github.io/paranext-core/platform-bible-react-storybook/) links
+- [ ] A before/after video or screen recording is posted in the PR description or Jira work item
+
+## Submitting the request
+
+Post in a new thread in [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) on the Paratext Discord. Include:
+
+- A link to the **Jira work item** — full URL, e.g. `https://paratextstudio.atlassian.net/browse/PT-3901`, not just `PT-3901`
+- A link to the **GitHub PR**
+- A brief description of what was done
+
+Also include a link to the Jira work item **in the PR description**, so it is traceable from the code change.
+
+---
+
+## Reference
 
 ### Jira UX review property
 
-Every Jira work item has a **UX review** property. It is **open** by default. A work item can only be moved to Done if the UX review property is set to done or review not needed.
-
-The property should be set during **grooming** to reflect which applies:
+Every Jira work item has a **UX review** property, set during grooming:
 
 | State | Meaning |
 | --- | --- |
@@ -24,26 +42,6 @@ The property should be set during **grooming** to reflect which applies:
 | `needs review` | Developer is ready for UX review |
 | `done` | UX review completed and approved |
 | `review not needed` | UX sign-off explicitly not required for this item |
-
----
-
-## Part 2: Working on the work item
-
-### Task management
-
-Work items are sometimes split into subtasks for engineering reasons. When this happens:
-
-- Subtasks with less definition can be treated as **check-ins** rather than full approvals.
-- The **parent work item** is still the unit that requires UX approval.
-- Don't block subtask PRs waiting for full UX sign-off, but do make sure the parent work item gets a complete UX review before it closes.
-
-### Storybook deliverables
-
-Every UI work item should have a **Storybook deliverable** — a story or documentation page that demonstrates the component or interaction. This makes the work reviewable, testable, and shareable without needing to run the full app.
-
----
-
-## Part 3: Requesting a review
 
 ### Acceptance criteria
 
@@ -57,27 +55,13 @@ Verification is the responsibility of:
 | User interface and experience | UX reviewer | New [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) thread on Paratext Discord — one thread per issue | Subtasks receive a directional review; parent work items require full UX approval. |
 | Functional behavior | QA / testing | New [#10-simple-testing](https://ptb.discord.com/channels/892072317436448768/1451251686709395548) or [#10-power-testing](https://ptb.discord.com/channels/892072317436448768/1451251722340139141) thread on Paratext Discord — one thread per item | Testing happens independently after the code is marked done. |
 
-### Before submitting
+### Task management
 
-Update the Jira work item:
+Work items are sometimes split into subtasks for engineering reasons. Subtasks can be treated as **check-ins** rather than full approvals — the parent work item is still the unit that requires UX sign-off. Don't block subtask PRs waiting for full UX approval, but make sure the parent gets a complete review before it closes.
 
-- Check off or explicitly declare which acceptance criteria you believe are fulfilled.
-- If any criteria were intentionally deferred or are out of scope, say so explicitly and make new work items for them.
-- Don't leave reviewers guessing about what was done.
+### Storybook deliverables
 
-Then set the **UX review property** to **needs review**.
-
-### Submitting the request
-
-Post in a new thread in [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) on the Paratext Discord.
-
-Include the following in your post:
-
-- A link to the **Jira work item** — full URL, e.g. `https://paratextstudio.atlassian.net/browse/PT-3901`, not just `PT-3901`
-- A link to the **GitHub PR**
-- A brief description of what was done
-
-Also include a link to the Jira work item **in the PR description**, so it is traceable from the code change.
+Every UI work item should have a **Storybook deliverable** — a story or documentation page that demonstrates the component or interaction. This makes the work reviewable, testable, and shareable without needing to run the full app.
 
 ### Linking to reference UI
 
@@ -88,10 +72,6 @@ When your PR description references other parts of the UI for comparison, provid
 
 **Helpful:**
 > "Adjusted padding to match the [SearchBar](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/basics-searchbar--docs) (`lib/platform-bible-react/src/components/basics/search-bar.component.tsx`) and the [TabToolbar](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/advanced-tabtoolbar--docs) (`lib/platform-bible-react/src/components/advanced/tab-toolbar/tab-toolbar.component.tsx`)."
-
-### Demo videos
-
-Post demo videos or screen recordings **directly in the GitHub PR description** or **in the Jira work item**. Do not use Google Drive — videos there are harder to access and don't stay attached to the artifact being reviewed.
 
 ### Getting UX approval
 
