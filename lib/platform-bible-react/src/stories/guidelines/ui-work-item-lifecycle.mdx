@@ -25,18 +25,6 @@ The property should be set during **grooming** to reflect which applies:
 | `done` | UX review completed and approved |
 | `review not needed` | UX sign-off explicitly not required for this item |
 
-### Acceptance criteria
-
-Checkboxes on a Jira work item assert that the developer **did the thing** — not that it has been verified. Checking a box is a claim, not a sign-off.
-
-Verification is the responsibility of:
-
-| What | Who verifies | Where to post | Notes |
-| --- | --- | --- | --- |
-| Code quality | Code reviewer | New [#reviews](https://ptb.discord.com/channels/1064938364597436416/1369016160485511222) thread on Platform.Bible Discord | Review happens in Reviewable (built on [GitHub](https://github.com/paranext)) |
-| User interface and experience | UX reviewer | New [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) thread on Paratext Discord — one thread per issue | Subtasks receive a directional review; parent work items require full UX approval. |
-| Functional behavior | QA / testing | New [#10-simple-testing](https://ptb.discord.com/channels/892072317436448768/1451251686709395548) or [#10-power-testing](https://ptb.discord.com/channels/892072317436448768/1451251722340139141) thread on Paratext Discord — one thread per item | Testing happens independently after the code is marked done. |
-
 ---
 
 ## Part 2: Working on the work item
@@ -53,19 +41,21 @@ Work items are sometimes split into subtasks for engineering reasons. When this 
 
 Every UI work item should have a **Storybook deliverable** — a story or documentation page that demonstrates the component or interaction. This makes the work reviewable, testable, and shareable without needing to run the full app.
 
-### Linking to reference UI
-
-When your PR description references other parts of the UI for comparison (e.g., "spacing matches the comments panel"), provide **specific file paths**, not just names. This allows reviewers and AI-assisted review tools to actually locate and verify those references.
-
-**Unhelpful:**
-> "Adjusted spacing to be consistent with the rest of the platform."
-
-**Helpful:**
-> "Adjusted spacing to match the toolbar in the comments panel (`src/components/comments/CommentsPanel.tsx`) and the find UI bar (`src/components/find/FindBar.tsx`)."
-
 ---
 
 ## Part 3: Requesting a review
+
+### Acceptance criteria
+
+Checkboxes on a Jira work item assert that the developer **did the thing** — not that it has been verified. Checking a box is a claim, not a sign-off.
+
+Verification is the responsibility of:
+
+| What | Who verifies | Where to post | Notes |
+| --- | --- | --- | --- |
+| Code quality | Code reviewer | New [#reviews](https://ptb.discord.com/channels/1064938364597436416/1369016160485511222) thread on Platform.Bible Discord | Review happens in Reviewable (built on [GitHub](https://github.com/paranext)) |
+| User interface and experience | UX reviewer | New [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) thread on Paratext Discord — one thread per issue | Subtasks receive a directional review; parent work items require full UX approval. |
+| Functional behavior | QA / testing | New [#10-simple-testing](https://ptb.discord.com/channels/892072317436448768/1451251686709395548) or [#10-power-testing](https://ptb.discord.com/channels/892072317436448768/1451251722340139141) thread on Paratext Discord — one thread per item | Testing happens independently after the code is marked done. |
 
 ### Before submitting
 
@@ -88,6 +78,16 @@ Include the following in your post:
 - A brief description of what was done
 
 Also include a link to the Jira work item **in the PR description**, so it is traceable from the code change.
+
+### Linking to reference UI
+
+When your PR description references other parts of the UI for comparison, provide **specific file paths and Storybook links** — not just names. This allows reviewers and AI-assisted review tools to actually locate and verify those references.
+
+**Unhelpful:**
+> "Adjusted padding to be consistent with the rest of the platform."
+
+**Helpful:**
+> "Adjusted padding to match the [SearchBar](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/basics-searchbar--docs) (`lib/platform-bible-react/src/components/basics/search-bar.component.tsx`) and the [TabToolbar](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/advanced-tabtoolbar--docs) (`lib/platform-bible-react/src/components/advanced/tab-toolbar/tab-toolbar.component.tsx`)."
 
 ### Demo videos
 
