@@ -253,12 +253,18 @@ export async function sendPapiCommand<T = unknown>(
 
 /**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
- * platform-dock layout to appear, indicating extensions have loaded.
+ * platform-dock layout to appear, then for the dialog service to finish registering menu commands
+ * like `platform.about` (the dock can render before that async work completes).
  */
 export async function waitForAppReady(page: Page, timeout = 60_000): Promise<void> {
-  // Wait for the dock layout which indicates the full UI has rendered
   await page.waitForSelector('div[class*="dock-layout"]', {
     state: 'attached',
     timeout,
   });
+  await page.waitForFunction(
+    () =>
+      (globalThis as { __paranextDialogServiceCommandsReady?: boolean })
+        .__paranextDialogServiceCommandsReady === true,
+    { timeout },
+  );
 }
