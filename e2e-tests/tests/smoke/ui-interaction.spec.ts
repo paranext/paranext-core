@@ -76,14 +76,14 @@ test.describe('UI Interaction', () => {
     await expect(async () => {
       const newThemeId = await getThemeId();
       expect(newThemeId).not.toBe(initialThemeId);
-    }).toPass({ timeout: 15_000 });
+    }).toPass({ timeout: 5_000 });
 
     // Toggle back to restore the original theme for subsequent tests
     await themeButton.click();
     await expect(async () => {
       const restoredThemeId = await getThemeId();
       expect(restoredThemeId).toBe(initialThemeId);
-    }).toPass({ timeout: 15_000 });
+    }).toPass({ timeout: 5_000 });
   });
 
   test('should have a functional toolbar with book/chapter control', async ({ mainPage }) => {
