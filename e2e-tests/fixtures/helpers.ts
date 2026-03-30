@@ -59,12 +59,13 @@ export async function launchElectronApp(): Promise<ElectronAppContext> {
   console.log(`Launching Electron app from project root: ${rootDir}`);
 
   // VSCode/Claude Code set ELECTRON_RUN_AS_NODE=1 which forces the Electron
-  // binary to run as plain Node.js. We must remove it.
+  // binary to run as plain Node.js. We must omit it (do not set it to undefined:
+  // Playwright's env type is Record<string, string>).
   // NODE_ENV=development so the renderer loads from the webpack dev server.
+  const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...restEnv } = process.env;
   const env = {
-    ...process.env,
+    ...restEnv,
     NODE_ENV: 'development',
-    ELECTRON_RUN_AS_NODE: undefined,
   };
 
   // Use an isolated user-data directory so the singleton instance lock does not
