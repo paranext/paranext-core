@@ -287,6 +287,27 @@ function toCamelCaseFromKebab(input: string): string {
 }
 
 /**
+ * Format the `extensions/` root folder after a merge from the multi-extension template.
+ *
+ * Currently: deletes `extensions/package-lock.json` if present and unused (it is unused because
+ * `extensions/` is an npm workspace). This is a named function rather than inline code to serve as
+ * a home for future extensions-root formatting steps.
+ */
+export async function formatExtensionsRoot() {
+  const lockFilePath = `${subtreeRootFolder}/package-lock.json`;
+  if (await isUnusedWorkspacePackageLock(lockFilePath)) {
+    const absolutePath = path.resolve(path.join(__dirname, '..', '..', lockFilePath));
+    try {
+      await fs.unlink(absolutePath);
+      console.log(`Deleted unused ${lockFilePath}`);
+    } catch (error: unknown) {
+      // File not present — nothing to delete
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+}
+
+/**
  * Format an extension folder to make the extension template folder work as a subfolder of this repo
  *
  * This function may be called many times for one extension folder, so make sure all operations work
@@ -307,6 +328,19 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
     `${subtreeRootFolder}/`,
     '',
   );
+
+  // Delete package-lock.json if present — it is unused because this folder is an npm workspace
+  const lockFilePath = `${extensionFolderPath}/package-lock.json`;
+  if (await isUnusedWorkspacePackageLock(lockFilePath)) {
+    const absoluteLockPath = path.resolve(path.join(__dirname, '..', '..', lockFilePath));
+    try {
+      await fs.unlink(absoluteLockPath);
+      console.log(`Deleted unused ${lockFilePath}`);
+    } catch (error: unknown) {
+      // File not present — nothing to delete
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
 
   // Get the basename of the extension folder for use in replacements
   const extensionName = path.basename(extensionFolderPath);
