@@ -1,26 +1,32 @@
 import logo from '@assets/icon.png';
 import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
+import ProfileDropdown from '@renderer/components/profile-dropdown.component';
+import { useSimpleModeContext } from '@renderer/components/simple-mode/simple-mode-context';
 import {
-  useData,
-  useDataProvider,
   useLocalizedStrings,
   useScrollGroupScrRef,
   useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
 import { app } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
-import { localThemeService } from '@renderer/services/theme.service-host';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
-import { logger } from '@shared/services/logger.service';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
-import { CircleUserRound, HomeIcon, Moon, Network, Sun } from 'lucide-react';
+import { ChevronDown, HomeIcon, Plus, Settings2 } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
   Button,
   cn,
+  ComboBox,
+  type ComboBoxLabelOption,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   getToolbarOSReservedSpaceClassName,
   ScrollGroupSelector,
   Toolbar,
@@ -30,26 +36,10 @@ import {
   TooltipTrigger,
   usePromise,
 } from 'platform-bible-react';
-import {
-  getErrorMessage,
-  getLocalizeKeysForScrollGroupIds,
-  isPlatformError,
-  LocalizeKey,
-  ScrollGroupId,
-  ThemeDefinitionExpanded,
-} from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { getLocalizeKeysForScrollGroupIds, LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
+import { useCallback, useMemo, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
-
-/** Placeholder theme to detect when we are loading */
-const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
-  themeFamilyId: '',
-  type: 'light',
-  id: 'light',
-  label: '%unused%',
-  cssVariables: {},
-};
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
 
@@ -60,17 +50,43 @@ const availableScrollGroupIdsTop = availableScrollGroupIds.filter(
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIdsTop);
 
-const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
-  '%mainMenu_openParatextRegistration%',
-  '%mainMenu_openInternetSettings%',
-  '%mainMenu_openHome%',
-  '%toolbar_theme_change_to_light%',
-  '%toolbar_theme_change_to_dark%',
-  '%toolbar_theme_loading%',
-  '%toolbar_theme_loading_error%',
-];
+const LOCALIZED_STRING_KEYS: LocalizeKey[] = ['%mainMenu_openHome%'];
 
-export function PlatformBibleToolbar() {
+export type InterfaceMode = 'simple' | 'power';
+
+// #region Simple mode project selector
+
+type ProjectOption = ComboBoxLabelOption & { id: string };
+
+function useProjectOptions(): [ProjectOption[], boolean] {
+  const [projects, isLoading] = usePromise(
+    useCallback(async () => {
+      const allMetadata = await projectLookupService.getMetadataForAllProjects({
+        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+      });
+
+      const options: ProjectOption[] = await Promise.all(
+        allMetadata.map(async (metadata) => {
+          const pdp = await papiFrontendProjectDataProviderService.get(
+            PROJECT_INTERFACE_PLATFORM_BASE,
+            metadata.id,
+          );
+          const name = await pdp.getSetting('platform.name');
+          return { id: metadata.id, label: name };
+        }),
+      );
+
+      return options.sort((a, b) => a.label.localeCompare(b.label));
+    }, []),
+    useMemo(() => [], []),
+  );
+
+  return [projects ?? [], isLoading];
+}
+
+// #endregion
+
+export function PlatformBibleToolbar({ mode = 'power' }: { mode?: InterfaceMode }) {
   // Internal state tracker for scroll group in local storage
   const [scrollGroupIdInternal, setScrollGroupIdInternal] = useState<ScrollGroupId>(() =>
     JSON.parse(localStorage.getItem(scrollGroupIdLocalStorageKey) ?? '0'),
@@ -145,35 +161,19 @@ export function PlatformBibleToolbar() {
     'Marketing Version',
   );
 
-  const themeDataProvider = useDataProvider(themeServiceDataProviderName);
-
-  /** Get the theme on first load so we can show the right symbol on the toolbar */
-  const themeOnFirstLoad = useMemo(() => localThemeService.getCurrentThemeSync(), []);
-
-  const [theme, setTheme] = useData<typeof themeServiceDataProviderName>(
-    themeDataProvider,
-  ).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
-
-  // Warn if the theme came back as a PlatformError. Will handle the PlatformError in the jsx too
-  useEffect(() => {
-    if (isPlatformError(theme))
-      logger.warn(`Error getting theme for toolbar button. ${getErrorMessage(theme)}`);
-  }, [theme]);
-
-  const isThemeLoadedNotError = theme !== DEFAULT_THEME_VALUE && !isPlatformError(theme);
-
-  let themeButtonTooltip = localizedStrings['%toolbar_theme_loading%'];
-  if (!isThemeLoadedNotError)
-    themeButtonTooltip = localizedStrings['%tooltip_theme_loading_error%'];
-  else if (theme.type === 'dark') {
-    themeButtonTooltip = localizedStrings['%toolbar_theme_change_to_light%'];
-  } else {
-    themeButtonTooltip = localizedStrings['%toolbar_theme_change_to_dark%'];
+  if (mode === 'simple') {
+    return (
+      <SimpleToolbar
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        recentScriptureRefs={recentScriptureRefs}
+        addRecentScriptureRef={addRecentScriptureRef}
+        osPlatformToReserveSpaceFor={osPlatformToReserveSpaceFor}
+      />
+    );
   }
 
-  // Get the theme type from the first theme load or the current theme data, whichever is available
-  const themeTypeEffective = isThemeLoadedNotError ? theme.type : themeOnFirstLoad.type;
-
+  // Power mode toolbar
   return (
     <Toolbar
       menuData={menuData}
@@ -207,78 +207,7 @@ export function PlatformBibleToolbar() {
               </Tooltip>
             </TooltipProvider>
           )}
-          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() => {
-                    if (!isThemeLoadedNotError) return;
-
-                    const newThemeType = theme.type === 'dark' ? 'light' : 'dark';
-                    try {
-                      setTheme?.({ type: newThemeType });
-                    } catch (e) {
-                      logger.warn(
-                        `Toolbar caught an error while trying to set theme to ${newThemeType}: ${getErrorMessage(e)}`,
-                      );
-                    }
-                  }}
-                  disabled={!isThemeLoadedNotError}
-                >
-                  {themeTypeEffective === 'dark' ? <Moon /> : <Sun />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="tw-font-light">{themeButtonTooltip}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          {/* This is a placeholder for the actual user menu */}
-          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() => sendCommand('paratextRegistration.showInternetSettings')}
-                >
-                  <Network />
-                </Button>
-              </TooltipTrigger>
-              {localizedStrings['%mainMenu_openInternetSettings%'] && (
-                <TooltipContent>
-                  <p className="tw-font-light">
-                    {localizedStrings['%mainMenu_openInternetSettings%']}
-                  </p>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() => sendCommand('paratextRegistration.showParatextRegistration')}
-                >
-                  <CircleUserRound />
-                </Button>
-              </TooltipTrigger>
-              {localizedStrings['%mainMenu_openParatextRegistration%'] && (
-                <TooltipContent>
-                  <p className="tw-font-light">
-                    {localizedStrings['%mainMenu_openParatextRegistration%']}
-                  </p>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
+          <ProfileDropdown />
         </>
       }
     >
@@ -318,5 +247,120 @@ export function PlatformBibleToolbar() {
     </Toolbar>
   );
 }
+
+// #region Simple mode toolbar
+
+interface SimpleToolbarProps {
+  scrRef: { bookNum: number; chapterNum: number; verseNum: number };
+  setScrRef: (scrRef: { bookNum: number; chapterNum: number; verseNum: number }) => boolean;
+  recentScriptureRefs: { bookNum: number; chapterNum: number; verseNum: number }[];
+  addRecentScriptureRef: (scrRef: {
+    bookNum: number;
+    chapterNum: number;
+    verseNum: number;
+  }) => void;
+  osPlatformToReserveSpaceFor: string | undefined;
+}
+
+function SimpleToolbar({
+  scrRef,
+  setScrRef,
+  recentScriptureRefs,
+  addRecentScriptureRef,
+  osPlatformToReserveSpaceFor,
+}: SimpleToolbarProps) {
+  const { selectedProjectId, setSelectedProjectId } = useSimpleModeContext();
+  const [projectOptions] = useProjectOptions();
+
+  // 3 panel toggle buttons state
+  const [panelToggles, setPanelToggles] = useState([true, true, true]);
+  const togglePanel = (index: number) => {
+    setPanelToggles((prev) => {
+      const next = [...prev];
+      next[index] = !next[index];
+      return next;
+    });
+  };
+
+  const selectedProjectOption = projectOptions.find((p) => p.id === selectedProjectId);
+
+  return (
+    <Toolbar
+      onSelectMenuItem={handleMenuCommand}
+      className={cn(
+        'tw-h-12 tw-bg-transparent',
+        getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
+      )}
+      shouldUseAsAppDragArea
+      appMenuAreaChildren={
+        <div className="tw-flex tw-items-center tw-gap-2">
+          <img width={24} height={24} src={`${logo}`} alt="Application Logo" />
+          <span className="tw-text-sm tw-font-semibold tw-whitespace-nowrap">Platform.Bible</span>
+        </div>
+      }
+      configAreaChildren={
+        <div className="tw-flex tw-items-center tw-gap-1">
+          {/* Plus button */}
+          <Button variant="ghost" size="icon" className="tw-h-8 tw-w-8 tw-flex-shrink-0">
+            <Plus className="tw-h-4 tw-w-4" />
+          </Button>
+          {/* 3 panel toggle buttons - taller than wide rectangles */}
+          {panelToggles.map((isOn, i) => (
+            <button
+              // eslint-disable-next-line react/no-array-index-key
+              key={i}
+              type="button"
+              aria-label={`Toggle panel ${i + 1}`}
+              aria-pressed={isOn}
+              className={cn(
+                'tw-h-7 tw-w-4 tw-rounded-sm tw-border tw-flex-shrink-0 tw-transition-colors',
+                isOn
+                  ? 'tw-bg-primary tw-border-primary'
+                  : 'tw-bg-transparent tw-border-muted-foreground/40',
+              )}
+              onClick={() => togglePanel(i)}
+            />
+          ))}
+          {/* View dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="tw-h-8 tw-gap-1 tw-px-2 tw-flex-shrink-0">
+                <Settings2 className="tw-h-4 tw-w-4" />
+                <span className="tw-text-xs">View</span>
+                <ChevronDown className="tw-h-3 tw-w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem>Layout Options</DropdownMenuItem>
+              <DropdownMenuItem>Reset Layout</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      }
+    >
+      {/* Project selector */}
+      <ComboBox
+        options={projectOptions}
+        value={selectedProjectOption}
+        onChange={(newProject: ProjectOption) => setSelectedProjectId(newProject.id)}
+        getButtonLabel={(project: ProjectOption) => project.label}
+        buttonPlaceholder="Select Project"
+        buttonVariant="outline"
+        buttonClassName="tw-min-w-32 tw-max-w-48 tw-font-normal tw-h-8"
+        popoverContentClassName="tw-w-[300px]"
+      />
+      {/* BCV control */}
+      <BookChapterControl
+        scrRef={scrRef}
+        handleSubmit={setScrRef}
+        className="tw-w-96"
+        recentSearches={recentScriptureRefs}
+        onAddRecentSearch={addRecentScriptureRef}
+      />
+    </Toolbar>
+  );
+}
+
+// #endregion
 
 export default PlatformBibleToolbar;
