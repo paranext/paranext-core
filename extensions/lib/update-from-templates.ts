@@ -9,6 +9,8 @@ import {
   execCommand,
   fetchFromSingleTemplate,
   formatExtensionFolder,
+  formatExtensionsRoot,
+  resolvePackageLockConflicts,
 } from './git.util';
 import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webpack.util';
 
@@ -30,9 +32,34 @@ import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webp
       `git subtree pull --prefix ${subtreeRootFolder} ${MULTI_TEMPLATE_NAME} ${MULTI_TEMPLATE_BRANCH} --squash`,
     );
   } catch (e) {
-    console.error(`Error merging from ${MULTI_TEMPLATE_NAME}: ${e}`);
-    return 1;
+    const { resolved, remainingConflicts } = await resolvePackageLockConflicts();
+
+    if (resolved > 0 && remainingConflicts.length === 0) {
+      // MERGE_HEAD exists; git prepared a squash-merge commit message. --no-edit reuses it.
+      await execCommand('git commit --no-edit');
+      console.log(
+        `Auto-resolved ${resolved} package-lock.json conflict(s) by deleting unused lock files. Continuing.`,
+      );
+      // Fall through — do not return 1
+    } else if (resolved > 0 && remainingConflicts.length > 0) {
+      console.error(
+        `Auto-resolved package-lock.json conflicts, but other merge conflicts remain:\n  ${remainingConflicts.join('\n  ')}`,
+      );
+      return 1;
+    } else if (remainingConflicts.length > 0) {
+      // No package-lock.json conflicts resolved — other conflicts exist
+      console.error(
+        `Merge conflicts remain:\n  ${remainingConflicts.join('\n  ')}\n\nOriginal error: ${e}`,
+      );
+      return 1;
+    } else {
+      // No conflict lines at all — error was something other than a merge conflict
+      console.error(`Error merging from ${MULTI_TEMPLATE_NAME}: ${e}`);
+      return 1;
+    }
   }
+
+  await formatExtensionsRoot();
 
   // Fetch latest on SINGLE_TEMPLATE_REMOTE_NAME to make sure we're up to date
   if (!(await fetchFromSingleTemplate())) return 1;
@@ -74,10 +101,32 @@ import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webp
           `${ext.dirName} was never added as a subtree of ${SINGLE_TEMPLATE_NAME}. Feel free to ignore this if this folder is not supposed to be based on ${SINGLE_TEMPLATE_NAME}.\nIf this folder is supposed to be based on ${SINGLE_TEMPLATE_NAME}, move the folder elsewhere, run \`npm run create-extension -- ${ext.dirName}\`, drop the folder back in, and evaluate all working changes before committing.\n`,
         );
       else {
-        console.error(`Error pulling from ${SINGLE_TEMPLATE_NAME} to ${ext.dirName}: ${e}`);
         // You can only fix merge conflicts on one subtree at a time, so stop
         // if we hit an error like merge conflicts
-        return 1;
+        // eslint-disable-next-line no-await-in-loop
+        const { resolved, remainingConflicts } = await resolvePackageLockConflicts();
+
+        if (resolved > 0 && remainingConflicts.length === 0) {
+          // eslint-disable-next-line no-await-in-loop
+          await execCommand('git commit --no-edit');
+          console.log(
+            `Auto-resolved ${resolved} package-lock.json conflict(s) in ${ext.dirName} by deleting unused lock files. Continuing.`,
+          );
+          extensionsBasedOnTemplate.push(ext);
+        } else if (resolved > 0 && remainingConflicts.length > 0) {
+          console.error(
+            `Auto-resolved package-lock.json conflicts in ${ext.dirName}, but other merge conflicts remain:\n  ${remainingConflicts.join('\n  ')}`,
+          );
+          return 1;
+        } else if (remainingConflicts.length > 0) {
+          console.error(
+            `Merge conflicts in ${ext.dirName}:\n  ${remainingConflicts.join('\n  ')}\n\nOriginal error: ${e}`,
+          );
+          return 1;
+        } else {
+          console.error(`Error pulling from ${SINGLE_TEMPLATE_NAME} to ${ext.dirName}: ${e}`);
+          return 1;
+        }
       }
     }
   }
