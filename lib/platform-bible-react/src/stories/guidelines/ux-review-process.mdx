@@ -39,11 +39,37 @@ Post demo videos or screen recordings **directly in the GitHub PR description** 
 
 ---
 
-## Updating the Jira ticket
+## Task management
 
-Before requesting a UX review:
+### Subtasks and engineering splits
 
-- Check off or explicitly declare which **acceptance criteria** you believe are fulfilled.
+Tasks are sometimes split into subtasks for engineering reasons. When this happens:
+
+- Subtasks with less definition can be treated as **check-ins** rather than full approvals.
+- The **parent task** is still the unit that requires UX approval.
+- Don't block subtask PRs waiting for full UX sign-off, but do make sure the parent task gets a complete UX review before it closes.
+
+### Storybook deliverables
+
+Every UI work item should have a **Storybook deliverable** — a story or documentation page that demonstrates the component or interaction. This makes the work reviewable, testable, and shareable without needing to run the full app.
+
+---
+
+## Acceptance criteria
+
+Checkboxes on a Jira ticket assert that the developer **did the thing** — not that it has been verified. Checking a box is a claim, not a sign-off.
+
+Verification is the responsibility of:
+
+| What | Who verifies |
+| --- | --- |
+| Code correctness | Code reviewer |
+| UI elements | UX reviewer |
+| Functional behavior | QA / testing |
+
+Before requesting a UX review, update the ticket:
+
+- Check off or explicitly declare which acceptance criteria you believe are fulfilled.
 - If any criteria were intentionally deferred or are out of scope, say so explicitly.
 - Don't leave reviewers guessing about what was done.
 
