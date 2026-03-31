@@ -1,6 +1,6 @@
 import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
-import { getErrorMessage } from 'platform-bible-utils';
+
 import { CheckResultsInvalidated } from 'platform-scripture';
 import {
   ChecksSidePanelWebViewOptions,
@@ -490,11 +490,14 @@ export async function activate(context: ExecutionActivationContext) {
   );
 
   const annotationStyleDp = await papi.dataProviders.get('platformScriptureEditor.annotationStyle');
-  const findAnnotationStyleDisposer = await annotationStyleDp?.registerAnnotationStyle(
+  const findAnnotationStyleNonce = await annotationStyleDp?.registerAnnotationStyle(
     'find-result-highlight',
     { backgroundColor: 'rgba(251, 191, 36, 0.4)' },
   );
-  if (findAnnotationStyleDisposer) context.registrations.add(findAnnotationStyleDisposer);
+  if (findAnnotationStyleNonce)
+    context.registrations.add(async () => {
+      await annotationStyleDp?.deleteAnnotationStyle(findAnnotationStyleNonce);
+    });
 
   logger.debug('platformScripture is finished activating!');
 }
