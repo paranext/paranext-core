@@ -489,15 +489,12 @@ export async function activate(context: ExecutionActivationContext) {
     checkAggregatorService.dispose,
   );
 
-  // Register find-result-highlight annotation style for use in Scripture editors (fire-and-forget)
-  papi.dataProviders
-    .get('platformScriptureEditor.annotationStyle')
-    .then((dp) =>
-      dp?.registerAnnotationStyle('find-result-highlight', {
-        backgroundColor: 'rgba(251, 191, 36, 0.4)',
-      }),
-    )
-    .catch((e) => logger.debug(`platformScripture: find annotation style: ${getErrorMessage(e)}`));
+  const annotationStyleDp = await papi.dataProviders.get('platformScriptureEditor.annotationStyle');
+  const findAnnotationStyleDisposer = await annotationStyleDp?.registerAnnotationStyle(
+    'find-result-highlight',
+    { backgroundColor: 'rgba(251, 191, 36, 0.4)' },
+  );
+  if (findAnnotationStyleDisposer) context.registrations.add(findAnnotationStyleDisposer);
 
   logger.debug('platformScripture is finished activating!');
 }

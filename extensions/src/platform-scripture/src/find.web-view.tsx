@@ -195,11 +195,17 @@ global.webViewComponent = function FindWebView({
     [pendingHistory, recentSearches],
   );
 
+  // Track the last term written to platform settings so repeated calls for the same term
+  // (e.g. clicking through results) don't trigger redundant setRecentSearches writes.
+  const lastPersistedHistoryTermRef = useRef<string | undefined>(undefined);
   const addToHistory = useCallback(
     (term: string) => {
       if (!term) return;
       setPendingHistory((prev) => [term, ...prev.filter((s) => s !== term)]);
-      addRecentSearchItem(term);
+      if (term !== lastPersistedHistoryTermRef.current) {
+        lastPersistedHistoryTermRef.current = term;
+        addRecentSearchItem(term);
+      }
     },
     [addRecentSearchItem],
   );
@@ -553,10 +559,6 @@ global.webViewComponent = function FindWebView({
   const initialSearchTriggeredRef = useRef(false);
   // Skips adding to history on the initial render of the options-change effect.
   const isInitialOptionsRenderRef = useRef(true);
-  // Tracks the last search term reached by growing/typing (not deleting). Used so that clearing
-  // the field character-by-character saves the full term ("god") to history rather than the partial
-  // React state value from the previous render ("g").
-  const lastTypedSearchTermRef = useRef(searchTerm);
 
   const handleStartSearch = useCallback(
     async (isExplicitSearch = false) => {
@@ -1403,15 +1405,9 @@ global.webViewComponent = function FindWebView({
       <FindHeader
         searchTerm={searchTerm}
         onSearchTermChange={(value) => {
-          if (!value) {
-            if (lastTypedSearchTermRef.current) addToHistory(lastTypedSearchTermRef.current);
-          } else if (value.length >= searchTerm.length) {
-            lastTypedSearchTermRef.current = value;
-          }
           setSearchTerm(value);
         }}
         onAddToHistory={() => {
-          lastTypedSearchTermRef.current = searchTerm;
           addToHistory(searchTerm);
         }}
         onSearchSubmit={() => handleStartSearch(true)}
@@ -1565,9 +1561,7 @@ global.webViewComponent = function FindWebView({
                   ({ originalIndex }) => originalIndex === focusedResultIndex,
                 )}
                 replaceConfig={
-                  activeMode === 'replace' && replaceTerm
-                    ? { term: replaceTerm, preserveCase }
-                    : undefined
+                  activeMode === 'replace' ? { term: replaceTerm, preserveCase } : undefined
                 }
                 onResultClick={(result, indexInBookResults) =>
                   handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
