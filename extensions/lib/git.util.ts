@@ -6,23 +6,14 @@ import replaceInFile from 'replace-in-file';
 import { minimatch } from 'minimatch';
 import { subtreeRootFolder } from '../webpack/webpack.util';
 
+// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/git.util.ts
+
 const execAsync = promisify(exec);
 
 /** Absolute path to the repo root directory */
 const repoRoot = path.resolve(path.join(__dirname, '..', '..'));
 
-/** Cached npm workspaces list from root package.json, loaded once per process */
-let cachedWorkspaces: string[] | undefined;
-
-async function getWorkspaces(): Promise<string[]> {
-  if (cachedWorkspaces !== undefined) return cachedWorkspaces;
-  const content = await fs.readFile(path.join(repoRoot, 'package.json'), 'utf-8');
-  // JSON.parse returns unknown; we expect a package.json shape
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const packageJson = JSON.parse(content) as { workspaces?: string[] };
-  cachedWorkspaces = packageJson.workspaces ?? [];
-  return cachedWorkspaces;
-}
+// #endregion
 
 /** The name for the multi-extension template remote as used in the git scripts */
 export const MULTI_TEMPLATE_NAME = 'paranext-multi-extension-template';
@@ -36,6 +27,19 @@ export const SINGLE_TEMPLATE_NAME = 'paranext-extension-template';
 export const SINGLE_TEMPLATE_URL = 'https://github.com/paranext/paranext-extension-template';
 /** The branch to use in pulling changes from `SINGLE_TEMPLATE_REMOTE_NAME` in the git scripts */
 export const SINGLE_TEMPLATE_BRANCH = 'main';
+
+/** Cached npm workspaces list from root package.json, loaded once per process */
+let cachedWorkspaces: string[] | undefined;
+
+async function getWorkspaces(): Promise<string[]> {
+  if (cachedWorkspaces !== undefined) return cachedWorkspaces;
+  const content = await fs.readFile(path.join(repoRoot, 'package.json'), 'utf-8');
+  // JSON.parse returns unknown; we expect a package.json shape
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const packageJson = JSON.parse(content) as { workspaces?: string[] };
+  cachedWorkspaces = packageJson.workspaces ?? [];
+  return cachedWorkspaces;
+}
 
 // #region localization
 
@@ -228,6 +232,8 @@ export async function resolvePackageLockConflicts(): Promise<{
   const packageLockPaths: string[] = [];
   const otherConflictPaths: string[] = [];
 
+  // Push order is non-deterministic across concurrent promises, but order doesn't matter here:
+  // all package-lock files get removed and remainingConflicts is only used for reporting.
   await Promise.all(
     conflictLines.map(async (line) => {
       const filePath = line.slice(3); // skip "XY "
