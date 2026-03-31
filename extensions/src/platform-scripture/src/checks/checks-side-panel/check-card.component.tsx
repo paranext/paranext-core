@@ -225,7 +225,7 @@ export function CheckCard({
       onSelect={() => handleSelectCheck(checkId)}
       isDenied={isFixedOrDenied}
       dropdownContent={dropdownContent}
-      additionalSelectedContent={additionalSelectedContent}
+      additionalContent={additionalSelectedContent}
     >
       {cardContent}
     </ResultsCard>
