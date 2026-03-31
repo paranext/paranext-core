@@ -36,8 +36,6 @@
     "experimentalDecorators": true,
     // We want sourcemaps so we can bundle them with webpack
     "sourceMap": true,
-    // We need a baseurl for webpack's tsconfig path aliases plugin
-    "baseUrl": "./",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
