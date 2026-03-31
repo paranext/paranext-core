@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // "6.0" silences the baseUrl deprecation warning in TypeScript 6.x (used by dts-bundle-generator)
+    "ignoreDeprecations": "6.0",
+    // dts-bundle-generator generates virtual .d.ts files that retain side-effect CSS imports.
+    // TS 5.8+ treats unresolvable side-effect imports in .d.ts as errors (TS2882) even though
+    // the CSS files exist on disk and are handled by the bundler at runtime.
+    "noUncheckedSideEffectImports": false
+  }
+}
