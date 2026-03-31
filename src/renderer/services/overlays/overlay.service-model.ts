@@ -76,7 +76,8 @@ export interface PopoverRequest {
   dismissOnClickOutside?: boolean;
   /**
    * Automatically dismiss the popover after this many milliseconds. Useful for transient
-   * notifications. If omitted or `0`, the popover stays open until explicitly dismissed.
+   * notifications. If omitted, the popover stays open until explicitly dismissed. Must be
+   * positive.
    */
   dismissAfterMs?: number;
   /** Maximum width of the popover in pixels. If omitted, uses a default max width. */

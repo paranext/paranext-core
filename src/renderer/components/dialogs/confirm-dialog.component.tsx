@@ -23,7 +23,6 @@ function ConfirmDialog({
   cancelLabel,
   destructive,
   submitDialog,
-  cancelDialog,
 }: DialogProps<boolean> &
   Omit<ConfirmDialogOptions, 'prompt'> & { prompt?: ConfirmDialogOptions['prompt'] }) {
   return (
@@ -33,7 +32,7 @@ function ConfirmDialog({
       </DialogHeader>
       <DialogDescription>{prompt}</DialogDescription>
       <DialogFooter>
-        <Button variant="outline" onClick={() => cancelDialog()}>
+        <Button variant="outline" onClick={() => submitDialog(false)}>
           {cancelLabel ?? FALLBACK_CANCEL_LABEL}
         </Button>
         <Button
@@ -50,7 +49,7 @@ function ConfirmDialog({
 export const CONFIRM_DIALOG: DialogDefinition<typeof CONFIRM_DIALOG_TYPE> = Object.freeze({
   ...DIALOG_BASE,
   tabType: CONFIRM_DIALOG_TYPE,
-  defaultTitle: 'Confirm',
+  defaultTitle: '%overlay_dialog_title_confirm%',
   initialSize: { width: 400, height: 200 },
   dialogRole: 'alertdialog',
   Component: ConfirmDialog,

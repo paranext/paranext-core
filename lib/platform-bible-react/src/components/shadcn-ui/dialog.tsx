@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { readDirection } from '@/utils/dir-helper.util';
 
+// CUSTOM JSDoc comments added to all components for documentation
 /**
  * The Dialog component displays a modal dialog window. Built on Radix UI's Dialog component and
  * styled by Shadcn UI.
@@ -13,8 +14,6 @@ import { readDirection } from '@/utils/dir-helper.util';
  * Documentation https://www.radix-ui.com/docs/primitives/components/dialog
  */
 const Dialog = DialogPrimitive.Root;
-
-// CUSTOM JSDoc comments added to all sub-components for documentation
 /** Button or element that opens the dialog when clicked. */
 const DialogTrigger = DialogPrimitive.Trigger;
 
