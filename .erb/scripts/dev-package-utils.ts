@@ -81,6 +81,17 @@ export function checkoutRevision(folder: string, revision: string): void {
   execSync('git fetch origin', { stdio: 'inherit', cwd: repoPath });
   console.log(`Checking out ${revision} in ${folder}...`);
   execSync(`git checkout "${revision}"`, { stdio: 'inherit', cwd: repoPath });
+  // Pull to get the latest commits if we're on a branch. This is a no-op for detached HEADs
+  // (tags or commit hashes), which will log a message and continue.
+  try {
+    execSync('git pull', { stdio: 'inherit', cwd: repoPath });
+  } catch {
+    console.log(
+      `Could not pull in ${
+        folder
+      } — likely a detached HEAD (tag or commit hash). Continuing with checked-out revision.`,
+    );
+  }
 }
 
 export function execInDevPackage(folder: string, cmd: string): void {
