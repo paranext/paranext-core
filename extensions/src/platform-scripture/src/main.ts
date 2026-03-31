@@ -191,11 +191,15 @@ async function openFind(
   );
 
   // If found an existing web view, then reloads it if the project is different or if there is
-  // selected text to pre-fill (so the find panel picks up the new search term)
+  // selected text to pre-fill that differs from the current search term (so the find panel picks
+  // up the new search term without unnecessary reloads)
   if (findWebViewId) {
     const existingFindWebViewDefinition =
       await papi.webViews.getOpenWebViewDefinition(findWebViewId);
-    if (existingFindWebViewDefinition?.projectId !== projectId || options.initialSearchText) {
+    const existingSearchTerm = existingFindWebViewDefinition?.state?.findSearchTerm;
+    const searchTermChanged =
+      options.initialSearchText && options.initialSearchText !== existingSearchTerm;
+    if (existingFindWebViewDefinition?.projectId !== projectId || searchTermChanged) {
       await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
     }
   } else {
@@ -497,6 +501,7 @@ export async function activate(context: ExecutionActivationContext) {
   if (findAnnotationStyleNonce)
     context.registrations.add(async () => {
       await annotationStyleDp?.deleteAnnotationStyle(findAnnotationStyleNonce);
+      return true;
     });
 
   logger.debug('platformScripture is finished activating!');
