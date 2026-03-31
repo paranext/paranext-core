@@ -1,43 +1,46 @@
 /**
  * Script to automatically link `@eten-tech-foundation/platform-editor` and
- * `@eten-tech-foundation/scripture-utilities` via yalc if the scripture-editors folder exists next
- * to this repo. This means those packages will be used from the local dev versions in
- * scripture-editors instead of the published versions.
+ * `@eten-tech-foundation/scripture-utilities` via yalc. If the scripture-editors repo is not
+ * present next to this repo or in `dev-packages`, it will be cloned automatically.
  *
- * This script will:
+ * This script will, for each dev repo:
  *
- * 1. Run devpub in scripture-editors for both packages
- * 2. Link the packages via yalc in this repo
+ * 1. Clone the repo into `dev-packages` if it doesn't exist in either location
+ * 2. Verify there are no working changes (to avoid accidentally overwriting them)
+ * 3. Check out the specified revision
+ * 4. Run `pnpm install` in the repo
+ * 5. Run devpub in the repo for each package
+ * 6. Link the packages via yalc in this repo
  */
 
 import {
-  isAnyDevPackagePresent,
-  devPackageExists,
+  DEV_REPOS,
+  cloneRepoIfNeeded,
+  checkNoWorkingChanges,
+  checkoutRevision,
   execPnpmInDevPackage,
   execInRepo,
-  DEV_PACKAGES,
 } from './dev-package-utils';
 
 function linkDevPackages(): void {
-  if (!isAnyDevPackagePresent()) {
-    console.log('dev packages not found - skipping yalc linking');
-    return;
-  }
-
-  console.log('dev packages found - linking via yalc');
+  console.log('Setting up dev packages via yalc...');
 
   try {
-    DEV_PACKAGES.forEach((p) => {
-      if (!devPackageExists(p.folder)) {
-        console.log(`Skipping ${p.devpubTarget} — folder not found for ${p.folder}`);
-        return;
-      }
+    DEV_REPOS.forEach((repo) => {
+      cloneRepoIfNeeded(repo);
+      checkNoWorkingChanges(repo.folder);
+      checkoutRevision(repo.folder, repo.revision);
 
-      console.log(`Running devpub for ${p.devpubTarget} in ${p.folder}...`);
-      execPnpmInDevPackage(p.folder, `nx devpub ${p.devpubTarget}`);
+      console.log(`Running pnpm install in ${repo.folder}...`);
+      execPnpmInDevPackage(repo.folder, 'install');
 
-      console.log(`Running ${p.repoLinkScript}:link in repo...`);
-      execInRepo(`npm run ${p.repoLinkScript}:link`);
+      repo.devPackages.forEach((p) => {
+        console.log(`Running devpub for ${p.devpubTarget} in ${repo.folder}...`);
+        execPnpmInDevPackage(repo.folder, `nx devpub ${p.devpubTarget}`);
+
+        console.log(`Running ${p.repoLinkScript}:link in repo...`);
+        execInRepo(`npm run ${p.repoLinkScript}:link`);
+      });
     });
 
     console.log('Successfully linked dev packages via yalc');
