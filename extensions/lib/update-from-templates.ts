@@ -72,7 +72,7 @@ async function handleConflicts(
       `git subtree pull --prefix ${subtreeRootFolder} ${MULTI_TEMPLATE_NAME} ${MULTI_TEMPLATE_BRANCH} --squash`,
     );
   } catch (e) {
-    if ((await handleConflicts(MULTI_TEMPLATE_NAME, e)) === 'failed') return 1;
+    if ((await handleConflicts('extensions root', e)) === 'failed') return 1;
     // Fall through — do not return 1
   }
 
