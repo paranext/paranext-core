@@ -244,7 +244,7 @@ export function FindHeader({
               }
             }}
             placeholder={localizedStrings.searchPlaceholder}
-            className={`tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
+            className={`scripture-font tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
           />
           {searchTerm && (
             <button
@@ -262,7 +262,7 @@ export function FindHeader({
           )}
         </div>
         <RecentSearches
-          classNameForItems=""
+          classNameForItems="scripture-font"
           recentSearches={recentSearches}
           onSearchItemSelect={onRecentSearchSelect}
           ariaLabel={localizedStrings.showRecentSearches}
@@ -298,7 +298,7 @@ export function FindHeader({
               value={replaceTerm}
               onChange={(e) => onReplaceTermChange(e.target.value)}
               placeholder={localizedStrings.replacePlaceholder}
-              className="tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4"
+              className="scripture-font tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4"
             />
           </div>
           <div className="tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-2">
