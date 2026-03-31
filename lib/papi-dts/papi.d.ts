@@ -7684,7 +7684,12 @@ declare module 'renderer/services/overlays/overlay-store' {
   export function subscribe(listener: () => void): () => void;
   /** Get a specific overlay by id, or undefined if not found */
   export function getOverlayById(id: string): OverlayEntry | undefined;
-  /** Removes all overlays from the store and notifies listeners. Only exported for use in tests. */
+  /**
+   * Removes all overlays from the store and notifies listeners.
+   *
+   * WARNING: Test-only. Does not resolve or reject pending overlay promises. Using this in production
+   * would cause callers awaiting overlay results to hang indefinitely. @internal
+   */
   export function clearAllOverlays(): void;
   /**
    * Updates the content of a popover overlay and notifies subscribers.
@@ -7856,7 +7861,8 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     dismissOnClickOutside?: boolean;
     /**
      * Automatically dismiss the popover after this many milliseconds. Useful for transient
-     * notifications. If omitted or `0`, the popover stays open until explicitly dismissed.
+     * notifications. If omitted, the popover stays open until explicitly dismissed. Must be
+     * positive.
      */
     dismissAfterMs?: number;
     /** Maximum width of the popover in pixels. If omitted, uses a default max width. */
@@ -10216,7 +10222,7 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
 declare module 'renderer/services/overlays/overlay.service-host' {
   import type { ReactElement } from 'react';
   import { IOverlayService } from 'renderer/services/overlays/overlay.service-model';
-  /** Resets debounce tracking state. Exported for use in tests only. */
+  /** Resets debounce tracking state. Exported for use in tests only. @internal */
   export function resetDebounceState(): void;
   /**
    * Shows a modal dialog overlay with any dialog component. Called internally by the dialog service

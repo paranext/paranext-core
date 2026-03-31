@@ -96,7 +96,7 @@ function PaletteItem({
       </div>
       {item.badge && (
         <span
-          className="tw-ml-auto tw-shrink-0 tw-rounded tw-bg-muted tw-py-0.5 tw-text-xs tw-text-muted-foreground"
+          className="tw-ms-auto tw-shrink-0 tw-rounded tw-bg-muted tw-py-0.5 tw-text-xs tw-text-muted-foreground"
           style={{ paddingLeft: '0.375rem', paddingRight: '0.375rem' }}
         >
           {item.badge}

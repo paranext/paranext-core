@@ -7,24 +7,42 @@ import { isString } from './util';
  * @see https://grpc.io/docs/guides/status-codes/ for the original gRPC specification
  */
 
+/**
+ * The operation was aborted, typically due to a concurrency issue such as a newer request replacing
+ * an in-flight one, or a transaction abort.
+ */
+export const ABORTED = 'ABORTED';
+/** The entity that a client attempted to create already exists. */
+export const ALREADY_EXISTS = 'ALREADY_EXISTS';
 /** The operation was cancelled, typically by the caller. */
 export const CANCELLED = 'CANCELLED';
+/** Unrecoverable data loss or corruption. */
+export const DATA_LOSS = 'DATA_LOSS';
+/** The deadline expired before the operation could complete. */
+export const DEADLINE_EXCEEDED = 'DEADLINE_EXCEEDED';
 /**
- * Unknown error. This may be returned when a received error code is not recognized or is not
- * applicable in the current context.
+ * The operation was rejected because the system is not in a state required for the operation's
+ * execution. For example, a WebView must be visible to show an overlay. Unlike
+ * {@link INVALID_ARGUMENT}, this error indicates a problem with the system state, not the request.
  */
-export const UNKNOWN = 'UNKNOWN';
+export const FAILED_PRECONDITION = 'FAILED_PRECONDITION';
+/**
+ * Internal error. This means that some invariants expected by the underlying system have been
+ * broken. This is a serious error; it means the system is in an unexpected state.
+ */
+export const INTERNAL = 'INTERNAL';
 /**
  * The client specified an invalid argument. Indicates arguments that are problematic regardless of
  * the state of the system (e.g., a malformed request, empty required field, invalid enum value).
  */
 export const INVALID_ARGUMENT = 'INVALID_ARGUMENT';
-/** The deadline expired before the operation could complete. */
-export const DEADLINE_EXCEEDED = 'DEADLINE_EXCEEDED';
 /** The requested entity (e.g., file, resource, overlay) was not found. */
 export const NOT_FOUND = 'NOT_FOUND';
-/** The entity that a client attempted to create already exists. */
-export const ALREADY_EXISTS = 'ALREADY_EXISTS';
+/**
+ * The operation was attempted past the valid range. Unlike {@link INVALID_ARGUMENT}, this error
+ * indicates a problem that may be fixed if the system state changes.
+ */
+export const OUT_OF_RANGE = 'OUT_OF_RANGE';
 /**
  * The caller does not have permission to execute the specified operation. Must not be used for
  * authentication failures (use {@link UNAUTHENTICATED} instead).
@@ -36,41 +54,23 @@ export const PERMISSION_DENIED = 'PERMISSION_DENIED';
  */
 export const RESOURCE_EXHAUSTED = 'RESOURCE_EXHAUSTED';
 /**
- * The operation was rejected because the system is not in a state required for the operation's
- * execution. For example, a WebView must be visible to show an overlay. Unlike
- * {@link INVALID_ARGUMENT}, this error indicates a problem with the system state, not the request.
- */
-export const FAILED_PRECONDITION = 'FAILED_PRECONDITION';
-/**
- * The operation was aborted, typically due to a concurrency issue such as a newer request replacing
- * an in-flight one, or a transaction abort.
- */
-export const ABORTED = 'ABORTED';
-/**
- * The operation was attempted past the valid range. Unlike {@link INVALID_ARGUMENT}, this error
- * indicates a problem that may be fixed if the system state changes.
- */
-export const OUT_OF_RANGE = 'OUT_OF_RANGE';
-/** The operation is not implemented or is not supported/enabled in this service. */
-export const UNIMPLEMENTED = 'UNIMPLEMENTED';
-/**
- * Internal error. This means that some invariants expected by the underlying system have been
- * broken. This is a serious error; it means the system is in an unexpected state.
- */
-export const INTERNAL = 'INTERNAL';
-/**
- * The service is currently unavailable. This is most likely a transient condition, which can be
- * corrected by retrying with a backoff.
- */
-export const UNAVAILABLE = 'UNAVAILABLE';
-/** Unrecoverable data loss or corruption. */
-export const DATA_LOSS = 'DATA_LOSS';
-/**
  * The request does not have valid authentication credentials for the operation. Use
  * {@link PERMISSION_DENIED} for authorization failures where the caller is authenticated but not
  * permitted.
  */
 export const UNAUTHENTICATED = 'UNAUTHENTICATED';
+/**
+ * The service is currently unavailable. This is most likely a transient condition, which can be
+ * corrected by retrying with a backoff.
+ */
+export const UNAVAILABLE = 'UNAVAILABLE';
+/** The operation is not implemented or is not supported/enabled in this service. */
+export const UNIMPLEMENTED = 'UNIMPLEMENTED';
+/**
+ * Unknown error. This may be returned when a received error code is not recognized or is not
+ * applicable in the current context.
+ */
+export const UNKNOWN = 'UNKNOWN';
 
 /**
  * Union of all valid platform error codes. Based on gRPC status codes.
@@ -78,22 +78,22 @@ export const UNAUTHENTICATED = 'UNAUTHENTICATED';
  * @see https://grpc.io/docs/guides/status-codes/
  */
 export type PlatformErrorCode =
-  | typeof CANCELLED
-  | typeof UNKNOWN
-  | typeof INVALID_ARGUMENT
-  | typeof DEADLINE_EXCEEDED
-  | typeof NOT_FOUND
+  | typeof ABORTED
   | typeof ALREADY_EXISTS
+  | typeof CANCELLED
+  | typeof DATA_LOSS
+  | typeof DEADLINE_EXCEEDED
+  | typeof FAILED_PRECONDITION
+  | typeof INTERNAL
+  | typeof INVALID_ARGUMENT
+  | typeof NOT_FOUND
+  | typeof OUT_OF_RANGE
   | typeof PERMISSION_DENIED
   | typeof RESOURCE_EXHAUSTED
-  | typeof FAILED_PRECONDITION
-  | typeof ABORTED
-  | typeof OUT_OF_RANGE
-  | typeof UNIMPLEMENTED
-  | typeof INTERNAL
+  | typeof UNAUTHENTICATED
   | typeof UNAVAILABLE
-  | typeof DATA_LOSS
-  | typeof UNAUTHENTICATED;
+  | typeof UNIMPLEMENTED
+  | typeof UNKNOWN;
 
 /** The version of the PlatformError type */
 export const PLATFORM_ERROR_VERSION = 1;

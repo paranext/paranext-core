@@ -51,7 +51,7 @@ describe('ConfirmDialog', () => {
       expect(props.cancelDialog).not.toHaveBeenCalled();
     });
 
-    it('calls cancelDialog when Cancel is clicked', () => {
+    it('calls submitDialog(false) when Cancel is clicked', () => {
       const props = makeProps();
       render(
         <Dialog open modal={false}>
@@ -60,8 +60,8 @@ describe('ConfirmDialog', () => {
       );
 
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-      expect(props.cancelDialog).toHaveBeenCalled();
-      expect(props.submitDialog).not.toHaveBeenCalled();
+      expect(props.submitDialog).toHaveBeenCalledWith(false);
+      expect(props.cancelDialog).not.toHaveBeenCalled();
     });
 
     it('applies destructive variant to OK button when destructive is true', () => {
