@@ -153,7 +153,10 @@ async function openChecksSidePanel(
   return sidePanelWebViewId;
 }
 
-async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
+async function openFind(
+  editorWebViewId: string | undefined,
+  selectedText?: string,
+): Promise<string | undefined> {
   let projectId: FindWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
   let editorScrollGroupId: FindWebViewOptions['editorScrollGroupId'];
@@ -177,6 +180,7 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
     editorScrollGroupId,
     bringToFront: true,
     editorWebViewId,
+    initialSearchText: selectedText || undefined,
   };
 
   // First tries to open an existing find web view
@@ -186,12 +190,12 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
     { ...options, existingId: '?', createNewIfNotFound: false },
   );
 
-  // If found an existing web view, then reloads it only if the project definition is different
+  // If found an existing web view, then reloads it if the project is different or if there is
+  // selected text to pre-fill (so the find panel picks up the new search term)
   if (findWebViewId) {
     const existingFindWebViewDefinition =
       await papi.webViews.getOpenWebViewDefinition(findWebViewId);
-    // If the existing web view has a project id different to the current one, then prompts a reload
-    if (existingFindWebViewDefinition?.projectId !== projectId) {
+    if (existingFindWebViewDefinition?.projectId !== projectId || options.initialSearchText) {
       await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
     }
   } else {
@@ -404,6 +408,12 @@ export async function activate(context: ExecutionActivationContext) {
           name: 'webViewId',
           required: false,
           summary: 'The ID of the web view tied to the project that we are searching in',
+          schema: { type: 'string' },
+        },
+        {
+          name: 'selectedText',
+          required: false,
+          summary: 'Text to pre-fill in the search field and immediately search for',
           schema: { type: 'string' },
         },
       ],

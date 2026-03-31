@@ -44,6 +44,8 @@ type FindFiltersProps = {
   isRegexAllowed: boolean;
   setIsRegexAllowed: (value: boolean) => void;
   localizedStrings: FindFiltersStrings;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export function FindFilters({
@@ -57,9 +59,11 @@ export function FindFilters({
   isRegexAllowed,
   setIsRegexAllowed,
   localizedStrings,
+  open,
+  onOpenChange,
 }: FindFiltersProps) {
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -80,7 +84,10 @@ export function FindFilters({
       <DropdownMenuContent align="end" className="tw-w-72 tw-p-3">
         {/* 1. Match content in */}
         <div className="tw-mb-3">
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.matchContentIn}</p>
+          {/* Replicating shadcn's DropdownMenuLabel styling. See lib/platform-bible-react/src/components/shadcn-ui/dropdown-menu.tsx */}
+          <div className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
+            {localizedStrings.matchContentIn}
+          </div>
           <RadioGroup
             value={searchTextType}
             // RadioGroup onValueChange provides a plain string, but we know it will always be one
@@ -122,7 +129,9 @@ export function FindFilters({
 
         {/* 2. Match boundaries */}
         <div className="tw-mb-3">
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.restrictions}</p>
+          <div className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
+            {localizedStrings.restrictions}
+          </div>
           <RadioGroup
             value={wordRestriction}
             // RadioGroup onValueChange provides a plain string, but we know it will always be one
@@ -154,7 +163,9 @@ export function FindFilters({
 
         {/* 3. Capitalization */}
         <div className="tw-mb-3">
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.capitalization}</p>
+          <div className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
+            {localizedStrings.capitalization}
+          </div>
           <div className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
             <Checkbox
               id="matchCase"
@@ -169,7 +180,9 @@ export function FindFilters({
 
         {/* 4. Pattern */}
         <div>
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.pattern}</p>
+          <div className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
+            {localizedStrings.pattern}
+          </div>
           <div className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
             <Checkbox
               id="allowRegex"

@@ -10,6 +10,20 @@ const SHAPE_CLASSES: Record<ReplacePreviewHighlightShape, string> = {
   plain: '',
 };
 
+// Positioned variants for inline layout where find and replace spans are directly adjacent.
+// Only the outer corners are rounded so the two spans look like one unified rectangle.
+const SHAPE_CLASSES_LEFT: Record<ReplacePreviewHighlightShape, string> = {
+  bar: 'tw-shadow-[inset_0_2px_0_0_var(--tw-ring-color),inset_0_-2px_0_0_var(--tw-ring-color)]',
+  rounded: 'tw-rounded-l-sm tw-ring-1 tw-ring-inset',
+  plain: '',
+};
+
+const SHAPE_CLASSES_RIGHT: Record<ReplacePreviewHighlightShape, string> = {
+  bar: 'tw-shadow-[inset_0_2px_0_0_var(--tw-ring-color),inset_0_-2px_0_0_var(--tw-ring-color)]',
+  rounded: 'tw-rounded-r-sm tw-ring-1 tw-ring-inset',
+  plain: '',
+};
+
 /** Lighter amber/gold color classes used for the find highlight in the verse text context area. */
 const GOLD_FIND_COLOR = {
   bg: 'tw-bg-amber-100 dark:tw-bg-amber-900',
@@ -21,22 +35,25 @@ const GOLD_FIND_COLOR = {
 // Color classes for the FIND (old) highlight
 const FIND_COLOR_CLASSES: Record<
   ReplacePreviewColor,
-  { bg: string; text: string; border: string }
+  { bg: string; text: string; border: string; decoration: string }
 > = {
   'red-cyan': {
     bg: 'tw-bg-red-100 dark:tw-bg-red-950',
     text: 'tw-text-red-700 dark:tw-text-red-300',
     border: 'tw-border-red-400 dark:tw-border-red-600 tw-ring-red-400 dark:tw-ring-red-600',
+    decoration: 'tw-decoration-red-700/70 dark:tw-decoration-red-300/70',
   },
   'red-green': {
     bg: 'tw-bg-red-100 dark:tw-bg-red-950',
     text: 'tw-text-red-700 dark:tw-text-red-300',
     border: 'tw-border-red-400 dark:tw-border-red-600 tw-ring-red-400 dark:tw-ring-red-600',
+    decoration: 'tw-decoration-red-700/70 dark:tw-decoration-red-300/70',
   },
   'grey-blue': {
-    bg: 'tw-bg-gray-100 dark:tw-bg-gray-800',
-    text: 'tw-text-gray-600 dark:tw-text-gray-400',
-    border: 'tw-border-gray-400 dark:tw-border-gray-500 tw-ring-gray-400 dark:tw-ring-gray-500',
+    bg: 'tw-bg-gray-200 dark:tw-bg-gray-700',
+    text: 'tw-text-gray-700 dark:tw-text-gray-300',
+    border: 'tw-border-gray-500 dark:tw-border-gray-400 tw-ring-gray-500 dark:tw-ring-gray-400',
+    decoration: 'tw-decoration-gray-700/70 dark:tw-decoration-gray-300/70',
   },
 };
 
@@ -88,18 +105,22 @@ export function getGoldFindHighlightClasses(shape: ReplacePreviewHighlightShape)
  *
  * @param showLineThrough Whether to include line-through styling. Pass false for find-only
  *   highlighting where strikethrough is not desired.
+ * @param position When `'left'`, only the left corners are rounded so the span visually connects to
+ *   an adjacent replace span on the right (inline layout).
  */
 export function getFindHighlightClasses(
   color: ReplacePreviewColor,
   shape: ReplacePreviewHighlightShape,
   showLineThrough: boolean = true,
+  position: 'standalone' | 'left' = 'standalone',
 ): string {
   const c = FIND_COLOR_CLASSES[color];
-  const shapeClass = SHAPE_CLASSES[shape];
+  const shapeClass = (position === 'left' ? SHAPE_CLASSES_LEFT : SHAPE_CLASSES)[shape];
   const borderClass = shape !== 'plain' ? c.border : '';
   return [
     'tw-inline tw-px-0.5 tw-whitespace-pre-wrap',
     showLineThrough ? 'tw-line-through' : '',
+    showLineThrough ? c.decoration : '',
     c.bg,
     c.text,
     shapeClass,
@@ -112,13 +133,17 @@ export function getFindHighlightClasses(
 /**
  * Returns Tailwind class string for the REPLACE (new) highlight span. All class values are complete
  * static literals.
+ *
+ * @param position When `'right'`, only the right corners are rounded so the span visually connects
+ *   to an adjacent find span on the left (inline layout).
  */
 export function getReplaceHighlightClasses(
   color: ReplacePreviewColor,
   shape: ReplacePreviewHighlightShape,
+  position: 'standalone' | 'right' = 'standalone',
 ): string {
   const c = REPLACE_COLOR_CLASSES[color];
-  const shapeClass = SHAPE_CLASSES[shape];
+  const shapeClass = (position === 'right' ? SHAPE_CLASSES_RIGHT : SHAPE_CLASSES)[shape];
   const borderClass = shape !== 'plain' ? c.border : '';
   return ['tw-inline tw-px-0.5 tw-whitespace-pre-wrap', c.bg, c.text, shapeClass, borderClass]
     .filter(Boolean)
@@ -128,7 +153,7 @@ export function getReplaceHighlightClasses(
 /** Maps invisible/whitespace code points to visible stand-in symbols */
 const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
   '\u0020': '·', // regular space → middle dot
-  '\u00a0': '·', // non-breaking space
+  '\u00a0': '[Nbsp]', // non-breaking space — distinguished from regular space
   '\u200b': '​‹ZW›', // zero-width space
   '\u200c': '‹ZWN›', // zero-width non-joiner
   '\u200d': '‹ZWJ›', // zero-width joiner
@@ -141,7 +166,9 @@ const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
   '\u2002': '·', // en space
   '\u2003': '·', // em space
   '\u3000': '·', // ideographic space
-  '~': '·', // USFM non-breaking space tilde
+  // ~ is intentionally omitted here; it is added dynamically when allowInvisibleCharacters is false,
+  // because in that mode ~ represents NBSP in USFM and should render as [Nbsp]. When
+  // allowInvisibleCharacters is true, ~ is a literal tilde in the text and must not be substituted.
 };
 
 // The regex intentionally mixes regular spaces and Unicode zero-width/whitespace code points in one
@@ -150,23 +177,46 @@ const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
 // standing alone, so grouping them with ordinary characters in `[...]` can look unintentional.
 // Here it is intentional: we want a single pass that catches every invisible/whitespace variant.
 /* eslint-disable no-misleading-character-class */
-const INVISIBLE_CHAR_REGEX =
+/** Matches all handled invisible/whitespace chars, including the USFM tilde NBSP escape. */
+const INVISIBLE_CHAR_REGEX_WITH_TILDE =
   /[ \u00a0\u200b\u200c\u200d\u200e\u200f\u2060\u202f\u2009\u200a\u2002\u2003\u3000~]/g;
+/** Matches all handled invisible/whitespace chars, excluding tilde (for AllowInvisibleChars=true). */
+const INVISIBLE_CHAR_REGEX_WITHOUT_TILDE =
+  /[ \u00a0\u200b\u200c\u200d\u200e\u200f\u2060\u202f\u2009\u200a\u2002\u2003\u3000]/g;
 /* eslint-enable no-misleading-character-class */
 
 /**
  * Replaces invisible/whitespace characters with visible stand-in symbols. Regular visible
  * characters pass through unchanged.
+ *
+ * @param text The text to process
+ * @param allowInvisibleCharacters Whether the project has AllowInvisibleChars enabled. When `false`
+ *   (the default), the USFM tilde `~` is treated as a NBSP escape and rendered as `[Nbsp]`. When
+ *   `true`, `~` is a literal tilde in the project's USFM and is left unchanged.
  */
-export function renderWithInvisibleChars(text: string): string {
-  return text.replace(INVISIBLE_CHAR_REGEX, (ch) => INVISIBLE_CHAR_SYMBOLS[ch] ?? ch);
+export function renderWithInvisibleChars(
+  text: string,
+  allowInvisibleCharacters: boolean = false,
+): string {
+  if (allowInvisibleCharacters) {
+    return text.replace(
+      INVISIBLE_CHAR_REGEX_WITHOUT_TILDE,
+      (ch) => INVISIBLE_CHAR_SYMBOLS[ch] ?? ch,
+    );
+  }
+  // In legacy mode ~ represents NBSP — render it the same as U+00A0
+  return text.replace(INVISIBLE_CHAR_REGEX_WITH_TILDE, (ch) =>
+    ch === '~' ? '[Nbsp]' : (INVISIBLE_CHAR_SYMBOLS[ch] ?? ch),
+  );
 }
 
 /**
  * Replaces trailing spaces with non-breaking spaces so they receive background-color and
  * text-decoration styling inside the highlighted find span. Since `\u00a0` is in
- * {@link INVISIBLE_CHAR_SYMBOLS}, `renderWithInvisibleChars` will still render it as `·` when
- * `showInvisible` is enabled.
+ * {@link INVISIBLE_CHAR_SYMBOLS}, `renderWithInvisibleChars` will render it as `[Nbsp]` when
+ * `showInvisible` is enabled. Note: trailing spaces that were originally U+0020 will appear as
+ * `[Nbsp]` rather than `·` due to this substitution, which is acceptable since the key information
+ * (the match ends in whitespace) is still conveyed.
  */
 export function preserveTrailingSpaces(text: string): string {
   return text.replace(/ +$/, (spaces) => '\u00a0'.repeat(spaces.length));
