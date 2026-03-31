@@ -340,9 +340,11 @@ export async function waitForPapiMethodRegistered(
  * like `platform.about` (the dock can render before that async work completes).
  */
 export async function waitForAppReady(page: Page, timeout = 60_000): Promise<void> {
+  const start = Date.now();
   await page.waitForSelector('div[class*="dock-layout"]', {
     state: 'attached',
     timeout,
   });
-  await waitForPapiMethodRegistered(PLATFORM_ABOUT_COMMAND, DEFAULT_WEBSOCKET_PORT, timeout);
+  const remaining = Math.max(0, timeout - (Date.now() - start));
+  await waitForPapiMethodRegistered(PLATFORM_ABOUT_COMMAND, DEFAULT_WEBSOCKET_PORT, remaining);
 }
