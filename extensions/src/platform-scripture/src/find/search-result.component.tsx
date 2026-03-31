@@ -55,6 +55,11 @@ interface SearchResultProps {
   isSelected: boolean;
   /** UsjReaderWriter for the book this search result occurred in */
   usjReaderWriter: UsjReaderWriter | undefined;
+  /**
+   * Pre-serialized USFM string for the book, cached at the book level to avoid repeated toUsfm()
+   * calls
+   */
+  cachedUsfm?: string;
   /** Map of book IDs to their localized display names */
   localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
   /** Callback function called when the user clicks on this search result */
@@ -119,6 +124,7 @@ export default function SearchResult({
   globalResultsIndex,
   isSelected,
   usjReaderWriter,
+  cachedUsfm,
   localizedBookData,
   onResultClick,
   onResultFocus,
@@ -191,7 +197,7 @@ export default function SearchResult({
       const startIndexInUsfm = usjReaderWriter.usfmVerseLocationToIndexInUsfm(searchResult.start);
       const endIndexInUsfm = usjReaderWriter.usfmVerseLocationToIndexInUsfm(searchResult.end);
 
-      const usfm = usjReaderWriter.toUsfm();
+      const usfm = cachedUsfm ?? usjReaderWriter.toUsfm();
 
       let beforeText = usfm.substring(0, startIndexInUsfm);
 
@@ -211,7 +217,7 @@ export default function SearchResult({
       logger.warn(`Error determining text parts for search result: ${getErrorMessage(error)}`);
       return undefined;
     }
-  }, [usjReaderWriter, searchResult, shouldCalculateContext]);
+  }, [usjReaderWriter, cachedUsfm, searchResult, shouldCalculateContext]);
 
   /** Applies the showInvisible option to a string */
   const displayText = (text: string) =>

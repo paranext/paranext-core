@@ -115,6 +115,19 @@ export function SearchResultsInBook({
     }
   }, [usjBook, bookId]);
 
+  // Cache the USFM string once per book so individual result cards don't each serialize the book
+  const cachedUsfm = useMemo(() => {
+    if (!usjReaderWriter) return undefined;
+    try {
+      return usjReaderWriter.toUsfm();
+    } catch (error) {
+      logger.warn(
+        `Error serializing USFM for book ${bookId} in search results: ${getErrorMessage(error)}`,
+      );
+      return undefined;
+    }
+  }, [usjReaderWriter, bookId]);
+
   const firstReplacedIndex = results.findIndex((r) => r.isReplaced);
 
   return (
@@ -126,6 +139,7 @@ export function SearchResultsInBook({
           globalResultsIndex={index}
           isSelected={index === focusedResultIndex}
           usjReaderWriter={usjReaderWriter}
+          cachedUsfm={cachedUsfm}
           localizedBookData={localizedBookData}
           onResultClick={onResultClick}
           onResultFocus={onResultFocus}
