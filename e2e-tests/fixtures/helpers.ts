@@ -212,10 +212,10 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
  */
 async function sendPapiJsonRpcOnce<T>(
   method: string,
+  timeoutErrorMessage?: string,
   params: unknown[] = [],
   port: number = DEFAULT_WEBSOCKET_PORT,
   perRequestTimeoutMs = 10_000,
-  timeoutErrorMessage?: string,
 ): Promise<T> {
   const timeoutMessage =
     timeoutErrorMessage ?? `PAPI request "${method}" timed out after ${perRequestTimeoutMs}ms`;
@@ -282,10 +282,10 @@ export async function sendPapiCommand<T = unknown>(
 ): Promise<T> {
   return sendPapiJsonRpcOnce<T>(
     `command:${command}`,
+    `PAPI command "${command}" timed out after 10s`,
     args,
     port,
     10_000,
-    `PAPI command "${command}" timed out after 10s`,
   );
 }
 
@@ -299,7 +299,7 @@ async function sendPapiRequestOnce<T>(
   port: number = DEFAULT_WEBSOCKET_PORT,
   perRequestTimeoutMs = 10_000,
 ): Promise<T> {
-  return sendPapiJsonRpcOnce<T>(method, params, port, perRequestTimeoutMs);
+  return sendPapiJsonRpcOnce<T>(method, undefined, params, port, perRequestTimeoutMs);
 }
 
 /**
