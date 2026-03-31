@@ -7,16 +7,15 @@
     "lib": ["dom", "es2023"],
     "strict": true,
     "sourceMap": true,
-    "baseUrl": "./src",
     "paths": {
-      "@assets/*": ["../assets/*"],
-      "@client/*": ["./client/*"],
-      "@extension-host/*": ["./extension-host/*"],
-      "@main/*": ["./main/*"],
-      "@node/*": ["./node/*"],
-      "@renderer/*": ["./renderer/*"],
-      "@shared/*": ["./shared/*"],
-      "vite": ["./@types/shims-vite.d.ts"]
+      "@assets/*": ["./assets/*"],
+      "@client/*": ["./src/client/*"],
+      "@extension-host/*": ["./src/extension-host/*"],
+      "@main/*": ["./src/main/*"],
+      "@node/*": ["./src/node/*"],
+      "@renderer/*": ["./src/renderer/*"],
+      "@shared/*": ["./src/shared/*"],
+      "vite": ["./src/@types/shims-vite.d.ts"]
     },
     "experimentalDecorators": true,
     "typeRoots": [

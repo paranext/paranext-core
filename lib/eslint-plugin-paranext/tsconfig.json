@@ -6,8 +6,6 @@
     "declaration": false,
     "skipLibCheck": true,
     "incremental": false,
-    "baseUrl": ".",
-    "paths": {},
     "typeRoots": ["./node_modules/@types", "../../node_modules/@types"]
   },
   "include": ["src/**/*"],

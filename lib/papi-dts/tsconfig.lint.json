@@ -2,7 +2,6 @@
   "extends": "../../tsconfig",
   "compilerOptions": {
     "module": "ESNext",
-    "baseUrl": "./",
     "noEmit": true
   },
   "include": [".eslintrc.cjs", "edit-papi-d-ts.ts", "papi.d.ts"],

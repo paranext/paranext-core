@@ -1,4 +1,3 @@
-import { LocalizeKey } from 'extension-contributions/menus.model';
 import {
   indexOf as stringzIndexOf,
   length as stringzLength,
@@ -8,6 +7,7 @@ import {
   toArray as stringzToArray,
 } from 'stringz';
 import { ensureArray } from './array-util';
+import { LocalizeKey } from './extension-contributions/menus.model';
 import { isString } from './util';
 
 /**
