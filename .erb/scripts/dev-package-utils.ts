@@ -4,6 +4,8 @@ import path from 'path';
 
 export const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
+// #region Types — keep in sync with dev-packages.schema.json (both must be updated together)
+
 /** A package within a dev repo that can be published locally via yalc and linked into this repo. */
 export type DevPackage = {
   /** The nx project name passed to `nx devpub <target>` to publish this package. */
@@ -33,20 +35,12 @@ export type DevRepo = {
   devPackages: DevPackage[];
 };
 
-// Driving data: list of development repos that can be published locally, including
-// the packages within each repo and the corresponding npm script names in this repo
-// used to link/unlink them.
-export const DEV_REPOS: DevRepo[] = [
-  {
-    folder: 'scripture-editors',
-    cloneUrl: 'https://github.com/eten-tech-foundation/scripture-editors.git',
-    revision: 'platform-yalc',
-    devPackages: [
-      { devpubTarget: 'platform-editor', repoLinkScript: 'editor' },
-      { devpubTarget: 'utilities', repoLinkScript: 'utils' },
-    ],
-  },
-];
+// #endregion
+
+/** List of development repos loaded from `dev-packages.json` at the repository root. */
+export const DEV_REPOS: DevRepo[] = JSON.parse(
+  fs.readFileSync(path.resolve(REPO_ROOT, 'dev-packages.json'), 'utf8'),
+).repos;
 
 // Resolve a dev-package folder path. Prefer `dev-packages/<folder>` inside the
 // repository workspace (used by CI), but fall back to a sibling directory
@@ -73,18 +67,16 @@ export function cloneRepoIfNeeded(repo: DevRepo): void {
   execSync(`git clone "${repo.cloneUrl}" "${clonePath}"`, { stdio: 'inherit' });
 }
 
-export function checkNoWorkingChanges(folder: string): void {
+export function checkoutRevision(folder: string, revision: string): void {
   const repoPath = getDevPackagePath(folder);
+
   const status = execSync('git status --porcelain', { cwd: repoPath, encoding: 'utf8' });
   if (status.trim().length > 0) {
     throw new Error(
       `The ${folder} repo has working changes:\n${status}\nWe don't want to accidentally overwrite any changes. Please go handle your changes and try again when there are no more working changes.`,
     );
   }
-}
 
-export function checkoutRevision(folder: string, revision: string): void {
-  const repoPath = getDevPackagePath(folder);
   console.log(`Fetching latest in ${folder}...`);
   execSync('git fetch origin', { stdio: 'inherit', cwd: repoPath });
   console.log(`Checking out ${revision} in ${folder}...`);

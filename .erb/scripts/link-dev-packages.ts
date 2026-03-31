@@ -6,17 +6,15 @@
  * This script will, for each dev repo:
  *
  * 1. Clone the repo into `dev-packages` if it doesn't exist in either location
- * 2. Verify there are no working changes (to avoid accidentally overwriting them)
- * 3. Check out the specified revision
- * 4. Run `pnpm install` in the repo
- * 5. Run devpub in the repo for each package
- * 6. Link the packages via yalc in this repo
+ * 2. Verify there are no working changes and check out the specified revision
+ * 3. Run `pnpm install` in the repo
+ * 4. Run devpub in the repo for each package
+ * 5. Link the packages via yalc in this repo
  */
 
 import {
   DEV_REPOS,
   cloneRepoIfNeeded,
-  checkNoWorkingChanges,
   checkoutRevision,
   execPnpmInDevPackage,
   execInRepo,
@@ -28,7 +26,6 @@ function linkDevPackages(): void {
   try {
     DEV_REPOS.forEach((repo) => {
       cloneRepoIfNeeded(repo);
-      checkNoWorkingChanges(repo.folder);
       checkoutRevision(repo.folder, repo.revision);
 
       console.log(`Running pnpm install in ${repo.folder}...`);
