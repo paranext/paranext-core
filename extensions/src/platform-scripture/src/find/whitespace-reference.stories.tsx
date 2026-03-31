@@ -395,7 +395,7 @@ function WhitespaceReference() {
                   'Preserve / Replace / Collapse (WhitespaceNormalizer.cs)',
                   'Not yet implemented',
                 ],
-              ] as [string, string, string][]
+              ] satisfies [string, string, string][]
             ).map(([feature, pt9, pt10]) => (
               <tr key={feature} className="tw-align-top odd:tw-bg-background even:tw-bg-muted/40">
                 <td className="tw-border tw-border-border tw-px-3 tw-py-2 tw-font-medium tw-text-foreground">
