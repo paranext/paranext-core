@@ -1673,7 +1673,10 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
-    'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+    'platformScripture.openFind': (
+      editorWebViewId?: string | undefined,
+      selectedText?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {
