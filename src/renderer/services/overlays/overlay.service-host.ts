@@ -92,7 +92,7 @@ function debounceCheck(overlayType: string, webViewId: string): boolean {
   return true;
 }
 
-/** Resets debounce tracking state. Exported for use in tests only. */
+/** Resets debounce tracking state. Exported for use in tests only. @internal */
 export function resetDebounceState(): void {
   lastInvocationTime.clear();
 }
@@ -237,6 +237,14 @@ async function showContextMenu(
   webViewId: string,
   options?: { position?: { x: number; y: number } },
 ): Promise<string | undefined> {
+  if (!isWebViewVisible(webViewId)) {
+    throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
+  }
+
+  if (!debounceCheck('contextMenu', webViewId)) {
+    throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
+  }
+
   // Fetch menu contributions for this webViewType
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const webViewMenu = await menuDataService.getWebViewMenu(webViewType as ReferencedItem);
@@ -252,14 +260,6 @@ async function showContextMenu(
   }
 
   validateContextMenuItems(items);
-
-  if (!isWebViewVisible(webViewId)) {
-    throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
-  }
-
-  if (!debounceCheck('contextMenu', webViewId)) {
-    throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
-  }
 
   const existingOverlays = getOverlaysByWebView(webViewId).filter((o) => o.type === 'contextMenu');
   existingOverlays.forEach((existing) => {
@@ -291,7 +291,10 @@ async function showContextMenu(
         restoreFocus(overlayId);
         resolve(result);
       },
-      reject,
+      reject: (reason?: unknown) => {
+        restoreFocus(overlayId);
+        reject(reason);
+      },
     });
   });
 
@@ -367,7 +370,10 @@ export async function showModalDialogOverlay<TReturn>(
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         resolve(result as TReturn | undefined);
       }) as (result: unknown) => void,
-      reject,
+      reject: (reason?: unknown) => {
+        restoreFocus(overlayId);
+        reject(reason);
+      },
     });
   });
 }
@@ -578,7 +584,10 @@ async function showCommandPalette(
         restoreFocus(overlayId);
         resolve(selectedId);
       },
-      reject,
+      reject: (reason?: unknown) => {
+        restoreFocus(overlayId);
+        reject(reason);
+      },
     });
   });
 }

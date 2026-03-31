@@ -102,7 +102,12 @@ export function getOverlayById(id: string): OverlayEntry | undefined {
   return overlays.get(id);
 }
 
-/** Removes all overlays from the store and notifies listeners. Only exported for use in tests. */
+/**
+ * Removes all overlays from the store and notifies listeners.
+ *
+ * WARNING: Test-only. Does not resolve or reject pending overlay promises. Using this in production
+ * would cause callers awaiting overlay results to hang indefinitely. @internal
+ */
 export function clearAllOverlays(): void {
   if (overlays.size === 0) return;
   overlays.clear();
