@@ -210,10 +210,8 @@ global.webViewComponent = function FindWebView({
     [addRecentSearchItem],
   );
 
-  const [lastSearchTermPossiblyError, setLastSearchTermSetting] = useSetting(
-    'platformScripture.findLastSearchTerm',
-    '',
-  );
+  const [lastSearchTermPossiblyError, setLastSearchTermSetting, , isLastSearchTermLoading] =
+    useSetting('platformScripture.findLastSearchTerm', '');
   const lastSearchTermSetting = isPlatformError(lastSearchTermPossiblyError)
     ? ''
     : lastSearchTermPossiblyError;
@@ -338,10 +336,17 @@ global.webViewComponent = function FindWebView({
     if (lastSearchTermSetting) {
       searchTermRestoredRef.current = true;
       if (!searchTerm) setSearchTerm(lastSearchTermSetting);
-    } else if (!isPlatformError(lastSearchTermPossiblyError)) {
+    } else if (!isPlatformError(lastSearchTermPossiblyError) && !isLastSearchTermLoading) {
+      // Only finalize restoration once the setting has fully loaded (not just returned the default)
       searchTermRestoredRef.current = true;
     }
-  }, [lastSearchTermPossiblyError, lastSearchTermSetting, searchTerm, setSearchTerm]);
+  }, [
+    isLastSearchTermLoading,
+    lastSearchTermPossiblyError,
+    lastSearchTermSetting,
+    searchTerm,
+    setSearchTerm,
+  ]);
 
   // Persist the current search term to settings so it survives session restarts
   const saveSearchTermTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
