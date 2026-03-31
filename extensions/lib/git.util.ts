@@ -8,6 +8,22 @@ import { subtreeRootFolder } from '../webpack/webpack.util';
 
 const execAsync = promisify(exec);
 
+/** Absolute path to the repo root directory */
+const repoRoot = path.resolve(path.join(__dirname, '..', '..'));
+
+/** Cached npm workspaces list from root package.json, loaded once per process */
+let cachedWorkspaces: string[] | undefined;
+
+async function getWorkspaces(): Promise<string[]> {
+  if (cachedWorkspaces !== undefined) return cachedWorkspaces;
+  const content = await fs.readFile(path.join(repoRoot, 'package.json'), 'utf-8');
+  // JSON.parse returns unknown; we expect a package.json shape
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const packageJson = JSON.parse(content) as { workspaces?: string[] };
+  cachedWorkspaces = packageJson.workspaces ?? [];
+  return cachedWorkspaces;
+}
+
 /** The name for the multi-extension template remote as used in the git scripts */
 export const MULTI_TEMPLATE_NAME = 'paranext-multi-extension-template';
 /** The url for the multi-extension template remote as used in the git scripts */
@@ -88,7 +104,7 @@ export async function execCommand(
   if (!quiet) console.log(`\n>${execOptions.cwd ? ` cd ${execOptions.cwd};` : ''} ${command}`);
   try {
     const result = await execAsync(command, {
-      cwd: path.resolve(path.join(__dirname, '..', '..')),
+      cwd: repoRoot,
       ...execOptions,
     });
     if (!quiet && result.stdout) console.log(result.stdout);
@@ -177,11 +193,7 @@ export async function isUnusedWorkspacePackageLock(repoRootRelativePath: string)
   if (parentDir !== 'extensions' && !parentDir.startsWith('extensions/')) return false;
 
   // Must match a workspace pattern from the root package.json
-  const rootPackageJsonPath = path.resolve(path.join(__dirname, '..', '..', 'package.json'));
-  const rootPackageContent = await fs.readFile(rootPackageJsonPath, 'utf-8');
-  const rootPackageJson = JSON.parse(rootPackageContent) as { workspaces?: string[] };
-  const workspaces = rootPackageJson.workspaces ?? [];
-
+  const workspaces = await getWorkspaces();
   return workspaces.some((pattern) => minimatch(parentDir, pattern));
 }
 
@@ -219,11 +231,7 @@ export async function resolvePackageLockConflicts(): Promise<{
   await Promise.all(
     conflictLines.map(async (line) => {
       const filePath = line.slice(3); // skip "XY "
-      if (
-        // Fast path: skip async file I/O for the many non-lock files in a typical conflict set
-        filePath.endsWith('package-lock.json') &&
-        (await isUnusedWorkspacePackageLock(filePath))
-      ) {
+      if (await isUnusedWorkspacePackageLock(filePath)) {
         packageLockPaths.push(filePath);
       } else {
         otherConflictPaths.push(filePath);
@@ -231,9 +239,11 @@ export async function resolvePackageLockConflicts(): Promise<{
     }),
   );
 
-  // Remove and stage each conflicted package-lock.json. Errors propagate immediately.
+  // Remove and stage each conflicted package-lock.json sequentially: each `git rm` must finish
+  // before the next to avoid interleaved git index updates.
   // eslint-disable-next-line no-restricted-syntax
   for (const filePath of packageLockPaths) {
+    // Intentional sequential await — see comment above the loop
     // eslint-disable-next-line no-await-in-loop
     await execCommand(`git rm "${filePath}"`);
   }
@@ -250,8 +260,9 @@ const replaceInFileIgnoreGlobs = [
   '**/.eslintcache',
   '**/dist/**/*',
   '**/release/**/*',
-  // With npm workspaces, child workspace package-lock.json files are not used. Let's not format
-  // them so they can stay the same as how they were in the template to avoid merge conflicts
+  // With npm workspaces, child workspace package-lock.json files are unused and are deleted
+  // proactively by formatExtensionFolder and formatExtensionsRoot. Skip them here in case they
+  // are present during a format pass before deletion runs.
   '**/package-lock.json',
 ];
 
@@ -287,6 +298,24 @@ function toCamelCaseFromKebab(input: string): string {
 }
 
 /**
+ * Deletes a repo-root-relative path if it is an unused workspace `package-lock.json`. Silently
+ * skips if the file is absent.
+ *
+ * @param repoRootRelativePath Repo-root-relative path, e.g.
+ *   `extensions/src/hello-rock3/package-lock.json`
+ */
+async function deleteUnusedPackageLockIfPresent(repoRootRelativePath: string): Promise<void> {
+  if (!(await isUnusedWorkspacePackageLock(repoRootRelativePath))) return;
+  try {
+    await fs.unlink(path.join(repoRoot, repoRootRelativePath));
+    console.log(`Deleted unused ${repoRootRelativePath}`);
+  } catch (error: unknown) {
+    // File not present — nothing to delete
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
+  }
+}
+
+/**
  * Format the `extensions/` root folder after a merge from the multi-extension template.
  *
  * Currently: deletes `extensions/package-lock.json` if present and unused (it is unused because
@@ -294,17 +323,7 @@ function toCamelCaseFromKebab(input: string): string {
  * a home for future extensions-root formatting steps.
  */
 export async function formatExtensionsRoot() {
-  const lockFilePath = `${subtreeRootFolder}/package-lock.json`;
-  if (await isUnusedWorkspacePackageLock(lockFilePath)) {
-    const absolutePath = path.resolve(path.join(__dirname, '..', '..', lockFilePath));
-    try {
-      await fs.unlink(absolutePath);
-      console.log(`Deleted unused ${lockFilePath}`);
-    } catch (error: unknown) {
-      // File not present — nothing to delete
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-  }
+  await deleteUnusedPackageLockIfPresent(`${subtreeRootFolder}/package-lock.json`);
 }
 
 /**
@@ -330,17 +349,7 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
   );
 
   // Delete package-lock.json if present — it is unused because this folder is an npm workspace
-  const lockFilePath = `${extensionFolderPath}/package-lock.json`;
-  if (await isUnusedWorkspacePackageLock(lockFilePath)) {
-    const absoluteLockPath = path.resolve(path.join(__dirname, '..', '..', lockFilePath));
-    try {
-      await fs.unlink(absoluteLockPath);
-      console.log(`Deleted unused ${lockFilePath}`);
-    } catch (error: unknown) {
-      // File not present — nothing to delete
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-  }
+  await deleteUnusedPackageLockIfPresent(`${extensionFolderPath}/package-lock.json`);
 
   // Get the basename of the extension folder for use in replacements
   const extensionName = path.basename(extensionFolderPath);
