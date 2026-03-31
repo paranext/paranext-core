@@ -40,7 +40,7 @@ function AlertDialog({
 export const ALERT_DIALOG: DialogDefinition<typeof ALERT_DIALOG_TYPE> = Object.freeze({
   ...DIALOG_BASE,
   tabType: ALERT_DIALOG_TYPE,
-  defaultTitle: 'Alert',
+  defaultTitle: '%overlay_dialog_title_alert%',
   initialSize: { width: 400, height: 200 },
   dialogRole: 'alertdialog',
   Component: AlertDialog,

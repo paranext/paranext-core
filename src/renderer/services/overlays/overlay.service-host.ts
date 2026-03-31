@@ -92,7 +92,7 @@ function debounceCheck(overlayType: string, webViewId: string): boolean {
   return true;
 }
 
-/** Resets debounce tracking state. Exported for use in tests only. */
+/** Resets debounce tracking state. Exported for use in tests only. @internal */
 export function resetDebounceState(): void {
   lastInvocationTime.clear();
 }

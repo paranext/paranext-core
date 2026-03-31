@@ -212,8 +212,7 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     // Click Cancel -> returns undefined
     await dialog.locator('button', { hasText: 'Abort' }).click();
     await expect(dialog).not.toBeVisible({ timeout: 3_000 });
-    // eslint-disable-next-line no-null/no-null
-    expect(await resultPromise).toBeNull();
+    expect(await resultPromise).toBe(false);
   });
 
   await test.step('confirm dialog - modal (Escape dismissal)', async () => {
