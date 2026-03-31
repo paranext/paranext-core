@@ -144,8 +144,8 @@ export function ScopeSelector({
   return (
     <div id={id} className="tw-grid tw-gap-4">
       <div className="tw-grid tw-gap-2">
-        {/* Replicating shadcn's DropdownMenuLabel styling. See lib/platform-bible-react/src/components/shadcn-ui/dropdown-menu.tsx */}
-        <div className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">{scopeText}</div>
+        {/* Will likely be replaced with RadioGroupFieldSet and legend when we upgrade shadcn */}
+        <Label>{scopeText}</Label>
         <RadioGroup
           value={scope}
           onValueChange={onScopeChange}

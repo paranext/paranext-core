@@ -168,18 +168,20 @@ export function ReplacePreviewOptions({
 
       <PopoverContent align="start" className="tw-w-72 tw-p-4">
         {/* 1. Layout */}
-        <div className="tw-mb-4">
-          {/* Replicating shadcn's DropdownMenuLabel styling. See lib/platform-bible-react/src/components/shadcn-ui/dropdown-menu.tsx */}
-          <div className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
+        <fieldset className="tw-mb-4">
+          <legend className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
             {localizedStrings.layout}
-          </div>
+          </legend>
+
           <ToggleGroup
             type="single"
             value={layout}
             onValueChange={(value) => {
-              if (value === 'arrow' || value === 'inline' || value === 'block')
+              if (value === 'arrow' || value === 'inline' || value === 'block') {
                 set('layout', value);
-              else if (value === '') set('layout', layout);
+              } else if (value === '') {
+                set('layout', layout);
+              }
             }}
             className="tw-w-full"
           >
@@ -200,18 +202,20 @@ export function ReplacePreviewOptions({
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-        </div>
+        </fieldset>
 
         {/* 2. Highlight shape */}
-        <div className="tw-mb-4">
-          <div className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
+        <fieldset className="tw-mb-4">
+          <legend className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
             {localizedStrings.highlightShape}
-          </div>
+          </legend>
+
           <RadioGroup
             value={highlightShape}
             onValueChange={(value) => {
-              if (value === 'bar' || value === 'rounded' || value === 'plain')
+              if (value === 'bar' || value === 'rounded' || value === 'plain') {
                 set('highlightShape', value);
+              }
             }}
             className="tw-gap-1"
           >
@@ -234,18 +238,20 @@ export function ReplacePreviewOptions({
               </div>
             ))}
           </RadioGroup>
-        </div>
+        </fieldset>
 
         {/* 3. Color */}
-        <div className="tw-mb-4">
-          <div className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
+        <fieldset className="tw-mb-4">
+          <legend className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
             {localizedStrings.color}
-          </div>
+          </legend>
+
           <RadioGroup
             value={color}
             onValueChange={(value) => {
-              if (value === 'red-cyan' || value === 'red-green' || value === 'grey-blue')
+              if (value === 'red-cyan' || value === 'red-green' || value === 'grey-blue') {
                 set('color', value);
+              }
             }}
             className="tw-gap-1"
           >
@@ -272,7 +278,7 @@ export function ReplacePreviewOptions({
               </div>
             ))}
           </RadioGroup>
-        </div>
+        </fieldset>
 
         <Separator className="tw-mb-4" />
 
