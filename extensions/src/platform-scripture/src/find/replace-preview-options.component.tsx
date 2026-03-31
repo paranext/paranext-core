@@ -22,13 +22,7 @@ import {
   getGoldFindHighlightClasses,
   getReplaceHighlightClasses,
 } from './replace-preview-styles';
-import {
-  DEFAULT_PREVIEW_OPTIONS,
-  PreviewOptions,
-  ReplacePreviewColor,
-  ReplacePreviewHighlightShape,
-  ReplacePreviewLayout,
-} from './replace-preview-types';
+import { PreviewOptions, ReplacePreviewLayout } from './replace-preview-types';
 
 export type ReplacePreviewOptionsStrings = {
   togglePreviewOptions: string;
@@ -74,6 +68,8 @@ type ReplacePreviewOptionsProps = {
   previewOptions: PreviewOptions;
   setPreviewOptions: (value: PreviewOptions) => void;
   localizedStrings: ReplacePreviewOptionsStrings;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 function InlineLayoutIcon({ className }: { className?: string }) {
@@ -141,30 +137,25 @@ export function ReplacePreviewOptions({
   previewOptions,
   setPreviewOptions,
   localizedStrings,
+  open,
+  onOpenChange,
 }: ReplacePreviewOptionsProps) {
-  const areOptionsNonDefault =
-    previewOptions.layout !== DEFAULT_PREVIEW_OPTIONS.layout ||
-    previewOptions.highlightShape !== DEFAULT_PREVIEW_OPTIONS.highlightShape ||
-    previewOptions.color !== DEFAULT_PREVIEW_OPTIONS.color ||
-    previewOptions.monospace !== DEFAULT_PREVIEW_OPTIONS.monospace ||
-    previewOptions.showInvisible !== DEFAULT_PREVIEW_OPTIONS.showInvisible;
-
   const { layout, highlightShape, color, monospace, showInvisible } = previewOptions;
 
   const set = <K extends keyof PreviewOptions>(key: K, value: PreviewOptions[K]) =>
     setPreviewOptions({ ...previewOptions, [key]: value });
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
               <Button
-                variant="ghost"
+                variant="subtle"
                 size="sm"
                 aria-label={localizedStrings.togglePreviewOptions}
-                className={`tw-gap-1.5 ${areOptionsNonDefault ? 'tw-bg-muted' : ''}`}
+                className="tw-h-auto tw-gap-1.5 tw-px-2 tw-py-0.5"
               >
                 <Eye className="tw-h-4 tw-w-4" />
                 {localizedStrings.togglePreviewOptions}
@@ -175,19 +166,20 @@ export function ReplacePreviewOptions({
         </Tooltip>
       </TooltipProvider>
 
-      <PopoverContent align="end" className="tw-w-72 tw-p-4">
+      <PopoverContent align="start" className="tw-w-72 tw-p-4">
         {/* 1. Layout */}
         <div className="tw-mb-4">
-          <p className="tw-mb-2 tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wide tw-text-muted-foreground">
+          {/* Replicating shadcn's DropdownMenuLabel styling. See lib/platform-bible-react/src/components/shadcn-ui/dropdown-menu.tsx */}
+          <div className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
             {localizedStrings.layout}
-          </p>
+          </div>
           <ToggleGroup
             type="single"
             value={layout}
             onValueChange={(value) => {
               if (value === 'arrow' || value === 'inline' || value === 'block')
-                // eslint-disable-next-line no-type-assertion/no-type-assertion
-                set('layout', value as ReplacePreviewLayout);
+                set('layout', value);
+              else if (value === '') set('layout', layout);
             }}
             className="tw-w-full"
           >
@@ -212,13 +204,15 @@ export function ReplacePreviewOptions({
 
         {/* 2. Highlight shape */}
         <div className="tw-mb-4">
-          <p className="tw-mb-1.5 tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wide tw-text-muted-foreground">
+          <div className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
             {localizedStrings.highlightShape}
-          </p>
+          </div>
           <RadioGroup
             value={highlightShape}
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            onValueChange={(value) => set('highlightShape', value as ReplacePreviewHighlightShape)}
+            onValueChange={(value) => {
+              if (value === 'bar' || value === 'rounded' || value === 'plain')
+                set('highlightShape', value);
+            }}
             className="tw-gap-1"
           >
             {(
@@ -244,13 +238,15 @@ export function ReplacePreviewOptions({
 
         {/* 3. Color */}
         <div className="tw-mb-4">
-          <p className="tw-mb-1.5 tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wide tw-text-muted-foreground">
+          <div className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
             {localizedStrings.color}
-          </p>
+          </div>
           <RadioGroup
             value={color}
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            onValueChange={(value) => set('color', value as ReplacePreviewColor)}
+            onValueChange={(value) => {
+              if (value === 'red-cyan' || value === 'red-green' || value === 'grey-blue')
+                set('color', value);
+            }}
             className="tw-gap-1"
           >
             {(

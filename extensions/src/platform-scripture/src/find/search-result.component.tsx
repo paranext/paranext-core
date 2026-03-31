@@ -79,6 +79,12 @@ interface SearchResultProps {
   replaceConfig?: ReplaceConfig;
   /** Options controlling how the replace preview is displayed */
   previewOptions?: PreviewOptions;
+  /**
+   * Whether the project has AllowInvisibleChars enabled. Controls whether the USFM tilde `~` is
+   * treated as a NBSP escape (false, the default) or as a literal tilde character (true). Passed
+   * through to {@link renderWithInvisibleChars} when `previewOptions.showInvisible` is true.
+   */
+  allowInvisibleCharacters?: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -126,15 +132,15 @@ export default function SearchResult({
   isReplacing,
   replaceConfig,
   previewOptions = DEFAULT_PREVIEW_OPTIONS,
+  allowInvisibleCharacters = false,
 }: SearchResultProps) {
   // useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Inline layout needs context for every result; arrow/block only compute on selection
-  const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(
-    isSelected || previewOptions.layout === 'inline',
-  );
+  // Arrow/block only compute context on selection; inline defers to viewport visibility
+  const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(isSelected);
+  const [isVisible, setIsVisible] = useState(false);
   const [isProgressAnimating, setIsProgressAnimating] = useState(false);
 
   useEffect(() => {
@@ -158,6 +164,23 @@ export default function SearchResult({
     return () => cancelAnimationFrame(frame);
   }, [searchResult.isReplaced]);
 
+  // Observe when the card enters the viewport so inline context loads lazily
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '100px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   // When this result becomes selected, we should calculate the context if we haven't already
   useEffect(() => {
     if (isSelected) {
@@ -165,12 +188,12 @@ export default function SearchResult({
     }
   }, [isSelected]);
 
-  // When layout switches to inline, enable context calculation for this result
+  // When layout switches to inline AND the result is visible, enable context calculation
   useEffect(() => {
-    if (previewOptions.layout === 'inline') {
+    if (previewOptions.layout === 'inline' && isVisible) {
       setShouldGetVerseText(true);
     }
-  }, [previewOptions.layout]);
+  }, [previewOptions.layout, isVisible]);
 
   // Determine the text to show before the search result, the search result, and the text after
   const textParts = useMemo(() => {
@@ -203,7 +226,7 @@ export default function SearchResult({
 
   /** Applies the showInvisible option to a string */
   const displayText = (text: string) =>
-    previewOptions.showInvisible ? renderWithInvisibleChars(text) : text;
+    previewOptions.showInvisible ? renderWithInvisibleChars(text, allowInvisibleCharacters) : text;
 
   /** Returns the font class based on the monospace option */
   const fontClass = previewOptions.monospace ? 'tw-font-mono' : '';
@@ -212,6 +235,10 @@ export default function SearchResult({
   const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
   const findHighlightClass = `${fontClass} ${getGoldFindHighlightClasses(highlightShape)}`;
   const replaceClass = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape)}`;
+  // In inline layout the find and replace spans are directly adjacent — only round the outer corners
+  // so the two spans look like one unified rectangle split by color.
+  const findClassInline = `${fontClass} ${getFindHighlightClasses(color, highlightShape, true, 'left')}`;
+  const replaceClassInline = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape, 'right')}`;
 
   /**
    * Break-all when invisible chars are shown (spaces replaced with ·, no wrap points), break-words
@@ -324,7 +351,13 @@ export default function SearchResult({
   const getReplacePreviewElement = () => {
     if (previewReplacement === undefined) return undefined;
 
-    const findText = displayText(preserveTrailingSpaces(searchResult.text ?? ''));
+    const rawFindText = searchResult.text ?? '';
+    // When showInvisible is on, let renderWithInvisibleChars turn trailing spaces into · directly
+    // (same as replace text). preserveTrailingSpaces is only needed when showInvisible is off so
+    // that trailing spaces aren't collapsed inside the CSS-highlighted span.
+    const findText = previewOptions.showInvisible
+      ? displayText(rawFindText)
+      : preserveTrailingSpaces(rawFindText);
     const replaceText = displayText(previewReplacement);
 
     if (previewOptions.layout === 'inline') {
@@ -341,8 +374,12 @@ export default function SearchResult({
       return (
         <div className={`tw-text-muted-foreground ${fontClass} ${breakClass}`}>
           {displayText(textParts.beforeText)}
-          <span className={findClass}>{displayText(preserveTrailingSpaces(textParts.text))}</span>
-          <span className={replaceClass}>{replaceText}</span>
+          <span className={findClassInline}>
+            {previewOptions.showInvisible
+              ? displayText(textParts.text)
+              : preserveTrailingSpaces(textParts.text)}
+          </span>
+          <span className={replaceClassInline}>{replaceText}</span>
           {displayText(textParts.afterText)}
         </div>
       );

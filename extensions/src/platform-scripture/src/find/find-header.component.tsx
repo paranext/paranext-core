@@ -28,6 +28,7 @@ import {
 } from 'platform-bible-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { WordRestriction } from 'platform-scripture';
+import { useState } from 'react';
 import { FindFilters, FindFiltersStrings } from './find-filters.component';
 import { LocalizedBookData, SearchTextType } from './find-types';
 import {
@@ -52,6 +53,36 @@ export type FindHeaderLocalizedStrings = {
   countOfTotal?: string;
   previousResult?: string;
   nextResult?: string;
+  clearSearch?: string;
+};
+
+export type FindHeaderReplaceProps = {
+  replaceTerm: string;
+  onReplaceTermChange: (value: string) => void;
+  preserveCase: boolean;
+  onPreserveCaseChange: (value: boolean) => void;
+  onReplace: () => void;
+  onReplaceAll: () => void;
+  isReplacing: boolean;
+  /** Whether the Replace button should be enabled */
+  replaceEnabled: boolean;
+  /** Whether the Replace All button should be enabled */
+  replaceAllEnabled: boolean;
+  /** Preview options shown only in replace mode */
+  previewOptions: PreviewOptions;
+  onPreviewOptionsChange: (value: PreviewOptions) => void;
+  previewOptionsStrings: ReplacePreviewOptionsStrings;
+};
+
+export type FindHeaderScopeProps = {
+  scope: Scope;
+  onScopeChange: (value: Scope) => void;
+  selectedBookIds: string[];
+  onSelectedBookIdsChange: (value: string[]) => void;
+  scopeDisplayText: string;
+  availableBookInfo: string;
+  localizedBookNames?: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
+  scopeSelectorStrings: Record<string, string | undefined>;
 };
 
 export interface FindHeaderProps {
@@ -87,33 +118,11 @@ export interface FindHeaderProps {
   activeMode: 'find' | 'replace';
   onActiveModeChange: (value: 'find' | 'replace') => void;
 
-  // Replace
-  replaceTerm: string;
-  onReplaceTermChange: (value: string) => void;
-  preserveCase: boolean;
-  onPreserveCaseChange: (value: boolean) => void;
-  onReplace: () => void;
-  onReplaceAll: () => void;
-  isReplacing: boolean;
-  /** Whether the Replace button should be enabled */
-  replaceEnabled: boolean;
-  /** Whether the Replace All button should be enabled */
-  replaceAllEnabled: boolean;
+  // Replace (all replace-related props and preview options grouped together)
+  replaceProps: FindHeaderReplaceProps;
 
   // Scope
-  scope: Scope;
-  onScopeChange: (value: Scope) => void;
-  selectedBookIds: string[];
-  onSelectedBookIdsChange: (value: string[]) => void;
-  scopeDisplayText: string;
-  availableBookInfo: string;
-  localizedBookNames?: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
-  scopeSelectorStrings: Record<string, string | undefined>;
-
-  // Preview options (shown only in replace mode)
-  previewOptions: PreviewOptions;
-  onPreviewOptionsChange: (value: PreviewOptions) => void;
-  previewOptionsStrings: ReplacePreviewOptionsStrings;
+  scopeProps: FindHeaderScopeProps;
 
   // Result navigation
   /** Total number of visible (non-hidden) results */
@@ -151,32 +160,43 @@ export function FindHeader({
   filterStrings,
   activeMode,
   onActiveModeChange,
-  replaceTerm,
-  onReplaceTermChange,
-  preserveCase,
-  onPreserveCaseChange,
-  onReplace,
-  onReplaceAll,
-  isReplacing,
-  replaceEnabled,
-  replaceAllEnabled,
-  scope,
-  onScopeChange,
-  selectedBookIds,
-  onSelectedBookIdsChange,
-  scopeDisplayText,
-  availableBookInfo,
-  localizedBookNames,
-  scopeSelectorStrings,
-  previewOptions,
-  onPreviewOptionsChange,
-  previewOptionsStrings,
+  replaceProps: {
+    replaceTerm,
+    onReplaceTermChange,
+    preserveCase,
+    onPreserveCaseChange,
+    onReplace,
+    onReplaceAll,
+    isReplacing,
+    replaceEnabled,
+    replaceAllEnabled,
+    previewOptions,
+    onPreviewOptionsChange,
+    previewOptionsStrings,
+  },
+  scopeProps: {
+    scope,
+    onScopeChange,
+    selectedBookIds,
+    onSelectedBookIdsChange,
+    scopeDisplayText,
+    availableBookInfo,
+    localizedBookNames,
+    scopeSelectorStrings,
+  },
   visibleResultsCount,
   focusedVisibleIndex,
   onPreviousResult,
   onNextResult,
   localizedStrings,
 }: FindHeaderProps) {
+  const [isScopeSelectorOpen, setIsScopeSelectorOpen] = useState(false);
+  const [isPreviewOptionsOpen, setIsPreviewOptionsOpen] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const isAnyMenuOpen =
+    isScopeSelectorOpen || isPreviewOptionsOpen || isFiltersOpen || isHistoryOpen;
+
   return (
     <div className="tw-space-y-3">
       {/* Find/Replace mode toggle */}
@@ -185,6 +205,8 @@ export function FindHeader({
         value={activeMode}
         onValueChange={(value) => {
           if (value === 'find' || value === 'replace') onActiveModeChange(value);
+          // Prevent deselection: keep current value when toggling an already-selected item
+          else if (value === '') onActiveModeChange(activeMode);
         }}
         className="tw-w-fit tw-rounded-lg tw-bg-muted tw-p-1"
       >
@@ -227,6 +249,7 @@ export function FindHeader({
           {searchTerm && (
             <button
               type="button"
+              aria-label={localizedStrings.clearSearch ?? 'Clear search'}
               onClick={() => {
                 if (searchTerm) onAddToHistory();
                 onSearchTermChange('');
@@ -246,6 +269,8 @@ export function FindHeader({
           groupHeading={localizedStrings.recent}
           buttonClassName="tw-h-10 tw-w-10"
           buttonVariant="outline"
+          open={isHistoryOpen}
+          onOpenChange={setIsHistoryOpen}
         />
         <FindFilters
           areFiltersActive={areFiltersActive}
@@ -258,6 +283,8 @@ export function FindHeader({
           isRegexAllowed={isRegexAllowed}
           setIsRegexAllowed={onIsRegexAllowedChange}
           localizedStrings={filterStrings}
+          open={isFiltersOpen}
+          onOpenChange={setIsFiltersOpen}
         />
       </div>
 
@@ -301,12 +328,15 @@ export function FindHeader({
               <Button
                 variant="outline"
                 onClick={onReplaceAll}
-                disabled={!replaceAllEnabled || isReplacing}
+                disabled={!replaceAllEnabled || isReplacing || isAnyMenuOpen}
               >
                 <ReplaceAll className="tw-h-4 tw-w-4" />
                 {localizedStrings.replaceAll}
               </Button>
-              <Button onClick={onReplace} disabled={!replaceEnabled || isReplacing}>
+              <Button
+                onClick={onReplace}
+                disabled={!replaceEnabled || isReplacing || isAnyMenuOpen}
+              >
                 <Replace className="tw-h-4 tw-w-4" />
                 {localizedStrings.replace}
               </Button>
@@ -319,7 +349,7 @@ export function FindHeader({
       <div className="tw-flex tw-items-center tw-justify-between">
         <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-1 tw-overflow-hidden">
           <div className="tw-min-w-0 tw-overflow-hidden">
-            <Popover>
+            <Popover open={isScopeSelectorOpen} onOpenChange={setIsScopeSelectorOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
@@ -354,6 +384,8 @@ export function FindHeader({
               previewOptions={previewOptions}
               setPreviewOptions={onPreviewOptionsChange}
               localizedStrings={previewOptionsStrings}
+              open={isPreviewOptionsOpen}
+              onOpenChange={setIsPreviewOptionsOpen}
             />
           )}
         </div>

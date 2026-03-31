@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSearchRegex, CharacterCategorizer } from './find.utils';
+import { applyPreserveCase, buildSearchRegex, CharacterCategorizer } from './find.utils';
 
 /** Default character categorizer matching the project-settings defaults used in production */
 const DEFAULT_CATEGORIZER: CharacterCategorizer = {
@@ -13,6 +13,50 @@ const DEFAULT_CATEGORIZER: CharacterCategorizer = {
 function matchAll(regex: RegExp, text: string): string[] {
   return [...text.matchAll(regex)].map((m) => m[0]);
 }
+
+describe('applyPreserveCase', () => {
+  it('returns ALL CAPS replacement when matched text is all-caps', () => {
+    expect(applyPreserveCase('HELLO', 'world')).toBe('WORLD');
+  });
+
+  it('returns Title Case replacement when matched text starts with a capital', () => {
+    expect(applyPreserveCase('Hello', 'world')).toBe('World');
+  });
+
+  it('returns replacement as-is when matched text is lowercase', () => {
+    expect(applyPreserveCase('hello', 'world')).toBe('world');
+  });
+
+  it('returns replacement as-is when matched text is mixed case (neither all-caps nor title-case)', () => {
+    expect(applyPreserveCase('hEllo', 'world')).toBe('world');
+  });
+
+  it('returns replacement unchanged when replacementText is empty', () => {
+    expect(applyPreserveCase('HELLO', '')).toBe('');
+  });
+
+  it('returns replacement unchanged when matchedText is empty', () => {
+    expect(applyPreserveCase('', 'world')).toBe('world');
+  });
+
+  it('does not treat a string of digits as all-caps (no case distinction)', () => {
+    // "123" toUpperCase === "123" and toLowerCase === "123", so the all-caps branch
+    // requires matchedText !== matchedText.toLowerCase() — digits should pass through
+    expect(applyPreserveCase('123', 'replacement')).toBe('replacement');
+  });
+
+  it('does not treat a punctuation-only match as all-caps', () => {
+    expect(applyPreserveCase('!!!', 'world')).toBe('world');
+  });
+
+  it('title-cases a multi-word replacement when match starts with a capital', () => {
+    expect(applyPreserveCase('Hello', 'foo bar')).toBe('Foo bar');
+  });
+
+  it('upper-cases a multi-word replacement when match is all-caps', () => {
+    expect(applyPreserveCase('FOO BAR', 'hello world')).toBe('HELLO WORLD');
+  });
+});
 
 describe('buildSearchRegex – trailing space', () => {
   it('matches a word followed by a space', () => {

@@ -945,7 +945,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Find dialog trigger listener
       if (event.ctrlKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
-        papi.commands.sendCommand('platformScripture.openFind', webViewId);
+        const selectedText = window.getSelection()?.toString() ?? '';
+        papi.commands.sendCommand('platformScripture.openFind', webViewId, selectedText);
       } else {
         const isInsertCommentHotkey = isMac
           ? event.metaKey &&
