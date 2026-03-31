@@ -1,96 +1,136 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ThemeProvider, useTheme } from '@/storybook/theme-provider.component';
+import { useEffect, useState } from 'react';
 import { Input } from '@/components/shadcn-ui/input';
 
-function createColorCells(color: string, invert: boolean = false) {
-  const colorString = getComputedStyle(document.documentElement).getPropertyValue(`--${color}`);
+const TOKEN_NAMES = [
+  'primary',
+  'secondary',
+  'destructive',
+  'muted',
+  'accent',
+  'popover',
+  'card',
+] as const;
+
+function hslVar(token: string) {
+  return `hsl(var(--${token}))`;
+}
+
+function useRootCssVar(name: string) {
+  const [value, setValue] = useState('');
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const read = () => {
+      setValue(getComputedStyle(root).getPropertyValue(`--${name}`).trim());
+    };
+    read();
+    const observer = new MutationObserver(read);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, [name]);
+
+  return value;
+}
+
+function TokenSwatch({ token, foregroundToken }: { token: string; foregroundToken: string }) {
+  const rawBg = useRootCssVar(token);
+  const rawFg = useRootCssVar(foregroundToken);
+
   return (
-    <>
-      {invert ? '' : <td>{color}</td>}
-      {createPreviewCell(
-        color,
-        colorString.split(', ')[2] === '0%' ? 'white' : 'inherit',
-        colorString,
-      )}
-      {invert ? <td>{color}</td> : ''}
-    </>
+    <Input
+      style={{
+        backgroundColor: hslVar(token),
+        color: hslVar(foregroundToken),
+        borderColor: hslVar('border'),
+      }}
+      className="tw-border-2"
+      value={`bg: ${rawBg} | fg: ${rawFg}`}
+      aria-label={`${token} and ${foregroundToken} preview`}
+      readOnly
+    />
   );
 }
 
-function createPreviewCell(color: string, foreground: string, text: string) {
-  return (
-    <td>
-      <Input
-        className={`tw-bg-${color} tw-border-2 tw-text-${foreground}`}
-        value={text}
-        aria-label={`${color} color preview showing value ${text}`}
-        readOnly
-      />
-    </td>
-  );
-}
+type ThemeColorDisplayProps = {
+  /**
+   * From Storybook `globals.theme` — passed via meta `render` so Docs/canvas do not call preview
+   * hooks inside the component
+   */
+  activeThemeId?: string;
+};
 
-function ThemeColorDisplay() {
+function ThemeColorDisplay({ activeThemeId = 'platform-light' }: ThemeColorDisplayProps) {
+  const isParatext = activeThemeId === 'paratext-light' || activeThemeId === 'paratext-dark';
+
   return (
     <>
       <p>
-        Color variables are defined in{' '}
+        Color variables come from the active Storybook toolbar theme (see <strong>Theme</strong> in
+        the toolbar). They are defined in{' '}
         <a
           className="tw-text-blue-600 hover:tw-underline"
           href="https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css"
         >
           index.css
-          <br />
-          <br />
         </a>
+        . The same values are mirrored for the running app in{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json"
+        >
+          themes.data.json
+        </a>
+        .
       </p>
-      {useTheme().theme.includes('paratext') ? (
-        ''
-      ) : (
+      {!isParatext ? (
         <p>
-          The currently selected theme is matching the Shadcn Slate theme, whereas ui.shadcn.com
-          uses the Zinc theme (with a deviating --ring 240 5% 64.9%). So be aware of the slight
-          differences of grayish / blueish tones.
-          <br />
-          <br />
+          The currently selected theme is the Platform (Shadcn Slate) pair, whereas ui.shadcn.com
+          uses the Zinc theme (with a deviating <code>--ring</code>). Expect slight differences in
+          gray/blue tones.
         </p>
-      )}
-      <p>Following colors are defined by the current theme:</p>
+      ) : undefined}
+      <p>Colors for the active theme:</p>
       <table>
         <thead>
           <tr>
             <th>Preview</th>
             <th>Name</th>
-            <th>Background</th>
-            <th>Foreground</th>
-            <th>Variable</th>
+            <th>Variables</th>
           </tr>
         </thead>
         <tbody>
-          {['primary', 'secondary', 'destructive', 'muted', 'accent', 'popover', 'card'].map(
-            (color) => {
-              return (
-                <tr key={color}>
-                  {createPreviewCell(color, `${color}-foreground`, color)}
-                  {createColorCells(color)}
-                  {createColorCells(`${color}-foreground`, true)}
-                </tr>
-              );
-            },
-          )}
+          {TOKEN_NAMES.map((color) => (
+            <tr key={color}>
+              <td>
+                <TokenSwatch token={color} foregroundToken={`${color}-foreground`} />
+              </td>
+              <td>{color}</td>
+              <td>
+                <code className="tw-text-xs">
+                  --{color}, --{color}-foreground
+                </code>
+              </td>
+            </tr>
+          ))}
           <tr>
-            {createPreviewCell('background', 'foreground', 'background')}
-            {createColorCells('background')}
-            {createColorCells('foreground', true)}
+            <td>
+              <TokenSwatch token="background" foregroundToken="foreground" />
+            </td>
+            <td>background</td>
+            <td>
+              <code className="tw-text-xs">--background, --foreground</code>
+            </td>
           </tr>
-          {['border', 'input', 'ring'].map((color) => {
-            return (
-              <tr key={color}>
-                <td className="tw-text-center">—</td>
-                {createColorCells(color)}
-              </tr>
-            );
-          })}
+          {(['border', 'input', 'ring'] as const).map((color) => (
+            <tr key={color}>
+              <td className="tw-text-center">—</td>
+              <td>{color}</td>
+              <td>
+                <code className="tw-text-xs">--{color}</code>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </>
@@ -101,13 +141,17 @@ const meta: Meta<typeof ThemeColorDisplay> = {
   title: 'Guides/Theme Colors',
   component: ThemeColorDisplay,
   tags: ['autodocs'],
+  render: (_, context) => {
+    const themeGlobal = context.globals.theme;
+    const activeThemeId =
+      typeof themeGlobal === 'string' && themeGlobal.length > 0 ? themeGlobal : 'platform-light';
+    return <ThemeColorDisplay activeThemeId={activeThemeId} />;
+  },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-max-w-6xl tw-p-6">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-min-h-[200px] tw-max-w-6xl tw-bg-background tw-p-6 tw-text-foreground">
+        <Story />
+      </div>
     ),
   ],
 };
@@ -121,7 +165,7 @@ export const Default: Story = {
     docs: {
       description: {
         story:
-          'A visual display of all available theme colors and their CSS variables, showing how they appear in the current theme context.',
+          'Theme colors for the current Storybook toolbar theme. Switch themes from the toolbar to see variables update.',
       },
     },
   },

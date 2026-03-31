@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { FootnoteList } from '@/components/advanced/footnotes/footnote-list.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { getFormatCallerFunction } from 'platform-bible-utils';
 import '@/components/demo/scripture-editor/usj-nodes.css';
 import {
@@ -18,11 +17,9 @@ const meta: Meta<typeof FootnoteList> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-h-[300px] tw-overflow-hidden tw-border tw-border-slate-300 tw-p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-h-[300px] tw-overflow-hidden tw-border tw-border-slate-300 tw-p-4">
+        <Story />
+      </div>
     ),
   ],
   argTypes: {

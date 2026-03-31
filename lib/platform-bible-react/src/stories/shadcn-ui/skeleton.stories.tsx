@@ -1,18 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Skeleton } from '@/components/shadcn-ui/skeleton';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Skeleton> = {
   title: 'Shadcn/Skeleton',
   component: Skeleton,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
+  decorators: [(Story) => <Story />],
   argTypes: {
     className: { control: 'text' },
   },

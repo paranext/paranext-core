@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import { ComboBox, type ComboBoxLabelOption } from '@/components/basics/combo-box.component';
+import { ComboBox } from '@/components/basics/combo-box.component';
+import type { ComboBoxLabelOption } from '@/components/basics/combo-box.component';
 import { BookOpen, Calendar, User, Settings, Folder } from 'lucide-react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { useState } from 'react';
 
 // Mock data for examples
@@ -58,11 +58,9 @@ const meta: Meta<typeof ComboBox<string>> = {
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-max-w-lg tw-p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-max-w-lg tw-p-4">
+        <Story />
+      </div>
     ),
   ],
 };

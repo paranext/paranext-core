@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import CommentEditor from './comment-editor.component';
 import { CommentEditorLocalizedStrings } from './comment-editor.types';
 
@@ -20,11 +19,9 @@ const meta: Meta<typeof CommentEditor> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-w-80">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-w-80">
+        <Story />
+      </div>
     ),
   ],
   argTypes: {

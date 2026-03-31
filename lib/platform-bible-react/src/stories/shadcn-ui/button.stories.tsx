@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
 import { Button } from '@/components/shadcn-ui/button';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Button> = {
   title: 'Shadcn/Button',
@@ -19,13 +18,7 @@ const meta: Meta<typeof Button> = {
     disabled: { control: 'boolean' },
     className: { control: 'text' },
   },
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
+  decorators: [(Story) => <Story />],
 };
 
 export default meta; // Ensure this is the default export

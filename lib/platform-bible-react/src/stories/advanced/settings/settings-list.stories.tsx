@@ -14,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof SettingsList> = {
   title: 'Advanced/Settings/SettingsList',
@@ -22,11 +21,9 @@ const meta: Meta<typeof SettingsList> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-max-w-2xl tw-p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-max-w-2xl tw-p-4">
+        <Story />
+      </div>
     ),
   ],
 };

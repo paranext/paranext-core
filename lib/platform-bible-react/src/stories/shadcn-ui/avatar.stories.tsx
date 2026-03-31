@@ -1,18 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/shadcn-ui/avatar';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Avatar> = {
   title: 'Shadcn/Avatar',
   component: Avatar,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
+  decorators: [(Story) => <Story />],
 };
 
 export default meta;

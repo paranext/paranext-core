@@ -3,19 +3,12 @@ import { fn } from 'storybook/test';
 import { Label } from '@/components/shadcn-ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { useState } from 'react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof RadioGroup> = {
   title: 'Shadcn/RadioGroup',
   component: RadioGroup,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
+  decorators: [(Story) => <Story />],
   argTypes: {
     defaultValue: { control: 'text' },
     value: { control: 'text' },

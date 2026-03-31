@@ -1,18 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Spinner } from '@/components/basics/spinner.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Spinner> = {
   title: 'Basics/Spinner',
   component: Spinner,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
+  decorators: [(Story) => <Story />],
   argTypes: {
     size: { control: { type: 'number', min: 1, max: 100 } },
     className: { control: 'text' },

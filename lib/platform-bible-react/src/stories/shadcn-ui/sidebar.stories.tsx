@@ -15,7 +15,6 @@ import {
   SidebarTrigger,
 } from '@/components/shadcn-ui/sidebar';
 import { Home, Inbox, Calendar, Search, Settings, File, Folder, User } from 'lucide-react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Sidebar> = {
   title: 'Shadcn/Sidebar',
@@ -23,11 +22,9 @@ const meta: Meta<typeof Sidebar> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-h-96">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-h-96">
+        <Story />
+      </div>
     ),
   ],
   argTypes: {

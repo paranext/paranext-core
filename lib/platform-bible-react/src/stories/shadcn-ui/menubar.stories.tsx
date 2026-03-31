@@ -15,19 +15,12 @@ import {
   MenubarTrigger,
 } from '@/components/shadcn-ui/menubar';
 import { useState } from 'react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Menubar> = {
   title: 'Shadcn/Menubar',
   component: Menubar,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
+  decorators: [(Story) => <Story />],
   argTypes: {
     variant: { control: 'select', options: ['default', 'muted'] },
   },

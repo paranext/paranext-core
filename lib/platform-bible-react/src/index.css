@@ -32,7 +32,9 @@
    * section for more information
    */
   /* ["Slate" base theme by shadcn/ui](https://ui.shadcn.com/docs/theming#slate) */
-  :root {
+  /* `.theme-platform-light` duplicates :root so a subtree can show Platform light while `html` is dark/Paratext (e.g. theme matrix). */
+  :root,
+  .theme-platform-light {
     --background: 0 0% 100%; /* white */
     --foreground: 222.2 84% 4.9%; /* slate-950 */
     --card: 0 0% 100%; /* white */

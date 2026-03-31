@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { History } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
@@ -123,11 +122,9 @@ const meta: Meta<typeof DirectionGuide> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-max-w-4xl tw-p-6">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-max-w-4xl tw-p-6">
+        <Story />
+      </div>
     ),
   ],
 };

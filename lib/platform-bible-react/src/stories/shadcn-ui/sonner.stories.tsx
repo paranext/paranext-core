@@ -1,19 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Button } from '@/components/shadcn-ui/button';
 import { Sonner, sonner } from '@/components/shadcn-ui/sonner';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Sonner> = {
   title: 'Shadcn/Sonner',
   component: Sonner,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
+  decorators: [(Story) => <Story />],
 };
 
 export default meta;

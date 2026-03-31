@@ -1,4 +1,3 @@
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { BookOpen, Copy, ExternalLink, Settings } from 'lucide-react';
 import { useState } from 'react';
@@ -28,11 +27,9 @@ A base component for displaying results in a card format. It provides common fun
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-max-w-lg tw-p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-max-w-lg tw-p-4">
+        <Story />
+      </div>
     ),
   ],
 };

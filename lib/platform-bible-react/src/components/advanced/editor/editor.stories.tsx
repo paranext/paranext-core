@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { useState } from 'react';
 import { SerializedEditorState } from 'lexical';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { Editor } from './editor';
 import { htmlToEditorState, editorStateToHtml } from './editor-utils';
 
@@ -12,11 +11,9 @@ const meta: Meta<typeof Editor> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-max-w-2xl tw-bg-background tw-p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-max-w-2xl tw-bg-background tw-p-4">
+        <Story />
+      </div>
     ),
   ],
   argTypes: {

@@ -3,5 +3,5 @@
   "compilerOptions": {
     "allowJs": true
   },
-  "include": [".eslintrc.cjs", "postcss.config.js", "*.ts", "src"]
+  "include": [".eslintrc.cjs", "postcss.config.js", "*.ts", ".storybook/**/*.ts", "src"]
 }

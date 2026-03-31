@@ -3,7 +3,6 @@ import { ScriptureResultsViewer } from '@/components/advanced/scripture-results-
 import { Button } from '@/components/shadcn-ui/button';
 import { useState } from 'react';
 import { generateRandomCheckingData } from '@/storybook/generate-random-checking-data';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof ScriptureResultsViewer> = {
   title: 'Advanced/ScriptureResultsViewer',
@@ -11,11 +10,9 @@ const meta: Meta<typeof ScriptureResultsViewer> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-p-4">
+        <Story />
+      </div>
     ),
   ],
   argTypes: {

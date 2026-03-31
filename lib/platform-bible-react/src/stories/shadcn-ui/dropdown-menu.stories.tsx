@@ -16,19 +16,12 @@ import {
 } from '@/components/shadcn-ui/dropdown-menu';
 import { ChevronDown, User, Settings, LogOut, CreditCard } from 'lucide-react';
 import { useState } from 'react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof DropdownMenu> = {
   title: 'Shadcn/DropdownMenu',
   component: DropdownMenu,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
+  decorators: [(Story) => <Story />],
 };
 
 export default meta;

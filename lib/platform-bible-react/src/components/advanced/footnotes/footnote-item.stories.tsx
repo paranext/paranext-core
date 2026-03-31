@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FootnoteItem } from '@/components/advanced/footnotes/footnote-item.component';
 import { FootnoteItemProps } from '@/components/advanced/footnotes/footnotes.types';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import '@/components/demo/scripture-editor/usj-nodes.css';
 import { cn } from '@/utils/shadcn-ui.util';
 import { usjFootnotes } from './footnotes.usj.data';
@@ -12,11 +11,9 @@ const meta: Meta<typeof FootnoteItem> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className={cn('formatted-font', 'tw-p-4')}>
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className={cn('formatted-font', 'tw-p-4')}>
+        <Story />
+      </div>
     ),
   ],
   args: {

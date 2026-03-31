@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MarkdownRenderer } from '@/components/advanced/extension-marketplace/markdown-renderer.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof MarkdownRenderer> = {
   title: 'Advanced/MarkdownRenderer',
@@ -8,11 +7,9 @@ const meta: Meta<typeof MarkdownRenderer> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-max-w-4xl tw-p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-max-w-4xl tw-p-4">
+        <Story />
+      </div>
     ),
   ],
   argTypes: {

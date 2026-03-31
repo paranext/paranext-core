@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { LanguageStrings, LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
 import CommentList from './comment-list.component';
@@ -197,13 +196,7 @@ const meta: Meta<typeof CommentList> = {
   title: 'Advanced/CommentList',
   component: CommentList,
   tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
-    ),
-  ],
+  decorators: [(Story) => <Story />],
   argTypes: {
     threads: { control: 'object' },
     className: { control: 'text' },

@@ -20,7 +20,6 @@ import {
   SelectValue,
 } from '@/components/shadcn-ui/select';
 import { BellRing, Check, Star, MessageSquare } from 'lucide-react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Card> = {
   title: 'Shadcn/Card',
@@ -31,11 +30,9 @@ const meta: Meta<typeof Card> = {
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-max-w-lg tw-p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-max-w-lg tw-p-4">
+        <Story />
+      </div>
     ),
   ],
 };

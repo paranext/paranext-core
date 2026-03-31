@@ -9,7 +9,6 @@ import {
   DropdownMenuItemType,
 } from '@/components/advanced/extension-marketplace/filter-dropdown.component';
 import { Footer } from '@/components/advanced/extension-marketplace/footer.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const mockVersionHistory: VersionHistoryType = {
   '1.0.0': {
@@ -77,11 +76,9 @@ const meta: Meta = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-p-4">
+        <Story />
+      </div>
     ),
   ],
 };

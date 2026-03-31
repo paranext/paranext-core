@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Toolbar } from '@/components/advanced/toolbar.component';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { Search, Save, Settings, Share } from 'lucide-react';
@@ -11,11 +10,9 @@ const meta: Meta<typeof Toolbar> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-p-4">
+        <Story />
+      </div>
     ),
   ],
 };

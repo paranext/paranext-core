@@ -1,7 +1,10 @@
 import type { Preview } from '@storybook/react-vite';
+import { createElement } from 'react';
 import { setupMonaco } from 'storybook-addon-code-editor';
 import { persistDirection, readDirection } from '../src/utils/dir-helper.util';
+import { withPlatformBibleThemes } from './theme-decorator';
 import '../src/index.css';
+import './preview-storybook.css';
 
 // Setup Monaco editor
 setupMonaco({
@@ -16,6 +19,7 @@ const preview: Preview = {
     actions: { argTypesRegex: '^on[A-Z].*' },
 
     controls: {
+      sort: 'requiredFirst',
       matchers: {
         color: /(background|color)$/i,
         date: /Date$/i,
@@ -34,11 +38,29 @@ const preview: Preview = {
       // 'off' - skip a11y checks entirely
       test: 'todo',
     },
+
+    /** @storybook/addon-themes — see `.storybook/theme-decorator.ts` */
+    themes: {
+      disable: false,
+    },
+
+    backgrounds: {
+      default: 'theme',
+      values: [
+        /** Canvas fill comes from `--background` in `theme-decorator.ts` so it tracks toolbar theme */
+        { name: 'theme', value: 'transparent' },
+        { name: 'light', value: '#ffffff' },
+        { name: 'dark', value: '#0f172a' },
+      ],
+    },
   },
   initialGlobals: {
+    /** Toolbar theme ids — applied to `document.documentElement` in `withPlatformBibleThemes` */
+    theme: 'platform-light',
     addonRtl: readDirection(),
   },
   decorators: [
+    withPlatformBibleThemes(),
     (Story, context) => {
       const direction = context.globals.addonRtl;
 
@@ -57,6 +79,18 @@ const preview: Preview = {
 
       return Story();
     },
+    /**
+     * Layout wrapper: themed backgrounds are scoped in preview-storybook.css (`#storybook-root`,
+     * Docs roots, `.sbdocs-preview`). This div only supplies min-height and width for the story subtree.
+     */
+    (Story) =>
+      createElement(
+        'div',
+        {
+          className: 'tw-box-border tw-min-h-full tw-w-full',
+        },
+        createElement(Story),
+      ),
   ],
   tags: [
     /* Auto-generate "Docs" page by default for each Storybook component.

@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MarkdownRenderer } from '@/components/advanced/extension-marketplace/markdown-renderer.component';
 import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn-ui/alert';
 import { AlertCircle, Terminal, Info, CheckCircle2, XCircle } from 'lucide-react';
-import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Alert> = {
   title: 'Shadcn/Alert',
@@ -17,11 +16,9 @@ const meta: Meta<typeof Alert> = {
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <div className="tw-max-w-lg tw-p-4">
-          <Story />
-        </div>
-      </ThemeProvider>
+      <div className="tw-max-w-lg tw-p-4">
+        <Story />
+      </div>
     ),
   ],
 };
