@@ -10216,7 +10216,7 @@ declare module 'renderer/services/overlays/overlay-coordinates' {
 declare module 'renderer/services/overlays/overlay.service-host' {
   import type { ReactElement } from 'react';
   import { IOverlayService } from 'renderer/services/overlays/overlay.service-model';
-  /** Resets debounce tracking state. Exported for use in tests only. */
+  /** Resets debounce tracking state. Exported for use in tests only. @internal */
   export function resetDebounceState(): void;
   /**
    * Shows a modal dialog overlay with any dialog component. Called internally by the dialog service
