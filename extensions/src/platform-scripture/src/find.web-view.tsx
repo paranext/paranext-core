@@ -104,6 +104,7 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_previewOptions_monospaceDescription%',
   '%webView_find_previewOptions_showInvisible%',
   '%webView_find_previewOptions_showInvisibleDescription%',
+  '%webView_find_clearSearch%',
 ];
 
 const defaultBooksPresent: string = '';
@@ -331,8 +332,10 @@ global.webViewComponent = function FindWebView({
     if (lastSearchTermSetting) {
       searchTermRestoredRef.current = true;
       if (!searchTerm) setSearchTerm(lastSearchTermSetting);
+    } else if (!isPlatformError(lastSearchTermPossiblyError)) {
+      searchTermRestoredRef.current = true;
     }
-  }, [lastSearchTermSetting, searchTerm, setSearchTerm]);
+  }, [lastSearchTermPossiblyError, lastSearchTermSetting, searchTerm, setSearchTerm]);
 
   // Persist the current search term to settings so it survives session restarts
   const saveSearchTermTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -344,6 +347,15 @@ global.webViewComponent = function FindWebView({
     }, 1000);
     return () => clearTimeout(saveSearchTermTimeoutRef.current);
   }, [searchTerm, setLastSearchTermSetting]);
+
+  const [allowInvisibleCharsPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.allowInvisibleCharacters',
+    false,
+  );
+  const allowInvisibleCharacters = isPlatformError(allowInvisibleCharsPossiblyError)
+    ? false
+    : allowInvisibleCharsPossiblyError;
 
   // #region Get available books and their localizations
 
@@ -1383,6 +1395,8 @@ global.webViewComponent = function FindWebView({
     }
   }, [scope, selectedBookIds, verseRefSetting, localizedBookData]);
 
+  const L = (key: (typeof LOCALIZED_STRINGS)[number]) => localizedStrings[key];
+
   return (
     <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-gap-4 tw-p-4 tw-min-w-[10rem] tw-max-h-screen">
       {/* Header with searchbar and filters */}
@@ -1414,73 +1428,65 @@ global.webViewComponent = function FindWebView({
         isRegexAllowed={isRegexAllowed}
         onIsRegexAllowedChange={setIsRegexAllowed}
         filterStrings={{
-          toggleFilters: localizedStrings['%webView_find_toggleFilters%'] ?? '',
-          matchContentIn: localizedStrings['%webView_find_matchContentIn%'] ?? '',
-          allText: localizedStrings['%webView_find_allText%'] ?? '',
-          allTextTooltip: localizedStrings['%webView_find_allText_tooltip%'] ?? '',
-          verseTextOnly: localizedStrings['%webView_find_verseTextOnly%'] ?? '',
-          restrictions: localizedStrings['%webView_find_restrictions%'] ?? '',
-          restrictionNone: localizedStrings['%webView_find_restrictions_none%'] ?? '',
-          restrictionWholeWord: localizedStrings['%webView_find_restrictions_wholeWord%'] ?? '',
-          restrictionStartOfWord: localizedStrings['%webView_find_restrictions_startOfWord%'] ?? '',
-          restrictionEndOfWord: localizedStrings['%webView_find_restrictions_endOfWord%'] ?? '',
-          capitalization: localizedStrings['%webView_find_capitalization%'] ?? '',
-          matchCase: localizedStrings['%webView_find_matchCase%'] ?? '',
-          pattern: localizedStrings['%webView_find_pattern%'] ?? '',
-          allowRegex: localizedStrings['%webView_find_allowRegex%'] ?? '',
+          toggleFilters: L('%webView_find_toggleFilters%'),
+          matchContentIn: L('%webView_find_matchContentIn%'),
+          allText: L('%webView_find_allText%'),
+          allTextTooltip: L('%webView_find_allText_tooltip%'),
+          verseTextOnly: L('%webView_find_verseTextOnly%'),
+          restrictions: L('%webView_find_restrictions%'),
+          restrictionNone: L('%webView_find_restrictions_none%'),
+          restrictionWholeWord: L('%webView_find_restrictions_wholeWord%'),
+          restrictionStartOfWord: L('%webView_find_restrictions_startOfWord%'),
+          restrictionEndOfWord: L('%webView_find_restrictions_endOfWord%'),
+          capitalization: L('%webView_find_capitalization%'),
+          matchCase: L('%webView_find_matchCase%'),
+          pattern: L('%webView_find_pattern%'),
+          allowRegex: L('%webView_find_allowRegex%'),
         }}
         activeMode={activeMode}
         onActiveModeChange={setActiveMode}
-        replaceTerm={replaceTerm}
-        onReplaceTermChange={setReplaceTerm}
-        preserveCase={preserveCase}
-        onPreserveCaseChange={setPreserveCase}
-        onReplace={() => handleReplace()}
-        onReplaceAll={handleReplaceAll}
-        isReplacing={isReplacing}
-        replaceEnabled={focusedResultIndex !== undefined && searchStatus !== 'running'}
-        replaceAllEnabled={visibleResults.length > 0 && searchStatus !== 'running'}
-        scope={scope}
-        onScopeChange={setScope}
-        selectedBookIds={selectedBookIds}
-        onSelectedBookIdsChange={setSelectedBookIds}
-        scopeDisplayText={scopeDisplayText}
-        availableBookInfo={booksPresent}
-        localizedBookNames={localizedBookData}
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        scopeSelectorStrings={scopeSelectorLocalizedStrings as Record<string, string | undefined>}
-        previewOptions={previewOptions}
-        onPreviewOptionsChange={setStoredPreviewOptions}
-        previewOptionsStrings={{
-          togglePreviewOptions: localizedStrings['%webView_find_previewOptions_toggle%'] ?? 'View',
-          layout: localizedStrings['%webView_find_previewOptions_layout%'] ?? 'Layout',
-          layoutArrow: localizedStrings['%webView_find_previewOptions_layout_arrow%'] ?? 'Arrow',
-          layoutInline: localizedStrings['%webView_find_previewOptions_layout_inline%'] ?? 'Inline',
-          layoutBlock: localizedStrings['%webView_find_previewOptions_layout_block%'] ?? 'Block',
-          highlightShape:
-            localizedStrings['%webView_find_previewOptions_shape%'] ?? 'Highlight Shape',
-          highlightShapeBar:
-            localizedStrings['%webView_find_previewOptions_shape_bar%'] ?? 'Bar border',
-          highlightShapeRounded:
-            localizedStrings['%webView_find_previewOptions_shape_rounded%'] ?? 'Rounded',
-          highlightShapePlain:
-            localizedStrings['%webView_find_previewOptions_shape_plain%'] ?? 'Plain',
-          color: localizedStrings['%webView_find_previewOptions_color%'] ?? 'Color',
-          colorRedCyan:
-            localizedStrings['%webView_find_previewOptions_color_redCyan%'] ?? 'Red / Cyan',
-          colorRedGreen:
-            localizedStrings['%webView_find_previewOptions_color_redGreen%'] ?? 'Red / Green',
-          colorGreyBlue:
-            localizedStrings['%webView_find_previewOptions_color_greyBlue%'] ?? 'Grey / Blue',
-          monospace: localizedStrings['%webView_find_previewOptions_monospace%'] ?? 'Monospace',
-          monospaceDescription:
-            localizedStrings['%webView_find_previewOptions_monospaceDescription%'] ??
-            'Use fixed-width font',
-          showInvisible:
-            localizedStrings['%webView_find_previewOptions_showInvisible%'] ?? 'Show invisible',
-          showInvisibleDescription:
-            localizedStrings['%webView_find_previewOptions_showInvisibleDescription%'] ??
-            'Show symbols for whitespace',
+        replaceProps={{
+          replaceTerm,
+          onReplaceTermChange: setReplaceTerm,
+          preserveCase,
+          onPreserveCaseChange: setPreserveCase,
+          onReplace: () => handleReplace(),
+          onReplaceAll: handleReplaceAll,
+          isReplacing,
+          replaceEnabled: focusedResultIndex !== undefined && searchStatus !== 'running',
+          replaceAllEnabled: visibleResults.length > 0 && searchStatus !== 'running',
+          previewOptions,
+          onPreviewOptionsChange: setStoredPreviewOptions,
+          previewOptionsStrings: {
+            togglePreviewOptions: L('%webView_find_previewOptions_toggle%'),
+            layout: L('%webView_find_previewOptions_layout%'),
+            layoutArrow: L('%webView_find_previewOptions_layout_arrow%'),
+            layoutInline: L('%webView_find_previewOptions_layout_inline%'),
+            layoutBlock: L('%webView_find_previewOptions_layout_block%'),
+            highlightShape: L('%webView_find_previewOptions_shape%'),
+            highlightShapeBar: L('%webView_find_previewOptions_shape_bar%'),
+            highlightShapeRounded: L('%webView_find_previewOptions_shape_rounded%'),
+            highlightShapePlain: L('%webView_find_previewOptions_shape_plain%'),
+            color: L('%webView_find_previewOptions_color%'),
+            colorRedCyan: L('%webView_find_previewOptions_color_redCyan%'),
+            colorRedGreen: L('%webView_find_previewOptions_color_redGreen%'),
+            colorGreyBlue: L('%webView_find_previewOptions_color_greyBlue%'),
+            monospace: L('%webView_find_previewOptions_monospace%'),
+            monospaceDescription: L('%webView_find_previewOptions_monospaceDescription%'),
+            showInvisible: L('%webView_find_previewOptions_showInvisible%'),
+            showInvisibleDescription: L('%webView_find_previewOptions_showInvisibleDescription%'),
+          },
+        }}
+        scopeProps={{
+          scope,
+          onScopeChange: setScope,
+          selectedBookIds,
+          onSelectedBookIdsChange: setSelectedBookIds,
+          scopeDisplayText,
+          availableBookInfo: booksPresent,
+          localizedBookNames: localizedBookData,
+          // eslint-disable-next-line no-type-assertion/no-type-assertion -- useLocalizedStrings returns a type keyed by specific string literals; the prop expects the broader Record<string, string | undefined>, so the cast is required
+          scopeSelectorStrings: scopeSelectorLocalizedStrings as Record<string, string | undefined>,
         }}
         visibleResultsCount={visibleResults.length}
         focusedVisibleIndex={focusedVisibleIndex}
@@ -1501,6 +1507,7 @@ global.webViewComponent = function FindWebView({
           countOfTotal: localizedStrings['%general_countOfTotal%'],
           previousResult: localizedStrings['%webView_find_previousResult%'],
           nextResult: localizedStrings['%webView_find_nextResult%'],
+          clearSearch: localizedStrings['%webView_find_clearSearch%'],
         }}
       />
 
@@ -1585,6 +1592,7 @@ global.webViewComponent = function FindWebView({
                 isReplaceMode={activeMode === 'replace'}
                 isReplacing={isReplacing}
                 previewOptions={previewOptions}
+                allowInvisibleCharacters={allowInvisibleCharacters}
               />
             );
           });

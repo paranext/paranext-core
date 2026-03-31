@@ -13,6 +13,11 @@ const preview: Preview = {
         date: /Date$/,
       },
     },
+    options: {
+      storySort: {
+        method: 'alphabetical',
+      },
+    },
   },
 
   initialGlobals: {
