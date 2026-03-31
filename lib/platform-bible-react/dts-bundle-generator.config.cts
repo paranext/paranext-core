@@ -3,6 +3,9 @@ const config = {
     // Stops dts-bundle-generator from trying to inline symlinked packages, which causes issues
     // when using yalc links to local dev packages
     followSymlinks: false,
+    // dts-bundle-generator uses TypeScript 6.x internally, which requires different settings
+    // than the TypeScript 5.x used by tsc (e.g., ignoreDeprecations for baseUrl)
+    preferredConfigPath: './tsconfig.dts.json',
   },
   entries: [
     {
