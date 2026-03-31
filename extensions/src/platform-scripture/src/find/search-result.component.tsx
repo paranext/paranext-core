@@ -8,7 +8,7 @@ import {
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
 import { applyPreserveCase } from './find.utils';
 import {
@@ -183,10 +183,12 @@ export default function SearchResult({
     }
   }, [isSelected]);
 
-  // When layout switches to inline AND the result is visible, enable context calculation
+  // When layout switches to inline AND the result is visible, enable context calculation.
+  // Use startTransition so these low-priority updates across many visible cards don't block
+  // the main thread when the user switches to inline layout.
   useEffect(() => {
     if (previewOptions.layout === 'inline' && isVisible) {
-      setShouldGetVerseText(true);
+      startTransition(() => setShouldGetVerseText(true));
     }
   }, [previewOptions.layout, isVisible]);
 
