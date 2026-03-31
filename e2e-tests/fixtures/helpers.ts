@@ -3,11 +3,10 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import WebSocket from 'ws';
+import { GET_METHODS } from '../../src/shared/data/rpc.model';
+import type { OpenRpc } from '../../src/shared/models/openrpc.model';
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
-
-/** Keep in sync with `GET_METHODS` in `src/shared/data/rpc.model.ts`. */
-const GET_METHODS = 'rpc.discover';
 
 /**
  * Same serialized request type as `registerCommand('platform.about', ...)` in command.service
@@ -206,32 +205,37 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
 }
 
 /**
- * @deprecated For CI smoke tests / app.fixture teardown only. Per-feature E2E tests must navigate
- *   through visible UI using cdp.fixture, not PAPI commands.
+ * One JSON-RPC 2.0 request over WebSocket: open, send, wait for response id `1`, close. Ignores
+ * unrelated messages until the matching response arrives.
  *
- *   Send a JSON-RPC request over WebSocket to the PAPI server. Opens a connection, sends the request,
- *   waits for response, then closes.
+ * @param timeoutErrorMessage — optional; defaults to a `PAPI request "…" timed out …` message.
  */
-export async function sendPapiCommand<T = unknown>(
-  command: string,
-  args: unknown[] = [],
+async function sendPapiJsonRpcOnce<T>(
+  method: string,
+  params: unknown[] = [],
   port: number = DEFAULT_WEBSOCKET_PORT,
+  perRequestTimeoutMs = 10_000,
+  timeoutErrorMessage?: string,
 ): Promise<T> {
+  const timeoutMessage =
+    timeoutErrorMessage ?? `PAPI request "${method}" timed out after ${perRequestTimeoutMs}ms`;
+
   return new Promise<T>((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:${port}`);
     const timeout = setTimeout(() => {
       ws.close();
-      reject(new Error(`PAPI command "${command}" timed out after 10s`));
-    }, 10_000);
+      reject(new Error(timeoutMessage));
+    }, perRequestTimeoutMs);
 
     ws.on('open', () => {
-      const request = {
-        jsonrpc: '2.0',
-        id: 1,
-        method: `command:${command}`,
-        params: args,
-      };
-      ws.send(JSON.stringify(request));
+      ws.send(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method,
+          params,
+        }),
+      );
     });
 
     ws.on('message', (data) => {
@@ -244,15 +248,14 @@ export async function sendPapiCommand<T = unknown>(
         reject(err);
         return;
       }
-      // Ignore unsolicited messages (notifications, events) that don't
-      // match our request id — only resolve on the actual response.
+      // Ignore unsolicited messages (notifications, events) that don't match our request id.
       if (parsed.id !== 1) return;
       clearTimeout(timeout);
       ws.close();
       if (parsed.error) {
         reject(new Error(`PAPI error: ${JSON.stringify(parsed.error)}`));
       } else {
-        // WebSocket JSON-RPC response `result` is untyped; caller provides T
+        // JSON-RPC `result` is untyped; caller supplies T (e.g. OpenRpc for rpc.discover).
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         resolve(parsed.result as T);
       }
@@ -265,9 +268,26 @@ export async function sendPapiCommand<T = unknown>(
   });
 }
 
-type OpenRpcDiscoverResult = {
-  methods?: { name: string }[];
-};
+/**
+ * @deprecated For CI smoke tests / app.fixture teardown only. Per-feature E2E tests must navigate
+ *   through visible UI using cdp.fixture, not PAPI commands.
+ *
+ *   Send a PAPI command over WebSocket (`method` = `command:` + `command`). Opens a connection, sends
+ *   the request, waits for the response, then closes.
+ */
+export async function sendPapiCommand<T = unknown>(
+  command: string,
+  args: unknown[] = [],
+  port: number = DEFAULT_WEBSOCKET_PORT,
+): Promise<T> {
+  return sendPapiJsonRpcOnce<T>(
+    `command:${command}`,
+    args,
+    port,
+    10_000,
+    `PAPI command "${command}" timed out after 10s`,
+  );
+}
 
 /**
  * Send a single JSON-RPC request where `method` is a PAPI request type (e.g. `rpc.discover`). Opens
@@ -279,51 +299,7 @@ async function sendPapiRequestOnce<T>(
   port: number = DEFAULT_WEBSOCKET_PORT,
   perRequestTimeoutMs = 10_000,
 ): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const ws = new WebSocket(`ws://localhost:${port}`);
-    const timeout = setTimeout(() => {
-      ws.close();
-      reject(new Error(`PAPI request "${method}" timed out after ${perRequestTimeoutMs}ms`));
-    }, perRequestTimeoutMs);
-
-    ws.on('open', () => {
-      const request = {
-        jsonrpc: '2.0',
-        id: 1,
-        method,
-        params,
-      };
-      ws.send(JSON.stringify(request));
-    });
-
-    ws.on('message', (data) => {
-      let parsed: { id?: number; error?: unknown; result?: unknown };
-      try {
-        parsed = JSON.parse(data.toString());
-      } catch (err) {
-        clearTimeout(timeout);
-        ws.close();
-        reject(err);
-        return;
-      }
-      if (parsed.id !== 1) return;
-      clearTimeout(timeout);
-      ws.close();
-      if (parsed.error) {
-        reject(new Error(`PAPI error: ${JSON.stringify(parsed.error)}`));
-      } else {
-        // JSON-RPC `result` is untyped at the protocol layer; callers choose `T` (e.g. OpenRPC from
-        // rpc.discover). There is no runtime validator here, so we assert to match the generic.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        resolve(parsed.result as T);
-      }
-    });
-
-    ws.on('error', (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
-  });
+  return sendPapiJsonRpcOnce<T>(method, params, port, perRequestTimeoutMs);
 }
 
 /**
@@ -339,7 +315,7 @@ export async function waitForPapiMethodRegistered(
   while (Date.now() - start < timeoutMs) {
     const remaining = timeoutMs - (Date.now() - start);
     try {
-      const result = await sendPapiRequestOnce<OpenRpcDiscoverResult>(
+      const result = await sendPapiRequestOnce<OpenRpc>(
         GET_METHODS,
         [],
         port,
