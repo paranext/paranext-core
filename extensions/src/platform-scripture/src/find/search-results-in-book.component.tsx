@@ -52,6 +52,8 @@ type SearchResultsInBookProps = {
   isReplacing: boolean;
   /** Options controlling how the replace preview is displayed */
   previewOptions?: PreviewOptions;
+  /** Whether the project has AllowInvisibleChars enabled. Forwarded to each SearchResult. */
+  allowInvisibleCharacters?: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -76,6 +78,7 @@ export function SearchResultsInBook({
   isReplacing,
   replaceConfig,
   previewOptions,
+  allowInvisibleCharacters,
 }: SearchResultsInBookProps) {
   const verseRefForBook = useMemo(() => {
     return {
@@ -136,6 +139,7 @@ export function SearchResultsInBook({
           isReplacing={isReplacing}
           replaceConfig={replaceConfig}
           previewOptions={previewOptions}
+          allowInvisibleCharacters={allowInvisibleCharacters}
         />
       ))}
     </>

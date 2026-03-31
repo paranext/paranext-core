@@ -112,42 +112,46 @@ export function FindHeaderDemo() {
       }}
       activeMode={activeMode}
       onActiveModeChange={setActiveMode}
-      replaceTerm={replaceTerm}
-      onReplaceTermChange={setReplaceTerm}
-      preserveCase={preserveCase}
-      onPreserveCaseChange={setPreserveCase}
-      onReplace={() => {}}
-      onReplaceAll={() => {}}
-      isReplacing={false}
-      replaceEnabled={focusedResultIndex !== undefined}
-      replaceAllEnabled={demoTotalResults > 0}
-      scope={scope}
-      onScopeChange={setScope}
-      selectedBookIds={selectedBookIds}
-      onSelectedBookIdsChange={setSelectedBookIds}
-      scopeDisplayText={scopeDisplayText}
-      availableBookInfo={availableBookIds}
-      scopeSelectorStrings={{}}
-      previewOptions={previewOptions}
-      onPreviewOptionsChange={setPreviewOptions}
-      previewOptionsStrings={{
-        togglePreviewOptions: 'View',
-        layout: 'Layout',
-        layoutArrow: 'Arrow',
-        layoutInline: 'Inline',
-        layoutBlock: 'Block',
-        highlightShape: 'Highlight Shape',
-        highlightShapeBar: 'Bar border',
-        highlightShapeRounded: 'Rounded',
-        highlightShapePlain: 'Plain',
-        color: 'Color',
-        colorRedCyan: 'Red / Cyan',
-        colorRedGreen: 'Red / Green',
-        colorGreyBlue: 'Grey / Blue',
-        monospace: 'Monospace',
-        monospaceDescription: 'Use fixed-width font',
-        showInvisible: 'Show invisible',
-        showInvisibleDescription: 'Show symbols for whitespace',
+      replaceProps={{
+        replaceTerm,
+        onReplaceTermChange: setReplaceTerm,
+        preserveCase,
+        onPreserveCaseChange: setPreserveCase,
+        onReplace: () => {},
+        onReplaceAll: () => {},
+        isReplacing: false,
+        replaceEnabled: focusedResultIndex !== undefined,
+        replaceAllEnabled: demoTotalResults > 0,
+        previewOptions,
+        onPreviewOptionsChange: setPreviewOptions,
+        previewOptionsStrings: {
+          togglePreviewOptions: 'View',
+          layout: 'Layout',
+          layoutArrow: 'Arrow',
+          layoutInline: 'Inline',
+          layoutBlock: 'Block',
+          highlightShape: 'Highlight Shape',
+          highlightShapeBar: 'Bar border',
+          highlightShapeRounded: 'Rounded',
+          highlightShapePlain: 'Plain',
+          color: 'Color',
+          colorRedCyan: 'Red / Cyan',
+          colorRedGreen: 'Red / Green',
+          colorGreyBlue: 'Grey / Blue',
+          monospace: 'Monospace',
+          monospaceDescription: 'Use fixed-width font',
+          showInvisible: 'Show invisible',
+          showInvisibleDescription: 'Show symbols for whitespace',
+        },
+      }}
+      scopeProps={{
+        scope,
+        onScopeChange: setScope,
+        selectedBookIds,
+        onSelectedBookIdsChange: setSelectedBookIds,
+        scopeDisplayText,
+        availableBookInfo: availableBookIds,
+        scopeSelectorStrings: {},
       }}
       visibleResultsCount={demoTotalResults}
       focusedVisibleIndex={focusedVisibleIndex}
@@ -179,6 +183,7 @@ export function FindHeaderDemo() {
         countOfTotal: '{count} of {total}',
         previousResult: 'Previous result',
         nextResult: 'Next result',
+        clearSearch: 'Clear search',
       }}
     />
   );
