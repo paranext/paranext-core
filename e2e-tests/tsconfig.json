@@ -9,11 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "resolveJsonModule": true,
-    "baseUrl": "..",
-    "paths": {
-      "@shared/*": ["src/shared/*"]
-    }
+    "resolveJsonModule": true
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules", "playwright-report", "test-results"]

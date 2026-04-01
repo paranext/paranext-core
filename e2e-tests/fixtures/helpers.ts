@@ -3,8 +3,6 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import WebSocket from 'ws';
-import { GET_METHODS } from '../../src/shared/data/rpc.model';
-import type { OpenRpc } from '../../src/shared/models/openrpc.model';
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
@@ -16,6 +14,20 @@ const PLATFORM_ABOUT_COMMAND = 'command:platform.about';
 
 const RPC_DISCOVER_POLL_INTERVAL_MS = 250;
 export const PROCESS_READY_TIMEOUT = 120_000;
+
+/**
+ * Keep in sync with GET_METHODS from @shared/data/rpc.model Get all methods that are currently
+ * registered on the network. Required to be 'rpc.discover' by the OpenRPC specification.
+ */
+const GET_METHODS = 'rpc.discover';
+
+/**
+ * Subset of the OpenRPC `rpc.discover` result shape used by E2E helpers (see
+ * `src/shared/models/openrpc.model` for the full type).
+ */
+type RpcDiscoverResult = {
+  methods?: Array<{ name: string }>;
+};
 
 /** Return value from {@link launchElectronApp}. */
 export interface ElectronAppContext {
@@ -255,7 +267,7 @@ async function sendPapiJsonRpcOnce<T>(
       if (parsed.error) {
         reject(new Error(`PAPI error: ${JSON.stringify(parsed.error)}`));
       } else {
-        // JSON-RPC `result` is untyped; caller supplies T (e.g. OpenRpc for rpc.discover).
+        // JSON-RPC `result` is untyped; caller supplies T (e.g. RpcDiscoverResult for rpc.discover).
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         resolve(parsed.result as T);
       }
@@ -315,7 +327,7 @@ export async function waitForPapiMethodRegistered(
   while (Date.now() - start < timeoutMs) {
     const remaining = timeoutMs - (Date.now() - start);
     try {
-      const result = await sendPapiRequestOnce<OpenRpc>(
+      const result = await sendPapiRequestOnce<RpcDiscoverResult>(
         GET_METHODS,
         [],
         port,
