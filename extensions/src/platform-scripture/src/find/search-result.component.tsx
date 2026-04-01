@@ -151,7 +151,9 @@ export default function SearchResult({
 
   useEffect(() => {
     // Registers a `IntersectionObserver` instance to determine when the component is visible in the DOM
-    const observer = new IntersectionObserver(([entry]) => setShouldGetVerseText(entry.isIntersecting));
+    const observer = new IntersectionObserver(([entry]) =>
+      setShouldGetVerseText(entry.isIntersecting),
+    );
     if (cardRef.current) {
       observer.observe(cardRef.current);
     }
@@ -241,7 +243,7 @@ export default function SearchResult({
 
   const { highlightShape, color } = previewOptions;
   const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
-  const findHighlightClass = `${fontClass} ${getGoldFindHighlightClasses(highlightShape)}`;
+  const findHighlightClass = `${fontClass} ${getGoldFindHighlightClasses('rounded')}`;
   const replaceClass = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape)}`;
   // In inline layout the find and replace spans are directly adjacent — only round the outer corners
   // so the two spans look like one unified rectangle split by color.
