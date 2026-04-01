@@ -151,6 +151,8 @@ module.exports = {
     {
       files: ['*.stories.ts', '*.stories.tsx'],
       rules: {
+        // Stories use console.log for Storybook action logging
+        'no-console': 'off',
         '@typescript-eslint/naming-convention': [
           'error',
           {

@@ -750,6 +750,82 @@ export declare class UnsubscriberAsyncList {
 	 */
 	runAllUnsubscribers(): Promise<boolean>;
 }
+/**
+ * Standard platform error codes based on gRPC status codes. These provide machine-readable,
+ * cross-process error classification that survives iframe serialization boundaries.
+ *
+ * @see https://grpc.io/docs/guides/status-codes/ for the original gRPC specification
+ */
+/**
+ * The operation was aborted, typically due to a concurrency issue such as a newer request replacing
+ * an in-flight one, or a transaction abort.
+ */
+export declare const ABORTED = "ABORTED";
+/** The entity that a client attempted to create already exists. */
+export declare const ALREADY_EXISTS = "ALREADY_EXISTS";
+/** The operation was cancelled, typically by the caller. */
+export declare const CANCELLED = "CANCELLED";
+/** Unrecoverable data loss or corruption. */
+export declare const DATA_LOSS = "DATA_LOSS";
+/** The deadline expired before the operation could complete. */
+export declare const DEADLINE_EXCEEDED = "DEADLINE_EXCEEDED";
+/**
+ * The operation was rejected because the system is not in a state required for the operation's
+ * execution. For example, a WebView must be visible to show an overlay. Unlike
+ * {@link INVALID_ARGUMENT}, this error indicates a problem with the system state, not the request.
+ */
+export declare const FAILED_PRECONDITION = "FAILED_PRECONDITION";
+/**
+ * Internal error. This means that some invariants expected by the underlying system have been
+ * broken. This is a serious error; it means the system is in an unexpected state.
+ */
+export declare const INTERNAL = "INTERNAL";
+/**
+ * The client specified an invalid argument. Indicates arguments that are problematic regardless of
+ * the state of the system (e.g., a malformed request, empty required field, invalid enum value).
+ */
+export declare const INVALID_ARGUMENT = "INVALID_ARGUMENT";
+/** The requested entity (e.g., file, resource, overlay) was not found. */
+export declare const NOT_FOUND = "NOT_FOUND";
+/**
+ * The operation was attempted past the valid range. Unlike {@link INVALID_ARGUMENT}, this error
+ * indicates a problem that may be fixed if the system state changes.
+ */
+export declare const OUT_OF_RANGE = "OUT_OF_RANGE";
+/**
+ * The caller does not have permission to execute the specified operation. Must not be used for
+ * authentication failures (use {@link UNAUTHENTICATED} instead).
+ */
+export declare const PERMISSION_DENIED = "PERMISSION_DENIED";
+/**
+ * Some resource has been exhausted, perhaps a per-user quota, or perhaps the entire file system is
+ * out of space. Also used when a rate limit or throttle rejects a request.
+ */
+export declare const RESOURCE_EXHAUSTED = "RESOURCE_EXHAUSTED";
+/**
+ * The request does not have valid authentication credentials for the operation. Use
+ * {@link PERMISSION_DENIED} for authorization failures where the caller is authenticated but not
+ * permitted.
+ */
+export declare const UNAUTHENTICATED = "UNAUTHENTICATED";
+/**
+ * The service is currently unavailable. This is most likely a transient condition, which can be
+ * corrected by retrying with a backoff.
+ */
+export declare const UNAVAILABLE = "UNAVAILABLE";
+/** The operation is not implemented or is not supported/enabled in this service. */
+export declare const UNIMPLEMENTED = "UNIMPLEMENTED";
+/**
+ * Unknown error. This may be returned when a received error code is not recognized or is not
+ * applicable in the current context.
+ */
+export declare const UNKNOWN = "UNKNOWN";
+/**
+ * Union of all valid platform error codes. Based on gRPC status codes.
+ *
+ * @see https://grpc.io/docs/guides/status-codes/
+ */
+export type PlatformErrorCode = typeof ABORTED | typeof ALREADY_EXISTS | typeof CANCELLED | typeof DATA_LOSS | typeof DEADLINE_EXCEEDED | typeof FAILED_PRECONDITION | typeof INTERNAL | typeof INVALID_ARGUMENT | typeof NOT_FOUND | typeof OUT_OF_RANGE | typeof PERMISSION_DENIED | typeof RESOURCE_EXHAUSTED | typeof UNAUTHENTICATED | typeof UNAVAILABLE | typeof UNIMPLEMENTED | typeof UNKNOWN;
 /** The version of the PlatformError type */
 export declare const PLATFORM_ERROR_VERSION = 1;
 /**
@@ -766,6 +842,8 @@ export type PlatformError = {
 	 * it will be stored here.
 	 */
 	cause?: unknown;
+	/** Machine-readable error code indicating the class of problem. See {@link PlatformErrorCode}. */
+	code?: PlatformErrorCode;
 	/**
 	 * A descriptive message explaining the error. Normally this will be copied from an `Error` object
 	 * passed to {@link newPlatformError}. If a string is passed to {@link newPlatformError}, it will be
@@ -786,9 +864,10 @@ export type PlatformError = {
  *
  * @param error The error message as a string, an Error object, or a value to assign to the `cause`
  *   property of the returned PlatformError object
+ * @param code Optional machine-readable error code. See {@link PlatformErrorCode}.
  * @returns A new PlatformError object
  */
-export declare function newPlatformError(error?: unknown): PlatformError;
+export declare function newPlatformError(error?: unknown, code?: PlatformErrorCode): PlatformError;
 /**
  * Checks if the provided value is a PlatformError object.
  *

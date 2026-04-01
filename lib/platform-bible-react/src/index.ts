@@ -199,6 +199,18 @@ export {
   CommandList,
 } from './components/shadcn-ui/command';
 export * from './components/shadcn-ui/context-menu';
+export {
+  Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogClose,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from './components/shadcn-ui/dialog';
 export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
@@ -243,6 +255,15 @@ export {
   type UseListboxProps,
   type ListboxOption,
 } from './hooks/listbox-keyboard-navigation.hook';
+
+// Z-index scale
+export {
+  Z_INDEX_ABOVE_DOCK,
+  Z_INDEX_FOOTNOTE_EDITOR,
+  Z_INDEX_OVERLAY,
+  Z_INDEX_MODAL_BACKDROP,
+  Z_INDEX_MODAL,
+} from './components/z-index';
 
 // Utils
 export { cn } from './utils/shadcn-ui.util';
