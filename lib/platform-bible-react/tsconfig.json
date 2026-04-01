@@ -1,7 +1,6 @@
 {
   "extends": "../../tsconfig",
   "compilerOptions": {
-    "baseUrl": "./src",
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -11,7 +10,9 @@
     // We needed to remove react from here below because having two copies was causing problems in
     // the jest tests. But we need the types in both places.
     "typeRoots": ["./node_modules/@types", "../../node_modules/@types", "./src/types"],
-    "types": ["node", "jest"],
+    // Need vite-env here for css imports during dts-bundle-generator runs because it replaces
+    // `include` (which normally includes ./src/types/vite-env.d.ts) with its single `filePath`
+    "types": ["node", "jest", "vite-env"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "forceConsistentCasingInFileNames": true,
     "incremental": false,
@@ -22,7 +23,7 @@
     "useDefineForClassFields": true,
     "outDir": "",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],
