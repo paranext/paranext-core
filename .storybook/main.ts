@@ -42,17 +42,17 @@ const config: StorybookConfig = {
 
   // Merge StorybookWebpackConfig with our WebpackRendererConfig
   // See the current webpack configuration using npm run storybook -- --debug-webpack
-  // TODO: Make this work in production mode
   webpackFinal: async (webpackConfig, { configType }) => {
     const rendererConfig =
       configType === 'PRODUCTION'
-        ? // Storybook is a build tool so this will not affect anything
-          // eslint-disable-next-line global-require
+        ? // eslint-disable-next-line global-require
           require('../.erb/configs/webpack.config.renderer.prod').default
         : // Storybook is a build tool so this will not affect anything
           // eslint-disable-next-line global-require
           require('../.erb/configs/webpack.config.renderer.dev').default;
-    // Remove configs that break stuff (https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config)
+    // Strip Electron-specific configs that conflict with Storybook's own webpack setup.
+    // devServer/entry/output are Electron-only; optimization/cache are managed by Storybook.
+    // See https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { devServer, entry, output, optimization, cache, ...rendererConfigSanitized } =
       rendererConfig;

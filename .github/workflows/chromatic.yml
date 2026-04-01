@@ -61,7 +61,7 @@ jobs:
           fi
 
       - name: Run Chromatic
-        uses: chromaui/action@latest
+        uses: chromaui/action@v16
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
           buildScriptName: storybook:build
