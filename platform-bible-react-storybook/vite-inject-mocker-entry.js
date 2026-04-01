@@ -1377,15 +1377,6 @@ video:where(.pr-twp,.pr-twp *) {
 .tw-z-50 {
   z-index: 50;
 }
-.tw-z-\\[1000\\] {
-  z-index: 1000;
-}
-.tw-z-\\[250\\] {
-  z-index: 250;
-}
-.tw-z-\\[300\\] {
-  z-index: 300;
-}
 .tw-col-span-1 {
   grid-column: span 1 / span 1;
 }

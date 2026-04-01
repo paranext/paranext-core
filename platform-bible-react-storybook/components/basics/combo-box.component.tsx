@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { type CSSProperties, ReactNode, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
@@ -40,6 +40,11 @@ export type ComboBoxProps<T> = {
   buttonClassName?: string;
   /** Additional css classes to help with unique styling of the combo box popover */
   popoverContentClassName?: string;
+  /**
+   * Additional inline styles for the combo box popover. Use for z-index overrides instead of
+   * className to avoid being overridden by PopoverContent's inline default z-index.
+   */
+  popoverContentStyle?: CSSProperties;
   /**
    * The selected value that the combo box currently holds. Must be shallow equal to one of the
    * options entries.
@@ -94,6 +99,7 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   className,
   buttonClassName,
   popoverContentClassName,
+  popoverContentStyle,
   value,
   onChange = () => {},
   getOptionLabel = getOptionLabelDefault,
@@ -184,6 +190,7 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
       <PopoverContent
         align={alignDropDown}
         className={cn('tw-w-[200px] tw-p-0', popoverContentClassName)}
+        style={popoverContentStyle}
       >
         <Command>
           <CommandInput placeholder={textPlaceholder} className="tw-text-inherit" />

@@ -5,14 +5,25 @@ import { X } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { readDirection } from '@/utils/dir-helper.util';
 
+// CUSTOM JSDoc comments added to all components for documentation
+/**
+ * The Dialog component displays a modal dialog window. Built on Radix UI's Dialog component and
+ * styled by Shadcn UI.
+ *
+ * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/dialog See Radix UI
+ * Documentation https://www.radix-ui.com/docs/primitives/components/dialog
+ */
 const Dialog = DialogPrimitive.Root;
-
+/** Button or element that opens the dialog when clicked. */
 const DialogTrigger = DialogPrimitive.Trigger;
 
+/** Portals the dialog content into `document.body` to avoid z-index and overflow issues. */
 const DialogPortal = DialogPrimitive.Portal;
 
+/** Button or element that closes the dialog when clicked. */
 const DialogClose = DialogPrimitive.Close;
 
+/** Semi-transparent backdrop rendered behind the dialog content. Animates on open/close. */
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -28,6 +39,10 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+/**
+ * Main container for dialog content. Renders inside a portal with an overlay backdrop, centered on
+ * screen. Includes a close button in the top corner.
+ */
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
@@ -61,6 +76,8 @@ const DialogContent = React.forwardRef<
   );
 });
 DialogContent.displayName = DialogPrimitive.Content.displayName;
+
+/** Container for the dialog's header area. Stacks title and description vertically. */
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
@@ -74,6 +91,7 @@ function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 }
 DialogHeader.displayName = 'DialogHeader';
 
+/** Container for the dialog's footer area. Lays out action buttons in a row on larger screens. */
 function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
@@ -87,6 +105,7 @@ function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 }
 DialogFooter.displayName = 'DialogFooter';
 
+/** Renders the dialog's title as a styled heading. Used inside DialogHeader. */
 const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
@@ -99,6 +118,7 @@ const DialogTitle = React.forwardRef<
 ));
 DialogTitle.displayName = DialogPrimitive.Title.displayName;
 
+/** Renders the dialog's description text in a muted style. Used inside DialogHeader. */
 const DialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
