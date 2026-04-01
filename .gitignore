@@ -57,7 +57,8 @@ e2e-tests/test-results/
 e2e-tests/.dev-server.pid
 
 #claude
-.claude
+.claude/*
+!.claude/settings.json
 .claude.backup/
 .context
 c-sharp/CLAUDE.md
