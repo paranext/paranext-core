@@ -493,17 +493,6 @@ export async function activate(context: ExecutionActivationContext) {
     checkAggregatorService.dispose,
   );
 
-  const annotationStyleDp = await papi.dataProviders.get('platformScriptureEditor.annotationStyle');
-  const findAnnotationStyleNonce = await annotationStyleDp?.registerAnnotationStyle(
-    'find-result-highlight',
-    { backgroundColor: 'rgba(251, 191, 36, 0.4)' },
-  );
-  if (findAnnotationStyleNonce)
-    context.registrations.add(async () => {
-      await annotationStyleDp?.deleteAnnotationStyle(findAnnotationStyleNonce);
-      return true;
-    });
-
   logger.debug('platformScripture is finished activating!');
 }
 

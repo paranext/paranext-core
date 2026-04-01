@@ -4,7 +4,6 @@ import {
   useLocalizedStrings,
   useProjectDataProvider,
   useProjectSetting,
-  useSetting,
   useWebViewController,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
@@ -169,7 +168,8 @@ global.webViewComponent = function FindWebView({
     undefined,
   );
 
-  const [recentSearchesPossiblyError, setRecentSearches] = useSetting(
+  const [recentSearchesPossiblyError, setRecentSearches] = useProjectSetting(
+    projectId,
     'platformScripture.findRecentSearches',
     [],
   );
@@ -180,7 +180,7 @@ global.webViewComponent = function FindWebView({
 
   const addRecentSearchItem = useRecentSearches(recentSearches, setRecentSearches);
 
-  // Track items added locally so the history dropdown updates immediately (useSetting is async).
+  // Track items added locally so the history dropdown updates immediately (useProjectSetting is async).
   const [pendingHistory, setPendingHistory] = useState<string[]>([]);
   // Once settings confirm the addition, retire it from the pending list.
   useEffect(() => {
@@ -211,7 +211,7 @@ global.webViewComponent = function FindWebView({
   );
 
   const [lastSearchTermPossiblyError, setLastSearchTermSetting, , isLastSearchTermLoading] =
-    useSetting('platformScripture.findLastSearchTerm', '');
+    useProjectSetting(projectId, 'platformScripture.findLastSearchTerm', '');
   const lastSearchTermSetting = isPlatformError(lastSearchTermPossiblyError)
     ? ''
     : lastSearchTermPossiblyError;
@@ -330,34 +330,35 @@ global.webViewComponent = function FindWebView({
   }, []);
 
   // Restore the last search term from settings when the webview first loads with an empty field
-  const searchTermRestoredRef = useRef(false);
+  const [searchTermRestored, setSearchTermRestored] = useState(false);
   useEffect(() => {
-    if (searchTermRestoredRef.current) return;
+    if (searchTermRestored) return;
     if (lastSearchTermSetting) {
-      searchTermRestoredRef.current = true;
+      setSearchTermRestored(true);
       if (!searchTerm) setSearchTerm(lastSearchTermSetting);
     } else if (!isPlatformError(lastSearchTermPossiblyError) && !isLastSearchTermLoading) {
       // Only finalize restoration once the setting has fully loaded (not just returned the default)
-      searchTermRestoredRef.current = true;
+      setSearchTermRestored(true);
     }
   }, [
     isLastSearchTermLoading,
     lastSearchTermPossiblyError,
     lastSearchTermSetting,
     searchTerm,
+    searchTermRestored,
     setSearchTerm,
   ]);
 
   // Persist the current search term to settings so it survives session restarts
   const saveSearchTermTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
-    if (!searchTermRestoredRef.current) return;
+    if (!searchTermRestored) return;
     clearTimeout(saveSearchTermTimeoutRef.current);
     saveSearchTermTimeoutRef.current = setTimeout(() => {
       setLastSearchTermSetting(searchTerm);
     }, 1000);
     return () => clearTimeout(saveSearchTermTimeoutRef.current);
-  }, [searchTerm, setLastSearchTermSetting]);
+  }, [searchTerm, searchTermRestored, setLastSearchTermSetting]);
 
   const [allowInvisibleCharsPossiblyError] = useProjectSetting(
     projectId,
@@ -652,10 +653,13 @@ global.webViewComponent = function FindWebView({
         setSearchStatus(undefined);
         setSearchError(undefined);
         setFocusedResultIndex(undefined);
+        editorWebViewController
+          ?.runAnnotationAction('find-current-result', 'removed')
+          .catch(() => {});
         await abandonFindJob();
       } else await stopFindJob();
     },
-    [abandonFindJob, stopFindJob],
+    [abandonFindJob, editorWebViewController, stopFindJob],
   );
 
   const loadMoreResults = useCallback(async () => {
@@ -861,15 +865,12 @@ global.webViewComponent = function FindWebView({
       handleStartSearchRef.current();
     }, SEARCH_DEBOUNCE_DELAY_MS),
   );
-  const debouncedAddToHistory = useRef(
-    debounce(() => {
-      if (searchTermRef.current) addToHistoryRef.current(searchTermRef.current);
-    }, HISTORY_DEBOUNCE_DELAY_MS),
-  );
+  const addToHistoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Save search term to history on unmount (closing the tab or application)
   useEffect(() => {
     return () => {
+      clearTimeout(addToHistoryTimeoutRef.current);
       if (searchTermRef.current) addToHistoryRef.current(searchTermRef.current);
     };
   }, []);
@@ -881,8 +882,11 @@ global.webViewComponent = function FindWebView({
       // Only skip the initial auto-search when the field is empty. When searchTerm is non-empty
       // (e.g. restored from state), fall through so results appear immediately on startup.
       if (searchTerm.trim() === '') return undefined;
-      initialSearchTriggeredRef.current = true;
     }
+    // Track any search attempt with a non-empty term so the findPdp-readiness fallback below
+    // can retry if the PDP wasn't available when the debounce fired (covers both the initial
+    // render and later cases like term-restoration or user typing).
+    if (searchTerm.trim() !== '') initialSearchTriggeredRef.current = true;
     debouncedHandleStartSearch.current();
   }, [
     searchTerm,
@@ -895,7 +899,12 @@ global.webViewComponent = function FindWebView({
 
   // Save search term to history after 5 seconds of typing inactivity
   useEffect(() => {
-    if (searchTerm) debouncedAddToHistory.current();
+    if (searchTerm) {
+      clearTimeout(addToHistoryTimeoutRef.current);
+      addToHistoryTimeoutRef.current = setTimeout(() => {
+        addToHistoryRef.current(searchTerm);
+      }, HISTORY_DEBOUNCE_DELAY_MS);
+    }
   }, [searchTerm]);
 
   // When search options change (not the search term itself), add the current term to history if
@@ -978,7 +987,6 @@ global.webViewComponent = function FindWebView({
   const handleFocusedResultChange = useCallback(
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
-      if (searchTerm) addToHistory(searchTerm);
       setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
         editorWebViewController
@@ -998,7 +1006,7 @@ global.webViewComponent = function FindWebView({
       // Return focus to the results container so arrow-key navigation works after a single click
       setTimeout(() => resultsContainerRef.current?.focus(), 0);
     },
-    [addToHistory, editorWebViewController, editorWebViewId, searchTerm, setVerseRefSetting],
+    [editorWebViewController, editorWebViewId, setVerseRefSetting],
   );
 
   /** Navigate to a result AND shift focus to the editor (double-click / reference-click). */
@@ -1006,7 +1014,6 @@ global.webViewComponent = function FindWebView({
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
-      if (searchTerm) addToHistory(searchTerm);
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
         editorWebViewController
@@ -1015,9 +1022,16 @@ global.webViewComponent = function FindWebView({
             end: searchResult.end,
           })
           .catch((e) => logger.warn(`Find: selectRange failed: ${getErrorMessage(e)}`));
+        editorWebViewController
+          .setAnnotation(
+            { start: searchResult.start, end: searchResult.end },
+            'find-result-highlight',
+            'find-current-result',
+          )
+          .catch((e) => logger.warn(`Find: setAnnotation failed: ${getErrorMessage(e)}`));
       }
     },
-    [addToHistory, editorWebViewController, editorWebViewId, searchTerm, setVerseRefSetting],
+    [editorWebViewController, editorWebViewId, setVerseRefSetting],
   );
 
   const handleHideResult = useCallback((index: number) => {

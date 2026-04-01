@@ -33,7 +33,8 @@ export function generateInlineMarkerMenuListItems(
           title:
             localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
           action: () => {
-            // `insertMarker` is a planned but not yet released method in the platform-editor API
+            // TODO: Remove this cast once `insertMarker` ships in the platform-editor API
+            // Tech debt: `insertMarker` is a planned but not yet released method; tracked for removal
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             const editorWithInsertMarker = editorRef.current as unknown as {
               insertMarker?: (m: string) => void;
