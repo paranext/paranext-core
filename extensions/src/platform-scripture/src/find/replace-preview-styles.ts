@@ -118,7 +118,7 @@ export function getFindHighlightClasses(
   const shapeClass = (position === 'left' ? SHAPE_CLASSES_LEFT : SHAPE_CLASSES)[shape];
   const borderClass = shape !== 'plain' ? c.border : '';
   return [
-    'tw-inline tw-px-0.5 tw-whitespace-pre-wrap',
+    'tw-inline tw-whitespace-pre-wrap',
     showLineThrough ? 'tw-line-through' : '',
     showLineThrough ? c.decoration : '',
     c.bg,
@@ -145,7 +145,7 @@ export function getReplaceHighlightClasses(
   const c = REPLACE_COLOR_CLASSES[color];
   const shapeClass = (position === 'right' ? SHAPE_CLASSES_RIGHT : SHAPE_CLASSES)[shape];
   const borderClass = shape !== 'plain' ? c.border : '';
-  return ['tw-inline tw-px-0.5 tw-whitespace-pre-wrap', c.bg, c.text, shapeClass, borderClass]
+  return ['tw-inline tw-whitespace-pre-wrap', c.bg, c.text, shapeClass, borderClass]
     .filter(Boolean)
     .join(' ');
 }
