@@ -149,6 +149,7 @@ export const ReplaceModeInline: Story = {
       isReplaceMode
       replaceConfig={{ term: 'Lord', preserveCase: false }}
       previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout: 'inline' }}
+      initiallySelected
     />
   ),
 };
@@ -181,7 +182,7 @@ export const AllLayouts: Story = {
             isReplaceMode
             replaceConfig={{ term: 'Lord', preserveCase: false }}
             previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout }}
-            initiallySelected={layout !== 'inline'}
+            initiallySelected
           />
         </div>
       ))}
@@ -261,11 +262,13 @@ export const MonospaceAndInvisible: Story = {
         isReplaceMode
         replaceConfig={{ term: 'Lord', preserveCase: false }}
         previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout: 'inline', monospace: true }}
+        initiallySelected
       />
       <SearchResultDemo
         isReplaceMode
         replaceConfig={{ term: 'Lord', preserveCase: false }}
         previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout: 'inline', showInvisible: true }}
+        initiallySelected
       />
     </div>
   ),

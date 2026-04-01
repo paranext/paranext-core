@@ -70,6 +70,9 @@ function PreviewSwatchRow({
   const fontClass = monospace ? 'tw-font-mono' : 'scripture-font';
   const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
   const replaceClass = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape)}`;
+  // Inline layout: only round the outer corners so the two adjacent spans look like one unified rectangle
+  const findClassInline = `${fontClass} ${getFindHighlightClasses(color, highlightShape, true, 'left')}`;
+  const replaceClassInline = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape, 'right')}`;
 
   const display = (text: string) => (showInvisible ? renderWithInvisibleChars(text) : text);
 
@@ -83,8 +86,8 @@ function PreviewSwatchRow({
       return (
         <div className={`tw-text-xs tw-text-muted-foreground ${fontClass}`}>
           {before}
-          <span className={findClass}>{find}</span>
-          <span className={replaceClass}>{replace}</span>
+          <span className={findClassInline}>{find}</span>
+          <span className={replaceClassInline}>{replace}</span>
           {after}
         </div>
       );
