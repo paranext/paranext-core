@@ -51,12 +51,21 @@ jobs:
           npm ci
           npm run build
 
+      - name: Read story filter
+        id: story_filter
+        run: |
+          if [ -f .chromatic-story-filter ]; then
+            echo "glob=$(cat .chromatic-story-filter)" >> "$GITHUB_OUTPUT"
+          else
+            echo "glob=extensions/src/**/*.stories.tsx" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run Chromatic
         uses: chromaui/action@latest
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
           buildScriptName: storybook:build
-          onlyStoryFiles: 'extensions/src/**/*.stories.tsx'
+          onlyStoryFiles: ${{ steps.story_filter.outputs.glob }}
           onlyChanged: true
           exitZeroOnChanges: true
         env:
