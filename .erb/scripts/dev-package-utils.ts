@@ -81,15 +81,19 @@ export function checkoutRevision(folder: string, revision: string): void {
   execSync('git fetch origin', { stdio: 'inherit', cwd: repoPath });
   console.log(`Checking out ${revision} in ${folder}...`);
   execSync(`git checkout "${revision}"`, { stdio: 'inherit', cwd: repoPath });
-  // Pull to get the latest commits if we're on a branch. This is a no-op for detached HEADs
-  // (tags or commit hashes), which will log a message and continue.
+  // Pull to get the latest commits if we're on a branch. Skip for detached HEADs (tags or commit hashes).
+  let isOnBranch: boolean;
   try {
-    execSync('git pull', { stdio: 'inherit', cwd: repoPath });
+    execSync('git symbolic-ref --quiet HEAD', { stdio: 'pipe', cwd: repoPath });
+    isOnBranch = true;
   } catch {
+    isOnBranch = false;
+  }
+  if (isOnBranch) {
+    execSync('git pull', { stdio: 'inherit', cwd: repoPath });
+  } else {
     console.log(
-      `Could not pull in ${
-        folder
-      } — likely a detached HEAD (tag or commit hash). Continuing with checked-out revision.`,
+      `Detached HEAD in ${folder} (tag or commit hash). Skipping pull, using checked-out revision.`,
     );
   }
 }
