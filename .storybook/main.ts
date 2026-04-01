@@ -54,7 +54,18 @@ const config: StorybookConfig = {
           require('../.erb/configs/webpack.config.renderer.dev').default;
     // Remove configs that break stuff (https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { devServer, entry, output, ...rendererConfigSanitized } = rendererConfig;
+    const { devServer, entry, output, optimization, cache, ...rendererConfigSanitized } =
+      rendererConfig;
+
+    // Filter out plugins that conflict with Storybook's own plugins.
+    // HtmlWebpackPlugin causes Storybook 9's WebpackInjectMockerRuntimePlugin to
+    // emit mocker-runtime-injected.js twice (one per HtmlWebpackPlugin instance).
+    rendererConfigSanitized.plugins = (rendererConfigSanitized.plugins || []).filter(
+      (plugin: { constructor?: { name?: string } }) => {
+        const name = plugin?.constructor?.name;
+        return name !== 'HtmlWebpackPlugin' && name !== 'BundleAnalyzerPlugin';
+      },
+    );
 
     // Inject postcss-loader into the renderer's CSS rules for Storybook only.
     // postcss-loader is intentionally omitted from the shared renderer webpack configs so that
