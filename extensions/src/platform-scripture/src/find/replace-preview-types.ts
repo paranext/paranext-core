@@ -1,11 +1,11 @@
 /** Layout of the replace preview row */
-export type ReplacePreviewLayout = 'arrow' | 'inline' | 'block';
+export type ReplacePreviewLayout = 'find' | 'arrow' | 'inline' | 'block';
 
 /** Border/shape style applied to the highlighted text spans */
 export type ReplacePreviewHighlightShape = 'bar' | 'rounded' | 'plain';
 
 /** Color scheme applied to find/replace highlights */
-export type ReplacePreviewColor = 'red-cyan' | 'red-green' | 'grey-blue';
+export type ReplacePreviewColor = 'gold' | 'red-cyan' | 'red-green' | 'grey-blue';
 
 /** All configurable preview display options */
 export interface PreviewOptions {
@@ -21,10 +21,23 @@ export interface PreviewOptions {
   showInvisible: boolean;
 }
 
-export const DEFAULT_PREVIEW_OPTIONS: PreviewOptions = {
-  layout: 'arrow',
+/** Default options when in Find (no replace) mode: gold highlight, rounded shape, find layout */
+export const DEFAULT_FIND_PREVIEW_OPTIONS: PreviewOptions = {
+  layout: 'find',
   highlightShape: 'rounded',
-  color: 'red-cyan',
+  color: 'gold',
   monospace: false,
   showInvisible: false,
 };
+
+/** Default options when in Replace mode: block layout, bar shape, red/emerald color */
+export const DEFAULT_REPLACE_PREVIEW_OPTIONS: PreviewOptions = {
+  layout: 'block',
+  highlightShape: 'bar',
+  color: 'red-green',
+  monospace: false,
+  showInvisible: false,
+};
+
+/** @deprecated Use {@link DEFAULT_FIND_PREVIEW_OPTIONS} or {@link DEFAULT_REPLACE_PREVIEW_OPTIONS} */
+export const DEFAULT_PREVIEW_OPTIONS = DEFAULT_REPLACE_PREVIEW_OPTIONS;

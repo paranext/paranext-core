@@ -1779,12 +1779,15 @@ declare module 'papi-shared-types' {
      * tilde character, not a whitespace substitute.
      */
     'platformScripture.allowInvisibleCharacters': boolean;
-  }
-
-  export interface SettingTypes {
-    /** Recent search terms used in the Find in Scripture web view. Hidden from settings UI. */
+    /**
+     * Recent search terms used in the Find in Scripture web view for this project. Hidden from
+     * settings UI.
+     */
     'platformScripture.findRecentSearches': string[];
-    /** The last string entered in the Find in Scripture search field. Hidden from settings UI. */
+    /**
+     * The last string entered in the Find in Scripture search field for this project. Hidden from
+     * settings UI.
+     */
     'platformScripture.findLastSearchTerm': string;
   }
 }
