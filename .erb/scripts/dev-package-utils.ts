@@ -42,19 +42,26 @@ export const DEV_REPOS: DevRepo[] = JSON.parse(
   fs.readFileSync(path.resolve(REPO_ROOT, 'dev-packages.json'), 'utf8'),
 ).repos;
 
-// Resolve a dev-package folder path. Prefer `dev-packages/<folder>` inside the
-// repository workspace (used by CI), but fall back to a sibling directory
-// `../<folder>` for developer checkouts where the repo lives next to this repo.
-export function getDevPackagePath(folder: string): string {
+/**
+ * Resolve a dev-package folder path. Prefers `dev-packages/<folder>` inside the repository
+ * workspace (used by CI), but falls back to a sibling directory `../<folder>` for developer
+ * checkouts where the repo lives next to this repo.
+ */
+function getDevPackagePath(folder: string): string {
   const inRepo = path.resolve(REPO_ROOT, 'dev-packages', folder);
   if (fs.existsSync(inRepo)) return inRepo;
   return path.resolve(REPO_ROOT, '..', folder);
 }
 
-export function devPackageExists(folder: string): boolean {
+/** Returns whether a dev package folder exists at the resolved path for the given folder name. */
+function devPackageExists(folder: string): boolean {
   return fs.existsSync(getDevPackagePath(folder));
 }
 
+/**
+ * Clones the given dev repo into `dev-packages/<folder>` if it does not already exist locally. Does
+ * nothing if the repo is already present.
+ */
 export function cloneRepoIfNeeded(repo: DevRepo): void {
   if (devPackageExists(repo.folder)) return;
 
@@ -67,6 +74,10 @@ export function cloneRepoIfNeeded(repo: DevRepo): void {
   execSync(`git clone "${repo.cloneUrl}" "${clonePath}"`, { stdio: 'inherit' });
 }
 
+/**
+ * Checks out the given revision in the dev package repo at `folder`. Fetches from origin first,
+ * then pulls if the repo is on a branch. Throws if the repo has uncommitted working changes.
+ */
 export function checkoutRevision(folder: string, revision: string): void {
   const repoPath = getDevPackagePath(folder);
 
@@ -98,7 +109,11 @@ export function checkoutRevision(folder: string, revision: string): void {
   }
 }
 
-export function execInDevPackage(folder: string, cmd: string): void {
+/**
+ * Executes a shell command in the dev package directory resolved from `folder`, with environment
+ * variables configured for Volta pnpm support and Nx Cloud disabled.
+ */
+function execInDevPackage(folder: string, cmd: string): void {
   const pathToUse = getDevPackagePath(folder);
   const env = {
     ...process.env,
@@ -112,6 +127,7 @@ export function execInDevPackage(folder: string, cmd: string): void {
   execSync(cmd, { stdio: 'inherit', cwd: pathToUse, env });
 }
 
+/** Executes a shell command in the repository root directory. */
 export function execInRepo(cmd: string): void {
   execSync(cmd, { stdio: 'inherit', cwd: REPO_ROOT });
 }
