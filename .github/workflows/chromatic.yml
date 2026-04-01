@@ -1,0 +1,65 @@
+name: Chromatic
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+    branches: [ai/main]
+
+jobs:
+  chromatic:
+    name: Publish to Chromatic
+    # Only run when the 'storybook-review' label is present
+    if: contains(github.event.pull_request.labels.*.name, 'storybook-review')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+
+      - name: Checkout scripture-editors
+        uses: actions/checkout@v4
+        with:
+          repository: eten-tech-foundation/scripture-editors
+          ref: platform-yalc
+          path: dev-packages/scripture-editors
+
+      - name: Install Volta and toolchain
+        uses: volta-cli/action@v4
+
+      - name: Install scripture-editors dependencies
+        env:
+          VOLTA_FEATURE_PNPM: '1'
+        run: |
+          cd dev-packages/scripture-editors
+          pnpm install
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          cache: npm
+
+      - name: Install packages and build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run Chromatic
+        uses: chromaui/action@latest
+        with:
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          buildScriptName: storybook:build
+          onlyStoryFiles: 'extensions/src/**/*.stories.tsx'
+          onlyChanged: true
+          exitZeroOnChanges: true
+        env:
+          CHROMATIC_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          CHROMATIC_SHA: ${{ github.event.pull_request.head.sha || github.ref }}
+          CHROMATIC_SLUG: ${{ github.repository }}
