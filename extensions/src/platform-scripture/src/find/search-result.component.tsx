@@ -99,9 +99,20 @@ export default function SearchResult({
   // eslint-disable-next-line no-null/no-null
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // We should avoid calculating context unless this result is selected to improve performance
-  const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(isSelected);
+  const [isVisible, setIsVisible] = useState(false);
   const [isProgressAnimating, setIsProgressAnimating] = useState(false);
+
+  useEffect(() => {
+    // Registers a `IntersectionObserver` instance to determine when the component is visible in the DOM
+    const observer = new IntersectionObserver(([entry]) => setIsVisible(entry.isIntersecting));
+    if (cardRef.current) {
+      observer.observe(cardRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [cardRef]);
 
   useEffect(() => {
     if (!searchResult.isReplaced) {
@@ -115,14 +126,13 @@ export default function SearchResult({
   // When this result becomes selected, we should calculate the context if we haven't already
   useEffect(() => {
     if (isSelected) {
-      setShouldGetVerseText(true);
       cardRef.current?.scrollIntoView({ block: 'nearest' });
     }
   }, [isSelected]);
 
   // Determine the text to show before the search result, the search result, and the text after
   const textParts = useMemo(() => {
-    if (!usjReaderWriter || !shouldCalculateContext) return undefined;
+    if (!usjReaderWriter || !isVisible) return undefined;
     try {
       const startIndexInUsfm = usjReaderWriter.usfmVerseLocationToIndexInUsfm(searchResult.start);
       const endIndexInUsfm = usjReaderWriter.usfmVerseLocationToIndexInUsfm(searchResult.end);
@@ -147,7 +157,7 @@ export default function SearchResult({
       logger.warn(`Error determining text parts for search result: ${getErrorMessage(error)}`);
       return undefined;
     }
-  }, [usjReaderWriter, searchResult, shouldCalculateContext]);
+  }, [usjReaderWriter, searchResult, isVisible]);
 
   /**
    * Highlights the search term within the verse text by wrapping the specified occurrence in a
@@ -163,7 +173,9 @@ export default function SearchResult({
     return (
       <>
         {beforeText}
-        <strong>{text}</strong>
+        <mark className="tw-bg-amber-100 tw-ring-2 tw-rounded-sm tw-ring-offset-1 tw-ring-amber-400">
+          {text}
+        </mark>
         {afterText}
       </>
     );
@@ -269,7 +281,7 @@ export default function SearchResult({
   );
 
   const additionalSelectedContent = (
-    <div className="tw-text-xs tw-font-normal tw-text-muted-foreground scripture-font">
+    <div className="tw-text-xs tw-m-1 tw-font-normal tw-text-muted-foreground scripture-font">
       {getFocusedVerseText()}
     </div>
   );
@@ -283,15 +295,12 @@ export default function SearchResult({
         isHidden={searchResult.isHidden}
         isSelected={isSelected}
         className={searchResult.isReplaced ? '!tw-bg-red-100 dark:!tw-bg-red-950' : undefined}
-        onSelect={() => {
-          setShouldGetVerseText(true);
-          onResultClick(searchResult, globalResultsIndex);
-        }}
+        onSelect={() => onResultClick(searchResult, globalResultsIndex)}
         selectedButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
         hoverButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
         dropdownContent={searchResult.isReplaced ? undefined : dropdownContent}
         showDropdownOnHover={!searchResult.isReplaced}
-        additionalSelectedContent={additionalSelectedContent}
+        additionalContent={additionalSelectedContent}
       >
         {cardContent}
       </ResultsCard>
