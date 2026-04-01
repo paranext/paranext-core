@@ -216,6 +216,8 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  aria-label={themeButtonTooltip}
+                  data-testid="theme-toggle"
                   onClick={() => {
                     if (!isThemeLoadedNotError) return;
 
