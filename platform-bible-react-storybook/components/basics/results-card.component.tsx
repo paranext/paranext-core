@@ -28,8 +28,8 @@ export interface ResultsCardProps {
   dropdownContent?: ReactNode;
   /** Whether to show the dropdown menu button on hover even when not selected. Defaults to false */
   showDropdownOnHover?: boolean;
-  /** Additional content to show below the main content when selected */
-  additionalSelectedContent?: ReactNode;
+  /** Additional content to show below the main content */
+  additionalContent?: ReactNode;
   /** Color to use for the card's accent border */
   accentColor?: string;
 }
@@ -50,7 +50,7 @@ export function ResultsCard({
   selectedButtons,
   hoverButtons,
   dropdownContent,
-  additionalSelectedContent,
+  additionalContent,
   accentColor,
   showDropdownOnHover = false,
 }: ResultsCardProps) {
@@ -108,9 +108,9 @@ export function ResultsCard({
             </DropdownMenu>
           )}
         </div>
-        {isSelected && additionalSelectedContent && (
+        {additionalContent && (
           <div className="tw-w-fit tw-min-w-0 tw-max-w-full tw-overflow-hidden">
-            {additionalSelectedContent}
+            {additionalContent}
           </div>
         )}
       </div>
