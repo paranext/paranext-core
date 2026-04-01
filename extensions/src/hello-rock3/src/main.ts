@@ -259,7 +259,7 @@ async function showContextMenuAlert() {
   await papi.dialogs.showDialog('platform.alert', {
     title: '%helloRock3_overlay_alertTitle%',
     prompt: '%helloRock3_overlay_alertMessage%',
-    modal: true,
+    isModal: true,
   });
 }
 

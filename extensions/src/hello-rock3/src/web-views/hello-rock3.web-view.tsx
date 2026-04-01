@@ -631,8 +631,8 @@ globalThis.webViewComponent = function HelloRock3({
                 prompt: overlayDeletePersonMessage,
                 okLabel: overlayDeletePersonOkLabel,
                 cancelLabel: overlayCancel,
-                destructive: true,
-                modal: true,
+                isDestructive: true,
+                isModal: true,
               });
               if (confirmed) peopleDataProvider?.deletePerson(name);
             }}

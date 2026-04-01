@@ -64,10 +64,10 @@ describe('ConfirmDialog', () => {
       expect(props.cancelDialog).not.toHaveBeenCalled();
     });
 
-    it('applies destructive variant to OK button when destructive is true', () => {
+    it('applies destructive variant to OK button when isDestructive is true', () => {
       render(
         <Dialog open modal={false}>
-          <ConfirmDialog {...makeProps({ destructive: true })} />
+          <ConfirmDialog {...makeProps({ isDestructive: true })} />
         </Dialog>,
       );
 

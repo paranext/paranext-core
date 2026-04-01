@@ -51,7 +51,7 @@ export type ConfirmDialogOptions = DialogOptions & {
   /** Custom label for the Cancel button. Defaults to a localized "Cancel". */
   cancelLabel?: string | LocalizeKey;
   /** Whether to style the OK button as a destructive action (e.g., red) */
-  destructive?: boolean;
+  isDestructive?: boolean;
 };
 
 /**

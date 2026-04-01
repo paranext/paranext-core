@@ -5682,10 +5682,15 @@ declare module 'shared/models/dialog-options.model' {
      */
     prompt?: string | LocalizeKey;
     /** Whether to render as a modal overlay instead of an rc-dock floating tab. Defaults to false. */
-    modal?: boolean;
+    isModal?: boolean;
   };
   /** Keys of properties on {@link DialogOptions} that should be localized if they are LocalizeKeys */
-  export const DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS: readonly string[];
+  export const DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS: readonly [
+    'title',
+    'prompt',
+    'okLabel',
+    'cancelLabel',
+  ];
   /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
   export type DialogData = DialogOptions & {
     isDialog: true;
@@ -5836,7 +5841,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     /** Custom label for the Cancel button. Defaults to a localized "Cancel". */
     cancelLabel?: string | LocalizeKey;
     /** Whether to style the OK button as a destructive action (e.g., red) */
-    destructive?: boolean;
+    isDestructive?: boolean;
   };
   /**
    * Mapped type for dialog functions to use in getting various types for dialogs

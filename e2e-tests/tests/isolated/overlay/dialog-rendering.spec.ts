@@ -110,7 +110,7 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
       title: 'Test Alert',
       prompt: 'This is a modal alert',
       okLabel: 'Acknowledged',
-      modal: true,
+      isModal: true,
     });
 
     const dialog = modalDialog(mainPage);
@@ -173,7 +173,7 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
       prompt: 'Proceed with this action?',
       okLabel: 'Yes',
       cancelLabel: 'No',
-      modal: true,
+      isModal: true,
     });
 
     const dialog = modalDialog(mainPage);
@@ -203,7 +203,7 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
       prompt: 'Will you cancel?',
       okLabel: 'Confirm',
       cancelLabel: 'Abort',
-      modal: true,
+      isModal: true,
     });
 
     const dialog = modalDialog(mainPage);
@@ -221,13 +221,15 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
       prompt: 'Press Escape to dismiss',
       okLabel: 'OK',
       cancelLabel: 'Cancel',
-      modal: true,
+      isModal: true,
     });
 
     const dialog = modalDialog(mainPage);
     await expect(dialog).toBeVisible({ timeout: 10_000 });
 
-    // Escape dismissal goes through handleOpenChange, a different code path from button clicks
+    // Escape dismissal goes through handleOpenChange, a different code path from button clicks.
+    // Wait for a button to be visible so Radix's keyboard handlers are fully attached.
+    await dialog.locator('button', { hasText: 'Cancel' }).waitFor({ state: 'visible' });
     await mainPage.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible({ timeout: 3_000 });
     // eslint-disable-next-line no-null/no-null
@@ -265,7 +267,7 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     const resultPromise = showDialogViaWebSocket<string>('platform.selectProject', {
       title: 'Pick a Project',
       prompt: 'Choose one project',
-      modal: true,
+      isModal: true,
     });
 
     const dialog = modalDialog(mainPage);
@@ -319,7 +321,7 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     const resultPromise = showDialogViaWebSocket<string[]>('platform.selectMultipleProjects', {
       title: 'Select Projects',
       prompt: 'Check one or more',
-      modal: true,
+      isModal: true,
     });
 
     const dialog = modalDialog(mainPage);
@@ -378,7 +380,7 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
       title: 'Pick Books',
       prompt: 'Select some books',
       selectedBookIds: ['GEN', 'EXO'],
-      modal: true,
+      isModal: true,
     });
 
     const dialog = modalDialog(mainPage);

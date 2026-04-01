@@ -21,7 +21,7 @@ function ConfirmDialog({
   title,
   okLabel,
   cancelLabel,
-  destructive,
+  isDestructive,
   submitDialog,
 }: DialogProps<boolean> &
   Omit<ConfirmDialogOptions, 'prompt'> & { prompt?: ConfirmDialogOptions['prompt'] }) {
@@ -36,7 +36,7 @@ function ConfirmDialog({
           {cancelLabel ?? FALLBACK_CANCEL_LABEL}
         </Button>
         <Button
-          variant={destructive ? 'destructive' : 'default'}
+          variant={isDestructive ? 'destructive' : 'default'}
           onClick={() => submitDialog(true)}
         >
           {okLabel ?? FALLBACK_OK_LABEL}

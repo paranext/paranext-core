@@ -149,19 +149,19 @@ describe('dialog.service-host', () => {
   });
 
   describe('modal dialog routing', () => {
-    it('routes dialog with modal:true to showModalDialogOverlay', async () => {
+    it('routes dialog with isModal:true to showModalDialogOverlay', async () => {
       mockShowModalDialogOverlay.mockResolvedValue(true);
 
       await capturedShowDialog('platform.alert', {
         prompt: 'Alert message',
-        modal: true,
+        isModal: true,
       });
 
       expect(mockShowModalDialogOverlay).toHaveBeenCalledWith(
         MockAlertComponent,
         expect.objectContaining({
           prompt: 'Alert message',
-          modal: true,
+          isModal: true,
           isDialog: true,
           role: 'alertdialog',
         }),

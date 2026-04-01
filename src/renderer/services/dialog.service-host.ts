@@ -202,7 +202,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
   const localizedOptions = await localizeDialogOptions(options);
 
   // Route based on modal flag
-  if (localizedOptions?.modal) {
+  if (localizedOptions?.isModal) {
     // Look up the DialogDefinition for this dialog type
     const dialogDef = DIALOGS[dialogType];
     if (!dialogDef) {
@@ -376,8 +376,8 @@ export async function startDialogService(): Promise<void> {
                   selectedBookIds: { type: 'array', items: { type: 'string' } },
                   okLabel: { type: 'string' },
                   cancelLabel: { type: 'string' },
-                  destructive: { type: 'boolean' },
-                  modal: { type: 'boolean' },
+                  isDestructive: { type: 'boolean' },
+                  isModal: { type: 'boolean' },
                 },
               },
             },
