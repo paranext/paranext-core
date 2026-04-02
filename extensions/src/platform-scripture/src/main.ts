@@ -69,6 +69,17 @@ const punctuationValidator: ProjectSettingValidator<
   'platformScripture.validPunctuation' | 'platformScripture.invalidPunctuation'
 > = async (newValue) => typeof newValue === 'string';
 
+// Search history - array of recent searches
+const findRecentSearchesValidator: ProjectSettingValidator<
+  'platformScripture.findRecentSearches'
+> = async (newValue) =>
+  Array.isArray(newValue) && newValue.every((item) => typeof item === 'string');
+
+// Last search term - single string
+const findLastSearchTermValidator: ProjectSettingValidator<
+  'platformScripture.findLastSearchTerm'
+> = async (newValue) => typeof newValue === 'string';
+
 // #endregion
 
 async function openPlatformCharactersInventory(
@@ -369,6 +380,14 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.invalidPunctuation',
     punctuationValidator,
   );
+  const findRecentSearchesPromise = papi.projectSettings.registerValidator(
+    'platformScripture.findRecentSearches',
+    findRecentSearchesValidator,
+  );
+  const findLastSearchTermPromise = papi.projectSettings.registerValidator(
+    'platformScripture.findLastSearchTerm',
+    findLastSearchTermValidator,
+  );
   const openPunctuationInventoryPromise = papi.commands.registerCommand(
     'platformScripture.openPunctuationInventory',
     openPlatformPunctuationInventory,
@@ -482,6 +501,8 @@ export async function activate(context: ExecutionActivationContext) {
     await markersInventoryWebViewProviderPromise,
     await validPunctuationPromise,
     await invalidPunctuationPromise,
+    await findRecentSearchesPromise,
+    await findLastSearchTermPromise,
     await openPunctuationInventoryPromise,
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
