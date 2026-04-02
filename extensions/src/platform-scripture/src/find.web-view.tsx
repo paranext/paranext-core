@@ -1010,7 +1010,7 @@ global.webViewComponent = function FindWebView({
               'find-current-result',
             )
             .catch(() => {}); // Silent fail
-        } catch (e) {
+        } catch {
           // Silently ignore any synchronous errors from the controller methods
         }
       }
