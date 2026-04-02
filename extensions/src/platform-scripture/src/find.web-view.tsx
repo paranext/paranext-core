@@ -915,12 +915,13 @@ global.webViewComponent = function FindWebView({
 
   // Save search term to history after 5 seconds of typing inactivity
   useEffect(() => {
+    clearTimeout(addToHistoryTimeoutRef.current);
     if (searchTerm) {
-      clearTimeout(addToHistoryTimeoutRef.current);
       addToHistoryTimeoutRef.current = setTimeout(() => {
         addToHistoryRef.current(searchTerm);
       }, HISTORY_DEBOUNCE_DELAY_MS);
     }
+    return () => clearTimeout(addToHistoryTimeoutRef.current);
   }, [searchTerm]);
 
   // When search options change (not the search term itself), add the current term to history if
