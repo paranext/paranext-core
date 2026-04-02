@@ -37,12 +37,6 @@ const FIND_COLOR_CLASSES: Record<
   ReplacePreviewColor,
   { bg: string; text: string; border: string; decoration: string }
 > = {
-  gold: {
-    bg: 'tw-bg-amber-100 dark:tw-bg-amber-900',
-    text: 'tw-text-amber-700 dark:tw-text-amber-300',
-    border: 'tw-border-amber-400 dark:tw-border-amber-600 tw-ring-amber-400 dark:tw-ring-amber-600',
-    decoration: 'tw-decoration-amber-700/70 dark:tw-decoration-amber-300/70',
-  },
   'red-cyan': {
     bg: 'tw-bg-red-100 dark:tw-bg-red-950',
     text: 'tw-text-red-700 dark:tw-text-red-300',
@@ -68,11 +62,6 @@ const REPLACE_COLOR_CLASSES: Record<
   ReplacePreviewColor,
   { bg: string; text: string; border: string }
 > = {
-  gold: {
-    bg: 'tw-bg-amber-200 dark:tw-bg-amber-800',
-    text: 'tw-text-amber-900 dark:tw-text-amber-100',
-    border: 'tw-border-amber-500 dark:tw-border-amber-500 tw-ring-amber-500 dark:tw-ring-amber-500',
-  },
   'red-cyan': {
     bg: 'tw-bg-cyan-100 dark:tw-bg-cyan-950',
     text: 'tw-text-cyan-700 dark:tw-text-cyan-300',

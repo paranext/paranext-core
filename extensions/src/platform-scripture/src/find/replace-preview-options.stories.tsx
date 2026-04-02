@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { ArrowRight, Minus, Plus } from 'lucide-react';
 import { ReplacePreviewOptions } from './replace-preview-options.component';
 import {
-  DEFAULT_PREVIEW_OPTIONS,
+  DEFAULT_REPLACE_PREVIEW_OPTIONS,
   PreviewOptions,
   ReplacePreviewColor,
   ReplacePreviewHighlightShape,
 } from './replace-preview-types';
 import {
   getFindHighlightClasses,
+  getGoldFindHighlightClasses,
   getReplaceHighlightClasses,
   renderWithInvisibleChars,
 } from './replace-preview-styles';
@@ -17,7 +18,9 @@ import {
 // ─── Picker Story ────────────────────────────────────────────────────────────
 
 function ReplacePreviewOptionsDemo() {
-  const [previewOptions, setPreviewOptions] = useState<PreviewOptions>(DEFAULT_PREVIEW_OPTIONS);
+  const [previewOptions, setPreviewOptions] = useState<PreviewOptions>(
+    DEFAULT_REPLACE_PREVIEW_OPTIONS,
+  );
 
   return (
     <div className="tw-flex tw-items-center tw-gap-4">
@@ -70,6 +73,7 @@ function PreviewSwatchRow({
   const fontClass = monospace ? 'tw-font-mono' : 'scripture-font';
   const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
   const replaceClass = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape)}`;
+  const findGoldClass = `${fontClass} ${getGoldFindHighlightClasses(highlightShape)}`;
   // Inline layout: only round the outer corners so the two adjacent spans look like one unified rectangle
   const findClassInline = `${fontClass} ${getFindHighlightClasses(color, highlightShape, true, 'left')}`;
   const replaceClassInline = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape, 'right')}`;
@@ -82,6 +86,16 @@ function PreviewSwatchRow({
   const after = display(SAMPLE_AFTER);
 
   const renderPreview = () => {
+    if (layout === 'find') {
+      return (
+        <div className={`tw-text-xs tw-text-muted-foreground ${fontClass}`}>
+          {before}
+          <span className={findGoldClass}>{find}</span>
+          {after}
+        </div>
+      );
+    }
+
     if (layout === 'inline') {
       return (
         <div className={`tw-text-xs tw-text-muted-foreground ${fontClass}`}>
@@ -141,6 +155,24 @@ function AllPreviewVariants() {
   return (
     <div className="tw-space-y-6 tw-p-4">
       <section>
+        <h3 className="tw-mb-3 tw-text-sm tw-font-semibold">Find Layout (no replace preview)</h3>
+        <div className="tw-grid tw-grid-cols-3 tw-gap-3">
+          {shapes.map((shape) => (
+            <PreviewSwatchRow
+              key={`find-${shape}`}
+              label={`${shape}`}
+              previewOptions={{
+                ...DEFAULT_REPLACE_PREVIEW_OPTIONS,
+                layout: 'find',
+                highlightShape: shape,
+                color: 'red-cyan',
+              }}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section>
         <h3 className="tw-mb-3 tw-text-sm tw-font-semibold">Arrow Layout</h3>
         <div className="tw-grid tw-grid-cols-3 tw-gap-3">
           {shapes.map((shape) =>
@@ -149,7 +181,7 @@ function AllPreviewVariants() {
                 key={`arrow-${shape}-${color}`}
                 label={`${shape} · ${color}`}
                 previewOptions={{
-                  ...DEFAULT_PREVIEW_OPTIONS,
+                  ...DEFAULT_REPLACE_PREVIEW_OPTIONS,
                   layout: 'arrow',
                   highlightShape: shape,
                   color,
@@ -169,7 +201,7 @@ function AllPreviewVariants() {
                 key={`inline-${shape}-${color}`}
                 label={`${shape} · ${color}`}
                 previewOptions={{
-                  ...DEFAULT_PREVIEW_OPTIONS,
+                  ...DEFAULT_REPLACE_PREVIEW_OPTIONS,
                   layout: 'inline',
                   highlightShape: shape,
                   color,
@@ -189,7 +221,7 @@ function AllPreviewVariants() {
                 key={`block-${shape}-${color}`}
                 label={`${shape} · ${color}`}
                 previewOptions={{
-                  ...DEFAULT_PREVIEW_OPTIONS,
+                  ...DEFAULT_REPLACE_PREVIEW_OPTIONS,
                   layout: 'block',
                   highlightShape: shape,
                   color,
@@ -205,12 +237,16 @@ function AllPreviewVariants() {
         <div className="tw-grid tw-grid-cols-2 tw-gap-3">
           <PreviewSwatchRow
             label="Monospace ON"
-            previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout: 'arrow', monospace: true }}
+            previewOptions={{
+              ...DEFAULT_REPLACE_PREVIEW_OPTIONS,
+              layout: 'arrow',
+              monospace: true,
+            }}
           />
           <PreviewSwatchRow
             label="Show Invisible ON"
             previewOptions={{
-              ...DEFAULT_PREVIEW_OPTIONS,
+              ...DEFAULT_REPLACE_PREVIEW_OPTIONS,
               layout: 'inline',
               showInvisible: true,
             }}
@@ -218,7 +254,7 @@ function AllPreviewVariants() {
           <PreviewSwatchRow
             label="Both ON"
             previewOptions={{
-              ...DEFAULT_PREVIEW_OPTIONS,
+              ...DEFAULT_REPLACE_PREVIEW_OPTIONS,
               layout: 'block',
               monospace: true,
               showInvisible: true,
