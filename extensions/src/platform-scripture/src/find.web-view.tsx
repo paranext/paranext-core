@@ -878,7 +878,7 @@ global.webViewComponent = function FindWebView({
         explicitSearchPendingRef.current = false;
         return;
       }
-      handleStartSearchRef.current();
+      handleStartSearchRef.current?.();
     }, SEARCH_DEBOUNCE_DELAY_MS),
   );
   const addToHistoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -946,7 +946,7 @@ global.webViewComponent = function FindWebView({
     )
       return;
     explicitSearchPendingRef.current = true;
-    handleStartSearchRef.current();
+    handleStartSearchRef.current?.();
   }, [findPdp, searchStatus, searchTerm]);
 
   // Reset isPostReplaceSearch once the search finishes so a subsequent search in replace mode
@@ -966,7 +966,7 @@ global.webViewComponent = function FindWebView({
 
     // External change detected — update baseline and re-run find to refresh positions
     scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
-    handleStartSearchRef.current();
+    handleStartSearchRef.current?.();
   }, [scriptureDataForChangeDetection, activeMode, isReplacing, searchStatus, monitoredScope]);
 
   // #endregion
@@ -1133,7 +1133,7 @@ global.webViewComponent = function FindWebView({
         // state so the existing results are still valid, and re-searching would cause a flicker.
         if (!(isCancelled && revertSucceeded)) {
           isPostReplaceSearchRef.current = true;
-          await handleStartSearchRef.current();
+          await handleStartSearchRef.current?.();
         }
       } catch (error) {
         logger.error(`Error replacing result: ${getErrorMessage(error)}`);
@@ -1259,7 +1259,7 @@ global.webViewComponent = function FindWebView({
       // state so the existing results are still valid, and re-searching would cause a flicker.
       if (!(isCancelled && revertSucceeded)) {
         isPostReplaceSearchRef.current = true;
-        await handleStartSearchRef.current();
+        await handleStartSearchRef.current?.();
       }
     } catch (error) {
       logger.error(`Error replacing all results: ${getErrorMessage(error)}`);
