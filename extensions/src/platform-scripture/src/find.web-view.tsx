@@ -332,6 +332,15 @@ global.webViewComponent = function FindWebView({
     };
   }, []);
 
+  // Refs to track current values without dependency issues in effects
+  const addToHistoryRef = useRef(addToHistory);
+  addToHistoryRef.current = addToHistory;
+  const searchTermRef = useRef(searchTerm);
+  searchTermRef.current = searchTerm;
+  const setLastSearchTermSettingRef = useRef(setLastSearchTermSetting);
+  setLastSearchTermSettingRef.current = setLastSearchTermSetting;
+  const handleStartSearchRef = useRef<typeof handleStartSearch>();
+
   // Restore the last search term from settings when the webview first loads with an empty field
   const [searchTermRestored, setSearchTermRestored] = useState(false);
   useEffect(() => {
@@ -362,9 +371,15 @@ global.webViewComponent = function FindWebView({
     }, 1000);
     return () => {
       clearTimeout(saveSearchTermTimeoutRef.current);
-      setLastSearchTermSetting?.(searchTerm);
     };
   }, [searchTerm, searchTermRestored, setLastSearchTermSetting]);
+
+  // Save search term to project settings on unmount (closing the tab or application)
+  useEffect(() => {
+    return () => {
+      setLastSearchTermSettingRef.current?.(searchTermRef.current);
+    };
+  }, []);
 
   const [allowInvisibleCharsPossiblyError] = useProjectSetting(
     projectId,
@@ -648,6 +663,8 @@ global.webViewComponent = function FindWebView({
     ],
   );
 
+  handleStartSearchRef.current = handleStartSearch;
+
   const handleStopSearch = useCallback(
     async (shouldClearResults?: boolean) => {
       if (!isMountedRef.current) return;
@@ -855,13 +872,6 @@ global.webViewComponent = function FindWebView({
 
   // Keep handleStartSearch in a ref so the detection effect never re-runs just because the
   // memoized callback identity changed (it has many dependencies).
-  const handleStartSearchRef = useRef(handleStartSearch);
-  handleStartSearchRef.current = handleStartSearch;
-  // Refs so the options-change effect can read the latest values without depending on them.
-  const addToHistoryRef = useRef(addToHistory);
-  addToHistoryRef.current = addToHistory;
-  const searchTermRef = useRef(searchTerm);
-  searchTermRef.current = searchTerm;
   const debouncedHandleStartSearch = useRef(
     debounce(() => {
       if (explicitSearchPendingRef.current) {
