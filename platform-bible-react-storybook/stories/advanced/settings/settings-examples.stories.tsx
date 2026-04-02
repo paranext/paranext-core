@@ -260,6 +260,7 @@ export const MixedControlTypes: Story = {
       backupFrequency: 'daily',
     });
 
+    // Story helper accepts heterogeneous setting values; the exact type cannot be narrowed further
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateSetting = (key: keyof typeof settings, value: any) => {
       setSettings((prev) => ({ ...prev, [key]: value }));
