@@ -5,6 +5,7 @@ import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import * as AvatarPrimitive from '@radix-ui/react-avatar';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
 import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
@@ -24,7 +25,7 @@ import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import { CommentStatus, FormatScrRefRangeOptions, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedBookNames, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, getLocalizedBookName } from 'platform-bible-utils';
 import React$1 from 'react';
-import { ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -1670,6 +1671,11 @@ export type ComboBoxProps<T> = {
 	/** Additional css classes to help with unique styling of the combo box popover */
 	popoverContentClassName?: string;
 	/**
+	 * Additional inline styles for the combo box popover. Use for z-index overrides instead of
+	 * className to avoid being overridden by PopoverContent's inline default z-index.
+	 */
+	popoverContentStyle?: React$1.CSSProperties;
+	/**
 	 * The selected value that the combo box currently holds. Must be shallow equal to one of the
 	 * options entries.
 	 */
@@ -1706,7 +1712,7 @@ export type ComboBoxProps<T> = {
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, popoverContentStyle, value, onChange, getOptionLabel, getButtonLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ariaLabel, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 type EditorKeyboardShortcutsProps = React$1.PropsWithChildren & {
 	editorRef: React$1.MutableRefObject<EditorRef | null>;
 };
@@ -1813,8 +1819,8 @@ interface ResultsCardProps {
 	dropdownContent?: React$1.ReactNode;
 	/** Whether to show the dropdown menu button on hover even when not selected. Defaults to false */
 	showDropdownOnHover?: boolean;
-	/** Additional content to show below the main content when selected */
-	additionalSelectedContent?: React$1.ReactNode;
+	/** Additional content to show below the main content */
+	additionalContent?: React$1.ReactNode;
 	/** Color to use for the card's accent border */
 	accentColor?: string;
 }
@@ -1823,7 +1829,7 @@ interface ResultsCardProps {
  * though it is not based on the Card component. It provides common functionality like selection
  * state, dropdown menus, and expandable content.
  */
-export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, selectedButtons, hoverButtons, dropdownContent, additionalSelectedContent, accentColor, showDropdownOnHover, onDoubleClick, linkedScrRef, badges, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, selectedButtons, hoverButtons, dropdownContent, additionalContent, accentColor, showDropdownOnHover, onDoubleClick, linkedScrRef, badges, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Search query for the search bar */
@@ -2151,6 +2157,41 @@ export declare function ContextMenuShortcut({ className, ...props }: React$1.HTM
 export declare namespace ContextMenuShortcut {
 	var displayName: string;
 }
+/**
+ * The Dialog component displays a modal dialog window. Built on Radix UI's Dialog component and
+ * styled by Shadcn UI.
+ *
+ * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/dialog See Radix UI
+ * Documentation https://www.radix-ui.com/docs/primitives/components/dialog
+ */
+export declare const Dialog: React$1.FC<DialogPrimitive.DialogProps>;
+/** Button or element that opens the dialog when clicked. */
+export declare const DialogTrigger: React$1.ForwardRefExoticComponent<DialogPrimitive.DialogTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+/** Portals the dialog content into `document.body` to avoid z-index and overflow issues. */
+export declare const DialogPortal: React$1.FC<DialogPrimitive.DialogPortalProps>;
+/** Button or element that closes the dialog when clicked. */
+export declare const DialogClose: React$1.ForwardRefExoticComponent<DialogPrimitive.DialogCloseProps & React$1.RefAttributes<HTMLButtonElement>>;
+/** Semi-transparent backdrop rendered behind the dialog content. Animates on open/close. */
+export declare const DialogOverlay: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogOverlayProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Main container for dialog content. Renders inside a portal with an overlay backdrop, centered on
+ * screen. Includes a close button in the top corner.
+ */
+export declare const DialogContent: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** Container for the dialog's header area. Stacks title and description vertically. */
+export declare function DialogHeader({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
+export declare namespace DialogHeader {
+	var displayName: string;
+}
+/** Container for the dialog's footer area. Lays out action buttons in a row on larger screens. */
+export declare function DialogFooter({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
+export declare namespace DialogFooter {
+	var displayName: string;
+}
+/** Renders the dialog's title as a styled heading. Used inside DialogHeader. */
+export declare const DialogTitle: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogTitleProps & React$1.RefAttributes<HTMLHeadingElement>, "ref"> & React$1.RefAttributes<HTMLHeadingElement>>;
+/** Renders the dialog's description text in a muted style. Used inside DialogHeader. */
+export declare const DialogDescription: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogDescriptionProps & React$1.RefAttributes<HTMLParagraphElement>, "ref"> & React$1.RefAttributes<HTMLParagraphElement>>;
 /**
  * A drawer component for React. These components are built on Vaul and styled with Shadcn UI. See
  * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/drawer See Vaul Documentation:
@@ -2724,6 +2765,16 @@ export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCh
 	/** Focus an option by its ID */
 	focusOption: (id: string) => void;
 };
+/** Z-index for elements that need to appear above rc-dock floating tabs (~200) */
+export declare const Z_INDEX_ABOVE_DOCK = 250;
+/** Z-index for the footnote editor layer */
+export declare const Z_INDEX_FOOTNOTE_EDITOR = 300;
+/** Z-index for overlay popovers and context menus */
+export declare const Z_INDEX_OVERLAY = 400;
+/** Z-index for the semi-transparent backdrop behind modal dialogs */
+export declare const Z_INDEX_MODAL_BACKDROP = 450;
+/** Z-index for modal dialog content */
+export declare const Z_INDEX_MODAL = 500;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

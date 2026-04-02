@@ -286,10 +286,7 @@ export default function SearchResult({
         isHidden={searchResult.isHidden}
         isSelected={isSelected}
         className={searchResult.isReplaced ? '!tw-bg-red-100 dark:!tw-bg-red-950' : undefined}
-        onSelect={() => {
-          setShouldGetVerseText(true);
-          onResultClick(searchResult, globalResultsIndex);
-        }}
+        onSelect={() => onResultClick(searchResult, globalResultsIndex)}
         onDoubleClick={() => {
           onResultDoubleClick(searchResult, globalResultsIndex);
         }}

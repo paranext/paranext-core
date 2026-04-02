@@ -167,9 +167,9 @@ export function ResultsCard({
           )}
         </div>
 
-        {isSelected && additionalSelectedContent && (
+        {isSelected && additionalContent && (
           <div className="tw-ms-1 tw-w-fit tw-min-w-0 tw-max-w-full tw-overflow-hidden tw-break-words">
-            {additionalSelectedContent}
+            {additionalContent}
           </div>
         )}
       </div>
