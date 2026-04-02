@@ -360,7 +360,10 @@ global.webViewComponent = function FindWebView({
     saveSearchTermTimeoutRef.current = setTimeout(() => {
       setLastSearchTermSetting?.(searchTerm);
     }, 1000);
-    return () => clearTimeout(saveSearchTermTimeoutRef.current);
+    return () => {
+      clearTimeout(saveSearchTermTimeoutRef.current);
+      setLastSearchTermSetting?.(searchTerm);
+    };
   }, [searchTerm, searchTermRestored, setLastSearchTermSetting]);
 
   const [allowInvisibleCharsPossiblyError] = useProjectSetting(
@@ -992,19 +995,24 @@ global.webViewComponent = function FindWebView({
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
-        editorWebViewController
-          .selectRange({
-            start: searchResult.start,
-            end: searchResult.end,
-          })
-          .catch((e) => logger.warn(`Find: selectRange failed: ${getErrorMessage(e)}`));
-        editorWebViewController
-          .setAnnotation(
-            { start: searchResult.start, end: searchResult.end },
-            'find-result-highlight',
-            'find-current-result',
-          )
-          .catch((e) => logger.warn(`Find: setAnnotation failed: ${getErrorMessage(e)}`));
+        // Ignore any errors from editor updates to prevent cascading failures
+        try {
+          editorWebViewController
+            .selectRange({
+              start: searchResult.start,
+              end: searchResult.end,
+            })
+            .catch(() => {}); // Silent fail
+          editorWebViewController
+            .setAnnotation(
+              { start: searchResult.start, end: searchResult.end },
+              'find-result-highlight',
+              'find-current-result',
+            )
+            .catch(() => {}); // Silent fail
+        } catch (e) {
+          // Silently ignore any synchronous errors from the controller methods
+        }
       }
       // Return focus to the results container so arrow-key navigation works after a single click
       setTimeout(() => resultsContainerRef.current?.focus(), 0);
@@ -1019,19 +1027,25 @@ global.webViewComponent = function FindWebView({
       setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        // Chain the calls: await selectRange before calling setAnnotation to ensure the websocket
+        // connection is stable and prevent "Tried to send payload while not connected" errors.
         editorWebViewController
           .selectRange({
             start: searchResult.start,
             end: searchResult.end,
           })
-          .catch((e) => logger.warn(`Find: selectRange failed: ${getErrorMessage(e)}`));
-        editorWebViewController
-          .setAnnotation(
-            { start: searchResult.start, end: searchResult.end },
-            'find-result-highlight',
-            'find-current-result',
-          )
-          .catch((e) => logger.warn(`Find: setAnnotation failed: ${getErrorMessage(e)}`));
+          .then(() => {
+            // Only call setAnnotation if selectRange succeeded and the controller is still valid
+            if (editorWebViewId && editorWebViewController) {
+              return editorWebViewController.setAnnotation(
+                { start: searchResult.start, end: searchResult.end },
+                'find-result-highlight',
+                'find-current-result',
+              );
+            }
+            return undefined;
+          })
+          .catch((e) => logger.warn(`Find: Failed to update editor: ${getErrorMessage(e)}`));
       }
     },
     [editorWebViewController, editorWebViewId, setVerseRefSetting],

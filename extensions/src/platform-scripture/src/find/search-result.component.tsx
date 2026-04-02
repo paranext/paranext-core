@@ -320,19 +320,43 @@ export default function SearchResult({
 
   const dropdownContent = (
     <>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyReference}>
+      <DropdownMenuItem
+        className="tw-flex tw-flex-row"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleCopyReference();
+        }}
+      >
         <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
         <span>{localizedStrings['%webView_find_copyReference%']}</span>
       </DropdownMenuItem>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyVerseText}>
+      <DropdownMenuItem
+        className="tw-flex tw-flex-row"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleCopyVerseText();
+        }}
+      >
         <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
         <span>{localizedStrings['%webView_find_copyVerseText%']}</span>
       </DropdownMenuItem>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyReferenceAndVerseText}>
+      <DropdownMenuItem
+        className="tw-flex tw-flex-row"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleCopyReferenceAndVerseText();
+        }}
+      >
         <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
         <span>{localizedStrings['%webView_find_copyReferenceAndVerseText%']}</span>
       </DropdownMenuItem>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleDismiss}>
+      <DropdownMenuItem
+        className="tw-flex tw-flex-row"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleDismiss();
+        }}
+      >
         <X className="tw-mr-2 tw-h-4 tw-w-4" />
         <span>{localizedStrings['%webView_find_dismiss%']}</span>
       </DropdownMenuItem>
@@ -473,14 +497,11 @@ export default function SearchResult({
           </>
         )}
       </div>
-      {/* Preview shown when selected and in replace mode (except arrow, which appears below verse text when selected) */}
-      {previewOptions.layout !== 'arrow' && isSelected && getReplacePreviewElement()}
     </div>
   );
 
-  // Verse text context is shown when selected.
-  // Inline layout embeds context in the preview above; block shows context in the preview above when selected.
-  // Only arrow layout (and find-only mode) needs separate verse text in additionalSelectedContent.
+  // Verse text is shown in additionalContent for arrow and find-only modes.
+  // Inline/block modes embed context text inside getReplacePreviewElement(), which also renders in additionalContent.
   const showVerseTextInAdditional =
     !isReplaceMode || previewOptions.layout === 'arrow' || previewOptions.layout === 'find';
 
@@ -493,10 +514,7 @@ export default function SearchResult({
           {getFocusedVerseText()}
         </div>
       )}
-      {isReplaceMode &&
-        previewOptions.layout === 'arrow' &&
-        isSelected &&
-        getReplacePreviewElement()}
+      {isReplaceMode && isSelected && getReplacePreviewElement()}
     </>
   );
 
@@ -506,10 +524,11 @@ export default function SearchResult({
       className="pr-twp"
       onDoubleClick={() => onResultDoubleClick?.(searchResult, globalResultsIndex)}
       onFocus={(e) => {
-        // Only fire when focus enters from outside the card (e.g. Tab key navigation),
-        // not when focus moves between elements already inside it.
-        const isInsideCard =
-          e.relatedTarget instanceof Node && cardRef.current?.contains(e.relatedTarget) === true;
+        // Only fire when focus explicitly comes from outside the card via Tab or similar.
+        // The relatedTarget must be a valid Node and definitely NOT in the card.
+        // Skip if relatedTarget is falsy to avoid issues during dropdown interactions.
+        if (!e.relatedTarget || !(e.relatedTarget instanceof Node)) return;
+        const isInsideCard = cardRef.current?.contains(e.relatedTarget);
         if (!isInsideCard) {
           onResultFocus?.(searchResult, globalResultsIndex);
         }

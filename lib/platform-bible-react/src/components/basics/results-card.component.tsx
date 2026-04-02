@@ -88,27 +88,27 @@ export function ResultsCard({
           {!isSelected && hoverButtons && (
             <div className="tw-invisible group-hover:tw-visible">{hoverButtons}</div>
           )}
-          {!isSelected && showDropdownOnHover && dropdownContent && (
-            <div className="tw-invisible group-hover:tw-visible">
+          {dropdownContent && (isSelected || showDropdownOnHover) && (
+            <div
+              className={cn(
+                !isSelected && showDropdownOnHover && 'tw-invisible group-hover:tw-visible',
+              )}
+            >
               <DropdownMenu>
                 <DropdownMenuTrigger className={cn(accentColor && 'tw-me-1')} asChild>
-                  <Button className="tw-m-1 tw-h-6 tw-w-6" variant="ghost" size="icon">
+                  <Button
+                    className="tw-m-1 tw-h-6 tw-w-6"
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => e.stopPropagation()}
+                    onFocus={(e) => e.stopPropagation()}
+                  >
                     <MoreVertical />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">{dropdownContent}</DropdownMenuContent>
               </DropdownMenu>
             </div>
-          )}
-          {isSelected && dropdownContent && (
-            <DropdownMenu>
-              <DropdownMenuTrigger className={cn(accentColor && 'tw-me-1')} asChild>
-                <Button className="tw-m-1 tw-h-6 tw-w-6" variant="ghost" size="icon">
-                  <MoreVertical />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">{dropdownContent}</DropdownMenuContent>
-            </DropdownMenu>
           )}
         </div>
         {additionalContent && (
