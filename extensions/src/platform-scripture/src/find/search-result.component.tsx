@@ -18,7 +18,7 @@ import {
   preserveTrailingSpaces,
   renderWithInvisibleChars,
 } from './replace-preview-styles';
-import { DEFAULT_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
+import { DEFAULT_FIND_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: boolean };
 
@@ -137,7 +137,7 @@ export default function SearchResult({
   isReplaceMode,
   isReplacing,
   replaceConfig,
-  previewOptions = DEFAULT_PREVIEW_OPTIONS,
+  previewOptions = DEFAULT_FIND_PREVIEW_OPTIONS,
   allowInvisibleCharacters = false,
 }: SearchResultProps) {
   // useRef requires null as the initial value for DOM refs
@@ -150,20 +150,6 @@ export default function SearchResult({
   const [isProgressAnimating, setIsProgressAnimating] = useState(false);
 
   useEffect(() => {
-    // Registers a `IntersectionObserver` instance to determine when the component is visible in the DOM
-    const observer = new IntersectionObserver(([entry]) =>
-      setShouldGetVerseText(entry.isIntersecting),
-    );
-    if (cardRef.current) {
-      observer.observe(cardRef.current);
-    }
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [cardRef]);
-
-  useEffect(() => {
     if (!searchResult.isReplaced) {
       setIsProgressAnimating(false);
       return undefined;
@@ -172,7 +158,8 @@ export default function SearchResult({
     return () => cancelAnimationFrame(frame);
   }, [searchResult.isReplaced]);
 
-  // Observe when the card enters the viewport so inline context loads lazily
+  // Observe when the card enters the viewport so inline context loads lazily.
+  // Also serves as the sole IntersectionObserver on this element — no second observer needed.
   useEffect(() => {
     const el = cardRef.current;
     if (!el) return undefined;
@@ -188,6 +175,14 @@ export default function SearchResult({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // Arrow/block layout: enable context calculation when this result is selected.
+  // (Inline layout uses isVisible via the effect below instead.)
+  useEffect(() => {
+    if (isSelected) {
+      setShouldGetVerseText(true);
+    }
+  }, [isSelected]);
 
   // When this result becomes selected, we should calculate the context if we haven't already
   useEffect(() => {
@@ -360,6 +355,7 @@ export default function SearchResult({
    */
   const getReplacePreviewElement = () => {
     if (previewReplacement === undefined) return undefined;
+    if (previewOptions.layout === 'find') return undefined;
 
     const rawFindText = searchResult.text ?? '';
     // When showInvisible is on, let renderWithInvisibleChars turn trailing spaces into · directly
@@ -485,7 +481,8 @@ export default function SearchResult({
   // Verse text context is shown when selected.
   // Inline layout embeds context in the preview above; block shows context in the preview above when selected.
   // Only arrow layout (and find-only mode) needs separate verse text in additionalSelectedContent.
-  const showVerseTextInAdditional = !isReplaceMode || previewOptions.layout === 'arrow';
+  const showVerseTextInAdditional =
+    !isReplaceMode || previewOptions.layout === 'arrow' || previewOptions.layout === 'find';
 
   const additionalSelectedContent = (
     <>
@@ -496,7 +493,10 @@ export default function SearchResult({
           {getFocusedVerseText()}
         </div>
       )}
-      {isReplaceMode && previewOptions.layout === 'arrow' && getReplacePreviewElement()}
+      {isReplaceMode &&
+        previewOptions.layout === 'arrow' &&
+        isSelected &&
+        getReplacePreviewElement()}
     </>
   );
 
@@ -544,7 +544,7 @@ export default function SearchResult({
         hoverButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
         dropdownContent={searchResult.isReplaced ? undefined : dropdownContent}
         showDropdownOnHover={!searchResult.isReplaced}
-        additionalContent={additionalSelectedContent}
+        additionalContent={isSelected ? additionalSelectedContent : undefined}
       >
         {cardContent}
       </ResultsCard>

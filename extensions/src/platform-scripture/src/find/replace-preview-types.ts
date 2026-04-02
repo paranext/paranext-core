@@ -5,7 +5,7 @@ export type ReplacePreviewLayout = 'find' | 'arrow' | 'inline' | 'block';
 export type ReplacePreviewHighlightShape = 'bar' | 'rounded' | 'plain';
 
 /** Color scheme applied to find/replace highlights */
-export type ReplacePreviewColor = 'gold' | 'red-cyan' | 'red-green' | 'grey-blue';
+export type ReplacePreviewColor = 'red-cyan' | 'red-green' | 'grey-blue';
 
 /** All configurable preview display options */
 export interface PreviewOptions {
@@ -21,11 +21,11 @@ export interface PreviewOptions {
   showInvisible: boolean;
 }
 
-/** Default options when in Find (no replace) mode: gold highlight, rounded shape, find layout */
+/** Default options when in Find (no replace) mode: rounded shape, find layout */
 export const DEFAULT_FIND_PREVIEW_OPTIONS: PreviewOptions = {
   layout: 'find',
   highlightShape: 'rounded',
-  color: 'gold',
+  color: 'red-cyan',
   monospace: false,
   showInvisible: false,
 };

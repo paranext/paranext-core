@@ -2,7 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useState } from 'react';
 import SearchResult, { HidableFindResult, ReplaceConfig } from './search-result.component';
 import {
-  DEFAULT_PREVIEW_OPTIONS,
+  DEFAULT_FIND_PREVIEW_OPTIONS,
+  DEFAULT_REPLACE_PREVIEW_OPTIONS,
   PreviewOptions,
   ReplacePreviewColor,
 } from './replace-preview-types';
@@ -54,7 +55,7 @@ function SearchResultDemo({
   initiallySelected = false,
   isReplaceMode = false,
   replaceConfig,
-  previewOptions = DEFAULT_PREVIEW_OPTIONS,
+  previewOptions = DEFAULT_FIND_PREVIEW_OPTIONS,
   isReplacing = false,
   onCancelReplace,
 }: {
@@ -125,6 +126,22 @@ export const Selected: Story = {
 // ─── Replace mode stories ─────────────────────────────────────────────────────
 
 /**
+ * Find layout in replace mode: the replace preview is suppressed; the card behaves like find mode
+ * (verse text with gold highlight only). Useful when the user wants to review matches before
+ * replacing without visual clutter.
+ */
+export const ReplaceModeFind: Story = {
+  render: () => (
+    <SearchResultDemo
+      isReplaceMode
+      replaceConfig={{ term: 'Lord', preserveCase: false }}
+      previewOptions={{ ...DEFAULT_REPLACE_PREVIEW_OPTIONS, layout: 'find' }}
+      initiallySelected
+    />
+  ),
+};
+
+/**
  * Arrow layout (default): shows `[find strikethrough] → [replace]` below the verse text when
  * selected.
  */
@@ -133,7 +150,7 @@ export const ReplaceModeArrow: Story = {
     <SearchResultDemo
       isReplaceMode
       replaceConfig={{ term: 'Lord', preserveCase: false }}
-      previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout: 'arrow' }}
+      previewOptions={{ ...DEFAULT_REPLACE_PREVIEW_OPTIONS, layout: 'arrow' }}
       initiallySelected
     />
   ),
@@ -148,7 +165,7 @@ export const ReplaceModeInline: Story = {
     <SearchResultDemo
       isReplaceMode
       replaceConfig={{ term: 'Lord', preserveCase: false }}
-      previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout: 'inline' }}
+      previewOptions={{ ...DEFAULT_REPLACE_PREVIEW_OPTIONS, layout: 'inline' }}
       initiallySelected
     />
   ),
@@ -163,7 +180,7 @@ export const ReplaceModeBlock: Story = {
     <SearchResultDemo
       isReplaceMode
       replaceConfig={{ term: 'Lord', preserveCase: false }}
-      previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout: 'block' }}
+      previewOptions={{ ...DEFAULT_REPLACE_PREVIEW_OPTIONS, layout: 'block' }}
       initiallySelected
     />
   ),
@@ -173,7 +190,7 @@ export const ReplaceModeBlock: Story = {
 export const AllLayouts: Story = {
   render: () => (
     <div className="tw-space-y-4">
-      {(['arrow', 'inline', 'block'] as const).map((layout) => (
+      {(['find', 'arrow', 'inline', 'block'] as const).map((layout) => (
         <div key={layout}>
           <p className="tw-mb-2 tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wide tw-text-muted-foreground">
             {layout}
@@ -181,7 +198,7 @@ export const AllLayouts: Story = {
           <SearchResultDemo
             isReplaceMode
             replaceConfig={{ term: 'Lord', preserveCase: false }}
-            previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout }}
+            previewOptions={{ ...DEFAULT_REPLACE_PREVIEW_OPTIONS, layout }}
             initiallySelected
           />
         </div>
@@ -204,7 +221,7 @@ export const AllColorSchemes: Story = {
           <SearchResultDemo
             isReplaceMode
             replaceConfig={{ term: 'Lord', preserveCase: false }}
-            previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout: 'arrow', color }}
+            previewOptions={{ ...DEFAULT_REPLACE_PREVIEW_OPTIONS, layout: 'arrow', color }}
             initiallySelected
           />
         </div>
@@ -223,7 +240,7 @@ export const PreserveCase: Story = {
       result={mockResultGodCaps}
       isReplaceMode
       replaceConfig={{ term: 'lord', preserveCase: true }}
-      previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout: 'arrow' }}
+      previewOptions={{ ...DEFAULT_REPLACE_PREVIEW_OPTIONS, layout: 'arrow' }}
       initiallySelected
     />
   ),
@@ -261,13 +278,17 @@ export const MonospaceAndInvisible: Story = {
       <SearchResultDemo
         isReplaceMode
         replaceConfig={{ term: 'Lord', preserveCase: false }}
-        previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout: 'inline', monospace: true }}
+        previewOptions={{ ...DEFAULT_REPLACE_PREVIEW_OPTIONS, layout: 'inline', monospace: true }}
         initiallySelected
       />
       <SearchResultDemo
         isReplaceMode
         replaceConfig={{ term: 'Lord', preserveCase: false }}
-        previewOptions={{ ...DEFAULT_PREVIEW_OPTIONS, layout: 'inline', showInvisible: true }}
+        previewOptions={{
+          ...DEFAULT_REPLACE_PREVIEW_OPTIONS,
+          layout: 'inline',
+          showInvisible: true,
+        }}
         initiallySelected
       />
     </div>

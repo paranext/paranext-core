@@ -26,7 +26,6 @@ import { PreviewOptions } from './replace-preview-types';
 export type ReplacePreviewOptionsStrings = {
   togglePreviewOptions: string;
   layout: string;
-  layoutFind: string;
   layoutArrow: string;
   layoutInline: string;
   layoutBlock: string;
@@ -35,7 +34,6 @@ export type ReplacePreviewOptionsStrings = {
   highlightShapeRounded: string;
   highlightShapePlain: string;
   color: string;
-  colorGold: string;
   colorRedCyan: string;
   colorRedGreen: string;
   colorGreyBlue: string;
@@ -48,7 +46,6 @@ export type ReplacePreviewOptionsStrings = {
 export const REPLACE_PREVIEW_OPTIONS_STRING_KEYS = [
   '%webView_find_previewOptions_toggle%',
   '%webView_find_previewOptions_layout%',
-  '%webView_find_previewOptions_layout_find%',
   '%webView_find_previewOptions_layout_arrow%',
   '%webView_find_previewOptions_layout_inline%',
   '%webView_find_previewOptions_layout_block%',
@@ -57,7 +54,6 @@ export const REPLACE_PREVIEW_OPTIONS_STRING_KEYS = [
   '%webView_find_previewOptions_shape_rounded%',
   '%webView_find_previewOptions_shape_plain%',
   '%webView_find_previewOptions_color%',
-  '%webView_find_previewOptions_color_gold%',
   '%webView_find_previewOptions_color_redCyan%',
   '%webView_find_previewOptions_color_redGreen%',
   '%webView_find_previewOptions_color_greyBlue%',
@@ -130,18 +126,7 @@ function Swatch({
   );
 }
 
-function FindLayoutIcon({
-  highlightShape,
-}: {
-  highlightShape: Parameters<typeof getGoldFindHighlightClasses>[0];
-}) {
-  return <Swatch findClass={getGoldFindHighlightClasses(highlightShape)} />;
-}
-
 const LAYOUT_ICONS = {
-  find: (highlightShape: Parameters<typeof getGoldFindHighlightClasses>[0]) => (
-    <FindLayoutIcon highlightShape={highlightShape} />
-  ),
   arrow: () => <ArrowRight className="tw-h-4 tw-w-4" />,
   inline: () => <InlineLayoutIcon className="tw-h-4 tw-w-4" />,
   block: () => <BlockLayoutIcon className="tw-h-4 tw-w-4" />,
@@ -206,7 +191,6 @@ export function ReplacePreviewOptions({
           >
             {(
               [
-                ['find', localizedStrings.layoutFind],
                 ['arrow', localizedStrings.layoutArrow],
                 ['inline', localizedStrings.layoutInline],
                 ['block', localizedStrings.layoutBlock],
@@ -217,7 +201,7 @@ export function ReplacePreviewOptions({
                 value={value}
                 className="tw-flex tw-flex-1 tw-flex-col tw-gap-1 tw-h-auto tw-py-2"
               >
-                {LAYOUT_ICONS[value](highlightShape)}
+                {LAYOUT_ICONS[value]()}
                 <span className="tw-text-xs">{label}</span>
               </ToggleGroupItem>
             ))}
@@ -269,12 +253,7 @@ export function ReplacePreviewOptions({
           <RadioGroup
             value={color}
             onValueChange={(value) => {
-              if (
-                value === 'gold' ||
-                value === 'red-cyan' ||
-                value === 'red-green' ||
-                value === 'grey-blue'
-              ) {
+              if (value === 'red-cyan' || value === 'red-green' || value === 'grey-blue') {
                 set('color', value);
               }
             }}
@@ -282,7 +261,6 @@ export function ReplacePreviewOptions({
           >
             {(
               [
-                ['gold', localizedStrings.colorGold],
                 ['red-cyan', localizedStrings.colorRedCyan],
                 ['red-green', localizedStrings.colorRedGreen],
                 ['grey-blue', localizedStrings.colorGreyBlue],
