@@ -245,8 +245,10 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
     // (via submitDialog, cancelDialog, Escape, or click-outside). The onOverlayCreated callback
     // captures the overlay ID synchronously before the overlay is added to the store.
     return showModalDialogOverlay(
+      // Dialog component type must be widened to generic props; specific dialog types can't unify without this cast
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       dialogDef.Component as unknown as (props: Record<string, unknown>) => ReactElement,
+      // Dialog props must be widened to match the generic component signature above
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       dialogProps as unknown as Record<string, unknown>,
       (overlayId) => {

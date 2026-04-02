@@ -8,10 +8,13 @@ beforeAll(() => {
   // Radix Popover uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
   // implementation. The methods intentionally don't use `this` since they're empty stubs.
   global.ResizeObserver = class {
+    // jsdom stub: empty no-op intentionally has no `this` usage
     // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     observe() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
     // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     unobserve() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
     // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     disconnect() {}
   };

@@ -157,7 +157,8 @@ function HoverableSubmenu({
           onPointerEnter={cancelClose}
           onPointerLeave={scheduleClose}
         >
-          {/* eslint-disable-next-line no-use-before-define -- mutual recursion between renderMenuItems and HoverableSubmenu */}
+          {/* renderMenuItems and HoverableSubmenu call each other; forward reference is unavoidable */}
+          {/* eslint-disable-next-line no-use-before-define */}
           {renderMenuItems(items, onSelect)}
         </DropdownMenuSubContent>
       </DropdownMenuPortal>
@@ -180,8 +181,8 @@ function renderMenuItems(
     const item = items[i];
 
     if (item.type === 'separator') {
-      // Separators have no unique identifier; index is the only stable key
       result.push(
+        // Separators have no unique identifier; index is the only stable key
         // eslint-disable-next-line react/no-array-index-key
         <DropdownMenuSeparator key={`sep-${i}`} />,
       );

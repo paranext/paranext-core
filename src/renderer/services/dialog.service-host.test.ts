@@ -39,6 +39,7 @@ vi.mock('@shared/services/logger.service', () => ({
 // Mock dialog index with Component mocks for routing tests
 // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
 const MockAlertComponent = vi.fn(() => undefined as any);
+// vi.fn mock must satisfy React component return type; `any` cast is the standard test pattern
 // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
 const MockConfirmComponent = vi.fn(() => undefined as any);
 const mockDialogs = {

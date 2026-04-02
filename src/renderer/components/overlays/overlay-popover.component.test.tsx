@@ -7,10 +7,13 @@ import { OverlayPopoverPresentational } from './overlay-popover.component';
 // implementation. The methods intentionally don't use `this` since they're empty stubs.
 beforeAll(() => {
   global.ResizeObserver = class {
+    // jsdom stub: empty no-op intentionally has no `this` usage
     // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     observe() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
     // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     unobserve() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
     // eslint-disable-next-line @typescript-eslint/class-methods-use-this
     disconnect() {}
   };

@@ -164,6 +164,7 @@ describe('showContextMenu contribution integration', () => {
     const overlay = overlays[0];
     expect(overlay.type).toBe('contextMenu');
 
+    // TypeScript cannot narrow a discriminated union via expect() assertions; cast needed to access typed fields
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const ctxOverlay = overlay as Extract<typeof overlay, { type: 'contextMenu' }>;
 
