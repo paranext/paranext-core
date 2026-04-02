@@ -168,19 +168,19 @@ If you want to develop an extension for Platform.Bible, check out the Git refere
 git checkout v0.3.0
 ```
 
-#### Linking local development packages
+#### Linking local development packages (automatic)
 
-If you are developing `paranext-core` itself or developing extensions based on a development version of `paranext-core` like `main` (as opposed to developing based on a specific [tag](https://github.com/paranext/paranext-core/tags)), you must also set up local development packages. We develop `paranext-core` based on specific branches of some dependent repositories, so you need to make them available for `paranext-core` to find. If you are developing extensions based on a specific release of Platform.Bible, no further action is necessary; you can skip to [Install and Build](#install-and-build).
+If you are developing `paranext-core` itself or developing extensions based on a development version of `paranext-core` like `main` (as opposed to developing based on a specific [tag](https://github.com/paranext/paranext-core/tags)), you must also have some local development packages set up. `npm install` in `paranext-core` should do this automatically for you; you can skip this section if you do not have particular requirements for these local development packages. We develop `paranext-core` based on specific branches of some dependent repositories, so `npm install` makes them available for `paranext-core` to find if they are not already in the expected locations on your computer. If you are developing extensions based on a specific release of Platform.Bible, no further action is necessary; you can skip to [Install and Build](#install-and-build).
 
 `paranext-core` looks for local development packages first as sub-directories of the `dev-packages` folder (e.g. `paranext-core/dev-packages/scripture-editors`). If it cannot find the appropriate directories there, it looks in the repo's parent folder (e.g. `paranext-core/../scripture-editors`).
 
-To develop `paranext-core`, you must clone and install the following repositories in one of the expected directories as mentioned above:
+`npm install` will clone and install the following repositories in `dev-packages` at the revision listed in [`dev-packages.json`](./dev-packages.json) if they are not in one of the expected directories as mentioned above:
 
 - [`eten-tech-foundation/scripture-editors`](https://github.com/eten-tech-foundation/scripture-editors?tab=readme-ov-file#developer-quick-start)
 
 Running `npm install` in `paranext-core` will automatically link development versions of npm packages `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` from `scripture-editors` via [yalc](https://github.com/wclr/yalc). This allows you to develop those packages alongside Platform.Bible.
 
-Note: When developing on your machine, whatever version of `scripture-editors` you have currently checked out will be used. However, CI and build servers check out the `scripture-editors` repository at the branch named `platform-yalc`. To have build servers use changes from `main`, update the `platform-yalc` branch in the `eten-tech-foundation/scripture-editors` repository by rebasing it onto `main` and force-pushing. Example:
+Note: `npm install` will check out the revision of `scripture-editors` specified in [`dev-packages.json`](./dev-packages.json) (it will throw and ask you to do something with your working changes if you have any so your changes don't get messed up). However, the general expectation is that this revision for the `scripture-editors` repository is the branch named `platform-yalc`. To make your local development and build servers use changes from `scripture-editors/main`, update the `platform-yalc` branch in the `eten-tech-foundation/scripture-editors` repository by rebasing it onto `main` and force-pushing. Example:
 
 ```bash
 # from a clone of scripture-editors (or adjust path accordingly)
@@ -190,7 +190,7 @@ git rebase origin/main
 git push --force-with-lease
 ```
 
-To set up `scripture-editors` to be linked locally:
+To manually set up `scripture-editors` to be linked locally (this should all be done automatically during `npm install`):
 
 1. Clone `scripture-editors` as a sibling to this repo (alternatively, clone it in `paranext-core/dev-packages`):
    ```bash
