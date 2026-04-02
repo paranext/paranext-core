@@ -40,7 +40,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FindHeader } from './find/find-header.component';
 import { LocalizedBookData, SearchTextType } from './find/find-types';
 import { applyPreserveCase } from './find/find.utils';
-import { DEFAULT_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
+import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import {
   HidableFindResult,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
@@ -178,7 +178,7 @@ global.webViewComponent = function FindWebView({
     [recentSearchesPossiblyError],
   );
 
-  const addRecentSearchItem = useRecentSearches(recentSearches, setRecentSearches);
+  const addRecentSearchItem = useRecentSearches(recentSearches, setRecentSearches ?? (() => {}));
 
   // Track items added locally so the history dropdown updates immediately (useProjectSetting is async).
   const [pendingHistory, setPendingHistory] = useState<string[]>([]);
@@ -240,11 +240,14 @@ global.webViewComponent = function FindWebView({
   const [preserveCase, setPreserveCase] = useWebViewState<boolean>('findPreserveCase', false);
   const [storedPreviewOptions, setStoredPreviewOptions] = useWebViewState<PreviewOptions>(
     'findPreviewOptions',
-    DEFAULT_PREVIEW_OPTIONS,
+    DEFAULT_REPLACE_PREVIEW_OPTIONS,
   );
   // Spread-merge with defaults so that adding new fields in future versions doesn't break
   // stored values that were saved before those fields existed
-  const previewOptions: PreviewOptions = { ...DEFAULT_PREVIEW_OPTIONS, ...storedPreviewOptions };
+  const previewOptions: PreviewOptions = {
+    ...DEFAULT_REPLACE_PREVIEW_OPTIONS,
+    ...storedPreviewOptions,
+  };
   /**
    * True while a replace operation is executing (including the mandatory re-find afterward). Keeps
    * replace buttons disabled during the gap between replace() completing and searchStatus becoming
@@ -355,7 +358,7 @@ global.webViewComponent = function FindWebView({
     if (!searchTermRestored) return;
     clearTimeout(saveSearchTermTimeoutRef.current);
     saveSearchTermTimeoutRef.current = setTimeout(() => {
-      setLastSearchTermSetting(searchTerm);
+      setLastSearchTermSetting?.(searchTerm);
     }, 1000);
     return () => clearTimeout(saveSearchTermTimeoutRef.current);
   }, [searchTerm, searchTermRestored, setLastSearchTermSetting]);
