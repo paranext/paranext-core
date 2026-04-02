@@ -31,6 +31,7 @@
  *
  * - Paranext/require-provenance-comment: Require PORTED FROM PT9 / NEW IN PT10 comments
  * - Paranext/registration-cleanup: Ensure registrations added to context.registrations
+ * - Paranext/require-disable-comment: Require explanatory comment above disable directives
  */
 
 import commandNaming from './rules/command-naming';
@@ -47,6 +48,7 @@ import requireLocalizedStringsArray from './rules/require-localized-strings-arra
 import requireProvenanceComment from './rules/require-provenance-comment';
 import noHardcodedStringComparison from './rules/no-hardcoded-string-comparison';
 import registrationCleanup from './rules/registration-cleanup';
+import requireDisableComment from './rules/require-disable-comment';
 
 const plugin = {
   meta: {
@@ -68,6 +70,7 @@ const plugin = {
     'require-provenance-comment': requireProvenanceComment,
     'no-hardcoded-string-comparison': noHardcodedStringComparison,
     'registration-cleanup': registrationCleanup,
+    'require-disable-comment': requireDisableComment,
   },
   configs: {
     recommended: {
@@ -87,6 +90,7 @@ const plugin = {
         'paranext/require-provenance-comment': 'warn',
         'paranext/no-hardcoded-string-comparison': 'error',
         'paranext/registration-cleanup': 'warn',
+        'paranext/require-disable-comment': 'error',
       },
     },
     strict: {
@@ -106,6 +110,7 @@ const plugin = {
         'paranext/require-provenance-comment': 'error',
         'paranext/no-hardcoded-string-comparison': 'error',
         'paranext/registration-cleanup': 'error',
+        'paranext/require-disable-comment': 'error',
       },
     },
   },

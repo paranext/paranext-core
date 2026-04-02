@@ -137,15 +137,19 @@ export function PlatformMenubar({
   onOpenChange,
   variant,
 }: PlatformMenubarProps) {
-  // These refs will always be defined
+  // These refs will always be defined — using undefined! avoids a null check on every use
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menubarRef = useRef<HTMLDivElement>(undefined!);
+  // Ref is always defined before use; the non-null assertion avoids redundant null checks
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const projectMenuRef = useRef<HTMLButtonElement>(undefined!);
+  // Ref is always defined before use; the non-null assertion avoids redundant null checks
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const windowMenuRef = useRef<HTMLButtonElement>(undefined!);
+  // Ref is always defined before use; the non-null assertion avoids redundant null checks
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const layoutMenuRef = useRef<HTMLButtonElement>(undefined!);
+  // Ref is always defined before use; the non-null assertion avoids redundant null checks
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const helpMenuRef = useRef<HTMLButtonElement>(undefined!);
 

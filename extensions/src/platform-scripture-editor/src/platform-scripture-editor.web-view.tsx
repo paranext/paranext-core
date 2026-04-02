@@ -244,6 +244,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // The refs needs to start out with null for it to work as a element ref
   // eslint-disable-next-line no-null/no-null
   const markerMenuSearchRef = useRef<HTMLInputElement>(null);
+  // The refs needs to start out with null for it to work as a element ref
   // eslint-disable-next-line no-null/no-null
   const editorContainerRef = useRef<HTMLDivElement>(null);
 

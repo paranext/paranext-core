@@ -132,6 +132,14 @@ module.exports = {
     // #endregion
 
     // #endregion
+
+    // #region rules related to our custom ESLint plugin (paranext) - not yet available in other repos
+
+    // Disable directives (eslint-disable, prettier-ignore, stylelint-disable) require an
+    // explanatory comment on the immediately preceding line
+    'paranext/require-disable-comment': 'error',
+
+    // #endregion
   },
   globals: {
     globalThis: 'readonly',
@@ -210,7 +218,7 @@ module.exports = {
     project: './tsconfig.lint.json',
     tsconfigRootDir: __dirname,
   },
-  plugins: ['@typescript-eslint', '@stylistic/ts', 'no-type-assertion', 'no-null'],
+  plugins: ['@typescript-eslint', '@stylistic/ts', 'no-type-assertion', 'no-null', 'paranext'],
   settings: {
     'import/resolver': {
       // See https://github.com/benmosher/eslint-plugin-import/issues/1396#issuecomment-575727774 for line below

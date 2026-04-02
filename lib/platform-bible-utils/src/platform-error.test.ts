@@ -103,6 +103,7 @@ describe('isPlatformError', () => {
 
   it('should return false for a non-object value', () => {
     expect(isPlatformError('error')).toBe(false);
+    // Intentionally testing null input to verify the guard rejects it
     // eslint-disable-next-line no-null/no-null
     expect(isPlatformError(null)).toBe(false);
     expect(isPlatformError(undefined)).toBe(false);

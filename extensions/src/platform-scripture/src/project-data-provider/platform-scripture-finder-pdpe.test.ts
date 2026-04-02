@@ -1912,10 +1912,12 @@ describe('ScriptureFinderProjectDataProviderEngine word restriction', () => {
     // Poll until job completes
     let report = await engine.retrieveFindJobUpdate(jobId, 1000);
     while (report.status === 'running') {
+      // Polling requires sequential awaits; parallelizing would race against job completion.
       // eslint-disable-next-line no-await-in-loop
       await new Promise((resolve) => {
         setTimeout(resolve, 10);
       });
+      // Sequential await required to get updated status after each polling delay.
       // eslint-disable-next-line no-await-in-loop
       report = await engine.retrieveFindJobUpdate(jobId, 1000);
     }
@@ -2059,10 +2061,12 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
     let report = await engine.retrieveFindJobUpdate(jobId, 1000);
     resultCount += (report.nextResults ?? []).length;
     while (report.status === 'running') {
+      // Polling requires sequential awaits; parallelizing would race against job completion.
       // eslint-disable-next-line no-await-in-loop
       await new Promise<void>((resolve) => {
         setTimeout(resolve, 10);
       });
+      // Sequential await required to get updated status after each polling delay.
       // eslint-disable-next-line no-await-in-loop
       report = await engine.retrieveFindJobUpdate(jobId, 1000);
       resultCount += (report.nextResults ?? []).length;
@@ -2086,10 +2090,12 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
     let report = await engine.retrieveFindJobUpdate(jobId, 1000);
     (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
     while (report.status === 'running') {
+      // Polling requires sequential awaits; parallelizing would race against job completion.
       // eslint-disable-next-line no-await-in-loop
       await new Promise<void>((resolve) => {
         setTimeout(resolve, 10);
       });
+      // Sequential await required to get updated status after each polling delay.
       // eslint-disable-next-line no-await-in-loop
       report = await engine.retrieveFindJobUpdate(jobId, 1000);
       (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
@@ -2119,6 +2125,7 @@ describe('ScriptureFinderProjectDataProviderEngine ignoreDiacritics', () => {
   let engine: ScriptureFinderProjectDataProviderEngine;
 
   beforeEach(() => {
+    // Mock PDPs are plain objects cast to the interface type for test setup convenience.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const mockPdps = {
       'platform.base': {
@@ -2169,10 +2176,12 @@ describe('ScriptureFinderProjectDataProviderEngine ignoreDiacritics', () => {
     });
     let report = await engine.retrieveFindJobUpdate(jobId, 1000);
     while (report.status === 'running') {
+      // Polling requires sequential awaits; parallelizing would race against job completion.
       // eslint-disable-next-line no-await-in-loop
       await new Promise((resolve) => {
         setTimeout(resolve, 10);
       });
+      // Sequential await required to get updated status after each polling delay.
       // eslint-disable-next-line no-await-in-loop
       report = await engine.retrieveFindJobUpdate(jobId, 1000);
     }

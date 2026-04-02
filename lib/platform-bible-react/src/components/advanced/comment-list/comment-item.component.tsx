@@ -41,6 +41,7 @@ export function CommentItem({
   const [isEditing, setIsEditing] = useState(false);
   const [editorState, setEditorState] = useState<SerializedEditorState>();
 
+  // Ref must default to null so React can attach it to the DOM element
   // eslint-disable-next-line no-null/no-null
   const editContainerRef = useRef<HTMLDivElement | null>(null);
 

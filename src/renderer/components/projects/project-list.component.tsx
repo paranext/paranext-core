@@ -35,6 +35,7 @@ export type Project = ProjectMetadataDisplay & {
  * @returns Downloadable (and downloaded) project information
  */
 export function fetchProjects(): Project[] {
+  // Hardcoded mock data uses string literals cast to branded `ProjectInterfaces` type until real data is wired in.
   /* eslint-disable no-type-assertion/no-type-assertion */
   return [
     {

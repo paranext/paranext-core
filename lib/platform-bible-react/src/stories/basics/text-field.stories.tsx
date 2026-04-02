@@ -160,6 +160,7 @@ export const InteractiveExample: Story = {
       setErrors(newErrors);
 
       if (Object.keys(newErrors).length === 0) {
+        // Story form submission handler - alert is intentional for user feedback in the demo
         // eslint-disable-next-line no-alert
         alert('Form submitted successfully!');
       }

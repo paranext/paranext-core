@@ -94,6 +94,7 @@ const createSampleContent = (searchValue: string) => {
           <h3 className="tw-text-lg tw-font-semibold">General Settings</h3>
           <div className="tw-space-y-1">
             {filterItems(generalItems, searchValue).map((item, index) => (
+              // Items have no stable unique id; index is the only available key
               // eslint-disable-next-line react/no-array-index-key
               <div key={index} className="tw-hover:bg-gray-50 tw-rounded tw-border tw-p-2">
                 {item}
@@ -116,6 +117,7 @@ const createSampleContent = (searchValue: string) => {
           <h3 className="tw-text-lg tw-font-semibold">Security Settings</h3>
           <div className="tw-space-y-1">
             {filterItems(securityItems, searchValue).map((item, index) => (
+              // Items have no stable unique id; index is the only available key
               // eslint-disable-next-line react/no-array-index-key
               <div key={index} className="tw-hover:bg-gray-50 tw-rounded tw-border tw-p-2">
                 {item}
@@ -138,6 +140,7 @@ const createSampleContent = (searchValue: string) => {
           <h3 className="tw-text-lg tw-font-semibold">Advanced Settings</h3>
           <div className="tw-space-y-1">
             {filterItems(advancedItems, searchValue).map((item, index) => (
+              // Items have no stable unique id; index is the only available key
               // eslint-disable-next-line react/no-array-index-key
               <div key={index} className="tw-hover:bg-gray-50 tw-rounded tw-border tw-p-2">
                 {item}
