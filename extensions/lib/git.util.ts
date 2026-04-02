@@ -321,14 +321,10 @@ async function deleteUnusedPackageLockIfPresent(repoRootRelativePath: string): P
   }
 }
 
-/**
- * Format the `extensions/` root folder after a merge from the multi-extension template.
- *
- * Currently: deletes `extensions/package-lock.json` if present and unused (it is unused because
- * `extensions/` is an npm workspace). This is a named function rather than inline code to serve as
- * a home for future extensions-root formatting steps.
- */
+/** Format the `extensions/` root folder after a merge from the multi-extension template. */
 export async function formatExtensionsRoot() {
+  // Delete `extensions/package-lock.json` if present — it is unused because `extensions/` is an npm
+  // workspace
   await deleteUnusedPackageLockIfPresent(`${subtreeRootFolder}/package-lock.json`);
 }
 
