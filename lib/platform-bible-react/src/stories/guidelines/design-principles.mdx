@@ -1,8 +1,14 @@
 import { Meta } from '@storybook/addon-docs/blocks';
+import { Button } from '@/components/shadcn-ui/button';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/shadcn-ui/tooltip';
+import { Save } from 'lucide-react';
+import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
 
 <Meta title="Guidelines/Design Principles" />
 
 # Design Principles
+
+This document defines the baseline quality standard for Paratext 10's UI. It is the **Definition of Done** for interface work — acceptance criteria on individual Jira items should treat this as the baseline and add only what is specific to that item.
 
 ---
 
@@ -51,7 +57,7 @@ For example: if hover lightens a card background while activation darkens the te
 
 ---
 
-## Editor toolbars and action buttons
+## Dialogs, toolbars, and action buttons
 
 ### Button order
 
@@ -63,7 +69,36 @@ Use `Trash2` (not `X`) when a button discards or deletes content. `X` means "clo
 
 ### Button variant hierarchy
 
-The discard button should use `variant="secondary"`, and the accept button `variant="default"` (filled). Avoid pairing `ghost` + `ghost` — it removes visual hierarchy and makes the primary action unclear.
+In dialogs and popovers, the discard button should use `variant="secondary"` or `variant="ghost"`, and the accept button `variant="default"` (filled). Avoid pairing `ghost` + `ghost` — it removes visual hierarchy and makes the primary action unclear.
+
+### Button labels
+
+Labels should communicate what will happen — even if the user skips the surrounding text. Use a specific action verb. Avoid **OK**: users learn to dismiss it without reading, which turns dialogs into interruptions rather than decisions.
+
+**Cancel** is sometimes appropriate, but a more descriptive alternative is usually clearer. Both buttons should be self-explanatory taken together.
+
+**Example scenario:** A user writes a comment, then tries to navigate away. The app needs to know: submit the comment or discard it? Draft-saving is not an option.
+
+| | Dismiss | Confirm |
+| --- | --- | --- |
+| Avoid | Cancel | OK |
+| Acceptable | Cancel | Comment |
+| Preferred | Discard | Comment |
+
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="dont"
+    preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Cancel</Button><Button>OK</Button></div>}
+  >
+    Neither label explains what will happen — users dismiss without reading.
+  </ExampleBlock>
+  <ExampleBlock
+    variant="do"
+    preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Discard</Button><Button>Comment</Button></div>}
+  >
+    Both actions are self-evident — the choice is clear without reading surrounding text.
+  </ExampleBlock>
+</ExampleBlockGroup>
 
 ### ButtonGroup
 
@@ -75,15 +110,107 @@ Every icon-only button must have an `aria-label`. Screen readers cannot infer me
 
 ---
 
-## Keyboard shortcuts in tooltips
+## Tooltips
+
+Tooltips are required for every icon button and any control without a visible label — including toolbar items. At the same time, tooltips are supplementary. If the tooltip would only repeat the visible label, omit it.
+
+
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="dont"
+    previewClassName="tw-pb-8"
+    preview={
+      <Button variant="outline" size="icon" aria-label="Save" >
+        <Save />
+      </Button>
+    }
+  >
+    This icon button lacks a tooltip, so users can't learn what it means.
+  </ExampleBlock>
+  <ExampleBlock
+    title="Avoid redundant tooltips"
+    variant="dont"
+    previewClassName="tw-pb-8"
+    preview={
+      <TooltipProvider>
+        <Tooltip open>
+          <TooltipTrigger asChild>
+            <Button>Save</Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Save</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    }
+  >
+    The tooltip only repeats the visible label — omit it.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an explanation.
+
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="dont"
+    previewClassName="tw-pb-16"
+    preview={
+      <TooltipProvider>
+        <Tooltip open>
+          <TooltipTrigger asChild>
+            <Button variant="outline" size="icon" aria-label="Save">
+              <Save />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="tw-max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    }
+  >
+    Too long to scan — a tooltip is a hint, not a sentence.
+  </ExampleBlock>
+  <ExampleBlock
+    variant="do"
+    previewClassName="tw-pb-16"
+    preview={
+      <TooltipProvider>
+        <Tooltip open>
+          <TooltipTrigger asChild>
+            <Button variant="outline" size="icon" aria-label="Save">
+              <Save />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Save changes</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    }
+  >
+    The tooltip adds meaning an icon alone cannot convey, and it's short enough to read at a glance.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+### Keyboard shortcuts in tooltips
 
 Render keyboard shortcut hints using the HTML `<kbd>` element, not plain text in parentheses. The `<kbd>` styling provides sufficient visual distinction on its own — no parentheses needed.
 
-**Do:** `Undo <kbd>⌘</kbd><kbd>Z</kbd>`
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="do"
+    preview={<span>Undo <kbd className="tw-rounded tw-border tw-border-border tw-bg-muted tw-px-1 tw-py-0.5 tw-text-xs tw-font-mono">
+  ⌘Z
+</kbd></span>}
+    code="Undo <kbd>⌘</kbd><kbd>Z</kbd>"
+  >
+    Caveat: The <code>kbd</code> element provides visual distinction without extra punctuation.
+  </ExampleBlock>
+  <ExampleBlock
+    variant="dont"
+    preview={<span>Undo (⌘Z)</span>}
+    code="Undo (⌘Z)"
+  >
+    Parentheses blend into prose and don't signal "keyboard shortcut" to the reader.
+  </ExampleBlock>
+</ExampleBlockGroup>
 
-**Don't:** `Undo (⌘Z)`
-
-If a shared `Kbd` component doesn't exist yet, style inline:
+Caveat: The shared `Kbd` component doesn't exist yet and won't until after we upgrade shadcn/ui, so style `<kbd>` inline:
 
 ```tsx
 <kbd className="tw-rounded tw-border tw-border-border tw-bg-muted tw-px-1 tw-py-0.5 tw-text-xs tw-font-mono">
