@@ -28,6 +28,8 @@ Do not trigger a search on every keystroke. Instead, wait until the user pauses 
 
 In Find and Replace, a 300–500 ms debounce on the Find input means the user can type a whole word before results appear.
 
+Implementations may optionally skip debounce-triggered searches when the input is a single character. This avoids flooding results for very common letters, but applies only to keystroke debounce — not to other triggers like Enter or UI interactions, which should always fire regardless of input length.
+
 ### Trigger immediately on certain actions
 
 Some actions signal clear intent and should bypass the debounce:
@@ -60,10 +62,10 @@ History should be saved when any of these occur, whichever comes first:
 | **5 seconds of no typing** | Captures terms the user paused on, even if they did not interact with results |
 | **Enter key pressed** | The user explicitly submitted the search |
 | **Clicking a result** | The user confirmed the term was useful by acting on it |
-| **Clicking navigation controls** (next/previous result arrows, "X results" summary, etc.) | Same intent as clicking a result |
+| **Clicking navigation controls** (next/previous result arrows, etc.) | Same intent as clicking a result |
 | **Changing a search option** (e.g. case-sensitive toggle) | The user refined a term they intend to keep |
 | **Clearing the input** | Save the previous value before it is lost |
-| **Replace All** | The search term was used to complete an action |
+| **Completing an action** (Replace All, applying a check fix, etc.) | The search term was used to complete an action |
 | **Closing the tab or the application** | Flush any pending history entry |
 | **Input losing focus (blur)** | The user moved on; treat the current value as final |
 
@@ -71,7 +73,7 @@ In Find and Replace, if the user types "temple" and then clicks the next-result 
 
 ### Debounce backspace and selection changes
 
-Rapid backspacing is usually editing, not a new search intent. Do not save a history entry on every backspace. Apply the same 5-second timer to backspace sequences.
+Rapid backspacing is usually editing, not a new search intent. Do not save a history entry on every backspace. Apply the same 5-second timer to backspace sequences. If backspacing empties the field, the **Clearing the input** trigger takes over — see above.
 
 Selecting all text with Ctrl+A or mouse is ambiguous — the user may be about to replace the value. Do not save on selection alone; wait for one of the triggers above.
 
@@ -89,6 +91,10 @@ In Find and Replace, the Find input and Replace input each have their own histor
 
 If a value is already in history, do not add it again. Move it to the top of the list instead. This keeps history clean and puts recently used terms first.
 
+### Persist history across sessions
+
+History should survive a session restart. Store it in a way that persists between application launches so users can return to previous searches the next time they open the same feature.
+
 ---
 
 ## Summary
@@ -100,6 +106,6 @@ If a value is already in history, do not add it again. Move it to the top of the
 | Search when option changes | Immediately |
 | Search on empty input | No — clear results |
 | Debounce delay for history save | 5 seconds of no typing |
-| Also save history on | Enter, blur, result click, navigation click, option change, clear, replace all, close |
+| Also save history on | Enter, blur, result click, navigation click, option change, clear, completing an action, close |
 | Track Find and Replace history | Separately |
 | Deduplicate history | Yes — move duplicates to top |
