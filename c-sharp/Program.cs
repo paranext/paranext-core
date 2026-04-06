@@ -69,14 +69,14 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
-            var paratextCommitChangesService = new VersionHistoryService(papi);
+            var versionHistoryService = new VersionHistoryService(papi);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
                 dblResources.RegisterDataProviderAsync(),
                 paratextRegistrationService.InitializeAsync(),
-                paratextCommitChangesService.InitializeAsync()
+                versionHistoryService.InitializeAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here
