@@ -2,17 +2,32 @@ import { Button } from '@/components/shadcn-ui/button';
 
 export function ThemingGuideBody() {
   return (
-    <div className="tw-min-h-[200px] tw-max-w-4xl tw-bg-background tw-p-6 tw-text-foreground">
+    <div className="tw-min-h-[200px] tw-max-w-4xl tw-bg-white tw-p-6 tw-text-slate-900">
       <p>
-        This guide covers theming with the shadcn-style token model: prefer CSS variables and
-        Tailwind classes that map to them (see{' '}
+        A comprehensive guide on theming components using the shadcn design system, including best
+        practices for color usage, theme switching, and CSS variable management.
+      </p>
+      <p>
+        By default we stick to the existing shadcn styles. Components we install from shadcn already
+        come with styles that expect design tokens—see which properties and class patterns they use
+        so they can set their own appearance and stay themeable.
+      </p>
+      <p>
+        Token values for Storybook and the app live in{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css"
+        >
+          index.css
+        </a>
+        . For a live table of variables for the toolbar-selected theme, see{' '}
         <a
           className="tw-text-blue-600 hover:tw-underline"
           href="https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs"
         >
           Guides / Theme Colors
-        </a>{' '}
-        for live token values in Storybook).
+        </a>
+        .
       </p>
       <p>
         Use the <strong>Theme</strong> control in the Storybook toolbar to switch palettes. Choices
@@ -38,6 +53,19 @@ export function ThemingGuideBody() {
           only (not Paratext).
         </li>
       </ul>
+      <h2 className="tw-py-2 tw-font-bold">Try it: change theme</h2>
+      <p>
+        Shadcn-style theming is driven by CSS variables in{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css"
+        >
+          index.css
+        </a>
+        . In this Storybook, use the <strong>Theme</strong> control in the toolbar (not a separate
+        preview-app toggle) to switch palettes and confirm your story respects tokens—foreground,
+        background, borders, and components that use the same variables should track the selection.
+      </p>
       <h2 className="tw-py-2 tw-font-bold">In the running application</h2>
       <p>
         The Paranext renderer loads built-in theme definitions from{' '}
@@ -58,42 +86,69 @@ export function ThemingGuideBody() {
         theme colors. End-user theme selection is handled by the platform theme service, not
         Storybook.
       </p>
-      <p>
-        By default, components use shadcn-style tokens (<code>tw-bg-background</code>,{' '}
-        <code>tw-text-foreground</code>, etc.). Prefer those over hard-coded colors so stories track
-        the toolbar theme.
+      <h2 className="tw-py-2 tw-font-bold">Bad example</h2>
+      <p className="tw-text-sm tw-text-slate-500">
+        Manual colors on primitives do not follow the active theme.
       </p>
+      <table className="tw-mb-6">
+        <tbody>
+          <tr>
+            <td>
+              Bad example<div className="tw-text-xs">manual styles, unable to be themed</div>
+            </td>
+            <td>
+              <input
+                value="this has manual colors"
+                aria-label="Bad example input with manual colors"
+                readOnly
+                className="tw-full tw-file:border-0 tw-col-span-2 tw-flex tw-h-8 tw-rounded-md tw-border tw-border-slate-300 tw-bg-white tw-px-3 tw-py-2 tw-text-sm tw-text-slate-900 tw-ring-offset-white file:tw-bg-transparent file:tw-text-sm file:tw-font-medium placeholder:tw-text-slate-400 focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-slate-400 focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
       <h2 className="tw-py-2 tw-font-bold">Overwriting styles</h2>
       <p>
-        Try not to overwrite styles (colors). When you need to, use Tailwind classes that reference
-        CSS variables, as shadcn does.
+        Try not to overwrite styles (colors). When you need to, use Tailwind classes that apply the
+        same color variables shadcn uses, in the same way shadcn does. You can see token names on{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs"
+        >
+          Guides / Theme Colors
+        </a>{' '}
+        and in the{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://ui.shadcn.com/docs/theming"
+          target="_blank"
+          rel="noreferrer"
+        >
+          shadcn theming docs
+        </a>
+        .
       </p>
       <p>
-        For example:{' '}
-        <code className="tw-rounded tw-bg-muted tw-px-1">className=&quot;tw-bg-muted&quot;</code>{' '}
-        and{' '}
-        <code className="tw-rounded tw-bg-muted tw-px-1">
+        For example, use{' '}
+        <code className="tw-rounded tw-bg-slate-100 tw-px-1 tw-text-slate-800">
+          className=&quot;tw-bg-muted&quot;
+        </code>{' '}
+        on a header-like surface and{' '}
+        <code className="tw-rounded tw-bg-slate-100 tw-px-1 tw-text-slate-800">
           className=&quot;tw-text-muted-foreground&quot;
-        </code>
-        . You can use opacity modifiers such as <code>tw-bg-muted/50</code> sparingly, consistent
-        with shadcn usage.
+        </code>{' '}
+        for supporting text. You can use shades such as <code>tw-bg-muted/50</code> sparingly, in
+        line with how shadcn applies them.
       </p>
       <h2 className="tw-py-2 tw-font-bold">Per-story theme override</h2>
       <p>
         To lock a story to one theme (for example to show a dark-mode edge case), set{' '}
-        <code className="tw-rounded tw-bg-muted tw-px-1">
-          globals: {'{'} theme: &apos;paratext-dark&apos; {'}'}
+        <code className="tw-rounded tw-bg-slate-100 tw-px-1 tw-text-slate-800">
+          parameters: {'{'} themes: {'{'} themeOverride: &apos;paratext-dark&apos; {'}'} {'}'}
         </code>{' '}
-        on the story or meta. See Storybook’s{' '}
-        <a
-          className="tw-text-blue-600 hover:tw-underline"
-          href="https://github.com/storybookjs/storybook/blob/next/code/addons/themes/README.md"
-          target="_blank"
-          rel="noreferrer"
-        >
-          @storybook/addon-themes
-        </a>{' '}
-        readme.
+        on the story or meta. The preview decorator reads this in{' '}
+        <code>.storybook/theme-decorator.ts</code> (toolbar changes use{' '}
+        <code>localStorage</code> and a channel event instead of <code>globals.theme</code>).
       </p>
       <h2 className="tw-py-2 tw-font-bold">Adding a new theme</h2>
       <ol className="tw-list-inside tw-list-decimal tw-space-y-1">
@@ -106,29 +161,13 @@ export function ThemingGuideBody() {
         </li>
         <li>
           Register the theme id in <code>.storybook/theme-constants.ts</code> (
-          <code>STORYBOOK_THEME_IDS</code>) and map classes in{' '}
-          <code>.storybook/theme-decorator.ts</code> so it appears in the toolbar.
+          <code>STORYBOOK_THEME_IDS</code>), map classes in <code>.storybook/theme-apply.ts</code>, and
+          add it to the Theme menu in <code>.storybook/manager.tsx</code>.
         </li>
       </ol>
-      <table>
-        <tbody>
-          <tr>
-            <td>
-              Bad example<div className="tw-text-xs">manual styles, unable to be themed</div>
-            </td>
-            <td>
-              <input
-                value="this has manual colors"
-                aria-label="Bad example input with manual colors"
-                readOnly
-                className="tw-full tw-file:border-0 tw-col-span-2 tw-flex tw-h-8 tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-sm tw-ring-offset-background file:tw-bg-transparent file:tw-text-sm file:tw-font-medium placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50"
-              />
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p className="tw-pt-4">
-        If you are unsure about color usage, see how{' '}
+      <p className="tw-pt-2">
+        Descriptions of which colors to use in which context are still being expanded. If you are
+        unsure, see how{' '}
         <a
           href="https://ui.shadcn.com/"
           className="tw-text-blue-600 hover:tw-underline"
@@ -137,7 +176,7 @@ export function ThemingGuideBody() {
         >
           shadcn
         </a>{' '}
-        applies tokens or talk to the{' '}
+        handles a similar pattern or talk to the{' '}
         <a
           href="https://discord.com/channels/1064938364597436416/1082713526780575845"
           className="tw-text-blue-600 hover:tw-underline"
@@ -166,8 +205,8 @@ const MATRIX_THEMES = [
  */
 export function ThemeMatrixDemo() {
   return (
-    <div className="tw-not-prose tw-min-h-[200px] tw-max-w-6xl tw-space-y-4 tw-bg-background tw-p-6 tw-text-foreground">
-      <p className="tw-text-sm tw-text-muted-foreground">
+    <div className="tw-not-prose tw-min-h-[200px] tw-max-w-6xl tw-space-y-4 tw-bg-slate-50 tw-p-6 tw-text-slate-900">
+      <p className="tw-text-sm tw-text-slate-500">
         Each panel uses the same components with theme variables applied on a local wrapper. Compare
         with the global toolbar theme on other stories. For a larger token table, see{' '}
         <a

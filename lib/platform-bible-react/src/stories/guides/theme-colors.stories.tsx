@@ -1,6 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { addons } from 'storybook/preview-api';
 import { useEffect, useState } from 'react';
 import { Input } from '@/components/shadcn-ui/input';
+
+import {
+  PLATFORM_BIBLE_THEME_CHANNEL,
+  readStoredStorybookThemeId,
+} from '../../../.storybook/theme-apply';
+import { STORYBOOK_THEME_IDS, type StorybookThemeId } from '../../../.storybook/theme-constants';
+
+function isStorybookThemeId(value: string): value is StorybookThemeId {
+  return STORYBOOK_THEME_IDS.some((id) => id === value);
+}
 
 const TOKEN_NAMES = [
   'primary',
@@ -33,6 +44,21 @@ function useRootCssVar(name: string) {
   return value;
 }
 
+function useActiveStorybookThemeId(): StorybookThemeId {
+  const [id, setId] = useState<StorybookThemeId>(() => readStoredStorybookThemeId());
+
+  useEffect(() => {
+    const ch = addons.getChannel();
+    const onTheme = (t: string) => {
+      if (isStorybookThemeId(t)) setId(t);
+    };
+    ch.on(PLATFORM_BIBLE_THEME_CHANNEL, onTheme);
+    return () => ch.off(PLATFORM_BIBLE_THEME_CHANNEL, onTheme);
+  }, []);
+
+  return id;
+}
+
 function TokenSwatch({ token, foregroundToken }: { token: string; foregroundToken: string }) {
   const rawBg = useRootCssVar(token);
   const rawFg = useRootCssVar(foregroundToken);
@@ -52,15 +78,8 @@ function TokenSwatch({ token, foregroundToken }: { token: string; foregroundToke
   );
 }
 
-type ThemeColorDisplayProps = {
-  /**
-   * From Storybook `globals.theme` — passed via meta `render` so Docs/canvas do not call preview
-   * hooks inside the component
-   */
-  activeThemeId?: string;
-};
-
-function ThemeColorDisplay({ activeThemeId = 'platform-light' }: ThemeColorDisplayProps) {
+function ThemeColorDisplay() {
+  const activeThemeId = useActiveStorybookThemeId();
   const isParatext = activeThemeId === 'paratext-light' || activeThemeId === 'paratext-dark';
 
   return (
@@ -141,12 +160,6 @@ const meta: Meta<typeof ThemeColorDisplay> = {
   title: 'Guides/Theme Colors',
   component: ThemeColorDisplay,
   tags: ['autodocs'],
-  render: (_, context) => {
-    const themeGlobal = context.globals.theme;
-    const activeThemeId =
-      typeof themeGlobal === 'string' && themeGlobal.length > 0 ? themeGlobal : 'platform-light';
-    return <ThemeColorDisplay activeThemeId={activeThemeId} />;
-  },
   decorators: [
     (Story) => (
       <div className="tw-min-h-[200px] tw-max-w-6xl tw-bg-background tw-p-6 tw-text-foreground">

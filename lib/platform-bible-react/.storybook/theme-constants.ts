@@ -1,4 +1,4 @@
-/** Toolbar / globals.theme values — keep in sync with `initializeThemeState` in theme-decorator.ts */
+/** Toolbar theme ids — keep in sync with `STORYBOOK_THEME_IDS` in `manager.tsx` and `theme-apply.ts` */
 export const STORYBOOK_THEME_IDS = [
   'platform-light',
   'platform-dark',

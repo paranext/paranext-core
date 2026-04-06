@@ -29,10 +29,11 @@ Conventions, tooling, and maintenance for this package’s Storybook. For Parate
 | --- | --- |
 | [main.ts](./main.ts) | Stories glob, addons, Vite merge, `staticDirs` |
 | [preview.ts](./preview.ts) | Global parameters, decorators, tags |
-| [theme-constants.ts](./theme-constants.ts) | Toolbar theme ids (`globals.theme`) |
-| [theme-decorator.ts](./theme-decorator.ts) | Toolbar themes → `documentElement` + canvas colors |
+| [theme-constants.ts](./theme-constants.ts) | Toolbar theme ids (shared with manager + theme apply) |
+| [theme-apply.ts](./theme-apply.ts) | Class mapping, `localStorage` key, preview iframe DOM helper |
+| [theme-decorator.ts](./theme-decorator.ts) | Preview: apply theme classes + channel sync |
+| [manager.tsx](./manager.tsx) | Theme toolbar (Vueless-style iframe DOM update, no `globals.theme`); optional shell tweaks in [BRANDING.md](./BRANDING.md) |
 | [preview-storybook.css](./preview-storybook.css) | `#storybook-root` and Storybook docs/loading surfaces |
-| `manager.ts` (optional) | Custom manager shell; see [BRANDING.md](./BRANDING.md) |
 | [vitest.setup.ts](./vitest.setup.ts) | Portable stories / Vitest integration |
 
 Add new global behavior in small modules and import them from `preview.ts` so this file stays an ordered list of decorators and parameters.
@@ -44,5 +45,5 @@ Add new global behavior in small modules and import them from `preview.ts` so th
 
 ## Canvas and theming
 
-- Theme classes on `html` come from [theme-decorator.ts](./theme-decorator.ts); surfaces are in [preview-storybook.css](./preview-storybook.css) and [index.css](../src/index.css). **Canvas** uses `#storybook-root` for the full themed background. **Docs** uses `#storybook-docs` with `--muted` for the MDX page; embedded previews (`.sbdocs-preview`, zoom toolbar, `.docs-story`) use `--background` so they match Canvas. `body` is not painted with the canvas color so titles/descriptions are not forced to the same flat panel as the story.
+- Theme classes on `html` come from [theme-apply.ts](./theme-apply.ts) / [theme-decorator.ts](./theme-decorator.ts) and the Theme tool in [manager.tsx](./manager.tsx); surfaces are in [preview-storybook.css](./preview-storybook.css) and [index.css](../src/index.css). **Canvas** uses `#storybook-root` for the full themed background. **Docs** uses `#storybook-docs` with `--muted` for the MDX page; embedded previews (`.sbdocs-preview`, zoom toolbar, `.docs-story`) use `--background` so they match Canvas. `body` is not painted with the canvas color so titles/descriptions are not forced to the same flat panel as the story.
 - **Authoring:** [Guidelines/Theming](../src/stories/guidelines/theming.mdx) explains the toolbar, per-story overrides, and adding themes. [Guides / Theme Colors](../src/stories/guides/theme-colors.stories.tsx) shows live token values for the selected theme.

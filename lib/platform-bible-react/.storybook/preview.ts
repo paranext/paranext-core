@@ -38,11 +38,7 @@ const preview: Preview = {
       test: 'todo',
     },
 
-    /** @storybook/addon-themes — see `.storybook/theme-decorator.ts` */
-    themes: {
-      disable: false,
-    },
-
+    /** Toolbar themes: `.storybook/manager.tsx` + `.storybook/theme-decorator.ts` (not `globals.theme`) */
     backgrounds: {
       default: 'theme',
       values: [
@@ -54,8 +50,6 @@ const preview: Preview = {
     },
   },
   initialGlobals: {
-    /** Toolbar theme ids — applied to `document.documentElement` in `withPlatformBibleThemes` */
-    theme: 'platform-light',
     addonRtl: readDirection(),
   },
   decorators: [

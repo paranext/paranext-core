@@ -18,7 +18,6 @@ function getAbsolutePath(value: string): any {
  *
  * - `@storybook/addon-docs` — MDX and autodocs
  * - `@storybook/addon-links` — cross-story navigation
- * - `@storybook/addon-themes` — toolbar themes (`globals.theme`); paired with `.storybook/theme-decorator.ts`
  * - `@storybook/addon-a11y` — accessibility checks (`parameters.a11y` in `preview.ts`)
  * - `@chromatic-com/storybook` — visual testing integration
  * - `storybook-addon-rtl` — RTL toolbar (`globals.addonRtl`)
@@ -51,7 +50,6 @@ const config: StorybookConfig = {
       },
     },
     getAbsolutePath('@storybook/addon-links'),
-    getAbsolutePath('@storybook/addon-themes'),
     getAbsolutePath('@storybook/addon-a11y'),
     getAbsolutePath('@chromatic-com/storybook'),
     getAbsolutePath('storybook-addon-rtl'),
