@@ -4,7 +4,7 @@ using Paratext.Data.Repository;
 namespace Paranext.DataProvider.Services;
 
 /// <summary>
-/// Commands on the papi that handle Send/Receive-related operations
+/// Service that manages version history for the projects
 /// </summary>
 internal class VersionHistoryService(PapiClient papiClient)
 {
