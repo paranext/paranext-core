@@ -110,12 +110,6 @@ export function ThemingGuideBody() {
           <code>.storybook/theme-decorator.ts</code> so it appears in the toolbar.
         </li>
       </ol>
-      <h2 className="tw-py-2 tw-font-bold">Core Storybook (PT-3492)</h2>
-      <p>
-        When Extension UI is added to the core repo Storybook, reuse the same{' '}
-        <code>@storybook/addon-themes</code> setup and <code>theme-decorator</code> pattern so theme
-        switching is consistent across both Storybooks.
-      </p>
       <table>
         <tbody>
           <tr>
@@ -158,15 +152,12 @@ export function ThemingGuideBody() {
   );
 }
 
+/** Theme class only on the outer shell so `index.css` variables apply before `pr-twp` / utilities. */
 const MATRIX_THEMES = [
-  {
-    id: 'platform-light',
-    label: 'Platform light',
-    className: 'pr-twp theme-platform-light',
-  },
-  { id: 'platform-dark', label: 'Platform dark', className: 'pr-twp dark' },
-  { id: 'paratext-light', label: 'Paratext light', className: 'pr-twp paratext-light' },
-  { id: 'paratext-dark', label: 'Paratext dark', className: 'pr-twp paratext-dark' },
+  { id: 'platform-light', label: 'Platform light', themeShell: 'theme-platform-light' },
+  { id: 'platform-dark', label: 'Platform dark', themeShell: 'dark' },
+  { id: 'paratext-light', label: 'Paratext light', themeShell: 'paratext-light' },
+  { id: 'paratext-dark', label: 'Paratext dark', themeShell: 'paratext-dark' },
 ] as const;
 
 /**
@@ -175,7 +166,7 @@ const MATRIX_THEMES = [
  */
 export function ThemeMatrixDemo() {
   return (
-    <div className="tw-min-h-[200px] tw-max-w-6xl tw-space-y-4 tw-bg-background tw-p-6 tw-text-foreground">
+    <div className="tw-not-prose tw-min-h-[200px] tw-max-w-6xl tw-space-y-4 tw-bg-background tw-p-6 tw-text-foreground">
       <p className="tw-text-sm tw-text-muted-foreground">
         Each panel uses the same components with theme variables applied on a local wrapper. Compare
         with the global toolbar theme on other stories. For a larger token table, see{' '}
@@ -188,18 +179,21 @@ export function ThemeMatrixDemo() {
         .
       </p>
       <div className="tw-grid tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-2 xl:tw-grid-cols-4">
-        {MATRIX_THEMES.map(({ id, label, className }) => (
-          <div
-            key={id}
-            className={`tw-flex tw-flex-col tw-rounded-lg tw-border tw-border-border tw-p-4 ${className} tw-bg-background tw-text-foreground`}
-          >
-            <p className="tw-mb-2 tw-font-semibold">{label}</p>
-            <Button type="button" variant="default" className="tw-mb-2">
-              Primary
-            </Button>
-            <Button type="button" variant="secondary">
-              Secondary
-            </Button>
+        {MATRIX_THEMES.map(({ id, label, themeShell }) => (
+          <div key={id} className={themeShell}>
+            <div className="pr-twp tw-flex tw-flex-col tw-rounded-lg tw-border tw-border-border tw-bg-background tw-p-4 tw-text-foreground">
+              {/*
+                Important: Docs iframe can inherit a global `color` onto `p` that does not re-resolve
+                `--foreground` from this nested theme shell. Force token-based text color.
+              */}
+              <p className="tw-mb-2 tw-font-semibold !tw-text-foreground">{label}</p>
+              <Button type="button" variant="default" className="tw-mb-2">
+                Primary
+              </Button>
+              <Button type="button" variant="secondary">
+                Secondary
+              </Button>
+            </div>
           </div>
         ))}
       </div>
