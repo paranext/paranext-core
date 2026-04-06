@@ -10,8 +10,10 @@ import {
 } from './replace-preview-types';
 import {
   getFindHighlightClasses,
+  getFindHighlightStyle,
   getGoldFindHighlightClasses,
   getReplaceHighlightClasses,
+  getReplaceHighlightStyle,
   renderWithInvisibleChars,
 } from './replace-preview-styles';
 
@@ -71,12 +73,14 @@ function PreviewSwatchRow({
 }) {
   const { layout, highlightShape, color, monospace, showInvisible } = previewOptions;
   const fontClass = monospace ? 'tw-font-mono' : 'scripture-font';
-  const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
-  const replaceClass = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape)}`;
+  const findClass = getFindHighlightClasses(color, highlightShape);
+  const findStyle = getFindHighlightStyle(color);
+  const replaceClass = getReplaceHighlightClasses(color, highlightShape);
+  const replaceStyle = getReplaceHighlightStyle(color);
   const findGoldClass = `${fontClass} ${getGoldFindHighlightClasses(highlightShape)}`;
   // Inline layout: only round the outer corners so the two adjacent spans look like one unified rectangle
-  const findClassInline = `${fontClass} ${getFindHighlightClasses(color, highlightShape, true, 'left')}`;
-  const replaceClassInline = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape, 'right')}`;
+  const findClassInline = getFindHighlightClasses(color, highlightShape, true, 'left');
+  const replaceClassInline = getReplaceHighlightClasses(color, highlightShape, 'right');
 
   const display = (text: string) => (showInvisible ? renderWithInvisibleChars(text) : text);
 
@@ -100,8 +104,12 @@ function PreviewSwatchRow({
       return (
         <div className={`tw-text-xs tw-text-muted-foreground ${fontClass}`}>
           {before}
-          <span className={findClassInline}>{find}</span>
-          <span className={replaceClassInline}>{replace}</span>
+          <span className={`${fontClass} ${findClassInline}`} style={findStyle}>
+            {find}
+          </span>
+          <span className={`${fontClass} ${replaceClassInline}`} style={replaceStyle}>
+            {replace}
+          </span>
           {after}
         </div>
       );
@@ -114,7 +122,9 @@ function PreviewSwatchRow({
             <Minus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-red-500" />
             <span className={`tw-text-muted-foreground ${fontClass}`}>
               {before}
-              <span className={findClass}>{find}</span>
+              <span className={`${fontClass} ${findClass}`} style={findStyle}>
+                {find}
+              </span>
               {after}
             </span>
           </div>
@@ -122,7 +132,9 @@ function PreviewSwatchRow({
             <Plus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-green-500" />
             <span className={`tw-text-muted-foreground ${fontClass}`}>
               {before}
-              <span className={replaceClass}>{replace}</span>
+              <span className={`${fontClass} ${replaceClass}`} style={replaceStyle}>
+                {replace}
+              </span>
               {after}
             </span>
           </div>
@@ -133,9 +145,13 @@ function PreviewSwatchRow({
     // arrow
     return (
       <div className="tw-flex tw-items-center tw-gap-1.5 tw-text-xs">
-        <span className={findClass}>{find}</span>
+        <span className={`${fontClass} ${findClass}`} style={findStyle}>
+          {find}
+        </span>
         <ArrowRight className="tw-h-3 tw-w-3 tw-shrink-0" />
-        <span className={replaceClass}>{replace}</span>
+        <span className={`${fontClass} ${replaceClass}`} style={replaceStyle}>
+          {replace}
+        </span>
       </div>
     );
   };
@@ -277,6 +293,14 @@ function AllPreviewVariants() {
 const meta: Meta = {
   title: 'Bundled Extensions/find/ReplacePreviewOptions',
   tags: ['autodocs'],
+};
+
+export default meta;
+
+type Story = StoryObj;
+
+export const PickerLight: Story = {
+  render: () => <ReplacePreviewOptionsDemo />,
   decorators: [
     (Story) => (
       <div className="pr-twp tw-p-4">
@@ -286,14 +310,13 @@ const meta: Meta = {
   ],
 };
 
-export default meta;
-
-type Story = StoryObj;
-
-export const Picker: Story = {
-  render: () => <ReplacePreviewOptionsDemo />,
-};
-
-export const AllVariants: Story = {
+export const AllVariantsLight: Story = {
   render: () => <AllPreviewVariants />,
+  decorators: [
+    (Story) => (
+      <div className="pr-twp">
+        <Story />
+      </div>
+    ),
+  ],
 };

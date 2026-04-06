@@ -13,8 +13,11 @@ import { LocalizedBookData } from './find-types';
 import { applyPreserveCase } from './find.utils';
 import {
   getFindHighlightClasses,
+  getFindHighlightStyle,
   getGoldFindHighlightClasses,
+  getGoldFindHighlightStyle,
   getReplaceHighlightClasses,
+  getReplaceHighlightStyle,
   preserveTrailingSpaces,
   renderWithInvisibleChars,
 } from './replace-preview-styles';
@@ -145,9 +148,11 @@ export default function SearchResult({
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Arrow/block only compute context on selection; inline defers to viewport visibility
-  const [shouldCalculateContext, setShouldGetVerseText] = useState<boolean>(isSelected);
+  const [shouldCalculateContext, setShouldCalculateContext] = useState<boolean>(isSelected);
   const [isVisible, setIsVisible] = useState(false);
   const [isProgressAnimating, setIsProgressAnimating] = useState(false);
+  // Track dark mode changes to re-render and update inline styles
+  const [, setDarkMode] = useState(document.body.classList.contains('dark'));
 
   useEffect(() => {
     if (!searchResult.isReplaced) {
@@ -157,6 +162,17 @@ export default function SearchResult({
     const frame = requestAnimationFrame(() => setIsProgressAnimating(true));
     return () => cancelAnimationFrame(frame);
   }, [searchResult.isReplaced]);
+
+  // Listen for dark mode changes to re-render with updated inline styles
+  useEffect(() => {
+    const handleDarkModeChange = () => {
+      setDarkMode(document.body.classList.contains('dark'));
+    };
+
+    const observer = new MutationObserver(handleDarkModeChange);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   // Observe when the card enters the viewport so inline context loads lazily.
   // Also serves as the sole IntersectionObserver on this element — no second observer needed.
@@ -180,7 +196,7 @@ export default function SearchResult({
   // (Inline layout uses isVisible via the effect below instead.)
   useEffect(() => {
     if (isSelected) {
-      setShouldGetVerseText(true);
+      setShouldCalculateContext(true);
     }
   }, [isSelected]);
 
@@ -196,7 +212,7 @@ export default function SearchResult({
   // the main thread when the user switches to inline layout.
   useEffect(() => {
     if (previewOptions.layout === 'inline' && isVisible) {
-      startTransition(() => setShouldGetVerseText(true));
+      startTransition(() => setShouldCalculateContext(true));
     }
   }, [previewOptions.layout, isVisible]);
 
@@ -238,8 +254,11 @@ export default function SearchResult({
 
   const { highlightShape, color } = previewOptions;
   const findClass = `${fontClass} ${getFindHighlightClasses(color, highlightShape)}`;
+  const findStyle = getFindHighlightStyle(color);
   const findHighlightClass = `${fontClass} ${getGoldFindHighlightClasses('rounded')}`;
+  const findHighlightStyle = getGoldFindHighlightStyle();
   const replaceClass = `${fontClass} ${getReplaceHighlightClasses(color, highlightShape)}`;
+  const replaceStyle = getReplaceHighlightStyle(color);
   // In inline layout the find and replace spans are directly adjacent — only round the outer corners
   // so the two spans look like one unified rectangle split by color.
   const findClassInline = `${fontClass} ${getFindHighlightClasses(color, highlightShape, true, 'left')}`;
@@ -265,7 +284,9 @@ export default function SearchResult({
     return (
       <>
         {displayText(beforeText)}
-        <span className={findHighlightClass}>{displayText(preserveTrailingSpaces(text))}</span>
+        <span className={findHighlightClass} style={findHighlightStyle}>
+          {displayText(preserveTrailingSpaces(text))}
+        </span>
         {displayText(afterText)}
       </>
     );
@@ -395,21 +416,27 @@ export default function SearchResult({
       if (!textParts) {
         return (
           <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-1.5">
-            <span className={`${findClass} tw-min-w-0 ${breakClass}`}>{findText}</span>
+            <span className={`${findClass} tw-min-w-0 ${breakClass}`} style={findStyle}>
+              {findText}
+            </span>
             <ArrowRight className="tw-h-3 tw-w-3 tw-shrink-0 rtl:tw-rotate-180" />
-            <span className={`${replaceClass} tw-min-w-0 ${breakClass}`}>{replaceText}</span>
+            <span className={`${replaceClass} tw-min-w-0 ${breakClass}`} style={replaceStyle}>
+              {replaceText}
+            </span>
           </div>
         );
       }
       return (
         <div className={`tw-text-muted-foreground ${fontClass} ${breakClass}`}>
           {displayText(textParts.beforeText)}
-          <span className={findClassInline}>
+          <span className={findClassInline} style={findStyle}>
             {previewOptions.showInvisible
               ? displayText(textParts.text)
               : preserveTrailingSpaces(textParts.text)}
           </span>
-          <span className={replaceClassInline}>{replaceText}</span>
+          <span className={replaceClassInline} style={replaceStyle}>
+            {replaceText}
+          </span>
           {displayText(textParts.afterText)}
         </div>
       );
@@ -425,7 +452,9 @@ export default function SearchResult({
             <Minus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-gray-400 dark:tw-text-gray-500" />
             <span className={`tw-text-muted-foreground tw-min-w-0 ${breakClass} ${fontClass}`}>
               {before}
-              <span className={findClass}>{findText}</span>
+              <span className={findClass} style={findStyle}>
+                {findText}
+              </span>
               {after}
             </span>
           </div>
@@ -433,7 +462,9 @@ export default function SearchResult({
             <Plus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-gray-700 dark:tw-text-gray-300" />
             <span className={`tw-text-foreground tw-min-w-0 ${breakClass} ${fontClass}`}>
               {before}
-              <span className={replaceClass}>{replaceText}</span>
+              <span className={replaceClass} style={replaceStyle}>
+                {replaceText}
+              </span>
               {after}
             </span>
           </div>
@@ -444,9 +475,13 @@ export default function SearchResult({
     // Default: arrow layout
     return (
       <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-1.5">
-        <span className={`${findClass} tw-min-w-0 ${breakClass}`}>{findText}</span>
+        <span className={`${findClass} tw-min-w-0 ${breakClass}`} style={findStyle}>
+          {findText}
+        </span>
         <ArrowRight className="tw-h-3 tw-w-3 tw-shrink-0 rtl:tw-rotate-180" />
-        <span className={`${replaceClass} tw-min-w-0 ${breakClass}`}>{replaceText}</span>
+        <span className={`${replaceClass} tw-min-w-0 ${breakClass}`} style={replaceStyle}>
+          {replaceText}
+        </span>
       </div>
     );
   };
@@ -461,7 +496,7 @@ export default function SearchResult({
           className="tw-shrink-0 tw-font-semibold tw-cursor-pointer tw-border-0 tw-bg-transparent tw-p-0 tw-text-inherit hover:tw-underline"
           onClick={(e) => {
             e.stopPropagation();
-            setShouldGetVerseText(true);
+            setShouldCalculateContext(true);
             onResultReferenceClick?.(searchResult, globalResultsIndex);
           }}
           onDoubleClick={(e) => e.stopPropagation()}
