@@ -1,4 +1,5 @@
 using Paranext.DataProvider;
+using Paranext.DataProvider.Projects;
 using Paratext.Data.Repository;
 
 namespace Paranext.DataProvider.Services;
@@ -27,7 +28,7 @@ internal class VersionHistoryService(PapiClient papiClient)
     /// Function to commit new changes to the version history
     /// </summary>
     /// <returns>Whether the changes were successfully committed</returns>
-    private Boolean CommitChanges(String comment)
+    private Boolean CommitChanges(String projectId, String comment)
     {
         throw new Exception("This command is unimplemented!");
     }
