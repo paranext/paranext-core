@@ -1,3 +1,4 @@
+import { CSSProperties, useEffect, useState } from 'react';
 import { ArrowRight, Eye } from 'lucide-react';
 import {
   Button,
@@ -18,8 +19,11 @@ import {
 } from 'platform-bible-react';
 import {
   getFindHighlightClasses,
+  getFindHighlightStyle,
   getGoldFindHighlightClasses,
+  getGoldFindHighlightStyle,
   getReplaceHighlightClasses,
+  getReplaceHighlightStyle,
 } from './replace-preview-styles';
 import { PreviewOptions } from './replace-preview-types';
 
@@ -111,17 +115,27 @@ function BlockLayoutIcon({ className }: { className?: string }) {
 /** Small styled swatch used to preview highlight shapes and colors inside the picker */
 function Swatch({
   findClass,
+  findStyle,
   replaceClass,
+  replaceStyle,
   showReplace = false,
 }: {
   findClass: string;
+  findStyle?: CSSProperties;
   replaceClass?: string;
+  replaceStyle?: CSSProperties;
   showReplace?: boolean;
 }) {
   return (
     <span className="tw-inline-flex tw-items-center tw-gap-0.5 tw-text-xs">
-      <span className={findClass}>old</span>
-      {showReplace && replaceClass && <span className={replaceClass}>new</span>}
+      <span className={findClass} style={findStyle}>
+        old
+      </span>
+      {showReplace && replaceClass && (
+        <span className={replaceClass} style={replaceStyle}>
+          new
+        </span>
+      )}
     </span>
   );
 }
@@ -140,6 +154,16 @@ export function ReplacePreviewOptions({
   onOpenChange,
 }: ReplacePreviewOptionsProps) {
   const { layout, highlightShape, color, monospace, showInvisible } = previewOptions;
+
+  // Track dark mode changes so inline styles on swatches stay in sync (same pattern as search-result)
+  const [, setDarkMode] = useState(document.body.classList.contains('dark'));
+  useEffect(() => {
+    const observer = new MutationObserver(() =>
+      setDarkMode(document.body.classList.contains('dark')),
+    );
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   const set = <K extends keyof PreviewOptions>(key: K, value: PreviewOptions[K]) =>
     setPreviewOptions({ ...previewOptions, [key]: value });
@@ -237,7 +261,10 @@ export function ReplacePreviewOptions({
                   className="tw-flex tw-flex-1 tw-cursor-pointer tw-items-center tw-justify-between tw-text-sm tw-font-normal"
                 >
                   {label}
-                  <Swatch findClass={getGoldFindHighlightClasses(value)} />
+                  <Swatch
+                    findClass={getGoldFindHighlightClasses(value)}
+                    findStyle={getGoldFindHighlightStyle()}
+                  />
                 </Label>
               </div>
             ))}
@@ -265,22 +292,30 @@ export function ReplacePreviewOptions({
                 ['red-green', localizedStrings.colorRedGreen],
                 ['grey-blue', localizedStrings.colorGreyBlue],
               ] as const
-            ).map(([value, label]) => (
-              <div key={value} className="tw-flex tw-min-h-8 tw-items-center tw-gap-2">
-                <RadioGroupItem value={value} id={`color-${value}`} />
-                <Label
-                  htmlFor={`color-${value}`}
-                  className="tw-flex tw-flex-1 tw-cursor-pointer tw-items-center tw-justify-between tw-text-sm tw-font-normal"
-                >
-                  {label}
-                  <Swatch
-                    findClass={getFindHighlightClasses(value, highlightShape)}
-                    replaceClass={getReplaceHighlightClasses(value, highlightShape)}
-                    showReplace
-                  />
-                </Label>
-              </div>
-            ))}
+            ).map(([value, label]) => {
+              const findClass = getFindHighlightClasses(value, highlightShape);
+              const findStyle = getFindHighlightStyle(value);
+              const replaceClass = getReplaceHighlightClasses(value, highlightShape);
+              const replaceStyle = getReplaceHighlightStyle(value);
+              return (
+                <div key={value} className="tw-flex tw-min-h-8 tw-items-center tw-gap-2">
+                  <RadioGroupItem value={value} id={`color-${value}`} />
+                  <Label
+                    htmlFor={`color-${value}`}
+                    className="tw-flex tw-flex-1 tw-cursor-pointer tw-items-center tw-justify-between tw-text-sm tw-font-normal"
+                  >
+                    {label}
+                    <Swatch
+                      findClass={findClass}
+                      findStyle={findStyle}
+                      replaceClass={replaceClass}
+                      replaceStyle={replaceStyle}
+                      showReplace
+                    />
+                  </Label>
+                </div>
+              );
+            })}
           </RadioGroup>
         </fieldset>
 

@@ -1,4 +1,8 @@
+import { CSSProperties } from 'react';
 import { ReplacePreviewColor, ReplacePreviewHighlightShape } from './replace-preview-types';
+
+// Extends CSSProperties to allow CSS custom properties (e.g. --tw-ring-color) without type assertions.
+type CSSWithVars = CSSProperties & Record<`--${string}`, string>;
 
 // Shape class lookup — all classes are complete literals so Tailwind content scanning picks them up.
 // Bar uses box-shadow (via --tw-ring-color) instead of CSS borders because a global
@@ -24,60 +28,73 @@ const SHAPE_CLASSES_RIGHT: Record<ReplacePreviewHighlightShape, string> = {
   plain: '',
 };
 
+// CSS custom properties for light/dark mode colors
+const COLOR_STYLES: Record<
+  ReplacePreviewColor,
+  { light: Record<string, string>; dark: Record<string, string> }
+> = {
+  'red-cyan': {
+    light: {
+      '--find-bg': '#fee2e2', // red-100
+      '--find-text': '#b91c1c', // red-700
+      '--find-border': '#fca5a5', // red-300
+      '--replace-bg': '#cffafe', // cyan-100
+      '--replace-text': '#0369a1', // cyan-700
+      '--replace-border': '#a5f3fc', // cyan-300
+    },
+    dark: {
+      '--find-bg': '#111111', // near-black
+      '--find-text': '#fca5a5', // red-300
+      '--find-border': '#b91c1c', // red-700
+      '--replace-bg': '#111111', // near-black
+      '--replace-text': '#67e8f9', // cyan-300
+      '--replace-border': '#164e63', // cyan-700
+    },
+  },
+  'red-green': {
+    light: {
+      '--find-bg': '#fee2e2', // red-100
+      '--find-text': '#b91c1c', // red-700
+      '--find-border': '#fca5a5', // red-300
+      '--replace-bg': '#dcfce7', // emerald-100
+      '--replace-text': '#15803d', // emerald-700
+      '--replace-border': '#86efac', // emerald-300
+    },
+    dark: {
+      '--find-bg': '#111111', // near-black
+      '--find-text': '#fca5a5', // red-300
+      '--find-border': '#b91c1c', // red-700
+      '--replace-bg': '#111111', // near-black
+      '--replace-text': '#86efac', // emerald-300
+      '--replace-border': '#166534', // emerald-700
+    },
+  },
+  'grey-blue': {
+    light: {
+      '--find-bg': '#e5e7eb', // gray-200
+      '--find-text': '#374151', // gray-700
+      '--find-border': '#d1d5db', // gray-300
+      '--replace-bg': '#dbeafe', // blue-100
+      '--replace-text': '#1e40af', // blue-700
+      '--replace-border': '#bfdbfe', // blue-300
+    },
+    dark: {
+      '--find-bg': '#111111', // near-black
+      '--find-text': '#f3f4f6', // gray-100
+      '--find-border': '#374151', // gray-700
+      '--replace-bg': '#111111', // near-black
+      '--replace-text': '#93c5fd', // blue-300
+      '--replace-border': '#1e3a8a', // blue-700
+    },
+  },
+};
+
 /** Lighter amber/gold color classes used for the find highlight in the verse text context area. */
 const GOLD_FIND_COLOR = {
-  bg: 'tw-bg-amber-100 dark:tw-bg-amber-900',
+  bg: 'tw-bg-amber-100 dark:tw-bg-amber-950',
   text: 'tw-text-amber-700 dark:tw-text-amber-300',
   // Sets --tw-ring-color used by both the bar shadow and the rounded ring
   border: 'tw-ring-amber-600 dark:tw-ring-amber-400',
-};
-
-// Color classes for the FIND (old) highlight
-const FIND_COLOR_CLASSES: Record<
-  ReplacePreviewColor,
-  { bg: string; text: string; border: string; decoration: string }
-> = {
-  'red-cyan': {
-    bg: 'tw-bg-red-100 dark:tw-bg-red-950',
-    text: 'tw-text-red-700 dark:tw-text-red-300',
-    border: 'tw-border-red-400 dark:tw-border-red-600 tw-ring-red-400 dark:tw-ring-red-600',
-    decoration: 'tw-decoration-red-700/70 dark:tw-decoration-red-300/70',
-  },
-  'red-green': {
-    bg: 'tw-bg-red-100 dark:tw-bg-red-950',
-    text: 'tw-text-red-700 dark:tw-text-red-300',
-    border: 'tw-border-red-400 dark:tw-border-red-600 tw-ring-red-400 dark:tw-ring-red-600',
-    decoration: 'tw-decoration-red-700/70 dark:tw-decoration-red-300/70',
-  },
-  'grey-blue': {
-    bg: 'tw-bg-gray-200 dark:tw-bg-gray-700',
-    text: 'tw-text-gray-700 dark:tw-text-gray-300',
-    border: 'tw-border-gray-500 dark:tw-border-gray-400 tw-ring-gray-500 dark:tw-ring-gray-400',
-    decoration: 'tw-decoration-gray-700/70 dark:tw-decoration-gray-300/70',
-  },
-};
-
-// Color classes for the REPLACE (new) highlight
-const REPLACE_COLOR_CLASSES: Record<
-  ReplacePreviewColor,
-  { bg: string; text: string; border: string }
-> = {
-  'red-cyan': {
-    bg: 'tw-bg-cyan-100 dark:tw-bg-cyan-950',
-    text: 'tw-text-cyan-700 dark:tw-text-cyan-300',
-    border: 'tw-border-cyan-400 dark:tw-border-cyan-600 tw-ring-cyan-400 dark:tw-ring-cyan-600',
-  },
-  'red-green': {
-    bg: 'tw-bg-emerald-100 dark:tw-bg-emerald-950',
-    text: 'tw-text-emerald-700 dark:tw-text-emerald-300',
-    border:
-      'tw-border-emerald-400 dark:tw-border-emerald-600 tw-ring-emerald-400 dark:tw-ring-emerald-600',
-  },
-  'grey-blue': {
-    bg: 'tw-bg-blue-100 dark:tw-bg-blue-950',
-    text: 'tw-text-blue-700 dark:tw-text-blue-300',
-    border: 'tw-border-blue-400 dark:tw-border-blue-600 tw-ring-blue-400 dark:tw-ring-blue-600',
-  },
 };
 
 /**
@@ -104,8 +121,25 @@ export function getGoldFindHighlightClasses(shape: ReplacePreviewHighlightShape)
 }
 
 /**
- * Returns Tailwind class string for the FIND (old) highlight span. All class values are complete
- * static literals.
+ * Returns inline style object for the gold/amber find highlight used in the verse text context
+ * area. Handles dark mode colors since Tailwind's dark: prefix doesn't work with dynamically built
+ * classes.
+ */
+export function getGoldFindHighlightStyle(): CSSProperties {
+  const isDarkMode = document.body.classList.contains('dark');
+  const style: CSSWithVars = {
+    backgroundColor: isDarkMode ? '#111111' : '#fef3c7', // amber-100 light, near-black dark
+    color: isDarkMode ? '#fcd34d' : '#b45309', // amber-300 dark, amber-700 light
+    borderColor: isDarkMode ? '#b45309' : '#f59e0b', // amber-600 colors
+    '--tw-ring-color': isDarkMode ? '#b45309' : '#f59e0b',
+  };
+  return style;
+}
+
+/**
+ * Returns Tailwind class string and inline style for the FIND (old) highlight span. All class
+ * values are complete static literals. Inline styles handle dark mode colors since they're built
+ * dynamically.
  *
  * @param showLineThrough Whether to include line-through styling. Pass false for find-only
  *   highlighting where strikethrough is not desired.
@@ -113,45 +147,77 @@ export function getGoldFindHighlightClasses(shape: ReplacePreviewHighlightShape)
  *   an adjacent replace span on the right (inline layout).
  */
 export function getFindHighlightClasses(
-  color: ReplacePreviewColor,
+  // Colors are applied via inline styles (getFindHighlightStyle), not Tailwind classes.
+  // The parameter exists so callers can pass color and shape together for a consistent API.
+  _color: ReplacePreviewColor,
   shape: ReplacePreviewHighlightShape,
   showLineThrough: boolean = true,
   position: 'standalone' | 'left' = 'standalone',
 ): string {
-  const c = FIND_COLOR_CLASSES[color];
   const shapeClass = (position === 'left' ? SHAPE_CLASSES_LEFT : SHAPE_CLASSES)[shape];
-  const borderClass = shape !== 'plain' ? c.border : '';
-  return [
-    'tw-inline tw-whitespace-pre-wrap',
-    showLineThrough ? 'tw-line-through' : '',
-    showLineThrough ? c.decoration : '',
-    c.bg,
-    c.text,
-    shapeClass,
-    borderClass,
-  ]
+  const decorationClass = showLineThrough ? 'tw-line-through' : '';
+  const paddingClass = shape === 'bar' ? '' : 'tw-px-0.5';
+  return ['tw-inline tw-whitespace-pre-wrap', paddingClass, decorationClass, shapeClass]
     .filter(Boolean)
     .join(' ');
 }
 
 /**
- * Returns Tailwind class string for the REPLACE (new) highlight span. All class values are complete
- * static literals.
+ * Returns inline style object for the FIND (old) highlight span to handle dark mode colors.
+ *
+ * @param color The color scheme to use
+ */
+export function getFindHighlightStyle(color: ReplacePreviewColor): CSSProperties {
+  const isDarkMode = document.body.classList.contains('dark');
+  const colorSet = COLOR_STYLES[color];
+  const colors = isDarkMode ? colorSet.dark : colorSet.light;
+
+  const style: CSSWithVars = {
+    backgroundColor: colors['--find-bg'],
+    color: colors['--find-text'],
+    borderColor: colors['--find-border'],
+    '--tw-ring-color': colors['--find-border'],
+  };
+  return style;
+}
+
+/**
+ * Returns Tailwind class string and inline style for the REPLACE (new) highlight span. All class
+ * values are complete static literals. Inline styles handle dark mode colors since they're built
+ * dynamically.
  *
  * @param position When `'right'`, only the right corners are rounded so the span visually connects
  *   to an adjacent find span on the left (inline layout).
  */
 export function getReplaceHighlightClasses(
-  color: ReplacePreviewColor,
+  // Colors are applied via inline styles (getReplaceHighlightStyle), not Tailwind classes.
+  // The parameter exists so callers can pass color and shape together for a consistent API.
+  _color: ReplacePreviewColor,
   shape: ReplacePreviewHighlightShape,
   position: 'standalone' | 'right' = 'standalone',
 ): string {
-  const c = REPLACE_COLOR_CLASSES[color];
   const shapeClass = (position === 'right' ? SHAPE_CLASSES_RIGHT : SHAPE_CLASSES)[shape];
-  const borderClass = shape !== 'plain' ? c.border : '';
-  return ['tw-inline tw-whitespace-pre-wrap', c.bg, c.text, shapeClass, borderClass]
-    .filter(Boolean)
-    .join(' ');
+  const paddingClass = shape === 'bar' ? '' : 'tw-px-0.5';
+  return ['tw-inline tw-whitespace-pre-wrap', paddingClass, shapeClass].filter(Boolean).join(' ');
+}
+
+/**
+ * Returns inline style object for the REPLACE (new) highlight span to handle dark mode colors.
+ *
+ * @param color The color scheme to use
+ */
+export function getReplaceHighlightStyle(color: ReplacePreviewColor): CSSProperties {
+  const isDarkMode = document.body.classList.contains('dark');
+  const colorSet = COLOR_STYLES[color];
+  const colors = isDarkMode ? colorSet.dark : colorSet.light;
+
+  const style: CSSWithVars = {
+    backgroundColor: colors['--replace-bg'],
+    color: colors['--replace-text'],
+    borderColor: colors['--replace-border'],
+    '--tw-ring-color': colors['--replace-border'],
+  };
+  return style;
 }
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
