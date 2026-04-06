@@ -183,10 +183,11 @@ export const DIALOG_BASE: DialogDefinitionBase = {
       // Wrap in a non-modal Dialog context so Radix primitives (DialogTitle, DialogDescription)
       // used inside dialog components have the required Radix context provider. The modal overlay
       // path provides its own Dialog wrapper; this covers the dock-tab (non-modal) path.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
       content: createElement(
         Dialog,
         { open: true, modal: false },
+        // dialogs must define their own Component. It will then be used in this default
+        // implementation of `loadDialog`
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         createElement(this.Component!, {
           ...tabData,

@@ -579,6 +579,7 @@ globalThis.webViewComponent = function HelloRock3({
   // #endregion
 
   return (
+    // Root div needs onContextMenu to intercept right-clicks; no keyboard role needed here
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div onContextMenu={handleContextMenu}>
       <TabFloatingMenu

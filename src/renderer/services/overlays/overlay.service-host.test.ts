@@ -75,7 +75,6 @@ vi.mock('@shared/services/localization.service', () => ({
 // Import the service after mocks are set up
 // eslint-disable-next-line import/first
 import { overlayService, resetDebounceState, showModalDialogOverlay } from './overlay.service-host';
-// eslint-disable-next-line import/first
 
 /** A minimal WebViewMenu with one context menu item, used across context menu tests */
 const DEFAULT_WEB_VIEW_MENU = {
@@ -153,6 +152,7 @@ describe('overlay.service-host', () => {
       await Promise.resolve();
 
       const overlays = getOverlays();
+      // TypeScript cannot narrow a discriminated union after getOverlays(); cast needed to access typed fields
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const menuOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'contextMenu' }>;
       menuOverlay.resolve(undefined);
@@ -214,6 +214,7 @@ describe('overlay.service-host', () => {
 
   describe('modal dialogs', () => {
     const MockDialogComponent = vi.fn(
+      // vi.fn mock must satisfy React component return type; `any` cast is the standard test pattern
       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
       () => undefined as any,
     );
@@ -294,7 +295,6 @@ describe('overlay.service-host', () => {
       const overlays = getOverlays();
       const modalOverlays = overlays.filter((o) => o.type === 'modalDialog');
       expect(modalOverlays).toHaveLength(1);
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
       const remaining = modalOverlays[0];
       expect(remaining.props).toEqual(props2);
 
@@ -342,6 +342,7 @@ describe('overlay.service-host', () => {
       const promise = showModalDialogOverlay(MockDialogComponent, props, undefined, 'test-webview');
 
       const overlays = getOverlays();
+      // TypeScript cannot narrow a discriminated union after getOverlays(); cast needed to access typed fields
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const alertOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'modalDialog' }>;
       alertOverlay.resolve(undefined);
@@ -544,6 +545,7 @@ describe('overlay.service-host', () => {
       const promise = overlayService.showCommandPalette(validRequest, 'test-webview');
 
       const overlays = getOverlays();
+      // TypeScript cannot narrow a discriminated union after getOverlays(); cast needed to access typed fields
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const overlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
       overlay.resolve(undefined);
@@ -601,6 +603,7 @@ describe('overlay.service-host', () => {
 
       const overlays = getOverlays();
       expect(overlays).toHaveLength(1);
+      // TypeScript cannot narrow a discriminated union after getOverlays(); cast needed to access typed fields
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const overlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
       expect(overlay.position).toBeUndefined();
@@ -665,6 +668,7 @@ describe('overlay.service-host', () => {
       await Promise.resolve();
 
       const overlays = getOverlays();
+      // TypeScript cannot narrow a discriminated union after getOverlays(); cast needed to access typed fields
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const menuOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'contextMenu' }>;
       menuOverlay.resolve('ext.cut');
@@ -680,6 +684,7 @@ describe('overlay.service-host', () => {
       await Promise.resolve();
 
       const overlays = getOverlays();
+      // TypeScript cannot narrow a discriminated union after getOverlays(); cast needed to access typed fields
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const menuOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'contextMenu' }>;
       menuOverlay.resolve(undefined);
@@ -776,6 +781,7 @@ describe('overlay.service-host', () => {
       const { windowService } = await import('@shared/services/window.service');
 
       const MockFocusComponent = vi.fn(
+        // vi.fn mock must satisfy React component return type; `any` cast is the standard test pattern
         // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
         () => undefined as any,
       );
@@ -788,6 +794,7 @@ describe('overlay.service-host', () => {
 
       // Resolve the dialog to trigger restoreFocus
       const overlays = getOverlays();
+      // TypeScript cannot narrow a discriminated union after getOverlays(); cast needed to access typed fields
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const modalOverlay = overlays[0] as Extract<(typeof overlays)[0], { type: 'modalDialog' }>;
       modalOverlay.resolve(true);

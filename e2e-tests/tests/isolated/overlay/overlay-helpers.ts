@@ -19,7 +19,8 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
   // the unresolved localization key "%helloRock3_helloRock3%").
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
-    // eslint-disable-next-line no-await-in-loop -- polling loop; iterations are intentionally sequential
+    // Polling loop: each iteration depends on the previous result, so awaits must be sequential
+    // eslint-disable-next-line no-await-in-loop
     const match = await page
       .frames()
       .filter((f) => f !== page.mainFrame())
@@ -43,7 +44,8 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
 
     if (match) return match;
 
-    // eslint-disable-next-line no-await-in-loop -- polling loop requires sequential waits
+    // Polling loop: wait between attempts must be sequential
+    // eslint-disable-next-line no-await-in-loop
     await page.waitForTimeout(500);
   }
 

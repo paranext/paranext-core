@@ -61,6 +61,7 @@ function showDialogViaWebSocket<T = unknown>(
       if (parsed.error) {
         reject(new Error(`PAPI error: ${JSON.stringify(parsed.error)}`));
       } else {
+        // WebSocket data is untyped JSON; caller supplies T so the cast is safe
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         resolve(parsed.result as T | undefined);
       }
@@ -232,6 +233,7 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     await dialog.locator('button', { hasText: 'Cancel' }).waitFor({ state: 'visible' });
     await mainPage.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible({ timeout: 3_000 });
+    // The dialog service returns null (not undefined) when dismissed via Escape
     // eslint-disable-next-line no-null/no-null
     expect(await resultPromise).toBeNull();
   });

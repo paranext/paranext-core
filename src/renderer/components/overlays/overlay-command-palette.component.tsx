@@ -173,6 +173,7 @@ export function OverlayCommandPalettePresentational({
   onSelect,
   onDismiss,
 }: OverlayCommandPalettePresentationalProps) {
+  // React's useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -209,6 +210,7 @@ export function OverlayCommandPalettePresentational({
   // Centered mode — no anchor position
   if (!position) {
     return (
+      // Backdrop handles click-to-dismiss; keyboard events (Escape) are handled by the child Command component
       // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
       <div
         data-overlay-command-palette-backdrop
