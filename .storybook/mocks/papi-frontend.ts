@@ -1,5 +1,5 @@
-/* eslint-disable max-classes-per-file -- This file stubs multiple browser globals
-(WebSocket, XMLHttpRequest) needed to mock the @papi/frontend module in Storybook */
+// This file stubs multiple browser globals (WebSocket, XMLHttpRequest) needed
+// to mock the @papi/frontend module in Storybook
 export const logger = {
   warn: () => {},
   error: () => {},
@@ -12,13 +12,13 @@ export const logger = {
 
 export const fetch = async () => new Response();
 
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- Stub class with no members;
-// only the name is needed so Storybook can resolve the @papi/frontend WebSocket export without a
-// real browser environment
-export class WebSocket {}
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- Same as WebSocket above: stub
-// with no members, exported only to satisfy the @papi/frontend module shape in Storybook
-export class XMLHttpRequest {}
+// Stub function with no members; only the name is needed so Storybook can resolve
+// the @papi/frontend WebSocket export without a real browser environment
+export const WebSocket = function WebSocket() {};
+
+// Same as WebSocket above: stub with no members, exported only to satisfy
+// the @papi/frontend module shape in Storybook
+export const XMLHttpRequest = function XMLHttpRequest() {};
 
 export const app = {};
 export const commands = {};
