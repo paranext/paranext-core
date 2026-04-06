@@ -19,7 +19,6 @@ const preview: Preview = {
     actions: { argTypesRegex: '^on[A-Z].*' },
 
     controls: {
-      sort: 'requiredFirst',
       matchers: {
         color: /(background|color)$/i,
         date: /Date$/i,
@@ -81,7 +80,8 @@ const preview: Preview = {
     },
     /**
      * Layout wrapper: themed backgrounds are scoped in preview-storybook.css (`#storybook-root`,
-     * Docs roots, `.sbdocs-preview`). This div only supplies min-height and width for the story subtree.
+     * Docs roots, `.sbdocs-preview`). This div only supplies min-height and width for the story
+     * subtree.
      */
     (Story) =>
       createElement(

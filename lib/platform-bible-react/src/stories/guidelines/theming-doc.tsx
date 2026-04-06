@@ -4,6 +4,17 @@ export function ThemingGuideBody() {
   return (
     <div className="tw-min-h-[200px] tw-max-w-4xl tw-bg-background tw-p-6 tw-text-foreground">
       <p>
+        This guide covers theming with the shadcn-style token model: prefer CSS variables and
+        Tailwind classes that map to them (see{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs"
+        >
+          Guides / Theme Colors
+        </a>{' '}
+        for live token values in Storybook).
+      </p>
+      <p>
         Use the <strong>Theme</strong> control in the Storybook toolbar to switch palettes. Choices
         map to classes on <code>document.documentElement</code> in{' '}
         <a
@@ -27,15 +38,25 @@ export function ThemingGuideBody() {
           only (not Paratext).
         </li>
       </ul>
+      <h2 className="tw-py-2 tw-font-bold">In the running application</h2>
       <p>
-        The running application reads the same HSL tokens from{' '}
+        The Paranext renderer loads built-in theme definitions from{' '}
         <a
           className="tw-text-blue-600 hover:tw-underline"
           href="https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json"
         >
           themes.data.json
+        </a>{' '}
+        and applies the same HSL tokens as <code>index.css</code> (see{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://github.com/paranext/paranext-core/blob/main/src/renderer/services/theme.service-host.ts"
+        >
+          theme.service-host.ts
         </a>
-        ; keep that file and <code>index.css</code> in sync when changing theme colors.
+        ). Keep <code>index.css</code> and <code>themes.data.json</code> in sync when you change
+        theme colors. End-user theme selection is handled by the platform theme service, not
+        Storybook.
       </p>
       <p>
         By default, components use shadcn-style tokens (<code>tw-bg-background</code>,{' '}
@@ -54,7 +75,8 @@ export function ThemingGuideBody() {
         <code className="tw-rounded tw-bg-muted tw-px-1">
           className=&quot;tw-text-muted-foreground&quot;
         </code>
-        .
+        . You can use opacity modifiers such as <code>tw-bg-muted/50</code> sparingly, consistent
+        with shadcn usage.
       </p>
       <h2 className="tw-py-2 tw-font-bold">Per-story theme override</h2>
       <p>
@@ -156,7 +178,14 @@ export function ThemeMatrixDemo() {
     <div className="tw-min-h-[200px] tw-max-w-6xl tw-space-y-4 tw-bg-background tw-p-6 tw-text-foreground">
       <p className="tw-text-sm tw-text-muted-foreground">
         Each panel uses the same components with theme variables applied on a local wrapper. Compare
-        with the global toolbar theme on other stories.
+        with the global toolbar theme on other stories. For a larger token table, see{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs"
+        >
+          Guides / Theme Colors
+        </a>
+        .
       </p>
       <div className="tw-grid tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-2 xl:tw-grid-cols-4">
         {MATRIX_THEMES.map(({ id, label, className }) => (

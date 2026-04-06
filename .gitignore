@@ -56,7 +56,7 @@ e2e-tests/playwright-report/
 e2e-tests/test-results/
 e2e-tests/.dev-server.pid
 
-#claude
+# claude
 .claude
 .claude.backup/
 .context
@@ -65,3 +65,6 @@ CLAUDE.md
 CLAUDE.md.backup
 
 .review
+
+# cursor
+.cursor/
