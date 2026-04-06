@@ -136,6 +136,7 @@ export const Rich: Story = {
           </p>
         </div>
         <div className="tw-space-y-2">
+          {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
           <label className="tw-text-sm tw-font-medium">Username</label>
           <input
@@ -152,6 +153,7 @@ export const Rich: Story = {
           </p>
         </div>
         <div className="tw-space-y-2">
+          {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
           <label className="tw-text-sm tw-font-medium">Current Password</label>
           <input type="password" className="tw-w-full tw-rounded-md tw-border tw-px-3 tw-py-2" />

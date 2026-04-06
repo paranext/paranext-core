@@ -154,6 +154,7 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
     const dataProviderUntyped = (await dataProviderPromise) as Awaited<
       typeof dataProviderPromise
     > & {
+      // The index signature requires `any` to allow dynamic property access on the intersection type.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       [key: string]: any;
     };
@@ -314,6 +315,7 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dataProvider = new Proxy(
     dataProviderEngine ??
+      // `dataProviderInternal` is built to satisfy the engine interface even though it is typed as `Partial`.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       (dataProviderInternal as IDataProviderEngine<DataProviderTypes[DataProviderName]>),
     {
@@ -356,6 +358,8 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
           // but now members can't be accessed by indexing in DataProviderService
           // TODO: fix it so it is indexable but can have specific members
           newDataProviderMethod =
+            // `IDataProviderEngine` lacks an index signature, so `prop` must be cast and the result typed as `any`.
+            // Dynamic engine method lookup requires casting through `any`; no index signature exists on `IDataProviderEngine`.
             /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
             (
               obj[prop as keyof typeof obj] as IDataProviderEngine<
@@ -614,6 +618,7 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
   // `DataTypeNames<DataProviderTypes[DataProviderName]>` is one specific set of names of data types
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dataProviderEngineUntyped = dataProviderEngine as typeof dataProviderEngine & {
+    // The index signature requires `any` to allow dynamic property access on the intersection type.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
   };
@@ -676,6 +681,7 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
       !(dataProviderEngineUntyped[`set${dataType}`] as any).doNotNotify
     ) {
+      // Assert the dynamically-keyed set method and its layered replacement to the correct typed setter signature.
       /* eslint-disable no-type-assertion/no-type-assertion */
       /** Saved bound version of the data provider engine's set so we can call it from here */
       const dpeSet = (

@@ -5681,9 +5681,16 @@ declare module 'shared/models/dialog-options.model' {
      * Default depends on the dialog
      */
     prompt?: string | LocalizeKey;
+    /** Whether to render as a modal overlay instead of an rc-dock floating tab. Defaults to false. */
+    isModal?: boolean;
   };
   /** Keys of properties on {@link DialogOptions} that should be localized if they are LocalizeKeys */
-  export const DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS: readonly ['title', 'prompt'];
+  export const DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS: readonly [
+    'title',
+    'prompt',
+    'okLabel',
+    'cancelLabel',
+  ];
   /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
   export type DialogData = DialogOptions & {
     isDialog: true;
@@ -5717,6 +5724,15 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
     minWidth?: number;
     /** The minimum height to which the dialog can be set in CSS `px` units */
     minHeight?: number;
+    /**
+     * The ARIA role to use when this dialog is rendered as a modal overlay.
+     *
+     * - `'alertdialog'` for dialogs that interrupt the user and require acknowledgment (alert, confirm)
+     * - `'dialog'` for general-purpose dialogs (selection, about, etc.)
+     *
+     * Defaults to `'dialog'`
+     */
+    dialogRole?: 'dialog' | 'alertdialog';
     /**
      * The function used to load the dialog into the dock layout. Default uses the `Component` field
      * and passes in the `DialogProps`
@@ -5783,6 +5799,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
   import { ReactElement } from 'react';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
+  import { LocalizeKey } from 'platform-bible-utils';
   /** The tabType for the about dialog in `about-dialog.component.tsx` */
   export const ABOUT_DIALOG_TYPE = 'platform.aboutDialog';
   /** The tabType for the select project dialog in `select-project.dialog.tsx` */
@@ -5791,6 +5808,10 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
   /** The tabType for the select books dialog in `select-books.dialog.tsx` */
   export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
+  /** The dialogType for alert dialogs rendered via overlay */
+  export const ALERT_DIALOG_TYPE = 'platform.alert';
+  /** The dialogType for confirm dialogs rendered via overlay */
+  export const CONFIRM_DIALOG_TYPE = 'platform.confirm';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -5804,12 +5825,28 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     /** Books IDs that should start selected in the dialog */
     selectedBookIds?: string[];
   };
+  /** Options to provide when showing an alert dialog */
+  export type AlertDialogOptions = DialogOptions & {
+    /** The message body displayed in the dialog. Required for alert dialogs. */
+    prompt: string | LocalizeKey;
+    /** Custom label for the OK button. Defaults to a localized "OK". */
+    okLabel?: string | LocalizeKey;
+  };
+  /** Options to provide when showing a confirm dialog */
+  export type ConfirmDialogOptions = DialogOptions & {
+    /** The message body displayed in the dialog. Required for confirm dialogs. */
+    prompt: string | LocalizeKey;
+    /** Custom label for the OK button. Defaults to a localized "OK". */
+    okLabel?: string | LocalizeKey;
+    /** Custom label for the Cancel button. Defaults to a localized "Cancel". */
+    cancelLabel?: string | LocalizeKey;
+    /** Whether to style the OK button as a destructive action (e.g., red) */
+    isDestructive?: boolean;
+  };
   /**
    * Mapped type for dialog functions to use in getting various types for dialogs
    *
    * Keys should be dialog names, and values should be {@link DialogDataTypes}
-   *
-   * If you add a dialog here, you must also add it on {@link DIALOGS}
    */
   export interface DialogTypes {
     [ABOUT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, void>;
@@ -5819,8 +5856,10 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
       string[]
     >;
     [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
+    [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
+    [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
   }
-  /** Each type of dialog. These are the tab types used in the dock layout */
+  /** All dialog types that have DialogDefinition entries */
   export type DialogTabTypes = keyof DialogTypes;
   /** Types related to a specific dialog */
   export type DialogDataTypes<TOptions extends DialogOptions, TReturnType> = {
@@ -6557,6 +6596,1535 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
   export default useDialogCallback;
 }
+declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
+  import { NetworkObject } from 'shared/models/network-object.model';
+  /**
+   * This function takes in a getNetworkObject function and creates a hook with that function in it
+   * which will return a network object
+   *
+   * @param getNetworkObject A function that takes in an id string and returns a network object
+   * @param mapParametersToNetworkObjectSource Function that takes the parameters passed into the hook
+   *   and returns the `networkObjectSource` associated with those parameters. Defaults to taking the
+   *   first parameter passed into the hook and using that as the `networkObjectSource`.
+   *
+   *   - Note: `networkObjectSource` is string name of the network object to get OR `networkObject`
+   *       (result of this hook, if you want this hook to just return the network object again)
+   *
+   * @returns A function that takes in a networkObjectSource and returns a NetworkObject
+   */
+  export function createUseNetworkObjectHook<THookParams extends unknown[]>(
+    getNetworkObject: (...args: THookParams) => Promise<NetworkObject<object> | undefined>,
+    mapParametersToNetworkObjectSource?: (
+      ...args: THookParams
+    ) => string | NetworkObject<object> | undefined,
+  ): (...args: THookParams) => NetworkObject<object> | undefined;
+  export default createUseNetworkObjectHook;
+}
+declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
+  import { DataProviderNames, DataProviders } from 'papi-shared-types';
+  /**
+   * Gets a data provider with specified provider name
+   *
+   * @type `T` - The type of data provider to return. Use `IDataProvider<TDataProviderDataTypes>`,
+   *   specifying your own types, or provide a custom data provider type
+   * @param dataProviderSource String name of the data provider to get OR dataProvider (result of
+   *   useDataProvider, if you want this hook to just return the data provider again)
+   * @returns Undefined if the data provider has not been retrieved, data provider if it has been
+   *   retrieved and is not disposed, and undefined again if the data provider is disposed
+   */
+  export const useDataProvider: <DataProviderName extends DataProviderNames>(
+    dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+  ) => DataProviders[DataProviderName] | undefined;
+  export default useDataProvider;
+}
+declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { PlatformError } from 'platform-bible-utils';
+  import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
+  /**
+   * The final function called as part of the `useData` hook that is the actual React hook
+   *
+   * This is the `.Greeting(...)` part of `useData('helloSomeone.people').Greeting(...)`
+   */
+  type UseDataFunctionWithProviderType<
+    TDataProvider extends IDataProvider<any>,
+    TDataType extends keyof ExtractDataProviderDataTypes<TDataProvider>,
+  > = (
+    selector: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['selector'],
+    defaultValue: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
+    subscriberOptions?: DataProviderSubscriberOptions,
+  ) => [
+    ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'] | PlatformError,
+    (
+      | ((
+          newData: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['setData'],
+        ) => Promise<DataProviderUpdateInstructions<ExtractDataProviderDataTypes<TDataProvider>>>)
+      | undefined
+    ),
+    boolean,
+  ];
+  /**
+   * A proxy that serves the actual hooks for a single data provider
+   *
+   * This is the `useData('helloSomeone.people')` part of
+   * `useData('helloSomeone.people').Greeting(...)`
+   */
+  type UseDataProxy<TDataProvider extends IDataProvider<any>> = {
+    [TDataType in keyof ExtractDataProviderDataTypes<TDataProvider>]: UseDataFunctionWithProviderType<
+      TDataProvider,
+      TDataType
+    >;
+  };
+  /**
+   * React hook to use data provider data with various data types
+   *
+   * @example `useData('helloSomeone.people').Greeting('Bill', 'Greeting loading')`
+   *
+   * @type `TDataProvider` - The type of data provider to get. Use
+   *   `IDataProvider<TDataProviderDataTypes>`, specifying your own types, or provide a custom data
+   *   provider type
+   */
+  type UseDataHookGeneric<TUseDataProviderParams extends unknown[]> = {
+    <TDataProvider extends IDataProvider<any>>(
+      ...args: TUseDataProviderParams
+    ): UseDataProxy<TDataProvider>;
+  };
+  /**
+   * Create a `useData(...).DataType(selector, defaultValue, options)` hook for a specific subset of
+   * data providers as supported by `useDataProviderHook`
+   *
+   * @param useDataProviderHook Hook that gets a data provider from a specific subset of data
+   *   providers
+   * @returns `useData` hook for getting data from a data provider
+   */
+  export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
+    useDataProviderHook: (...args: TUseDataProviderParams) => IDataProvider | undefined,
+  ): UseDataHookGeneric<TUseDataProviderParams>;
+  export default createUseDataHook;
+}
+declare module 'renderer/hooks/papi-hooks/use-data.hook' {
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { DataProviderNames, DataProviderTypes, DataProviders } from 'papi-shared-types';
+  import { PlatformError } from 'platform-bible-utils';
+  /**
+   * React hook to use data from a data provider
+   *
+   * @example `useData('helloSomeone.people').Greeting('Bill', 'Greeting loading')`
+   */
+  type UseDataHook = {
+    <DataProviderName extends DataProviderNames>(
+      dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+    ): {
+      [TDataType in keyof DataProviderTypes[DataProviderName]]: (
+        // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
+        selector: DataProviderTypes[DataProviderName][TDataType]['selector'],
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
+        defaultValue: DataProviderTypes[DataProviderName][TDataType]['getData'],
+        subscriberOptions?: DataProviderSubscriberOptions,
+      ) => [
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
+        DataProviderTypes[DataProviderName][TDataType]['getData'] | PlatformError,
+        (
+          | ((
+              // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
+              newData: DataProviderTypes[DataProviderName][TDataType]['setData'],
+            ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
+          | undefined
+        ),
+        boolean,
+      ];
+    };
+  };
+  /**
+   * ```typescript
+   * useData<DataProviderName extends DataProviderNames>(
+   *     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+   *   ).DataType(
+   *       selector: DataProviderTypes[DataProviderName][DataType]['selector'],
+   *       defaultValue: DataProviderTypes[DataProviderName][DataType]['getData'],
+   *       subscriberOptions?: DataProviderSubscriberOptions,
+   *     ) => [
+   *       DataProviderTypes[DataProviderName][DataType]['getData'] | PlatformError,
+   *       (
+   *         | ((
+   *             newData: DataProviderTypes[DataProviderName][DataType]['setData'],
+   *           ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
+   *         | undefined
+   *       ),
+   *       boolean,
+   *     ]
+   * ```
+   *
+   * React hook to use data from a data provider. Subscribes to run a callback on a data provider's
+   * data with specified selector on the specified data type that data provider serves.
+   *
+   * Usage: Specify the data provider and the data type on the data provider with
+   * `useData('<data_provider>').<data_type>` and use like any other React hook.
+   *
+   * _＠example_ Subscribing to Verse data at JHN 11:35 on the `'quickVerse.quickVerse'` data provider:
+   *
+   * ```typescript
+   * const [verseText, setVerseText, verseTextIsLoading] = useData('quickVerse.quickVerse').Verse(
+   *   'JHN 11:35',
+   *   'Verse text goes here',
+   * );
+   * ```
+   *
+   * _＠param_ `dataProviderSource` string name of data provider to get OR dataProvider (result of
+   * useDataProvider if you want to consolidate and only get the data provider once)
+   *
+   * _＠param_ `selector` tells the provider what data this listener is listening for
+   *
+   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   * updated every render
+   *
+   * _＠param_ `defaultValue` the initial value to return while first awaiting the data
+   *
+   * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
+   *
+   * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   * to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+   * provider's `subscribe<data_type>` method as soon as possible and will not be updated again until
+   * `dataProviderSource` or `selector` changes.
+   *
+   * _＠returns_ `[data, setData, isLoading]`
+   *
+   * - `data`: the current value for the data from the data provider with the specified data type and
+   *   selector. This will be the `defaultValue`, the resolved data, or a {@link PlatformError} if the
+   *   data provider throws an error. You can call {@link isPlatformError} on this value to check if it
+   *   is an error.
+   * - `setData`: asynchronous function to request that the data provider update the data at this data
+   *   type and selector. Returns `true` if successful. Note that this function does not update the
+   *   data. The data provider sends out an update to this subscription if it successfully updates
+   *   data.
+   * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
+   *   provider
+   */
+  export const useData: UseDataHook;
+  export default useData;
+}
+declare module 'shared/data/platform.data' {
+  /**
+   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
+   * Platform.Bible core
+   */
+  export const PLATFORM_NAMESPACE = 'platform';
+  /** Query parameter passed to the renderer. Determines which log level to use */
+  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
+  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
+  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /** ID of the default theme family for use in the application */
+  export const DEFAULT_THEME_FAMILY = '';
+  /** Type of the default theme for use in the application */
+  export const DEFAULT_THEME_TYPE = 'light';
+  /** Constants related to zoom factor of entire application */
+  export const DEFAULT_ZOOM_FACTOR = 1;
+  export const MIN_ZOOM_FACTOR = 0.5;
+  export const MAX_ZOOM_FACTOR = 3;
+}
+declare module 'shared/log-error.model' {
+  /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
+  export class LogError extends Error {
+    constructor(message?: string);
+  }
+  export default LogError;
+}
+declare module 'shared/services/localization.service-model' {
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import {
+    DataProviderDataType,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { LanguageInfo } from 'platform-bible-react';
+  import {
+    LanguageStrings,
+    LocalizedStringDataContribution,
+    LocalizeKey,
+    OnDidDispose,
+  } from 'platform-bible-utils';
+  export type LocalizationData = LanguageStrings;
+  export type LocalizationSelector = {
+    localizeKey: LocalizeKey;
+    locales?: string[];
+  };
+  export type LocalizationSelectors = {
+    localizeKeys: LocalizeKey[];
+    locales?: string[];
+  };
+  /**
+   *
+   * This name is used to register the localization data provider on the papi. You can use this name
+   * to find the data provider when accessing it using the useData hook
+   */
+  export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
+  export const localizationServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the localization data provider on the papi. You can use this name
+     * to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.localizationDataServiceDataProvider';
+  }>;
+  export type LocalizationDataDataTypes = {
+    LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
+    LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
+    AvailableInterfaceLanguages: DataProviderDataType<
+      undefined,
+      Record<string, LanguageInfo>,
+      never
+    >;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [localizationServiceProviderName]: ILocalizationService;
+    }
+  }
+  /**
+   *
+   * Service that allows to get and store localizations
+   */
+  export type ILocalizationService = {
+    /**
+     * Look up localized string for specific localizeKey
+     *
+     * @param selector Made up of a string key that corresponds to a localized value and an array of
+     *   BCP 47 language codes
+     * @returns Localized string
+     */
+    getLocalizedString: (selector: LocalizationSelector) => Promise<string>;
+    /**
+     * Look up localized strings for all localizeKeys provided
+     *
+     * @param selectors An array of LocalizationSelectors. A LocalizationSelector is made up of a
+     *   string key that corresponds to a localized value and an array of BCP 47 language codes
+     * @returns Object whose keys are localizeKeys and values are localized strings
+     */
+    getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
+    /**
+     * Get a collection of known user-interface languages
+     *
+     * @returns All user-interface languages
+     */
+    getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
+    /**
+     * Get all localized string data currently loaded by the platform
+     *
+     * @returns All localized string data from all sources formatted a single, combined contribution
+     */
+    retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
+     */
+    setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
+     */
+    setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide new interface languages in contributions
+     */
+    setAvailableInterfaceLanguages(): Promise<
+      DataProviderUpdateInstructions<LocalizationDataDataTypes>
+    >;
+  } & OnDidDispose &
+    typeof localizationServiceObjectToProxy & {
+      /**
+       * This function is used to take a book number from a verse ref and return the localized name of
+       * the book so that the book name can be displayed in the UI language within the UI
+       */
+      getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
+    } & IDataProvider<LocalizationDataDataTypes>;
+}
+declare module 'shared/services/localization.service' {
+  import { ILocalizationService } from 'shared/services/localization.service-model';
+  export const localizationService: ILocalizationService;
+  export default localizationService;
+}
+declare module 'shared/utils/settings-document-combiner-base' {
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  import {
+    DocumentCombiner,
+    JsonDocumentLike,
+    Localized,
+    Setting,
+    SettingsGroup,
+  } from 'platform-bible-utils';
+  /**
+   * Information about one specific setting. Basically just {@link Setting} but with specific default
+   * type info
+   */
+  type SettingInfo<SettingName extends SettingNames> = Setting & {
+    default: SettingTypes[SettingName];
+  };
+  /** Information about all settings. Keys are setting keys, values are information for that setting */
+  type AllSettingsInfo = {
+    [SettingName in SettingNames]: SettingInfo<SettingName>;
+  };
+  export type SettingsContributionInfo = {
+    /** Map of extension name to that extension's provided settings groups if provided */
+    contributions: {
+      [extensionName: string]: SettingsGroup[] | undefined;
+    };
+    /**
+     * Map of setting name to setting definition. For type specificity and ease of accessing settings
+     * since they're a bit hard to find in `contributions`
+     */
+    settings: Partial<AllSettingsInfo>;
+  };
+  export type LocalizedSettingsContributionInfo = Localized<SettingsContributionInfo>;
+  export abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
+    /** Name for type of setting to use in error messages */
+    protected readonly settingTypeName: string;
+    /** Cached promise for getting the localized output */
+    private localizedOutputPromise;
+    constructor(baseDocument: JsonDocumentLike);
+    /**
+     * This method is intended to be layered over by a child class to expose the localized setting
+     * info.
+     *
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * NOTE: If the input documents might have changed since the last time the settings contributions
+     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
+     * this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of settings contributions. If all the input documents are static, then there is
+     * no need to ever rebuild once all the documents have been contributed to this combiner.
+     */
+    protected getLocalizedOutput(): Promise<LocalizedSettingsContributionInfo | undefined>;
+    protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
+    protected transformBaseDocumentAfterValidation(
+      baseDocument: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateContribution(documentName: string, document: JsonDocumentLike): void;
+    protected transformContributionAfterValidation(
+      documentName: string,
+      document: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateOutput(): void;
+    /** Validate the base and contribution documents against the JSON schema */
+    protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
+  }
+  export default SettingsDocumentCombinerBase;
+}
+declare module 'shared/services/settings.service-model' {
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  import { OnDidDispose, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { LocalizedSettingsContributionInfo } from 'shared/utils/settings-document-combiner-base';
+  /** Name prefix for registered commands that call settings validators */
+  export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
+  /**
+   *
+   * This name is used to register the settings service data provider on the papi. You can use this
+   * name to find the data provider when accessing it using the useData hook
+   */
+  export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
+  export const settingsServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the settings service data provider on the papi. You can use this
+     * name to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.settingsServiceDataProvider';
+    /**
+     *
+     * Registers a function that validates whether a new setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator: <SettingName extends SettingNames>(
+      key: SettingName,
+      validator: SettingValidator<SettingName>,
+    ) => Promise<UnsubscriberAsync>;
+  }>;
+  /**
+   * SettingDataTypes handles getting and setting Platform.Bible core application and extension
+   * settings.
+   *
+   * Note: the unnamed (`''`) data type is not actually part of `SettingDataTypes` because the methods
+   * would not be able to create a generic type extending from `SettingNames` in order to return the
+   * specific setting type being requested. As such, `get`, `set`, `reset` and `subscribe` are all
+   * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
+   * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
+   * instead. However, do note that the unnamed data type (`''`) is fully functional.
+   *
+   * The closest possible representation of the unnamed (````) data type follows:
+   *
+   * ```typescript
+   * '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
+   * ```
+   */
+  export type SettingDataTypes = {};
+  export type AllSettingsData = {
+    [SettingName in SettingNames]: SettingTypes[SettingName];
+  };
+  /** Function that validates whether a new setting value should be allowed to be set */
+  export type SettingValidator<SettingName extends SettingNames> = (
+    newValue: SettingTypes[SettingName],
+    currentValue: SettingTypes[SettingName],
+    allChanges: Partial<SettingTypes>,
+  ) => Promise<boolean>;
+  /** Validators for all settings. Keys are setting keys, values are functions to validate new settings */
+  export type AllSettingsValidators = {
+    [SettingName in SettingNames]: SettingValidator<SettingName>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [settingsServiceDataProviderName]: ISettingsService;
+    }
+  }
+  /** */
+  export type ISettingsService = {
+    /**
+     * Retrieves the value of the specified setting
+     *
+     * @param key The string id of the setting for which the value is being retrieved
+     * @returns The value of the specified setting, parsed to an object. Returns default setting if
+     *   setting does not exist
+     * @throws If no default value is available for the setting.
+     */
+    get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
+    /**
+     * Validates the setting at the given key with the new value provided
+     *
+     * @param key The string id of the setting to validate
+     * @param newValue The value to validate
+     * @param currentValue The value already set to the setting
+     * @param allChanges
+     */
+    validateSetting<SettingName extends SettingNames>(
+      key: SettingName,
+      newValue: SettingTypes[SettingName],
+      currentValue: SettingTypes[SettingName],
+      allChanges?: Partial<SettingTypes>,
+    ): Promise<boolean>;
+    /**
+     * Sets the value of the specified setting
+     *
+     * @param key The string id of the setting for which the value is being set
+     * @param newSetting The value that is to be set for the specified key
+     * @returns Information that papi uses to interpret whether to send out updates. Defaults to
+     *   `true` (meaning send updates only for this data type).
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    set<SettingName extends SettingNames>(
+      key: SettingName,
+      newSetting: SettingTypes[SettingName],
+    ): Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
+    /**
+     * Removes the setting from memory and resets it to its default value
+     *
+     * @param key The string id of the setting for which the value is being removed
+     * @returns `true` if successfully reset the project setting. `false` otherwise
+     */
+    reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean>;
+    /**
+     * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
+     * callback function is executed.
+     *
+     * @param key The string id of the setting for which the value is being subscribed to
+     * @param callback The function that will be called whenever the specified setting is updated. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribe<SettingName extends SettingNames>(
+      key: SettingName,
+      callback: (newSetting: SettingTypes[SettingName] | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Registers a function that validates whether a new setting value is allowed to be set.
+     *
+     * @param key The string id of the setting to validate
+     * @param validator Function to call to validate the new setting value
+     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
+     */
+    registerValidator<SettingName extends SettingNames>(
+      key: SettingName,
+      validator: SettingValidator<SettingName>,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * @returns Localized project settings contribution info or undefined
+     */
+    getLocalizedSettingsContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined>;
+  } & OnDidDispose &
+    IDataProvider<SettingDataTypes> &
+    typeof settingsServiceObjectToProxy;
+}
+declare module 'shared/services/settings.service' {
+  import { ISettingsService } from 'shared/services/settings.service-model';
+  export const settingsService: ISettingsService;
+  export default settingsService;
+}
+declare module 'renderer/services/scroll-group.service-host' {
+  import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { ScrollGroupId } from 'platform-bible-utils';
+  /**
+   * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
+   * placeholder and will be refactored significantly in
+   * https://github.com/paranext/paranext-core/issues/788
+   */
+  export const availableScrollGroupIds: (number | undefined)[];
+  /** Event that emits with information about a changed Scripture Reference for a scroll group */
+  export const onDidUpdateScrRef: import('platform-bible-utils').PlatformEvent<ScrollGroupUpdateInfo>;
+  /** See {@link IScrollGroupRemoteService.getScrRef} */
+  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
+  /**
+   * See {@link IScrollGroupRemoteService.setScrRef}
+   *
+   * @param shouldSetVerseRefSetting If `true`: if scroll group 0's reference changes, update the
+   *   `platform.verseRef` setting to keep it in sync for backwards compatibility. Defaults to `true`.
+   *   Only set to `false` when running this from subscription to updates to the setting
+   */
+  export function setScrRefSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    scrRef: SerializedVerseRef,
+    shouldSetVerseRefSetting?: boolean,
+  ): boolean;
+  /** Register the network object that backs the scroll group service */
+  export function startScrollGroupService(): Promise<void>;
+}
+declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
+  import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { ScrollGroupId } from 'platform-bible-utils';
+  /**
+   * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
+   * value for both the SerializedVerseRef and the {@link ScrollGroupId} for the provided
+   * `scrollGroupScrRef`. Use similarly to `useState`.
+   *
+   * @param scrollGroupScrRef {@link ScrollGroupScrRef} representing a scroll group and/or Scripture
+   *   reference. Defaults to 0 meaning synced with scroll group 0 (A in English)
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param setScrollGroupScrRef Function to run to set `scrollGroupScrRef`. Should return `true` if
+   *   actually updated any properties; `false` otherwise
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because this is just used when needed and doesn't have any
+   *   reason to render changes, this has no adverse effect on the functionality of this hook. It will
+   *   always set using the latest value of this callback
+   * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+   *
+   *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents
+   *   - `setScrRef`: Function to use to update the Scripture reference this `scrollGroupScrRef`
+   *       represents. If it is synced to a scroll group, sets the scroll group's Scripture reference
+   *   - `scrollGroupId`: The current value for the scroll group this `scrollGroupScrRef` is synced with.
+   *       If not synced to a scroll group, this is `undefined`
+   *   - `setScrollGroupId`: Function to use to update the scroll group with which this
+   *       `scrollGroupScrRef` is synced
+   */
+  export function useScrollGroupScrRef(
+    scrollGroupScrRef: ScrollGroupScrRef | undefined,
+    setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
+  ): [
+    scrRef: SerializedVerseRef,
+    setScrRef: (newScrRef: SerializedVerseRef) => void,
+    scrollGroupId: ScrollGroupId | undefined,
+    setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
+  ];
+  export default useScrollGroupScrRef;
+}
+declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
+  import { PlatformError } from 'platform-bible-utils';
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { SettingDataTypes } from 'shared/services/settings.service-model';
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  /**
+   * Gets, sets and resets a setting on the PAPI. Also notifies subscribers when the setting changes
+   * and gets updated when the setting is changed by others.
+   *
+   * @param key The string id that is used to identify the setting that will be stored on the PAPI
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param defaultState The initial value to return while first awaiting the setting value
+   * @param subscriberOptions Various options to adjust how the subscriber emits updates
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+   *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   *   until `dataProviderSource` or `selector` changes.
+   * @returns `[setting, setSetting, resetSetting]`
+   *
+   *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
+   *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
+   *   - `setSetting`: Function that updates the setting to a new value
+   *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
+   *
+   * @throws When subscription callback function is called with an update that has an unexpected
+   *   message type
+   */
+  export const useSetting: <SettingName extends SettingNames>(
+    key: SettingName,
+    defaultState: SettingTypes[SettingName],
+    subscriberOptions?: DataProviderSubscriberOptions,
+  ) => [
+    setting: SettingTypes[SettingName] | PlatformError,
+    setSetting: (
+      newData: SettingTypes[SettingName],
+    ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
+    resetSetting: () => void,
+    isLoading: boolean,
+  ];
+  export default useSetting;
+}
+declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
+  import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
+  /**
+   * Gets a project data provider with specified provider name
+   *
+   * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
+   *   type for the returned project data provider will have the project data provider interface type
+   *   associated with this `projectInterface`. If the project does not implement this
+   *   `projectInterface` (according to its metadata), an error will be thrown.
+   * @param projectDataProviderSource String name of the id of the project to get OR
+   *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
+   *   data provider again)
+   * @param pdpFactoryId Optional ID of the PDP factory from which to get the project data provider if
+   *   the PDP factory supports this project id and project interface. If not provided, then look in
+   *   all available PDP factories for the given project ID.
+   * @returns `undefined` if the Project Data Provider has not been retrieved, the requested Project
+   *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
+   *   Data Provider is disposed
+   */
+  export const useProjectDataProvider: <ProjectInterface extends ProjectInterfaces>(
+    projectInterface: ProjectInterface,
+    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+    pdpFactoryId?: string,
+  ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
+  export default useProjectDataProvider;
+}
+declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
+  import { PlatformError } from 'platform-bible-utils';
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import {
+    ProjectDataProviderInterfaces,
+    ProjectInterfaceDataTypes,
+    ProjectInterfaces,
+  } from 'papi-shared-types';
+  /**
+   * React hook to use data from a Project Data Provider
+   *
+   * @example `useProjectData('platformScripture.USFM_Verse', 'project id').VerseUSFM(...);`
+   */
+  type UseProjectDataHook = {
+    <ProjectInterface extends ProjectInterfaces>(
+      projectInterface: ProjectInterface,
+      projectDataProviderSource:
+        | string
+        | ProjectDataProviderInterfaces[ProjectInterface]
+        | undefined,
+    ): {
+      [TDataType in keyof ProjectInterfaceDataTypes[ProjectInterface]]: (
+        // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
+        selector: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['selector'],
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
+        defaultValue: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
+        subscriberOptions?: DataProviderSubscriberOptions,
+      ) => [
+        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
+        ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'] | PlatformError,
+        (
+          | ((
+              // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
+              newData: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['setData'],
+            ) => Promise<
+              DataProviderUpdateInstructions<ProjectInterfaceDataTypes[ProjectInterface]>
+            >)
+          | undefined
+        ),
+        boolean,
+      ];
+    };
+  };
+  /**
+   * ```typescript
+   * useProjectData<ProjectInterface extends ProjectInterfaces>(
+   *     projectInterface: ProjectInterface,
+   *     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+   *   ).DataType(
+   *       selector: ProjectInterfaceDataTypes[ProjectInterface][DataType]['selector'],
+   *       defaultValue: ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
+   *       subscriberOptions?: DataProviderSubscriberOptions,
+   *     ) => [
+   *       ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'] | PlatformError,
+   *       (
+   *         | ((
+   *             newData: ProjectInterfaceDataTypes[ProjectInterface][DataType]['setData'],
+   *           ) => Promise<DataProviderUpdateInstructions<ProjectInterfaceDataTypes[ProjectInterface]>>)
+   *         | undefined
+   *       ),
+   *       boolean,
+   *     ]
+   * ```
+   *
+   * React hook to use data from a Project Data Provider. Subscribes to run a callback on a Project
+   * Data Provider's data with specified selector on the specified data type that the Project Data
+   * Provider serves according to its supported `projectInterface`s.
+   *
+   * Usage: Specify the `projectInterface`, the project id, and the data type on the Project Data
+   * Provider with `useProjectData('<projectInterface>', '<project_id>').<data_type>` and use like any
+   * other React hook.
+   *
+   * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `platformScripture.USFM_Verse`
+   * project with projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
+   *
+   * ```typescript
+   * const [verse, setVerse, verseIsLoading] = useProjectData(
+   *   'platformScripture.USFM_Verse',
+   *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
+   * ).VerseUSFM(
+   *   useMemo(() =>
+   *    { book: 'JHN', chapterNum: 11, verseNum: 35, versificationStr: ScrVers.English }, []),
+   *   'Loading verse ',
+   * );
+   * ```
+   *
+   * _＠param_ `projectInterface` `projectInterface` that the project to load must support. The
+   * TypeScript type for the returned project data provider will have the project data provider
+   * interface type associated with this `projectInterface`. If the project does not implement this
+   * `projectInterface` (according to its metadata), an error will be thrown.
+   *
+   * _＠param_ `projectDataProviderSource` String name of the id of the project to get OR
+   * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
+   * Project Data Provider once)
+   *
+   * _＠param_ `selector` tells the provider what data this listener is listening for
+   *
+   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   * updated every render
+   *
+   * _＠param_ `defaultValue` the initial value to return while first awaiting the data
+   *
+   * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
+   *
+   * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   * to re-run with its new value. This means that `subscriberOptions` will be passed to the Project
+   * Data Provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   * until `projectDataProviderSource` or `selector` changes.
+   *
+   * _＠returns_ `[data, setData, isLoading]`
+   *
+   * - `data`: the current value for the data from the Project Data Provider with the specified data
+   *   type and selector, either the `defaultValue`, the resolved data, or a {@link PlatformError} if
+   *   the project data provider throws an error. You can call {@link isPlatformError} on this value to
+   *   check if it is an error.
+   * - `setData`: asynchronous function to request that the Project Data Provider update the data at
+   *   this data type and selector. Returns `true` if successful. Note that this function does not
+   *   update the data. The Project Data Provider sends out an update to this subscription if it
+   *   successfully updates data.
+   * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
+   *   provider
+   */
+  export const useProjectData: UseProjectDataHook;
+  export default useProjectData;
+}
+declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
+  import { PlatformError } from 'platform-bible-utils';
+  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import {
+    IBaseProjectDataProvider,
+    ProjectSettingNames,
+    ProjectSettingTypes,
+  } from 'papi-shared-types';
+  /**
+   * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
+   * subscribers when the project setting changes and gets updated when the project setting is changed
+   * by others.
+   *
+   * @param projectDataProviderSource `projectDataProviderSource` String name of the id of the project
+   *   to get OR projectDataProvider (result of `useProjectDataProvider` if you want to consolidate
+   *   and only get the Project Data Provider once). If you provide a project id, this hook will use a
+   *   PDP for this project that supports the `platform.base` `projectInterface`.
+   *
+   *   Note: If you provide a projectDataProvider directly, it must be an
+   *   {@link IBaseProjectDataProvider}
+   * @param key The string id of the project setting to interact with
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param defaultValue The initial value to return while first awaiting the project setting value
+   * @param subscriberOptions Various options to adjust how the subscriber emits updates
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+   *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   *   until `dataProviderSource` or `selector` changes.
+   * @returns `[setting, setSetting, resetSetting]`
+   *
+   *   - `setting`: the current value for the project setting from the Project Data Provider with the
+   *       specified key, either the `defaultValue`, the resolved setting value, or a
+   *       {@link PlatformError} if the Project Data Provider throws an error. You can call
+   *       {@link isPlatformError} on this value to check if it is an error.
+   *   - `setSetting`: asynchronous function to request that the Project Data Provider update the project
+   *       setting with the specified key. Returns `true` if successful. Note that this function does
+   *       not update the data. The Project Data Provider sends out an update to this subscription if
+   *       it successfully updates data.
+   *   - `resetSetting`: asynchronous function to request that the Project Data Provider reset the project
+   *       setting
+   *   - `isLoading`: whether the setting value is awaiting retrieval from the Project Data Provider
+   *
+   * @throws When subscription callback function is called with an update that has an unexpected
+   *   message type
+   */
+  export const useProjectSetting: <ProjectSettingName extends ProjectSettingNames>(
+    projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,
+    key: ProjectSettingName,
+    defaultValue: ProjectSettingTypes[ProjectSettingName],
+    subscriberOptions?: DataProviderSubscriberOptions,
+  ) => [
+    setting: ProjectSettingTypes[ProjectSettingName] | PlatformError,
+    setSetting: ((newSetting: ProjectSettingTypes[ProjectSettingName]) => void) | undefined,
+    resetSetting: (() => void) | undefined,
+    isLoading: boolean,
+  ];
+  export default useProjectSetting;
+}
+declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
+  import { DataProviderNames, DataProviders } from 'papi-shared-types';
+  /**
+   * Gets an array of data providers based on an array of input sources
+   *
+   * @type `T` - The types of data providers to return. Use `IDataProvider<TDataProviderDataTypes>`,
+   *   specifying your own types, or provide a custom data provider type for each item in the array.
+   *   Note that if you provide more than one data type, each item in the returned array will be
+   *   considered to be any of those types. For example, if you call `useDataProviderMulti<Type1,
+   *   Type2>`, all items in the returned array will be considered to be of type `Type1 | Type2 |
+   *   undefined`. Although you can determine the actual type based on the array index, TypeScript
+   *   will not know, so you will need to type assert the array items for later type checking to
+   *   work.
+   * @param dataProviderSources Array containing string names of the data providers to get OR data
+   *   providers themselves (i.e., the results of useDataProvider/useDataProviderMulti) if you want
+   *   this hook to return the data providers again. It is fine to have a mix of strings and data
+   *   providers in the array.
+   *
+   *   WARNING: THE ARRAY MUST BE STABLE - const or wrapped in useState, useMemo, etc. It must not be
+   *   updated every render.
+   * @returns An array of data providers that correspond by index to the values in
+   *   `dataProviderSources`. Each item in the array will be (a) undefined if the data provider has
+   *   not been retrieved or has been disposed, or (b) a data provider if it has been retrieved and is
+   *   not disposed.
+   */
+  export function useDataProviderMulti<EachDataProviderName extends DataProviderNames[]>(
+    dataProviderSources: (
+      | EachDataProviderName[number]
+      | DataProviders[EachDataProviderName[number]]
+      | undefined
+    )[],
+  ): (DataProviders[EachDataProviderName[number]] | undefined)[];
+  export default useDataProviderMulti;
+}
+declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
+  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import { LocalizationData } from 'shared/services/localization.service-model';
+  import { LocalizeKey } from 'platform-bible-utils';
+  /**
+   * Gets localizations on the papi.
+   *
+   * @param localizationKeys Array of keys to get localizations of
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param localizationLocales Array of localization languages to look up the keys in
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param subscriberOptions Various options to adjust how the subscriber emits updates
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
+   *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
+   *   until `dataProviderSource` or `selector` changes.
+   * @returns `[localizedStrings]`
+   *
+   *   - `localizedStrings`: The current state of the localizations, either `defaultState` or the stored
+   *       state on the papi, if any
+   */
+  export const useLocalizedStrings: (
+    localizationKeys: LocalizeKey[],
+    localizationLocales?: string[],
+    subscriberOptions?: DataProviderSubscriberOptions,
+  ) => [localizedStrings: LocalizationData, isLoading: boolean];
+  export default useLocalizedStrings;
+}
+declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
+  import { NetworkObject } from 'shared/models/network-object.model';
+  import { WebViewId } from 'shared/models/web-view.model';
+  import { WebViewControllerTypes, WebViewControllers } from 'papi-shared-types';
+  /**
+   * Gets a Web View Controller with specified provider name
+   *
+   * @param webViewType `webViewType` that the web view controller must support. The TypeScript type
+   *   for the returned web view controller will have the web view controller interface type
+   *   associated with this `webViewType`. If the web view controller does not implement this
+   *   `webViewType` (according to its metadata), an error will be thrown.
+   * @param webViewId Id of the web view for which to get the web view controller OR
+   *   `webViewController` (result of `useWebViewController`, if you want this hook to just return the
+   *   controller again)
+   * @param pdpFactoryId Optional ID of the PDP factory from which to get the Web View Controller if
+   *   the PDP factory supports this project id and project interface. If not provided, then look in
+   *   all available PDP factories for the given project ID.
+   * @returns `undefined` if the Web View Controller has not been retrieved, the requested Web View
+   *   Controller if it has been retrieved and is not disposed, and undefined again if the Web View
+   *   Controller is disposed
+   */
+  export const useWebViewController: <WebViewType extends WebViewControllerTypes>(
+    webViewType: WebViewType,
+    webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,
+  ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;
+  export default useWebViewController;
+}
+declare module 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook' {
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  /**
+   * Custom hook that provides synchronized recent scripture references across all components. This
+   * hook automatically syncs with localStorage changes from other components.
+   */
+  export default function useRecentScriptureRefs(): {
+    recentScriptureRefs: SerializedVerseRef[];
+    addRecentScriptureRef: (newRef: SerializedVerseRef) => void;
+  };
+}
+declare module 'renderer/hooks/papi-hooks/index' {
+  export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
+  export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
+  export { default as useScrollGroupScrRef } from 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
+  export { default as useSetting } from 'renderer/hooks/papi-hooks/use-setting.hook';
+  export { default as useProjectData } from 'renderer/hooks/papi-hooks/use-project-data.hook';
+  export { default as useProjectDataProvider } from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
+  export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
+  export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
+  export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
+  export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
+  export { default as useRecentScriptureRefs } from 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
+}
+declare module 'renderer/services/overlays/overlay-store' {
+  /**
+   * Simple overlay store using a Map and listeners pattern. Manages active overlay entries (context
+   * menus, modal dialogs, popovers) and notifies subscribers on changes.
+   */
+  import type { PlatformError } from 'platform-bible-utils';
+  import {
+    OverlayEntry,
+    OverlayResolveType,
+    PopoverContent,
+  } from 'renderer/services/overlays/overlay.service-model';
+  /**
+   * Add an overlay entry to the store
+   *
+   * @param entry The overlay entry to add
+   * @throws Error if an overlay with the same id already exists
+   */
+  export function addOverlay(entry: OverlayEntry): void;
+  /**
+   * Resolves an overlay's promise with the given result and removes it from the store. Returns true
+   * if the overlay was found and settled, false if not found.
+   *
+   * @param id The id of the overlay to resolve and remove
+   * @param expectedType The expected type of the overlay (e.g. 'contextMenu', 'popover', 'modal')
+   * @param result The value to resolve the overlay's promise with
+   * @returns True if the overlay was found and resolved, false if not found
+   * @throws Error if the overlay exists but its type does not match `expectedType`
+   */
+  export function resolveAndRemoveOverlay<T extends keyof OverlayResolveType>(
+    id: string,
+    expectedType: T,
+    result: OverlayResolveType[T],
+  ): boolean;
+  /**
+   * Rejects an overlay's promise with the given error and removes it from the store. Returns true if
+   * the overlay was found and settled, false if not found.
+   *
+   * @param id The id of the overlay to reject and remove
+   * @param error The error to reject the overlay's promise with
+   * @returns True if the overlay was found and rejected, false if not found
+   */
+  export function rejectAndRemoveOverlay(id: string, error: PlatformError): boolean;
+  /** Get all active overlays as an array */
+  export function getOverlays(): OverlayEntry[];
+  /**
+   * Get all overlays for a specific webViewId
+   *
+   * @param webViewId The web view id to filter overlays by
+   * @returns An array of overlay entries associated with the given web view id
+   */
+  export function getOverlaysByWebView(webViewId: string): OverlayEntry[];
+  /** Subscribe to store changes. Returns an unsubscribe function. */
+  export function subscribe(listener: () => void): () => void;
+  /** Get a specific overlay by id, or undefined if not found */
+  export function getOverlayById(id: string): OverlayEntry | undefined;
+  /**
+   * Removes all overlays from the store and notifies listeners.
+   *
+   * WARNING: Test-only. Does not resolve or reject pending overlay promises. Using this in production
+   * would cause callers awaiting overlay results to hang indefinitely. @internal
+   */
+  export function clearAllOverlays(): void;
+  /**
+   * Updates the content of a popover overlay and notifies subscribers.
+   *
+   * @param id The overlay id to update
+   * @param content The new popover content
+   * @returns True if the overlay was found and updated, false otherwise
+   */
+  export function updateOverlayContent(id: string, content: PopoverContent): boolean;
+}
+declare module 'renderer/components/overlays/overlay-context-menu.component' {
+  import { OverlayEntry } from 'renderer/services/overlays/overlay.service-model';
+  import { LocalizeKey } from 'platform-bible-utils';
+  /** Alias for platform icon names. Currently any string; may become a branded type in the future. */
+  type PlatformIconName = string;
+  /**
+   * A single item in an overlay context menu. Discriminated union on `type`:
+   *
+   * - `'item'` — A clickable menu item that returns its `id` when selected.
+   * - `'separator'` — A visual divider between groups of items.
+   * - `'submenu'` — A nested menu that expands on hover to show child `items`.
+   */
+  export type OverlayContextMenuItem =
+    | {
+        type: 'item';
+        id: string;
+        label: string | LocalizeKey;
+        icon?: PlatformIconName;
+        shortcut?: string;
+        disabled?: boolean;
+      }
+    | {
+        type: 'separator';
+      }
+    | {
+        type: 'submenu';
+        label: string | LocalizeKey;
+        icon?: PlatformIconName;
+        items: OverlayContextMenuItem[];
+      };
+  /** Result returned when the user selects an item from the context menu */
+  export type OverlayContextMenuResult = {
+    itemId: string;
+  };
+  /** Props for the presentational OverlayContextMenuPresentational component */
+  export type OverlayContextMenuPresentationalProps = {
+    /** Menu items to display */
+    items: OverlayContextMenuItem[];
+    /** Document-relative position for the menu */
+    position: {
+      x: number;
+      y: number;
+    };
+    /** Called when the user selects a menu item */
+    onSelect: (result: OverlayContextMenuResult) => void;
+    /** Called when the menu is dismissed without a selection */
+    onDismiss: () => void;
+  };
+  /**
+   * Pure presentational context menu component. Renders a context menu at a fixed position using
+   * Radix DropdownMenu. Supports items, separators, and submenus.
+   *
+   * This component has no dependency on the overlay store or localization hooks. Use it directly in
+   * tests and Storybook stories. For production rendering via the overlay service, use
+   * {@link OverlayContextMenu} instead — it handles LocalizeKey resolution and store lifecycle.
+   */
+  export function OverlayContextMenuPresentational({
+    items,
+    position,
+    onSelect,
+    onDismiss,
+  }: OverlayContextMenuPresentationalProps): import('react/jsx-runtime').JSX.Element;
+  type OverlayContextMenuProps = {
+    overlay: Extract<
+      OverlayEntry,
+      {
+        type: 'contextMenu';
+      }
+    >;
+  };
+  /**
+   * Production context menu component. Resolves LocalizeKey values in menu items via
+   * `useLocalizedStrings`, manages overlay lifecycle (removing from store and resolving the promise),
+   * and delegates rendering to {@link OverlayContextMenuPresentational}.
+   *
+   * This is the component rendered by `OverlayHost`. Do not use it directly in tests or Storybook —
+   * use {@link OverlayContextMenuPresentational} instead, which accepts plain props without requiring
+   * an `OverlayEntry`.
+   */
+  export function OverlayContextMenu({
+    overlay,
+  }: OverlayContextMenuProps): import('react/jsx-runtime').JSX.Element;
+}
+declare module 'renderer/services/overlays/overlay.service-model' {
+  /**
+   * Type definitions for the overlay service, a renderer-only service that manages overlays (context
+   * menus, popovers, command palettes) rendered in the renderer's top-level document outside iframe
+   * boundaries. Extensions running in sandboxed WebView iframes cannot render UI above other content,
+   * so this service provides a way for them to request overlays that the renderer hosts on their
+   * behalf.
+   */
+  import { LocalizeKey, PlatformError } from 'platform-bible-utils';
+  import type { ReactElement } from 'react';
+  import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
+  /**
+   * An action button displayed at the bottom of a `'card'`-type popover. When clicked, the popover
+   * resolves with this action's `id` via {@link IOverlayService.onPopoverDismissed}.
+   */
+  export type PopoverAction = {
+    /** Unique identifier returned when this action is clicked */
+    id: string;
+    /** Button label text */
+    label: string | LocalizeKey;
+    /** Visual style variant. Defaults to `'default'`. */
+    variant?: 'default' | 'destructive' | 'secondary';
+  };
+  /**
+   * The content to display inside a popover. Discriminated union on `type`:
+   *
+   * - `'text'` — Simple text with an optional title and a plain-text body.
+   * - `'markdown'` — Markdown content rendered via `markdown-to-jsx`. Handles its own title via `#`
+   *   headings. Replaces the former `list`, `description`, and `richText` types.
+   * - `'card'` — A card with title, body text, and one or more {@link PopoverAction} buttons.
+   */
+  export type PopoverContent =
+    | {
+        type: 'text';
+        /** Optional heading displayed above the body */
+        title?: string | LocalizeKey;
+        /** Plain-text body content */
+        body: string | LocalizeKey;
+      }
+    | {
+        type: 'markdown';
+        /** Markdown content. Rendered via markdown-to-jsx. Use `#` headings for titles. */
+        markdown: string | LocalizeKey;
+      }
+    | {
+        type: 'card';
+        /** Optional heading displayed at the top of the card */
+        title?: string | LocalizeKey;
+        /** Card body text */
+        body: string | LocalizeKey;
+        /** Action buttons displayed at the bottom of the card */
+        actions: PopoverAction[];
+      };
+  /**
+   * Request payload for {@link IOverlayService.showPopover}. Describes where to anchor the popover,
+   * what content to display, and behavioral options.
+   */
+  export interface PopoverRequest {
+    /**
+     * Anchor rectangle in pixels relative to the requesting WebView's iframe origin. The popover is
+     * positioned adjacent to this rectangle on the specified `side`. If `width`/`height` are
+     * provided, the popover aligns to the full rectangle; otherwise it anchors to the point `(x,
+     * y)`.
+     */
+    anchor: {
+      x: number;
+      y: number;
+      width?: number;
+      height?: number;
+    };
+    /** Preferred side of the anchor to place the popover. Defaults to `'bottom'`. */
+    side?: 'top' | 'bottom' | 'left' | 'right';
+    /** The content to display inside the popover. Can be updated later via `updatePopover`. */
+    content: PopoverContent;
+    /** Whether clicking outside the popover dismisses it. Defaults to `true`. */
+    dismissOnClickOutside?: boolean;
+    /**
+     * Automatically dismiss the popover after this many milliseconds. Useful for transient
+     * notifications. If omitted, the popover stays open until explicitly dismissed. Must be
+     * positive.
+     */
+    dismissAfterMs?: number;
+    /** Maximum width of the popover in pixels. If omitted, uses a default max width. */
+    maxWidth?: number;
+    /** Whether to display an arrow pointing from the popover toward the anchor. Defaults to `true`. */
+    showArrow?: boolean;
+  }
+  /**
+   * A single item in a command palette. Items are displayed in a searchable, filterable list. The
+   * user types to filter and selects one item.
+   */
+  export type CommandPaletteItem = {
+    /** Unique identifier returned when this item is selected */
+    id: string;
+    /** Primary display text (e.g., marker code like "ft" or command name) */
+    label: string | LocalizeKey;
+    /** Secondary description text displayed below the label */
+    description?: string | LocalizeKey;
+    /** Optional icon displayed to the left of the label */
+    icon?: string;
+    /** Optional badge text (e.g., "Deprecated", "Disallowed") */
+    badge?: string | LocalizeKey;
+    /** Optional group key for visual sectioning with group headers */
+    group?: string;
+    /** Whether the item is grayed out and non-selectable. Defaults to false. */
+    disabled?: boolean;
+  };
+  /** Request payload for {@link IOverlayService.showCommandPalette}. */
+  export interface CommandPaletteRequest {
+    /** The selectable items to display */
+    items: CommandPaletteItem[];
+    /**
+     * Anchor position in pixels relative to the requesting WebView's iframe origin. The palette is
+     * positioned adjacent to this point. If omitted, centers in the viewport.
+     */
+    anchor?: {
+      x: number;
+      y: number;
+      width?: number;
+      height?: number;
+    };
+    /** Preferred side of the anchor to place the palette. Defaults to 'bottom'. */
+    side?: 'top' | 'bottom' | 'left' | 'right';
+    /** Placeholder text for the search input */
+    placeholder?: string | LocalizeKey;
+    /** Maximum width in pixels. Defaults to 500. */
+    maxWidth?: number;
+    /** Maximum height in pixels. Defaults to 400. */
+    maxHeight?: number;
+    /** Whether clicking outside dismisses the palette. Defaults to true. */
+    dismissOnClickOutside?: boolean;
+  }
+  /**
+   *
+   * Service for showing overlays (context menus, popovers, command palettes) that render outside
+   * iframe boundaries in the renderer's top-level document. Renderer-only service.
+   *
+   * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
+   * iframe bounds. This service accepts overlay requests from WebViews, translates their
+   * iframe-relative coordinates to document-level coordinates, and renders the overlay in the
+   * renderer's React tree. Each method returns a promise that resolves when the user interacts with
+   * the overlay or it is dismissed.
+   *
+   * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
+   * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
+   * one and rejects its promise with a PlatformError with code ABORTED.
+   */
+  export interface IOverlayService {
+    /**
+     * Shows a context menu from menu.json contributions registered for the given webViewType. Fetches
+     * menu data, renders the menu, and auto-executes the selected command. Returns the command string
+     * that was executed, or undefined if dismissed.
+     *
+     * @param webViewType The webViewType to look up in the menu data service
+     * @param webViewId The ID of the WebView requesting the context menu. Pass `globalThis.webViewId`
+     *   from within a WebView iframe.
+     * @param options Optional context including the position for the menu
+     * @returns The command string that was executed, or `undefined` if dismissed
+     * @throws PlatformError with code ABORTED if replaced by another context menu from the same
+     *   WebView
+     */
+    showContextMenu(
+      webViewType: string,
+      webViewId: string,
+      options?: {
+        position?: {
+          x: number;
+          y: number;
+        };
+      },
+    ): Promise<string | undefined>;
+    /**
+     * Shows a popover anchored to the specified position. Unlike context menus and modals, popovers
+     * return immediately with an overlay ID rather than waiting for dismissal. Use
+     * {@link onPopoverDismissed} to await the result, {@link updatePopover} to change content, and
+     * {@link dismissPopover} to close it programmatically.
+     *
+     * @param request The popover anchor, content, and behavioral options
+     * @param webViewId The ID of the WebView requesting the popover. Pass `globalThis.webViewId` from
+     *   within a WebView iframe.
+     * @returns The overlay ID string, usable with other popover methods
+     * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
+     *   debounce cooldown
+     * @throws PlatformError with code INVALID_ARGUMENT if the request is invalid
+     * @throws PlatformError with code ABORTED if replaced by another popover from the same WebView
+     */
+    showPopover(request: PopoverRequest, webViewId: string): Promise<string>;
+    /**
+     * Replaces the content of an existing popover without closing and reopening it. Useful for
+     * updating status messages or showing loading progress.
+     *
+     * @param overlayId The overlay ID returned by {@link showPopover}
+     * @param content The new content to display
+     * @throws {Error} If no popover with the given ID exists
+     */
+    updatePopover(overlayId: string, content: PopoverContent): Promise<void>;
+    /**
+     * Programmatically dismisses a popover, resolving its {@link onPopoverDismissed} promise with
+     * `undefined`. No-op if the popover has already been dismissed or does not exist.
+     *
+     * @param overlayId The overlay ID returned by {@link showPopover}
+     */
+    dismissPopover(overlayId: string): Promise<void>;
+    /**
+     * Returns a promise that resolves when the specified popover is dismissed. Resolves with the
+     * {@link PopoverAction} `id` if the user clicked an action button, or `undefined` if the popover
+     * was dismissed by clicking outside, calling {@link dismissPopover}, or via auto-dismiss timer.
+     * Resolves immediately with `undefined` if the overlay ID is not found (already dismissed).
+     *
+     * @param overlayId The overlay ID returned by {@link showPopover}
+     * @returns The action ID that triggered dismissal, or `undefined`
+     * @throws PlatformError with code ABORTED if the popover was replaced by a new one from the same
+     *   WebView
+     */
+    onPopoverDismissed(overlayId: string): Promise<string | undefined>;
+    /**
+     * Shows a command palette with searchable/filterable items. Returns a promise that resolves with
+     * the selected item's `id`, or `undefined` if dismissed.
+     *
+     * @param request The items, optional anchor position, and display options
+     * @param webViewId The ID of the WebView requesting the command palette
+     * @returns The selected item's ID, or `undefined` if dismissed
+     * @throws PlatformError with code INVALID_ARGUMENT if the request is invalid
+     * @throws PlatformError with code ABORTED if replaced by another command palette from the same
+     *   WebView
+     */
+    showCommandPalette(
+      request: CommandPaletteRequest,
+      webViewId: string,
+    ): Promise<string | undefined>;
+  }
+  /**
+   * Internal representation of an active overlay stored in the overlay store. Each entry holds the
+   * data needed to render the overlay plus `resolve`/`reject` callbacks that settle the promise
+   * returned to the caller of the service method.
+   *
+   * Discriminated union on `type`:
+   *
+   * - `'contextMenu'` — An active context menu with translated position and menu items.
+   * - `'modalDialog'` — An active modal dialog with its type-specific options.
+   * - `'popover'` — An active popover with mutable `content` (updatable via `updatePopover`).
+   * - `'commandPalette'` — An active command palette with searchable/filterable items.
+   *
+   * UI components read entries from the overlay store to render overlays, then call `resolve` or
+   * `reject` when the user interacts with or dismisses them.
+   */
+  export type OverlayEntry =
+    | {
+        type: 'contextMenu';
+        /** Unique overlay identifier generated by the service */
+        id: string;
+        /** The WebView that requested this overlay. Used to enforce one-per-type-per-WebView. */
+        webViewId: string;
+        /** Menu items to render */
+        items: OverlayContextMenuItem[];
+        /** Document-relative position (already translated from iframe coordinates and clamped) */
+        position: {
+          x: number;
+          y: number;
+        };
+        /** Settles the caller's promise with the selected command string, or `undefined` if dismissed */
+        resolve: (result: string | undefined) => void;
+        /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+        reject: (error: PlatformError) => void;
+      }
+    | {
+        type: 'modalDialog';
+        /** Unique overlay identifier generated by the service */
+        id: string;
+        /** The WebView that requested this overlay. Used to enforce one-per-type-per-WebView. */
+        webViewId: string;
+        /** The dialog React component to render inside the modal shell */
+        Component: (props: Record<string, unknown>) => ReactElement;
+        /** Pre-built props for the component (DialogProps + dialog options, already localized) */
+        props: Record<string, unknown>;
+        /**
+         * Settles the caller's promise with the dialog result. Typed as `unknown` because the generic
+         * return type is not preserved in the store entry.
+         */
+        resolve: (result: unknown) => void;
+        /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+        reject: (error: PlatformError) => void;
+      }
+    | {
+        type: 'popover';
+        /** Unique overlay identifier generated by the service */
+        id: string;
+        /** The WebView that requested this overlay. Used to enforce one-per-type-per-WebView. */
+        webViewId: string;
+        /** The original request, retained for reference (e.g., `dismissAfterMs`, `side`) */
+        request: PopoverRequest;
+        /** Current popover content. Mutable — updated in place by `updateOverlayContent`. */
+        content: PopoverContent;
+        /** Document-relative position (already translated from iframe coordinates and clamped) */
+        position: {
+          x: number;
+          y: number;
+        };
+        /**
+         * Settles the popover's internal promise and the `onPopoverDismissed` promise. Called with
+         * the {@link PopoverAction} `id` if the user clicked an action, or `undefined` if dismissed.
+         */
+        resolve: (actionId: string | undefined) => void;
+        /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+        reject: (error: PlatformError) => void;
+      }
+    | {
+        type: 'commandPalette';
+        /** Unique overlay identifier generated by the service */
+        id: string;
+        /** The WebView that requested this overlay */
+        webViewId: string;
+        /** The original request */
+        request: CommandPaletteRequest;
+        /** Items to render */
+        items: CommandPaletteItem[];
+        /** Document-relative position (translated + clamped), or undefined for centered */
+        position?: {
+          x: number;
+          y: number;
+        };
+        /** Settles the caller's promise with the selected item ID, or undefined if dismissed */
+        resolve: (selectedId: string | undefined) => void;
+        /** Rejects the caller's promise (e.g., with a PlatformError with code ABORTED) */
+        reject: (error: PlatformError) => void;
+      };
+  /**
+   * Maps each overlay type to the type its resolve callback accepts. Used by
+   * {@link resolveAndRemoveOverlay} to provide compile-time type safety on the result parameter.
+   */
+  export type OverlayResolveType = {
+    contextMenu: string | undefined;
+    modalDialog: unknown;
+    popover: string | undefined;
+    commandPalette: string | undefined;
+  };
+}
 declare module 'shared/services/app.service-model' {
   /**
    * Information about the app that is currently running.
@@ -6930,214 +8498,6 @@ declare module 'shared/services/database.service-model' {
     ): Promise<SqlOutputRow[]>;
   } & typeof databaseServiceObjectToProxy;
 }
-declare module 'shared/services/localization.service-model' {
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import {
-    DataProviderDataType,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { LanguageInfo } from 'platform-bible-react';
-  import {
-    LanguageStrings,
-    LocalizedStringDataContribution,
-    LocalizeKey,
-    OnDidDispose,
-  } from 'platform-bible-utils';
-  export type LocalizationData = LanguageStrings;
-  export type LocalizationSelector = {
-    localizeKey: LocalizeKey;
-    locales?: string[];
-  };
-  export type LocalizationSelectors = {
-    localizeKeys: LocalizeKey[];
-    locales?: string[];
-  };
-  /**
-   *
-   * This name is used to register the localization data provider on the papi. You can use this name
-   * to find the data provider when accessing it using the useData hook
-   */
-  export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
-  export const localizationServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the localization data provider on the papi. You can use this name
-     * to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.localizationDataServiceDataProvider';
-  }>;
-  export type LocalizationDataDataTypes = {
-    LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
-    LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
-    AvailableInterfaceLanguages: DataProviderDataType<
-      undefined,
-      Record<string, LanguageInfo>,
-      never
-    >;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [localizationServiceProviderName]: ILocalizationService;
-    }
-  }
-  /**
-   *
-   * Service that allows to get and store localizations
-   */
-  export type ILocalizationService = {
-    /**
-     * Look up localized string for specific localizeKey
-     *
-     * @param selector Made up of a string key that corresponds to a localized value and an array of
-     *   BCP 47 language codes
-     * @returns Localized string
-     */
-    getLocalizedString: (selector: LocalizationSelector) => Promise<string>;
-    /**
-     * Look up localized strings for all localizeKeys provided
-     *
-     * @param selectors An array of LocalizationSelectors. A LocalizationSelector is made up of a
-     *   string key that corresponds to a localized value and an array of BCP 47 language codes
-     * @returns Object whose keys are localizeKeys and values are localized strings
-     */
-    getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
-    /**
-     * Get a collection of known user-interface languages
-     *
-     * @returns All user-interface languages
-     */
-    getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
-    /**
-     * Get all localized string data currently loaded by the platform
-     *
-     * @returns All localized string data from all sources formatted a single, combined contribution
-     */
-    retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide localized strings in contributions
-     */
-    setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide localized strings in contributions
-     */
-    setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide new interface languages in contributions
-     */
-    setAvailableInterfaceLanguages(): Promise<
-      DataProviderUpdateInstructions<LocalizationDataDataTypes>
-    >;
-  } & OnDidDispose &
-    typeof localizationServiceObjectToProxy & {
-      /**
-       * This function is used to take a book number from a verse ref and return the localized name of
-       * the book so that the book name can be displayed in the UI language within the UI
-       */
-      getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
-    } & IDataProvider<LocalizationDataDataTypes>;
-}
-declare module 'shared/data/platform.data' {
-  /**
-   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
-   * Platform.Bible core
-   */
-  export const PLATFORM_NAMESPACE = 'platform';
-  /** Query parameter passed to the renderer. Determines which log level to use */
-  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
-  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
-  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
-  /** ID of the default theme family for use in the application */
-  export const DEFAULT_THEME_FAMILY = '';
-  /** Type of the default theme for use in the application */
-  export const DEFAULT_THEME_TYPE = 'light';
-  /** Constants related to zoom factor of entire application */
-  export const DEFAULT_ZOOM_FACTOR = 1;
-  export const MIN_ZOOM_FACTOR = 0.5;
-  export const MAX_ZOOM_FACTOR = 3;
-}
-declare module 'shared/log-error.model' {
-  /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
-  export class LogError extends Error {
-    constructor(message?: string);
-  }
-  export default LogError;
-}
-declare module 'shared/services/localization.service' {
-  import { ILocalizationService } from 'shared/services/localization.service-model';
-  export const localizationService: ILocalizationService;
-  export default localizationService;
-}
-declare module 'shared/utils/settings-document-combiner-base' {
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import {
-    DocumentCombiner,
-    JsonDocumentLike,
-    Localized,
-    Setting,
-    SettingsGroup,
-  } from 'platform-bible-utils';
-  /**
-   * Information about one specific setting. Basically just {@link Setting} but with specific default
-   * type info
-   */
-  type SettingInfo<SettingName extends SettingNames> = Setting & {
-    default: SettingTypes[SettingName];
-  };
-  /** Information about all settings. Keys are setting keys, values are information for that setting */
-  type AllSettingsInfo = {
-    [SettingName in SettingNames]: SettingInfo<SettingName>;
-  };
-  export type SettingsContributionInfo = {
-    /** Map of extension name to that extension's provided settings groups if provided */
-    contributions: {
-      [extensionName: string]: SettingsGroup[] | undefined;
-    };
-    /**
-     * Map of setting name to setting definition. For type specificity and ease of accessing settings
-     * since they're a bit hard to find in `contributions`
-     */
-    settings: Partial<AllSettingsInfo>;
-  };
-  export type LocalizedSettingsContributionInfo = Localized<SettingsContributionInfo>;
-  export abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
-    /** Name for type of setting to use in error messages */
-    protected readonly settingTypeName: string;
-    /** Cached promise for getting the localized output */
-    private localizedOutputPromise;
-    constructor(baseDocument: JsonDocumentLike);
-    /**
-     * This method is intended to be layered over by a child class to expose the localized setting
-     * info.
-     *
-     * Get the current set of settings contribution info given all the input documents with all
-     * localized string keys localized properly.
-     *
-     * NOTE: If the input documents might have changed since the last time the settings contributions
-     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
-     * this getter. For example, if one of the input document objects changed and
-     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
-     * the current set of settings contributions. If all the input documents are static, then there is
-     * no need to ever rebuild once all the documents have been contributed to this combiner.
-     */
-    protected getLocalizedOutput(): Promise<LocalizedSettingsContributionInfo | undefined>;
-    protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
-    protected transformBaseDocumentAfterValidation(
-      baseDocument: JsonDocumentLike,
-    ): JsonDocumentLike;
-    protected validateContribution(documentName: string, document: JsonDocumentLike): void;
-    protected transformContributionAfterValidation(
-      documentName: string,
-      document: JsonDocumentLike,
-    ): JsonDocumentLike;
-    protected validateOutput(): void;
-    /** Validate the base and contribution documents against the JSON schema */
-    protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
-  }
-  export default SettingsDocumentCombinerBase;
-}
 declare module 'shared/utils/project-settings-document-combiner' {
   import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
   import {
@@ -7319,164 +8679,6 @@ declare module 'shared/services/project-settings.service-model' {
     [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
   };
 }
-declare module 'shared/services/settings.service-model' {
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import { OnDidDispose, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import {
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { LocalizedSettingsContributionInfo } from 'shared/utils/settings-document-combiner-base';
-  /** Name prefix for registered commands that call settings validators */
-  export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
-  /**
-   *
-   * This name is used to register the settings service data provider on the papi. You can use this
-   * name to find the data provider when accessing it using the useData hook
-   */
-  export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
-  export const settingsServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the settings service data provider on the papi. You can use this
-     * name to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.settingsServiceDataProvider';
-    /**
-     *
-     * Registers a function that validates whether a new setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator: <SettingName extends SettingNames>(
-      key: SettingName,
-      validator: SettingValidator<SettingName>,
-    ) => Promise<UnsubscriberAsync>;
-  }>;
-  /**
-   * SettingDataTypes handles getting and setting Platform.Bible core application and extension
-   * settings.
-   *
-   * Note: the unnamed (`''`) data type is not actually part of `SettingDataTypes` because the methods
-   * would not be able to create a generic type extending from `SettingNames` in order to return the
-   * specific setting type being requested. As such, `get`, `set`, `reset` and `subscribe` are all
-   * specified on {@link ISettingsService} instead. Unfortunately, as a result, using Intellisense with
-   * `useData` will not show the unnamed data type (`''`) as an option, but you can use `useSetting`
-   * instead. However, do note that the unnamed data type (`''`) is fully functional.
-   *
-   * The closest possible representation of the unnamed (````) data type follows:
-   *
-   * ```typescript
-   * '': DataProviderDataType<SettingName, SettingTypes[SettingName], SettingTypes[SettingName]>;
-   * ```
-   */
-  export type SettingDataTypes = {};
-  export type AllSettingsData = {
-    [SettingName in SettingNames]: SettingTypes[SettingName];
-  };
-  /** Function that validates whether a new setting value should be allowed to be set */
-  export type SettingValidator<SettingName extends SettingNames> = (
-    newValue: SettingTypes[SettingName],
-    currentValue: SettingTypes[SettingName],
-    allChanges: Partial<SettingTypes>,
-  ) => Promise<boolean>;
-  /** Validators for all settings. Keys are setting keys, values are functions to validate new settings */
-  export type AllSettingsValidators = {
-    [SettingName in SettingNames]: SettingValidator<SettingName>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [settingsServiceDataProviderName]: ISettingsService;
-    }
-  }
-  /** */
-  export type ISettingsService = {
-    /**
-     * Retrieves the value of the specified setting
-     *
-     * @param key The string id of the setting for which the value is being retrieved
-     * @returns The value of the specified setting, parsed to an object. Returns default setting if
-     *   setting does not exist
-     * @throws If no default value is available for the setting.
-     */
-    get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
-    /**
-     * Validates the setting at the given key with the new value provided
-     *
-     * @param key The string id of the setting to validate
-     * @param newValue The value to validate
-     * @param currentValue The value already set to the setting
-     * @param allChanges
-     */
-    validateSetting<SettingName extends SettingNames>(
-      key: SettingName,
-      newValue: SettingTypes[SettingName],
-      currentValue: SettingTypes[SettingName],
-      allChanges?: Partial<SettingTypes>,
-    ): Promise<boolean>;
-    /**
-     * Sets the value of the specified setting
-     *
-     * @param key The string id of the setting for which the value is being set
-     * @param newSetting The value that is to be set for the specified key
-     * @returns Information that papi uses to interpret whether to send out updates. Defaults to
-     *   `true` (meaning send updates only for this data type).
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    set<SettingName extends SettingNames>(
-      key: SettingName,
-      newSetting: SettingTypes[SettingName],
-    ): Promise<DataProviderUpdateInstructions<SettingDataTypes>>;
-    /**
-     * Removes the setting from memory and resets it to its default value
-     *
-     * @param key The string id of the setting for which the value is being removed
-     * @returns `true` if successfully reset the project setting. `false` otherwise
-     */
-    reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean>;
-    /**
-     * Subscribes to updates of the specified setting. Whenever the value of the setting changes, the
-     * callback function is executed.
-     *
-     * @param key The string id of the setting for which the value is being subscribed to
-     * @param callback The function that will be called whenever the specified setting is updated. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber that should be called whenever the subscription should be deleted
-     */
-    subscribe<SettingName extends SettingNames>(
-      key: SettingName,
-      callback: (newSetting: SettingTypes[SettingName] | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     *
-     * Registers a function that validates whether a new setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
-    registerValidator<SettingName extends SettingNames>(
-      key: SettingName,
-      validator: SettingValidator<SettingName>,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     * Get the current set of settings contribution info given all the input documents with all
-     * localized string keys localized properly.
-     *
-     * @returns Localized project settings contribution info or undefined
-     */
-    getLocalizedSettingsContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined>;
-  } & OnDidDispose &
-    IDataProvider<SettingDataTypes> &
-    typeof settingsServiceObjectToProxy;
-}
 declare module 'shared/services/window.service-model' {
   import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
   import {
@@ -7618,6 +8820,14 @@ declare module '@papi/core' {
   export type { ExecutionToken } from 'node/models/execution-token.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  export type {
+    CommandPaletteItem,
+    CommandPaletteRequest,
+    IOverlayService,
+    PopoverAction,
+    PopoverContent,
+    PopoverRequest,
+  } from 'renderer/services/overlays/overlay.service-model';
   export type { IBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
   export type {
     IDataProvider,
@@ -7891,11 +9101,6 @@ declare module 'shared/services/scroll-group.service' {
    */
   export const scrollGroupService: IScrollGroupService;
   export default scrollGroupService;
-}
-declare module 'shared/services/settings.service' {
-  import { ISettingsService } from 'shared/services/settings.service-model';
-  export const settingsService: ISettingsService;
-  export default settingsService;
 }
 declare module 'shared/services/window.service' {
   import { IWindowService } from 'shared/services/window.service-model';
@@ -8890,675 +10095,162 @@ declare module 'extension-host/extension-types/extension.interface' {
     deactivate?: UnsubscriberAsync;
   }
 }
-declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
-  import { NetworkObject } from 'shared/models/network-object.model';
-  /**
-   * This function takes in a getNetworkObject function and creates a hook with that function in it
-   * which will return a network object
-   *
-   * @param getNetworkObject A function that takes in an id string and returns a network object
-   * @param mapParametersToNetworkObjectSource Function that takes the parameters passed into the hook
-   *   and returns the `networkObjectSource` associated with those parameters. Defaults to taking the
-   *   first parameter passed into the hook and using that as the `networkObjectSource`.
-   *
-   *   - Note: `networkObjectSource` is string name of the network object to get OR `networkObject`
-   *       (result of this hook, if you want this hook to just return the network object again)
-   *
-   * @returns A function that takes in a networkObjectSource and returns a NetworkObject
-   */
-  export function createUseNetworkObjectHook<THookParams extends unknown[]>(
-    getNetworkObject: (...args: THookParams) => Promise<NetworkObject<object> | undefined>,
-    mapParametersToNetworkObjectSource?: (
-      ...args: THookParams
-    ) => string | NetworkObject<object> | undefined,
-  ): (...args: THookParams) => NetworkObject<object> | undefined;
-  export default createUseNetworkObjectHook;
-}
-declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
-  import { DataProviderNames, DataProviders } from 'papi-shared-types';
-  /**
-   * Gets a data provider with specified provider name
-   *
-   * @type `T` - The type of data provider to return. Use `IDataProvider<TDataProviderDataTypes>`,
-   *   specifying your own types, or provide a custom data provider type
-   * @param dataProviderSource String name of the data provider to get OR dataProvider (result of
-   *   useDataProvider, if you want this hook to just return the data provider again)
-   * @returns Undefined if the data provider has not been retrieved, data provider if it has been
-   *   retrieved and is not disposed, and undefined again if the data provider is disposed
-   */
-  export const useDataProvider: <DataProviderName extends DataProviderNames>(
-    dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
-  ) => DataProviders[DataProviderName] | undefined;
-  export default useDataProvider;
-}
-declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
-  import {
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import { PlatformError } from 'platform-bible-utils';
-  import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
-  /**
-   * The final function called as part of the `useData` hook that is the actual React hook
-   *
-   * This is the `.Greeting(...)` part of `useData('helloSomeone.people').Greeting(...)`
-   */
-  type UseDataFunctionWithProviderType<
-    TDataProvider extends IDataProvider<any>,
-    TDataType extends keyof ExtractDataProviderDataTypes<TDataProvider>,
-  > = (
-    selector: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['selector'],
-    defaultValue: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
-    subscriberOptions?: DataProviderSubscriberOptions,
-  ) => [
-    ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'] | PlatformError,
-    (
-      | ((
-          newData: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['setData'],
-        ) => Promise<DataProviderUpdateInstructions<ExtractDataProviderDataTypes<TDataProvider>>>)
-      | undefined
-    ),
-    boolean,
-  ];
-  /**
-   * A proxy that serves the actual hooks for a single data provider
-   *
-   * This is the `useData('helloSomeone.people')` part of
-   * `useData('helloSomeone.people').Greeting(...)`
-   */
-  type UseDataProxy<TDataProvider extends IDataProvider<any>> = {
-    [TDataType in keyof ExtractDataProviderDataTypes<TDataProvider>]: UseDataFunctionWithProviderType<
-      TDataProvider,
-      TDataType
-    >;
-  };
-  /**
-   * React hook to use data provider data with various data types
-   *
-   * @example `useData('helloSomeone.people').Greeting('Bill', 'Greeting loading')`
-   *
-   * @type `TDataProvider` - The type of data provider to get. Use
-   *   `IDataProvider<TDataProviderDataTypes>`, specifying your own types, or provide a custom data
-   *   provider type
-   */
-  type UseDataHookGeneric<TUseDataProviderParams extends unknown[]> = {
-    <TDataProvider extends IDataProvider<any>>(
-      ...args: TUseDataProviderParams
-    ): UseDataProxy<TDataProvider>;
-  };
-  /**
-   * Create a `useData(...).DataType(selector, defaultValue, options)` hook for a specific subset of
-   * data providers as supported by `useDataProviderHook`
-   *
-   * @param useDataProviderHook Hook that gets a data provider from a specific subset of data
-   *   providers
-   * @returns `useData` hook for getting data from a data provider
-   */
-  export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
-    useDataProviderHook: (...args: TUseDataProviderParams) => IDataProvider | undefined,
-  ): UseDataHookGeneric<TUseDataProviderParams>;
-  export default createUseDataHook;
-}
-declare module 'renderer/hooks/papi-hooks/use-data.hook' {
-  import {
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { DataProviderNames, DataProviderTypes, DataProviders } from 'papi-shared-types';
-  import { PlatformError } from 'platform-bible-utils';
-  /**
-   * React hook to use data from a data provider
-   *
-   * @example `useData('helloSomeone.people').Greeting('Bill', 'Greeting loading')`
-   */
-  type UseDataHook = {
-    <DataProviderName extends DataProviderNames>(
-      dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
-    ): {
-      [TDataType in keyof DataProviderTypes[DataProviderName]]: (
-        // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
-        selector: DataProviderTypes[DataProviderName][TDataType]['selector'],
-        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        defaultValue: DataProviderTypes[DataProviderName][TDataType]['getData'],
-        subscriberOptions?: DataProviderSubscriberOptions,
-      ) => [
-        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        DataProviderTypes[DataProviderName][TDataType]['getData'] | PlatformError,
-        (
-          | ((
-              // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
-              newData: DataProviderTypes[DataProviderName][TDataType]['setData'],
-            ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
-          | undefined
-        ),
-        boolean,
-      ];
-    };
-  };
-  /**
-   * ```typescript
-   * useData<DataProviderName extends DataProviderNames>(
-   *     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
-   *   ).DataType(
-   *       selector: DataProviderTypes[DataProviderName][DataType]['selector'],
-   *       defaultValue: DataProviderTypes[DataProviderName][DataType]['getData'],
-   *       subscriberOptions?: DataProviderSubscriberOptions,
-   *     ) => [
-   *       DataProviderTypes[DataProviderName][DataType]['getData'] | PlatformError,
-   *       (
-   *         | ((
-   *             newData: DataProviderTypes[DataProviderName][DataType]['setData'],
-   *           ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
-   *         | undefined
-   *       ),
-   *       boolean,
-   *     ]
-   * ```
-   *
-   * React hook to use data from a data provider. Subscribes to run a callback on a data provider's
-   * data with specified selector on the specified data type that data provider serves.
-   *
-   * Usage: Specify the data provider and the data type on the data provider with
-   * `useData('<data_provider>').<data_type>` and use like any other React hook.
-   *
-   * _＠example_ Subscribing to Verse data at JHN 11:35 on the `'quickVerse.quickVerse'` data provider:
-   *
-   * ```typescript
-   * const [verseText, setVerseText, verseTextIsLoading] = useData('quickVerse.quickVerse').Verse(
-   *   'JHN 11:35',
-   *   'Verse text goes here',
-   * );
-   * ```
-   *
-   * _＠param_ `dataProviderSource` string name of data provider to get OR dataProvider (result of
-   * useDataProvider if you want to consolidate and only get the data provider once)
-   *
-   * _＠param_ `selector` tells the provider what data this listener is listening for
-   *
-   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   * updated every render
-   *
-   * _＠param_ `defaultValue` the initial value to return while first awaiting the data
-   *
-   * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
-   *
-   * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   * to re-run with its new value. This means that `subscriberOptions` will be passed to the data
-   * provider's `subscribe<data_type>` method as soon as possible and will not be updated again until
-   * `dataProviderSource` or `selector` changes.
-   *
-   * _＠returns_ `[data, setData, isLoading]`
-   *
-   * - `data`: the current value for the data from the data provider with the specified data type and
-   *   selector. This will be the `defaultValue`, the resolved data, or a {@link PlatformError} if the
-   *   data provider throws an error. You can call {@link isPlatformError} on this value to check if it
-   *   is an error.
-   * - `setData`: asynchronous function to request that the data provider update the data at this data
-   *   type and selector. Returns `true` if successful. Note that this function does not update the
-   *   data. The data provider sends out an update to this subscription if it successfully updates
-   *   data.
-   * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
-   *   provider
-   */
-  export const useData: UseDataHook;
-  export default useData;
-}
-declare module 'renderer/services/scroll-group.service-host' {
-  import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
-  import { SerializedVerseRef } from '@sillsdev/scripture';
-  import { ScrollGroupId } from 'platform-bible-utils';
-  /**
-   * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
-   * placeholder and will be refactored significantly in
-   * https://github.com/paranext/paranext-core/issues/788
-   */
-  export const availableScrollGroupIds: (number | undefined)[];
-  /** Event that emits with information about a changed Scripture Reference for a scroll group */
-  export const onDidUpdateScrRef: import('platform-bible-utils').PlatformEvent<ScrollGroupUpdateInfo>;
-  /** See {@link IScrollGroupRemoteService.getScrRef} */
-  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
-  /**
-   * See {@link IScrollGroupRemoteService.setScrRef}
-   *
-   * @param shouldSetVerseRefSetting If `true`: if scroll group 0's reference changes, update the
-   *   `platform.verseRef` setting to keep it in sync for backwards compatibility. Defaults to `true`.
-   *   Only set to `false` when running this from subscription to updates to the setting
-   */
-  export function setScrRefSync(
-    scrollGroupId: ScrollGroupId | undefined,
-    scrRef: SerializedVerseRef,
-    shouldSetVerseRefSetting?: boolean,
-  ): boolean;
-  /** Register the network object that backs the scroll group service */
-  export function startScrollGroupService(): Promise<void>;
-}
-declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
-  import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  import { SerializedVerseRef } from '@sillsdev/scripture';
-  import { ScrollGroupId } from 'platform-bible-utils';
-  /**
-   * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
-   * value for both the SerializedVerseRef and the {@link ScrollGroupId} for the provided
-   * `scrollGroupScrRef`. Use similarly to `useState`.
-   *
-   * @param scrollGroupScrRef {@link ScrollGroupScrRef} representing a scroll group and/or Scripture
-   *   reference. Defaults to 0 meaning synced with scroll group 0 (A in English)
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param setScrollGroupScrRef Function to run to set `scrollGroupScrRef`. Should return `true` if
-   *   actually updated any properties; `false` otherwise
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because this is just used when needed and doesn't have any
-   *   reason to render changes, this has no adverse effect on the functionality of this hook. It will
-   *   always set using the latest value of this callback
-   * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
-   *
-   *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents
-   *   - `setScrRef`: Function to use to update the Scripture reference this `scrollGroupScrRef`
-   *       represents. If it is synced to a scroll group, sets the scroll group's Scripture reference
-   *   - `scrollGroupId`: The current value for the scroll group this `scrollGroupScrRef` is synced with.
-   *       If not synced to a scroll group, this is `undefined`
-   *   - `setScrollGroupId`: Function to use to update the scroll group with which this
-   *       `scrollGroupScrRef` is synced
-   */
-  export function useScrollGroupScrRef(
-    scrollGroupScrRef: ScrollGroupScrRef | undefined,
-    setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
-  ): [
-    scrRef: SerializedVerseRef,
-    setScrRef: (newScrRef: SerializedVerseRef) => void,
-    scrollGroupId: ScrollGroupId | undefined,
-    setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
-  ];
-  export default useScrollGroupScrRef;
-}
-declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
-  import { PlatformError } from 'platform-bible-utils';
-  import {
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { SettingDataTypes } from 'shared/services/settings.service-model';
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
-  /**
-   * Gets, sets and resets a setting on the PAPI. Also notifies subscribers when the setting changes
-   * and gets updated when the setting is changed by others.
-   *
-   * @param key The string id that is used to identify the setting that will be stored on the PAPI
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param defaultState The initial value to return while first awaiting the setting value
-   * @param subscriberOptions Various options to adjust how the subscriber emits updates
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
-   *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
-   *   until `dataProviderSource` or `selector` changes.
-   * @returns `[setting, setSetting, resetSetting]`
-   *
-   *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
-   *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
-   *   - `setSetting`: Function that updates the setting to a new value
-   *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
-   *
-   * @throws When subscription callback function is called with an update that has an unexpected
-   *   message type
-   */
-  export const useSetting: <SettingName extends SettingNames>(
-    key: SettingName,
-    defaultState: SettingTypes[SettingName],
-    subscriberOptions?: DataProviderSubscriberOptions,
-  ) => [
-    setting: SettingTypes[SettingName] | PlatformError,
-    setSetting: (
-      newData: SettingTypes[SettingName],
-    ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
-    resetSetting: () => void,
-    isLoading: boolean,
-  ];
-  export default useSetting;
-}
-declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
-  import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
-  /**
-   * Gets a project data provider with specified provider name
-   *
-   * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
-   *   type for the returned project data provider will have the project data provider interface type
-   *   associated with this `projectInterface`. If the project does not implement this
-   *   `projectInterface` (according to its metadata), an error will be thrown.
-   * @param projectDataProviderSource String name of the id of the project to get OR
-   *   projectDataProvider (result of useProjectDataProvider, if you want this hook to just return the
-   *   data provider again)
-   * @param pdpFactoryId Optional ID of the PDP factory from which to get the project data provider if
-   *   the PDP factory supports this project id and project interface. If not provided, then look in
-   *   all available PDP factories for the given project ID.
-   * @returns `undefined` if the Project Data Provider has not been retrieved, the requested Project
-   *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
-   *   Data Provider is disposed
-   */
-  export const useProjectDataProvider: <ProjectInterface extends ProjectInterfaces>(
-    projectInterface: ProjectInterface,
-    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
-    pdpFactoryId?: string,
-  ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
-  export default useProjectDataProvider;
-}
-declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
-  import { PlatformError } from 'platform-bible-utils';
-  import {
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import {
-    ProjectDataProviderInterfaces,
-    ProjectInterfaceDataTypes,
-    ProjectInterfaces,
-  } from 'papi-shared-types';
-  /**
-   * React hook to use data from a Project Data Provider
-   *
-   * @example `useProjectData('platformScripture.USFM_Verse', 'project id').VerseUSFM(...);`
-   */
-  type UseProjectDataHook = {
-    <ProjectInterface extends ProjectInterfaces>(
-      projectInterface: ProjectInterface,
-      projectDataProviderSource:
-        | string
-        | ProjectDataProviderInterfaces[ProjectInterface]
-        | undefined,
-    ): {
-      [TDataType in keyof ProjectInterfaceDataTypes[ProjectInterface]]: (
-        // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
-        selector: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['selector'],
-        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        defaultValue: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
-        subscriberOptions?: DataProviderSubscriberOptions,
-      ) => [
-        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'] | PlatformError,
-        (
-          | ((
-              // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
-              newData: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['setData'],
-            ) => Promise<
-              DataProviderUpdateInstructions<ProjectInterfaceDataTypes[ProjectInterface]>
-            >)
-          | undefined
-        ),
-        boolean,
-      ];
-    };
-  };
-  /**
-   * ```typescript
-   * useProjectData<ProjectInterface extends ProjectInterfaces>(
-   *     projectInterface: ProjectInterface,
-   *     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
-   *   ).DataType(
-   *       selector: ProjectInterfaceDataTypes[ProjectInterface][DataType]['selector'],
-   *       defaultValue: ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
-   *       subscriberOptions?: DataProviderSubscriberOptions,
-   *     ) => [
-   *       ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'] | PlatformError,
-   *       (
-   *         | ((
-   *             newData: ProjectInterfaceDataTypes[ProjectInterface][DataType]['setData'],
-   *           ) => Promise<DataProviderUpdateInstructions<ProjectInterfaceDataTypes[ProjectInterface]>>)
-   *         | undefined
-   *       ),
-   *       boolean,
-   *     ]
-   * ```
-   *
-   * React hook to use data from a Project Data Provider. Subscribes to run a callback on a Project
-   * Data Provider's data with specified selector on the specified data type that the Project Data
-   * Provider serves according to its supported `projectInterface`s.
-   *
-   * Usage: Specify the `projectInterface`, the project id, and the data type on the Project Data
-   * Provider with `useProjectData('<projectInterface>', '<project_id>').<data_type>` and use like any
-   * other React hook.
-   *
-   * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `platformScripture.USFM_Verse`
-   * project with projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
-   *
-   * ```typescript
-   * const [verse, setVerse, verseIsLoading] = useProjectData(
-   *   'platformScripture.USFM_Verse',
-   *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
-   * ).VerseUSFM(
-   *   useMemo(() =>
-   *    { book: 'JHN', chapterNum: 11, verseNum: 35, versificationStr: ScrVers.English }, []),
-   *   'Loading verse ',
-   * );
-   * ```
-   *
-   * _＠param_ `projectInterface` `projectInterface` that the project to load must support. The
-   * TypeScript type for the returned project data provider will have the project data provider
-   * interface type associated with this `projectInterface`. If the project does not implement this
-   * `projectInterface` (according to its metadata), an error will be thrown.
-   *
-   * _＠param_ `projectDataProviderSource` String name of the id of the project to get OR
-   * projectDataProvider (result of useProjectDataProvider if you want to consolidate and only get the
-   * Project Data Provider once)
-   *
-   * _＠param_ `selector` tells the provider what data this listener is listening for
-   *
-   * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   * updated every render
-   *
-   * _＠param_ `defaultValue` the initial value to return while first awaiting the data
-   *
-   * _＠param_ `subscriberOptions` various options to adjust how the subscriber emits updates
-   *
-   * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   * to re-run with its new value. This means that `subscriberOptions` will be passed to the Project
-   * Data Provider's `subscribe<data_type>` method as soon as possible and will not be updated again
-   * until `projectDataProviderSource` or `selector` changes.
-   *
-   * _＠returns_ `[data, setData, isLoading]`
-   *
-   * - `data`: the current value for the data from the Project Data Provider with the specified data
-   *   type and selector, either the `defaultValue`, the resolved data, or a {@link PlatformError} if
-   *   the project data provider throws an error. You can call {@link isPlatformError} on this value to
-   *   check if it is an error.
-   * - `setData`: asynchronous function to request that the Project Data Provider update the data at
-   *   this data type and selector. Returns `true` if successful. Note that this function does not
-   *   update the data. The Project Data Provider sends out an update to this subscription if it
-   *   successfully updates data.
-   * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
-   *   provider
-   */
-  export const useProjectData: UseProjectDataHook;
-  export default useProjectData;
-}
-declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
-  import { PlatformError } from 'platform-bible-utils';
-  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
-  import {
-    IBaseProjectDataProvider,
-    ProjectSettingNames,
-    ProjectSettingTypes,
-  } from 'papi-shared-types';
-  /**
-   * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
-   * subscribers when the project setting changes and gets updated when the project setting is changed
-   * by others.
-   *
-   * @param projectDataProviderSource `projectDataProviderSource` String name of the id of the project
-   *   to get OR projectDataProvider (result of `useProjectDataProvider` if you want to consolidate
-   *   and only get the Project Data Provider once). If you provide a project id, this hook will use a
-   *   PDP for this project that supports the `platform.base` `projectInterface`.
-   *
-   *   Note: If you provide a projectDataProvider directly, it must be an
-   *   {@link IBaseProjectDataProvider}
-   * @param key The string id of the project setting to interact with
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param defaultValue The initial value to return while first awaiting the project setting value
-   * @param subscriberOptions Various options to adjust how the subscriber emits updates
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
-   *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
-   *   until `dataProviderSource` or `selector` changes.
-   * @returns `[setting, setSetting, resetSetting]`
-   *
-   *   - `setting`: the current value for the project setting from the Project Data Provider with the
-   *       specified key, either the `defaultValue`, the resolved setting value, or a
-   *       {@link PlatformError} if the Project Data Provider throws an error. You can call
-   *       {@link isPlatformError} on this value to check if it is an error.
-   *   - `setSetting`: asynchronous function to request that the Project Data Provider update the project
-   *       setting with the specified key. Returns `true` if successful. Note that this function does
-   *       not update the data. The Project Data Provider sends out an update to this subscription if
-   *       it successfully updates data.
-   *   - `resetSetting`: asynchronous function to request that the Project Data Provider reset the project
-   *       setting
-   *   - `isLoading`: whether the setting value is awaiting retrieval from the Project Data Provider
-   *
-   * @throws When subscription callback function is called with an update that has an unexpected
-   *   message type
-   */
-  export const useProjectSetting: <ProjectSettingName extends ProjectSettingNames>(
-    projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,
-    key: ProjectSettingName,
-    defaultValue: ProjectSettingTypes[ProjectSettingName],
-    subscriberOptions?: DataProviderSubscriberOptions,
-  ) => [
-    setting: ProjectSettingTypes[ProjectSettingName] | PlatformError,
-    setSetting: ((newSetting: ProjectSettingTypes[ProjectSettingName]) => void) | undefined,
-    resetSetting: (() => void) | undefined,
-    isLoading: boolean,
-  ];
-  export default useProjectSetting;
-}
-declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
-  import { DataProviderNames, DataProviders } from 'papi-shared-types';
-  /**
-   * Gets an array of data providers based on an array of input sources
-   *
-   * @type `T` - The types of data providers to return. Use `IDataProvider<TDataProviderDataTypes>`,
-   *   specifying your own types, or provide a custom data provider type for each item in the array.
-   *   Note that if you provide more than one data type, each item in the returned array will be
-   *   considered to be any of those types. For example, if you call `useDataProviderMulti<Type1,
-   *   Type2>`, all items in the returned array will be considered to be of type `Type1 | Type2 |
-   *   undefined`. Although you can determine the actual type based on the array index, TypeScript
-   *   will not know, so you will need to type assert the array items for later type checking to
-   *   work.
-   * @param dataProviderSources Array containing string names of the data providers to get OR data
-   *   providers themselves (i.e., the results of useDataProvider/useDataProviderMulti) if you want
-   *   this hook to return the data providers again. It is fine to have a mix of strings and data
-   *   providers in the array.
-   *
-   *   WARNING: THE ARRAY MUST BE STABLE - const or wrapped in useState, useMemo, etc. It must not be
-   *   updated every render.
-   * @returns An array of data providers that correspond by index to the values in
-   *   `dataProviderSources`. Each item in the array will be (a) undefined if the data provider has
-   *   not been retrieved or has been disposed, or (b) a data provider if it has been retrieved and is
-   *   not disposed.
-   */
-  export function useDataProviderMulti<EachDataProviderName extends DataProviderNames[]>(
-    dataProviderSources: (
-      | EachDataProviderName[number]
-      | DataProviders[EachDataProviderName[number]]
-      | undefined
-    )[],
-  ): (DataProviders[EachDataProviderName[number]] | undefined)[];
-  export default useDataProviderMulti;
-}
-declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
-  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
-  import { LocalizationData } from 'shared/services/localization.service-model';
-  import { LocalizeKey } from 'platform-bible-utils';
-  /**
-   * Gets localizations on the papi.
-   *
-   * @param localizationKeys Array of keys to get localizations of
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param localizationLocales Array of localization languages to look up the keys in
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param subscriberOptions Various options to adjust how the subscriber emits updates
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that `subscriberOptions` will be passed to the data
-   *   provider's `subscribe<data_type>` method as soon as possible and will not be updated again
-   *   until `dataProviderSource` or `selector` changes.
-   * @returns `[localizedStrings]`
-   *
-   *   - `localizedStrings`: The current state of the localizations, either `defaultState` or the stored
-   *       state on the papi, if any
-   */
-  export const useLocalizedStrings: (
-    localizationKeys: LocalizeKey[],
-    localizationLocales?: string[],
-    subscriberOptions?: DataProviderSubscriberOptions,
-  ) => [localizedStrings: LocalizationData, isLoading: boolean];
-  export default useLocalizedStrings;
-}
-declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
-  import { NetworkObject } from 'shared/models/network-object.model';
-  import { WebViewId } from 'shared/models/web-view.model';
-  import { WebViewControllerTypes, WebViewControllers } from 'papi-shared-types';
-  /**
-   * Gets a Web View Controller with specified provider name
-   *
-   * @param webViewType `webViewType` that the web view controller must support. The TypeScript type
-   *   for the returned web view controller will have the web view controller interface type
-   *   associated with this `webViewType`. If the web view controller does not implement this
-   *   `webViewType` (according to its metadata), an error will be thrown.
-   * @param webViewId Id of the web view for which to get the web view controller OR
-   *   `webViewController` (result of `useWebViewController`, if you want this hook to just return the
-   *   controller again)
-   * @param pdpFactoryId Optional ID of the PDP factory from which to get the Web View Controller if
-   *   the PDP factory supports this project id and project interface. If not provided, then look in
-   *   all available PDP factories for the given project ID.
-   * @returns `undefined` if the Web View Controller has not been retrieved, the requested Web View
-   *   Controller if it has been retrieved and is not disposed, and undefined again if the Web View
-   *   Controller is disposed
-   */
-  export const useWebViewController: <WebViewType extends WebViewControllerTypes>(
-    webViewType: WebViewType,
-    webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,
-  ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;
-  export default useWebViewController;
-}
-declare module 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook' {
-  import { SerializedVerseRef } from '@sillsdev/scripture';
-  /**
-   * Custom hook that provides synchronized recent scripture references across all components. This
-   * hook automatically syncs with localStorage changes from other components.
-   */
-  export default function useRecentScriptureRefs(): {
-    recentScriptureRefs: SerializedVerseRef[];
-    addRecentScriptureRef: (newRef: SerializedVerseRef) => void;
-  };
-}
-declare module 'renderer/hooks/papi-hooks/index' {
-  export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
-  export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
-  export { default as useScrollGroupScrRef } from 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
-  export { default as useSetting } from 'renderer/hooks/papi-hooks/use-setting.hook';
-  export { default as useProjectData } from 'renderer/hooks/papi-hooks/use-project-data.hook';
-  export { default as useProjectDataProvider } from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
-  export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
-  export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
-  export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
-  export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
-  export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
-  export { default as useRecentScriptureRefs } from 'renderer/hooks/papi-hooks/use-recent-scripture-refs.hook';
-}
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
+}
+declare module 'renderer/services/overlays/overlay-menu-converter' {
+  /**
+   * Converts menu data service contributions (SingleColumnMenu) into the overlay service's
+   * ContextMenuItem[] format for rendering context menus.
+   */
+  import type { Localized, SingleColumnMenu } from 'platform-bible-utils';
+  import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
+  /**
+   * Converts a localized SingleColumnMenu from the menu data service into an array of
+   * OverlayContextMenuItem objects suitable for the overlay service's context menu rendering.
+   *
+   * @param menu The localized SingleColumnMenu to convert
+   * @returns An array of OverlayContextMenuItem objects
+   */
+  export function convertContributionToContextMenuItems(
+    menu: Localized<SingleColumnMenu>,
+  ): OverlayContextMenuItem[];
+}
+declare module 'renderer/services/overlays/overlay-validation' {
+  import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
+  import {
+    CommandPaletteRequest,
+    PopoverRequest,
+  } from 'renderer/services/overlays/overlay.service-model';
+  /**
+   * Validates an array of context menu items' count, nesting depth, and label lengths.
+   *
+   * @param items The context menu items to validate
+   * @throws PlatformError with code INVALID_ARGUMENT if validation fails
+   */
+  export function validateContextMenuItems(items: OverlayContextMenuItem[]): void;
+  /**
+   * Recursively validates menu items at a given depth.
+   *
+   * @param items The menu items to validate
+   * @param depth The current nesting depth (0-based)
+   * @throws PlatformError with code INVALID_ARGUMENT if validation fails
+   */
+  export function validateMenuItems(items: OverlayContextMenuItem[], depth: number): void;
+  /**
+   * Validates a popover request's anchor, content, and options.
+   *
+   * @param request The popover request to validate
+   * @throws PlatformError with code INVALID_ARGUMENT if validation fails
+   */
+  export function validatePopoverRequest(request: PopoverRequest): void;
+  /**
+   * Validates a command palette request's items, anchor, and options.
+   *
+   * @param request The command palette request to validate
+   * @throws PlatformError with code INVALID_ARGUMENT if validation fails
+   */
+  export function validateCommandPaletteRequest(request: CommandPaletteRequest): void;
+}
+declare module 'renderer/services/overlays/overlay-coordinates' {
+  /**
+   * Coordinate translation utilities for the overlay service. Translates iframe-relative coordinates
+   * to document-relative coordinates, clamps positions to the viewport, and checks WebView
+   * visibility.
+   */
+  /**
+   * Finds a WebView iframe element by its data-web-view-id attribute.
+   *
+   * @param webViewId The webViewId to search for
+   * @returns The iframe element, or null if not found
+   */
+  export function getWebViewIframe(webViewId: string): HTMLIFrameElement | null;
+  /**
+   * Translates iframe-relative coordinates to document-relative coordinates using
+   * getBoundingClientRect of the WebView iframe.
+   *
+   * @param webViewId The webViewId of the iframe
+   * @param position The iframe-relative position
+   * @returns The document-relative position
+   */
+  export function translateCoordinates(
+    webViewId: string,
+    position: {
+      x: number;
+      y: number;
+    },
+  ): {
+    x: number;
+    y: number;
+  };
+  /**
+   * Clamps a position to the visible viewport with optional padding.
+   *
+   * @param position The position to clamp
+   * @param padding Optional padding from the viewport edges (default 0)
+   * @returns The clamped position
+   */
+  export function clampToViewport(
+    position: {
+      x: number;
+      y: number;
+    },
+    padding?: number,
+  ): {
+    x: number;
+    y: number;
+  };
+  /**
+   * Checks whether a WebView iframe is currently visible in the viewport (i.e., it is in an active
+   * tab and has non-zero dimensions).
+   *
+   * @param webViewId The webViewId to check
+   * @returns True if the iframe is found and visible, false otherwise
+   */
+  export function isWebViewVisible(webViewId: string): boolean;
+  /**
+   * Checks whether a document-relative position is currently within the visible viewport. Used to
+   * detect when a popover anchor has scrolled out of view.
+   *
+   * @param position The document-relative position to check
+   * @param margin Extra margin outside the viewport to tolerate (default 50px)
+   * @returns True if the position is within the viewport (plus margin)
+   */
+  export function isPositionInViewport(
+    position: {
+      x: number;
+      y: number;
+    },
+    margin?: number,
+  ): boolean;
+}
+declare module 'renderer/services/overlays/overlay.service-host' {
+  import type { ReactElement } from 'react';
+  import { IOverlayService } from 'renderer/services/overlays/overlay.service-model';
+  /** Resets debounce tracking state. Exported for use in tests only. @internal */
+  export function resetDebounceState(): void;
+  /**
+   * Shows a modal dialog overlay with any dialog component. Called internally by the dialog service
+   * host. Not exposed on PAPI.
+   *
+   * @param Component The dialog React component to render inside the modal shell
+   * @param props Pre-built props for the component (DialogProps + options, already localized)
+   * @param webViewId The WebView that initiated the request. Defaults to 'dialog-service'.
+   * @returns The dialog result, or undefined if dismissed
+   * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
+   *   debounce cooldown
+   * @internal
+   */
+  export function showModalDialogOverlay<TReturn>(
+    Component: (props: Record<string, unknown>) => ReactElement,
+    props: Record<string, unknown>,
+    onOverlayCreated?: (overlayId: string) => void,
+    webViewId?: string,
+  ): Promise<TReturn | undefined>;
+  /** The overlay service instance exposed on papi */
+  export const overlayService: IOverlayService;
+  /** Initialize the overlay service. Called during renderer startup. */
+  export function startOverlayService(): Promise<void>;
 }
 declare module 'shared/services/theme-data.service-model' {
   import {
@@ -9811,6 +10503,7 @@ declare module '@papi/frontend' {
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
   import { IWindowService } from 'shared/services/window.service-model';
+  import { IOverlayService } from 'renderer/services/overlays/overlay.service-model';
   import { IThemeServiceLocal } from 'shared/services/theme.service-model';
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { PapiRendererXMLHttpRequest } from 'renderer/services/renderer-xml-http-request.service';
@@ -9968,6 +10661,22 @@ declare module '@papi/frontend' {
      * Service that allows to interact with the main application window
      */
     window: IWindowService;
+    /**
+     *
+     * Service for showing overlays (context menus, popovers, command palettes) that render outside
+     * iframe boundaries in the renderer's top-level document. Renderer-only service.
+     *
+     * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
+     * iframe bounds. This service accepts overlay requests from WebViews, translates their
+     * iframe-relative coordinates to document-level coordinates, and renders the overlay in the
+     * renderer's React tree. Each method returns a promise that resolves when the user interacts with
+     * the overlay or it is dismissed.
+     *
+     * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
+     * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
+     * one and rejects its promise with a PlatformError with code ABORTED.
+     */
+    overlays: IOverlayService;
   };
   export default papi;
   /** This is just an alias for internet.fetch */
@@ -10121,5 +10830,21 @@ declare module '@papi/frontend' {
    * Service that allows to interact with the main application window
    */
   export const window: IWindowService;
+  /**
+   *
+   * Service for showing overlays (context menus, popovers, command palettes) that render outside
+   * iframe boundaries in the renderer's top-level document. Renderer-only service.
+   *
+   * Extensions in sandboxed WebView iframes cannot render UI above other content or outside their
+   * iframe bounds. This service accepts overlay requests from WebViews, translates their
+   * iframe-relative coordinates to document-level coordinates, and renders the overlay in the
+   * renderer's React tree. Each method returns a promise that resolves when the user interacts with
+   * the overlay or it is dismissed.
+   *
+   * Only one overlay of each type (context menu, popover, command palette) can be active per WebView
+   * at a time. Requesting a new overlay of the same type from the same WebView replaces the previous
+   * one and rejects its promise with a PlatformError with code ABORTED.
+   */
+  export const overlays: IOverlayService;
   export type Papi = typeof papi;
 }

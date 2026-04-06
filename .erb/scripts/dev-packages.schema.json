@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DevPackagesConfig",
+  "description": "Configuration for development repositories to link into this repo via yalc. The DevRepo and DevPackage types in dev-package-utils.ts mirror this schema — if you change one, update the other.",
+  "type": "object",
+  "required": ["repos"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "repos": {
+      "type": "array",
+      "description": "List of development repositories to link into this repo via yalc.",
+      "items": {
+        "$ref": "#/definitions/DevRepo"
+      }
+    }
+  },
+  "definitions": {
+    "DevRepo": {
+      "type": "object",
+      "description": "A development repository containing one or more packages that can be linked into this repo via yalc.",
+      "required": ["folder", "cloneUrl", "revision", "devPackages"],
+      "additionalProperties": false,
+      "properties": {
+        "folder": {
+          "type": "string",
+          "description": "The directory name of the repo, used as both the clone destination under dev-packages/ and the sibling-directory fallback name."
+        },
+        "cloneUrl": {
+          "type": "string",
+          "description": "The git clone URL for the repo, used when the repo is not already present locally."
+        },
+        "revision": {
+          "type": "string",
+          "description": "The git revision (branch name, tag, or commit hash) to check out before building."
+        },
+        "devPackages": {
+          "type": "array",
+          "description": "The packages within this repo to publish and link.",
+          "items": {
+            "$ref": "#/definitions/DevPackage"
+          }
+        }
+      }
+    },
+    "DevPackage": {
+      "type": "object",
+      "description": "A package within a dev repo that can be published locally via yalc and linked into this repo.",
+      "required": ["devpubTarget", "repoLinkScript"],
+      "additionalProperties": false,
+      "properties": {
+        "devpubTarget": {
+          "type": "string",
+          "description": "The nx project name passed to `nx devpub <target>` to publish this package."
+        },
+        "repoLinkScript": {
+          "type": "string",
+          "description": "The npm script prefix in this repo used to link/unlink the package, e.g. `editor` maps to `editor:link` and `editor:unlink`."
+        }
+      }
+    }
+  }
+}

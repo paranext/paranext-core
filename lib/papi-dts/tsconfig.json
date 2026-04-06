@@ -1,7 +1,6 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "baseUrl": "../../src",
     "module": "ESNext",
     "declaration": true,
     "emitDeclarationOnly": true,

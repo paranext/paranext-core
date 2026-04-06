@@ -7,6 +7,7 @@ test('Subset checking works on simple types', () => {
   expect(isSubset(1, 2)).toBeFalsy();
   expect(isSubset(true, true)).toBeTruthy();
   expect(isSubset(true, false)).toBeFalsy();
+  // Intentionally testing null inputs to verify the subset check handles them correctly
   // eslint-disable-next-line no-null/no-null
   expect(isSubset(null, null)).toBeTruthy();
   expect(isSubset(undefined, undefined)).toBeTruthy();

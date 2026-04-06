@@ -1,6 +1,7 @@
 import * as networkService from '@shared/services/network.service';
 import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service-model';
 import { serializeRequestType } from '@shared/utils/util';
+import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 
 let initializationPromise: Promise<void>;
 async function initialize(): Promise<void> {
@@ -13,9 +14,16 @@ async function initialize(): Promise<void> {
 }
 
 export const dialogService: DialogService = {
-  showDialog: async (...args) => {
+  showDialog: async <DialogTabType extends DialogTabTypes>(
+    dialogType: DialogTabType,
+    options?: DialogTypes[DialogTabType]['options'],
+  ): Promise<DialogTypes[DialogTabType]['responseType'] | undefined> => {
     await initialize();
-    return networkService.request(serializeRequestType(CATEGORY_DIALOG, 'showDialog'), ...args);
+    return networkService.request(
+      serializeRequestType(CATEGORY_DIALOG, 'showDialog'),
+      dialogType,
+      options,
+    );
   },
   selectProject: async (...args) => {
     await initialize();

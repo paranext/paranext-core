@@ -1,7 +1,14 @@
 import { ABOUT_DIALOG } from '@renderer/components/dialogs/about-dialog.component';
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
 import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
+import { DIALOGS } from '@renderer/components/dialogs/index';
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
+import { showModalDialogOverlay } from '@renderer/services/overlays/overlay.service-host';
+import {
+  rejectAndRemoveOverlay,
+  resolveAndRemoveOverlay,
+} from '@renderer/services/overlays/overlay-store';
+import { ReactElement } from 'react';
 import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-project.dialog';
 import * as webViewService from '@renderer/services/web-view.service-host';
 import {
@@ -19,6 +26,7 @@ import {
   isLocalizeKey,
   LocalizeKey,
   newGuid,
+  newPlatformError,
   serialize,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
@@ -158,25 +166,27 @@ async function localizeDialogOptions<T extends DialogTypes[keyof DialogTypes]['o
 ) {
   if (!options) return options;
 
-  // Get all the LocalizeKey values of props that can be localized
-  // Filter doesn't realize we are getting rid of undefined and taking only LocalizeKeys
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const propValuesToLocalize = DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS.map(
-    (localizableKey) => options[localizableKey],
-  ).filter((optionPropValue) => optionPropValue && isLocalizeKey(optionPropValue)) as LocalizeKey[];
-
-  // Get localized strings for the LocalizeKey prop values
-  const localizedPropValues = await localizationService.getLocalizedStrings({
-    localizeKeys: propValuesToLocalize,
+  // Collect LocalizeKey values with their property names
+  const keysToLocalize: { propName: string; key: LocalizeKey }[] = [];
+  DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS.forEach((propName) => {
+    // Access dynamically since okLabel/cancelLabel are on subtypes, not DialogOptions base
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const value = (options as Record<string, unknown>)[propName];
+    if (value && typeof value === 'string' && isLocalizeKey(value)) {
+      keysToLocalize.push({ propName, key: value });
+    }
   });
 
-  // Reconnect the localized strings to the prop names via the LocalizeKeys
-  const localizedProps: Partial<T> = {};
-  Object.entries(localizedPropValues).forEach(([localizeKey, localizedString]) => {
-    const optionPropName = DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS.find(
-      (localizableKey) => options[localizableKey] === localizeKey,
-    );
-    if (optionPropName) localizedProps[optionPropName] = localizedString;
+  if (keysToLocalize.length === 0) return options;
+
+  const localizedPropValues = await localizationService.getLocalizedStrings({
+    localizeKeys: keysToLocalize.map((entry) => entry.key),
+  });
+
+  const localizedProps: Record<string, unknown> = {};
+  keysToLocalize.forEach(({ propName, key }) => {
+    const localized = localizedPropValues[key];
+    if (localized) localizedProps[propName] = localized;
   });
 
   return { ...options, ...localizedProps };
@@ -189,9 +199,66 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 ): Promise<DialogTypes[DialogTabType]['responseType'] | undefined> {
   await initialize();
 
-  const optionsLocalized = await localizeDialogOptions(options);
+  const localizedOptions = await localizeDialogOptions(options);
 
-  // Set up a DialogRequest
+  // Route based on modal flag
+  if (localizedOptions?.isModal) {
+    // Look up the DialogDefinition for this dialog type
+    const dialogDef = DIALOGS[dialogType];
+    if (!dialogDef) {
+      throw new Error(`No DialogDefinition found for dialog type: ${dialogType}`);
+    }
+
+    // Track the overlay ID so submitDialog/cancelDialog can dismiss the overlay.
+    // The ID is assigned synchronously by showModalDialogOverlay before addOverlay.
+    let modalOverlayId: string | undefined;
+
+    const dialogProps = {
+      ...localizedOptions,
+      isDialog: true as const,
+      role: dialogDef.dialogRole ?? 'dialog',
+      submitDialog: (data: DialogTypes[DialogTabType]['responseType']) => {
+        if (!modalOverlayId) {
+          logger.error('submitDialog called before modal overlay ID was assigned');
+          return;
+        }
+        resolveAndRemoveOverlay(modalOverlayId, 'modalDialog', data);
+      },
+      cancelDialog: () => {
+        if (!modalOverlayId) {
+          logger.error('cancelDialog called before modal overlay ID was assigned');
+          return;
+        }
+        resolveAndRemoveOverlay(modalOverlayId, 'modalDialog', undefined);
+      },
+      rejectDialog: (errorMessage: string) => {
+        logger.error(`Modal dialog rejected: ${errorMessage}`);
+        if (!modalOverlayId) {
+          logger.error('rejectDialog called before modal overlay ID was assigned');
+          return;
+        }
+        rejectAndRemoveOverlay(modalOverlayId, newPlatformError(errorMessage));
+      },
+    };
+
+    // showModalDialogOverlay returns a promise that resolves when the overlay is dismissed
+    // (via submitDialog, cancelDialog, Escape, or click-outside). The onOverlayCreated callback
+    // captures the overlay ID synchronously before the overlay is added to the store.
+    return showModalDialogOverlay(
+      // Dialog component type must be widened to generic props; specific dialog types can't unify without this cast
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      dialogDef.Component as unknown as (props: Record<string, unknown>) => ReactElement,
+      // Dialog props must be widened to match the generic component signature above
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      dialogProps as unknown as Record<string, unknown>,
+      (overlayId) => {
+        modalOverlayId = overlayId;
+      },
+      'dialog-service',
+    );
+  }
+
+  // Non-modal path: create rc-dock floating tab (existing behavior)
   let dialogId = newGuid();
   // Dumbest way to make sure the guid is unique
   while (dialogRequests.has(dialogId)) dialogId = newGuid();
@@ -215,7 +282,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
       {
         id: dialogId,
         tabType: dialogType,
-        data: { ...optionsLocalized, isDialog: true },
+        data: { ...(localizedOptions ?? {}), isDialog: true },
       },
       {
         type: 'float',
@@ -309,6 +376,10 @@ export async function startDialogService(): Promise<void> {
                   excludeProjectIds: { type: 'array', items: { type: 'string' } },
                   selectedProjectIds: { type: 'array', items: { type: 'string' } },
                   selectedBookIds: { type: 'array', items: { type: 'string' } },
+                  okLabel: { type: 'string' },
+                  cancelLabel: { type: 'string' },
+                  isDestructive: { type: 'boolean' },
+                  isModal: { type: 'boolean' },
                 },
               },
             },

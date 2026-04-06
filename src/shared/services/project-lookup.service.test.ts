@@ -1,3 +1,4 @@
+// Tests cast mock objects to interfaces and define multiple helper classes in a single file for conciseness.
 /* eslint-disable no-type-assertion/no-type-assertion, max-classes-per-file */
 
 import { vi } from 'vitest';
@@ -49,11 +50,11 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+  // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
   networkObjectService.get.mockImplementation(() => {
     throw new Error('networkObjectService.get has no test implementation');
   });
-  // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+  // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
   networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() => {
     throw new Error(
       'networkObjectStatusService.getAllNetworkObjectDetails has no test implementation',
@@ -155,7 +156,7 @@ describe('Getting project metadata with Layering PDPs', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectService.get.mockImplementation(
       (networkObjectId: string) => testPDPFs[networkObjectId],
     );
@@ -163,7 +164,7 @@ describe('Getting project metadata with Layering PDPs', () => {
 
   it('should successfully get just the base metadata if that is the only pdpf available', async () => {
     const pdpfIds = ['base'];
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
       getTestPDPFInfoSubset(pdpfIds),
     );
@@ -194,7 +195,7 @@ describe('Getting project metadata with Layering PDPs', () => {
 
   it('should successfully get no projects if only a layering pdpf is available', async () => {
     const pdpfIds = ['layer-1'];
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
       getTestPDPFInfoSubset(pdpfIds),
     );
@@ -206,7 +207,7 @@ describe('Getting project metadata with Layering PDPs', () => {
 
   it('should successfully get the base plus one layering metadata if there is just one layering pdpfs available', async () => {
     const pdpfIds = ['base', 'layer-1'];
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
       getTestPDPFInfoSubset(pdpfIds),
     );
@@ -237,7 +238,7 @@ describe('Getting project metadata with Layering PDPs', () => {
 
   it('should not cause an infinite loop of calling each other but should successfully get base and layering metadata with multiple layering pdpfs (as far as we can control)', async () => {
     const pdpfIds = ['base', 'layer-1', 'layer-2'];
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
       getTestPDPFInfoSubset(pdpfIds),
     );
@@ -268,7 +269,7 @@ describe('Getting project metadata with Layering PDPs', () => {
 
   it('should successfully get base and layering metadata with duplicate layering pdpfs', async () => {
     const pdpfIds = ['base', 'layer-1', 'layer-2', 'layer-3'];
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
       getTestPDPFInfoSubset(pdpfIds),
     );
@@ -299,7 +300,7 @@ describe('Getting project metadata with Layering PDPs', () => {
 
   it('should not get interfaces for non-matching layering pdpfs', async () => {
     const pdpfIds = ['base', 'layer-1', 'non-layer', 'meta-layer-3'];
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
       getTestPDPFInfoSubset(pdpfIds),
     );
@@ -330,7 +331,7 @@ describe('Getting project metadata with Layering PDPs', () => {
 
   it('should successfully get metadata for layering pdpfs that layer over layering pdpfs', async () => {
     const pdpfIds = ['base', 'layer-1', 'layer-3', 'meta-layer-3'];
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
       getTestPDPFInfoSubset(pdpfIds),
     );
@@ -449,9 +450,9 @@ describe('Metadata generation:', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() => testPDPFInfo);
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectService.get.mockImplementation(
       (networkObjectId: string) => testPDPFs[networkObjectId],
     );
@@ -1299,12 +1300,12 @@ describe('Nested retry skip behavior', () => {
     // After the top-level retry wait, the base PDPF has appeared: the retry's top-level call
     // sees both (call 3), and the layering PDPF's nested call finds the base (call 4) → success.
     const basePdpfAppearsAfterCall = 2;
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() => {
       getAllCallCount += 1;
       return getAllCallCount <= basePdpfAppearsAfterCall ? layeringOnlyPdpfInfo : fullPdpfInfo;
     });
-    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
     networkObjectService.get.mockImplementation(
       (networkObjectId: string) => testPDPFs[networkObjectId],
     );

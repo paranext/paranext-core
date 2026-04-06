@@ -43,6 +43,7 @@ function createMockDb(): MockDb {
 function getLastDb(): MockDb {
   const last = MockDatabaseSync.mock.results.at(-1);
   if (!last || last.type !== 'return') throw new Error('No DatabaseSync instance was created');
+  // Cast mock result to MockDb type for test assertions
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return last.value as MockDb;
 }
@@ -51,6 +52,7 @@ function getLastDb(): MockDb {
 function getLastStmt(db: MockDb = getLastDb()): MockStatement {
   const last = db.prepare.mock.results.at(-1);
   if (!last || last.type !== 'return') throw new Error('No statement was prepared');
+  // Cast mock result to MockStatement type for test assertions
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return last.value as MockStatement;
 }
@@ -65,6 +67,7 @@ function send(message: unknown): WorkerResponse {
   // Cast to `never` so arbitrary test messages bypass the WorkerMessage type constraint
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   handler(message as never);
+  // Cast mock.lastCall to typed array to extract the WorkerResponse parameter
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const [response] = mockPort.postMessage.mock.lastCall as [WorkerResponse];
   return response;
@@ -81,9 +84,11 @@ beforeEach(() => {
   mockPort = { postMessage: vi.fn() };
   databases = new Map();
   handler = createMessageHandler(
+    // Cast empty Map to DatabaseSync type for dependency injection
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     databases as Map<string, import('node:sqlite').DatabaseSync>,
     { postMessage: mockPort.postMessage },
+    // Cast mock constructor to DbFactory type for dependency injection
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     MockDatabaseSync as unknown as DbFactory,
   );
@@ -383,10 +388,10 @@ describe('run', () => {
       type: 'run',
       nonce: 'nonce1',
       query: 'INSERT INTO t VALUES (?, ?)',
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      args: ['val', undefined] as any,
+      args: ['val', undefined],
     });
 
+    // Testing that undefined values are sanitized to null in the database layer
     // eslint-disable-next-line no-null/no-null
     expect(getLastStmt(db).run).toHaveBeenCalledWith('val', null);
   });
@@ -418,6 +423,7 @@ describe('run', () => {
       args: [{ name: 'Bob', status: undefined, id: 1 }],
     });
 
+    // Testing that undefined values in named parameters are sanitized to null
     // eslint-disable-next-line no-null/no-null
     expect(getLastStmt(db).run).toHaveBeenCalledWith({ name: 'Bob', status: null, id: 1 });
   });
@@ -446,10 +452,10 @@ describe('run', () => {
       type: 'run',
       nonce: 'nonce1',
       query: 'UPDATE t SET flag=:flag, val1=?, val2=? WHERE id=:id',
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      args: [{ flag: true, id: 5 }, undefined, 'data'] as any,
+      args: [{ flag: true, id: 5 }, undefined, 'data'],
     });
 
+    // Testing that undefined in mixed parameter types is sanitized to null
     // eslint-disable-next-line no-null/no-null
     expect(getLastStmt(db).run).toHaveBeenCalledWith({ flag: true, id: 5 }, null, 'data');
   });
@@ -528,10 +534,10 @@ describe('select', () => {
       type: 'select',
       nonce: 'nonce1',
       query: 'SELECT * FROM items WHERE name=? AND status=?',
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      args: ['item1', undefined] as any,
+      args: ['item1', undefined],
     });
 
+    // Testing that undefined values in select query parameters are sanitized to null
     // eslint-disable-next-line no-null/no-null
     expect(getLastStmt(db).all).toHaveBeenCalledWith('item1', null);
   });
@@ -566,6 +572,7 @@ describe('select', () => {
       args: [{ id: 42, status: undefined }],
     });
 
+    // Testing that undefined values in named select parameters are sanitized to null
     // eslint-disable-next-line no-null/no-null
     expect(getLastStmt(db).all).toHaveBeenCalledWith({ id: 42, status: null });
   });
@@ -597,10 +604,10 @@ describe('select', () => {
       type: 'select',
       nonce: 'nonce1',
       query: 'SELECT * FROM t WHERE category=:category AND minVal=? AND maxVal=?',
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      args: [{ category: 'A' }, 5, undefined] as any,
+      args: [{ category: 'A' }, 5, undefined],
     });
 
+    // Testing that undefined in mixed select parameter types is sanitized to null
     // eslint-disable-next-line no-null/no-null
     expect(getLastStmt(db).all).toHaveBeenCalledWith({ category: 'A' }, 5, null);
   });

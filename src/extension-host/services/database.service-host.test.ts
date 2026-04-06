@@ -42,6 +42,7 @@ vi.mock('@shared/services/network-object.service', () => ({
 
 const { DatabaseService } = testingDatabaseService;
 
+// Cast mock object to Worker type for dependency injection in tests
 // eslint-disable-next-line no-type-assertion/no-type-assertion
 const mockWorker = {
   on: mockWorkerOn,
@@ -66,6 +67,7 @@ function getRegisteredHandler(event: 'message'): (msg: WorkerMessage) => void;
 function getRegisteredHandler(event: 'error'): (err: Error) => void;
 function getRegisteredHandler(event: 'exit'): (code: number) => void;
 function getRegisteredHandler(event: string): (arg: unknown) => void {
+  // Cast mock.calls array to typed format for finding event handlers
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const call = (mockWorkerOn.mock.calls as [string, (arg: unknown) => void][]).find(
     ([evt]) => evt === event,
@@ -76,6 +78,7 @@ function getRegisteredHandler(event: string): (arg: unknown) => void {
 
 /** Returns the most recently posted worker request */
 function getLastRequest(): WorkerRequest {
+  // Cast mock.lastCall to typed array to extract the WorkerRequest parameter
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return (mockWorkerPostMessage.mock.lastCall as [WorkerRequest])[0];
 }

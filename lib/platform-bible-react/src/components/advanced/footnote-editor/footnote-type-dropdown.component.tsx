@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider } from '@/components/shadcn-ui
 import { TooltipTrigger } from '@radix-ui/react-tooltip';
 import { FunctionSquare, SquareSigma, SquareX } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
+import { Z_INDEX_FOOTNOTE_EDITOR } from '@/components/z-index';
 import { FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 interface FootnoteTypeDropdownProps {
@@ -87,7 +88,7 @@ export function FootnoteTypeDropdown({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <DropdownMenuContent className="tw-z-[300]">
+      <DropdownMenuContent style={{ zIndex: Z_INDEX_FOOTNOTE_EDITOR }}>
         <DropdownMenuLabel>
           {localizedStrings['%footnoteEditor_noteTypeDropdown_label%']}
         </DropdownMenuLabel>

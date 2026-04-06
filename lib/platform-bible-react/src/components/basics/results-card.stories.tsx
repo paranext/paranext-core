@@ -132,7 +132,7 @@ export const CheckCards: Story = {
                 setSelectedCardKey((current) => (current === card.key ? undefined : card.key))
               }
               dropdownContent={mockDropdownContent}
-              additionalSelectedContent={
+              additionalContent={
                 <Badge className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md tw-bg-blue-500">
                   Characters Check
                 </Badge>
@@ -215,7 +215,7 @@ export const FindCards: Story = {
                 setSelectedCardKey((current) => (current === card.key ? undefined : card.key))
               }
               dropdownContent={mockDropdownContent}
-              additionalSelectedContent={
+              additionalContent={
                 <div className="tw-text-xs tw-font-medium tw-text-muted-foreground">
                   {card.description}
                 </div>

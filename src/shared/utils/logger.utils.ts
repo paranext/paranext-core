@@ -34,6 +34,7 @@ function parseErrorLine(errorLine: string): ParsedErrorLine {
   // console.log(`**** LINE: ${errorLine}\nResulting filename: ${matches?.at(2)}`);
 
   if (matches && matches.length === 5) {
+    // `_` is a required positional placeholder for the full match; the naming convention rule flags it.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/naming-convention
     const [_, functionName, fileName, lineNumber, columnNumber] = matches;
     return {
@@ -44,6 +45,7 @@ function parseErrorLine(errorLine: string): ParsedErrorLine {
     };
   }
   if (matches && matches.length === 4) {
+    // `_` is a required positional placeholder for the full match; the naming convention rule flags it.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/naming-convention
     const [_, fileName, lineNumber, columnNumber] = matches;
     return {
@@ -106,6 +108,7 @@ export function formatLog(message: string, serviceName: string) {
 export function setUpLogger(log: MainLogger | RendererLogger) {
   // Make sure processType is loaded
   if (!Object.values(ProcessType).includes(getProcessType()))
+    // Logger isn't fully set up yet, so falling back to raw `console.warn` for this early diagnostic.
     // eslint-disable-next-line no-console
     console.warn(chalk.yellow(`Unexpected process type: ${globalThis.processType}`));
 

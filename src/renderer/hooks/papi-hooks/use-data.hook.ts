@@ -6,6 +6,7 @@ import {
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
 import { DataProviderNames, DataProviderTypes, DataProviders } from 'papi-shared-types';
+// Imported only for reference in JSDoc `@throws` / `@see` tags; not used at runtime.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- used for JSDOC comments
 import { PlatformError, isPlatformError } from 'platform-bible-utils';
 

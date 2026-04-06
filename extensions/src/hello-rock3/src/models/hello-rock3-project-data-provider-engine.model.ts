@@ -128,7 +128,8 @@ export class HelloRock3ProjectDataProviderEngine
     return newNumber;
   }
 
-  // Required method since this is a data provider engine
+  // setNames doesn't use instance state but cannot be static because it implements the
+  // IBaseProjectDataProviderEngine<typeof HELLO_ROCK3_PROJECT_INTERFACES> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setNames(): Promise<
     DataProviderUpdateInstructions<ProjectInterfaceDataTypes['helloRock3']>

@@ -35,6 +35,8 @@ class HelloCheck implements Check {
     return true;
   }
 
+  // getCheckDetails doesn't use instance state but cannot be static because it implements the Check
+  // interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   getCheckDetails(): CheckDetails {
     return checkDetails;

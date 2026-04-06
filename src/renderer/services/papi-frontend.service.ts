@@ -32,6 +32,8 @@ import { settingsService } from '@shared/services/settings.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
 import { windowService } from '@shared/services/window.service';
 import { IWindowService } from '@shared/services/window.service-model';
+import { overlayService } from '@renderer/services/overlays/overlay.service-host';
+import { IOverlayService } from '@renderer/services/overlays/overlay.service-model';
 import { localThemeService } from '@renderer/services/theme.service-host';
 import { IThemeServiceLocal } from '@shared/services/theme.service-model';
 import { webViewService } from '@shared/services/web-view.service';
@@ -109,6 +111,8 @@ const papi = {
   notifications: notificationService as INotificationService,
   /** JSDOC DESTINATION windowService */
   window: windowService as IWindowService,
+  /** JSDOC DESTINATION overlayService */
+  overlays: overlayService as IOverlayService,
 };
 /* eslint-enable */
 
@@ -188,5 +192,8 @@ Object.freeze(papi.notifications);
 /** JSDOC DESTINATION windowService */
 export const { window } = papi;
 Object.freeze(papi.window);
+/** JSDOC DESTINATION overlayService */
+export const { overlays } = papi;
+Object.freeze(papi.overlays);
 
 export type Papi = typeof papi;

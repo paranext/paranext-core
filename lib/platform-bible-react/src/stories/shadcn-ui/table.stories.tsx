@@ -134,6 +134,7 @@ export const WithBorder: Story = {
 
 export const StickyHeader: Story = {
   render: () => {
+    // Array.fill + flat returns unknown[]; cast is needed to restore the invoice element type
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const lotsOfInvoices = Array(15).fill(invoices).flat() as typeof invoices;
 
@@ -151,6 +152,7 @@ export const StickyHeader: Story = {
           <TableBody>
             {lotsOfInvoices.map((invoice, index) => (
               <TableRow
+                // Invoice numbers repeat since the array is flattened duplicates; index disambiguates
                 // eslint-disable-next-line react/no-array-index-key
                 key={`${invoice.invoice}-${index}`}
                 data-state={invoice.paymentStatus === 'Paid' ? 'selected' : ''}

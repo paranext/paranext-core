@@ -22,6 +22,8 @@ export interface FindWebViewOptions extends OpenWebViewOptions {
 }
 
 export class FindWebViewProvider implements IWebViewProvider {
+  // getWebView doesn't use instance state but cannot be static because it implements the
+  // IWebViewProvider interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getWebView(
     savedWebView: SavedWebViewDefinition,

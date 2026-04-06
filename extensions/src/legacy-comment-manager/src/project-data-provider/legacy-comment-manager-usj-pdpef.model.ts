@@ -31,7 +31,8 @@ export class LegacyCommentManagerUsjProjectDataProviderEngineFactory
 
   providedProjectInterfaces = LEGACY_COMMENT_USJ_PROJECT_INTERFACES;
 
-  // Implementing an interface method, so can't be static
+  // createProjectDataProviderEngine doesn't use instance state but cannot be static because it
+  // implements the IProjectDataProviderEngineFactory interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async createProjectDataProviderEngine(
     projectId: string,

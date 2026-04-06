@@ -864,6 +864,7 @@ export class ScriptureFinderProjectDataProviderEngine
                 `${cacheKey}. The fetched data is known to be out-of-date, but retrying ` +
                 'indefinitely could cause an infinite loop. Consider improving the retry strategy.',
             );
+          // The cache was invalidated mid-fetch; skip to the next retry iteration rather than processing stale data.
           // eslint-disable-next-line no-continue
           continue;
         }
