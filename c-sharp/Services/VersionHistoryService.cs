@@ -14,9 +14,14 @@ internal class VersionHistoryService(PapiClient papiClient)
     public async Task InitializeAsync()
     {
         // Set up commands on the PAPI
+        await papiClient.RegisterRequestHandlerAsync("command:versionHistory.commit", Commit);
         await papiClient.RegisterRequestHandlerAsync(
-            "command:versionHistory.commitChanges",
-            CommitChanges
+            "command:versionHistory.commitDaily",
+            CommitDaily
+        );
+        await papiClient.RegisterRequestHandlerAsync(
+            "command:versionHistory.quickCommit",
+            QuickCommit
         );
     }
 
@@ -25,10 +30,26 @@ internal class VersionHistoryService(PapiClient papiClient)
     #region Private handler methods
 
     /// <summary>
-    /// Function to commit new changes to the version history
+    /// Function to commit a snapshot of the current changes.
     /// </summary>
-    /// <returns>Whether the changes were successfully committed</returns>
-    private Boolean CommitChanges(String projectId, String comment)
+    /// <returns>Whether there were changes to commit (if not forcing)</returns>
+    private Boolean Commit(String projectId, String comment, Boolean forceCommit)
+    {
+        throw new Exception("This command is unimplemented!");
+    }
+
+    /// <summary>
+    /// Function that only commits if it's been a day since the last commit
+    /// </summary>
+    private void CommitDaily(String projectId)
+    {
+        throw new Exception("This command is unimplemented!");
+    }
+
+    /// <summary>
+    /// Function that quickly commits changes, bypassing merger check and few other things
+    /// </summary>
+    private void QuickCommit(String projectId, String comment)
     {
         throw new Exception("This command is unimplemented!");
     }
