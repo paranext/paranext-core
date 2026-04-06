@@ -49,7 +49,12 @@ internal class VersionHistoryService(PapiClient papiClient)
     /// <summary>
     /// Function that quickly commits changes, bypassing merger check and few other things
     /// </summary>
-    private void QuickCommit(String projectId, String comment)
+    private void QuickCommit(
+        String projectId,
+        String comment,
+        String? dblRevisionNumber = null,
+        String? forcedUserName = null
+    )
     {
         throw new Exception("This command is unimplemented!");
     }
