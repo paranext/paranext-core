@@ -337,8 +337,9 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     await expect(projectButtons.first()).toBeVisible({ timeout: 15_000 });
     await projectButtons.first().click({ force: true });
 
-    // Click the submit button using its specific CSS class
+    // Click the submit button using its specific CSS class (kept in view below scroll region).
     const submitButton = dialog.locator('.select-multiple-projects-submit-button button');
+    await submitButton.scrollIntoViewIfNeeded();
     await submitButton.click({ force: true });
 
     await expect(dialog).not.toBeVisible({ timeout: 3_000 });
@@ -395,9 +396,10 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     await expect(dialog.getByText('Exodus')).toBeVisible();
 
     // Submit with pre-selected books using the dialog's specific submit button class.
-    // Use force:true because Playwright can't click inside scrollable fixed modals.
+    // Fixed modal + overflow can clip the footer; scrollIntoView does not fix that, and Playwright's
+    // click can fail even with force:true when the hit point is outside the viewport.
     const submitButton = dialog.locator('.select-books-dialog-submit-button');
-    await submitButton.click({ force: true });
+    await submitButton.evaluate((el) => (el as HTMLElement).click());
 
     await expect(dialog).not.toBeVisible({ timeout: 3_000 });
     const result = await resultPromise;

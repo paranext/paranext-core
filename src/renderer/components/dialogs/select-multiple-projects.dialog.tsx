@@ -78,20 +78,22 @@ function SelectMultipleProjectsDialog({
 
   return (
     <div className="select-multiple-projects-dialog">
-      <div>{prompt}</div>
-      {isLoadingProjects ? (
-        <div>Loading Projects</div>
-      ) : (
-        <ProjectList
-          projects={projects}
-          handleSelectProject={handleProjectToggle}
-          selectedProjectIds={selectedProjectIds}
-          isMultiselect
-          isCheckable
-        >
-          <FolderOpenIcon className="select-multiple-projects-folder-icon" />
-        </ProjectList>
-      )}
+      <div className="select-multiple-projects-dialog-scroll">
+        <div>{prompt}</div>
+        {isLoadingProjects ? (
+          <div>Loading Projects</div>
+        ) : (
+          <ProjectList
+            projects={projects}
+            handleSelectProject={handleProjectToggle}
+            selectedProjectIds={selectedProjectIds}
+            isMultiselect
+            isCheckable
+          >
+            <FolderOpenIcon className="select-multiple-projects-folder-icon" />
+          </ProjectList>
+        )}
+      </div>
       <div className="select-multiple-projects-submit-button">
         <Button onClick={() => submitDialog(selectedProjectIds)}>
           <Check />
