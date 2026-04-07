@@ -1,5 +1,22 @@
 [
   {
+    "label": "%settings_platformScripture_find_label%",
+    "properties": {
+      "platformScripture.findRecentSearches": {
+        "label": "%settings_platformScripture_findRecentSearches_label%",
+        "type": "array",
+        "default": [],
+        "isHidden": true
+      },
+      "platformScripture.findLastSearchTerm": {
+        "label": "%settings_platformScripture_findLastSearchTerm_label%",
+        "type": "string",
+        "default": "",
+        "isHidden": true
+      }
+    }
+  },
+  {
     "label": "%project_settings_platformScripture_group1_label%",
     "properties": {
       "platformScripture.booksPresent": {

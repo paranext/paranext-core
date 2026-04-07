@@ -103,6 +103,8 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_previewOptions_monospaceDescription%',
   '%webView_find_previewOptions_showInvisible%',
   '%webView_find_previewOptions_showInvisibleDescription%',
+  '%webView_find_previewOptions_swatchOld%',
+  '%webView_find_previewOptions_swatchNew%',
   '%webView_find_clearSearch%',
 ];
 
@@ -1518,6 +1520,8 @@ global.webViewComponent = function FindWebView({
             monospaceDescription: L('%webView_find_previewOptions_monospaceDescription%'),
             showInvisible: L('%webView_find_previewOptions_showInvisible%'),
             showInvisibleDescription: L('%webView_find_previewOptions_showInvisibleDescription%'),
+            swatchOld: L('%webView_find_previewOptions_swatchOld%'),
+            swatchNew: L('%webView_find_previewOptions_swatchNew%'),
           },
         }}
         scopeProps={{
@@ -1528,8 +1532,7 @@ global.webViewComponent = function FindWebView({
           scopeDisplayText,
           availableBookInfo: booksPresent,
           localizedBookNames: localizedBookData,
-          // eslint-disable-next-line no-type-assertion/no-type-assertion -- useLocalizedStrings returns a type keyed by specific string literals; the prop expects the broader Record<string, string | undefined>, so the cast is required
-          scopeSelectorStrings: scopeSelectorLocalizedStrings as Record<string, string | undefined>,
+          scopeSelectorStrings: scopeSelectorLocalizedStrings,
         }}
         visibleResultsCount={visibleResults.length}
         focusedVisibleIndex={focusedVisibleIndex}

@@ -20,8 +20,8 @@ export const buttonVariants = cva(
         secondary: 'tw-bg-secondary tw-text-secondary-foreground hover:tw-bg-secondary/80',
         ghost: 'hover:tw-bg-accent hover:tw-text-accent-foreground',
         link: 'tw-text-primary tw-underline-offset-4 hover:tw-underline',
-        // For the most subtle buttons in the UI — no background, muted icon/text color at rest,
-        // foreground color on hover. Use when a button should recede into the layout by default.
+        // CUSTOM: Added 'subtle' variant — no background, muted color at rest, foreground on hover.
+        // Use when a button should visually recede into the layout by default.
         subtle: 'tw-text-muted-foreground hover:tw-text-foreground',
       },
       size: {

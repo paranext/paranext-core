@@ -21,6 +21,7 @@ import {
   preserveTrailingSpaces,
   renderWithInvisibleChars,
 } from './replace-preview-styles';
+import { useDarkMode } from './use-dark-mode.hook';
 import { DEFAULT_FIND_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
 export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: boolean };
@@ -151,9 +152,6 @@ export default function SearchResult({
   const [shouldCalculateContext, setShouldCalculateContext] = useState<boolean>(isSelected);
   const [isVisible, setIsVisible] = useState(false);
   const [isProgressAnimating, setIsProgressAnimating] = useState(false);
-  // Track dark mode changes to re-render and update inline styles
-  const [, setDarkMode] = useState(document.body.classList.contains('dark'));
-
   useEffect(() => {
     if (!searchResult.isReplaced) {
       setIsProgressAnimating(false);
@@ -164,15 +162,7 @@ export default function SearchResult({
   }, [searchResult.isReplaced]);
 
   // Listen for dark mode changes to re-render with updated inline styles
-  useEffect(() => {
-    const handleDarkModeChange = () => {
-      setDarkMode(document.body.classList.contains('dark'));
-    };
-
-    const observer = new MutationObserver(handleDarkModeChange);
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
+  useDarkMode();
 
   // Observe when the card enters the viewport so inline context loads lazily.
   // Also serves as the sole IntersectionObserver on this element — no second observer needed.
@@ -449,7 +439,7 @@ export default function SearchResult({
       return (
         <div className="tw-space-y-0.5">
           <div className="tw-flex tw-items-baseline tw-gap-1">
-            <Minus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-gray-400 dark:tw-text-gray-500" />
+            <Minus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
             <span className={`tw-text-muted-foreground tw-min-w-0 ${breakClass} ${fontClass}`}>
               {before}
               <span className={findClass} style={findStyle}>
@@ -459,7 +449,7 @@ export default function SearchResult({
             </span>
           </div>
           <div className="tw-flex tw-items-baseline tw-gap-1">
-            <Plus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-gray-700 dark:tw-text-gray-300" />
+            <Plus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-foreground" />
             <span className={`tw-text-foreground tw-min-w-0 ${breakClass} ${fontClass}`}>
               {before}
               <span className={replaceClass} style={replaceStyle}>

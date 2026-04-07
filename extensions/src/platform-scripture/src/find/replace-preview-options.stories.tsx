@@ -47,6 +47,8 @@ function ReplacePreviewOptionsDemo() {
           monospaceDescription: 'Use fixed-width font',
           showInvisible: 'Show invisible',
           showInvisibleDescription: 'Show symbols for whitespace',
+          swatchOld: 'old',
+          swatchNew: 'new',
         }}
       />
       <pre className="tw-text-xs tw-text-muted-foreground">
@@ -119,7 +121,7 @@ function PreviewSwatchRow({
       return (
         <div className="tw-space-y-0.5 tw-text-xs">
           <div className="tw-flex tw-items-baseline tw-gap-1">
-            <Minus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-red-500" />
+            <Minus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
             <span className={`tw-text-muted-foreground ${fontClass}`}>
               {before}
               <span className={`${fontClass} ${findClass}`} style={findStyle}>
@@ -129,7 +131,7 @@ function PreviewSwatchRow({
             </span>
           </div>
           <div className="tw-flex tw-items-baseline tw-gap-1">
-            <Plus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-green-500" />
+            <Plus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-foreground" />
             <span className={`tw-text-muted-foreground ${fontClass}`}>
               {before}
               <span className={`${fontClass} ${replaceClass}`} style={replaceStyle}>
