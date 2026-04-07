@@ -4,7 +4,6 @@ export const STORYBOOK_THEME_IDS = [
   'platform-dark',
   'paratext-light',
   'paratext-dark',
-  'system',
 ] as const;
 
 export type StorybookThemeId = (typeof STORYBOOK_THEME_IDS)[number];

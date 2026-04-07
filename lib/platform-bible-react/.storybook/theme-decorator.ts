@@ -40,18 +40,6 @@ export function withPlatformBibleThemes(): Decorator {
       };
     }, [themeOverride]);
 
-    useEffect(() => {
-      const key = themeOverride ?? liveThemeId ?? readStoredStorybookThemeId();
-      if (key !== 'system' || themeOverride) return undefined;
-
-      const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      const onChange = () => {
-        applyPlatformBibleThemeToElement(document.documentElement, 'system');
-      };
-      mq.addEventListener('change', onChange);
-      return () => mq.removeEventListener('change', onChange);
-    }, [themeOverride, liveThemeId]);
-
     return storyFn();
   };
 }

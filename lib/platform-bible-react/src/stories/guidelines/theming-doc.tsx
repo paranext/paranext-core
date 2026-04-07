@@ -48,10 +48,6 @@ export function ThemingGuideBody() {
         <li>
           <strong>paratext-light</strong> / <strong>paratext-dark</strong> — Paratext palettes.
         </li>
-        <li>
-          <strong>system</strong> — follows <code>prefers-color-scheme</code> for the Platform pair
-          only (not Paratext).
-        </li>
       </ul>
       <h2 className="tw-py-2 tw-font-bold">Try it: change theme</h2>
       <p>
@@ -147,8 +143,8 @@ export function ThemingGuideBody() {
           parameters: {'{'} themes: {'{'} themeOverride: &apos;paratext-dark&apos; {'}'} {'}'}
         </code>{' '}
         on the story or meta. The preview decorator reads this in{' '}
-        <code>.storybook/theme-decorator.ts</code> (toolbar changes use{' '}
-        <code>localStorage</code> and a channel event instead of <code>globals.theme</code>).
+        <code>.storybook/theme-decorator.ts</code> (toolbar changes use <code>localStorage</code>{' '}
+        and a channel event instead of <code>globals.theme</code>).
       </p>
       <h2 className="tw-py-2 tw-font-bold">Adding a new theme</h2>
       <ol className="tw-list-inside tw-list-decimal tw-space-y-1">
@@ -161,8 +157,8 @@ export function ThemingGuideBody() {
         </li>
         <li>
           Register the theme id in <code>.storybook/theme-constants.ts</code> (
-          <code>STORYBOOK_THEME_IDS</code>), map classes in <code>.storybook/theme-apply.ts</code>, and
-          add it to the Theme menu in <code>.storybook/manager.tsx</code>.
+          <code>STORYBOOK_THEME_IDS</code>), map classes in <code>.storybook/theme-apply.ts</code>,
+          and add it to the Theme menu in <code>.storybook/manager.tsx</code>.
         </li>
       </ol>
       <p className="tw-pt-2">

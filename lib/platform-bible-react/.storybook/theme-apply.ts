@@ -10,7 +10,7 @@ export const PLATFORM_BIBLE_STORYBOOK_THEME_STORAGE_KEY = 'platform-bible-storyb
 /** Emitted when the Theme toolbar changes so preview and stories can sync without `globals.theme`. */
 export const PLATFORM_BIBLE_THEME_CHANNEL = 'platform-bible/storybook-theme-changed';
 
-const CLASS_MAP: Record<Exclude<StorybookThemeId, 'system'>, string> = {
+const CLASS_MAP: Record<StorybookThemeId, string> = {
   'platform-light': '',
   'platform-dark': 'dark',
   'paratext-light': 'paratext-light',
@@ -23,27 +23,16 @@ function isStorybookThemeId(value: string | undefined): value is StorybookThemeI
   return STORYBOOK_THEME_IDS.some((id) => id === value);
 }
 
-function resolveResolvedPlatformTheme(): Exclude<StorybookThemeId, 'system'> {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'platform-dark' : 'platform-light';
-}
-
 function classStringToArray(classString: string): string[] {
   return classString.split(' ').filter(Boolean);
 }
 
 /**
  * Apply Platform / Paratext theme classes on `parent` (usually `document.documentElement` in the
- * preview iframe). "system" resolves to Platform light/dark from the OS preference.
+ * preview iframe). Unknown keys fall back to the default theme.
  */
 export function applyPlatformBibleThemeToElement(parent: HTMLElement, themeKey: string): void {
-  let resolved: Exclude<StorybookThemeId, 'system'>;
-  if (themeKey === 'system') {
-    resolved = resolveResolvedPlatformTheme();
-  } else if (isStorybookThemeId(themeKey) && themeKey !== 'system') {
-    resolved = themeKey;
-  } else {
-    resolved = 'platform-light';
-  }
+  const resolved: StorybookThemeId = isStorybookThemeId(themeKey) ? themeKey : DEFAULT_STORYBOOK_THEME;
 
   ALL_THEME_CLASSES.forEach((c) => parent.classList.remove(c));
   const className = CLASS_MAP[resolved];
