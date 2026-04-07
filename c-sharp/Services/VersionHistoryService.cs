@@ -30,7 +30,8 @@ internal class VersionHistoryService(PapiClient papiClient)
     #region Private handler methods
 
     /// <summary>
-    /// Function to commit a snapshot of the current changes.
+    /// Function to commit a snapshot of the current changes. Without `forceCommit` set to `true`,
+    /// will only commit if there are changes/revisions detected.
     /// </summary>
     /// <returns>Whether there were changes to commit (if not forcing)</returns>
     private Boolean Commit(String projectId, String comment, Boolean? forceCommit = false)
