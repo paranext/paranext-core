@@ -34,6 +34,7 @@ export const MODULE_SIMILAR_APIS: Readonly<{
     [ProcessType.ExtensionHost]: 'papi.storage',
   },
   child_process: 'createProcess (requires requesting in elevatedPrivileges)',
+  sqlite: 'papi.database',
 });
 
 /**

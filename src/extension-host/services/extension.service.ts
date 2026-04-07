@@ -1343,7 +1343,7 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
     // Tell the extension dev if there is an api similar to what they want to import
     const message = `Requiring other than papi is not allowed in extensions! ${getModuleSimilarApiMessage(
       moduleName,
-    )}`;
+    )}. Read more about Platform.Bible import restrictions at https://github.com/paranext/paranext/wiki/Module-import-restrictions`;
     throw new Error(message);
   }) as typeof Module.prototype.require;
 
