@@ -142,6 +142,8 @@ export function FindHeaderDemo() {
           monospaceDescription: 'Use fixed-width font',
           showInvisible: 'Show invisible',
           showInvisibleDescription: 'Show symbols for whitespace',
+          swatchOld: 'Old',
+          swatchNew: 'New',
         },
       }}
       scopeProps={{

@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useState } from 'react';
+import { CSSProperties } from 'react';
 import { ArrowRight, Eye } from 'lucide-react';
 import {
   Button,
@@ -12,10 +12,6 @@ import {
   Switch,
   ToggleGroup,
   ToggleGroupItem,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
 } from 'platform-bible-react';
 import {
   getFindHighlightClasses,
@@ -26,6 +22,7 @@ import {
   getReplaceHighlightStyle,
 } from './replace-preview-styles';
 import { PreviewOptions } from './replace-preview-types';
+import { useDarkMode } from './use-dark-mode.hook';
 
 export type ReplacePreviewOptionsStrings = {
   togglePreviewOptions: string;
@@ -45,6 +42,8 @@ export type ReplacePreviewOptionsStrings = {
   monospaceDescription: string;
   showInvisible: string;
   showInvisibleDescription: string;
+  swatchOld: string;
+  swatchNew: string;
 };
 
 export const REPLACE_PREVIEW_OPTIONS_STRING_KEYS = [
@@ -65,6 +64,8 @@ export const REPLACE_PREVIEW_OPTIONS_STRING_KEYS = [
   '%webView_find_previewOptions_monospaceDescription%',
   '%webView_find_previewOptions_showInvisible%',
   '%webView_find_previewOptions_showInvisibleDescription%',
+  '%webView_find_previewOptions_swatchOld%',
+  '%webView_find_previewOptions_swatchNew%',
 ] as const;
 
 type ReplacePreviewOptionsProps = {
@@ -119,21 +120,25 @@ function Swatch({
   replaceClass,
   replaceStyle,
   showReplace = false,
+  oldLabel,
+  newLabel,
 }: {
   findClass: string;
   findStyle?: CSSProperties;
   replaceClass?: string;
   replaceStyle?: CSSProperties;
   showReplace?: boolean;
+  oldLabel: string;
+  newLabel: string;
 }) {
   return (
     <span className="tw-inline-flex tw-items-center tw-gap-0.5 tw-text-xs">
       <span className={findClass} style={findStyle}>
-        old
+        {oldLabel}
       </span>
       {showReplace && replaceClass && (
         <span className={replaceClass} style={replaceStyle}>
-          new
+          {newLabel}
         </span>
       )}
     </span>
@@ -155,39 +160,25 @@ export function ReplacePreviewOptions({
 }: ReplacePreviewOptionsProps) {
   const { layout, highlightShape, color, monospace, showInvisible } = previewOptions;
 
-  // Track dark mode changes so inline styles on swatches stay in sync (same pattern as search-result)
-  const [, setDarkMode] = useState(document.body.classList.contains('dark'));
-  useEffect(() => {
-    const observer = new MutationObserver(() =>
-      setDarkMode(document.body.classList.contains('dark')),
-    );
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
+  // Track dark mode changes so inline styles on swatches stay in sync
+  useDarkMode();
 
   const set = <K extends keyof PreviewOptions>(key: K, value: PreviewOptions[K]) =>
     setPreviewOptions({ ...previewOptions, [key]: value });
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
-              <Button
-                variant="subtle"
-                size="sm"
-                aria-label={localizedStrings.togglePreviewOptions}
-                className="tw-h-auto tw-gap-1.5 tw-px-2 tw-py-0.5"
-              >
-                <Eye className="tw-h-4 tw-w-4" />
-                {localizedStrings.togglePreviewOptions}
-              </Button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent>{localizedStrings.togglePreviewOptions}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <PopoverTrigger asChild>
+        <Button
+          variant="subtle"
+          size="sm"
+          aria-label={localizedStrings.togglePreviewOptions}
+          className="tw-h-auto tw-gap-1.5 tw-px-2 tw-py-0.5"
+        >
+          <Eye className="tw-h-4 tw-w-4" />
+          {localizedStrings.togglePreviewOptions}
+        </Button>
+      </PopoverTrigger>
 
       <PopoverContent align="start" className="tw-w-72 tw-p-4">
         {/* 1. Layout */}
@@ -264,6 +255,8 @@ export function ReplacePreviewOptions({
                   <Swatch
                     findClass={getGoldFindHighlightClasses(value)}
                     findStyle={getGoldFindHighlightStyle()}
+                    oldLabel={localizedStrings.swatchOld}
+                    newLabel={localizedStrings.swatchNew}
                   />
                 </Label>
               </div>
@@ -311,6 +304,8 @@ export function ReplacePreviewOptions({
                       replaceClass={replaceClass}
                       replaceStyle={replaceStyle}
                       showReplace
+                      oldLabel={localizedStrings.swatchOld}
+                      newLabel={localizedStrings.swatchNew}
                     />
                   </Label>
                 </div>

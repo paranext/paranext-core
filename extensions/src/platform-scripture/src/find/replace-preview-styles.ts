@@ -123,7 +123,8 @@ export function getGoldFindHighlightClasses(shape: ReplacePreviewHighlightShape)
 /**
  * Returns inline style object for the gold/amber find highlight used in the verse text context
  * area. Handles dark mode colors since Tailwind's dark: prefix doesn't work with dynamically built
- * classes.
+ * classes. TODO: When we upgrade Tailwind, switch to using its dark mode styles rather than this
+ * manual approximation of what its styles do.
  */
 export function getGoldFindHighlightStyle(): CSSProperties {
   const isDarkMode = document.body.classList.contains('dark');

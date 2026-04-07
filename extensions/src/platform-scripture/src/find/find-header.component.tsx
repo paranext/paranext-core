@@ -26,7 +26,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { formatReplacementString } from 'platform-bible-utils';
+import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import { WordRestriction } from 'platform-scripture';
 import { useState } from 'react';
 import { FindFilters, FindFiltersStrings } from './find-filters.component';
@@ -82,7 +82,7 @@ export type FindHeaderScopeProps = {
   scopeDisplayText: string;
   availableBookInfo: string;
   localizedBookNames?: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
-  scopeSelectorStrings: Record<string, string | undefined>;
+  scopeSelectorStrings: LanguageStrings;
 };
 
 export interface FindHeaderProps {
