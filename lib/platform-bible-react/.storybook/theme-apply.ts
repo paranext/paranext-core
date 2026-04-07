@@ -11,13 +11,20 @@ export const PLATFORM_BIBLE_STORYBOOK_THEME_STORAGE_KEY = 'platform-bible-storyb
 export const PLATFORM_BIBLE_THEME_CHANNEL = 'platform-bible/storybook-theme-changed';
 
 const CLASS_MAP: Record<StorybookThemeId, string> = {
+  'shadcn-light': 'theme-shadcn-default',
+  'shadcn-dark': 'dark theme-shadcn-default',
   'platform-light': '',
   'platform-dark': 'dark',
   'paratext-light': 'paratext-light',
   'paratext-dark': 'paratext-dark',
 };
 
-const ALL_THEME_CLASSES = ['dark', 'paratext-light', 'paratext-dark'] as const;
+const ALL_THEME_CLASSES = [
+  'dark',
+  'paratext-light',
+  'paratext-dark',
+  'theme-shadcn-default',
+] as const;
 
 function isStorybookThemeId(value: string | undefined): value is StorybookThemeId {
   return STORYBOOK_THEME_IDS.some((id) => id === value);
@@ -28,7 +35,7 @@ function classStringToArray(classString: string): string[] {
 }
 
 /**
- * Apply Platform / Paratext theme classes on `parent` (usually `document.documentElement` in the
+ * Apply Storybook preview theme classes on `parent` (usually `document.documentElement` in the
  * preview iframe). Unknown keys fall back to the default theme.
  */
 export function applyPlatformBibleThemeToElement(parent: HTMLElement, themeKey: string): void {

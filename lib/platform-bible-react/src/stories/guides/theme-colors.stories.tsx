@@ -82,6 +82,8 @@ function TokenSwatch({ token, foregroundToken }: { token: string; foregroundToke
 function ThemeColorDisplay() {
   const activeThemeId = useActiveStorybookThemeId();
   const isParatext = activeThemeId === 'paratext-light' || activeThemeId === 'paratext-dark';
+  const isShadcn = activeThemeId === 'shadcn-light' || activeThemeId === 'shadcn-dark';
+  const isPlatform = activeThemeId === 'platform-light' || activeThemeId === 'platform-dark';
 
   return (
     <>
@@ -94,22 +96,35 @@ function ThemeColorDisplay() {
         >
           index.css
         </a>
-        . The same values are mirrored for the running app in{' '}
+        . The running app mirrors Platform and Paratext palettes in{' '}
         <a
           className="tw-text-blue-600 hover:tw-underline"
           href="https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json"
         >
           themes.data.json
         </a>
-        .
+        ; the Shadcn Slate preview classes are Storybook-only.
       </p>
-      {!isParatext ? (
+      {isShadcn && (
         <p>
-          The currently selected theme is the Platform (Shadcn Slate) pair, whereas ui.shadcn.com
-          uses the Zinc theme (with a deviating <code>--ring</code>). Expect slight differences in
-          gray/blue tones.
+          <strong>Shadcn Slate</strong> uses the stock HSL Slate preset under{' '}
+          <code>.theme-shadcn-default</code> for side-by-side comparison with Platform (which tweaks
+          some tokens on <code>:root</code> / <code>.dark</code>).
         </p>
-      ) : undefined}
+      )}
+      {isPlatform && (
+        <p>
+          <strong>Platform</strong> themes use Platform.Bible’s Slate-based tokens; ui.shadcn.com’s
+          current default may differ (for example neutral/oklch). Expect slight differences in gray
+          tones.
+        </p>
+      )}
+      {isParatext && (
+        <p>
+          <strong>Paratext</strong> palettes are defined in <code>themes.data.json</code> and{' '}
+          <code>index.css</code>.
+        </p>
+      )}
       <p>Colors for the active theme:</p>
       <table>
         <thead>

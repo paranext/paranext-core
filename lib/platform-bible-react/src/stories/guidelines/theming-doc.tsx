@@ -47,8 +47,13 @@ export function ThemingGuideBody() {
       </p>
       <ul className="tw-list-inside tw-list-disc tw-space-y-1">
         <li>
+          <strong>shadcn-light</strong> / <strong>shadcn-dark</strong> — Stock Shadcn Slate (HSL) in{' '}
+          <code>.theme-shadcn-default</code>; Storybook preview only (not in{' '}
+          <code>themes.data.json</code>).
+        </li>
+        <li>
           <strong>platform-light</strong> / <strong>platform-dark</strong> — Platform.Bible default
-          (Shadcn Slate) light and dark.
+          (Slate-based) light and dark; matches the running app.
         </li>
         <li>
           <strong>paratext-light</strong> / <strong>paratext-dark</strong> — Paratext palettes.
@@ -76,7 +81,8 @@ export function ThemingGuideBody() {
         >
           themes.data.json
         </a>{' '}
-        and applies the same HSL tokens as <code>index.css</code> (see{' '}
+        (Platform and Paratext families) and applies the same HSL tokens as <code>index.css</code>{' '}
+        for those (see{' '}
         <a
           className="tw-text-blue-600 hover:tw-underline"
           href="https://github.com/paranext/paranext-core/blob/main/src/renderer/services/theme.service-host.ts"
@@ -194,6 +200,8 @@ export function ThemingGuideBody() {
 
 /** Theme class only on the outer shell so `index.css` variables apply before `pr-twp` / utilities. */
 const MATRIX_THEMES = [
+  { id: 'shadcn-light', label: 'Shadcn Slate (light)', themeShell: 'theme-shadcn-default' },
+  { id: 'shadcn-dark', label: 'Shadcn Slate (dark)', themeShell: 'dark theme-shadcn-default' },
   { id: 'platform-light', label: 'Platform light', themeShell: 'theme-platform-light' },
   { id: 'platform-dark', label: 'Platform dark', themeShell: 'dark' },
   { id: 'paratext-light', label: 'Paratext light', themeShell: 'paratext-light' },
@@ -218,7 +226,7 @@ export function ThemeMatrixDemo() {
         </a>
         .
       </p>
-      <div className="tw-grid tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-2 xl:tw-grid-cols-4">
+      <div className="tw-grid tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-2 xl:tw-grid-cols-3 2xl:tw-grid-cols-6">
         {MATRIX_THEMES.map(({ id, label, themeShell }) => (
           <div key={id} className={themeShell}>
             <div className="pr-twp tw-flex tw-flex-col tw-rounded-lg tw-border tw-border-border tw-bg-background tw-p-4 tw-text-foreground">
