@@ -4,14 +4,12 @@
     "properties": {
       "platformScripture.findRecentSearches": {
         "label": "%settings_platformScripture_findRecentSearches_label%",
-        "type": "array",
         "default": [],
         "isHidden": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
       },
       "platformScripture.findLastSearchTerm": {
         "label": "%settings_platformScripture_findLastSearchTerm_label%",
-        "type": "string",
         "default": "",
         "isHidden": true,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
