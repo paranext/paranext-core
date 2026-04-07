@@ -62,7 +62,6 @@
     "test:unit": "vitest --project=unit",
     "test:unit:run": "vitest run --project=unit",
     "test:storybook": "vitest --project=storybook",
-    "test:storybook:install-browsers": "playwright install chromium",
     "typecheck": "tsc -p ./tsconfig.json",
     "storybook": "storybook dev -p 6007"
   },
