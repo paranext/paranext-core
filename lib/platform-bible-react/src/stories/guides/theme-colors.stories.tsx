@@ -6,8 +6,9 @@ import { Input } from '@/components/shadcn-ui/input';
 import {
   PLATFORM_BIBLE_THEME_CHANNEL,
   readStoredStorybookThemeId,
-} from '../../../.storybook/theme-apply';
-import { STORYBOOK_THEME_IDS, type StorybookThemeId } from '../../../.storybook/theme-constants';
+  STORYBOOK_THEME_IDS,
+  type StorybookThemeId,
+} from '../../../.storybook/theme-decorator';
 
 function isStorybookThemeId(value: string): value is StorybookThemeId {
   return STORYBOOK_THEME_IDS.some((id) => id === value);

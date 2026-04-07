@@ -80,7 +80,6 @@ const meta: Meta<typeof ScopeSelector> = {
   title: 'Advanced/ScopeSelector',
   component: ScopeSelector,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   args: {
     scope: 'chapter',
     availableBookInfo:

@@ -28,7 +28,6 @@ const meta: Meta<typeof SearchBar> = {
   title: 'Basics/SearchBar',
   component: SearchBar,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     onSearch: { action: 'search' },
     placeholder: { control: 'text' },

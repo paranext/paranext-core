@@ -8,7 +8,6 @@ const meta: Meta<typeof Checklist> = {
   title: 'Basics/Checklist',
   component: Checklist,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     handleSelectListItem: { action: 'item selected' },
     listItems: { control: 'object' },

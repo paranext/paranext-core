@@ -17,7 +17,6 @@ const meta: Meta<typeof Dialog> = {
   title: 'Shadcn/Dialog',
   component: Dialog,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
 };
 
 export default meta;

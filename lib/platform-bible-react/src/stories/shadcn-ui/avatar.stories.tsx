@@ -5,7 +5,6 @@ const meta: Meta<typeof Avatar> = {
   title: 'Shadcn/Avatar',
   component: Avatar,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
 };
 
 export default meta;

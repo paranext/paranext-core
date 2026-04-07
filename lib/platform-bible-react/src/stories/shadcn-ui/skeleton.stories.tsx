@@ -5,7 +5,6 @@ const meta: Meta<typeof Skeleton> = {
   title: 'Shadcn/Skeleton',
   component: Skeleton,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     className: { control: 'text' },
   },

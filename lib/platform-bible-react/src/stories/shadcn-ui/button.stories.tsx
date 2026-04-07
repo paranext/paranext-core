@@ -18,7 +18,6 @@ const meta: Meta<typeof Button> = {
     disabled: { control: 'boolean' },
     className: { control: 'text' },
   },
-  decorators: [(Story) => <Story />],
 };
 
 export default meta; // Ensure this is the default export

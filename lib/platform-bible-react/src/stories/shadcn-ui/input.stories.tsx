@@ -12,7 +12,6 @@ const meta: Meta<typeof Input> = {
     disabled: { control: 'boolean' },
     className: { control: 'text' },
   },
-  decorators: [(Story) => <Story />],
 };
 
 export default meta;

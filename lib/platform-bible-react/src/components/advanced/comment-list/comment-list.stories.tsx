@@ -196,7 +196,6 @@ const meta: Meta<typeof CommentList> = {
   title: 'Advanced/CommentList',
   component: CommentList,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     threads: { control: 'object' },
     className: { control: 'text' },

@@ -7,6 +7,8 @@ import {
   readStoredStorybookThemeId,
 } from './theme-apply';
 
+export { PLATFORM_BIBLE_THEME_CHANNEL, readStoredStorybookThemeId } from './theme-apply';
+
 export {
   DEFAULT_STORYBOOK_THEME,
   STORYBOOK_THEME_IDS,

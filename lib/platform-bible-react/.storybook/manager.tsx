@@ -10,7 +10,11 @@ import {
   readStoredStorybookThemeId,
   updatePreviewIframeTheme,
 } from './theme-apply';
-import { STORYBOOK_THEME_IDS, type StorybookThemeId } from './theme-constants';
+import {
+  STORYBOOK_THEME_IDS,
+  STORYBOOK_THEME_LABELS,
+  type StorybookThemeId,
+} from './theme-constants';
 
 const IconButtonLabel = styled.div(({ theme }) => ({
   fontSize: theme.typography.size.s2 - 1,
@@ -40,7 +44,7 @@ function ThemeTool() {
         <TooltipLinkList
           links={STORYBOOK_THEME_IDS.map((theme) => ({
             id: theme,
-            title: theme,
+            title: STORYBOOK_THEME_LABELS[theme],
             active: current === theme,
             onClick: () => {
               setTheme(theme);
@@ -50,9 +54,12 @@ function ThemeTool() {
         />
       )}
     >
-      <IconButton key={TOOL_ID} title="Theme" active>
+      {/* `active` = Storybook toolbar selected styling; mirror theme selection instead of always true. */}
+      <IconButton key={TOOL_ID} title="Theme" active={!!current}>
         <PaintBrushIcon />
-        {current ? <IconButtonLabel>{`${current} theme`}</IconButtonLabel> : null}
+        {current ? (
+          <IconButtonLabel>{`${STORYBOOK_THEME_LABELS[current]} theme`}</IconButtonLabel>
+        ) : null}
       </IconButton>
     </WithTooltip>
   );

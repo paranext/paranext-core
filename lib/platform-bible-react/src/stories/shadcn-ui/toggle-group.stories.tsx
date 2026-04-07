@@ -8,7 +8,6 @@ const meta: Meta<typeof ToggleGroup> = {
   title: 'Shadcn/ToggleGroup',
   component: ToggleGroup,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     type: { control: 'select', options: ['single', 'multiple'] },
     variant: { control: 'select', options: ['default', 'outline'] },

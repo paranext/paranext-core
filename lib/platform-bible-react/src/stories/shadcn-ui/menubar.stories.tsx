@@ -20,7 +20,6 @@ const meta: Meta<typeof Menubar> = {
   title: 'Shadcn/Menubar',
   component: Menubar,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     variant: { control: 'select', options: ['default', 'muted'] },
   },

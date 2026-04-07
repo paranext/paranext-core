@@ -17,7 +17,7 @@ const CLASS_MAP: Record<StorybookThemeId, string> = {
   'paratext-dark': 'paratext-dark',
 };
 
-const ALL_THEME_CLASSES = ['dark', 'paratext-light', 'paratext-dark', 'light'] as const;
+const ALL_THEME_CLASSES = ['dark', 'paratext-light', 'paratext-dark'] as const;
 
 function isStorybookThemeId(value: string | undefined): value is StorybookThemeId {
   return STORYBOOK_THEME_IDS.some((id) => id === value);

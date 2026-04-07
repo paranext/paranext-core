@@ -12,7 +12,6 @@ import {
 const meta: Meta = {
   title: 'Demo/RTL Direction',
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
 };
 
 export default meta;

@@ -15,7 +15,6 @@ const meta: Meta<typeof Select> = {
   title: 'Shadcn/Select',
   component: Select,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     onValueChange: { action: 'value changed' },
     disabled: { control: 'boolean' },

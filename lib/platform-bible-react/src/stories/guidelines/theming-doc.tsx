@@ -3,6 +3,11 @@ import { Button } from '@/components/shadcn-ui/button';
 export function ThemingGuideBody() {
   return (
     <div className="tw-min-h-[200px] tw-max-w-4xl tw-bg-white tw-p-6 tw-text-slate-900">
+      {/*
+        Fixed light surface on purpose: long-form prose and link colors stay readable in the Docs
+        iframe regardless of the Storybook toolbar theme. Use other stories or Guides / Theme Colors
+        to verify token behavior against the active theme.
+      */}
       <p>
         A comprehensive guide on theming components using the shadcn design system, including best
         practices for color usage, theme switching, and CSS variable management.

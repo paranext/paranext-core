@@ -81,6 +81,7 @@ const preview: Preview = {
      * subtree.
      */
     (Story) =>
+      // .ts extension — JSX unavailable, use createElement
       createElement(
         'div',
         {

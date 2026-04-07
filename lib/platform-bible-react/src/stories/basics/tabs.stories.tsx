@@ -12,7 +12,6 @@ const meta: Meta<typeof Tabs> = {
   title: 'Basics/Tabs',
   component: Tabs,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     defaultValue: { control: 'text' },
     orientation: { control: 'select', options: ['horizontal', 'vertical'] },

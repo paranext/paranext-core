@@ -6,7 +6,6 @@ const meta: Meta<typeof Sonner> = {
   title: 'Shadcn/Sonner',
   component: Sonner,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
 };
 
 export default meta;

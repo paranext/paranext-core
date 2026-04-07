@@ -6,7 +6,6 @@ const meta: Meta<typeof Progress> = {
   title: 'Shadcn/Progress',
   component: Progress,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     value: { control: { type: 'range', min: 0, max: 100, step: 1 } },
     className: { control: 'text' },

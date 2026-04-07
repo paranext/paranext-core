@@ -8,7 +8,6 @@ const meta: Meta<typeof Switch> = {
   title: 'Shadcn/Switch',
   component: Switch,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     checked: { control: 'boolean' },
     disabled: { control: 'boolean' },

@@ -14,7 +14,6 @@ const meta: Meta<typeof Table> = {
   title: 'Shadcn/Table',
   component: Table,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     stickyHeader: { control: 'boolean' },
   },

@@ -5,7 +5,6 @@ const meta: Meta<typeof Spinner> = {
   title: 'Basics/Spinner',
   component: Spinner,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     size: { control: { type: 'number', min: 1, max: 100 } },
     className: { control: 'text' },

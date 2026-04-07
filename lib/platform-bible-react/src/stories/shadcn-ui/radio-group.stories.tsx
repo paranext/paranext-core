@@ -8,7 +8,6 @@ const meta: Meta<typeof RadioGroup> = {
   title: 'Shadcn/RadioGroup',
   component: RadioGroup,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     defaultValue: { control: 'text' },
     value: { control: 'text' },

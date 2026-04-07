@@ -7,7 +7,6 @@ const meta: Meta<typeof Slider> = {
   title: 'Shadcn/Slider',
   component: Slider,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   argTypes: {
     min: { control: { type: 'number' } },
     max: { control: { type: 'number' } },

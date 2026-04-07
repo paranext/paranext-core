@@ -21,7 +21,6 @@ const meta: Meta<typeof DropdownMenu> = {
   title: 'Shadcn/DropdownMenu',
   component: DropdownMenu,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
 };
 
 export default meta;

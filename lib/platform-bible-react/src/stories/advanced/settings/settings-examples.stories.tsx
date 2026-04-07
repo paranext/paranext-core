@@ -28,7 +28,6 @@ const meta: Meta<typeof SettingsExamples> = {
   title: 'Advanced/Settings/SettingsExamples',
   component: SettingsExamples,
   tags: ['autodocs'],
-  decorators: [(Story) => <Story />],
   parameters: {
     docs: {
       description: {
