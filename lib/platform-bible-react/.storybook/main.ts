@@ -24,7 +24,8 @@ function getAbsolutePath(value: string): any {
  * - `@storybook/addon-vitest` — run stories in Vitest
  * - `storybook-addon-code-editor` — Monaco in stories
  *
- * Upgrade cadence: bump `storybook` and all `@storybook/*` packages together, then run `npx storybook doctor`.
+ * Upgrade cadence: bump `storybook` and all `@storybook/*` packages together, then run `npx
+ * storybook doctor`.
  */
 const config: StorybookConfig = {
   /**

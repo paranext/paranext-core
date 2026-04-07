@@ -7,11 +7,15 @@ import {
   readStoredStorybookThemeId,
 } from './theme-apply';
 
-export { DEFAULT_STORYBOOK_THEME, STORYBOOK_THEME_IDS, type StorybookThemeId } from './theme-constants';
+export {
+  DEFAULT_STORYBOOK_THEME,
+  STORYBOOK_THEME_IDS,
+  type StorybookThemeId,
+} from './theme-constants';
 
 /**
- * Applies toolbar theme classes on `document.documentElement` from
- * `localStorage` + `PLATFORM_BIBLE_THEME_CHANNEL` (see `manager.tsx`). Per-story overrides use
+ * Applies toolbar theme classes on `document.documentElement` from `localStorage` +
+ * `PLATFORM_BIBLE_THEME_CHANNEL` (see `manager.tsx`). Per-story overrides use
  * `parameters.themes.themeOverride`. Does not use `globals.theme`, so Docs scroll is preserved when
  * switching themes (Vueless-style DOM updates from the manager).
  */

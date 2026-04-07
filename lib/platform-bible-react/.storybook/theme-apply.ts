@@ -32,7 +32,9 @@ function classStringToArray(classString: string): string[] {
  * preview iframe). Unknown keys fall back to the default theme.
  */
 export function applyPlatformBibleThemeToElement(parent: HTMLElement, themeKey: string): void {
-  const resolved: StorybookThemeId = isStorybookThemeId(themeKey) ? themeKey : DEFAULT_STORYBOOK_THEME;
+  const resolved: StorybookThemeId = isStorybookThemeId(themeKey)
+    ? themeKey
+    : DEFAULT_STORYBOOK_THEME;
 
   ALL_THEME_CLASSES.forEach((c) => parent.classList.remove(c));
   const className = CLASS_MAP[resolved];

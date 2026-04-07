@@ -38,7 +38,10 @@ const preview: Preview = {
       test: 'todo',
     },
 
-    /** Toolbar themes: `.storybook/manager.tsx` + `.storybook/theme-decorator.ts` (not `globals.theme`) */
+    /**
+     * Toolbar themes: `.storybook/manager.tsx` + `.storybook/theme-decorator.ts` (not
+     * `globals.theme`)
+     */
     backgrounds: {
       default: 'theme',
       values: [

@@ -25,16 +25,16 @@ Conventions, tooling, and maintenance for this package’s Storybook. For Parate
 
 ## Configuration layout
 
-| File | Role |
-| --- | --- |
-| [main.ts](./main.ts) | Stories glob, addons, Vite merge, `staticDirs` |
-| [preview.ts](./preview.ts) | Global parameters, decorators, tags |
-| [theme-constants.ts](./theme-constants.ts) | Toolbar theme ids (shared with manager + theme apply) |
-| [theme-apply.ts](./theme-apply.ts) | Class mapping, `localStorage` key, preview iframe DOM helper |
-| [theme-decorator.ts](./theme-decorator.ts) | Preview: apply theme classes + channel sync |
-| [manager.tsx](./manager.tsx) | Theme toolbar (Vueless-style iframe DOM update, no `globals.theme`); optional shell tweaks in [BRANDING.md](./BRANDING.md) |
-| [preview-storybook.css](./preview-storybook.css) | `#storybook-root` and Storybook docs/loading surfaces |
-| [vitest.setup.ts](./vitest.setup.ts) | Portable stories / Vitest integration |
+| File                                             | Role                                                                                                                       |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| [main.ts](./main.ts)                             | Stories glob, addons, Vite merge, `staticDirs`                                                                             |
+| [preview.ts](./preview.ts)                       | Global parameters, decorators, tags                                                                                        |
+| [theme-constants.ts](./theme-constants.ts)       | Toolbar theme ids (shared with manager + theme apply)                                                                      |
+| [theme-apply.ts](./theme-apply.ts)               | Class mapping, `localStorage` key, preview iframe DOM helper                                                               |
+| [theme-decorator.ts](./theme-decorator.ts)       | Preview: apply theme classes + channel sync                                                                                |
+| [manager.tsx](./manager.tsx)                     | Theme toolbar (Vueless-style iframe DOM update, no `globals.theme`); optional shell tweaks in [BRANDING.md](./BRANDING.md) |
+| [preview-storybook.css](./preview-storybook.css) | `#storybook-root` and Storybook docs/loading surfaces                                                                      |
+| [vitest.setup.ts](./vitest.setup.ts)             | Portable stories / Vitest integration                                                                                      |
 
 Add new global behavior in small modules and import them from `preview.ts` so this file stays an ordered list of decorators and parameters.
 

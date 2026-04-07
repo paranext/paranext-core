@@ -20,7 +20,9 @@ const REGISTER_ID = 'platform-bible/storybook-theme';
 const TOOL_ID = `${REGISTER_ID}/tool`;
 
 function ThemeTool() {
-  const [current, setCurrent] = React.useState<StorybookThemeId>(() => readStoredStorybookThemeId());
+  const [current, setCurrent] = React.useState<StorybookThemeId>(() =>
+    readStoredStorybookThemeId(),
+  );
 
   const setTheme = (themeId: StorybookThemeId) => {
     persistStorybookTheme(themeId);
