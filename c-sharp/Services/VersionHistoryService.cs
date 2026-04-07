@@ -33,7 +33,7 @@ internal class VersionHistoryService(PapiClient papiClient)
     /// Function to commit a snapshot of the current changes.
     /// </summary>
     /// <returns>Whether there were changes to commit (if not forcing)</returns>
-    private Boolean Commit(String projectId, String comment, Boolean forceCommit)
+    private Boolean Commit(String projectId, String comment, Boolean? forceCommit = false)
     {
         throw new Exception("This command is unimplemented!");
     }
