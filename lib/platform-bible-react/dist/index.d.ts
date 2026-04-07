@@ -2102,8 +2102,6 @@ export declare const DialogOverlay: React$1.ForwardRefExoticComponent<Omit<Dialo
  * screen. Optionally includes a close button in the top corner.
  */
 export declare const DialogContent: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	/** When false, hides the default corner close (X) button (shadcn API). */
-	showCloseButton?: boolean;
 	/** Merged into `DialogOverlay` for per-call backdrop styling (e.g. overlay service modals). */
 	overlayClassName?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;

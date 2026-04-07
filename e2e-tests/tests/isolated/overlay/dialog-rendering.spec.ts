@@ -8,21 +8,37 @@
  *   dismissal returns the correct value to the caller.
  */
 
-import { Page } from '@playwright/test';
+import { Locator, Page } from '@playwright/test';
 import WebSocket from 'ws';
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { waitForAppReady } from '../../../fixtures/helpers';
+import {
+  waitForAppReady,
+  waitForAtLeastOneProjectMetadata,
+  waitForPapiMethodRegistered,
+} from '../../../fixtures/helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Send a PAPI `dialog:showDialog` JSON-RPC command over WebSocket. Returns a promise that resolves
- * with the dialog result once the user dismisses it. Uses a generous timeout because the dialog
- * stays open until Playwright interacts with it.
- */
-function showDialogViaWebSocket<T = unknown>(
+/** True when the PAPI client failed transiently (retrying the RPC can succeed). */
+function isTransientPapiWebSocketError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message;
+  return (
+    msg.includes('PAPI error') &&
+    (msg.includes('closed') || msg.includes('Web socket') || msg.includes('ECONNRESET'))
+  );
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** Single WebSocket round-trip for `dialog:showDialog` (no retries). */
+function showDialogViaWebSocketOnce<T = unknown>(
   dialogType: string,
   options: Record<string, unknown> = {},
   port = 8876,
@@ -74,6 +90,33 @@ function showDialogViaWebSocket<T = unknown>(
   });
 }
 
+/**
+ * Send a PAPI `dialog:showDialog` JSON-RPC command over WebSocket. Returns a promise that resolves
+ * with the dialog result once the user dismisses it. Uses a generous timeout because the dialog
+ * stays open until Playwright interacts with it.
+ *
+ * Retries on transient WebSocket / PAPI connection errors (e.g. renderer bridge not ready yet).
+ */
+async function showDialogViaWebSocket<T = unknown>(
+  dialogType: string,
+  options: Record<string, unknown> = {},
+  port = 8876,
+): Promise<T | undefined> {
+  const maxAttempts = 4;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await showDialogViaWebSocketOnce<T>(dialogType, options, port);
+    } catch (e) {
+      if (attempt < maxAttempts - 1 && isTransientPapiWebSocketError(e)) {
+        await delay(400 * (attempt + 1));
+      } else {
+        throw e;
+      }
+    }
+  }
+  throw new Error('showDialogViaWebSocket: internal retry loop exited without result');
+}
+
 /** Locate the modal overlay dialog element in the main page. */
 function modalDialog(page: Page) {
   return page.locator('[data-overlay-modal-dialog]');
@@ -95,12 +138,29 @@ function floatingTabContent(page: Page, titleSubstring: string) {
     .filter({ has: page.locator(`.dock-tab-btn:has-text("${titleSubstring}")`) });
 }
 
+/**
+ * Wait until select-project / select-multiple-projects async metadata has loaded and the list has
+ * at least one row. Polls list count so we do not depend on a visible "Loading Projects" flash
+ * (fast loads may skip that state).
+ */
+async function waitForProjectListReady(container: Locator) {
+  await expect
+    .poll(async () => container.locator('.project-list li').count(), {
+      timeout: 45_000,
+    })
+    .toBeGreaterThan(0);
+}
+
 // ---------------------------------------------------------------------------
 // Test
 // ---------------------------------------------------------------------------
 
 test('all dialog types render correctly in modal and non-modal form', async ({ mainPage }) => {
   await waitForAppReady(mainPage);
+  await waitForAtLeastOneProjectMetadata();
+  // Dock + platform.about can be registered before the dialog service finishes wiring; avoid
+  // forwarding to a closed renderer socket by waiting for the dialog RPC to appear in rpc.discover.
+  await waitForPapiMethodRegistered('dialog:showDialog');
 
   // =========================================================================
   // Alert Dialog
@@ -130,8 +190,9 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     const okButton = dialog.locator('button', { hasText: 'Acknowledged' });
     await expect(okButton).toBeVisible();
 
-    // No Cancel button on alert dialogs
-    expect(await dialog.locator('button').count()).toBe(1);
+    // Modal shell DialogContent includes a Radix close control; alert body has only the primary action (no Cancel).
+    await expect(dialog.getByRole('button', { name: 'Close' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /^cancel$/i })).toHaveCount(0);
 
     // Dismiss and verify return value
     await okButton.click();
@@ -278,9 +339,9 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     await expect(modalBackdrop(mainPage)).toBeVisible();
     await expect(dialog).toContainText('Choose one project');
 
-    // Wait for project list to load (should show at least one project button)
+    await waitForProjectListReady(dialog);
     const projectButtons = dialog.locator('.project-list button');
-    await expect(projectButtons.first()).toBeVisible({ timeout: 15_000 });
+    await expect(projectButtons.first()).toBeVisible();
 
     // The project list can be taller than the 85vh modal viewport. Playwright
     // considers the element "outside of the viewport" even when it's scrollable
@@ -304,9 +365,9 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     await expect(panel).toBeVisible({ timeout: 10_000 });
     await expect(modalDialog(mainPage)).not.toBeVisible();
 
-    // Wait for project list to load
+    await waitForProjectListReady(panel);
     const projectButtons = panel.locator('.project-list button');
-    await expect(projectButtons.first()).toBeVisible({ timeout: 15_000 });
+    await expect(projectButtons.first()).toBeVisible();
 
     await projectButtons.first().click();
     await expect(panel).not.toBeVisible({ timeout: 3_000 });
@@ -331,10 +392,10 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     await expect(modalBackdrop(mainPage)).toBeVisible();
     await expect(dialog).toContainText('Check one or more');
 
-    // Wait for projects to load, then toggle the first project.
+    await waitForProjectListReady(dialog);
     // Use force:true because Playwright can't click inside scrollable fixed modals.
     const projectButtons = dialog.locator('.project-list button');
-    await expect(projectButtons.first()).toBeVisible({ timeout: 15_000 });
+    await expect(projectButtons.first()).toBeVisible();
     await projectButtons.first().click({ force: true });
 
     // Click the submit button using its specific CSS class (kept in view below scroll region).
@@ -359,8 +420,9 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     await expect(panel).toBeVisible({ timeout: 10_000 });
     await expect(modalDialog(mainPage)).not.toBeVisible();
 
+    await waitForProjectListReady(panel);
     const projectButtons = panel.locator('.project-list button');
-    await expect(projectButtons.first()).toBeVisible({ timeout: 15_000 });
+    await expect(projectButtons.first()).toBeVisible();
     await projectButtons.first().click();
 
     const submitButton = panel.locator('.select-multiple-projects-submit-button button');
@@ -399,7 +461,9 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
     // Fixed modal + overflow can clip the footer; scrollIntoView does not fix that, and Playwright's
     // click can fail even with force:true when the hit point is outside the viewport.
     const submitButton = dialog.locator('.select-books-dialog-submit-button');
-    await submitButton.evaluate((el) => (el as HTMLElement).click());
+    await submitButton.evaluate((el) => {
+      if (el instanceof HTMLElement) el.click();
+    });
 
     await expect(dialog).not.toBeVisible({ timeout: 3_000 });
     const result = await resultPromise;

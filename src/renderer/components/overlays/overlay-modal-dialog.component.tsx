@@ -43,7 +43,6 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
   return (
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent
-        showCloseButton={false}
         overlayClassName="overlay-modal-backdrop tw-bg-black/40"
         data-overlay-modal-dialog
         role={typeof overlay.props.role === 'string' ? overlay.props.role : 'dialog'}
