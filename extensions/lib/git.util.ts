@@ -205,8 +205,8 @@ export async function isUnusedWorkspacePackageLock(repoRootRelativePath: string)
 const CONFLICT_XY_CODES = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
 
 /**
- * After a `git subtree pull` fails, call this to auto-resolve any conflicts that are solely unused
- * workspace `package-lock.json` files.
+ * After a `git subtree pull` or `git merge` fails, call this to auto-resolve any conflicts that are
+ * solely unused workspace `package-lock.json` files.
  *
  * Uses `git status --porcelain` (v1 format) — intentionally different from `checkForWorkingChanges`
  * which uses `--porcelain=v2`. V1 is simpler for conflict-code parsing.

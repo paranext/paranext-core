@@ -15,11 +15,11 @@ import {
 import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webpack.util';
 
 /**
- * After a failed `git subtree pull`, attempts to auto-resolve any conflicts that are solely unused
- * workspace `package-lock.json` files, then commits if fully resolved.
+ * After a failed `git subtree pull` or `git merge`, attempts to auto-resolve any conflicts that are
+ * solely unused workspace `package-lock.json` files, then commits if fully resolved.
  *
  * @param context Human-readable label for error messages (template name or extension name)
- * @param originalError The error thrown by the failed subtree pull
+ * @param originalError The error thrown by the failed merge/pull
  * @returns `'resolved'` if all conflicts were resolved and committed, `'failed'` otherwise (errors
  *   already logged)
  */
@@ -30,7 +30,7 @@ async function handleConflicts(
   const { resolved, remainingConflicts } = await resolvePackageLockConflicts();
 
   if (resolved > 0 && remainingConflicts.length === 0) {
-    // MERGE_HEAD exists; git prepared a squash-merge commit message. --no-edit reuses it.
+    // MERGE_HEAD exists; git prepared a commit message. --no-edit reuses it.
     await execCommand('git commit --no-edit');
     console.log(
       `Auto-resolved ${resolved} package-lock.json conflict(s) in ${context} by deleting unused lock files. Continuing.`,
