@@ -12,8 +12,8 @@ export type StorybookThemeId = (typeof STORYBOOK_THEME_IDS)[number];
 
 /** Human-readable labels for toolbar UI; keep in sync with ThemeMatrixDemo in theming-doc.tsx. */
 export const STORYBOOK_THEME_LABELS: Record<StorybookThemeId, string> = {
-  'shadcn-light': 'Shadcn Slate (light)',
-  'shadcn-dark': 'Shadcn Slate (dark)',
+  'shadcn-light': 'Shadcn Neutral (light)',
+  'shadcn-dark': 'Shadcn Neutral (dark)',
   'platform-light': 'Platform light',
   'platform-dark': 'Platform dark',
   'paratext-light': 'Paratext light',

@@ -103,29 +103,44 @@ function ThemeColorDisplay() {
         >
           themes.data.json
         </a>
-        ; the Shadcn Slate preview classes are Storybook-only.
+        ; the Shadcn Neutral preview classes are Storybook-only.
       </p>
+      <br />
       {isShadcn && (
-        <p>
-          <strong>Shadcn Slate</strong> uses the stock HSL Slate preset under{' '}
-          <code>.theme-shadcn-default</code> for side-by-side comparison with Platform (which tweaks
-          some tokens on <code>:root</code> / <code>.dark</code>).
-        </p>
+        <>
+          <p>
+            <strong>Shadcn Neutral</strong> uses the stock Neutral preset (HSL converted from the
+            OKLCH scaffold in the shadcn docs) under <code>.theme-shadcn-neutral</code> for
+            side-by-side comparison with Platform (which tweaks some tokens on <code>:root</code> /{' '}
+            <code>.dark</code>).
+          </p>
+          <br />
+        </>
       )}
       {isPlatform && (
-        <p>
-          <strong>Platform</strong> themes use Platform.Bible’s Slate-based tokens; ui.shadcn.com’s
-          current default may differ (for example neutral/oklch). Expect slight differences in gray
-          tones.
-        </p>
+        <>
+          <p>
+            <strong>Platform</strong> uses Slate-family HSLs with product tweaks vs stock Shadcn
+            Neutral in <code>.theme-shadcn-neutral</code>: different <strong>popover</strong> and{' '}
+            <strong>secondary/muted/accent</strong> neutrals, a different <strong>sidebar-*</strong>{' '}
+            block in light mode, and in dark mode different <strong>border/input</strong> and more
+            muted <strong>sidebar</strong> labels. See Guidelines / Theming for a concise
+            comparison.
+          </p>
+          <br />
+        </>
       )}
       {isParatext && (
-        <p>
-          <strong>Paratext</strong> palettes are defined in <code>themes.data.json</code> and{' '}
-          <code>index.css</code>.
-        </p>
+        <>
+          <p>
+            <strong>Paratext</strong> palettes are defined in <code>themes.data.json</code> and{' '}
+            <code>index.css</code>.
+          </p>
+          <br />
+        </>
       )}
       <p>Colors for the active theme:</p>
+      <br />
       <table>
         <thead>
           <tr>

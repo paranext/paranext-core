@@ -47,9 +47,9 @@ export function ThemingGuideBody() {
       </p>
       <ul className="tw-list-inside tw-list-disc tw-space-y-1">
         <li>
-          <strong>shadcn-light</strong> / <strong>shadcn-dark</strong> — Stock Shadcn Slate (HSL) in{' '}
-          <code>.theme-shadcn-default</code>; Storybook preview only (not in{' '}
-          <code>themes.data.json</code>).
+          <strong>shadcn-light</strong> / <strong>shadcn-dark</strong> — Stock Shadcn Neutral (HSL,
+          from the docs OKLCH scaffold) in <code>.theme-shadcn-neutral</code>; Storybook preview
+          only (not in <code>themes.data.json</code>).
         </li>
         <li>
           <strong>platform-light</strong> / <strong>platform-dark</strong> — Platform.Bible default
@@ -59,6 +59,59 @@ export function ThemingGuideBody() {
           <strong>paratext-light</strong> / <strong>paratext-dark</strong> — Paratext palettes.
         </li>
       </ul>
+      <h2 className="tw-py-2 tw-font-bold">Platform vs Shadcn Neutral vs Paratext</h2>
+      <p className="tw-text-sm tw-text-slate-600">
+        CSS variables live in{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css"
+        >
+          index.css
+        </a>
+        : Platform light is <code>:root</code> / <code>.theme-platform-light</code>; Platform dark
+        is <code>.dark</code>; stock Shadcn Neutral is <code>.theme-shadcn-neutral</code> (and{' '}
+        <code>.dark.theme-shadcn-neutral</code>); Paratext is <code>.paratext-light</code> /{' '}
+        <code>.paratext-dark</code>. The running app loads Platform and Paratext HSLs from{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json"
+        >
+          themes.data.json
+        </a>{' '}
+        (default Platform family key and <code>paratext</code>); Shadcn Neutral is Storybook-only.
+      </p>
+      <p>
+        <strong>Platform</strong> default (<code>:root</code> / <code>.dark</code>) is{' '}
+        <strong>Slate-based</strong> (blue-gray neutrals) but <strong>not identical</strong> to the
+        stock Shadcn Neutral preset under <code>.theme-shadcn-neutral</code> in{' '}
+        <code>index.css</code>. Use the toolbar’s <strong>Shadcn Neutral</strong> options when you
+        need the closest match to{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://ui.shadcn.com/docs/theming#neutral"
+          target="_blank"
+          rel="noreferrer"
+        >
+          shadcn/ui docs
+        </a>{' '}
+        for development, UX review, or debugging.
+      </p>
+      <p className="tw-text-sm tw-text-slate-600">
+        <strong>Light:</strong> Platform differs from stock Neutral on <strong>popover</strong>{' '}
+        (tinted vs pure white), <strong>secondary / muted / accent</strong> neutrals (Platform{' '}
+        <code>210 50% 95%</code> vs Neutral <code>0 0% 96.1%</code>), and the full{' '}
+        <strong>sidebar-*</strong> token block (Platform stays Slate-aligned; Neutral follows the
+        docs scaffold).
+      </p>
+      <p className="tw-text-sm tw-text-slate-600">
+        <strong>Dark:</strong> Platform uses solid <strong>border</strong> / <strong>input</strong>{' '}
+        grays; stock Neutral uses semi-transparent white on dark. Sidebar styling also differs
+        (including Neutral’s violet <strong>sidebar-primary</strong> in the docs preset).
+      </p>
+      <p className="tw-text-sm tw-text-slate-600">
+        <strong>Paratext</strong> is a separate palette (Caffeine-inspired in tweakcn), not vanilla
+        Shadcn; it is not “mostly Slate.”
+      </p>
       <h2 className="tw-py-2 tw-font-bold">Try it: change theme</h2>
       <p>
         Shadcn-style theming is driven by CSS variables in{' '}
@@ -168,8 +221,10 @@ export function ThemingGuideBody() {
         </li>
         <li>
           Register the theme id in <code>.storybook/theme-constants.ts</code> (
-          <code>STORYBOOK_THEME_IDS</code>), map classes in <code>.storybook/theme-apply.ts</code>,
-          and add it to the Theme menu in <code>.storybook/manager.tsx</code>.
+          <code>STORYBOOK_THEME_IDS</code> and <code>STORYBOOK_THEME_LABELS</code>), map classes in{' '}
+          <code>.storybook/theme-apply.ts</code> (<code>CLASS_MAP</code> and{' '}
+          <code>ALL_THEME_CLASSES</code>). The Theme toolbar in <code>.storybook/manager.tsx</code>{' '}
+          lists those ids automatically.
         </li>
       </ol>
       <p className="tw-pt-2">
@@ -200,8 +255,8 @@ export function ThemingGuideBody() {
 
 /** Theme class only on the outer shell so `index.css` variables apply before `pr-twp` / utilities. */
 const MATRIX_THEMES = [
-  { id: 'shadcn-light', label: 'Shadcn Slate (light)', themeShell: 'theme-shadcn-default' },
-  { id: 'shadcn-dark', label: 'Shadcn Slate (dark)', themeShell: 'dark theme-shadcn-default' },
+  { id: 'shadcn-light', label: 'Shadcn Neutral (light)', themeShell: 'theme-shadcn-neutral' },
+  { id: 'shadcn-dark', label: 'Shadcn Neutral (dark)', themeShell: 'dark theme-shadcn-neutral' },
   { id: 'platform-light', label: 'Platform light', themeShell: 'theme-platform-light' },
   { id: 'platform-dark', label: 'Platform dark', themeShell: 'dark' },
   { id: 'paratext-light', label: 'Paratext light', themeShell: 'paratext-light' },

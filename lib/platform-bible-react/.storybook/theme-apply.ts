@@ -11,8 +11,8 @@ export const PLATFORM_BIBLE_STORYBOOK_THEME_STORAGE_KEY = 'platform-bible-storyb
 export const PLATFORM_BIBLE_THEME_CHANNEL = 'platform-bible/storybook-theme-changed';
 
 const CLASS_MAP: Record<StorybookThemeId, string> = {
-  'shadcn-light': 'theme-shadcn-default',
-  'shadcn-dark': 'dark theme-shadcn-default',
+  'shadcn-light': 'theme-shadcn-neutral',
+  'shadcn-dark': 'dark theme-shadcn-neutral',
   'platform-light': '',
   'platform-dark': 'dark',
   'paratext-light': 'paratext-light',
@@ -23,7 +23,7 @@ const ALL_THEME_CLASSES = [
   'dark',
   'paratext-light',
   'paratext-dark',
-  'theme-shadcn-default',
+  'theme-shadcn-neutral',
 ] as const;
 
 function isStorybookThemeId(value: string | undefined): value is StorybookThemeId {
