@@ -30,7 +30,7 @@ internal class ParatextProjectSendReceiveService(
         await Task.WhenAll(
             papiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.commitChanges",
-                Commit
+                CommitChanges
             ),
             papiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.commitDaily",
