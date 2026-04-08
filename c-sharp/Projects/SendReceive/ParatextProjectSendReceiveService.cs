@@ -28,14 +28,13 @@ internal class ParatextProjectSendReceiveService(
     {
         // Set up commands on the PAPI
         await Task.WhenAll(
-            papiClient.RegisterRequestHandlerAsync("command:versionHistory.commit", Commit),
             papiClient.RegisterRequestHandlerAsync(
-                "command:versionHistory.commitDaily",
-                CommitDaily
+                "command:paratextBibleSendReceive.commitChanges",
+                Commit
             ),
             papiClient.RegisterRequestHandlerAsync(
-                "command:versionHistory.quickCommit",
-                QuickCommit
+                "command:paratextBibleSendReceive.commitDaily",
+                CommitDaily
             )
         );
     }
@@ -49,9 +48,11 @@ internal class ParatextProjectSendReceiveService(
     /// will only commit if there are changes/revisions detected.
     /// </summary>
     /// <returns>Whether there were changes to commit (if not forcing)</returns>
-    private Boolean Commit(String projectId, String comment, Boolean? forceCommit = false)
+    private Boolean CommitChanges(String projectId, String comment, Boolean? forceCommit = false)
     {
-        throw new Exception("This command is unimplemented!");
+        throw new Exception(
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+        );
     }
 
     /// <summary>
@@ -59,20 +60,9 @@ internal class ParatextProjectSendReceiveService(
     /// </summary>
     private void CommitDaily(String projectId)
     {
-        throw new Exception("This command is unimplemented!");
-    }
-
-    /// <summary>
-    /// Function that quickly commits changes, bypassing merger check and few other things
-    /// </summary>
-    private void QuickCommit(
-        String projectId,
-        String comment,
-        String? dblRevisionNumber = null,
-        String? forcedUserName = null
-    )
-    {
-        throw new Exception("This command is unimplemented!");
+        throw new Exception(
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+        );
     }
 
     #endregion
