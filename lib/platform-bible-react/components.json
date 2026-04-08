@@ -1,4 +1,5 @@
 {
+  "$schema": "https://ui.shadcn.com/schema.json",
   "style": "new-york",
   "rsc": false,
   "tsx": true,
@@ -13,7 +14,9 @@
   "aliases": {
     "components": "@/components/shadcn-ui",
     "utils": "@/utils/shadcn-ui.util",
-    "ui": "@/components/shadcn-ui"
+    "ui": "@/components/shadcn-ui",
+    "lib": "@/lib/shadcn-ui",
+    "hooks": "@/hooks/shadcn-ui"
   },
   "registries": {
     "@shadcn-editor": "https://shadcn-editor.vercel.app/r/{name}.json"

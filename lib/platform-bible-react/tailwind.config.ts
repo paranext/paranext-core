@@ -132,7 +132,7 @@ const config: Config = {
     // #endregion
     // TW4: containerQueries removed — built into TW4
     // TW4: tailwindCssAnimate removed — not needed with TW4
-    // TW4: scopedPreflightStyles removed — replaced by scoped-preflight.css
+    // TW4: scopedPreflightStyles removed — replaced by @plugin "tailwindcss-scoped-preflight" in index.css
   ],
 };
 

@@ -3284,7 +3284,7 @@ export declare function endsWith(string: string, searchString: string, endPositi
  * <p>
  *   {formatReplacementStringToArray('Hi {other}! I am {name}.', {
  *     other: 'Billy',
- *     name: <span className="tw-text-red-500">Jim</span>,
+ *     name: <span className="tw:text-red-500">Jim</span>,
  *   })}
  * </p>
  * ```
@@ -4831,7 +4831,7 @@ export interface ThemeDefinition {
 	/**
 	 * Theme colors and other CSS variable properties that adjust the looks of the application. These
 	 * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
-	 * `tw-bg-primary`
+	 * `tw:bg-primary`
 	 *
 	 * See the wiki's [Matching Application
 	 * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
@@ -4842,7 +4842,7 @@ export interface ThemeDefinition {
 /**
  * Theme colors and other CSS variable properties that adjust the looks of the application. These
  * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
- * `tw-bg-primary`
+ * `tw:bg-primary`
  *
  * See the wiki's [Matching Application
  * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)

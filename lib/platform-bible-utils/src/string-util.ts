@@ -136,7 +136,7 @@ function indexOfClosestClosingCurlyBrace(str: string, index: number, escaped: bo
  * <p>
  *   {formatReplacementStringToArray('Hi {other}! I am {name}.', {
  *     other: 'Billy',
- *     name: <span className="tw-text-red-500">Jim</span>,
+ *     name: <span className="tw:text-red-500">Jim</span>,
  *   })}
  * </p>
  * ```
