@@ -1,16 +1,3 @@
-using System.Diagnostics;
-using NetLoc;
-using Paranext.DataProvider.ParatextUtils;
-using Paranext.DataProvider.Services;
-using Paratext.Data;
-using Paratext.Data.ProjectFileAccess;
-using Paratext.Data.RegistryServerAccess;
-using Paratext.Data.Repository;
-using Paratext.Data.Users;
-using PtxUtils;
-using PtxUtils.Progress;
-using SIL.Scripture;
-
 namespace Paranext.DataProvider.Projects.SendReceive;
 
 /// <summary>
