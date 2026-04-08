@@ -1,10 +1,18 @@
-/* TW4 split imports — preflight omitted, scoped version imported separately.
+/* TW4 split imports — preflight omitted, scoped via plugin instead.
  * prefix(tw) must be on BOTH theme and utilities imports per TW4 docs. */
 @layer theme, base, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme) prefix(tw);
-@import './scoped-preflight.css';
 @import 'tailwindcss/utilities.css' layer(utilities) prefix(tw);
 @config '../tailwind.config.ts';
+
+/* Scope Tailwind's preflight to .pr-twp so it doesn't leak into host pages.
+ * isolationStrategy: inside = preflight only applies within .pr-twp elements. */
+@plugin 'tailwindcss-scoped-preflight' {
+  /* isolationStrategy is being formatted to all lower-case, but that is incorrect */
+  /* prettier-ignore */
+  isolationStrategy: inside;
+  selector: .pr-twp;
+}
 
 /*
  * WARNING: These themes are also represented in paranext-core/src/shared/data/themes.data.json!
@@ -175,11 +183,7 @@
 @layer base {
   .pr-twp,
   .pr-twp * {
-    /* Equivalent to @apply tw:border-border tw:outline-ring/50
-     * Written as raw CSS because @apply with prefix requires the full tailwindcss import,
-     * but we use split imports to exclude preflight (scoped-preflight.css replaces it). */
-    border-color: hsl(var(--border));
-    outline-color: hsl(var(--ring) / 0.5);
+    @apply tw:border-border tw:outline-ring/50;
   }
 
   /**
@@ -187,8 +191,6 @@
     */
   /* stylelint-disable-next-line selector-no-qualifying-type */
   body.pr-twp {
-    /* Equivalent to @apply tw:bg-background tw:text-foreground */
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
+    @apply tw:bg-background tw:text-foreground;
   }
 }

@@ -49,6 +49,9 @@
       "url": "http://json.schemastore.org/tsconfig"
     }
   ],
+  "json.schemaDownload.trustedDomains": {
+    "https://ui.shadcn.com/schema.json": true
+  },
 
   "todohighlight.keywords": [
     {

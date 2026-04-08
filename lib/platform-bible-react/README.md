@@ -64,7 +64,12 @@ If you want your whole app to match the styles of these components, you can appl
 ```css
 * {
   border-color: hsl(var(--border));
-  outline-color: hsl(var(--ring) / 0.5);
+  outline-color: hsl(var(--ring));
+}
+@supports (color: color-mix(in lab, red, red)) {
+  * {
+    outline-color: color-mix(in oklab, hsl(var(--ring)) 50%, transparent);
+  }
 }
 
 body {
