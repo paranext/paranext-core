@@ -3,8 +3,16 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
 import replaceInFile from 'replace-in-file';
+import { minimatch } from 'minimatch';
+
+// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/git.util.ts
 
 const execAsync = promisify(exec);
+
+/** Absolute path to the repo root directory */
+const repoRoot = path.resolve(path.join(__dirname, '..'));
+
+// #endregion
 
 /** The name for the multi-extension template remote as used in the git scripts */
 export const MULTI_TEMPLATE_NAME = 'paranext-multi-extension-template';
@@ -18,6 +26,19 @@ export const SINGLE_TEMPLATE_NAME = 'paranext-extension-template';
 export const SINGLE_TEMPLATE_URL = 'https://github.com/paranext/paranext-extension-template';
 /** The branch to use in pulling changes from `SINGLE_TEMPLATE_REMOTE_NAME` in the git scripts */
 export const SINGLE_TEMPLATE_BRANCH = 'main';
+
+/** Cached npm workspaces list from root package.json, loaded once per process */
+let cachedWorkspaces: string[] | undefined;
+
+async function getWorkspaces(): Promise<string[]> {
+  if (cachedWorkspaces !== undefined) return cachedWorkspaces;
+  const content = await fs.readFile(path.join(repoRoot, 'package.json'), 'utf-8');
+  // JSON.parse returns unknown; we expect a package.json shape
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const packageJson = JSON.parse(content) as { workspaces?: string[] };
+  cachedWorkspaces = packageJson.workspaces ?? [];
+  return cachedWorkspaces;
+}
 
 // #region localization
 
@@ -86,7 +107,7 @@ export async function execCommand(
   if (!quiet) console.log(`\n>${execOptions.cwd ? ` cd ${execOptions.cwd};` : ''} ${command}`);
   try {
     const result = await execAsync(command, {
-      cwd: path.resolve(path.join(__dirname, '..')),
+      cwd: repoRoot,
       ...execOptions,
     });
     if (!quiet && result.stdout) console.log(result.stdout);
@@ -160,6 +181,78 @@ export async function fetchFromSingleTemplate() {
 }
 
 /**
+ * Returns true if the given repo-root-relative path is a `package-lock.json` file whose parent
+ * directory is an npm workspace under `src/`. Such files are unused (because the folder is a
+ * workspace) and are safe to delete automatically.
+ *
+ * @param repoRootRelativePath Repo-root-relative path, e.g. `src/hello-world/package-lock.json`
+ */
+export async function isUnusedWorkspacePackageLock(repoRootRelativePath: string): Promise<boolean> {
+  if (path.basename(repoRootRelativePath) !== 'package-lock.json') return false;
+  const parentDir = path.dirname(repoRootRelativePath);
+
+  // Must match a workspace pattern from the root package.json
+  const workspaces = await getWorkspaces();
+  return workspaces.some((pattern) => minimatch(parentDir, pattern));
+}
+
+/** Git status --porcelain v1 XY codes that indicate an unmerged (conflict) entry */
+const CONFLICT_XY_CODES = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
+
+/**
+ * After a `git subtree pull` or `git merge` fails, call this to auto-resolve any conflicts that are
+ * solely unused workspace `package-lock.json` files.
+ *
+ * Uses `git status --porcelain` (v1 format) — intentionally different from `checkForWorkingChanges`
+ * which uses `--porcelain=v2`. V1 is simpler for conflict-code parsing.
+ *
+ * For each conflicted `package-lock.json` that passes {@link isUnusedWorkspacePackageLock}, runs
+ * `git rm <path>` to delete and stage the file. Works for both:
+ *
+ * - `UU` (both modified): file is on disk with conflict markers
+ * - `DU` (deleted by us, modified by them): git leaves their version on disk during the conflict
+ *
+ * @returns `resolved` — number of lock files removed and staged. `remainingConflicts` —
+ *   repo-root-relative paths of all OTHER conflicted files.
+ */
+export async function resolvePackageLockConflicts(): Promise<{
+  resolved: number;
+  remainingConflicts: string[];
+}> {
+  const status = await execCommand('git status --porcelain', { quiet: true });
+
+  const lines = status.stdout.split('\n').filter((line) => line.length > 0);
+  const conflictLines = lines.filter((line) => CONFLICT_XY_CODES.has(line.slice(0, 2)));
+
+  const packageLockPaths: string[] = [];
+  const otherConflictPaths: string[] = [];
+
+  // Push order is non-deterministic across concurrent promises, but order doesn't matter here:
+  // all package-lock files get removed and remainingConflicts is only used for reporting.
+  await Promise.all(
+    conflictLines.map(async (line) => {
+      const filePath = line.slice(3); // skip "XY "
+      if (await isUnusedWorkspacePackageLock(filePath)) {
+        packageLockPaths.push(filePath);
+      } else {
+        otherConflictPaths.push(filePath);
+      }
+    }),
+  );
+
+  // Remove and stage each conflicted package-lock.json sequentially: each `git rm` must finish
+  // before the next to avoid interleaved git index updates.
+  // eslint-disable-next-line no-restricted-syntax
+  for (const filePath of packageLockPaths) {
+    // Intentional sequential await — see comment above the loop
+    // eslint-disable-next-line no-await-in-loop
+    await execCommand(`git rm "${filePath}"`);
+  }
+
+  return { resolved: packageLockPaths.length, remainingConflicts: otherConflictPaths };
+}
+
+/**
  * Converts kebab-case into camelCase. Assumes that the input is a valid kebab-case string
  *
  * Current implementation supports only UTF-16.
@@ -191,6 +284,28 @@ function toCamelCaseFromKebab(input: string): string {
 }
 
 /**
+ * Deletes a repo-root-relative path if it is an unused workspace `package-lock.json`. Silently
+ * skips if the file is absent.
+ *
+ * @param repoRootRelativePath Repo-root-relative path, e.g. `src/hello-world/package-lock.json`
+ */
+async function deleteUnusedPackageLockIfPresent(repoRootRelativePath: string): Promise<void> {
+  if (!(await isUnusedWorkspacePackageLock(repoRootRelativePath))) return;
+  try {
+    await fs.unlink(path.join(repoRoot, repoRootRelativePath));
+    console.log(`Deleted unused ${repoRootRelativePath}`);
+  } catch (error: unknown) {
+    // File not present — nothing to delete
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
+  }
+}
+
+/** Format the repo root folder after a merge from the multi-extension template. */
+export async function formatExtensionsRoot() {
+  // Currently a noop placeholder - add root-level formatting operations here in the future
+}
+
+/**
  * Format an extension folder to make the extension template folder work as a subfolder of this repo
  *
  * This function may be called many times for one extension folder, so make sure all operations work
@@ -199,6 +314,9 @@ function toCamelCaseFromKebab(input: string): string {
  * @param extensionFolderPath Path to the extension to format relative to root
  */
 export async function formatExtensionFolder(extensionFolderPath: string) {
+  // Delete package-lock.json if present — it is unused because this folder is an npm workspace
+  await deleteUnusedPackageLockIfPresent(`${extensionFolderPath}/package-lock.json`);
+
   // Get the basename of the extension folder for use in replacements
   const extensionName = path.basename(extensionFolderPath);
   const extensionNameCamelCase = toCamelCaseFromKebab(extensionName);
@@ -214,8 +332,9 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
       '**/.eslintcache',
       '**/dist/**/*',
       '**/release/**/*',
-      // With npm workspaces, child workspace package-lock.json files are not used. Let's not format
-      // them so they can stay the same as how they were in the template to avoid merge conflicts
+      // With npm workspaces, child workspace package-lock.json files are unused and are deleted
+      // proactively by formatExtensionFolder and formatExtensionsRoot. Skip them here in case they
+      // are present during a format pass before deletion runs.
       '**/package-lock.json',
     ],
     from: /([^/])\.\.\/paranext-core/g,

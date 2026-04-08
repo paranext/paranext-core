@@ -68,6 +68,7 @@
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^4.6.2",
     "glob": "^10.5.0",
+    "minimatch": "^9.0.9",
     "lucide-react": "^0.475.0",
     "papi-dts": "file:../paranext-core/lib/papi-dts",
     "platform-bible-react": "file:../paranext-core/lib/platform-bible-react",

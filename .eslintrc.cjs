@@ -27,7 +27,6 @@ module.exports = {
 
     // Use `noImplicitReturns` instead. See https://typescript-eslint.io/rules/consistent-return/.
     'consistent-return': 'off',
-    'no-param-reassign': ['error', { props: false }],
     'import/default': 'off',
     'import/extensions': 'off',
     // A temporary hack related to IDE not resolving correct package.json
@@ -35,6 +34,7 @@ module.exports = {
     'import/no-import-module-exports': 'off',
     'import/no-unresolved': 'error',
     'import/prefer-default-export': 'off',
+    'no-param-reassign': ['error', { props: false }],
     'react/jsx-filename-extension': 'off',
     'react/react-in-jsx-scope': 'off',
 
@@ -58,6 +58,26 @@ module.exports = {
       { exceptAfterSingleLine: true, exceptAfterOverload: true },
     ],
     '@typescript-eslint/member-ordering': 'error',
+    '@typescript-eslint/naming-convention': [
+      'error',
+      {
+        selector: 'variableLike',
+        format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
+        leadingUnderscore: 'allow',
+      },
+      {
+        selector: 'enumMember',
+        format: ['PascalCase'],
+      },
+      {
+        selector: 'function',
+        format: ['camelCase', 'PascalCase'],
+      },
+      {
+        selector: 'typeLike',
+        format: ['PascalCase'],
+      },
+    ],
     'no-empty-function': 'off',
     '@typescript-eslint/no-empty-function': [
       'error',
