@@ -5,14 +5,11 @@ import { Input } from '@/components/shadcn-ui/input';
 
 import {
   PLATFORM_BIBLE_THEME_CHANNEL,
-  readStoredStorybookThemeId,
-  STORYBOOK_THEME_IDS,
-  type StorybookThemeId,
+  isStorybookThemeState,
+  isParatextStorybookThemeState,
+  readStoredStorybookThemeState,
+  type StorybookThemeState,
 } from '../../../.storybook/theme-decorator';
-
-function isStorybookThemeId(value: string): value is StorybookThemeId {
-  return STORYBOOK_THEME_IDS.some((id) => id === value);
-}
 
 const TOKEN_NAMES = [
   'primary',
@@ -45,19 +42,19 @@ function useRootCssVar(name: string) {
   return value;
 }
 
-function useActiveStorybookThemeId(): StorybookThemeId {
-  const [id, setId] = useState<StorybookThemeId>(() => readStoredStorybookThemeId());
+function useActiveStorybookThemeState(): StorybookThemeState {
+  const [state, setState] = useState<StorybookThemeState>(() => readStoredStorybookThemeState());
 
   useEffect(() => {
     const ch = addons.getChannel();
-    const onTheme = (t: string) => {
-      if (isStorybookThemeId(t)) setId(t);
+    const onTheme = (payload: unknown) => {
+      if (isStorybookThemeState(payload)) setState(payload);
     };
     ch.on(PLATFORM_BIBLE_THEME_CHANNEL, onTheme);
     return () => ch.off(PLATFORM_BIBLE_THEME_CHANNEL, onTheme);
   }, []);
 
-  return id;
+  return state;
 }
 
 function TokenSwatch({ token, foregroundToken }: { token: string; foregroundToken: string }) {
@@ -80,16 +77,17 @@ function TokenSwatch({ token, foregroundToken }: { token: string; foregroundToke
 }
 
 function ThemeColorDisplay() {
-  const activeThemeId = useActiveStorybookThemeId();
-  const isParatext = activeThemeId === 'paratext-light' || activeThemeId === 'paratext-dark';
-  const isShadcn = activeThemeId === 'shadcn-light' || activeThemeId === 'shadcn-dark';
-  const isPlatform = activeThemeId === 'platform-light' || activeThemeId === 'platform-dark';
+  const active = useActiveStorybookThemeState();
+  const isParatext = isParatextStorybookThemeState(active);
+  const isShadcn = active.family === 'shadcn-neutral';
+  const isPlatform = active.family === 'platform';
 
   return (
     <>
       <p>
-        Color variables come from the active Storybook toolbar theme (see <strong>Theme</strong> in
-        the toolbar). They are defined in{' '}
+        Color variables reflect the toolbar state: <strong>Color scheme</strong> (light / dark /
+        system) and <strong>Theme</strong> (Shadcn Neutral, Platform, Paratext), persisted as{' '}
+        <code>{'{ family, colorScheme }'}</code>. Token values are defined in{' '}
         <a
           className="tw-text-blue-600 hover:tw-underline"
           href="https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css"
@@ -209,7 +207,7 @@ export const Default: Story = {
     docs: {
       description: {
         story:
-          'Theme colors for the current Storybook toolbar theme. Switch themes from the toolbar to see variables update.',
+          'Live CSS variables for the toolbar Color scheme + Theme selection (see Guides / Theming for architecture).',
       },
     },
   },

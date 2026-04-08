@@ -39,13 +39,16 @@ const preview: Preview = {
     },
 
     /**
-     * Toolbar themes: `.storybook/manager.tsx` + `.storybook/theme-decorator.ts` (not
+     * Toolbar Color scheme + Theme: `.storybook/manager.tsx` + `.storybook/theme-decorator.ts` (not
      * `globals.theme`)
      */
     backgrounds: {
       default: 'theme',
       values: [
-        /** Canvas fill comes from `--background` in `theme-decorator.ts` so it tracks toolbar theme */
+        /**
+         * Canvas fill uses `--background` from `index.css` (toolbar theme classes via
+         * theme-decorator)
+         */
         { name: 'theme', value: 'transparent' },
         { name: 'light', value: '#ffffff' },
         { name: 'dark', value: '#0f172a' },

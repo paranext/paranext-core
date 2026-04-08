@@ -1,4 +1,4 @@
-// Imported by manager.tsx and theme-apply.ts — add new theme IDs here.
+// Shared by manager.tsx and theme-apply.ts — add composite ids and toolbar lists here; update CLASS_MAP in theme-apply.ts when adding a palette.
 export const STORYBOOK_THEME_IDS = [
   'shadcn-light',
   'shadcn-dark',
@@ -10,7 +10,7 @@ export const STORYBOOK_THEME_IDS = [
 
 export type StorybookThemeId = (typeof STORYBOOK_THEME_IDS)[number];
 
-/** Human-readable labels for toolbar UI; keep in sync with ThemeMatrixDemo in theming-doc.tsx. */
+/** Human-readable labels for legacy composite ids (migration, themeOverride docs). */
 export const STORYBOOK_THEME_LABELS: Record<StorybookThemeId, string> = {
   'shadcn-light': 'Shadcn Neutral (light)',
   'shadcn-dark': 'Shadcn Neutral (dark)',
@@ -21,3 +21,33 @@ export const STORYBOOK_THEME_LABELS: Record<StorybookThemeId, string> = {
 };
 
 export const DEFAULT_STORYBOOK_THEME: StorybookThemeId = 'platform-light';
+
+/** Toolbar: theme family (palette), independent of light/dark/system. */
+export const STORYBOOK_THEME_FAMILIES = ['shadcn-neutral', 'platform', 'paratext'] as const;
+export type StorybookThemeFamily = (typeof STORYBOOK_THEME_FAMILIES)[number];
+
+export const STORYBOOK_THEME_FAMILY_LABELS: Record<StorybookThemeFamily, string> = {
+  'shadcn-neutral': 'Shadcn Neutral',
+  platform: 'Platform',
+  paratext: 'Paratext',
+};
+
+/** Toolbar: color scheme; `system` follows `prefers-color-scheme`. */
+export const STORYBOOK_COLOR_SCHEMES = ['light', 'dark', 'system'] as const;
+export type StorybookColorScheme = (typeof STORYBOOK_COLOR_SCHEMES)[number];
+
+export const STORYBOOK_COLOR_SCHEME_LABELS: Record<StorybookColorScheme, string> = {
+  light: 'Light',
+  dark: 'Dark',
+  system: 'System',
+};
+
+export type StorybookThemeState = {
+  family: StorybookThemeFamily;
+  colorScheme: StorybookColorScheme;
+};
+
+export const DEFAULT_STORYBOOK_THEME_STATE: StorybookThemeState = {
+  family: 'platform',
+  colorScheme: 'light',
+};

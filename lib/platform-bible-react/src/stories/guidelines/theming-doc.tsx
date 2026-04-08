@@ -35,15 +35,19 @@ export function ThemingGuideBody() {
         .
       </p>
       <p>
-        Use the <strong>Theme</strong> control in the Storybook toolbar to switch palettes. Choices
-        map to classes on <code>document.documentElement</code> in{' '}
+        Use the <strong>Color scheme</strong> (light, dark, or system) and <strong>Theme</strong>{' '}
+        (Shadcn Neutral, Platform, or Paratext) controls in the Storybook toolbar to switch
+        palettes. Selection is stored as <code>{'{ family, colorScheme }'}</code> (when{' '}
+        <strong>system</strong> is chosen, light vs dark follows <code>prefers-color-scheme</code>
+        ). Classes on <code>document.documentElement</code> come from{' '}
         <a
           className="tw-text-blue-600 hover:tw-underline"
           href="https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css"
         >
           index.css
         </a>
-        :
+        . The effective row is always one of the six legacy composite ids below (also used for{' '}
+        <code>parameters.themes.themeOverride</code> strings):
       </p>
       <ul className="tw-list-inside tw-list-disc tw-space-y-1">
         <li>
@@ -94,7 +98,8 @@ export function ThemingGuideBody() {
         >
           shadcn/ui docs
         </a>{' '}
-        for development, UX review, or debugging.
+        for development, UX review, or debugging. Pick <strong>Shadcn Neutral</strong> under Theme
+        and set Color scheme to light or dark (or system).
       </p>
       <p className="tw-text-sm tw-text-slate-600">
         <strong>Light:</strong> Platform differs from stock Neutral on <strong>popover</strong>{' '}
@@ -121,9 +126,10 @@ export function ThemingGuideBody() {
         >
           index.css
         </a>
-        . In this Storybook, use the <strong>Theme</strong> control in the toolbar (not a separate
-        preview-app toggle) to switch palettes and confirm your story respects tokens—foreground,
-        background, borders, and components that use the same variables should track the selection.
+        . In this Storybook, use the <strong>Color scheme</strong> and <strong>Theme</strong>{' '}
+        toolbar controls (not a separate preview-app toggle) to switch palettes and confirm your
+        story respects tokens—foreground, background, borders, and components that use the same
+        variables should track the selection.
       </p>
       <h2 className="tw-py-2 tw-font-bold">In the running application</h2>
       <p>
@@ -202,11 +208,16 @@ export function ThemingGuideBody() {
       </p>
       <h2 className="tw-py-2 tw-font-bold">Per-story theme override</h2>
       <p>
-        To lock a story to one theme (for example to show a dark-mode edge case), set{' '}
+        To lock a story to one palette (for example to show a dark-mode edge case), set a{' '}
+        <strong>legacy composite id</strong> such as{' '}
         <code className="tw-rounded tw-bg-slate-100 tw-px-1 tw-text-slate-800">
           parameters: {'{'} themes: {'{'} themeOverride: &apos;paratext-dark&apos; {'}'} {'}'}
         </code>{' '}
-        on the story or meta. The preview decorator reads this in{' '}
+        on the story or meta. You can also pass{' '}
+        <code className="tw-rounded tw-bg-slate-100 tw-px-1 tw-text-slate-800">
+          themeOverride: {'{'} family: &apos;paratext&apos;, colorScheme: &apos;system&apos; {'}'}
+        </code>{' '}
+        for system light/dark. The preview decorator reads this in{' '}
         <code>.storybook/theme-decorator.ts</code> (toolbar changes use <code>localStorage</code>{' '}
         and a channel event instead of <code>globals.theme</code>).
       </p>
@@ -220,11 +231,14 @@ export function ThemingGuideBody() {
           Update <code>themes.data.json</code> in paranext-core if the app should expose the theme.
         </li>
         <li>
-          Register the theme id in <code>.storybook/theme-constants.ts</code> (
+          Register the composite id in <code>.storybook/theme-constants.ts</code> (
           <code>STORYBOOK_THEME_IDS</code> and <code>STORYBOOK_THEME_LABELS</code>), map classes in{' '}
-          <code>.storybook/theme-apply.ts</code> (<code>CLASS_MAP</code> and{' '}
-          <code>ALL_THEME_CLASSES</code>). The Theme toolbar in <code>.storybook/manager.tsx</code>{' '}
-          lists those ids automatically.
+          <code>.storybook/theme-apply.ts</code> (<code>CLASS_MAP</code>,{' '}
+          <code>compositeThemeIdFromFamilyAndEffective</code>,{' '}
+          <code>themeStateFromLegacyThemeId</code>, and <code>ALL_THEME_CLASSES</code>). Toolbar
+          family and color-scheme options live in <code>STORYBOOK_THEME_FAMILIES</code> /{' '}
+          <code>STORYBOOK_COLOR_SCHEMES</code> in the same file; <code>.storybook/manager.tsx</code>{' '}
+          reads those lists for the two toolbar tools.
         </li>
       </ol>
       <p className="tw-pt-2">
@@ -264,15 +278,17 @@ const MATRIX_THEMES = [
 ] as const;
 
 /**
- * Side-by-side preview: each column uses the same token classes with theme CSS variables scoped to
- * a wrapper (no dependency on the global toolbar theme).
+ * Side-by-side preview: each column applies a local theme shell class from `MATRIX_THEMES` so
+ * tokens are scoped to that wrapper (stories that follow the toolbar get classes on `html` via
+ * localStorage and the preview channel instead). The matrix does not read toolbar storage; it is
+ * for visual comparison only.
  */
 export function ThemeMatrixDemo() {
   return (
     <div className="tw-not-prose tw-min-h-[200px] tw-max-w-6xl tw-space-y-4 tw-bg-slate-50 tw-p-6 tw-text-slate-900">
       <p className="tw-text-sm tw-text-slate-500">
         Each panel uses the same components with theme variables applied on a local wrapper. Compare
-        with the global toolbar theme on other stories. For a larger token table, see{' '}
+        with the global toolbar themes on other stories. For a larger token table, see{' '}
         <a
           className="tw-text-blue-600 hover:tw-underline"
           href="https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs"
