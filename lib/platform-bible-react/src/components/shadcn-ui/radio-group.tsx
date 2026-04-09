@@ -43,13 +43,13 @@ function RadioGroupItem({
     <RadioGroupPrimitive.Item
       ref={ref}
       className={cn(
-        'pr-twp tw:aspect-square tw:h-4 tw:w-4 tw:rounded-full tw:border tw:border-primary tw:text-primary tw:shadow tw:focus:outline-none tw:focus-visible:ring-1 tw:focus-visible:ring-ring tw:disabled:cursor-not-allowed tw:disabled:opacity-50',
+        'pr-twp tw:aspect-square tw:h-4 tw:w-4 tw:rounded-full tw:border tw:border-primary tw:text-primary tw:ring-offset-background tw:focus:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50',
         className,
       )}
       {...props}
     >
       <RadioGroupPrimitive.Indicator className="tw:flex tw:items-center tw:justify-center">
-        <Circle className="tw:h-3.5 tw:w-3.5 tw:fill-primary" />
+        <Circle className="tw:h-2.5 tw:w-2.5 tw:fill-current tw:text-current" />
       </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
   );

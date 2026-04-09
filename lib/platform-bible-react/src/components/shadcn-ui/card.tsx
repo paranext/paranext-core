@@ -15,7 +15,7 @@ function Card({
     <div
       ref={ref}
       className={cn(
-        'pr-twp tw:rounded-xl tw:border tw:bg-card tw:text-card-foreground tw:shadow',
+        'pr-twp tw:rounded-lg tw:border tw:bg-card tw:text-card-foreground tw:shadow-sm',
         className,
       )}
       {...props}
@@ -47,7 +47,10 @@ function CardTitle({
   return (
     <h3
       ref={ref}
-      className={cn('pr-twp tw:font-semibold tw:leading-none tw:tracking-tight', className)}
+      className={cn(
+        'pr-twp tw:text-2xl tw:font-semibold tw:leading-none tw:tracking-tight',
+        className,
+      )}
       {...props}
     >
       {/* added because of https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md  */}

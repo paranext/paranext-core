@@ -51,7 +51,7 @@ function Menubar({
       <MenubarPrimitive.Root
         ref={ref}
         className={cn(
-          'tw:flex tw:h-9 tw:items-center tw:space-x-1 tw:rounded-md tw:border tw:bg-background tw:p-1 tw:shadow-sm',
+          'tw:flex tw:h-10 tw:items-center tw:space-x-1 tw:rounded-md tw:border tw:bg-background tw:p-1',
           className,
         )}
         {...props}
@@ -72,7 +72,7 @@ function MenubarTrigger({
     <MenubarPrimitive.Trigger
       ref={ref}
       className={cn(
-        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-3 tw:py-1 tw:text-sm tw:font-medium tw:outline-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[state=open]:bg-accent tw:data-[state=open]:text-accent-foreground',
+        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-3 tw:py-1.5 tw:text-sm tw:font-medium tw:outline-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[state=open]:bg-accent tw:data-[state=open]:text-accent-foreground',
         // CUSTOM
         'pr-twp',
         menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants

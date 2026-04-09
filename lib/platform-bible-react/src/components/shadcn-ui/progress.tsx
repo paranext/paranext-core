@@ -21,7 +21,7 @@ function Progress({
     <ProgressPrimitive.Root
       ref={ref}
       className={cn(
-        'pr-twp tw:relative tw:h-2 tw:w-full tw:overflow-hidden tw:rounded-full tw:bg-primary/20',
+        'pr-twp tw:relative tw:h-4 tw:w-full tw:overflow-hidden tw:rounded-full tw:bg-secondary',
         className,
       )}
       {...props}
