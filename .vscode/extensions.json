@@ -10,6 +10,7 @@
     "ms-dotnettools.csdevkit",
     "streetsidesoftware.code-spell-checker",
     "stylelint.vscode-stylelint",
+    "unifiedjs.vscode-mdx",
     "vitest.explorer"
   ]
 }
