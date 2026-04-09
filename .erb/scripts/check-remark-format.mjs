@@ -20,8 +20,7 @@ import { remark } from 'remark';
 import remarkGfm from 'remark-gfm';
 import remarkMdx from 'remark-mdx';
 import { readFileSync } from 'fs';
-import pkg from 'glob';
-const { glob } = pkg;
+import glob from 'glob';
 import path from 'path';
 
 const patterns = process.argv.slice(2);
