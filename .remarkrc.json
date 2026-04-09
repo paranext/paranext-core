@@ -1,0 +1,7 @@
+{
+  "plugins": ["remark-mdx"],
+  "settings": {
+    "bullet": "-",
+    "rule": "-"
+  }
+}
