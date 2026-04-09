@@ -14,7 +14,10 @@ function Card({
   return (
     <div
       ref={ref}
-      className={cn('pr-twp tw:rounded-xl tw:border tw:bg-card tw:text-card-foreground', className)}
+      className={cn(
+        'pr-twp tw:rounded-xl tw:border tw:bg-card tw:text-card-foreground tw:shadow',
+        className,
+      )}
       {...props}
     />
   );
