@@ -8,7 +8,7 @@ type ExampleBlockProps = {
   variant?: Variant;
   /** Overrides the default label ("Best Practice" / "Anti-pattern" / "Tip") */
   title?: string;
-  /** Description text explaining what the example illustrates */
+  /** Body content of the block — typically a sentence or two explaining what the example illustrates */
   children?: React.ReactNode;
   /** Live component rendered in a framed preview area above the code */
   preview?: React.ReactNode;
