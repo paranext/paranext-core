@@ -34,7 +34,7 @@ internal class ParatextProjectSendReceiveService(
     /// Function to commit a snapshot of the current changes. Without `forceCommit` set to `true`,
     /// will only commit if there are changes/revisions detected.
     /// </summary>
-    /// <returns>Whether there were changes to commit (if not forcing)</returns>[
+    /// <returns>Whether there were changes to commit (if not forcing)</returns>
     protected Boolean CommitChanges(String projectId, String comment, Boolean forceCommit = false)
     {
         throw new Exception(
