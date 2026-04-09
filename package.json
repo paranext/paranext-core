@@ -62,7 +62,7 @@
     "editor:link": "yalc link @eten-tech-foundation/platform-editor --no-pure",
     "editor:unlink": "yalc remove @eten-tech-foundation/platform-editor && npm i --ignore-scripts",
     "format": "npm run format:core && npm run format --workspaces --if-present",
-    "format:check": "prettier --check --ignore-path .prettierignorerun . && remark \"./src/**/*.mdx\" && npm run format:check --workspaces --if-present",
+    "format:check": "prettier --check --ignore-path .prettierignorerun . && node .erb/scripts/check-remark-format.mjs \"./src/**/*.mdx\" && npm run format:check --workspaces --if-present",
     "format:core": "prettier --write --ignore-path .prettierignorerun . && remark \"./src/**/*.mdx\" -o",
     "link-dev-packages": "ts-node .erb/scripts/link-dev-packages.ts",
     "lint": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" npm run build:types && npm run lint:scripts && npm run lint:styles && npm run lint --workspaces --if-present",
