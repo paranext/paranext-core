@@ -1,11 +1,11 @@
 /* COLOR */
-$color--text: hsl(var(--foreground));
+$color--text: var(--foreground);
 $color--shadow: var(--divider, rgba(0, 0, 0, 0.5));
 
-$color--active-tab: hsl(var(--background));
-$color--inactive-tab: hsl(var(--muted));
-$color--focus-ring: hsl(var(--ring));
-$color--accent: hsl(var(--accent));
+$color--active-tab: var(--background);
+$color--inactive-tab: var(--muted);
+$color--focus-ring: var(--ring);
+$color--accent: var(--accent);
 
 $color--border: var(--divider, rgba(0, 0, 0, 0.12));
 

@@ -52,6 +52,8 @@
     "build:extensions": "cd extensions && npm run build",
     "build:extensions:production": "cd extensions && npm run build:production",
     "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.main.prod.ts",
+    "build:pbr": "npm run build:platform-bible-react",
+    "build:pbu": "npm run build:platform-bible-utils",
     "build:platform-bible-react": "cd lib/platform-bible-react && npm run build",
     "build:platform-bible-utils": "cd lib/platform-bible-utils && npm run build",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.prod.ts",

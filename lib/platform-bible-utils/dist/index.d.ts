@@ -4830,7 +4830,7 @@ export interface ThemeDefinition {
 	label: LocalizeKey;
 	/**
 	 * Theme colors and other CSS variable properties that adjust the looks of the application. These
-	 * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
+	 * are applied in CSS properties using `var(--variableName)` or Tailwind classes like
 	 * `tw:bg-primary`
 	 *
 	 * See the wiki's [Matching Application
@@ -4841,7 +4841,7 @@ export interface ThemeDefinition {
 }
 /**
  * Theme colors and other CSS variable properties that adjust the looks of the application. These
- * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
+ * are applied in CSS properties using `var(--variableName)` or Tailwind classes like
  * `tw:bg-primary`
  *
  * See the wiki's [Matching Application
