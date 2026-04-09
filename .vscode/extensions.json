@@ -11,7 +11,6 @@
     "streetsidesoftware.code-spell-checker",
     "stylelint.vscode-stylelint",
     "unifiedjs.vscode-mdx",
-    "unifiedjs.vscode-remark",
     "vitest.explorer"
   ]
 }
