@@ -14,12 +14,12 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          'tw:border-transparent tw:bg-primary tw:text-primary-foreground tw:shadow tw:hover:bg-primary/80',
+          'tw:border-transparent tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/80',
         secondary:
           'tw:border-transparent tw:bg-secondary tw:text-secondary-foreground tw:hover:bg-secondary/80',
         muted: 'tw:border-transparent tw:bg-muted tw:text-muted-foreground tw:hover:bg-muted/80',
         destructive:
-          'tw:border-transparent tw:bg-destructive tw:text-destructive-foreground tw:shadow tw:hover:bg-destructive/80',
+          'tw:border-transparent tw:bg-destructive tw:text-destructive-foreground tw:hover:bg-destructive/80',
         outline: 'tw:text-foreground',
         blueIndicator: 'tw:w-[5px] tw:h-[5px] tw:bg-blue-400 tw:px-0',
         mutedIndicator: 'tw:w-[5px] tw:h-[5px] tw:bg-zinc-400 tw:px-0',

@@ -198,7 +198,7 @@ export function PlatformBibleToolbar() {
                 <TooltipTrigger asChild>
                   <Badge
                     variant="ghost"
-                    className="tw:block tw:max-w-[150px] tw:shrink tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:font-normal"
+                    className="tw:block tw:max-w-[150px] tw:shrink tw:overflow-hidden tw:font-normal tw:text-ellipsis tw:whitespace-nowrap"
                   >
                     {marketingVersion}
                   </Badge>
