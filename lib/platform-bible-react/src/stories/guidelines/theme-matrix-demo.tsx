@@ -1,0 +1,54 @@
+import { Button } from '@/components/shadcn-ui/button';
+
+/** Theme class only on the outer shell so `index.css` variables apply before `pr-twp` / utilities. */
+const MATRIX_THEMES = [
+  { id: 'shadcn-light', label: 'Shadcn Neutral (light)', themeShell: 'theme-shadcn-neutral' },
+  { id: 'shadcn-dark', label: 'Shadcn Neutral (dark)', themeShell: 'dark theme-shadcn-neutral' },
+  { id: 'platform-light', label: 'Platform light', themeShell: 'theme-platform-light' },
+  { id: 'platform-dark', label: 'Platform dark', themeShell: 'dark' },
+  { id: 'paratext-light', label: 'Paratext light', themeShell: 'paratext-light' },
+  { id: 'paratext-dark', label: 'Paratext dark', themeShell: 'paratext-dark' },
+] as const;
+
+/**
+ * Side-by-side preview: each column applies a local theme shell class from `MATRIX_THEMES` so
+ * tokens are scoped to that wrapper (stories that follow the toolbar get classes on `html` via
+ * localStorage and the preview channel instead). The matrix does not read toolbar storage; it is
+ * for visual comparison only.
+ */
+export function ThemeMatrixDemo() {
+  return (
+    <div className="tw-not-prose tw-min-h-[200px] tw-max-w-6xl tw-space-y-4 tw-bg-slate-50 tw-p-6 tw-text-slate-900">
+      <p className="tw-text-sm tw-text-slate-500">
+        Each panel uses the same components with theme variables applied on a local wrapper. Compare
+        with the global toolbar themes on other stories. For a larger token table, see{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs"
+        >
+          Guides / Theme Colors
+        </a>
+        .
+      </p>
+      <div className="tw-grid tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-2 xl:tw-grid-cols-3 2xl:tw-grid-cols-6">
+        {MATRIX_THEMES.map(({ id, label, themeShell }) => (
+          <div key={id} className={themeShell}>
+            <div className="pr-twp tw-flex tw-flex-col tw-rounded-lg tw-border tw-border-border tw-bg-background tw-p-4 tw-text-foreground">
+              {/*
+                Important: Docs iframe can inherit a global `color` onto `p` that does not re-resolve
+                `--foreground` from this nested theme shell. Force token-based text color.
+              */}
+              <p className="tw-mb-2 tw-font-semibold !tw-text-foreground">{label}</p>
+              <Button type="button" variant="default" className="tw-mb-2">
+                Primary
+              </Button>
+              <Button type="button" variant="secondary">
+                Secondary
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
