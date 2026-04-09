@@ -19,6 +19,14 @@ const workspace = defineConfig({
           environment: 'jsdom',
         },
       },
+      // Node.js tests for build scripts
+      {
+        test: {
+          name: 'scripts',
+          include: ['scripts/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
       // Browser tests for Storybook
       {
         plugins: [
