@@ -1,3 +1,103 @@
+# Theming Doc MDX Migration Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Migrate the prose content of `ThemingGuideBody` from TSX into native MDX so Storybook's Docs styles handle links, headings, and code spans theme-adaptively.
+
+**Architecture:** Extract `ThemeMatrixDemo` (and its `MATRIX_THEMES` constant) into a new `theme-matrix-demo.tsx` file, inline all prose from `ThemingGuideBody` into `theming.mdx` as native markdown, and delete the now-empty `theming-doc.tsx`.
+
+**Tech Stack:** MDX 2, Storybook Docs addon, React (TSX for `ThemeMatrixDemo` only)
+
+---
+
+### Task 1: Create `theme-matrix-demo.tsx`
+
+**Files:**
+
+- Create: `lib/platform-bible-react/src/stories/guidelines/theme-matrix-demo.tsx`
+
+- [x] **Step 1: Write `theme-matrix-demo.tsx`** — copy `MATRIX_THEMES` and `ThemeMatrixDemo` verbatim from `theming-doc.tsx`. Drop the `ThemingGuideBody` export and its wrapping div entirely.
+
+```tsx
+import { Button } from '@/components/shadcn-ui/button';
+
+/** Theme class only on the outer shell so `index.css` variables apply before `pr-twp` / utilities. */
+const MATRIX_THEMES = [
+  { id: 'shadcn-light', label: 'Shadcn Neutral (light)', themeShell: 'theme-shadcn-neutral' },
+  { id: 'shadcn-dark', label: 'Shadcn Neutral (dark)', themeShell: 'dark theme-shadcn-neutral' },
+  { id: 'platform-light', label: 'Platform light', themeShell: 'theme-platform-light' },
+  { id: 'platform-dark', label: 'Platform dark', themeShell: 'dark' },
+  { id: 'paratext-light', label: 'Paratext light', themeShell: 'paratext-light' },
+  { id: 'paratext-dark', label: 'Paratext dark', themeShell: 'paratext-dark' },
+] as const;
+
+/**
+ * Side-by-side preview: each column applies a local theme shell class from `MATRIX_THEMES` so
+ * tokens are scoped to that wrapper (stories that follow the toolbar get classes on `html` via
+ * localStorage and the preview channel instead). The matrix does not read toolbar storage; it is
+ * for visual comparison only.
+ */
+export function ThemeMatrixDemo() {
+  return (
+    <div className="tw-not-prose tw-min-h-[200px] tw-max-w-6xl tw-space-y-4 tw-bg-slate-50 tw-p-6 tw-text-slate-900">
+      <p className="tw-text-sm tw-text-slate-500">
+        Each panel uses the same components with theme variables applied on a local wrapper. Compare
+        with the global toolbar themes on other stories. For a larger token table, see{' '}
+        <a
+          className="tw-text-blue-600 hover:tw-underline"
+          href="https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs"
+        >
+          Guides / Theme Colors
+        </a>
+        .
+      </p>
+      <div className="tw-grid tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-2 xl:tw-grid-cols-3 2xl:tw-grid-cols-6">
+        {MATRIX_THEMES.map(({ id, label, themeShell }) => (
+          <div key={id} className={themeShell}>
+            <div className="pr-twp tw-flex tw-flex-col tw-rounded-lg tw-border tw-border-border tw-bg-background tw-p-4 tw-text-foreground">
+              {/*
+                Important: Docs iframe can inherit a global `color` onto `p` that does not re-resolve
+                `--foreground` from this nested theme shell. Force token-based text color.
+              */}
+              <p className="tw-mb-2 tw-font-semibold !tw-text-foreground">{label}</p>
+              <Button type="button" variant="default" className="tw-mb-2">
+                Primary
+              </Button>
+              <Button type="button" variant="secondary">
+                Secondary
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+- [x] **Step 2: Commit**
+
+```bash
+git add lib/platform-bible-react/src/stories/guidelines/theme-matrix-demo.tsx
+git commit -m "refactor(platform-bible-react): extract ThemeMatrixDemo into theme-matrix-demo.tsx"
+```
+
+---
+
+### Task 2: Replace `theming.mdx` content
+
+**Files:**
+
+- Modify: `lib/platform-bible-react/src/stories/guidelines/theming.mdx`
+
+- [x] **Step 1: Overwrite `theming.mdx`** with the full MDX below. Key changes vs. the old file:
+  - Import only `ThemeMatrixDemo` from the new `./theme-matrix-demo` path.
+  - All `ThemingGuideBody` prose inlined as markdown (headings `##`, links `[text](url)`, backtick code spans, bullet/numbered lists).
+  - Smaller-text callout `<p className="tw-text-sm ...">` paragraphs become regular prose.
+  - Bad-example `<table>` kept as JSX (it contains a live `<input>`); outer `tw-mb-6` class dropped.
+  - `## Theme matrix` section and `<ThemeMatrixDemo />` unchanged.
+
+```mdx
 import { Meta } from '@storybook/addon-docs/blocks';
 import { ThemeMatrixDemo } from './theme-matrix-demo';
 
@@ -143,3 +243,66 @@ of theme tokens. For the live token table for the toolbar-selected theme, see [G
 Colors](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs).
 
 <ThemeMatrixDemo />
+```
+
+- [x] **Step 2: Commit**
+
+```bash
+git add lib/platform-bible-react/src/stories/guidelines/theming.mdx
+git commit -m "refactor(platform-bible-react): inline ThemingGuideBody prose into theming.mdx as native MDX"
+```
+
+---
+
+### Task 3: Delete `theming-doc.tsx`
+
+**Files:**
+
+- Delete: `lib/platform-bible-react/src/stories/guidelines/theming-doc.tsx`
+
+- [x] **Step 1: Delete the file**
+
+```bash
+git rm lib/platform-bible-react/src/stories/guidelines/theming-doc.tsx
+```
+
+- [x] **Step 2: Commit**
+
+```bash
+git commit -m "refactor(platform-bible-react): delete theming-doc.tsx (content migrated to MDX)"
+```
+
+---
+
+### Task 4: Build and verify
+
+**Files:** none (verification only)
+
+- [x] **Step 1: Build the library**
+
+```bash
+cd lib/platform-bible-react && npm run build
+```
+
+Expected: build completes with no errors.
+
+- [x] **Step 2: Run Storybook and visually verify**
+
+```bash
+cd /Users/jolierabideau/dev/paranext-core && npm run storybook
+```
+
+Navigate to **Guidelines / Theming** in the Storybook sidebar. Verify:
+
+- All prose sections render (headings, paragraphs, links, lists, code spans)
+- The bad-example table and input are visible
+- The Theme matrix demo renders below all prose
+- Switching the toolbar Color scheme/Theme changes the matrix demo colors but the prose text adapts via Docs styles (no fixed-light wrapper)
+
+- [x] **Step 3: Confirm no other files reference `theming-doc`**
+
+```bash
+grep -r "theming-doc" lib/platform-bible-react/src/
+```
+
+Expected: no matches.
