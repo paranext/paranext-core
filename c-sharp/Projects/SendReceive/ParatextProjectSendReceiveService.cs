@@ -34,8 +34,8 @@ internal class ParatextProjectSendReceiveService(
     /// Function to commit a snapshot of the current changes. Without `forceCommit` set to `true`,
     /// will only commit if there are changes/revisions detected.
     /// </summary>
-    /// <returns>Whether there were changes to commit (if not forcing)</returns>
-    private Boolean CommitChanges(String projectId, String comment, Boolean? forceCommit = false)
+    /// <returns>Whether there were changes to commit (if not forcing)</returns>[
+    protected Boolean CommitChanges(String projectId, String comment, Boolean? forceCommit = false)
     {
         throw new Exception(
             "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
@@ -45,7 +45,7 @@ internal class ParatextProjectSendReceiveService(
     /// <summary>
     /// Function that only commits if it's been a day since the last commit
     /// </summary>
-    private void CommitDaily(String projectId)
+    protected void CommitDaily(String projectId)
     {
         throw new Exception(
             "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
