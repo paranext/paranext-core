@@ -1,20 +1,18 @@
 #!/usr/bin/env node
-/**
- * Verifies MDX files are formatted by remark.
- *
- * Reads each matched file, runs it through remark with the same plugins and
- * settings as .remarkrc.mjs, and compares the output to the original content.
- * Exits 1 and lists unformatted files if any differ.
- *
- * Files where remark is not idempotent (e.g. complex JSX inside attribute
- * expressions — a known remark-mdx limitation) are skipped rather than
- * flagged, since there is no stable target to compare against.
- *
- * Usage: node check-remark-format.mjs <glob> [<glob> ...]
- *
- * Example (root):   node .erb/scripts/check-remark-format.mjs "./src/**\/*.mdx"
- * Example (lib):    node ../../.erb/scripts/check-remark-format.mjs "**\/*.mdx"
- */
+// Verifies MDX files are formatted by remark.
+//
+// Reads each matched file, runs it through remark with the same plugins and settings as
+// .remarkrc.mjs, and compares the output to the original content. Exits 1 and lists unformatted
+// files if any differ.
+//
+// Files where remark is not idempotent (e.g. complex JSX inside attribute expressions — a known
+// remark-mdx limitation) are skipped rather than flagged, since there is no stable target to
+// compare against.
+//
+// Usage: node check-remark-format.mjs <glob> [<glob> ...]
+//
+// Example (root): node .erb/scripts/check-remark-format.mjs "./src/**/*.mdx"
+// Example (lib):  node ../../.erb/scripts/check-remark-format.mjs "**/*.mdx"
 
 import { remark } from 'remark';
 import remarkGfm from 'remark-gfm';
@@ -35,9 +33,7 @@ const processor = remark()
   .use(remarkGfm)
   .data('settings', { bullet: '-', rule: '-' });
 
-const files = patterns.flatMap((pattern) =>
-  glob.sync(pattern, { ignore: ['**/node_modules/**'] }),
-);
+const files = patterns.flatMap((pattern) => glob.sync(pattern, { ignore: ['**/node_modules/**'] }));
 
 if (files.length === 0) process.exit(0);
 
