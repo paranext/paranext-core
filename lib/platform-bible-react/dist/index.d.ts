@@ -2099,10 +2099,10 @@ export declare const DialogClose: React$1.ForwardRefExoticComponent<DialogPrimit
 export declare const DialogOverlay: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogOverlayProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * Main container for dialog content. Renders inside a portal with an overlay backdrop, centered on
- * screen. Optionally includes a close button in the top corner.
+ * screen. Includes a close button in the top corner.
  */
 export declare const DialogContent: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	/** Merged into `DialogOverlay` for per-call backdrop styling (e.g. overlay service modals). */
+	/** Additional CSS classes for the backdrop (`DialogOverlay`). Use when one dialog needs different overlay styling than the default. */
 	overlayClassName?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** Container for the dialog's header area. Stacks title and description vertically. */

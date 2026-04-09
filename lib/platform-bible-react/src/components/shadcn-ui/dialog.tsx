@@ -46,13 +46,16 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 // CUSTOM: Extend DialogContentProps with overlayClassName prop
 export type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
-  /** Merged into `DialogOverlay` for per-call backdrop styling (e.g. overlay service modals). */
+  /**
+   * Additional CSS classes for the backdrop (`DialogOverlay`). Use when one dialog needs different
+   * overlay styling than the default.
+   */
   overlayClassName?: string;
 };
 
 /**
  * Main container for dialog content. Renders inside a portal with an overlay backdrop, centered on
- * screen. Optionally includes a close button in the top corner.
+ * screen. Includes a close button in the top corner.
  */
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
