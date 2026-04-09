@@ -489,11 +489,11 @@ async function main() {
               }
 
               // Need to put commas between the numbers for it to work here
-              const newThemePrimaryString = newTheme.cssVariables.primary.split(' ').join(', ');
+              // const newThemePrimaryString = newTheme.cssVariables.primary.split(' ').join(', ');
 
               mainWindow?.setTitleBarOverlay({
                 color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
-                symbolColor: `hsl(${newThemePrimaryString})`,
+                symbolColor: newTheme.cssVariables.primary,
                 height: TITLE_BAR_BUTTON_HEIGHT,
               });
             }),
