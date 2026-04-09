@@ -8,13 +8,12 @@ A UI work item can only be moved to `Done` once its UX review property is set to
 
 *Written by Alex Mercado, UX*
 
-
-
 ---
 
 ## Request a UX review
 
 ### Pre-Review Checklist
+
 - [ ] Acceptance criteria are checked off or explicitly declared in the Jira work item
 - [ ] Jira UX review property is set to `needs review`
 - [ ] Storybook stories or documentation demonstrate the work
@@ -71,7 +70,9 @@ Every UI work item should have a **Storybook deliverable** — a story or docume
 When your PR description references other parts of the UI for comparison, provide **specific file paths and Storybook links** — not just names. This allows reviewers and AI-assisted review tools to actually locate and verify those references.
 
 **Unhelpful:**
+
 > "Adjusted padding to be consistent with the rest of the platform."
 
 **Helpful:**
+
 > "Adjusted padding to match the [SearchBar](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/basics-searchbar--docs) (`lib/platform-bible-react/src/components/basics/search-bar.component.tsx`) and the [TabToolbar](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/advanced-tabtoolbar--docs) (`lib/platform-bible-react/src/components/advanced/tab-toolbar/tab-toolbar.component.tsx`)."
