@@ -80,6 +80,8 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* #region theme definitions */
+
 /**
    * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
    * properties using `var(--variableName)` or Tailwind classes like `tw:bg-primary`
@@ -218,6 +220,8 @@
   --sidebar-border: oklch(0.2739 0.0055 285.94);
   --sidebar-ring: oklch(0.8711 0.0055 285.98);
 }
+
+/* #endregion theme definitions */
 
 /* #endregion */
 
