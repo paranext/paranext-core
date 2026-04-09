@@ -30,7 +30,7 @@ export function ThemeMatrixDemo() {
         </a>
         .
       </p>
-      <div className="tw-grid tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-2 xl:tw-grid-cols-3 2xl:tw-grid-cols-6">
+      <div className="tw-grid tw-grid-flow-row tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-2 xl:tw-auto-cols-fr xl:tw-grid-flow-col xl:tw-grid-cols-none xl:tw-grid-rows-2">
         {MATRIX_THEMES.map(({ id, label, themeShell }) => (
           <div key={id} className={themeShell}>
             <div className="pr-twp tw-flex tw-flex-col tw-rounded-lg tw-border tw-border-border tw-bg-background tw-p-4 tw-text-foreground">

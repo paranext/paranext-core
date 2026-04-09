@@ -23,13 +23,14 @@ export const PLATFORM_BIBLE_STORYBOOK_THEME_STORAGE_KEY = 'platform-bible-storyb
  */
 export const PLATFORM_BIBLE_THEME_CHANNEL = 'platform-bible/storybook-theme-changed';
 
-const CLASS_MAP: Record<StorybookThemeId, string> = {
-  'shadcn-light': 'theme-shadcn-neutral',
-  'shadcn-dark': 'dark theme-shadcn-neutral',
-  'platform-light': '',
-  'platform-dark': 'dark',
-  'paratext-light': 'paratext-light',
-  'paratext-dark': 'paratext-dark',
+/** Classes applied to the Storybook preview root for each legacy composite id (see `index.css`). */
+const CLASS_MAP: Record<StorybookThemeId, readonly string[]> = {
+  'shadcn-light': ['theme-shadcn-neutral'],
+  'shadcn-dark': ['dark', 'theme-shadcn-neutral'],
+  'platform-light': [],
+  'platform-dark': ['dark'],
+  'paratext-light': ['paratext-light'],
+  'paratext-dark': ['paratext-dark'],
 };
 
 const ALL_THEME_CLASSES = [
@@ -41,10 +42,6 @@ const ALL_THEME_CLASSES = [
 
 function isStorybookThemeId(value: string | undefined): value is StorybookThemeId {
   return STORYBOOK_THEME_IDS.some((id) => id === value);
-}
-
-function classStringToArray(classString: string): string[] {
-  return classString.split(' ').filter(Boolean);
 }
 
 /**
@@ -116,8 +113,7 @@ export function applyThemeStateToElement(
   const effective = resolveEffectiveColorScheme(state.colorScheme, mediaWindow);
   const legacyId = compositeThemeIdFromFamilyAndEffective(state.family, effective);
   ALL_THEME_CLASSES.forEach((c) => parent.classList.remove(c));
-  const className = CLASS_MAP[legacyId];
-  classStringToArray(className).forEach((c) => parent.classList.add(c));
+  CLASS_MAP[legacyId].forEach((c) => parent.classList.add(c));
 }
 
 /**

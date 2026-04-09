@@ -15,7 +15,7 @@ Conventions, tooling, and maintenance for this package’s Storybook. For Parate
 - **Vitest + Storybook:** [vitest.setup.ts](./vitest.setup.ts) calls `setProjectAnnotations` with this package’s `preview.ts`. Use **`play`** functions for interaction tests where the behavior is UI-driven; keep fast unit tests in Vitest `unit` project when logic does not need Storybook.
 - **Browser tests:** Install Playwright browsers once: `npm run test:storybook:install-browsers` (see [package.json](../package.json)).
 - **Accessibility:** `@storybook/addon-a11y` is enabled with `parameters.a11y.test: 'todo'`. Tighten to `'error'` in CI when violations are under control.
-- **Visual regression:** `@chromatic-com/storybook` is included; follow your team’s Chromatic / CI workflow for baselines and required checks.
+- **Visual regression:** `@chromatic-com/storybook` is installed so Storybook can talk to Chromatic, a hosted service that captures story screenshots and compares them to approved "baseline" images. This repo’s CI/release setup is what decides when baselines are updated and whether Chromatic is a required check on PRs.
 
 ## Tooling
 
