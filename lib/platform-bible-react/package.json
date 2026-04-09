@@ -63,7 +63,8 @@
     "test:unit:run": "vitest run --project=unit",
     "test:storybook": "vitest --project=storybook",
     "typecheck": "tsc -p ./tsconfig.json",
-    "storybook": "storybook dev -p 6007"
+    "storybook": "storybook dev -p 6007",
+    "lint:staged": "lint-staged -q"
   },
   "lint-staged": {
     "*.mdx": ["remark --output"]
