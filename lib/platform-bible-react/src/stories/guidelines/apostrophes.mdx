@@ -1,0 +1,58 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
+
+<Meta title="Guidelines/Apostrophes" />
+
+# Apostrophes
+
+Use a typographic apostrophe `'` (U+2019, RIGHT SINGLE QUOTATION MARK) in display text, not a straight apostrophe `'` or a backtick `` ` ``.
+
+Reference: [Practical Typography — Apostrophes](https://practicaltypography.com/apostrophes.html)
+
+---
+
+## Apostrophe character
+
+<ExampleBlockGroup>
+  <ExampleBlock variant="dont" code="What`s new">
+    A backtick is a code delimiter, not a punctuation character. It is never a valid apostrophe.
+  </ExampleBlock>
+
+  <ExampleBlock variant="dont" code="What's new">
+    A straight apostrophe is a typewriter legacy. It is acceptable inside code strings but not in
+    display text shown to users.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+<ExampleBlock variant="do" code="What's new">
+  Use a typographic (curly) apostrophe `'` (U+2019) in all display text.
+</ExampleBlock>
+
+---
+
+## Opening and closing single quotes
+
+The same rule applies to single quotation marks: use `'` (U+2018) to open and `'` (U+2019) to close.
+
+<ExampleBlockGroup>
+  <ExampleBlock variant="dont" code="'like this'">
+    Straight single quotes look like typewriter output and are visually ambiguous.
+  </ExampleBlock>
+
+  <ExampleBlock variant="do" code="'like this'">
+    Typographic single quotes curve to clearly indicate open and close.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+---
+
+## How to type it
+
+Most code editors do not auto-correct punctuation. Use one of these methods to insert a typographic apostrophe:
+
+| Method           | Value                                        |
+| ---------------- | -------------------------------------------- |
+| Copy/paste       | `'`                                          |
+| HTML entity      | `&rsquo;` or `&#x2019;`                      |
+| macOS shortcut   | <kbd>Opt</kbd> + <kbd>Shift</kbd> + <kbd>]</kbd>   |
+| Windows shortcut | <kbd>Alt</kbd> + <kbd>0146</kbd> (numpad)          |
