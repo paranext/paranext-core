@@ -38,12 +38,12 @@ Also include a link to the Jira work item **in the PR description**, so it is tr
 
 Every Jira work item has a **UX review** property, set during grooming:
 
-| State | Meaning |
-| --- | --- |
-| `open` | **Default** — not yet assessed or decision deferred |
-| `needs review` | Changes affect the user experience enough to need a UX review |
-| `done` | UX review completed and approved |
-| `review not needed` | UX approval explicitly not required |
+| State               | Meaning                                                       |
+| ------------------- | ------------------------------------------------------------- |
+| `open`              | **Default** — not yet assessed or decision deferred           |
+| `needs review`      | Changes affect the user experience enough to need a UX review |
+| `done`              | UX review completed and approved                              |
+| `review not needed` | UX approval explicitly not required                           |
 
 ### Acceptance criteria
 
@@ -51,11 +51,11 @@ Checkboxes on a Jira work item assert that the developer **did the thing** — n
 
 Verification is the responsibility of:
 
-| What | Who verifies | Where to post | Notes |
-| --- | --- | --- | --- |
-| Code quality | Code reviewer | New [#reviews](https://ptb.discord.com/channels/1064938364597436416/1369016160485511222) thread on Platform.Bible Discord | Review happens in Reviewable (built on [GitHub](https://github.com/paranext)) |
-| User interface and experience | UX reviewer | New [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) thread on Paratext Discord — one thread per issue | Subtasks receive a directional review; parent work items require full UX approval. |
-| Functional behavior | QA / testing | New [#10-simple-testing](https://ptb.discord.com/channels/892072317436448768/1451251686709395548) or [#10-power-testing](https://ptb.discord.com/channels/892072317436448768/1451251722340139141) thread on Paratext Discord — one thread per item | Testing happens independently after the code is marked done. |
+| What                          | Who verifies  | Where to post                                                                                                                                                                                                                                      | Notes                                                                              |
+| ----------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Code quality                  | Code reviewer | New [#reviews](https://ptb.discord.com/channels/1064938364597436416/1369016160485511222) thread on Platform.Bible Discord                                                                                                                          | Review happens in Reviewable (built on [GitHub](https://github.com/paranext))      |
+| User interface and experience | UX reviewer   | New [#review-ux](https://ptb.discord.com/channels/892072317436448768/1451254233910476992) thread on Paratext Discord — one thread per issue                                                                                                        | Subtasks receive a directional review; parent work items require full UX approval. |
+| Functional behavior           | QA / testing  | New [#10-simple-testing](https://ptb.discord.com/channels/892072317436448768/1451251686709395548) or [#10-power-testing](https://ptb.discord.com/channels/892072317436448768/1451251722340139141) thread on Paratext Discord — one thread per item | Testing happens independently after the code is marked done.                       |
 
 ### Subtask reviews
 

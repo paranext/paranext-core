@@ -39,15 +39,15 @@ Design for Saroj: capable, purposeful, and unpretentious.
 
 Always pair background utility classes with their `-foreground` counterparts. Never mix `text-secondary` on `bg-secondary` — it creates low contrast.
 
-| Class | CSS Variable | Use case |
-| --- | --- | --- |
-| `tw-text-secondary` | `--secondary` | Text **on** primary backgrounds |
+| Class                          | CSS Variable             | Use case                          |
+| ------------------------------ | ------------------------ | --------------------------------- |
+| `tw-text-primary-foreground`   | `--primary-foreground`   | Text **on** primary backgrounds   |
 | `tw-text-secondary-foreground` | `--secondary-foreground` | Text **on** secondary backgrounds |
 
 **Examples:**
 
 - Secondary card: `bg-secondary text-secondary-foreground`
-- Primary button text: `bg-primary text-secondary`
+- Primary button text: `bg-primary text-primary-foreground`
 
 ### State changes and contrast
 
@@ -79,11 +79,11 @@ Labels should communicate what will happen — even if the user skips the surrou
 
 **Example scenario:** A user writes a comment, then tries to navigate away. The app needs to know: submit the comment or discard it? Draft-saving is not an option.
 
-| | Dismiss | Confirm |
-| --- | --- | --- |
-| Avoid | Cancel | OK |
-| Acceptable | Cancel | Comment |
-| Preferred | Discard | Comment |
+|            | Dismiss | Confirm |
+| ---------- | ------- | ------- |
+| Avoid      | Cancel  | OK      |
+| Acceptable | Cancel  | Comment |
+| Preferred  | Discard | Comment |
 
 <ExampleBlockGroup>
   <ExampleBlock variant="dont" preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Cancel</Button><Button>OK</Button></div>}>
@@ -114,10 +114,10 @@ Tooltips are required for every icon button and any control without a visible la
     variant="dont"
     previewClassName="tw-pb-8"
     preview={
-    <Button variant="outline" size="icon" aria-label="Save" >
-      <Save />
-    </Button>
-  }
+  <Button variant="outline" size="icon" aria-label="Save" >
+    <Save />
+  </Button>
+}
   >
     This icon button lacks a tooltip, so users can't learn what it means.
   </ExampleBlock>
@@ -127,15 +127,15 @@ Tooltips are required for every icon button and any control without a visible la
     variant="dont"
     previewClassName="tw-pb-8"
     preview={
-    <TooltipProvider>
-      <Tooltip open>
-        <TooltipTrigger asChild>
-          <Button>Save</Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Save</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  }
+  <TooltipProvider>
+    <Tooltip open>
+      <TooltipTrigger asChild>
+        <Button>Save</Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Save</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+}
   >
     The tooltip only repeats the visible label — omit it.
   </ExampleBlock>
@@ -148,17 +148,17 @@ Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an 
     variant="dont"
     previewClassName="tw-pb-16"
     preview={
-    <TooltipProvider>
-      <Tooltip open>
-        <TooltipTrigger asChild>
-          <Button variant="outline" size="icon" aria-label="Save">
-            <Save />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="tw-max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  }
+  <TooltipProvider>
+    <Tooltip open>
+      <TooltipTrigger asChild>
+        <Button variant="outline" size="icon" aria-label="Save">
+          <Save />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="tw-max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+}
   >
     Too long to scan — a tooltip is a hint, not a sentence.
   </ExampleBlock>
@@ -167,17 +167,17 @@ Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an 
     variant="do"
     previewClassName="tw-pb-16"
     preview={
-    <TooltipProvider>
-      <Tooltip open>
-        <TooltipTrigger asChild>
-          <Button variant="outline" size="icon" aria-label="Save">
-            <Save />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Save changes</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  }
+  <TooltipProvider>
+    <Tooltip open>
+      <TooltipTrigger asChild>
+        <Button variant="outline" size="icon" aria-label="Save">
+          <Save />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Save changes</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+}
   >
     The tooltip adds meaning an icon alone cannot convey, and it's short enough to read at a glance.
   </ExampleBlock>
