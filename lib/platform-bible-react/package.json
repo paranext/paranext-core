@@ -65,6 +65,9 @@
     "typecheck": "tsc -p ./tsconfig.json",
     "storybook": "storybook dev -p 6007"
   },
+  "lint-staged": {
+    "*.mdx": ["remark --output"]
+  },
   "peerDependencies": {
     "react": ">=18.3.1",
     "react-dom": ">=18.3.1"

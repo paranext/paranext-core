@@ -112,7 +112,8 @@
     "*.{cjs,js,jsx,ts,tsx}": ["prettier --write --ignore-path .prettierignorerun"],
     "*.json": ["prettier --parser json --write --ignore-path .prettierignorerun"],
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
-    "*.{html,md,yml}": ["prettier --single-quote --write --ignore-path .prettierignorerun"]
+    "*.{html,md,yml}": ["prettier --single-quote --write --ignore-path .prettierignorerun"],
+    "*.mdx": ["remark --output"]
   },
   "browserslist": ["extends browserslist-config-detect-electron"],
   "dependencies": {
