@@ -26,11 +26,11 @@ This Design System is created and maintained by the Paratext UX Team. It is an e
 
 The design tokens represent the visual atoms of the design system. Here are some examples:
 
-* **Color Palette**: A range of colors inspired by the sky, from dawn to dusk, communicates openness and opportunity.
-* **Typography**: A legible typeface that resonates with trust, and suggests a foundation.
-* **Spacing Scale**: Harmonized spacing that allows for content to breathe, signifying openness.
-* **Iconography**: Symbols with roundness and unclosed elements to represent expansion and extensibility.
-* **Borders and Radii**: Smooth, rounded corners on elements to emphasize friendliness and collaboration.
+- **Color Palette**: A range of colors inspired by the sky, from dawn to dusk, communicates openness and opportunity.
+- **Typography**: A legible typeface that resonates with trust, and suggests a foundation.
+- **Spacing Scale**: Harmonized spacing that allows for content to breathe, signifying openness.
+- **Iconography**: Symbols with roundness and unclosed elements to represent expansion and extensibility.
+- **Borders and Radii**: Smooth, rounded corners on elements to emphasize friendliness and collaboration.
 
 ### Foundations
 
@@ -42,8 +42,57 @@ This guide would provide developers with step-by-step instructions on how to imp
 
 ### Voice and Tone
 
-* **Voice**: Welcoming, respectful, and warm. It should feel like a companion that supports the user in their exploration and understanding of the Bible.
-* **Tone**: Adaptable to context. Should be more formal and reverent when dealing with scripture content, and more casual and encouraging in teaching and guidance sections.
+- **Voice**: Welcoming, respectful, and warm. It should feel like a companion that supports the user in their exploration and understanding of the Bible.
+- **Tone**: Adaptable to context. Should be more formal and reverent when dealing with scripture content, and more casual and encouraging in teaching and guidance sections.
+
+### Writing Documentation Examples
+
+Use `ExampleBlock` and `ExampleBlockGroup` from `@/storybook/example-block.component` to annotate Do / Don't / Tip patterns in any MDX doc page.
+
+```mdx
+import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
+```
+
+**Text-only example:**
+
+```mdx
+<ExampleBlock variant="do">Use semantic HTML elements like `<button>` for interactive controls.</ExampleBlock>
+
+<ExampleBlock variant="dont">Avoid `<div onClick>` for buttons — it lacks keyboard and accessibility support.</ExampleBlock>
+
+<ExampleBlock variant="neutral">Add `aria-label` when the visual context isn't available to screen readers.</ExampleBlock>
+```
+
+**With a live component preview:**
+
+Pass a rendered component to the `preview` prop. It appears in a framed stage above the description text. Wrap two blocks in `ExampleBlockGroup` for a responsive side-by-side layout (two columns on medium+ screens, stacked on mobile).
+
+```mdx
+<ExampleBlockGroup>
+  <ExampleBlock
+    variant="do"
+    preview={<Button variant="secondary">Discard</Button>}
+  >
+    Use a specific verb — the action is self-evident without reading surrounding text.
+  </ExampleBlock>
+  <ExampleBlock
+    variant="dont"
+    preview={<Button variant="secondary">Cancel</Button>}
+  >
+    Avoid vague labels — users learn to dismiss without reading.
+  </ExampleBlock>
+</ExampleBlockGroup>
+```
+
+**Props:**
+
+| Prop               | Type                          | Default     | Description                                                                            |
+| ------------------ | ----------------------------- | ----------- | -------------------------------------------------------------------------------------- |
+| `variant`          | `'do' \| 'dont' \| 'neutral'` | `'neutral'` | Color and icon theme                                                                   |
+| `title`            | `string`                      | —           | Overrides the default label ("Best Practice" / "Anti-pattern" / "Tip")                 |
+| `preview`          | `ReactNode`                   | —           | Live component rendered in a framed stage                                              |
+| `previewClassName` | `string`                      | —           | Extra classes on the preview container (e.g. `tw-pb-24` for floating UI like tooltips) |
+| `children`         | `ReactNode`                   | required    | Description text below the preview                                                     |
 
 ### MDX, TypeScript, and CSF Examples
 

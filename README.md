@@ -83,7 +83,14 @@ Set up pre-requisites, build, and run:
 
 ### Linux Development Pre-requisites
 
-Add the system libraries needed for Electron, [Build Instructions (Linux)](https://www.electronjs.org/docs/latest/development/build-instructions-linux).
+1. Add the system libraries needed for Electron, [Build Instructions (Linux)](https://www.electronjs.org/docs/latest/development/build-instructions-linux). While those are the official instructions they aren't as clear as they used to be - adding these libraries work (this list taken from [stagePackages](https://github.com/paranext/paranext-core/blob/main/electron-builder.json5#L113-L126)):
+
+   ```sh
+   # Ubuntu-22/Debian
+   sudo apt-get install libappindicator3-1 libasound2 libdrm2 libdrm-nouveau2 libgbm1 libgl1 libgtk-3-0 libnspr4 libnss3 libsecret-1-0 libtinfo5 libxss1
+   ```
+
+2. If you want to build the app package locally (i.e. by running `npm run package`) also run [these commands](https://github.com/paranext/paranext-core/blob/main/.github/workflows/package-main.yml#L78-L86).
 
 If you are developing on Ubuntu 24.04 with AppArmor, you will need to modify `package.json` locally to add the `--no-sandbox` flag to `electronmon`. For example:
 
