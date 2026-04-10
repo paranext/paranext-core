@@ -2,10 +2,17 @@
 
 # Shadcn UI Component Customizations
 
+This document captures all customizations made to shadcn/ui components relative to their original boilerplate, to aid future shadcn version upgrades. For each component, it records: whether TSDocs are present on all exports, whether DOM-rendered components have the `pr-twp` Tailwind scope class applied, and the specific code changes made (explicit annotations, other comment-indicated changes, and uncalled-out changes detected via git history).
+
 ## Standard Customizations
 
-| Component | TSDocs on all exports? | DOM-rendered components |
-| --------- | ---------------------- | ----------------------- |
+The table below summarizes the two standard customizations that every shadcn component should have:
+
+- **TSDocs on all exports?** — Whether every exported symbol (components, interfaces, types, constants) has a TSDoc comment (`/** ... */`). ✅ means all exports are documented; ❌ lists the ones that are missing.
+- **pr-twp on DOM-rendered components?** — Whether each component that renders actual DOM output has `pr-twp` in its base Tailwind class string. `pr-twp` is a scope marker required for Platform.Bible's Tailwind CSS isolation (see `tailwind.config.ts`). ✅ means the class is present; ❌ means it is missing. Only components that produce DOM output are listed — compound root components (e.g. `Dialog`, `Popover`) that coordinate state without rendering DOM nodes are excluded, as are cva variant factories.
+
+| Component | TSDocs on all exports? | pr-twp on DOM-rendered components? |
+| --------- | ---------------------- | ---------------------------------- |
 | alert.tsx | ✅ | Alert ✅, AlertTitle ❌, AlertDescription ❌ |
 | avatar.tsx | ✅ | Avatar ✅, AvatarImage ✅, AvatarFallback ✅ |
 | badge.tsx | ✅ | Badge ✅ |
@@ -40,6 +47,12 @@
 | tooltip.tsx | ✅ | TooltipTrigger ❌, TooltipContent ✅ |
 
 ## Per-Component Customizations
+
+Each section below details the non-standard customizations for one component. There are three subsections:
+
+- **Explicit `// CUSTOM:` customizations** — changes that are already annotated in the source with a `// CUSTOM:` comment.
+- **Other comment-indicated customizations** — changes documented by other comments that indicate intent (e.g. "Changed from X to Y", "Added for accessibility").
+- **Uncalled-out customizations (from git history)** — changes detected by diffing the current file against its first-add commit, which were not already documented by a comment.
 
 ### alert.tsx
 
