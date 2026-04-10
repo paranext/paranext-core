@@ -4,18 +4,12 @@
  * directly - the shell only provides the modal wrapper.
  */
 
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
-import {
-  Dialog,
-  DialogOverlay,
-  DialogPortal,
-  Z_INDEX_MODAL,
-  Z_INDEX_MODAL_BACKDROP,
-} from 'platform-bible-react';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from 'platform-bible-react';
 import { createElement, useCallback, useRef } from 'react';
+import './overlay-modal-dialog.component.scss';
 
 type OverlayModalShellProps = {
   overlay: Extract<OverlayEntry, { type: 'modalDialog' }>;
@@ -49,46 +43,37 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
 
   return (
     <Dialog open onOpenChange={handleOpenChange}>
-      <DialogPortal>
-        <DialogOverlay
-          className="overlay-modal-backdrop"
-          style={{ zIndex: Z_INDEX_MODAL_BACKDROP, backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
-        />
-        {/* CUSTOM: Using DialogPrimitive.Content instead of the platform-bible-react
-            DialogContent component because DialogContent bundles its own DialogPortal,
-            DialogOverlay (we need custom backdrop opacity and z-index management), and a
-            close (X) button (inner dialog components handle their own dismissal). The
-            className below duplicates DialogContent's visual styling (positioning, animations,
-            sizing). To eliminate this duplication, DialogContent could be refactored to export
-            its base className as a constant or accept props to disable the close button and
-            skip the bundled portal/overlay. */}
-        <DialogPrimitive.Content
-          data-overlay-modal-dialog
-          role={typeof overlay.props.role === 'string' ? overlay.props.role : 'dialog'}
-          aria-modal="true"
-          className="pr-twp tw-fixed tw-left-[50%] tw-top-[50%] tw-grid tw-w-full tw-max-w-lg tw-translate-x-[-50%] tw-translate-y-[-50%] tw-gap-4 tw-border tw-bg-background tw-p-6 tw-shadow-lg tw-duration-200 data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[state=closed]:tw-slide-out-to-left-1/2 data-[state=closed]:tw-slide-out-to-top-[48%] data-[state=open]:tw-slide-in-from-left-1/2 data-[state=open]:tw-slide-in-from-top-[48%] sm:tw-rounded-lg"
-          style={{ zIndex: Z_INDEX_MODAL, maxHeight: '85vh', overflowY: 'auto' }}
-        >
-          {/* Radix requires DialogTitle and DialogDescription inside DialogContent for
-              accessibility. The inner dialog component may render its own visible versions;
-              these hidden ones satisfy Radix for dialogs that don't. */}
-          <VisuallyHidden asChild>
-            <DialogPrimitive.Title>
-              {typeof overlay.props.title === 'string' ? overlay.props.title : 'Dialog'}
-            </DialogPrimitive.Title>
-          </VisuallyHidden>
-          <VisuallyHidden asChild>
-            <DialogPrimitive.Description>
-              {(() => {
-                if (typeof overlay.props.prompt === 'string') return overlay.props.prompt;
-                if (typeof overlay.props.title === 'string') return overlay.props.title;
-                return 'Dialog';
-              })()}
-            </DialogPrimitive.Description>
-          </VisuallyHidden>
+      <DialogContent
+        overlayClassName="overlay-modal-backdrop"
+        data-overlay-modal-dialog
+        role={typeof overlay.props.role === 'string' ? overlay.props.role : 'dialog'}
+        aria-modal="true"
+        className="tw-flex tw-max-h-[85vh] tw-min-h-0 tw-flex-col tw-overflow-hidden"
+      >
+        {/* Radix requires DialogTitle and DialogDescription inside DialogContent for
+            accessibility. The inner dialog component may render its own visible versions;
+            these hidden ones satisfy Radix for dialogs that don't. */}
+        <VisuallyHidden asChild>
+          <DialogTitle>
+            {typeof overlay.props.title === 'string' ? overlay.props.title : 'Dialog'}
+          </DialogTitle>
+        </VisuallyHidden>
+        <VisuallyHidden asChild>
+          <DialogDescription>
+            {(() => {
+              if (typeof overlay.props.prompt === 'string') return overlay.props.prompt;
+              if (typeof overlay.props.title === 'string') return overlay.props.title;
+              return 'Dialog';
+            })()}
+          </DialogDescription>
+        </VisuallyHidden>
+        {/* Flex-1 + min-h-0 + overflow-hidden fills the modal shell; each dialog body scrolls its
+            own region. An outer overflow-y here scrolls the whole body and can push action buttons
+            off-screen for tall dialogs (e.g. select books), breaking hit-testing in E2E. */}
+        <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
           {createElement(overlay.Component, overlay.props)}
-        </DialogPrimitive.Content>
-      </DialogPortal>
+        </div>
+      </DialogContent>
     </Dialog>
   );
 }

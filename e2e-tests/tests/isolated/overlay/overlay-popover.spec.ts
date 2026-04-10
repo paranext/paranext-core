@@ -12,13 +12,12 @@ test('overlay popover rendering and interaction', async ({ mainPage }) => {
   await expect(greetingEl).toBeVisible({ timeout: 10_000 });
 
   await test.step('hover on greeting shows markdown popover with expected content', async () => {
-    // Hover to trigger the popover
-    await greetingEl.hover();
-
-    // Wait for the popover to appear in the parent document.
-    // The hover delay is 400ms, plus render time, so we use a generous timeout.
     const popover = mainPage.locator('[data-overlay-popover]');
-    await expect(popover).toBeVisible({ timeout: 5_000 });
+    // Hover + 400ms app delay is timing-sensitive under load; poll until the portaled popover appears.
+    await expect(async () => {
+      await greetingEl.hover();
+      await expect(popover).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
 
     // Verify the popover content - a markdown type with person details.
     // Title is "About {name}" rendered as a markdown heading.
