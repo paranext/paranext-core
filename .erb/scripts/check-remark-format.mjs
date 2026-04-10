@@ -18,7 +18,7 @@ import { remark } from 'remark';
 import remarkGfm from 'remark-gfm';
 import remarkMdx from 'remark-mdx';
 import { readFileSync } from 'fs';
-import glob from 'glob';
+import { globSync } from 'glob';
 import path from 'path';
 
 const patterns = process.argv.slice(2);
@@ -33,7 +33,7 @@ const processor = remark()
   .use(remarkGfm)
   .data('settings', { bullet: '-', rule: '-' });
 
-const files = patterns.flatMap((pattern) => glob.sync(pattern, { ignore: ['**/node_modules/**'] }));
+const files = patterns.flatMap((pattern) => globSync(pattern, { ignore: ['**/node_modules/**'] }));
 
 if (files.length === 0) process.exit(0);
 
