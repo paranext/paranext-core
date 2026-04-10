@@ -1,4 +1,4 @@
-> This file is AI-generated at specific times for use with updating shadcn components and may not reflect current code. It is retained for ease of reference only.
+> This file is AI-generated at specific times for use with updating shadcn components and may not reflect current code. It is retained for ease of reference only. To regenerate, run `/shadcn-customizations` in Claude Code.
 
 # Shadcn UI Component Customizations
 
@@ -8,7 +8,7 @@ This document captures all customizations made to shadcn/ui components relative 
 
 The table below summarizes the two standard customizations that every shadcn component should have:
 
-- **TSDocs on all exports?** — Whether every exported symbol (components, interfaces, types, constants) has a TSDoc comment (`/** ... */`). ✅ means all exports are documented; ❌ lists the ones that are missing.
+- **TSDocs on all exports?** — Whether every exported symbol (components, interfaces, types, constants) has a TSDoc comment (`/** ... */`) that includes links to the upstream libraries it uses (e.g. the shadcn/ui component page, the Radix UI primitive page, the Vaul page for drawer components). ✅ means all exports have TSDocs with appropriate library links; ❌ lists exports that are missing TSDocs or missing library links. A TSDoc that uses `@inheritdoc` pointing to a symbol whose TSDoc has the required links also passes.
 - **pr-twp on DOM-rendered components?** — Whether each component that renders actual DOM output has `pr-twp` in its base Tailwind class string. `pr-twp` is a scope marker required for Platform.Bible's Tailwind CSS isolation (see `tailwind.config.ts`). ✅ means the class is present; ❌ means it is missing. Only components that produce DOM output are listed — compound root components (e.g. `Dialog`, `Popover`) that coordinate state without rendering DOM nodes are excluded, as are cva variant factories.
 
 | Component | TSDocs on all exports? | pr-twp on DOM-rendered components? |
