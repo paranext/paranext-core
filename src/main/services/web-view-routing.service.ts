@@ -58,23 +58,14 @@ function getAllWindowIds(): number[] {
   return getWindows().map((w) => w.id);
 }
 
-// Proxy methods that route to the focused window's scoped WebViewService
-
-async function openWebView(
-  webViewType: WebViewType,
-  layout?: Layout,
-  options?: OpenWebViewOptions,
-): Promise<WebViewId | undefined> {
-  const svc = await getTargetWebViewService();
-  return svc.openWebView(webViewType, layout, options);
-}
-
-async function reloadWebView(
-  webViewType: WebViewType,
+/**
+ * Search all windows to find which one owns a given webview. Returns the scoped WebViewService for
+ * the owning window, or undefined if not found. Throws if some windows were unreachable.
+ */
+async function findOwnerService(
   webViewId: WebViewId,
-  options?: ReloadWebViewOptions,
-): Promise<WebViewId | undefined> {
-  // Find which window owns this webview, since it may not be in the focused window
+  operation: string,
+): Promise<WebViewServiceType | undefined> {
   const windowIds = getAllWindowIds();
   let hadServiceErrors = false;
   const ownerServices = await Promise.all(
@@ -87,7 +78,7 @@ async function reloadWebView(
         return undefined;
       } catch (e) {
         logger.warn(
-          `Failed to query webview ${webViewId} in window ${winId} for reload: ${getErrorMessage(e)}`,
+          `Failed to query webview ${webViewId} in window ${winId} for ${operation}: ${getErrorMessage(e)}`,
         );
         hadServiceErrors = true;
         return undefined;
@@ -95,12 +86,38 @@ async function reloadWebView(
     }),
   );
   const ownerSvc = ownerServices.find((svc) => svc !== undefined);
-  if (ownerSvc) return ownerSvc.reloadWebView(webViewType, webViewId, options);
+  if (ownerSvc) return ownerSvc;
 
   if (hadServiceErrors)
-    throw new Error(
-      `Could not reload webview ${webViewId}: some windows were unreachable. The owning window's service may be unavailable.`,
-    );
+    throw new Error(`Could not ${operation} webview ${webViewId}: some windows were unreachable.`);
+
+  return undefined;
+}
+
+// Proxy methods that route to the focused window's scoped WebViewService
+
+async function openWebView(
+  webViewType: WebViewType,
+  layout?: Layout,
+  options?: OpenWebViewOptions,
+): Promise<WebViewId | undefined> {
+  // If an existingId is provided, search all windows for the webview's owner
+  if (options?.existingId) {
+    const ownerSvc = await findOwnerService(options.existingId, 'openWebView');
+    if (ownerSvc) return ownerSvc.openWebView(webViewType, layout, options);
+  }
+  // No existingId or not found in any window — route to focused window
+  const svc = await getTargetWebViewService();
+  return svc.openWebView(webViewType, layout, options);
+}
+
+async function reloadWebView(
+  webViewType: WebViewType,
+  webViewId: WebViewId,
+  options?: ReloadWebViewOptions,
+): Promise<WebViewId | undefined> {
+  const ownerSvc = await findOwnerService(webViewId, 'reload');
+  if (ownerSvc) return ownerSvc.reloadWebView(webViewType, webViewId, options);
 
   // Webview not found in any window — fall back to focused window (may be a new webview)
   const svc = await getTargetWebViewService();
@@ -110,32 +127,8 @@ async function reloadWebView(
 async function getOpenWebViewDefinition(
   webViewId: string,
 ): Promise<SavedWebViewDefinition | undefined> {
-  // Query all windows in parallel to find which one owns this webview
-  const windowIds = getAllWindowIds();
-  let hadServiceErrors = false;
-  const results = await Promise.all(
-    windowIds.map(async (winId) => {
-      try {
-        const svc = await getScopedWebViewService(winId);
-        if (!svc) return undefined;
-        return svc.getOpenWebViewDefinition(webViewId);
-      } catch (e) {
-        logger.warn(
-          `Failed to query webview ${webViewId} in window ${winId}: ${getErrorMessage(e)}`,
-        );
-        hadServiceErrors = true;
-        return undefined;
-      }
-    }),
-  );
-  const result = results.find((def) => def !== undefined);
-  if (result) return result;
-
-  if (hadServiceErrors)
-    throw new Error(
-      `Could not find webview definition for ${webViewId}: some windows were unreachable.`,
-    );
-
+  const ownerSvc = await findOwnerService(webViewId, 'getOpenWebViewDefinition');
+  if (ownerSvc) return ownerSvc.getOpenWebViewDefinition(webViewId);
   return undefined;
 }
 

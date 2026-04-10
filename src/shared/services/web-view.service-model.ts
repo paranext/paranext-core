@@ -245,6 +245,7 @@ export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
  * the generic names that forward to the focused window's scoped handler.
  */
 export const RENDERER_HOSTED_COMMAND_NAMES = [
+  'platform.about',
   'platform.openSettings',
   'platform.openProjectSettings',
   'platform.openUserSettings',

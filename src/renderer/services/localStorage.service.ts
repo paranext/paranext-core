@@ -13,13 +13,14 @@ const localWindowStorage = {
     // eslint-disable-next-line no-null/no-null
     if (value !== null) return value;
 
-    // Migration: check for legacy unprefixed key from before multi-window support
+    // Migration: check for legacy unprefixed key from before multi-window support.
+    // Copy to the prefixed key but do NOT delete the legacy key — Electron's BrowserWindow.id
+    // is not guaranteed to be stable across restarts, so the legacy key must remain as a fallback.
     const legacyValue = localStorage.getItem(key);
     // localStorage.getItem returns null when the key doesn't exist
     // eslint-disable-next-line no-null/no-null
     if (legacyValue !== null) {
       localStorage.setItem(prefixedKey, legacyValue);
-      localStorage.removeItem(key);
       return legacyValue;
     }
     // Must return null to match the Storage.getItem interface contract

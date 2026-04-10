@@ -28,7 +28,6 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { startWebViewRoutingService } from '@main/services/web-view-routing.service';
-import { startWindowAggregatorService } from '@main/services/window-aggregator.service-host';
 import {
   addWindow,
   getWindows,
@@ -114,7 +113,7 @@ const resetZoomFactor = async () => {
   }
 };
 
-/** Increase the zoom factor of the app's main window by 0.1, up to a maximum of 3.0 */
+/** Increase the zoom factor of all application windows by 0.1, up to a maximum of 3.0 */
 const zoomIn = async () => {
   const currentZoom = await getZoomFactor();
   if (currentZoom < MAX_ZOOM_FACTOR) {
@@ -123,7 +122,7 @@ const zoomIn = async () => {
   }
 };
 
-/** Decrease the zoom factor of the app's main window by 0.1, down to a minimum of 0.5 */
+/** Decrease the zoom factor of all application windows by 0.1, down to a minimum of 0.5 */
 const zoomOut = async () => {
   const currentZoom = await getZoomFactor();
   if (currentZoom > MIN_ZOOM_FACTOR) {
@@ -251,9 +250,6 @@ async function main() {
   // The project lookup service relies on the network object status service
   await startProjectLookupService();
 
-  // The window aggregator service relies on the network object status service
-  await startWindowAggregatorService();
-
   // Register multi-window routing proxies before any windows are created. These claim generic names
   // (e.g. "WebViewService", "platform.openSettings") so renderers register under scoped names
   // (e.g. "WebViewService-1", "platform.openSettings-1") and the proxies route to the focused window.
@@ -282,6 +278,7 @@ async function main() {
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
+  // Live reference to the internal windows array — reflects current state, not a snapshot
   const windows = getWindows();
 
   // #region Set up the protocol client to receive navigation to this app's URI scheme
@@ -529,12 +526,13 @@ async function main() {
 
     newWindow.on('ready-to-show', async () => {
       logger.info(`Window ${windowId} is ready to show`);
-      if (process.env.START_MINIMIZED) {
+      // Startup flags only apply to the first window, not windows opened later by the user
+      if (isFirstWindow && process.env.START_MINIMIZED) {
         logger.info(`Window ${windowId} is starting minimized due to START_MINIMIZED env variable`);
         newWindow.minimize();
       } else {
         newWindow.show();
-        if (getCommandLineSwitch(CommandLineArgs.Maximize)) {
+        if (isFirstWindow && getCommandLineSwitch(CommandLineArgs.Maximize)) {
           logger.info(
             `Window ${windowId} is starting maximized due to --maximize command-line switch`,
           );
@@ -655,6 +653,15 @@ async function main() {
         event.preventDefault();
         if (input.shift) setWindowFocus('previousTab');
         else setWindowFocus('nextTab');
+        return;
+      }
+
+      // Open new window: Ctrl+Shift+N (Cmd+Shift+N on Mac)
+      if ((input.control || input.meta) && input.shift && input.key === 'N') {
+        event.preventDefault();
+        createWindow().catch((e) => {
+          logger.error(`Failed to create new window: ${getErrorMessage(e)}`);
+        });
         return;
       }
 
@@ -893,7 +900,7 @@ async function main() {
   commandService.registerCommand(
     'platform.createWindow',
     async () => {
-      createWindow();
+      await createWindow();
     },
     {
       method: {
@@ -918,7 +925,7 @@ async function main() {
         params: [],
         result: {
           name: 'return value',
-          schema: { type: 'number' },
+          schema: { oneOf: [{ type: 'number' }, { type: 'null' }] },
         },
       },
     },
@@ -1055,7 +1062,7 @@ async function main() {
     },
     {
       method: {
-        summary: 'Increase the zoom factor of the main window by 10%',
+        summary: 'Increase the zoom factor of all application windows by 10%',
         params: [],
         result: {
           name: 'return value',
@@ -1072,7 +1079,7 @@ async function main() {
     },
     {
       method: {
-        summary: 'Decrease the zoom factor of the main window by 10%',
+        summary: 'Decrease the zoom factor of all application windows by 10%',
         params: [],
         result: {
           name: 'return value',

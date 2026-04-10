@@ -3205,6 +3205,7 @@ declare module 'shared/services/web-view.service-model' {
    * the generic names that forward to the focused window's scoped handler.
    */
   export const RENDERER_HOSTED_COMMAND_NAMES: readonly [
+    'platform.about',
     'platform.openSettings',
     'platform.openProjectSettings',
     'platform.openUserSettings',
@@ -6845,7 +6846,7 @@ declare module 'shared/data/platform.data' {
   export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
-  /** Query string for the electron window id */
+  /** Query parameter key used to pass the Electron BrowserWindow ID to the renderer process */
   export const WINDOW_ID = 'windowId';
   /** ID of the default theme family for use in the application */
   export const DEFAULT_THEME_FAMILY = '';
@@ -8768,29 +8769,29 @@ declare module 'shared/services/window.service-model' {
   }
   /**
    *
-   * Service that allows to interact with the main application window
+   * Service that allows to interact with the current application window
    */
   export type IWindowService = {
     /**
      *
-     * Get information about the current subject of focus in the main app window
+     * Get information about the current subject of focus in the current window
      *
      * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
+     * @returns Information about the current window's current subject of focus
      */
     getFocus(selector: undefined): Promise<FocusSubject>;
     /**
      *
-     * Get information about the current subject of focus in the main app window
+     * Get information about the current subject of focus in the current window
      *
      * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
+     * @returns Information about the current window's current subject of focus
      */
     getFocus(): Promise<FocusSubject>;
     /**
-     * Sets the subject of focus in the main app window.
+     * Sets the subject of focus in the current window.
      *
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
      *   the window to update the current focus based on what is actually focused in the window (only
      *   necessary when an action happens that changes the focus but the window service does not
      *   detect already). In most cases, you will not need to set `'detect'` manually.
@@ -8801,10 +8802,10 @@ declare module 'shared/services/window.service-model' {
       focusSubject: SetFocusSpecifier,
     ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
     /**
-     * Sets the subject of focus in the main app window.
+     * Sets the subject of focus in the current window.
      *
      * @param selector `undefined`. Does not have to be provided
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
      *   the window to update the current focus based on what is actually focused in the window (only
      *   necessary when an action happens that changes the focus but the window service does not
      *   detect already). In most cases, you will not need to set `'detect'` manually.
@@ -8820,7 +8821,7 @@ declare module 'shared/services/window.service-model' {
       focusSubject: SetFocusSpecifier,
     ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
     /**
-     * Subscribe to run a callback function when the main app window's subject of focus is changed
+     * Subscribe to run a callback function when the current window's subject of focus is changed
      *
      * @param selector `undefined`. Does not have to be provided
      * @param callback Function to run with the updated localized menuContent for this selector. If
@@ -9839,7 +9840,7 @@ declare module '@papi/backend' {
     notifications: INotificationService;
     /**
      *
-     * Service that allows to interact with the main application window
+     * Service that allows to interact with the current application window
      */
     window: IWindowService;
   };
@@ -10097,7 +10098,7 @@ declare module '@papi/backend' {
   export const notifications: INotificationService;
   /**
    *
-   * Service that allows to interact with the main application window
+   * Service that allows to interact with the current application window
    */
   export const window: IWindowService;
 }
@@ -10685,7 +10686,7 @@ declare module '@papi/frontend' {
     notifications: INotificationService;
     /**
      *
-     * Service that allows to interact with the main application window
+     * Service that allows to interact with the current application window
      */
     window: IWindowService;
     /**
@@ -10854,7 +10855,7 @@ declare module '@papi/frontend' {
   export const notifications: INotificationService;
   /**
    *
-   * Service that allows to interact with the main application window
+   * Service that allows to interact with the current application window
    */
   export const window: IWindowService;
   /**
