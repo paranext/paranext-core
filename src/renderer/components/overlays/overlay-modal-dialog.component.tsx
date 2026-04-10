@@ -9,6 +9,7 @@ import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-sto
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from 'platform-bible-react';
 import { createElement, useCallback, useRef } from 'react';
+import './overlay-modal-dialog.component.scss';
 
 type OverlayModalShellProps = {
   overlay: Extract<OverlayEntry, { type: 'modalDialog' }>;
@@ -43,7 +44,7 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
   return (
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent
-        overlayClassName="overlay-modal-backdrop tw-bg-black/40"
+        overlayClassName="overlay-modal-backdrop"
         data-overlay-modal-dialog
         role={typeof overlay.props.role === 'string' ? overlay.props.role : 'dialog'}
         aria-modal="true"
