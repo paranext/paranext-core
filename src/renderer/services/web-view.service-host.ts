@@ -1838,10 +1838,12 @@ export async function startWebViewService(): Promise<void> {
     if (!globalThis.isPackaged) throw new Error(msg);
     logger.warn(msg);
   }
+  // Note: RENDERER_HOSTED_COMMAND_NAMES may include commands registered in other renderer files
+  // (e.g. platform.about in dialog.service-host.ts), so we only warn about extras rather than throw
   if (extra.length > 0) {
-    const msg = `Commands in RENDERER_HOSTED_COMMAND_NAMES but not registered in renderer: ${extra.join(', ')}`;
-    if (!globalThis.isPackaged) throw new Error(msg);
-    logger.warn(msg);
+    logger.debug(
+      `Commands in RENDERER_HOSTED_COMMAND_NAMES but not in web-view commandHandlers (registered elsewhere): ${extra.join(', ')}`,
+    );
   }
 
   // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple
