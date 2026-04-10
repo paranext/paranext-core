@@ -783,6 +783,7 @@ async function main() {
 
   app
     .whenReady()
+    // App initialization performs side effects (IPC handlers, window creation) with no return value
     // eslint-disable-next-line promise/always-return
     .then(async () => {
       // Set up ipc handlers

@@ -26,6 +26,8 @@ async function initialize(): Promise<void> {
           }
           const scopedName = `${windowServiceProviderName}-${globalThis.windowId}`;
           const provider = await dataProviderService.get(
+            // dataProviderService.get expects the literal provider name type, but the scoped
+            // name is built dynamically at runtime
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             scopedName as typeof windowServiceProviderName,
           );
@@ -47,6 +49,7 @@ async function initialize(): Promise<void> {
 const windowServiceProxyTarget = {
   ...windowServiceObjectToProxy,
   get dataProviderName(): typeof windowServiceProviderName {
+    // Provider name is dynamically scoped per window but the type system expects the literal type
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     return (
       globalThis.windowId

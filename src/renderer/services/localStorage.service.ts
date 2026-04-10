@@ -9,17 +9,20 @@ const localWindowStorage = {
   getItem(key: string): string | null {
     const prefixedKey = `${getWindowIdOrThrow()}_${key}`;
     const value = localStorage.getItem(prefixedKey);
+    // localStorage.getItem returns null when the key doesn't exist
     // eslint-disable-next-line no-null/no-null
     if (value !== null) return value;
 
     // Migration: check for legacy unprefixed key from before multi-window support
     const legacyValue = localStorage.getItem(key);
+    // localStorage.getItem returns null when the key doesn't exist
     // eslint-disable-next-line no-null/no-null
     if (legacyValue !== null) {
       localStorage.setItem(prefixedKey, legacyValue);
       localStorage.removeItem(key);
       return legacyValue;
     }
+    // Must return null to match the Storage.getItem interface contract
     // eslint-disable-next-line no-null/no-null
     return null;
   },
