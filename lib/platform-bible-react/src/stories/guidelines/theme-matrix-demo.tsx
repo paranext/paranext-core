@@ -4,7 +4,7 @@ import { Button } from '@/components/shadcn-ui/button';
 const MATRIX_THEMES = [
   { id: 'shadcn-light', label: 'Shadcn Neutral (light)', themeShell: 'theme-shadcn-neutral' },
   { id: 'shadcn-dark', label: 'Shadcn Neutral (dark)', themeShell: 'dark theme-shadcn-neutral' },
-  { id: 'platform-light', label: 'Platform light', themeShell: 'theme-platform-light' },
+  { id: 'platform-light', label: 'Platform light', themeShell: 'light' },
   { id: 'platform-dark', label: 'Platform dark', themeShell: 'dark' },
   { id: 'paratext-light', label: 'Paratext light', themeShell: 'paratext-light' },
   { id: 'paratext-dark', label: 'Paratext dark', themeShell: 'paratext-dark' },

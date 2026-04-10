@@ -38,14 +38,14 @@ The effective row is always one of the six legacy composite ids below (also used
 
 CSS variables live in
 [index.css](https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css):
-Platform light is `:root` / `.theme-platform-light`; Platform dark is `.dark`; stock Shadcn
+Platform light is `:root` / `.light`; Platform dark is `.dark`; stock Shadcn
 Neutral is `.theme-shadcn-neutral` (and `.dark.theme-shadcn-neutral`); Paratext is
 `.paratext-light` / `.paratext-dark`. The running app loads Platform and Paratext HSLs from
 [themes.data.json](https://github.com/paranext/paranext-core/blob/main/src/shared/data/themes.data.json)
 (default Platform family key and `paratext`); Shadcn Neutral is Storybook-only.
 
 **Platform** default (`:root` / `.dark`) is **Slate-based** (blue-gray neutrals) but **not
-identical** to the stock Shadcn Neutral preset under `.theme-shadcn-neutral` in `index.css`.
+identical** to the stock Shadcn Neutral preset under `.theme-shadcn-neutral` in `storybook-themes.css`.
 Use the toolbar's **Shadcn Neutral** options when you need the closest match to
 [shadcn/ui docs](https://ui.shadcn.com/docs/theming#neutral) for development, UX review, or
 debugging. Pick **Shadcn Neutral** under Theme and set Color scheme to light or dark (or system).

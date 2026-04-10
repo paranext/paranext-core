@@ -5,6 +5,7 @@ import { persistDirection, readDirection } from '../src/utils/dir-helper.util';
 import { withPlatformBibleThemes } from './theme-decorator';
 import '../src/index.css';
 import './preview-storybook.css';
+import './storybook-themes.css';
 
 // Setup Monaco editor
 setupMonaco({
