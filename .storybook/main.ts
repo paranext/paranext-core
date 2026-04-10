@@ -45,7 +45,8 @@ const config: StorybookConfig = {
   webpackFinal: async (webpackConfig, { configType }) => {
     const rendererConfig =
       configType === 'PRODUCTION'
-        ? // eslint-disable-next-line global-require
+        ? // Webpack configs must be loaded dynamically based on configType (PRODUCTION vs DEVELOPMENT)
+          // eslint-disable-next-line global-require
           require('../.erb/configs/webpack.config.renderer.prod').default
         : // Storybook is a build tool so this will not affect anything
           // eslint-disable-next-line global-require
@@ -60,11 +61,10 @@ const config: StorybookConfig = {
     // Filter out plugins that conflict with Storybook's own plugins.
     // HtmlWebpackPlugin causes Storybook 9's WebpackInjectMockerRuntimePlugin to
     // emit mocker-runtime-injected.js twice (one per HtmlWebpackPlugin instance).
+    const conflictingPlugins = ['HtmlWebpackPlugin', 'BundleAnalyzerPlugin'];
     rendererConfigSanitized.plugins = (rendererConfigSanitized.plugins || []).filter(
-      (plugin: { constructor?: { name?: string } }) => {
-        const name = plugin?.constructor?.name;
-        return name !== 'HtmlWebpackPlugin' && name !== 'BundleAnalyzerPlugin';
-      },
+      (plugin: { constructor?: { name?: string } }) =>
+        !conflictingPlugins.includes(plugin?.constructor?.name ?? ''),
     );
 
     // Inject postcss-loader into the renderer's CSS rules for Storybook only.
