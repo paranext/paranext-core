@@ -50,7 +50,7 @@ const variantConfig = {
 };
 
 /**
- * Color-coded documentation block for Do / Don't / Tip examples in Storybook.
+ * Color-coded documentation block for prefer / avoid / neutral examples in Storybook.
  *
  * - `variant="prefer"` — teal, thumbs-up, "Prefer"
  * - `variant="avoid"` — rose, thumbs-down, "Avoid"
