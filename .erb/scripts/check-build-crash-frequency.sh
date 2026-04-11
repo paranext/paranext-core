@@ -25,12 +25,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+progress() {
+  printf "\r  %s %d/%d  (%s)..." "$1" "$2" "$3" "$4"
+}
+
 echo "Scanning last $LIMIT runs of $WORKFLOW in $REPO..."
 echo "Path filter:  \"$PATH_FILTER\""
 echo "Looking for:  \"$PATTERN\""
 echo ""
 
-# Fetch run list — include headSha so we can query changed files per commit
 RUNS=$(gh run list \
   --workflow="$WORKFLOW" \
   --repo="$REPO" \
@@ -41,8 +44,8 @@ RUNS=$(gh run list \
 TOTAL=$(echo "$RUNS" | jq 'length')
 echo "Runs fetched: $TOTAL"
 
-# Isolate failed and cancelled runs (cancelled = re-run occurred; original failure logs are gone
-# but the run should still be inspected in case --log-failed surfaces anything)
+# Include cancelled runs: GitHub replaces job conclusions in-place on re-run,
+# so a previously-failing run becomes cancelled once the re-run succeeds.
 FAILED_JSON=$(echo "$RUNS" | jq '[.[] | select(.conclusion == "failure" or .conclusion == "cancelled")]')
 FAILED_COUNT=$(echo "$FAILED_JSON" | jq 'length')
 echo "Failed/cancelled runs: $FAILED_COUNT"
@@ -59,21 +62,20 @@ fi
 echo ""
 echo "Phase 1 — filtering by commit path ($PATH_FILTER)..."
 
-MATCHING_RUNS_JSON="[]"
+# Collect matching rows as individual JSON strings; build the array once after the loop
+# rather than re-parsing the accumulator on every iteration (avoids O(n²) jq calls).
+MATCHING_ROWS=()
 CHECKED_COMMITS=0
 # SHA cache as a temp file: each line is "<sha> <yes|no>"
-# Works on bash 3.2 (macOS default) which lacks associative arrays
+# Works on bash 3.2 (macOS default) which lacks associative arrays.
 COMMIT_CACHE_FILE=$(mktemp)
 trap 'rm -f "$COMMIT_CACHE_FILE"' EXIT
 
 while IFS= read -r ROW; do
-  RUN_ID=$(echo "$ROW"  | jq -r '.databaseId')
   HEAD_SHA=$(echo "$ROW" | jq -r '.headSha')
   CHECKED_COMMITS=$((CHECKED_COMMITS + 1))
-  printf "\r  Checking commit %d/%d  (%s)..." \
-    "$CHECKED_COMMITS" "$FAILED_COUNT" "${HEAD_SHA:0:7}"
+  progress "Checking commit" "$CHECKED_COMMITS" "$FAILED_COUNT" "${HEAD_SHA:0:7}"
 
-  # Use file-based cache to avoid re-querying the same SHA
   CACHED=$(grep "^$HEAD_SHA " "$COMMIT_CACHE_FILE" 2>/dev/null || true)
   if [[ -n "$CACHED" ]]; then
     TOUCHES=$(echo "$CACHED" | awk '{print $2}')
@@ -90,14 +92,12 @@ while IFS= read -r ROW; do
     echo "$HEAD_SHA $TOUCHES" >> "$COMMIT_CACHE_FILE"
   fi
 
-  if [[ "$TOUCHES" == "yes" ]]; then
-    MATCHING_RUNS_JSON=$(echo "$MATCHING_RUNS_JSON $ROW" | jq -s '.[0] + [.[1]]')
-  fi
+  [[ "$TOUCHES" == "yes" ]] && MATCHING_ROWS+=("$ROW")
 done < <(echo "$FAILED_JSON" | jq -c '.[]')
 
 echo ""
 
-MATCHING_COUNT=$(echo "$MATCHING_RUNS_JSON" | jq 'length')
+MATCHING_COUNT=${#MATCHING_ROWS[@]}
 echo "Runs touching $PATH_FILTER: $MATCHING_COUNT / $FAILED_COUNT failed"
 
 if [[ "$MATCHING_COUNT" -eq 0 ]]; then
@@ -105,6 +105,9 @@ if [[ "$MATCHING_COUNT" -eq 0 ]]; then
   echo "No failed runs touched $PATH_FILTER — nothing to scan for crash pattern."
   exit 0
 fi
+
+# Build the JSON array once from the collected rows.
+MATCHING_RUNS_JSON=$(printf '%s\n' "${MATCHING_ROWS[@]}" | jq -s '.')
 
 # ------------------------------------------------------------------
 # Phase 2: scan logs of matching runs for the crash pattern
@@ -118,8 +121,7 @@ SCANNED=0
 while IFS= read -r ROW; do
   RUN_ID=$(echo "$ROW" | jq -r '.databaseId')
   SCANNED=$((SCANNED + 1))
-  printf "\r  Scanning logs %d/%d  (run %s)..." \
-    "$SCANNED" "$MATCHING_COUNT" "$RUN_ID"
+  progress "Scanning logs" "$SCANNED" "$MATCHING_COUNT" "$RUN_ID"
 
   LOGS=$(gh run view "$RUN_ID" \
     --repo="$REPO" \
@@ -142,13 +144,13 @@ echo "========================================"
 echo "Runs scanned total:                      $TOTAL"
 echo "Failed/cancelled runs:                   $FAILED_COUNT"
 echo "Failed/cancelled + touched $PATH_FILTER: $MATCHING_COUNT"
-echo "Runs with crash pattern:         $CRASH_COUNT"
+echo "Runs with crash pattern:                 $CRASH_COUNT"
 
 if [[ "$CRASH_COUNT" -gt 0 ]]; then
   PCT_OF_MATCHING=$(awk "BEGIN { printf \"%.1f\", ($CRASH_COUNT / $MATCHING_COUNT) * 100 }")
   PCT_OF_ALL=$(awk "BEGIN { printf \"%.1f\", ($CRASH_COUNT / $TOTAL) * 100 }")
-  echo "As % of matching failed runs:    $PCT_OF_MATCHING%"
-  echo "As % of all scanned runs:        $PCT_OF_ALL%"
+  echo "As % of matching failed runs:            $PCT_OF_MATCHING%"
+  echo "As % of all scanned runs:                $PCT_OF_ALL%"
   echo ""
   echo "Affected runs:"
   for RUN_ID in "${CRASH_RUNS[@]}"; do
