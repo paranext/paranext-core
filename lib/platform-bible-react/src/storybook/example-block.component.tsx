@@ -6,7 +6,7 @@ type Variant = 'prefer' | 'avoid' | 'neutral';
 
 type ExampleBlockProps = {
   variant?: Variant;
-  /** Overrides the default label ("Best Practice" / "Anti-pattern" / "Tip") */
+  /** Overrides the default label ("Prefer" / "Avoid" / "Example") */
   title?: string;
   /** Body content of the block — typically a sentence or two explaining what the example illustrates */
   children?: React.ReactNode;
@@ -178,7 +178,7 @@ type ExampleBlockGroupProps = {
 
 /**
  * Lays out two `ExampleBlock`s side by side on medium+ screens, stacked on mobile. Typically used
- * to show a Do and Don't example together.
+ * to show a Prefer and Avoid example together.
  */
 export function ExampleBlockGroup({ children, className }: ExampleBlockGroupProps) {
   return (
