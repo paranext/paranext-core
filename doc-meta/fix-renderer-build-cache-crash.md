@@ -2,15 +2,15 @@
 
 ## Incident
 
-| Field             | Value                                                                                                                                                                                                   |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| First observed    | 2026-04-11                                                                                                                                                                                              |
-| Workflow          | [Test #5730](https://github.com/paranext/paranext-core/actions/runs/24285521198/job/70914135269)                                                                                                        |
-| Triggering commit | [`a9b19c5`](https://github.com/paranext/paranext-core/commit/a9b19c5eea59f0a06cd011f2454d9df739f535c4) — `refactor: rename ExampleBlock variants prefer/avoid/neutral, refresh labels and neutral icon` |
-| Branch            | `pt-example-block-rename`                                                                                                                                                                               |
-| Platform          | Linux (ubuntu-22.04)                                                                                                                                                                                    |
-| Reproducible      | **No** — re-running the same workflow passed cleanly                                                                                                                                                    |
-| Frequency         | 1 in 50 recent test runs (2% overall, 7.1% of failing runs)                                                                                                                                             |
+| Field | Value |
+| --- | --- |
+| First observed | 2026-04-11 |
+| Workflow | [Test #5730](https://github.com/paranext/paranext-core/actions/runs/24285521198/job/70914135269) |
+| Triggering commit | [`a9b19c5`](https://github.com/paranext/paranext-core/commit/a9b19c5eea59f0a06cd011f2454d9df739f535c4) — `refactor: rename ExampleBlock variants prefer/avoid/neutral` |
+| Branch | `pt-example-block-rename` |
+| Platform | Linux (ubuntu-22.04) |
+| Reproducible | **No** — re-running the same workflow passed cleanly |
+| Frequency | Effectively one-time — see Frequency Analysis section |
 
 ## Symptom
 
@@ -93,7 +93,7 @@ crashes fatally.
 - The V8 version delta only manifests when a stale cache entry from a prior step gets
   picked up. In most CI runs, the cache is cold and the delta never occurs.
 - Timing between concurrent build processes and filesystem cache writes may also play a role.
-- Frequency analysis (see `check-build-crash-frequency.sh`) found 1 occurrence in 50 runs.
+- Frequency analysis across 2000 runs found only the original incident — see Frequency Analysis section.
 
 ### What the AI analysis got wrong (for the record)
 
@@ -170,11 +170,75 @@ in CI.
 Do **not** add `NODE_OPTIONS="--max-old-space-size=8192"` to `build:renderer`. The crash
 is a V8 bytecode deserialization incompatibility. Heap size is irrelevant.
 
+## Frequency Analysis
+
+Two scan sessions were run using `.erb/scripts/check-build-crash-frequency.sh`.
+
+### Session 1 — 50 runs, no path filter (2026-04-11, before re-run)
+
+| Metric | Value |
+| --- | --- |
+| Runs scanned | 50 |
+| Failed runs | 14 |
+| Path filter | none |
+| Crash found | **1** (run [#5730](https://github.com/paranext/paranext-core/actions/runs/24285521198)) |
+| Crash % of all runs | 2.0% |
+| Crash % of failed runs | 7.1% |
+
+### Session 2 — 2000 runs, filtered to `lib/platform-bible-react` commits (2026-04-11, after re-run)
+
+| Metric | Value |
+| --- | --- |
+| Runs scanned | 2000 |
+| Failed runs | 551 |
+| Passed path filter | 204 |
+| Crash found | **0** |
+
+Full results: `doc-meta/crash-frequency-results-2000.txt`
+
+### Why the sessions disagree
+
+Session 2 found 0 crashes despite covering 40× more history. The reason is not the path
+filter — commit `a9b19c5` does touch `lib/platform-bible-react` and run #5730 was at
+position 5 in the 2000-run list. The real cause is **GitHub's re-run behavior**:
+
+When the user re-ran the failed workflow, GitHub replaced the job outcomes in-place. The
+original failing Ubuntu job became `conclusion: success`; the overall run conclusion
+changed from `failure` to `cancelled`. The script's phase 1 filter `select(.conclusion == "failure")`
+therefore excluded run #5730, and `--log-failed` returned nothing for it anyway since no
+jobs are currently marked failed.
+
+**Implication:** historical scans systematically under-count crashes that were followed by
+a successful re-run. Any occurrence that was re-run before a scan is invisible.
+
+### Scanner filter strategy
+
+The current two-phase design (path filter → log scan) has trade-offs worth understanding:
+
+| Approach | API calls | Catches re-run-masked crashes | Notes |
+| --- | --- | --- | --- |
+| No filter, check all failed | low | no | Fast but misses re-runs like this one |
+| Path filter on committed files | medium (1 per unique SHA) | no | Correctly narrows scope; not the cause of the miss here |
+| Include `cancelled` conclusion | low overhead | **yes** | Catches re-run cases; add `cancelled` alongside `failure` in phase 1 |
+| Filter by platform (Linux only) | none extra | no | Crash was Linux-specific; could skip Windows/macOS log fetches |
+| No filter + include `cancelled` | low | **yes** | Broadest coverage; recommended for future scans |
+
+**Recommended change to the script:** add `cancelled` to the conclusion filter in phase 1
+so re-run-masked runs are included. The `--log-failed` call will return empty for
+successful re-runs (no wasted log fetch), so there is no efficiency cost.
+
+```sh
+FAILED_JSON=$(echo "$RUNS" | jq '[.[] | select(.conclusion == "failure" or .conclusion == "cancelled")]')
+```
+
+Optionally add `--linux-only` flag to skip Windows/macOS log fetches, since the crash has
+only been observed on ubuntu-22.04.
+
 ## Investigation Tools
 
 - **Frequency script:** `.erb/scripts/check-build-crash-frequency.sh`  
-  Scans GitHub Actions history and reports how many runs contain the "unreachable code"
-  pattern. Usage: `bash .erb/scripts/check-build-crash-frequency.sh [--limit N]`
+  Usage: `bash .erb/scripts/check-build-crash-frequency.sh [--limit N] [--path-filter PATH]`
+- **Results (2000-run scan):** `doc-meta/crash-frequency-results-2000.txt`
 
 ## Branch / PR Guidance
 
