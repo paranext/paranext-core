@@ -47,7 +47,7 @@ This guide would provide developers with step-by-step instructions on how to imp
 
 ### Writing Documentation Examples
 
-Use `ExampleBlock` and `ExampleBlockGroup` from `@/storybook/example-block.component` to annotate Do / Don't / Tip patterns in any MDX doc page.
+Use `ExampleBlock` and `ExampleBlockGroup` from `@/storybook/example-block.component` to annotate Prefer / Avoid / Example patterns in any MDX doc page.
 
 ```mdx
 import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
@@ -56,9 +56,9 @@ import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.compo
 **Text-only example:**
 
 ```mdx
-<ExampleBlock variant="do">Use semantic HTML elements like `<button>` for interactive controls.</ExampleBlock>
+<ExampleBlock variant="prefer">Use semantic HTML elements like `<button>` for interactive controls.</ExampleBlock>
 
-<ExampleBlock variant="dont">Avoid `<div onClick>` for buttons — it lacks keyboard and accessibility support.</ExampleBlock>
+<ExampleBlock variant="avoid">Avoid `<div onClick>` for buttons — it lacks keyboard and accessibility support.</ExampleBlock>
 
 <ExampleBlock variant="neutral">Add `aria-label` when the visual context isn't available to screen readers.</ExampleBlock>
 ```
@@ -70,13 +70,13 @@ Pass a rendered component to the `preview` prop. It appears in a framed stage ab
 ```mdx
 <ExampleBlockGroup>
   <ExampleBlock
-    variant="do"
+    variant="prefer"
     preview={<Button variant="secondary">Discard</Button>}
   >
     Use a specific verb — the action is self-evident without reading surrounding text.
   </ExampleBlock>
   <ExampleBlock
-    variant="dont"
+    variant="avoid"
     preview={<Button variant="secondary">Cancel</Button>}
   >
     Avoid vague labels — users learn to dismiss without reading.
@@ -86,13 +86,13 @@ Pass a rendered component to the `preview` prop. It appears in a framed stage ab
 
 **Props:**
 
-| Prop               | Type                          | Default     | Description                                                                            |
-| ------------------ | ----------------------------- | ----------- | -------------------------------------------------------------------------------------- |
-| `variant`          | `'do' \| 'dont' \| 'neutral'` | `'neutral'` | Color and icon theme                                                                   |
-| `title`            | `string`                      | —           | Overrides the default label ("Best Practice" / "Anti-pattern" / "Tip")                 |
-| `preview`          | `ReactNode`                   | —           | Live component rendered in a framed stage                                              |
-| `previewClassName` | `string`                      | —           | Extra classes on the preview container (e.g. `tw-pb-24` for floating UI like tooltips) |
-| `children`         | `ReactNode`                   | required    | Description text below the preview                                                     |
+| Prop               | Type                               | Default     | Description                                                                            |
+| ------------------ | ---------------------------------- | ----------- | -------------------------------------------------------------------------------------- |
+| `variant`          | `'prefer' \| 'avoid' \| 'neutral'` | `'neutral'` | Color and icon theme                                                                   |
+| `title`            | `string`                           | —           | Overrides the default label ("Prefer" / "Avoid" / "Example")                           |
+| `preview`          | `ReactNode`                        | —           | Live component rendered in a framed stage                                              |
+| `previewClassName` | `string`                           | —           | Extra classes on the preview container (e.g. `tw-pb-24` for floating UI like tooltips) |
+| `children`         | `ReactNode`                        | required    | Description text below the preview                                                     |
 
 ### MDX, TypeScript, and CSF Examples
 
