@@ -18,14 +18,11 @@ const MATRIX_THEMES = [
  */
 export function ThemeMatrixDemo() {
   return (
-    <div className="tw-not-prose tw-min-h-[200px] tw-max-w-6xl tw-space-y-4 tw-bg-slate-50 tw-p-6 tw-text-slate-900">
-      <p className="tw-text-sm tw-text-slate-500">
+    <div className="tw-not-prose light tw-min-h-[200px] tw-max-w-6xl tw-space-y-4 tw-bg-muted tw-p-6">
+      <p>
         Each panel uses the same components with theme variables applied on a local wrapper. Compare
         with the global toolbar themes on other stories. For a larger token table, see{' '}
-        <a
-          className="tw-text-blue-600 hover:tw-underline"
-          href="https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs"
-        >
+        <a href="https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/guides-theme-colors--docs">
           Guides / Theme Colors
         </a>
         .
@@ -33,7 +30,7 @@ export function ThemeMatrixDemo() {
       <div className="tw-grid tw-grid-flow-row tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-2 xl:tw-auto-cols-fr xl:tw-grid-flow-col xl:tw-grid-cols-none xl:tw-grid-rows-2">
         {MATRIX_THEMES.map(({ id, label, themeShell }) => (
           <div key={id} className={themeShell}>
-            <div className="pr-twp tw-flex tw-flex-col tw-rounded-lg tw-border tw-border-border tw-bg-background tw-p-4 tw-text-foreground">
+            <div className="pr-twp tw-flex tw-flex-col tw-rounded-lg tw-border tw-border-border tw-bg-background tw-p-4">
               {/*
                 Important: Docs iframe can inherit a global `color` onto `p` that does not re-resolve
                 `--foreground` from this nested theme shell. Force token-based text color.
