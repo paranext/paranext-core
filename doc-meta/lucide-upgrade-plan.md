@@ -34,7 +34,6 @@ Requirements (automated LLM-actionable checklist):
 
 Icon rename mapping (common cases — extend as needed):
 
-- `LineSquiggle` => use `WaveSquare` or `Info` depending on intent (manual review)
 - `CheckCircle` => `CheckCircle2` or `CheckCircle` (confirm in v1)
 - `X` => `X` (confirm export unchanged)
 - `Home` => `Home` (usually unchanged)
@@ -57,14 +56,13 @@ Files to update:
 - lib/\*/package.json (list auto-detected)
 
 Icon mapping (JSON):
-{"LineSquiggle":"Info","CheckCircle":"CheckCircle2"}
+{"CheckCircle":"CheckCircle2",…}
 
 If any step fails, output the failing command and the error text.
 """
 
 Manual review notes:
 
-- `LineSquiggle` is a decorative squiggle; `Info` is semantically different. Prefer `Info` for a neutral example icon as a quick, low-risk substitution.
 - Some icons may have been removed or renamed; do not blindly replace without previewing in Storybook.
 
 Acceptance criteria for upgrade completion:
