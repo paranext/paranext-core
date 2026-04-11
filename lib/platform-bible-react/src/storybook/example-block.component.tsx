@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ThumbsUp, ThumbsDown, LineSquiggle, ChevronDown } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Info, ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 
 type Variant = 'prefer' | 'avoid' | 'neutral';
@@ -40,7 +40,7 @@ const variantConfig = {
     iconBgClass: 'tw-bg-rose-500/15',
   },
   neutral: {
-    Icon: LineSquiggle,
+    Icon: Info,
     label: 'Example',
     accentClass: 'tw-bg-sky-500',
     bgClass: 'tw-bg-sky-500/5',
@@ -54,7 +54,7 @@ const variantConfig = {
  *
  * - `variant="prefer"` — teal, thumbs-up, "Prefer"
  * - `variant="avoid"` — rose, thumbs-down, "Avoid"
- * - `variant="neutral"` (default) — sky, squiggle-line, "Example"
+ * - `variant="neutral"` (default) — sky, info icon, "Example"
  *
  * Pass a live component to `preview` to render it in a framed stage. Pass source code to `code` —
  * single-line displays inline, multiline collapses and expands on click. The preview and code share
