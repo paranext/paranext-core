@@ -228,7 +228,7 @@
     "jsonfile": "^6.2.0",
     "lexical": "~0.41.0",
     "lint-staged": "^15.4.3",
-    "lucide-react": "^0.475.0",
+    "lucide-react": "^1.8.0",
     "mini-css-extract-plugin": "^2.9.2",
     "node-abi": "^4.9.0",
     "node-loader": "^2.1.0",
