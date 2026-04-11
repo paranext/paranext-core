@@ -1,0 +1,75 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
+
+<Meta title="Guidelines/Apostrophes" />
+
+# Apostrophes and quotation marks
+
+Use typographic (curly) punctuation in display text. Straight quotes and backticks are typewriter
+legacies; typographic punctuation is what readers expect in polished prose.
+
+Reference: [Practical Typography — Apostrophes](https://practicaltypography.com/apostrophes.html)
+
+---
+
+## Apostrophe
+
+<ExampleBlock variant="dont" title="Avoid backticks except for code" code="What`s new">
+  A backtick is a code delimiter, not a punctuation character. It is never a valid apostrophe.
+</ExampleBlock>
+
+<ExampleBlock variant="neutral" title="Only when necessary" code="What's new">
+  A straight apostrophe is acceptable inside code strings, but prefer a typographic apostrophe in
+  display text whenever possible.
+</ExampleBlock>
+
+<ExampleBlock variant="do" code="What's new">
+  Use a typographic apostrophe `'` (U+2019, RIGHT SINGLE QUOTATION MARK) in all display text.
+</ExampleBlock>
+
+---
+
+## Single quotation marks
+
+Use `'` (U+2018, LEFT SINGLE QUOTATION MARK) to open and `'` (U+2019, RIGHT SINGLE QUOTATION MARK)
+to close.
+
+<ExampleBlockGroup>
+  <ExampleBlock variant="neutral" title="Avoid if possible" code="'like this'">
+    Straight single quotes are ambiguous — the same character serves as both open and close.
+  </ExampleBlock>
+
+  <ExampleBlock variant="do" code="'like this'">
+    Typographic single quotes curve to clearly distinguish open from close.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+---
+
+## Double quotation marks
+
+Use `"` (U+201C, LEFT DOUBLE QUOTATION MARK) to open and `"` (U+201D, RIGHT DOUBLE QUOTATION MARK)
+to close.
+
+<ExampleBlockGroup>
+  <ExampleBlock variant="neutral" title="Avoid if possible" code={`"like this"`}>
+    Straight double quotes are a typewriter legacy and look less polished in display text.
+  </ExampleBlock>
+
+  <ExampleBlock variant="do" code="&ldquo;like this&rdquo;">
+    Typographic double quotes are the standard in modern, well-typeset prose.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+---
+
+## How to type typographic punctuation
+
+Most code editors do not auto-correct punctuation. Use one of these methods:
+
+| Character                        | Copy/paste | HTML entity              | macOS                                                                      | Windows                                        |
+| -------------------------------- | ---------- | ------------------------ | -------------------------------------------------------------------------- | ---------------------------------------------- |
+| Apostrophe / closing single `'`  | `'`        | `&rsquo;` / `&#x2019;`  | <kbd>Opt</kbd> + <kbd>Shift</kbd> + <kbd>]</kbd>                           | <kbd>Alt</kbd> + <kbd>0146</kbd> (numpad)       |
+| Opening single `'`               | `'`        | `&lsquo;` / `&#x2018;`  | <kbd>Opt</kbd> + <kbd>]</kbd>                                              | <kbd>Alt</kbd> + <kbd>0145</kbd> (numpad)       |
+| Opening double `"`               | `"`        | `&ldquo;` / `&#x201C;`  | <kbd>Opt</kbd> + <kbd>[</kbd>                                              | <kbd>Alt</kbd> + <kbd>0147</kbd> (numpad)       |
+| Closing double `"`               | `"`        | `&rdquo;` / `&#x201D;`  | <kbd>Opt</kbd> + <kbd>Shift</kbd> + <kbd>[</kbd>                           | <kbd>Alt</kbd> + <kbd>0148</kbd> (numpad)       |
