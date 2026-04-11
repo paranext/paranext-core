@@ -20,13 +20,17 @@ Requirements (automated LLM-actionable checklist):
 4. Build and test each package that imports Lucide.
    - Run `npm run typecheck:platform-bible-react` and `npm run build:platform-bible-react`.
    - Run `cd extensions && npm run build` (or per-extension build scripts).
-5. Manually inspect Storybook builds and webviews for icon rendering issues.
+5. Run Chromatic to catch visual regressions in Storybook stories.
+   - Publish stories to Chromatic: `npx chromatic --project-token=<token>` from repo root.
+   - Review any flagged UI changes in the Chromatic dashboard and approve or reject them.
+   - Pay particular attention to stories that render icons (search stories for `lucide-react` imports).
+6. Manually inspect Storybook builds and webviews for icon rendering issues not caught by Chromatic.
    - Storybook: `npm run storybook:platform-bible-react`.
-6. Fix runtime mismatches by:
+7. Fix runtime mismatches by:
    - Adjusting imports (named imports vs. default) where necessary.
    - Updating any icon usage where props changed (e.g., `size`, `strokeWidth` defaults).
-7. Clean up older build artifacts that may bundle older Lucide versions (e.g., `storybook-static` folders).
-8. Commit changes and open PR with migration notes and any remaining manual tasks.
+8. Clean up older build artifacts that may bundle older Lucide versions (e.g., `storybook-static` folders).
+9. Commit changes and open PR with migration notes and any remaining manual tasks.
 
 Icon rename mapping (common cases — extend as needed):
 
