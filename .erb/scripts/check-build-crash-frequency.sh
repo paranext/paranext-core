@@ -60,7 +60,10 @@ echo "Phase 1 — filtering by commit path ($PATH_FILTER)..."
 
 MATCHING_RUNS_JSON="[]"
 CHECKED_COMMITS=0
-declare -A COMMIT_CACHE   # cache SHA → "yes"/"no" to skip duplicate SHAs
+# SHA cache as a temp file: each line is "<sha> <yes|no>"
+# Works on bash 3.2 (macOS default) which lacks associative arrays
+COMMIT_CACHE_FILE=$(mktemp)
+trap 'rm -f "$COMMIT_CACHE_FILE"' EXIT
 
 while IFS= read -r ROW; do
   RUN_ID=$(echo "$ROW"  | jq -r '.databaseId')
@@ -69,9 +72,10 @@ while IFS= read -r ROW; do
   printf "\r  Checking commit %d/%d  (%s)..." \
     "$CHECKED_COMMITS" "$FAILED_COUNT" "${HEAD_SHA:0:7}"
 
-  # Use cache to avoid re-querying the same SHA (multiple jobs per run share one SHA)
-  if [[ -v COMMIT_CACHE["$HEAD_SHA"] ]]; then
-    TOUCHES="${COMMIT_CACHE[$HEAD_SHA]}"
+  # Use file-based cache to avoid re-querying the same SHA
+  CACHED=$(grep "^$HEAD_SHA " "$COMMIT_CACHE_FILE" 2>/dev/null || true)
+  if [[ -n "$CACHED" ]]; then
+    TOUCHES=$(echo "$CACHED" | awk '{print $2}')
   else
     CHANGED=$(gh api "repos/$REPO/commits/$HEAD_SHA" \
       --jq '[.files // [] | .[].filename]' \
@@ -82,7 +86,7 @@ while IFS= read -r ROW; do
     else
       TOUCHES="no"
     fi
-    COMMIT_CACHE["$HEAD_SHA"]="$TOUCHES"
+    echo "$HEAD_SHA $TOUCHES" >> "$COMMIT_CACHE_FILE"
   fi
 
   if [[ "$TOUCHES" == "yes" ]]; then
