@@ -41,10 +41,11 @@ RUNS=$(gh run list \
 TOTAL=$(echo "$RUNS" | jq 'length')
 echo "Runs fetched: $TOTAL"
 
-# Isolate failed runs
-FAILED_JSON=$(echo "$RUNS" | jq '[.[] | select(.conclusion == "failure")]')
+# Isolate failed and cancelled runs (cancelled = re-run occurred; original failure logs are gone
+# but the run should still be inspected in case --log-failed surfaces anything)
+FAILED_JSON=$(echo "$RUNS" | jq '[.[] | select(.conclusion == "failure" or .conclusion == "cancelled")]')
 FAILED_COUNT=$(echo "$FAILED_JSON" | jq 'length')
-echo "Failed runs:  $FAILED_COUNT"
+echo "Failed/cancelled runs: $FAILED_COUNT"
 
 if [[ "$FAILED_COUNT" -eq 0 ]]; then
   echo ""
@@ -138,9 +139,9 @@ CRASH_COUNT=${#CRASH_RUNS[@]}
 echo "========================================"
 echo "Results"
 echo "========================================"
-echo "Runs scanned total:              $TOTAL"
-echo "Failed runs:                     $FAILED_COUNT"
-echo "Failed + touched $PATH_FILTER:  $MATCHING_COUNT"
+echo "Runs scanned total:                      $TOTAL"
+echo "Failed/cancelled runs:                   $FAILED_COUNT"
+echo "Failed/cancelled + touched $PATH_FILTER: $MATCHING_COUNT"
 echo "Runs with crash pattern:         $CRASH_COUNT"
 
 if [[ "$CRASH_COUNT" -gt 0 ]]; then
