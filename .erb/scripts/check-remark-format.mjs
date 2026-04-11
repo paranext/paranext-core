@@ -2,8 +2,8 @@
 // Verifies MDX files are formatted by remark.
 //
 // Reads each matched file, runs it through remark with the same plugins and settings as
-// .remarkrc.mjs, and compares the output to the original content. Exits 1 and lists unformatted
-// files if any differ.
+// the nearest .remarkrc.mjs (resolved from the current working directory), and compares
+// the output to the original content. Exits 1 and lists unformatted files if any differ.
 //
 // Files where remark is not idempotent (e.g. complex JSX inside attribute expressions — a known
 // remark-mdx limitation) are skipped rather than flagged, since there is no stable target to
@@ -15,11 +15,10 @@
 // Example (lib):  node ../../.erb/scripts/check-remark-format.mjs "**/*.mdx"
 
 import { remark } from 'remark';
-import remarkGfm from 'remark-gfm';
-import remarkMdx from 'remark-mdx';
 import { readFileSync } from 'fs';
 import { globSync } from 'glob';
 import path from 'path';
+import { pathToFileURL } from 'url';
 
 const patterns = process.argv.slice(2);
 if (patterns.length === 0) {
@@ -27,11 +26,22 @@ if (patterns.length === 0) {
   process.exit(1);
 }
 
-// Mirror settings from .remarkrc.mjs (shared by root and lib configs)
-const processor = remark()
-  .use(remarkMdx)
-  .use(remarkGfm)
-  .data('settings', { bullet: '-', rule: '-' });
+// Load .remarkrc.mjs from the current working directory (root or lib workspace) so this
+// script stays in sync with whatever plugins and settings remark-cli uses there.
+const configPath = path.resolve(process.cwd(), '.remarkrc.mjs');
+const { default: remarkConfig } = await import(pathToFileURL(configPath).href);
+
+// Resolve all plugin entries to [pluginFn, opts] pairs in parallel, then apply them.
+const resolvedPlugins = await Promise.all(
+  (remarkConfig.plugins ?? []).map(async (entry) => {
+    const [name, opts] = Array.isArray(entry) ? entry : [entry, undefined];
+    const plugin = typeof name === 'string' ? (await import(name)).default : name;
+    return /** @type {const} */ ([plugin, opts]);
+  }),
+);
+const processor = remark();
+resolvedPlugins.forEach(([plugin, opts]) => processor.use(plugin, opts));
+if (remarkConfig.settings) processor.data('settings', remarkConfig.settings);
 
 const files = patterns.flatMap((pattern) => globSync(pattern, { ignore: ['**/node_modules/**'] }));
 
