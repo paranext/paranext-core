@@ -68,7 +68,7 @@
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^4.6.2",
     "glob": "^10.5.0",
-    "lucide-react": "^0.475.0",
+    "lucide-react": "^1.8.0",
     "papi-dts": "file:../../../lib/papi-dts",
     "platform-bible-react": "file:../../../lib/platform-bible-react",
     "postcss": "^8.5.3",
