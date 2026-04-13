@@ -217,7 +217,7 @@
     "eslint-plugin-vitest": "^0.5.4",
     "file-loader": "^6.2.0",
     "fkill": "^9.0.0",
-    "glob": "^10.4.5",
+    "glob": "^7.2.3",
     "html-webpack-plugin": "^5.6.3",
     "husky": "^9.1.7",
     "identity-obj-proxy": "^3.0.0",
