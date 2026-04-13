@@ -16,9 +16,16 @@
 
 import { remark } from 'remark';
 import { readFileSync } from 'fs';
-import { globSync } from 'glob';
+import pkg from 'glob';
 import path from 'path';
 import { pathToFileURL } from 'url';
+
+const globSync =
+  pkg.globSync ??
+  pkg.sync ??
+  (() => {
+    throw new Error('glob sync API not available on this glob package version');
+  });
 
 const patterns = process.argv.slice(2);
 if (patterns.length === 0) {
@@ -71,9 +78,7 @@ const unformatted = secondPass
 
 if (unformatted.length > 0) {
   console.error('The following MDX files are not formatted with remark:');
-  for (const file of unformatted) {
-    console.error(`  ${file}`);
-  }
+  unformatted.forEach((file) => console.error(`  ${file}`));
   console.error('\nRun the format script to fix them.');
   process.exit(1);
 }
