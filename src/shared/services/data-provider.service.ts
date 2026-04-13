@@ -228,7 +228,18 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
           !deepEqual(dataPrevious, data)
         ) {
           dataPrevious = data;
-          callback(data);
+          try {
+            callback(data);
+          } catch (e) {
+            const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
+            logger.warn(
+              `Callback for subscription to ${dataType} with selector ${selectorDetails.substring(0, 120)} threw. ${getErrorMessage(e)}`,
+            );
+            // Still call callback with error for error handling
+            callback(newPlatformError(e));
+            const notification = constructErrorNotification(e);
+            if (notification) notificationService.send(notification);
+          }
         }
       } catch (e) {
         const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
@@ -265,7 +276,18 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
           if (!receivedUpdate && isSubscribed) {
             receivedUpdate = true;
             dataPrevious = data;
-            callback(data);
+            try {
+              callback(data);
+            } catch (e) {
+              const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
+              logger.warn(
+                `Callback for subscription to ${dataType} with selector ${selectorDetails.substring(0, 120)} threw. ${getErrorMessage(e)}`,
+              );
+              // Still call callback with error for error handling
+              callback(newPlatformError(e));
+              const notification = constructErrorNotification(e);
+              if (notification) notificationService.send(notification);
+            }
           }
         } catch (e) {
           const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
