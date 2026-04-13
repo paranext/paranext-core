@@ -4,7 +4,7 @@ import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FindHeader } from './find-header.component';
 import { SearchTextType } from './find-types';
-import { DEFAULT_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
+import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
 export function FindHeaderDemo() {
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -29,7 +29,9 @@ export function FindHeaderDemo() {
   const [activeMode, setActiveMode] = useState<'find' | 'replace'>('find');
   const [replaceTerm, setReplaceTerm] = useState<string>('');
   const [preserveCase, setPreserveCase] = useState(false);
-  const [previewOptions, setPreviewOptions] = useState<PreviewOptions>(DEFAULT_PREVIEW_OPTIONS);
+  const [previewOptions, setPreviewOptions] = useState<PreviewOptions>(
+    DEFAULT_REPLACE_PREVIEW_OPTIONS,
+  );
 
   const [searchStatus, setSearchStatus] = useState<FindJobStatus | undefined>(undefined);
 

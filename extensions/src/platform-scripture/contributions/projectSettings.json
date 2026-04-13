@@ -1,22 +1,5 @@
 [
   {
-    "label": "%settings_platformScripture_find_label%",
-    "properties": {
-      "platformScripture.findRecentSearches": {
-        "label": "%settings_platformScripture_findRecentSearches_label%",
-        "default": [],
-        "isHidden": true,
-        "includeProjectInterfaces": ["Paratext", "Scripture"]
-      },
-      "platformScripture.findLastSearchTerm": {
-        "label": "%settings_platformScripture_findLastSearchTerm_label%",
-        "default": "",
-        "isHidden": true,
-        "includeProjectInterfaces": ["Paratext", "Scripture"]
-      }
-    }
-  },
-  {
     "label": "%project_settings_platformScripture_group1_label%",
     "properties": {
       "platformScripture.booksPresent": {

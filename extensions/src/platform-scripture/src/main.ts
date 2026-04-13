@@ -69,16 +69,8 @@ const punctuationValidator: ProjectSettingValidator<
   'platformScripture.validPunctuation' | 'platformScripture.invalidPunctuation'
 > = async (newValue) => typeof newValue === 'string';
 
-// Search history - array of recent searches
-const findRecentSearchesValidator: ProjectSettingValidator<
-  'platformScripture.findRecentSearches'
-> = async (newValue) =>
-  Array.isArray(newValue) && newValue.every((item) => typeof item === 'string');
-
-// Last search term - single string
-const findLastSearchTermValidator: ProjectSettingValidator<
-  'platformScripture.findLastSearchTerm'
-> = async (newValue) => typeof newValue === 'string';
+const FIND_HISTORY_STORAGE_KEY = 'findRecentSearches';
+const FIND_LAST_SEARCH_TERM_STORAGE_KEY = 'findLastSearchTerm';
 
 // #endregion
 
@@ -380,13 +372,47 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.invalidPunctuation',
     punctuationValidator,
   );
-  const findRecentSearchesPromise = papi.projectSettings.registerValidator(
-    'platformScripture.findRecentSearches',
-    findRecentSearchesValidator,
+  const getFindHistoryPromise = papi.commands.registerCommand(
+    'platformScripture.getFindHistory',
+    async (projectId?: string): Promise<string[]> => {
+      const key = FIND_HISTORY_STORAGE_KEY + (projectId ? `_${projectId}` : '');
+      try {
+        const stored = await papi.storage.readUserData(context.executionToken, key);
+        if (!stored) return [];
+        const parsed: unknown = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string'))
+          return parsed;
+      } catch {
+        // Return empty array on any error
+      }
+      return [];
+    },
   );
-  const findLastSearchTermPromise = papi.projectSettings.registerValidator(
-    'platformScripture.findLastSearchTerm',
-    findLastSearchTermValidator,
+  const setFindHistoryPromise = papi.commands.registerCommand(
+    'platformScripture.setFindHistory',
+    async (history: string[], projectId?: string): Promise<void> => {
+      const key = FIND_HISTORY_STORAGE_KEY + (projectId ? `_${projectId}` : '');
+      await papi.storage.writeUserData(context.executionToken, key, JSON.stringify(history));
+    },
+  );
+  const getFindLastSearchTermPromise = papi.commands.registerCommand(
+    'platformScripture.getFindLastSearchTerm',
+    async (projectId?: string): Promise<string> => {
+      const key = FIND_LAST_SEARCH_TERM_STORAGE_KEY + (projectId ? `_${projectId}` : '');
+      try {
+        const stored = await papi.storage.readUserData(context.executionToken, key);
+        return stored ?? '';
+      } catch {
+        return '';
+      }
+    },
+  );
+  const setFindLastSearchTermPromise = papi.commands.registerCommand(
+    'platformScripture.setFindLastSearchTerm',
+    async (term: string, projectId?: string): Promise<void> => {
+      const key = FIND_LAST_SEARCH_TERM_STORAGE_KEY + (projectId ? `_${projectId}` : '');
+      await papi.storage.writeUserData(context.executionToken, key, term);
+    },
   );
   const openPunctuationInventoryPromise = papi.commands.registerCommand(
     'platformScripture.openPunctuationInventory',
@@ -501,8 +527,10 @@ export async function activate(context: ExecutionActivationContext) {
     await markersInventoryWebViewProviderPromise,
     await validPunctuationPromise,
     await invalidPunctuationPromise,
-    await findRecentSearchesPromise,
-    await findLastSearchTermPromise,
+    await getFindHistoryPromise,
+    await setFindHistoryPromise,
+    await getFindLastSearchTermPromise,
+    await setFindLastSearchTermPromise,
     await openPunctuationInventoryPromise,
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,

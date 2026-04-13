@@ -14,7 +14,7 @@ import { test as base, chromium, Page } from '@playwright/test';
 
 export { expect } from '@playwright/test';
 
-const CDP_URL = process.env.CDP_URL || 'http://localhost:9223';
+const CDP_URL = process.env.CDP_URL || 'http://127.0.0.1:9223';
 
 export interface CdpFixtures {
   mainPage: Page;

@@ -30,7 +30,6 @@ export type HidableFindResult = FindResult & { isHidden?: boolean; isReplaced?: 
 const WORDS_AROUND_SEARCH_RESULT = 15;
 
 export const SEARCH_RESULT_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
-  '%general_cancel%',
   '%webView_find_copyReference%',
   '%webView_find_copyVerseText%',
   '%webView_find_copyReferenceAndVerseText%',
@@ -78,8 +77,6 @@ interface SearchResultProps {
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on this result */
   onReplace: (index: number) => void;
-  /** Callback to cancel/revert the pending replace for this result */
-  onCancelReplace?: () => void;
   /** Whether the find WebView is currently in replace mode */
   isReplaceMode: boolean;
   /** Whether a replace operation is currently in progress */
@@ -136,7 +133,6 @@ export default function SearchResult({
   onResultReferenceClick,
   onHideResult,
   onReplace,
-  onCancelReplace,
   localizedStrings,
   isReplaceMode,
   isReplacing,
@@ -148,24 +144,14 @@ export default function SearchResult({
   // eslint-disable-next-line no-null/no-null
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Arrow/block only compute context on selection; inline defers to viewport visibility
+  // Context is calculated when the result is visible in the viewport (all results) or selected
   const [shouldCalculateContext, setShouldCalculateContext] = useState<boolean>(isSelected);
   const [isVisible, setIsVisible] = useState(false);
-  const [isProgressAnimating, setIsProgressAnimating] = useState(false);
-  useEffect(() => {
-    if (!searchResult.isReplaced) {
-      setIsProgressAnimating(false);
-      return undefined;
-    }
-    const frame = requestAnimationFrame(() => setIsProgressAnimating(true));
-    return () => cancelAnimationFrame(frame);
-  }, [searchResult.isReplaced]);
 
   // Listen for dark mode changes to re-render with updated inline styles
   useDarkMode();
 
-  // Observe when the card enters the viewport so inline context loads lazily.
-  // Also serves as the sole IntersectionObserver on this element — no second observer needed.
+  // Observe when the card enters the viewport so context loads lazily for all visible results.
   useEffect(() => {
     const el = cardRef.current;
     if (!el) return undefined;
@@ -182,29 +168,23 @@ export default function SearchResult({
     return () => observer.disconnect();
   }, []);
 
-  // Arrow/block layout: enable context calculation when this result is selected.
-  // (Inline layout uses isVisible via the effect below instead.)
+  // When this result becomes selected, ensure context is calculated and scroll into view.
   useEffect(() => {
     if (isSelected) {
       setShouldCalculateContext(true);
-    }
-  }, [isSelected]);
-
-  // When this result becomes selected, we should calculate the context if we haven't already
-  useEffect(() => {
-    if (isSelected) {
       cardRef.current?.scrollIntoView({ block: 'nearest' });
     }
   }, [isSelected]);
 
-  // When layout switches to inline AND the result is visible, enable context calculation.
+  // When any result becomes visible in the viewport, enable context calculation so verse text
+  // shows for all visible results (not just the selected one).
   // Use startTransition so these low-priority updates across many visible cards don't block
-  // the main thread when the user switches to inline layout.
+  // the main thread.
   useEffect(() => {
-    if (previewOptions.layout === 'inline' && isVisible) {
+    if (isVisible) {
       startTransition(() => setShouldCalculateContext(true));
     }
-  }, [previewOptions.layout, isVisible]);
+  }, [isVisible]);
 
   // Determine the text to show before the search result, the search result, and the text after
   const textParts = useMemo(() => {
@@ -401,6 +381,21 @@ export default function SearchResult({
       : preserveTrailingSpaces(rawFindText);
     const replaceText = displayText(previewReplacement);
 
+    // When replacing with nothing, show a thin vertical bar using the replace color so the user
+    // can see where the deletion will occur without a space being implied.
+    const isEmptyReplace = replaceText === '';
+    const deletionBar = (
+      <span
+        className="tw-inline-block tw-align-middle"
+        style={{
+          width: '2px',
+          height: '1lh',
+          backgroundColor: replaceStyle.color ?? 'currentColor',
+        }}
+        aria-hidden="true"
+      />
+    );
+
     if (previewOptions.layout === 'inline') {
       // Falls back to arrow if context not yet loaded
       if (!textParts) {
@@ -410,9 +405,13 @@ export default function SearchResult({
               {findText}
             </span>
             <ArrowRight className="tw-h-3 tw-w-3 tw-shrink-0 rtl:tw-rotate-180" />
-            <span className={`${replaceClass} tw-min-w-0 ${breakClass}`} style={replaceStyle}>
-              {replaceText}
-            </span>
+            {isEmptyReplace ? (
+              deletionBar
+            ) : (
+              <span className={`${replaceClass} tw-min-w-0 ${breakClass}`} style={replaceStyle}>
+                {replaceText}
+              </span>
+            )}
           </div>
         );
       }
@@ -424,9 +423,13 @@ export default function SearchResult({
               ? displayText(textParts.text)
               : preserveTrailingSpaces(textParts.text)}
           </span>
-          <span className={replaceClassInline} style={replaceStyle}>
-            {replaceText}
-          </span>
+          {isEmptyReplace ? (
+            deletionBar
+          ) : (
+            <span className={replaceClassInline} style={replaceStyle}>
+              {replaceText}
+            </span>
+          )}
           {displayText(textParts.afterText)}
         </div>
       );
@@ -452,9 +455,13 @@ export default function SearchResult({
             <Plus className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-foreground" />
             <span className={`tw-text-foreground tw-min-w-0 ${breakClass} ${fontClass}`}>
               {before}
-              <span className={replaceClass} style={replaceStyle}>
-                {replaceText}
-              </span>
+              {isEmptyReplace ? (
+                deletionBar
+              ) : (
+                <span className={replaceClass} style={replaceStyle}>
+                  {replaceText}
+                </span>
+              )}
               {after}
             </span>
           </div>
@@ -469,9 +476,13 @@ export default function SearchResult({
           {findText}
         </span>
         <ArrowRight className="tw-h-3 tw-w-3 tw-shrink-0 rtl:tw-rotate-180" />
-        <span className={`${replaceClass} tw-min-w-0 ${breakClass}`} style={replaceStyle}>
-          {replaceText}
-        </span>
+        {isEmptyReplace ? (
+          deletionBar
+        ) : (
+          <span className={`${replaceClass} tw-min-w-0 ${breakClass}`} style={replaceStyle}>
+            {replaceText}
+          </span>
+        )}
       </div>
     );
   };
@@ -495,31 +506,15 @@ export default function SearchResult({
           {searchResult.start.verseRef.chapterNum}:
           {searchResult.start.verseRef.verse || searchResult.start.verseRef.verseNum}
         </button>
+        {!searchResult.isReplaced && (
+          <span className="tw-text-muted-foreground tw-font-normal tw-truncate tw-min-w-0">
+            {searchResult.text}
+          </span>
+        )}
         {searchResult.isReplaced && (
-          <>
-            <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">
-              {localizedStrings['%webView_find_replaced%']}
-            </span>
-            <div className="tw-flex-1 tw-h-1.5 tw-bg-red-200 tw-rounded-full tw-overflow-hidden">
-              <div
-                className="tw-h-full tw-bg-red-500 tw-rounded-full tw-transition-all tw-ease-linear tw-duration-1000"
-                style={{ width: isProgressAnimating ? '100%' : '0%' }}
-              />
-            </div>
-            {onCancelReplace && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="tw-h-6 tw-shrink-0 tw-mr-10 tw-border-red-300 tw-text-red-500 hover:tw-border-red-500 hover:tw-text-red-700"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCancelReplace();
-                }}
-              >
-                {localizedStrings['%general_cancel%']}
-              </Button>
-            )}
-          </>
+          <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">
+            {localizedStrings['%webView_find_replaced%']}
+          </span>
         )}
       </div>
     </div>
@@ -532,7 +527,7 @@ export default function SearchResult({
 
   const additionalSelectedContent = (
     <>
-      {showVerseTextInAdditional && (
+      {showVerseTextInAdditional && textParts && (
         <div
           className={`tw-font-normal tw-text-muted-foreground ${fontClass} ${previewOptions.showInvisible ? 'tw-break-all' : 'tw-break-words'}`}
         >
@@ -588,7 +583,7 @@ export default function SearchResult({
         hoverButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
         dropdownContent={searchResult.isReplaced ? undefined : dropdownContent}
         showDropdownOnHover={!searchResult.isReplaced}
-        additionalContent={isSelected ? additionalSelectedContent : undefined}
+        additionalContent={additionalSelectedContent}
       >
         {cardContent}
       </ResultsCard>

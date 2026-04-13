@@ -38,6 +38,3 @@ export const DEFAULT_REPLACE_PREVIEW_OPTIONS: PreviewOptions = {
   monospace: false,
   showInvisible: false,
 };
-
-/** @deprecated Use {@link DEFAULT_FIND_PREVIEW_OPTIONS} or {@link DEFAULT_REPLACE_PREVIEW_OPTIONS} */
-export const DEFAULT_PREVIEW_OPTIONS = DEFAULT_REPLACE_PREVIEW_OPTIONS;

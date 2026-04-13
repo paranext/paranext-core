@@ -70,7 +70,6 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_replaceAll%',
   '%webView_find_replacedOneOccurrence%',
   '%webView_find_replacedNOccurrences%',
-  '%webView_find_replacementReverted%',
   '%webView_find_replaceTab%',
   '%webView_find_replaceTerm_placeholder%',
   '%webView_find_restrictions%',
@@ -79,7 +78,7 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_restrictions_startOfWord%',
   '%webView_find_restrictions_wholeWord%',
   '%webView_find_result%',
-  '%webView_find_searchPlaceholder%',
+  '%webView_find_searchPlaceholderShort%',
   '%webView_find_showing%',
   '%webView_find_showingResults%',
   '%webView_find_showingResultsOfMore%',
@@ -114,47 +113,6 @@ const RESULTS_BATCH_SIZE = 100;
 const SEARCH_DEBOUNCE_DELAY_MS = 500;
 const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 
-/**
- * Returns a promise that resolves after `ms` milliseconds. The cancel function stored in
- * `cancelRef` resolves the promise early; the resolved value is `true` when cancelled, `false` when
- * the timeout elapsed naturally. Callers must clear `cancelRef.current` after awaiting.
- */
-function cancellableDelay(
-  ms: number,
-  cancelRef: { current: { cancel: () => void } | undefined },
-): Promise<boolean> {
-  return new Promise<boolean>((resolve) => {
-    const timeoutId = setTimeout(() => resolve(false), ms);
-    // We must write to cancelRef.current to expose the cancel function to the caller, which is the
-    // intended API of this function. The ref object itself is not reassigned.
-    // eslint-disable-next-line no-param-reassign
-    cancelRef.current = {
-      cancel: () => {
-        clearTimeout(timeoutId);
-        resolve(true);
-      },
-    };
-  });
-}
-
-async function revertBookSnapshots(
-  snapshots: Map<string, string>,
-  pdp: { setBookUSFM: (verseRef: SerializedVerseRef, usfm: string) => Promise<unknown> },
-): Promise<boolean> {
-  let allRevertedSuccessfully = true;
-  await Promise.all(
-    [...snapshots].map(async ([bookId, snapshot]) => {
-      try {
-        await pdp.setBookUSFM({ book: bookId, chapterNum: 1, verseNum: 0 }, snapshot);
-      } catch (revertError) {
-        allRevertedSuccessfully = false;
-        logger.error(`Error reverting replace for book ${bookId}: ${getErrorMessage(revertError)}`);
-      }
-    }),
-  );
-  return allRevertedSuccessfully;
-}
-
 global.webViewComponent = function FindWebView({
   projectId,
   useWebViewState,
@@ -170,40 +128,32 @@ global.webViewComponent = function FindWebView({
     undefined,
   );
 
-  const [recentSearchesPossiblyError, setRecentSearches] = useProjectSetting(
-    projectId,
-    'platformScripture.findRecentSearches',
-    [],
-  );
-  const recentSearches = useMemo(
-    () => (isPlatformError(recentSearchesPossiblyError) ? [] : recentSearchesPossiblyError),
-    [recentSearchesPossiblyError],
-  );
-
-  const addRecentSearchItem = useRecentSearches(recentSearches, setRecentSearches ?? (() => {}));
-
-  // Track items added locally so the history dropdown updates immediately (useProjectSetting is async).
-  const [pendingHistory, setPendingHistory] = useState<string[]>([]);
-  // Once settings confirm the addition, retire it from the pending list.
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   useEffect(() => {
-    setPendingHistory((prev) => prev.filter((s) => !recentSearches.includes(s)));
-  }, [recentSearches]);
-  // Merge pending additions with persisted history, deduplicating throughout.
-  const localRecentSearches = useMemo(
-    () =>
-      [...pendingHistory, ...recentSearches]
-        .filter((s, i, arr) => arr.indexOf(s) === i)
-        .slice(0, 15),
-    [pendingHistory, recentSearches],
+    papi.commands
+      .sendCommand('platformScripture.getFindHistory', projectId)
+      .then((history) => setRecentSearches(history))
+      .catch(() => {});
+  }, [projectId]);
+
+  const persistRecentSearches = useCallback(
+    (newHistory: string[]) => {
+      setRecentSearches(newHistory);
+      papi.commands
+        .sendCommand('platformScripture.setFindHistory', newHistory, projectId)
+        .catch(() => {});
+    },
+    [projectId],
   );
 
-  // Track the last term written to platform settings so repeated calls for the same term
-  // (e.g. clicking through results) don't trigger redundant setRecentSearches writes.
+  const addRecentSearchItem = useRecentSearches(recentSearches, persistRecentSearches);
+
+  // Track the last term written to storage so repeated calls for the same term
+  // (e.g. clicking through results) don't trigger redundant writes.
   const lastPersistedHistoryTermRef = useRef<string | undefined>(undefined);
   const addToHistory = useCallback(
     (term: string) => {
       if (!term) return;
-      setPendingHistory((prev) => [term, ...prev.filter((s) => s !== term)]);
       if (term !== lastPersistedHistoryTermRef.current) {
         lastPersistedHistoryTermRef.current = term;
         addRecentSearchItem(term);
@@ -212,11 +162,18 @@ global.webViewComponent = function FindWebView({
     [addRecentSearchItem],
   );
 
-  const [lastSearchTermPossiblyError, setLastSearchTermSetting, , isLastSearchTermLoading] =
-    useProjectSetting(projectId, 'platformScripture.findLastSearchTerm', '');
-  const lastSearchTermSetting = isPlatformError(lastSearchTermPossiblyError)
-    ? ''
-    : lastSearchTermPossiblyError;
+  const [lastSearchTermSetting, setLastSearchTermStorage] = useState<string>('');
+  const [isLastSearchTermLoaded, setIsLastSearchTermLoaded] = useState(false);
+  useEffect(() => {
+    papi.commands
+      .sendCommand('platformScripture.getFindLastSearchTerm', projectId)
+      .then((term) => {
+        setLastSearchTermStorage(term);
+        setIsLastSearchTermLoaded(true);
+        return undefined;
+      })
+      .catch(() => setIsLastSearchTermLoaded(true));
+  }, [projectId]);
 
   const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
     'findSelectedBookIds',
@@ -334,52 +291,67 @@ global.webViewComponent = function FindWebView({
     };
   }, []);
 
+  const persistLastSearchTerm = useCallback(
+    (term: string) => {
+      papi.commands
+        .sendCommand('platformScripture.setFindLastSearchTerm', term, projectId)
+        .catch(() => {});
+    },
+    [projectId],
+  );
+
   // Refs to track current values without dependency issues in effects
   const addToHistoryRef = useRef(addToHistory);
   addToHistoryRef.current = addToHistory;
   const searchTermRef = useRef(searchTerm);
-  searchTermRef.current = searchTerm;
-  const setLastSearchTermSettingRef = useRef(setLastSearchTermSetting);
-  setLastSearchTermSettingRef.current = setLastSearchTermSetting;
+  const persistLastSearchTermRef = useRef(persistLastSearchTerm);
+  persistLastSearchTermRef.current = persistLastSearchTerm;
   const handleStartSearchRef = useRef<typeof handleStartSearch>();
 
-  // Restore the last search term from settings when the webview first loads with an empty field
+  // Keep searchTermRef in sync with state changes that bypass onSearchTermChange (restoration,
+  // recent-search selection). The synchronous update in onSearchTermChange takes priority: by NOT
+  // updating the ref in the render body, we prevent polling re-renders with the old searchTerm
+  // value from overwriting the ref between a fill() call and the subsequent Enter press.
+  useEffect(() => {
+    searchTermRef.current = searchTerm;
+  }, [searchTerm]);
+
+  // Restore the last search term from storage when the webview first loads with an empty field
   const [searchTermRestored, setSearchTermRestored] = useState(false);
   useEffect(() => {
     if (searchTermRestored) return;
     if (lastSearchTermSetting) {
       setSearchTermRestored(true);
       if (!searchTerm) setSearchTerm(lastSearchTermSetting);
-    } else if (!isPlatformError(lastSearchTermPossiblyError) && !isLastSearchTermLoading) {
-      // Only finalize restoration once the setting has fully loaded (not just returned the default)
+    } else if (isLastSearchTermLoaded) {
+      // Only finalize restoration once storage has fully loaded
       setSearchTermRestored(true);
     }
   }, [
-    isLastSearchTermLoading,
-    lastSearchTermPossiblyError,
+    isLastSearchTermLoaded,
     lastSearchTermSetting,
     searchTerm,
     searchTermRestored,
     setSearchTerm,
   ]);
 
-  // Persist the current search term to settings so it survives session restarts
+  // Persist the current search term to storage so it survives session restarts
   const saveSearchTermTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (!searchTermRestored) return;
     clearTimeout(saveSearchTermTimeoutRef.current);
     saveSearchTermTimeoutRef.current = setTimeout(() => {
-      setLastSearchTermSetting?.(searchTerm);
+      persistLastSearchTerm(searchTerm);
     }, 1000);
     return () => {
       clearTimeout(saveSearchTermTimeoutRef.current);
     };
-  }, [searchTerm, searchTermRestored, setLastSearchTermSetting]);
+  }, [searchTerm, searchTermRestored, persistLastSearchTerm]);
 
-  // Save search term to project settings on unmount (closing the tab or application)
+  // Save search term to storage on unmount (closing the tab or application)
   useEffect(() => {
     return () => {
-      setLastSearchTermSettingRef.current?.(searchTermRef.current);
+      persistLastSearchTermRef.current(searchTermRef.current);
     };
   }, []);
 
@@ -535,12 +507,6 @@ global.webViewComponent = function FindWebView({
 
   // #region Search related functions
 
-  const isSearchQueryValid = useMemo(() => {
-    if (searchTerm.trim() === '') return false;
-    if (scope === 'selectedBooks' && selectedBookIds.length === 0) return false;
-    return true;
-  }, [scope, searchTerm, selectedBookIds]);
-
   const findScope = useMemo((): FindScope[] => {
     switch (scope) {
       case 'chapter':
@@ -566,10 +532,6 @@ global.webViewComponent = function FindWebView({
     return `chapter:${verseRefSetting.book}:${verseRefSetting.chapterNum}`;
   }, [scope, selectedBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
 
-  // Stores a cancel function for a pending replace/replace-all operation (the 1-second window
-  // before the re-search fires). Calling it stops the timer and triggers a revert.
-  const pendingReplaceRevertRef = useRef<{ cancel: () => void } | undefined>(undefined);
-
   const isStartingSearchRef = useRef(false);
   // Set when the user explicitly starts a search (Enter/Find button) so the debounce timer that
   // may still be pending from the same keystroke skips its redundant restart.
@@ -591,7 +553,14 @@ global.webViewComponent = function FindWebView({
 
   const handleStartSearch = useCallback(
     async (isExplicitSearch = false) => {
-      if (!isSearchQueryValid || !findPdp || isStartingSearchRef.current) return;
+      // Read the latest search term from the ref rather than the closure. React 18 batches
+      // state updates and defers re-renders, so when Enter is pressed immediately after
+      // fill() the closure may still carry the previous searchTerm value. The ref is updated
+      // synchronously inside onSearchTermChange, guaranteeing we always search for the term
+      // the user actually typed.
+      const currentSearchTerm = searchTermRef.current;
+      if (!currentSearchTerm.trim() || !findPdp || isStartingSearchRef.current) return;
+      if (scope === 'selectedBooks' && selectedBookIds.length === 0) return;
 
       const isPostReplace = isPostReplaceSearchRef.current;
       isPostReplaceSearchRef.current = false;
@@ -605,14 +574,14 @@ global.webViewComponent = function FindWebView({
       isStartingSearchRef.current = true;
 
       try {
-        if (isExplicitSearch) addToHistory(searchTerm);
+        if (isExplicitSearch) addToHistory(currentSearchTerm);
 
         await abandonFindJob();
         if (!isMountedRef.current) return;
 
         await beginFindJob({
           scope: findScope,
-          searchString: searchTerm,
+          searchString: currentSearchTerm,
           caseInsensitive: !shouldMatchCase,
           useRegex: isRegexAllowed,
           verseTextOnly: searchTextType === 'verseOnly',
@@ -654,9 +623,7 @@ global.webViewComponent = function FindWebView({
       findPdp,
       findScope,
       isRegexAllowed,
-      isSearchQueryValid,
       scope,
-      searchTerm,
       searchTextType,
       selectedBookIds,
       shouldMatchCase,
@@ -665,6 +632,10 @@ global.webViewComponent = function FindWebView({
     ],
   );
 
+  // Keep handleStartSearch in a ref so the auto-search effect (which fires when searchTerm or
+  // filters change) never re-runs just because the memoized callback identity changed. The
+  // callback has many dependencies (findPdp, scope, history helpers, etc.) that can change
+  // without any search input changing, which would otherwise cause spurious debounced searches.
   handleStartSearchRef.current = handleStartSearch;
 
   const handleStopSearch = useCallback(
@@ -764,7 +735,6 @@ global.webViewComponent = function FindWebView({
   // Cleanup function that runs when component unmounts
   useEffect(() => {
     return () => {
-      pendingReplaceRevertRef.current?.cancel();
       abandonFindJob();
     };
   }, [abandonFindJob]);
@@ -872,8 +842,10 @@ global.webViewComponent = function FindWebView({
     }
   }, [activeMode, searchStatus, scriptureDataForChangeDetection]);
 
-  // Keep handleStartSearch in a ref so the detection effect never re-runs just because the
-  // memoized callback identity changed (it has many dependencies).
+  // Keep handleStartSearch in a ref so the auto-search effect (which fires when searchTerm or
+  // filters change) never re-runs just because the memoized callback identity changed. The
+  // callback has many dependencies (findPdp, scope, history helpers, etc.) that can change
+  // without any search input changing, which would otherwise cause spurious debounced searches.
   const debouncedHandleStartSearch = useRef(
     debounce(() => {
       if (explicitSearchPendingRef.current) {
@@ -1087,57 +1059,20 @@ global.webViewComponent = function FindWebView({
         ? applyPreserveCase(result.text ?? '', replaceTerm)
         : replaceTerm;
 
-      const bookVerseRef = { book: result.start.verseRef.book, chapterNum: 1, verseNum: 0 };
       setIsReplacing(true);
       try {
-        // Snapshot the book before replacing so revert can restore USFM exactly
-        const bookSnapshot = await usfmBookPdp?.getBookUSFM(bookVerseRef);
         await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
         // Mark the replaced result with visual feedback before re-running the search
         setResults((prev) =>
           prev.map((r, i) => (i === indexToReplace ? { ...r, isReplaced: true } : r)),
         );
-        const replacedToastId = sonner(localizedStrings['%webView_find_replacedOneOccurrence%']);
-
-        // Cancellable 1-second wait before re-search
-        const isCancelled = await cancellableDelay(1000, pendingReplaceRevertRef);
-        pendingReplaceRevertRef.current = undefined;
-
-        let revertSucceeded = false;
-        if (isCancelled) {
-          if (!isMountedRef.current) return; // Unmount — keep the replacement, don't revert
-          try {
-            if (bookSnapshot !== undefined && usfmBookPdp) {
-              revertSucceeded = await revertBookSnapshots(
-                new Map([[bookVerseRef.book, bookSnapshot]]),
-                usfmBookPdp,
-              );
-            } else {
-              logger.error('Error reverting replace: book snapshot unavailable');
-            }
-            sonner.dismiss(replacedToastId);
-            if (revertSucceeded) {
-              sonner(localizedStrings['%webView_find_replacementReverted%']);
-              if (isMountedRef.current)
-                setResults((prev) =>
-                  prev.map((r, i) => (i === indexToReplace ? { ...r, isReplaced: false } : r)),
-                );
-            }
-          } catch (revertError) {
-            logger.error(`Error reverting replace: ${getErrorMessage(revertError)}`);
-          }
-        } else {
-          // Store the replaced index so the auto-select effect can advance to the next result
-          // rather than jumping back to the first after the re-search completes.
-          pendingAdvanceIndexRef.current = indexToReplace;
-        }
+        sonner(localizedStrings['%webView_find_replacedOneOccurrence%']);
+        // Store the replaced index so the auto-select effect can advance to the next result
+        // rather than jumping back to the first after the re-search completes.
+        pendingAdvanceIndexRef.current = indexToReplace;
         if (!isMountedRef.current) return;
-        // Skip re-search when the revert succeeded — the book is restored to its pre-replace
-        // state so the existing results are still valid, and re-searching would cause a flicker.
-        if (!(isCancelled && revertSucceeded)) {
-          isPostReplaceSearchRef.current = true;
-          await handleStartSearchRef.current?.();
-        }
+        isPostReplaceSearchRef.current = true;
+        await handleStartSearchRef.current?.();
       } catch (error) {
         logger.error(`Error replacing result: ${getErrorMessage(error)}`);
       } finally {
@@ -1152,7 +1087,6 @@ global.webViewComponent = function FindWebView({
       replacePdp,
       replaceTerm,
       results,
-      usfmBookPdp,
     ],
   );
 
@@ -1191,18 +1125,6 @@ global.webViewComponent = function FindWebView({
         ? visibleResultsList.map((r) => applyPreserveCase(r.text ?? '', replaceTerm))
         : replaceTerm;
 
-      // Snapshot all affected books' USFM before replacing so cancel/revert can restore them
-      // exactly, avoiding stale-position errors from the post-replacement document state.
-      const uniqueBookIds = [...new Set(visibleResultsList.map((r) => r.start.verseRef.book))];
-      const bookSnapshots = new Map<string, string>();
-      await Promise.all(
-        uniqueBookIds.map(async (bookId) => {
-          const verseRef = { book: bookId, chapterNum: 1, verseNum: 0 };
-          const snapshot = await usfmBookPdp?.getBookUSFM(verseRef);
-          if (snapshot !== undefined) bookSnapshots.set(bookId, snapshot);
-        }),
-      );
-
       // Group results by book and call replace() once per book (API requires all ranges in same book).
       const bookGroupMap = new Map<
         string,
@@ -1227,7 +1149,7 @@ global.webViewComponent = function FindWebView({
         ),
       );
       const count = visibleResultsList.length;
-      const replacedAllToastId = sonner(
+      sonner(
         count === 1
           ? localizedStrings['%webView_find_replacedOneOccurrence%']
           : formatReplacementString(localizedStrings['%webView_find_replacedNOccurrences%'], {
@@ -1235,35 +1157,12 @@ global.webViewComponent = function FindWebView({
             }),
       );
 
-      // Mark all visible results as replaced for visual feedback (red background + progress bar)
+      // Mark all visible results as replaced for visual feedback
       setResults(allResults.map((r) => (r.isHidden ? r : { ...r, isReplaced: true })));
 
-      // Cancellable 1-second wait before re-search
-      const isCancelled = await cancellableDelay(1000, pendingReplaceRevertRef);
-      pendingReplaceRevertRef.current = undefined;
-
-      let revertSucceeded = false;
-      if (isCancelled) {
-        if (!isMountedRef.current) return; // Unmount — keep the replacement, don't revert
-        if (bookSnapshots.size > 0 && usfmBookPdp) {
-          revertSucceeded = await revertBookSnapshots(bookSnapshots, usfmBookPdp);
-        } else {
-          logger.error('Error reverting replace all: book snapshots unavailable');
-        }
-        sonner.dismiss(replacedAllToastId);
-        if (revertSucceeded) {
-          sonner(localizedStrings['%webView_find_replacementReverted%']);
-          if (isMountedRef.current)
-            setResults((prev) => prev.map((r) => ({ ...r, isReplaced: false })));
-        }
-      }
       if (!isMountedRef.current) return;
-      // Skip re-search when the revert succeeded — the book is restored to its pre-replace
-      // state so the existing results are still valid, and re-searching would cause a flicker.
-      if (!(isCancelled && revertSucceeded)) {
-        isPostReplaceSearchRef.current = true;
-        await handleStartSearchRef.current?.();
-      }
+      isPostReplaceSearchRef.current = true;
+      await handleStartSearchRef.current?.();
     } catch (error) {
       logger.error(`Error replacing all results: ${getErrorMessage(error)}`);
     } finally {
@@ -1277,12 +1176,7 @@ global.webViewComponent = function FindWebView({
     replaceTerm,
     retrieveFindJobUpdate,
     totalNumberOfResults,
-    usfmBookPdp,
   ]);
-
-  const handleCancelReplace = useCallback(() => {
-    pendingReplaceRevertRef.current?.cancel();
-  }, []);
 
   const visibleResults = useMemo(
     () =>
@@ -1454,6 +1348,11 @@ global.webViewComponent = function FindWebView({
       <FindHeader
         searchTerm={searchTerm}
         onSearchTermChange={(value) => {
+          // Update the ref immediately so handleStartSearch always reads the latest
+          // search term even if React hasn't committed the state update yet (React 18
+          // batches updates and defers re-renders, so a rapid fill + Enter keystroke can
+          // call handleStartSearch before the new searchTerm value is in the closure).
+          searchTermRef.current = value;
           setSearchTerm(value);
         }}
         onAddToHistory={() => {
@@ -1461,7 +1360,7 @@ global.webViewComponent = function FindWebView({
         }}
         onSearchSubmit={() => handleStartSearch(true)}
         onSearchClear={() => handleStopSearch(true)}
-        recentSearches={localRecentSearches}
+        recentSearches={recentSearches}
         onRecentSearchSelect={setSearchTerm}
         areFiltersActive={areFiltersActive}
         searchTextType={searchTextType}
@@ -1541,7 +1440,7 @@ global.webViewComponent = function FindWebView({
         localizedStrings={{
           findTab: localizedStrings['%webView_find_findTab%'],
           replaceTab: localizedStrings['%webView_find_replaceTab%'],
-          searchPlaceholder: localizedStrings['%webView_find_searchPlaceholder%'],
+          searchPlaceholder: localizedStrings['%webView_find_searchPlaceholderShort%'],
           showRecentSearches: localizedStrings['%webView_find_showRecentSearches%'],
           recent: localizedStrings['%webView_find_recent%'],
           replacePlaceholder: localizedStrings['%webView_find_replaceTerm_placeholder%'],
@@ -1590,57 +1489,44 @@ global.webViewComponent = function FindWebView({
         onScroll={handleResultsScroll}
         onKeyDown={handleResultsKeyDown}
       >
-        {(() => {
-          // Only the first book that has a replaced result gets the cancel handler.
-          // All replaced rows share one pending operation, so only one Cancel button
-          // should appear to avoid implying per-row granularity.
-          let cancelHandlerAssigned = false;
-          return [...resultsByBook.entries()].map(([bookId, bookResults]) => {
-            const bookHasReplaced = bookResults.some(({ result }) => result.isReplaced);
-            const cancelReplace =
-              !cancelHandlerAssigned && bookHasReplaced ? handleCancelReplace : undefined;
-            if (cancelReplace) cancelHandlerAssigned = true;
-            return (
-              <SearchResultsInBook
-                key={bookId}
-                projectId={projectId}
-                bookId={bookId}
-                results={bookResults.map(({ result }) => result)}
-                localizedBookData={localizedBookData}
-                focusedResultIndex={bookResults.findIndex(
-                  ({ originalIndex }) => originalIndex === focusedResultIndex,
-                )}
-                replaceConfig={
-                  activeMode === 'replace' ? { term: replaceTerm, preserveCase } : undefined
-                }
-                onResultClick={(result, indexInBookResults) =>
-                  handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
-                }
-                onResultFocus={(result, indexInBookResults) =>
-                  handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
-                }
-                onResultDoubleClick={(result, indexInBookResults) =>
-                  handleOpenAtResult(result, bookResults[indexInBookResults].originalIndex)
-                }
-                onResultReferenceClick={(result, indexInBookResults) =>
-                  handleOpenAtResult(result, bookResults[indexInBookResults].originalIndex)
-                }
-                onHideResult={(indexInBookResults) =>
-                  handleHideResult(bookResults[indexInBookResults].originalIndex)
-                }
-                onReplace={(indexInBookResults) =>
-                  handleReplace(bookResults[indexInBookResults].originalIndex)
-                }
-                onCancelReplace={cancelReplace}
-                localizedStrings={searchResultLocalizedStrings}
-                isReplaceMode={activeMode === 'replace'}
-                isReplacing={isReplacing}
-                previewOptions={previewOptions}
-                allowInvisibleCharacters={allowInvisibleCharacters}
-              />
-            );
-          });
-        })()}
+        {[...resultsByBook.entries()].map(([bookId, bookResults]) => (
+          <SearchResultsInBook
+            key={bookId}
+            projectId={projectId}
+            bookId={bookId}
+            results={bookResults.map(({ result }) => result)}
+            localizedBookData={localizedBookData}
+            focusedResultIndex={bookResults.findIndex(
+              ({ originalIndex }) => originalIndex === focusedResultIndex,
+            )}
+            replaceConfig={
+              activeMode === 'replace' ? { term: replaceTerm, preserveCase } : undefined
+            }
+            onResultClick={(result, indexInBookResults) =>
+              handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
+            }
+            onResultFocus={(result, indexInBookResults) =>
+              handleFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
+            }
+            onResultDoubleClick={(result, indexInBookResults) =>
+              handleOpenAtResult(result, bookResults[indexInBookResults].originalIndex)
+            }
+            onResultReferenceClick={(result, indexInBookResults) =>
+              handleOpenAtResult(result, bookResults[indexInBookResults].originalIndex)
+            }
+            onHideResult={(indexInBookResults) =>
+              handleHideResult(bookResults[indexInBookResults].originalIndex)
+            }
+            onReplace={(indexInBookResults) =>
+              handleReplace(bookResults[indexInBookResults].originalIndex)
+            }
+            localizedStrings={searchResultLocalizedStrings}
+            isReplaceMode={activeMode === 'replace'}
+            isReplacing={isReplacing}
+            previewOptions={previewOptions}
+            allowInvisibleCharacters={allowInvisibleCharacters}
+          />
+        ))}
       </div>
 
       {/* Status bar */}

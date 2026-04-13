@@ -36,7 +36,6 @@ const mockResultReplaced: HidableFindResult = {
 const localizedBookData = new Map([['GEN', { localizedId: 'GEN', localizedName: 'Genesis' }]]);
 
 const localizedStrings = {
-  '%general_cancel%': 'Cancel',
   '%webView_find_copyReference%': 'Copy reference',
   '%webView_find_copyVerseText%': 'Copy verse text',
   '%webView_find_copyReferenceAndVerseText%': 'Copy reference and verse text',
@@ -57,7 +56,6 @@ function SearchResultDemo({
   replaceConfig,
   previewOptions = DEFAULT_FIND_PREVIEW_OPTIONS,
   isReplacing = false,
-  onCancelReplace,
 }: {
   result?: HidableFindResult;
   initiallySelected?: boolean;
@@ -65,7 +63,6 @@ function SearchResultDemo({
   replaceConfig?: ReplaceConfig;
   previewOptions?: PreviewOptions;
   isReplacing?: boolean;
-  onCancelReplace?: () => void;
 }) {
   const [isSelected, setIsSelected] = useState(initiallySelected);
 
@@ -80,7 +77,6 @@ function SearchResultDemo({
         onResultClick={() => setIsSelected(true)}
         onHideResult={() => {}}
         onReplace={() => {}}
-        onCancelReplace={onCancelReplace}
         isReplaceMode={isReplaceMode}
         isReplacing={isReplacing}
         replaceConfig={replaceConfig}
@@ -246,10 +242,7 @@ export const PreserveCase: Story = {
   ),
 };
 
-/**
- * A result that has just been replaced. Shows the red "Replaced" badge with a progress bar
- * animating toward 100 %, and a Cancel button to revert (connected here to a no-op).
- */
+/** A result that has just been replaced. Shows the red "Replaced" badge. */
 export const Replaced: Story = {
   render: () => (
     <div className="tw-w-96 tw-overflow-hidden tw-rounded-md tw-border">
@@ -262,7 +255,6 @@ export const Replaced: Story = {
         onResultClick={() => {}}
         onHideResult={() => {}}
         onReplace={() => {}}
-        onCancelReplace={() => {}}
         isReplaceMode
         isReplacing={false}
         localizedStrings={localizedStrings}

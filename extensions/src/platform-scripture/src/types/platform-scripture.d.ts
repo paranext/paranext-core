@@ -1677,6 +1677,15 @@ declare module 'papi-shared-types' {
       editorWebViewId?: string | undefined,
       selectedText?: string | undefined,
     ) => Promise<string | undefined>;
+
+    /** Retrieves the user's recent find search history from user storage. */
+    'platformScripture.getFindHistory': (projectId?: string) => Promise<string[]>;
+    /** Persists the user's recent find search history to user storage. */
+    'platformScripture.setFindHistory': (history: string[], projectId?: string) => Promise<void>;
+    /** Retrieves the last find search term from user storage. */
+    'platformScripture.getFindLastSearchTerm': (projectId?: string) => Promise<string>;
+    /** Persists the last find search term to user storage. */
+    'platformScripture.setFindLastSearchTerm': (term: string, projectId?: string) => Promise<void>;
   }
 
   export interface ProjectSettingTypes {
@@ -1779,15 +1788,5 @@ declare module 'papi-shared-types' {
      * tilde character, not a whitespace substitute.
      */
     'platformScripture.allowInvisibleCharacters': boolean;
-    /**
-     * Recent search terms used in the Find in Scripture web view for this project. Hidden from
-     * settings UI.
-     */
-    'platformScripture.findRecentSearches': string[];
-    /**
-     * The last string entered in the Find in Scripture search field for this project. Hidden from
-     * settings UI.
-     */
-    'platformScripture.findLastSearchTerm': string;
   }
 }

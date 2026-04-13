@@ -42,8 +42,6 @@ type SearchResultsInBookProps = {
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on a result */
   onReplace: (index: number) => void;
-  /** Callback to cancel/revert the pending replace */
-  onCancelReplace?: () => void;
   /** Whether the find WebView is currently in replace mode */
   isReplaceMode: boolean;
   /** Configuration for replacement preview (used in replace mode) */
@@ -72,7 +70,6 @@ export function SearchResultsInBook({
   onResultReferenceClick,
   onHideResult,
   onReplace,
-  onCancelReplace,
   localizedStrings,
   isReplaceMode,
   isReplacing,
@@ -128,8 +125,6 @@ export function SearchResultsInBook({
     }
   }, [usjReaderWriter, bookId]);
 
-  const firstReplacedIndex = results.findIndex((r) => r.isReplaced);
-
   return (
     <>
       {results.map((result, index) => (
@@ -147,7 +142,6 @@ export function SearchResultsInBook({
           onResultReferenceClick={onResultReferenceClick}
           onHideResult={onHideResult}
           onReplace={onReplace}
-          onCancelReplace={index === firstReplacedIndex ? onCancelReplace : undefined}
           localizedStrings={localizedStrings}
           isReplaceMode={isReplaceMode}
           isReplacing={isReplacing}
