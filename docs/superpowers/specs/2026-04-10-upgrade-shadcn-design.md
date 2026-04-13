@@ -42,7 +42,7 @@ If the user says **no**: instruct them to run `/shadcn-customizations` first. Do
 
 Check whether `lib/platform-bible-react/src/components/shadcn-ui-old/` exists. If it does, instruct the user to delete it before continuing:
 
-> A `shadcn-ui-old/` folder already exists. Please delete it, then let me know when it's gone.
+> A `shadcn-ui-old/` folder already exists. Please review and delete or move it, then let me know when it's gone.
 >
 > - Linux / macOS / WSL2: `rm -rf lib/platform-bible-react/src/components/shadcn-ui-old`
 > - Windows (PowerShell): `Remove-Item -Recurse -Force lib\platform-bible-react\src\components\shadcn-ui-old`
