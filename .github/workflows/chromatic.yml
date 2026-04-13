@@ -1,0 +1,46 @@
+name: Chromatic
+
+on:
+  push:
+    branches: ['main', 'release-prep', 'hotfix-*', 'ai/main']
+  pull_request:
+    branches: ['main', 'release-prep', 'hotfix-*', 'ai/main']
+
+jobs:
+  chromatic:
+    name: Run Chromatic
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+
+      - name: Install Volta and toolchain
+        uses: volta-cli/action@v4
+
+      - name: Install Node.js and NPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Chromatic
+        uses: chromaui/action@v11
+        with:
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          workingDir: lib/platform-bible-react
+          buildScriptName: build:storybook
+          autoAcceptChanges: main
+          exitZeroOnChanges: true
+          onlyChanged: true
+          skip: dependabot/**
