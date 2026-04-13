@@ -40,17 +40,14 @@ If the user says **no**: instruct them to run `/shadcn-customizations` first. Do
 
 ### Check 2 — `shadcn-ui-old/` does not exist
 
-Check whether `lib/platform-bible-react/src/components/shadcn-ui-old/` exists. If it does, ask the user:
+Check whether `lib/platform-bible-react/src/components/shadcn-ui-old/` exists. If it does, instruct the user to delete it before continuing:
 
-> A `shadcn-ui-old/` folder already exists. OK to delete it?
+> A `shadcn-ui-old/` folder already exists. Please delete it, then let me know when it's gone.
+>
+> - Linux / macOS / WSL2: `rm -rf lib/platform-bible-react/src/components/shadcn-ui-old`
+> - Windows (PowerShell): `Remove-Item -Recurse -Force lib\platform-bible-react\src\components\shadcn-ui-old`
 
-- If **yes**: delete it using the appropriate platform command (no need to read its contents), then verify the folder is gone before continuing.
-- If **no**: instruct the user they must remove or relocate the folder themselves before running this command. Do not continue until they confirm it is gone and the folder has been verified as absent.
-
-Platform-specific delete commands:
-
-- Linux / macOS / WSL2: `rm -rf lib/platform-bible-react/src/components/shadcn-ui-old`
-- Windows (PowerShell): `Remove-Item -Recurse -Force lib\platform-bible-react\src\components\shadcn-ui-old`
+Do not continue until the user confirms it is gone and you have verified the folder is absent.
 
 ### Create Branch
 
@@ -114,15 +111,17 @@ This establishes **commit 1 of 3**: the clean deletion baseline.
 
 ## Step 4 — Re-add All Components via shadcn CLI
 
-Run from `lib/platform-bible-react/`:
+Run a single command from `lib/platform-bible-react/`, listing all component names from Step 1 together:
 
 ```bash
-npx shadcn add --yes <component>
+npx shadcn add --yes --overwrite <component1> <component2> ... <componentN>
 ```
 
-for each component name from Step 1. This uses the locally installed `shadcn` from devDependencies. `--yes` accepts defaults non-interactively. No `--overwrite` flag — the files were deleted in Step 2 so there is nothing to overwrite, and omitting it preserves error visibility.
+This uses the locally installed `shadcn` from devDependencies. `--yes` accepts defaults non-interactively. `--overwrite` prevents the CLI from blocking on any overwrite prompts.
 
-**If any component fails to be added:** stop at the end of this step and tell the user which components failed. Instruct them to re-add those components manually using the same command (`npx shadcn add --yes <component>` from `lib/platform-bible-react/`) without making any modifications to the resulting files. Tell them to report back once done. Do not continue until they confirm completion.
+Capture the full output. Review it to identify any components that failed to be added.
+
+**If any components failed:** save the full CLI output to a file (e.g. `shadcn-add-output.txt` in the repo root) so the user can inspect it, then stop and report which components failed. Instruct the user to re-add those components manually using the same command (`npx shadcn add --yes --overwrite <component>` from `lib/platform-bible-react/`) without making any other modifications to the resulting files. Tell them to report back once done. Do not continue until they confirm completion.
 
 ---
 
@@ -180,6 +179,6 @@ The PR description must:
 | Move files to gitignored `shadcn-ui-old/` rather than deleting | Preserves originals for subagent reference during re-application; `shadcn-ui-old/` left in place after command completes in case user needs it                                     |
 | No subagent for file move (Step 2)                             | `mv` produces no file-content output; no context risk                                                                                                                              |
 | General-purpose subagents for re-application (Step 6)          | Task is one-time and workflow-specific; detailed instructions inline in the dispatch prompt are sufficient; a dedicated agent would add maintenance overhead with no reuse benefit |
-| `--yes` but no `--overwrite` on shadcn CLI                     | `--yes` handles non-interactive prompts; `--overwrite` is unnecessary (files deleted) and would silence legitimate errors                                                          |
+| `--yes --overwrite` on shadcn CLI                              | `--yes` handles non-interactive prompts; `--overwrite` prevents blocking on any overwrite prompts                                                                                  |
 | Three separate commits                                         | Enables future upgrades to diff each commit independently: what changed in shadcn (commit 2 vs 1) vs what customizations were applied (commit 3 vs 2)                              |
 | PR targets `main`                                              | This is a real component upgrade, not an AI workflow artifact                                                                                                                      |
