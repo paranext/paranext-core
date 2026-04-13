@@ -129,6 +129,30 @@ function constructErrorNotification(exception: unknown): PlatformNotification | 
 }
 
 /**
+ * Handles errors that occur when executing a callback, logging them and notifying the user
+ *
+ * @param error The error that occurred
+ * @param callback Function to call with the error
+ * @param dataType Name of the data type for logging
+ * @param selector Selector used for logging
+ */
+function handleCallbackError(
+  error: unknown,
+  callback: (data: unknown) => void,
+  dataType: string,
+  selector: unknown,
+): void {
+  const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
+  logger.warn(
+    `Callback for subscription to ${dataType} with selector ${selectorDetails.substring(0, 120)} threw. ${getErrorMessage(error)}`,
+  );
+  // Still call callback with error for error handling
+  callback(newPlatformError(error));
+  const notification = constructErrorNotification(error);
+  if (notification) notificationService.send(notification);
+}
+
+/**
  * Creates a subscribe function for a data provider to allow subscribing to updates on the data
  *
  * @param dataProviderPromise Promise to the data provider's network object
@@ -231,14 +255,7 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
           try {
             callback(data);
           } catch (e) {
-            const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
-            logger.warn(
-              `Callback for subscription to ${dataType} with selector ${selectorDetails.substring(0, 120)} threw. ${getErrorMessage(e)}`,
-            );
-            // Still call callback with error for error handling
-            callback(newPlatformError(e));
-            const notification = constructErrorNotification(e);
-            if (notification) notificationService.send(notification);
+            handleCallbackError(e, callback, dataType, selector);
           }
         }
       } catch (e) {
@@ -279,14 +296,7 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
             try {
               callback(data);
             } catch (e) {
-              const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
-              logger.warn(
-                `Callback for subscription to ${dataType} with selector ${selectorDetails.substring(0, 120)} threw. ${getErrorMessage(e)}`,
-              );
-              // Still call callback with error for error handling
-              callback(newPlatformError(e));
-              const notification = constructErrorNotification(e);
-              if (notification) notificationService.send(notification);
+              handleCallbackError(e, callback, dataType, selector);
             }
           }
         } catch (e) {
