@@ -14,6 +14,7 @@ import path from 'path';
 import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
+import { oklchToHex } from '@main/utils/color.util';
 import {
   APP_NAME,
   APP_URI_SCHEME,
@@ -488,12 +489,12 @@ async function main() {
                 return;
               }
 
-              // Need to put commas between the numbers for it to work here
-              // const newThemePrimaryString = newTheme.cssVariables.primary.split(' ').join(', ');
+              // Convert oklch color to hex format for Electron compatibility
+              const symbolColorHex = oklchToHex(newTheme.cssVariables.primary);
 
               mainWindow?.setTitleBarOverlay({
                 color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
-                symbolColor: newTheme.cssVariables.primary,
+                symbolColor: symbolColorHex,
                 height: TITLE_BAR_BUTTON_HEIGHT,
               });
             }),

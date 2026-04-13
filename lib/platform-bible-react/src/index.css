@@ -3,6 +3,8 @@
 @layer theme, base, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme) prefix(tw);
 @import 'tailwindcss/utilities.css' layer(utilities) prefix(tw);
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 @config '../tailwind.config.ts';
 
 /* Scope Tailwind's preflight to .pr-twp so it doesn't leak into host pages.

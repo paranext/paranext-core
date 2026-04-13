@@ -212,8 +212,8 @@ export function OverlayPopoverPresentational({
         {showArrow && (
           <PopoverPrimitive.Arrow
             style={{
-              fill: 'hsl(var(--popover))',
-              stroke: 'hsl(var(--border))',
+              fill: 'var(--popover)',
+              stroke: 'var(--border)',
               strokeWidth: 1,
             }}
           />
