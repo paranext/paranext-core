@@ -6,6 +6,8 @@
  * Editable=T, reset to a clean state before each worker run to prevent test pollution.
  *
  * Run via: `npm run test:e2e:isolated`
+ *
+ * OR more specifically `npm run test:e2e:isolated -- find-replace.spec-e2e.ts`
  */
 
 import { Frame, FrameLocator, Locator, Page } from '@playwright/test';
@@ -535,12 +537,18 @@ test.describe('Search History', () => {
 
     await closeFindPanel(mainPage);
 
+    // Wait for the unmount effects (setFindHistory PAPI command) to complete before reopening
+    // so that getFindHistory on the new panel reads the already-written value, not a race.
+    await mainPage.waitForTimeout(1_000);
+
     // Re-open Find and verify the term is in history
     const frame2 = await openFindPanel(mainPage);
     await expect(frame2.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     await openHistoryDropdown(frame2);
-    await expect(frame2.getByText(term)).toBeVisible({ timeout: 5_000 });
+    // Use getByRole('option') to scope to the history dropdown CommandItem elements
+    // (role="option"), consistent with other history tests.
+    await expect(frame2.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
 
     await closeFindPanel(mainPage);
   });

@@ -47,4 +47,33 @@ describe('debounce', () => {
 
     expect(mockFunction).toHaveBeenCalledTimes(4);
   });
+
+  it('should resolve to undefined when canceled before the debounce fires', async () => {
+    const mockFunction = vi.fn();
+    const debounceFn = debounce(mockFunction, 1);
+
+    const result = debounceFn();
+    debounceFn.cancel();
+
+    expect(await result).toBeUndefined();
+    expect(mockFunction).not.toHaveBeenCalled();
+  });
+
+  it('should allow new calls after cancel', async () => {
+    const mockFunction = vi.fn().mockReturnValue(42);
+    const debounceFn = debounce(mockFunction, 1);
+
+    debounceFn();
+    debounceFn.cancel();
+
+    expect(await debounceFn()).toBe(42);
+    expect(mockFunction).toHaveBeenCalledTimes(1);
+  });
+
+  it('should be a no-op when cancel is called with no pending invocation', () => {
+    const mockFunction = vi.fn();
+    const debounceFn = debounce(mockFunction, 1);
+
+    expect(() => debounceFn.cancel()).not.toThrow();
+  });
 });

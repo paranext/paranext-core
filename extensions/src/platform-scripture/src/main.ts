@@ -392,7 +392,11 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.setFindHistory',
     async (history: string[], projectId?: string): Promise<void> => {
       const key = FIND_HISTORY_STORAGE_KEY + (projectId ? `_${projectId}` : '');
-      await papi.storage.writeUserData(context.executionToken, key, JSON.stringify(history));
+      try {
+        await papi.storage.writeUserData(context.executionToken, key, JSON.stringify(history));
+      } catch {
+        // Ignore storage write errors (e.g. concurrent access when panel closes and reopens)
+      }
     },
   );
   const getFindLastSearchTermPromise = papi.commands.registerCommand(
