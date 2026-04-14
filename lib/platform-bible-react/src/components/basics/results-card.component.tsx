@@ -1,6 +1,6 @@
 import { cn } from '@/utils/shadcn-ui.util';
 import { MoreVertical } from 'lucide-react';
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { Button } from '../shadcn-ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../shadcn-ui/dropdown-menu';
 
@@ -64,12 +64,18 @@ export function ResultsCard({
     }
   };
 
+  // Only mount the DropdownMenu (and its portal) once the card has been hovered or selected.
+  // This prevents dozens of DropdownMenuContent portals from mounting and crashing on teardown
+  // when the webview is closed while many results are visible.
+  const [hasBeenHovered, setHasBeenHovered] = useState(false);
+
   return (
     <div
       hidden={isHidden}
       key={cardKey}
       onClick={onSelect}
       onKeyDown={handleKeyDown}
+      onMouseEnter={() => setHasBeenHovered(true)}
       role="button"
       tabIndex={0}
       aria-pressed={isSelected}
@@ -88,7 +94,7 @@ export function ResultsCard({
           {!isSelected && hoverButtons && (
             <div className="tw-invisible group-hover:tw-visible">{hoverButtons}</div>
           )}
-          {dropdownContent && (isSelected || showDropdownOnHover) && (
+          {dropdownContent && (isSelected || (showDropdownOnHover && hasBeenHovered)) && (
             <div
               className={cn(
                 !isSelected && showDropdownOnHover && 'tw-invisible group-hover:tw-visible',

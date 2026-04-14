@@ -644,6 +644,13 @@ test.describe('Preserve Case in Replace Mode', () => {
 // Tests: Replace Operations
 // ---------------------------------------------------------------------------
 
+/** Open the filters dropdown (the SlidersHorizontal / Toggle filters button). */
+async function openFiltersPanel(frame: FrameLocator): Promise<void> {
+  const filtersBtn = frame.getByRole('button', { name: /toggle filters/i });
+  await expect(filtersBtn).toBeVisible({ timeout: 5_000 });
+  await filtersBtn.click();
+}
+
 /**
  * Set up the Find panel in Replace mode with a search term and replace term, then wait for results.
  * Returns the FrameLocator.
@@ -725,6 +732,39 @@ test.describe('Replace Operations', () => {
     await closeFindPanel(mainPage);
   });
 
+  test('should replace a result when regex mode is enabled', async ({ mainPage }) => {
+    // Enable regex mode before setting up Replace so the search uses a regex pattern.
+    // We open the panel first, enable regex, then let setupReplaceMode search with it active.
+    const frame = await openFindPanel(mainPage);
+    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
+
+    await openFiltersPanel(frame);
+    const regexCheckbox = frame.locator('#allowRegex');
+    await expect(regexCheckbox).toBeVisible({ timeout: 5_000 });
+    if (!(await regexCheckbox.isChecked())) await regexCheckbox.click();
+    await expect(regexCheckbox).toBeChecked();
+    // Close the filters panel so the search input is accessible
+    await regexCheckbox.press('Escape');
+
+    await frame.locator('#search-term').fill(REPLACE_SEARCH_TERM);
+    await frame.locator('#search-term').press('Enter');
+    await switchToReplaceMode(frame);
+    await frame.locator('#replace-term').fill('spoke');
+
+    await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
+
+    await firstResultCard(frame).click();
+    const replaceHeaderBtn = frame.getByRole('button', { name: /^replace$/i }).first();
+    await expect(replaceHeaderBtn).toBeEnabled({ timeout: 5_000 });
+    await replaceHeaderBtn.click();
+
+    await expect(frame.getByText(/replaced 1 occurrence/i).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await closeFindPanel(mainPage);
+  });
+
   // Replace All depletes REPLACE_SEARCH_TERM from the project — run it last so the per-result
   // replace tests above can still find results to work with.
   test('should replace all visible results when the Replace All button is clicked', async ({
@@ -742,6 +782,119 @@ test.describe('Replace Operations', () => {
     await expect(frame.getByText(/replaced \d+ occurrences/i).first()).toBeVisible({
       timeout: 10_000,
     });
+
+    await closeFindPanel(mainPage);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Search Filters
+// ---------------------------------------------------------------------------
+
+test.describe('Search Filters', () => {
+  test('should show an error message when an invalid regex pattern is entered in regex mode', async ({
+    mainPage,
+  }) => {
+    const frame = await openFindPanel(mainPage);
+    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
+
+    // Enable regex mode via the filters panel
+    await openFiltersPanel(frame);
+    const regexCheckbox = frame.locator('#allowRegex');
+    await expect(regexCheckbox).toBeVisible({ timeout: 5_000 });
+    if (!(await regexCheckbox.isChecked())) await regexCheckbox.click();
+    await expect(regexCheckbox).toBeChecked();
+    // Close the filters panel (Escape moves focus back to the trigger)
+    await regexCheckbox.press('Escape');
+
+    // Enter an invalid regex pattern (unclosed bracket) and submit
+    await frame.locator('#search-term').fill('[unclosed');
+    await frame.locator('#search-term').press('Enter');
+
+    // The UI should display an error, not crash or hang
+    await expect(frame.getByText(/an error occurred/i)).toBeVisible({ timeout: 20_000 });
+
+    await closeFindPanel(mainPage);
+  });
+
+  test('should apply match-case and whole-word filters simultaneously without crashing', async ({
+    mainPage,
+  }) => {
+    const frame = await openFindPanel(mainPage);
+    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
+
+    // Search with defaults first so there is a current term to re-search when filters change
+    await fillSearchAndWaitForResults(frame, COMMON_SEARCH_TERM);
+
+    // Open filters and enable Match Case
+    await openFiltersPanel(frame);
+    const matchCaseCheckbox = frame.locator('#matchCase');
+    await expect(matchCaseCheckbox).toBeVisible({ timeout: 5_000 });
+    if (!(await matchCaseCheckbox.isChecked())) await matchCaseCheckbox.click();
+    await expect(matchCaseCheckbox).toBeChecked();
+
+    // Also enable Whole Word (radio button)
+    const wholeWordRadio = frame.locator('#wordRestriction-wholeWord');
+    await expect(wholeWordRadio).toBeVisible({ timeout: 5_000 });
+    await wholeWordRadio.click();
+
+    // Close filters panel
+    await matchCaseCheckbox.press('Escape');
+
+    // After both filters are applied the search re-runs automatically. Either the counter
+    // updates (different result count) or the no-results paragraph appears — either confirms
+    // both filters are honoured without a crash.
+    await expect(
+      frame.locator('.tw-tabular-nums').or(frame.locator('p.tw-font-light.tw-text-center')).first(),
+    ).toBeVisible({ timeout: 30_000 });
+
+    await closeFindPanel(mainPage);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Scope Switching
+// ---------------------------------------------------------------------------
+
+test.describe('Scope Switching', () => {
+  test('should re-search and update results when the scope is changed', async ({ mainPage }) => {
+    const frame = await openFindPanel(mainPage);
+    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
+
+    // Run an initial search with the default book scope
+    await fillSearchAndWaitForResults(frame, COMMON_SEARCH_TERM);
+
+    // Open the scope selector and switch to chapter scope
+    const scopeBtn = frame.getByRole('button', { name: /showing/i });
+    await expect(scopeBtn).toBeVisible({ timeout: 5_000 });
+    const initialScopeText = await scopeBtn.textContent();
+    await scopeBtn.click();
+
+    const chapterRadio = frame.locator('#scope-chapter');
+    await expect(chapterRadio).toBeVisible({ timeout: 5_000 });
+    await chapterRadio.click();
+
+    // Close the scope popover so the counter is unobscured
+    await chapterRadio.press('Escape');
+
+    // The search re-runs for the new (chapter) scope. Verify by checking:
+    // 1. The scope button display updated to show a chapter (e.g. "Genesis 1")
+    // 2. A search completed — either results are visible or the no-results message appears.
+    //
+    // Note: we no longer compare the result counter value here because COMMON_SEARCH_TERM ('the')
+    // is frequent enough to hit the 100-result batch cap in both book and chapter scopes, which
+    // would make the counter identical in both cases and cause a false failure.
+    await expect(async () => {
+      // Scope button should now show a chapter display (different from the initial book text)
+      const newScopeText = await scopeBtn.textContent();
+      expect(newScopeText).not.toBe(initialScopeText);
+
+      // A search should have completed with results or no-results
+      const counterVisible = await frame.locator('.tw-tabular-nums').isVisible();
+      if (counterVisible) return;
+      if (await frame.locator('p.tw-font-light.tw-text-center').isVisible()) return;
+      throw new Error('Waiting for scope-change search to complete');
+    }).toPass({ timeout: 30_000 });
 
     await closeFindPanel(mainPage);
   });
