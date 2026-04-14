@@ -129,10 +129,10 @@ Tooltips are required for every icon button and any control without a visible la
     preview={
 <TooltipProvider>
 <Tooltip open>
-  <TooltipTrigger asChild>
-    <Button>Save</Button>
-  </TooltipTrigger>
-  <TooltipContent side="bottom">Save</TooltipContent>
+<TooltipTrigger asChild>
+  <Button>Save</Button>
+</TooltipTrigger>
+<TooltipContent side="bottom">Save</TooltipContent>
 </Tooltip>
 </TooltipProvider>
 }
@@ -150,12 +150,12 @@ Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an 
     preview={
 <TooltipProvider>
 <Tooltip open>
-  <TooltipTrigger asChild>
-    <Button variant="outline" size="icon" aria-label="Save">
-      <Save />
-    </Button>
-  </TooltipTrigger>
-  <TooltipContent side="bottom" className="tw:max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
+<TooltipTrigger asChild>
+  <Button variant="outline" size="icon" aria-label="Save">
+    <Save />
+  </Button>
+</TooltipTrigger>
+<TooltipContent side="bottom" className="tw:max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
 </Tooltip>
 </TooltipProvider>
 }
@@ -169,12 +169,12 @@ Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an 
     preview={
 <TooltipProvider>
 <Tooltip open>
-  <TooltipTrigger asChild>
-    <Button variant="outline" size="icon" aria-label="Save">
-      <Save />
-    </Button>
-  </TooltipTrigger>
-  <TooltipContent side="bottom">Save changes</TooltipContent>
+<TooltipTrigger asChild>
+  <Button variant="outline" size="icon" aria-label="Save">
+    <Save />
+  </Button>
+</TooltipTrigger>
+<TooltipContent side="bottom">Save changes</TooltipContent>
 </Tooltip>
 </TooltipProvider>
 }

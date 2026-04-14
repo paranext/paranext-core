@@ -3,6 +3,7 @@
   "style": "radix-nova",
   "rsc": false,
   "tsx": true,
+  "rtl": true,
   "tailwind": {
     "config": "",
     "css": "src/index.css",
