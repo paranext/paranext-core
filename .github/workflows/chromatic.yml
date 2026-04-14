@@ -11,6 +11,7 @@ jobs:
     name: Run Chromatic
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       checks: write
     steps:
       - name: Checkout code
@@ -47,10 +48,12 @@ jobs:
           exitZeroOnChanges: true
           onlyChanged: true
           skip: dependabot/**
+          exitOnceUploaded: true
           # TODO: Remove once console errors in platform-bible-react stories are fixed (tracked separately)
           allowConsoleErrors: true
 
       - name: Post Chromatic link to Checks UI
+        if: always() && steps.chromatic.outputs.buildUrl != ''
         uses: actions/github-script@v7
         with:
           script: |
