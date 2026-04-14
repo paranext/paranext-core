@@ -59,10 +59,11 @@ jobs:
           BUILD_URL: ${{ steps.chromatic.outputs.buildUrl }}
         with:
           script: |
+            const sha = context.payload.pull_request?.head?.sha ?? context.sha;
             const deployment = await github.rest.repos.createDeployment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              ref: context.sha,
+              ref: sha,
               environment: 'Chromatic',
               auto_merge: false,
               required_contexts: [],
