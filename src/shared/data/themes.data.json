@@ -3,6 +3,7 @@
     "light": {
       "label": "%theme_label_light%",
       "cssVariables": {
+        "radius": "0.5rem",
         "background": "oklch(1 0 0)",
         "foreground": "oklch(0.1371 0.036 258.53)",
         "card": "oklch(1 0 0)",
@@ -29,8 +30,7 @@
         "sidebar-accent": "oklch(0.9589 0.011 248.06)",
         "sidebar-accent-foreground": "oklch(0.2079 0.0399 265.73)",
         "sidebar-border": "oklch(0.929 0.0127 255.58)",
-        "sidebar-ring": "oklch(0.1371 0.036 258.53)",
-        "radius": "0.5rem"
+        "sidebar-ring": "oklch(0.1371 0.036 258.53)"
       }
     },
     "dark": {

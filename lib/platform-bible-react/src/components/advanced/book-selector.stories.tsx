@@ -101,9 +101,7 @@ export const Interactive: Story = {
         <p className="tw:text-sm tw:text-muted-foreground">
           Mode: <strong>{mode}</strong> &nbsp;|&nbsp; Chapters: <strong>{startChapter}</strong>–
           <strong>{endChapter}</strong> &nbsp;|&nbsp; Books:{' '}
-          <strong>
-            {selectedBookIds.map((id) => Canon.bookIdToEnglishName(id)).join(', ')}
-          </strong>
+          <strong>{selectedBookIds.map((id) => Canon.bookIdToEnglishName(id)).join(', ')}</strong>
         </p>
       </div>
     );

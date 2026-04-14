@@ -77,7 +77,7 @@ export interface ThemeCssVariables {
   border?: string;
   input?: string;
   ring?: string;
-  'sidebar-background'?: string;
+  sidebar?: string;
   'sidebar-foreground'?: string;
   'sidebar-primary'?: string;
   'sidebar-primary-foreground'?: string;
@@ -113,7 +113,7 @@ const themeDefs = {
       border: { type: 'string' },
       input: { type: 'string' },
       ring: { type: 'string' },
-      'sidebar-background': { type: 'string' },
+      sidebar: { type: 'string' },
       'sidebar-foreground': { type: 'string' },
       'sidebar-primary': { type: 'string' },
       'sidebar-primary-foreground': { type: 'string' },

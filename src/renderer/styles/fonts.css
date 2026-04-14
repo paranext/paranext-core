@@ -543,30 +543,22 @@
 /* #region apply fonts throughout the application */
 
 /*
- * WARNING: The following specifiers list the same class twice, which artificially increases their
- * specificity and may lead to unexpected specificity results when trying to overwrite the font from
- * other places. We do this because, in WebViews, PBR stylesheet is applied after these font styles,
- * so PBR's font applied to `.pr-twp` out-specifies this font applied just to `.pr-twp`. This likely
- * only means that any WebView that wants to change the font *directly on or through* a PBR
- * component must add `.pr-twp` to the selector like the `.pr-twp.scripture-font` selector below.
- * Normal specificity should work just fine for adjusting fonts above and below a `.pr-twp`
- * component.
+ * Font for normal text. Applied automatically throughout the app.
  *
- * It would be best to consider workarounds like adjusting core PBR's stylesheet application logic
- * so it is applied directly after the PBR stylesheet that is applied by extension code rather than
- * applying at the end of the list of stylesheets. However, doing so would take a more significant
- * effort than is currently warranted for fixing fonts.
+ * `body` applies the font to the entire app outside `platform-bible-react`, and `.pr-twp` applies
+ * the font inside `platform-bible-react`
  */
-
-/** Repeat pr-twp class to out-specify `.pr-twp` which applies `tw:font-sans` in PBU `index.css` */
 body,
-.pr-twp.pr-twp {
+.pr-twp {
   font-family: 'Google Sans', 'Cardo', 'Noto Sans Syriac', sans-serif;
 }
 
-/** Added specifier `.pr-twp.scripture-font` to out-specify `.pr-twp.pr-twp` above */
-.scripture-font,
-.pr-twp.scripture-font {
+/*
+ * Font for Scripture text. Add this class to any element that contains Scripture text.
+ *
+ * `.scripture-font` applies the font to scripture text, which is used in both `platform-bible-react`
+ */
+.scripture-font {
   font-family: 'Gentium Plus', 'Charis SIL', 'Cardo', 'Noto Sans Syriac', 'Google Sans', serif;
 }
 

@@ -1,14 +1,22 @@
-/* TW4 split imports — preflight omitted, scoped via plugin instead.
- * prefix(tw) must be on BOTH theme and utilities imports per TW4 docs. */
+/*
+ * CUSTOM: broke out tailwind imports to disable default preflight as it is scoped below. See
+ * https://tailwindcss.com/docs/preflight#disabling-preflight for syntax
+ */
 @layer theme, base, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme) prefix(tw);
 @import 'tailwindcss/utilities.css' layer(utilities) prefix(tw);
+
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
+
+/* CUSTOM: need some config from tailwind.config.ts which can't be inlined in this file */
 @config '../tailwind.config.ts';
 
-/* Scope Tailwind's preflight to .pr-twp so it doesn't leak into host pages.
- * isolationStrategy: inside = preflight only applies within .pr-twp elements. */
+/*
+ * CUSTOM: scoped preflight since we are a component library and don't want to apply styles to the entire page by default
+ * Scope Tailwind's preflight to .pr-twp so it doesn't leak into host pages.
+ * isolationStrategy: inside = preflight only applies within .pr-twp elements.
+ */
 @plugin 'tailwindcss-scoped-preflight' {
   /* isolationStrategy is being formatted to all lower-case, but that is incorrect */
   /* prettier-ignore */
@@ -16,29 +24,15 @@
   selector: .pr-twp;
 }
 
-@layer base {
-  /* Adding the preflight selector (pr-twp) to components was not changing the font as desired.
-  So this piece of code adds tw-font-sans everywhere we include preflight. */
-  .pr-twp {
-    @apply tw:font-sans;
-  }
-}
-
 /*
- * WARNING: These themes are also represented in paranext-core/src/shared/data/themes.data.json!
- * Please update in both locations
-*/
+ * CUSTOM: shared region opener.
+ *
+ * The content above this region is not shared exactly with extensions because they do not need the
+ * scoped preflight. Everything else above this is essentially the same, though.
+ */
 /* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css */
 
-@layer base {
-  @font-face {
-    font-family: 'Inter';
-    font-display: 'swap';
-    src: url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-  }
-}
-
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
@@ -82,18 +76,21 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* #region theme definitions */
-
-/**
-   * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
-   * properties using `var(--variableName)` or Tailwind classes like `tw:bg-primary`
-   *
-   * See the wiki's [Matching Application
-   * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
-   * section for more information
-   */
-/* ["Slate" base theme by shadcn/ui](https://ui.shadcn.com/docs/theming#slate) */
-:root {
+/*
+ * CUSTOM: default theme colors changed. Some colors have comments after them explaining their meaning.
+ * Added `.light` so this theme can be manually applied to a specific area in the DOM.
+ * Context for themes:
+ *
+ * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
+ * properties using `var(--variableName)` or Tailwind classes like `tw:bg-primary`
+ *
+ * See the wiki's [Matching Application
+ * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+ * section for more information
+ */
+:root,
+.light {
+  --radius: 0.625rem;
   --background: oklch(1 0 0); /* white */
   --foreground: oklch(0.1371 0.036 258.53); /* slate-950 */
   --card: oklch(1 0 0); /* white */
@@ -109,12 +106,17 @@
   --accent: oklch(0.9589 0.011 248.06);
   --accent-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
   --destructive: oklch(0.6369 0.2077 25.32);
+  /* CUSTOM: destructive-foreground is not in shadcn/ui anymore */
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
   --border: oklch(0.929 0.0127 255.58); /* slate-200 */
   --input: oklch(0.929 0.0127 255.58); /* slate-200 */
   --ring: oklch(0.1371 0.036 258.53); /* slate-950 */
-
-  --sidebar-background: oklch(0.9843 0.0018 248.56); /* popover platform */
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.9843 0.0018 248.56); /* popover platform */
   --sidebar-foreground: oklch(0.1371 0.036 258.53); /* slate-950 */
   --sidebar-primary: oklch(0.2079 0.0399 265.73); /* slate-900 */
   --sidebar-primary-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
@@ -122,10 +124,9 @@
   --sidebar-accent-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
   --sidebar-border: oklch(0.929 0.0127 255.58); /* slate-200 */
   --sidebar-ring: oklch(0.1371 0.036 258.53); /* slate-950 */
-
-  --radius: 0.5rem;
 }
 
+/* CUSTOM: dark theme colors changed. Some colors have comments after them explaining their meaning. */
 .dark {
   --background: oklch(0.1371 0.036 258.53); /* slate-950 */
   --foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
@@ -142,12 +143,17 @@
   --accent: oklch(0.28 0.037 259.98); /* slate-800 */
   --accent-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
   --destructive: oklch(0.396 0.1331 25.71);
+  /* CUSTOM: destructive-foreground is not in shadcn/ui anymore */
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
   --border: oklch(0.4454 0.0374 257.3); /* slate-600 */
   --input: oklch(0.4454 0.0374 257.3); /* slate-600 */
   --ring: oklch(0.8688 0.0199 252.89); /* slate-300 */
-
-  --sidebar-background: oklch(0.1371 0.036 258.53); /* slate-950 */
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.1371 0.036 258.53); /* slate-950 */
   --sidebar-foreground: oklch(0.7107 0.0351 256.8); /* slate-400 */
   --sidebar-primary: oklch(0.9838 0.0036 248.23); /* slate-50 */
   --sidebar-primary-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
@@ -157,7 +163,11 @@
   --sidebar-ring: oklch(0.8688 0.0199 252.89); /* slate-300 */
 }
 
-/* Palette built in https://tweakcn.com/themes/cmeukcpoj000204l45lxw5a74 based on "Caffeine" theme*/
+/*
+ * CUSTOM: new theme not built into shadcn.
+ *
+ * Palette built in https://tweakcn.com/themes/cmeukcpoj000204l45lxw5a74 based on "Caffeine" theme
+ */
 .paratext-light {
   --background: oklch(0.9821 0 0);
   --foreground: oklch(0.2435 0 0);
@@ -178,11 +188,12 @@
   --destructive: oklch(0.6271 0.1935 33.33);
   --destructive-foreground: oklch(1 0 0);
   --ring: oklch(0.4341 0.0392 41.96);
-
-  /* WARN: in Shadcn files, `--sidebar-background` is `--sidebar`
-     * I recommend changing this to make it match Shadcn.
-     */
-  --sidebar-background: oklch(0.9881 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.9881 0 0);
   --sidebar-foreground: oklch(0.2645 0 0);
   --sidebar-primary: oklch(0.325 0 0);
   --sidebar-primary-foreground: oklch(0.9881 0 0);
@@ -192,6 +203,7 @@
   --sidebar-ring: oklch(0.7731 0 0);
 }
 
+/* CUSTOM: new theme not built into shadcn */
 .paratext-dark {
   --background: oklch(0.1776 0 0);
   --foreground: oklch(0.9491 0 0);
@@ -212,8 +224,12 @@
   --destructive: oklch(0.6271 0.1935 33.33);
   --destructive-foreground: oklch(1 0 0);
   --ring: oklch(0.9247 0.0523 66.15);
-
-  --sidebar-background: oklch(0.2103 0.0059 285.82);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.2103 0.0059 285.82);
   --sidebar-foreground: oklch(0.9674 0.0014 285.04);
   --sidebar-primary: oklch(0.4882 0.2172 264.38);
   --sidebar-primary-foreground: oklch(1 0 0);
@@ -223,12 +239,14 @@
   --sidebar-ring: oklch(0.8711 0.0055 285.98);
 }
 
-/* #endregion theme definitions */
-
+/* CUSTOM: shared region closer. */
 /* #endregion */
 
-/* Note that the following region is from shadcn/ui's styles
- * https://ui.shadcn.com/docs/installation/manual#configure-styles but is scoped down to .pr-twp
+/*
+ * CUSTOM: shared region opener.
+ *
+ * The following shared region is from shadcn/ui's styles at
+ * https://ui.shadcn.com/docs/installation/manual#configure-styles but is scoped down to `.pr-twp`
  * because this is just a component library and should not apply its styles to the entire page.
  *
  * There is now a section in this library's README.md that explains how to apply these styles to the
@@ -240,14 +258,17 @@
 /* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css but with the difference of being scoped to .pr-twp here */
 
 @layer base {
+  /* CUSTOM: scoped to .pr-twp as mentioned above */
   .pr-twp,
   .pr-twp * {
     @apply tw:border-border tw:outline-ring/50;
   }
 
-  /**
-    * disabled because tslint does not like it, but it is the selector that's needed
-    */
+  /*
+   * CUSTOM: scoped to .pr-twp as mentioned above
+   *
+   * stylelint-disabled because tslint does not like it, but it is the selector that's needed
+   */
   /* stylelint-disable-next-line selector-no-qualifying-type */
   body.pr-twp {
     @apply tw:bg-background tw:text-foreground;
