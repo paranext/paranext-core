@@ -14,7 +14,7 @@ import path from 'path';
 import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
-import { colordx } from '@colordx/core';
+import chroma from 'chroma-js';
 import {
   APP_NAME,
   APP_URI_SCHEME,
@@ -490,7 +490,7 @@ async function main() {
               }
 
               // Convert oklch color to hex format for Electron compatibility
-              const symbolColorHex = colordx(newTheme.cssVariables.primary).toHex();
+              const symbolColorHex = chroma(newTheme.cssVariables.primary).hex();
 
               mainWindow?.setTitleBarOverlay({
                 color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
