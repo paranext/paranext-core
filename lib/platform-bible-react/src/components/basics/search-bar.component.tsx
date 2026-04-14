@@ -1,7 +1,7 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Search, X } from 'lucide-react';
 import { forwardRef } from 'react';
 

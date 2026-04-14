@@ -1,5 +1,5 @@
 import { Button } from '@/components/shadcn-ui/button';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { LanguageStrings, Section } from 'platform-bible-utils';
 import { getSectionShortName } from '@/components/shared/book.utils';
 import { getBooksForSection, isSectionFullySelected } from './scope-selector.utils';

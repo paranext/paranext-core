@@ -8,7 +8,7 @@ import { Badge } from '@/components/shadcn-ui/badge';
 import { Button } from '@/components/shadcn-ui/button';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { Separator } from '@/components/shadcn-ui/separator';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import {
   SerializedEditorState,
   SerializedElementNode,

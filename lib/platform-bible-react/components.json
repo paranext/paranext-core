@@ -16,7 +16,7 @@
     "components": "@/components/shadcn-ui",
     "utils": "@/utils/shadcn-ui.util",
     "ui": "@/components/shadcn-ui",
-    "lib": "@/lib/shadcn-ui",
+    "lib": "@/utils/shadcn-ui",
     "hooks": "@/hooks/shadcn-ui"
   },
   "registries": {

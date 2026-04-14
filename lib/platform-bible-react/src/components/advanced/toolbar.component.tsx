@@ -2,7 +2,7 @@ import {
   SelectMenuItemHandler,
   PlatformMenubar,
 } from '@/components/advanced/menus/platform-menubar.component';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { PropsWithChildren, ReactNode, useRef } from 'react';
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ThumbsUp, ThumbsDown, Lightbulb, ChevronDown } from 'lucide-react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 type Variant = 'do' | 'dont' | 'neutral';
 

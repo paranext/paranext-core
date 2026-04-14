@@ -3,7 +3,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { useState } from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /** Interface defining the properties for the RecentSearches component */
 export interface RecentSearchesProps<T> {

@@ -1,5 +1,5 @@
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { getFormatCallerFunction } from 'platform-bible-utils';
 import React, { useEffect, useRef, useState } from 'react';

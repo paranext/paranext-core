@@ -1,4 +1,4 @@
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 type MenuItemIconProps = {
   /** The icon to display */

@@ -1,5 +1,5 @@
 import { PropsWithChildren, useState } from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { ErrorDump, ErrorDumpProps, ERROR_DUMP_STRING_KEYS } from '../basics/error-dump.component';
 import { Popover, PopoverContent, PopoverTrigger } from '../shadcn-ui/popover';
 import { Label } from '../shadcn-ui/label';

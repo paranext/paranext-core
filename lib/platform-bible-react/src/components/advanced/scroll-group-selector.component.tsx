@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@/components/shadcn-ui/select';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 
 const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS = {

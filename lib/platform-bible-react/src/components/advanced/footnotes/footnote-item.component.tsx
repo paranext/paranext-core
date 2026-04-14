@@ -1,7 +1,7 @@
 import React from 'react';
 import { MarkerContent, MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { AlertCircle } from 'lucide-react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { FootnoteItemProps } from './footnotes.types';
 
 function makeKey(parentMarker: string | undefined, content?: MarkerContent[]): string {

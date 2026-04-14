@@ -1,6 +1,6 @@
 import { type CSSProperties, ReactNode, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import {

@@ -266,5 +266,5 @@ export {
 } from './components/z-index';
 
 // Utils
-export { cn } from './utils/shadcn-ui.util';
+export { cn } from './utils/shadcn-ui/utils';
 export { getToolbarOSReservedSpaceClassName } from './components/advanced/toolbar.component';

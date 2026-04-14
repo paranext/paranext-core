@@ -1,5 +1,5 @@
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import React, { RefObject, useCallback, useEffect, useState } from 'react';
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';

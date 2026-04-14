@@ -8,7 +8,7 @@ import {
   CommandList,
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Check, ChevronsUpDown, Star } from 'lucide-react';
 import { ReactNode, useCallback, useMemo, useState } from 'react';
 import { type VariantProps } from 'class-variance-authority';

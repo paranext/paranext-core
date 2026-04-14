@@ -4,7 +4,7 @@
 
 import { TabsContentProps, TabsListProps, TabsTriggerProps } from '@/components/shadcn-ui/tabs';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import React from 'react';
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { LocalizedStringValue, formatReplacementString } from 'platform-bible-utils';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../shadcn-ui/select';
 import { Label } from '../shadcn-ui/label';

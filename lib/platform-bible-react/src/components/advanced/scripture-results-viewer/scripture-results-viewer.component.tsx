@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shadcn-ui/table';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon } from '@sillsdev/scripture';
 import {
   Cell,

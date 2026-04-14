@@ -1,6 +1,6 @@
 import { Input as ShadInput } from '@/components/shadcn-ui/input';
 import { Label as ShadLabel } from '@/components/shadcn-ui/label';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { ChangeEventHandler, FocusEventHandler } from 'react';
 
 export type TextFieldProps = {

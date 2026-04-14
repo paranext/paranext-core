@@ -9,7 +9,7 @@ import {
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { formatScrRef, getSectionForBook, Section } from 'platform-bible-utils';

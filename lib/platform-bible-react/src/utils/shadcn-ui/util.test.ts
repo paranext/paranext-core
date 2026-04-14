@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cn } from './shadcn-ui.util';
+import { cn } from './utils';
 
 describe('cn() backwards compatibility shim', () => {
   describe('basic dedup — last wins', () => {

@@ -14,7 +14,7 @@ import { EditorState, SerializedEditorState } from 'lexical';
 
 import { editorTheme } from '@/components/advanced/editor/themes/editor-theme';
 import { TooltipProvider } from '@/components/shadcn-ui/tooltip';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 import { nodes } from './nodes';
 import { Plugins } from './plugins';

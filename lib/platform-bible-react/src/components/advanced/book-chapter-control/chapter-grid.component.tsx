@@ -1,5 +1,5 @@
 import { CommandGroup, CommandItem } from '@/components/shadcn-ui/command';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { ALL_ENGLISH_BOOK_NAMES } from '@/components/shared/book.utils';
 import { fetchEndChapter } from './book-chapter-control.utils';
 

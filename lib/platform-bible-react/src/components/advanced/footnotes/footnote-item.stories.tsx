@@ -3,7 +3,7 @@ import { FootnoteItem } from '@/components/advanced/footnotes/footnote-item.comp
 import { FootnoteItemProps } from '@/components/advanced/footnotes/footnotes.types';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import '@/components/demo/scripture-editor/usj-nodes.css';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { usjFootnotes } from './footnotes.usj.data';
 
 const meta: Meta<typeof FootnoteItem> = {

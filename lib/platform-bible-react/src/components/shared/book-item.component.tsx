@@ -1,6 +1,6 @@
 import { CommandItem } from '@/components/shadcn-ui/command';
 import { getLocalizedBookId, getLocalizedBookName } from '@/components/shared/book.utils';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon } from '@sillsdev/scripture';
 import { Check } from 'lucide-react';
 import { Section } from 'platform-bible-utils';

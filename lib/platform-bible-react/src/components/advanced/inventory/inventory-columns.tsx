@@ -15,7 +15,7 @@ import {
   CircleXIcon,
 } from 'lucide-react';
 import { ReactNode } from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { InventoryTableData, Status } from './inventory-utils';
 
 /**

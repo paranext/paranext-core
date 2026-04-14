@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { SerializedEditorState } from 'lexical';
 import { ArrowUp, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import { formatRelativeDate, formatReplacementString, sanitizeHtml } from 'platform-bible-utils';
