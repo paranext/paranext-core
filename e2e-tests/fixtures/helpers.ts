@@ -350,6 +350,46 @@ export async function waitForPapiMethodRegistered(
 }
 
 /**
+ * Serialized PAPI request for `ProjectLookupService.getMetadataForAllProjects` (see
+ * `network-object.service.ts` `getNetworkObjectRequestType`).
+ */
+const PROJECT_LOOKUP_GET_ALL_PROJECTS_METHOD =
+  'object:ProjectLookupService.getMetadataForAllProjects';
+
+/**
+ * Poll until project lookup returns at least one project. PDP factories can register after the dock
+ * is visible; select-project dialogs need metadata before they render `.project-list` buttons.
+ */
+export async function waitForAtLeastOneProjectMetadata(
+  port: number = DEFAULT_WEBSOCKET_PORT,
+  timeoutMs = 60_000,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const remaining = timeoutMs - (Date.now() - start);
+    try {
+      const result = await sendPapiRequestOnce<unknown[]>(
+        PROJECT_LOOKUP_GET_ALL_PROJECTS_METHOD,
+        [],
+        port,
+        Math.min(10_000, Math.max(1000, remaining)),
+      );
+      if (Array.isArray(result) && result.length > 0) return;
+    } catch {
+      /* PDP factories or network object not ready yet */
+    }
+    const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
+    if (sleepMs <= 0) break;
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, sleepMs);
+    });
+  }
+  throw new Error(
+    `Project lookup returned no projects within ${timeoutMs}ms (PDP factories may not be registered).`,
+  );
+}
+
+/**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
  * platform-dock layout to appear, then for the dialog service to finish registering menu commands
  * like `platform.about` (the dock can render before that async work completes).

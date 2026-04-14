@@ -1,18 +1,27 @@
 .select-books-dialog {
   display: flex;
   flex-direction: column;
+  flex: 1;
   gap: 16px;
+  min-height: 0;
   padding: 5%;
+  overflow: hidden;
+}
+
+// Scroll the checklist only so the submit button stays visible (modal overlay uses flex + max-height).
+.select-books-dialog-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-x: hidden;
-  overflow-y: hidden;
+  overflow-y: auto;
 }
 
 .select-books-dialog-submit-button {
-  margin-left: auto;
+  flex-shrink: 0;
+  margin-inline-start: auto;
 }
 
 .book-list {
   columns: 2;
   column-fill: balance;
-  overflow-y: auto;
 }

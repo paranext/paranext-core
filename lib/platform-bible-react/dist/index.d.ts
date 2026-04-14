@@ -2101,7 +2101,13 @@ export declare const DialogOverlay: React$1.ForwardRefExoticComponent<Omit<Dialo
  * Main container for dialog content. Renders inside a portal with an overlay backdrop, centered on
  * screen. Includes a close button in the top corner.
  */
-export declare const DialogContent: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DialogContent: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	/**
+	 * Additional CSS classes for the backdrop (`DialogOverlay`). Use when one dialog needs different
+	 * overlay styling than the default.
+	 */
+	overlayClassName?: string;
+} & React$1.RefAttributes<HTMLDivElement>>;
 /** Container for the dialog's header area. Stacks title and description vertically. */
 export declare function DialogHeader({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
 export declare namespace DialogHeader {

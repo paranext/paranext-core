@@ -109,6 +109,10 @@
     "utils:unlink": "yalc remove @eten-tech-foundation/scripture-utilities && npm i --ignore-scripts"
   },
   "lint-staged": {
+    "cspell.json": [
+      "node .erb/scripts/sort-cspell-words.js",
+      "prettier --parser json --write --ignore-path .prettierignorerun"
+    ],
     "*.{cjs,js,jsx,ts,tsx}": ["prettier --write --ignore-path .prettierignorerun"],
     "!(cspell).json": ["prettier --parser json --write --ignore-path .prettierignorerun"],
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
