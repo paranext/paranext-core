@@ -38,7 +38,7 @@
   }
 }
 
-/* @custom-variant dark (&:where(.dark, .dark *)); */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
   --color-background: var(--background);

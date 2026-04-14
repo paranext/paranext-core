@@ -158,9 +158,7 @@ if (process.argv[1] === scriptPath) {
 
   const cssContent = readFileSync(cssPath, 'utf-8');
   const themes = parseCssThemes(cssContent);
-  // eslint-disable-next-line no-null/no-null
-  const json = `${JSON.stringify(themes, null, 2)}\n`;
+  const json = `${JSON.stringify(themes, undefined, 2)}\n`;
   writeFileSync(outputPath, json);
-  // eslint-disable-next-line no-console
   console.log(`Generated ${outputPath}`);
 }
