@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      checks: write
+      deployments: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -52,23 +52,28 @@ jobs:
           # TODO: Remove once console errors in platform-bible-react stories are fixed (tracked separately)
           allowConsoleErrors: true
 
-      - name: Post Chromatic link to Checks UI
+      - name: Create Chromatic deployment link
         if: always() && steps.chromatic.outputs.buildUrl != ''
         uses: actions/github-script@v7
         env:
           BUILD_URL: ${{ steps.chromatic.outputs.buildUrl }}
         with:
           script: |
-            await github.rest.checks.create({
+            const deployment = await github.rest.repos.createDeployment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              name: 'Chromatic Visual Review',
-              head_sha: context.sha,
-              status: 'completed',
-              conclusion: 'neutral',
-              details_url: process.env.BUILD_URL,
-              output: {
-                title: 'Chromatic Visual Review',
-                summary: 'Click "Details" to open the Chromatic visual review for this build.',
-              },
+              ref: context.sha,
+              environment: 'Chromatic',
+              auto_merge: false,
+              required_contexts: [],
+              transient_environment: true,
+              production_environment: false,
+            });
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'success',
+              environment_url: process.env.BUILD_URL,
+              description: 'Visual review ready',
             });
