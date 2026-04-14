@@ -51,8 +51,9 @@ const HISTORY_DEBOUNCE_MS = 5_000;
 
 test.beforeAll(async ({ electronApp }) => {
   // The warm-up can take up to 120 s (app start + PDP cold-start); use a generous timeout so the
-  // beforeAll itself never races against the default 120 s Playwright timeout.
-  test.setTimeout(180_000);
+  // beforeAll itself never races against the default 120 s Playwright timeout.  On retried workers
+  // the Electron process must restart from scratch, which can push the total close-to-240 s.
+  test.setTimeout(240_000);
 
   const page = await electronApp.firstWindow({ timeout: PROCESS_READY_TIMEOUT });
   await waitForAppReady(page);
@@ -559,6 +560,10 @@ test.describe('Search History', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Preserve Case in Replace Mode', () => {
+  // openFindPanel can consume up to ~90 s on a warm-but-loaded worker; give each test 3 minutes
+  // so the fill+press pair never runs out of budget before the action completes.
+  test.describe.configure({ timeout: 180_000 });
+
   test('should display the Preserve Case checkbox in Replace mode', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
     await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
@@ -675,6 +680,9 @@ async function setupReplaceMode(
   return frame;
 }
 test.describe('Replace Operations', () => {
+  // setupReplaceMode calls openFindPanel which can consume up to ~90 s; give each test 3 minutes.
+  test.describe.configure({ timeout: 180_000 });
+
   test('should replace the selected result when Enter is pressed on the focused result card', async ({
     mainPage,
   }) => {
@@ -792,6 +800,9 @@ test.describe('Replace Operations', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Search Filters', () => {
+  // openFindPanel can consume up to ~90 s; give each test 3 minutes.
+  test.describe.configure({ timeout: 180_000 });
+
   test('should show an error message when an invalid regex pattern is entered in regex mode', async ({
     mainPage,
   }) => {
@@ -857,6 +868,9 @@ test.describe('Search Filters', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Scope Switching', () => {
+  // openFindPanel can consume up to ~90 s; give each test 3 minutes.
+  test.describe.configure({ timeout: 180_000 });
+
   test('should re-search and update results when the scope is changed', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
     await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });

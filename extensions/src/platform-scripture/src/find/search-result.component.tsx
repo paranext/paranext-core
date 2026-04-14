@@ -10,7 +10,8 @@ import {
 import { FindResult } from 'platform-scripture';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { LocalizedBookData } from './find-types';
-import { applyPreserveCase } from './find.utils';
+import { applyPreserveCase, preserveTrailingSpaces, renderWithInvisibleChars } from './find.utils';
+
 import {
   getFindHighlightClasses,
   getFindHighlightStyle,
@@ -18,8 +19,6 @@ import {
   getGoldFindHighlightStyle,
   getReplaceHighlightClasses,
   getReplaceHighlightStyle,
-  preserveTrailingSpaces,
-  renderWithInvisibleChars,
 } from './replace-preview-styles';
 import { useDarkMode } from './use-dark-mode.hook';
 import { DEFAULT_FIND_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
@@ -512,7 +511,7 @@ export default function SearchResult({
           </span>
         )}
         {searchResult.isReplaced && (
-          <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">
+          <span className="tw-text-destructive tw-font-semibold tw-shrink-0">
             {localizedStrings['%webView_find_replaced%']}
           </span>
         )}
@@ -577,7 +576,7 @@ export default function SearchResult({
         }${searchResult.text}${globalResultsIndex}`}
         isHidden={searchResult.isHidden}
         isSelected={isSelected}
-        className={`tw-rounded-none${searchResult.isReplaced ? ' !tw-bg-red-100 dark:!tw-bg-red-950' : ''}`}
+        className={`tw-rounded-none${searchResult.isReplaced ? ' !tw-bg-destructive/10' : ''}`}
         onSelect={() => onResultClick(searchResult, globalResultsIndex)}
         selectedButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
         hoverButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}

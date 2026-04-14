@@ -247,18 +247,25 @@ export function FindHeader({
             className={`scripture-font tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
           />
           {searchTerm && (
-            <button
-              type="button"
-              aria-label={localizedStrings.clearSearch ?? 'Clear search'}
-              onClick={() => {
-                if (searchTerm) onAddToHistory();
-                onSearchTermChange('');
-                onSearchClear();
-              }}
-              className="tw-absolute tw-end-2 tw-top-1/2 -tw-translate-y-1/2 tw-cursor-pointer tw-border-0 tw-bg-transparent tw-p-0 tw-text-muted-foreground hover:tw-text-foreground"
-            >
-              <X className="tw-h-4 tw-w-4" />
-            </button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={localizedStrings.clearSearch}
+                    onClick={() => {
+                      if (searchTerm) onAddToHistory();
+                      onSearchTermChange('');
+                      onSearchClear();
+                    }}
+                    className="tw-absolute tw-end-2 tw-top-1/2 -tw-translate-y-1/2 tw-cursor-pointer tw-border-0 tw-bg-transparent tw-p-0 tw-text-muted-foreground hover:tw-text-foreground"
+                  >
+                    <X className="tw-h-4 tw-w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{localizedStrings.clearSearch}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
         <RecentSearches
@@ -397,26 +404,40 @@ export function FindHeader({
                 total: String(visibleResultsCount),
               })}
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="tw-h-7 tw-w-7"
-              disabled={visibleResultsCount === 0}
-              onClick={onPreviousResult}
-              aria-label={localizedStrings.previousResult}
-            >
-              <ChevronUp className="tw-h-4 tw-w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="tw-h-7 tw-w-7"
-              disabled={visibleResultsCount === 0}
-              onClick={onNextResult}
-              aria-label={localizedStrings.nextResult}
-            >
-              <ChevronDown className="tw-h-4 tw-w-4" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="tw-h-7 tw-w-7"
+                    disabled={visibleResultsCount === 0}
+                    onClick={onPreviousResult}
+                    aria-label={localizedStrings.previousResult}
+                  >
+                    <ChevronUp className="tw-h-4 tw-w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{localizedStrings.previousResult}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="tw-h-7 tw-w-7"
+                    disabled={visibleResultsCount === 0}
+                    onClick={onNextResult}
+                    aria-label={localizedStrings.nextResult}
+                  >
+                    <ChevronDown className="tw-h-4 tw-w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{localizedStrings.nextResult}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         )}
       </div>

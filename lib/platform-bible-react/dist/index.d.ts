@@ -156,6 +156,44 @@ type BookSelectorProps = ChapterRangeSelectorProps & {
  *   strings for the component.
  */
 export declare function BookSelector({ handleBookSelectionModeChange, currentBookName, onSelectBooks, selectedBookIds, chapterCount, endChapter, handleSelectEndChapter, startChapter, handleSelectStartChapter, localizedStrings, }: BookSelectorProps): import("react/jsx-runtime").JSX.Element;
+type ClassValue$1 = ClassValue;
+type ClassProp = {
+	class: ClassValue$1;
+	className?: never;
+} | {
+	class?: never;
+	className: ClassValue$1;
+} | {
+	class?: never;
+	className?: never;
+};
+type OmitUndefined<T> = T extends undefined ? never : T;
+type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
+/**
+ * Style variants for the Button component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const buttonVariants: (props?: ({
+	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | "subtle" | null | undefined;
+	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+} & ClassProp) | undefined) => string;
+/**
+ * Props for Button component
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+	asChild?: boolean;
+}
+/**
+ * The Button component displays a button or a component that looks like a button. The component is
+ * built and styled by Shadcn UI.
+ *
+ * @param ButtonProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** Interface defining the properties for the RecentSearches component */
 export interface RecentSearchesProps<T> {
 	/** Array of recent search items */
@@ -180,7 +218,7 @@ export interface RecentSearchesProps<T> {
 	 */
 	buttonClassName?: string;
 	/** Variant for the trigger button. Defaults to `"ghost"` */
-	buttonVariant?: "ghost" | "outline" | "default" | "destructive" | "secondary" | "link";
+	buttonVariant?: ButtonProps["variant"];
 	/** Controlled open state of the popover. If provided, the component becomes controlled. */
 	open?: boolean;
 	/** Called when the open state changes. Required when `open` is provided. */
@@ -523,44 +561,6 @@ interface FooterProps {
  * @returns The rendered Footer component
  */
 export declare function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, currentVersion, }: FooterProps): import("react/jsx-runtime").JSX.Element;
-type ClassValue$1 = ClassValue;
-type ClassProp = {
-	class: ClassValue$1;
-	className?: never;
-} | {
-	class?: never;
-	className: ClassValue$1;
-} | {
-	class?: never;
-	className?: never;
-};
-type OmitUndefined<T> = T extends undefined ? never : T;
-type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
-/**
- * Style variants for the Button component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | "subtle" | null | undefined;
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
-} & ClassProp) | undefined) => string;
-/**
- * Props for Button component
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
-	asChild?: boolean;
-}
-/**
- * The Button component displays a button or a component that looks like a button. The component is
- * built and styled by Shadcn UI.
- *
- * @param ButtonProps
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type MultiSelectComboBoxEntry = {
 	value: string;
 	label: string;

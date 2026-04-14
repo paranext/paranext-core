@@ -8,13 +8,13 @@ import {
   ReplacePreviewColor,
   ReplacePreviewHighlightShape,
 } from './replace-preview-types';
+import { renderWithInvisibleChars } from './find.utils';
 import {
   getFindHighlightClasses,
   getFindHighlightStyle,
   getGoldFindHighlightClasses,
   getReplaceHighlightClasses,
   getReplaceHighlightStyle,
-  renderWithInvisibleChars,
 } from './replace-preview-styles';
 
 // ─── Picker Story ────────────────────────────────────────────────────────────

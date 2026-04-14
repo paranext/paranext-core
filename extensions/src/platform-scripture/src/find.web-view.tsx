@@ -166,7 +166,7 @@ global.webViewComponent = function FindWebView({
     [addRecentSearchItem],
   );
 
-  const [lastSearchTermSetting, setLastSearchTermStorage] = useState<string | undefined>(undefined);
+  const [lastSearchTermStorage, setLastSearchTermStorage] = useState<string | undefined>(undefined);
   useEffect(() => {
     papi.commands
       .sendCommand('platformScripture.getFindLastSearchTerm', projectId)
@@ -318,10 +318,10 @@ global.webViewComponent = function FindWebView({
   const [searchTermRestored, setSearchTermRestored] = useState(false);
   useEffect(() => {
     if (searchTermRestored) return;
-    if (lastSearchTermSetting === undefined) return; // still loading
+    if (lastSearchTermStorage === undefined) return; // still loading
     setSearchTermRestored(true);
-    if (lastSearchTermSetting && !searchTerm) setSearchTerm(lastSearchTermSetting);
-  }, [lastSearchTermSetting, searchTerm, searchTermRestored, setSearchTerm]);
+    if (lastSearchTermStorage && !searchTerm) setSearchTerm(lastSearchTermStorage);
+  }, [lastSearchTermStorage, searchTerm, searchTermRestored, setSearchTerm]);
 
   // Persist the current search term to storage so it survives session restarts
   const debouncedPersistLastSearchTerm = useRef<DebouncedFunction<(term: string) => void>>(
