@@ -113,7 +113,7 @@
     "!(cspell).json": ["prettier --parser json --write --ignore-path .prettierignorerun"],
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
     "*.{html,md,yml}": ["prettier --single-quote --write --ignore-path .prettierignorerun"],
-    "src/**/*.mdx": ["remark --output"]
+    "src/**/*.mdx": ["sh -c 'remark \"$@\" --output' --"]
   },
   "browserslist": ["extends browserslist-config-detect-electron"],
   "dependencies": {
