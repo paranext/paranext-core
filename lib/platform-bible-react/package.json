@@ -71,7 +71,7 @@
     "!(cspell).json": ["prettier --parser json --write"],
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
     "*.{html,md,yml}": ["prettier --single-quote --write"],
-    "*.mdx": ["remark --output"]
+    "*.mdx": ["remark --use remark-mdx --output"]
   },
   "peerDependencies": {
     "react": ">=18.3.1",
