@@ -1,6 +1,6 @@
 // Remark configuration for MDX files in src/stories/.
 // Runs via `format:core: remark "./src/**/*.mdx" -o`
-// Mirrored by lib/platform-bible-react/.remarkrc.mjs
+// Extended by lib/platform-bible-react/.remarkrc.mjs
 
 const config = {
   plugins: [

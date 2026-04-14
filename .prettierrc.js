@@ -5,10 +5,13 @@ module.exports = {
   trailingComma: 'all',
   endOfLine: 'lf',
   singleQuote: true,
-  // prettier-plugin-jsdoc options
-  tsdoc: true,
   plugins: ['prettier-plugin-jsdoc', 'prettier-plugin-tailwindcss'],
   overrides: [
+    {
+      // prettier-plugin-jsdoc tsdoc option is only valid for TypeScript parsers
+      files: ['*.ts', '*.tsx'],
+      options: { tsdoc: true },
+    },
     {
       files: '*.json',
       options: { parser: 'json' },
