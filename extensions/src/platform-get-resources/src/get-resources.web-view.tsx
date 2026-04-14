@@ -400,7 +400,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   return (
     <div>
       <Card className="tw:flex tw:h-screen tw:flex-col tw:rounded-none tw:border-0">
-        <CardHeader className="tw:flex-shrink-0">
+        <CardHeader className="tw:shrink-0">
           <div className="tw:flex">
             <div className="tw:flex tw:items-center tw:pr-4">
               <BookOpen size={36} className="tw:me-4" />
@@ -537,7 +537,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
             </div>
           )}
         </CardContent>
-        <CardFooter className="tw:flex-shrink-0 tw:justify-center tw:border-t tw:p-4">
+        <CardFooter className="tw:shrink-0 tw:justify-center tw:border-t tw:p-4">
           {sortedResources.length > 0 && (
             <Label className="tw:font-normal">{`${showingText} ${sortedResources.length} ${resultsText}`}</Label>
           )}

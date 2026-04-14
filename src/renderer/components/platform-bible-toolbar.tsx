@@ -198,7 +198,7 @@ export function PlatformBibleToolbar() {
                 <TooltipTrigger asChild>
                   <Badge
                     variant="ghost"
-                    className="tw:block tw:max-w-[150px] tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:font-normal tw:shrink"
+                    className="tw:block tw:max-w-[150px] tw:shrink tw:overflow-hidden tw:font-normal tw:text-ellipsis tw:whitespace-nowrap"
                   >
                     {marketingVersion}
                   </Badge>
@@ -215,7 +215,7 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw:h-8 tw:flex-shrink-0"
+                  className="pr-twp tw:h-8 tw:shrink-0"
                   aria-label={themeButtonTooltip}
                   data-testid="theme-toggle"
                   onClick={() => {
@@ -247,7 +247,7 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw:h-8 tw:flex-shrink-0"
+                  className="pr-twp tw:h-8 tw:shrink-0"
                   onClick={() => sendCommand('paratextRegistration.showInternetSettings')}
                 >
                   <Network />
@@ -268,7 +268,7 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw:h-8 tw:flex-shrink-0"
+                  className="pr-twp tw:h-8 tw:shrink-0"
                   onClick={() => sendCommand('paratextRegistration.showParatextRegistration')}
                 >
                   <CircleUserRound />

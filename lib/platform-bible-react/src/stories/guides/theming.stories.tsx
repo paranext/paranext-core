@@ -31,7 +31,7 @@ function ThemingGuide() {
                 value="this has manual colors"
                 aria-label="Bad example input with manual colors"
                 readOnly
-                className="tw:full tw:file:border-0 tw:col-span-2 tw:flex tw:h-8 tw:rounded-md tw:border tw:border-input tw:bg-background tw:px-3 tw:py-2 tw:text-sm tw:ring-offset-background tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:placeholder:text-muted-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
+                className="tw:full tw:file:border-0 tw:col-span-2 tw:flex tw:h-8 tw:rounded-md tw:border tw:border-input tw:bg-background tw:px-3 tw:py-2 tw:text-sm tw:ring-offset-background tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:placeholder:text-muted-foreground tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
               />
             </td>
           </tr>

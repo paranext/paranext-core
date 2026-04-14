@@ -9,7 +9,7 @@ import { cn } from '@/utils/shadcn-ui.util';
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
 const badgeVariants = cva(
-  'pr-twp tw:inline-flex tw:items-center tw:rounded-full tw:px-2.5 tw:py-0.5 tw:text-xs tw:font-semibold tw:transition-colors tw:focus:outline-none tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-2',
+  'pr-twp tw:inline-flex tw:items-center tw:rounded-full tw:px-2.5 tw:py-0.5 tw:text-xs tw:font-semibold tw:transition-colors tw:focus:outline-hidden tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-2',
   {
     variants: {
       variant: {

@@ -141,7 +141,7 @@ export const CustomStyles: Story = {
         <Input
           id="bvc-input"
           placeholder="Book-chapter-control style"
-          className="tw:box-border tw:gap-2.5 tw:rounded-lg tw:border tw:border-solid tw:border-black tw:bg-white tw:py-2 tw:pl-4 tw:pr-3 tw:font-medium tw:text-slate-900 tw:shadow-none tw:outline-none"
+          className="tw:box-border tw:gap-2.5 tw:rounded-lg tw:border tw:border-solid tw:border-black tw:bg-white tw:py-2 tw:pl-4 tw:pr-3 tw:font-medium tw:text-slate-900 tw:shadow-none tw:outline-hidden"
         />
       </div>
       <div>

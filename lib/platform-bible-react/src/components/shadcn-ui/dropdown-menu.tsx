@@ -137,7 +137,7 @@ export function DropdownMenuSubTrigger({
     <DropdownMenuPrimitive.SubTrigger
       ref={ref}
       className={cn(
-        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-none tw:focus:bg-accent tw:data-[state=open]:bg-accent',
+        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-hidden tw:focus:bg-accent tw:data-[state=open]:bg-accent',
         inset && 'tw:pl-8',
         className,
         menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
@@ -223,7 +223,7 @@ export function DropdownMenuItem({
       ref={ref}
       className={cn(
         // removed: tw:relative tw:focus:text-accent-foreground
-        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-none tw:transition-colors tw:focus:bg-accent tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
+        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-hidden tw:transition-colors tw:focus:bg-accent tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
         inset && 'tw:pl-8',
         className,
         menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
@@ -250,7 +250,7 @@ export function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       ref={ref}
       className={cn(
-        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:py-1.5 tw:pe-2 tw:ps-8 tw:text-sm tw:outline-none tw:transition-colors tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
+        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:py-1.5 tw:pe-2 tw:ps-8 tw:text-sm tw:outline-hidden tw:transition-colors tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
         className,
         menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
       )}
@@ -283,7 +283,7 @@ export function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       ref={ref}
       className={cn(
-        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:py-1.5 tw:pe-2 tw:ps-8 tw:text-sm tw:outline-none tw:transition-colors tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
+        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:py-1.5 tw:pe-2 tw:ps-8 tw:text-sm tw:outline-hidden tw:transition-colors tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
         className,
         menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
       )}

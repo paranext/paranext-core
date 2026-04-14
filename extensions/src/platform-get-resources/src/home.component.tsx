@@ -365,7 +365,7 @@ export function Home({
     <Card className="tw:flex tw:h-screen tw:flex-col tw:rounded-none tw:border-0">
       <CardHeader
         className={cn(
-          'tw:flex-shrink-0 tw:[@media(max-height:28rem)]:!pb-2 tw:[@media(max-height:28rem)]:!pt-4 tw:max-[300px]:!pb-0',
+          'tw:shrink-0 tw:[@media(max-height:28rem)]:!pb-2 tw:[@media(max-height:28rem)]:!pt-4 tw:max-[300px]:!pb-0',
           { 'tw:max-[300px]:!pb-2': showGetResourcesButton },
         )}
       >
@@ -555,7 +555,7 @@ export function Home({
           </div>
         </CardContent>
       )}
-      <CardFooter className="tw:flex-shrink-0 tw:flex-col tw:justify-center tw:p-4 tw:border-t tw:gap-2 tw:[@media(max-height:32rem)]:!hidden">
+      <CardFooter className="tw:shrink-0 tw:flex-col tw:justify-center tw:p-4 tw:border-t tw:gap-2 tw:[@media(max-height:32rem)]:!hidden">
         <Label>{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
       </CardFooter>
     </Card>

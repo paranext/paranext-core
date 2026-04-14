@@ -8,13 +8,6 @@ const config: Config = {
   // TW4: content array removed — TW4 auto-detects source files
   // Theme from shadcn/ui
   theme: {
-    container: {
-      center: true,
-      padding: '2rem',
-      screens: {
-        '2xl': '1400px',
-      },
-    },
     extend: {
       typography: {
         DEFAULT: {

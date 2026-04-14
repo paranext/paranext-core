@@ -23,16 +23,16 @@ export const editorTheme: EditorThemeClasses = {
     h5: 'tw:scroll-m-20 tw:text-lg tw:font-semibold tw:tracking-tight',
     h6: 'tw:scroll-m-20 tw:text-base tw:font-semibold tw:tracking-tight',
   },
-  paragraph: 'tw:outline-none',
+  paragraph: 'tw:outline-hidden',
   quote: 'tw:mt-6 tw:border-l-2 tw:pl-6 tw:italic',
   link: 'tw:text-blue-600 tw:hover:underline tw:hover:cursor-pointer',
   list: {
     checklist: 'tw:relative',
     listitem: 'tw:mx-8',
     listitemChecked:
-      'tw:relative tw:mx-2 tw:px-6 tw:list-none tw:outline-none tw:line-through tw:before:content-[""] tw:before:w-4 tw:before:h-4 tw:before:top-0.5 tw:before:left-0 tw:before:cursor-pointer tw:before:block tw:before:bg-cover tw:before:absolute tw:before:border tw:before:border-primary tw:before:rounded tw:before:bg-primary tw:before:bg-no-repeat tw:after:content-[""] tw:after:cursor-pointer tw:after:border-white tw:after:border-solid tw:after:absolute tw:after:block tw:after:top-[6px] tw:after:w-[3px] tw:after:left-[7px] tw:after:right-[7px] tw:after:h-[6px] tw:after:rotate-45 tw:after:border-r-2 tw:after:border-b-2 tw:after:border-l-0 tw:after:border-t-0',
+      'tw:relative tw:mx-2 tw:px-6 tw:list-none tw:outline-hidden tw:line-through tw:before:content-[""] tw:before:w-4 tw:before:h-4 tw:before:top-0.5 tw:before:left-0 tw:before:cursor-pointer tw:before:block tw:before:bg-cover tw:before:absolute tw:before:border tw:before:border-primary tw:before:rounded tw:before:bg-primary tw:before:bg-no-repeat tw:after:content-[""] tw:after:cursor-pointer tw:after:border-white tw:after:border-solid tw:after:absolute tw:after:block tw:after:top-[6px] tw:after:w-[3px] tw:after:left-[7px] tw:after:right-[7px] tw:after:h-[6px] tw:after:rotate-45 tw:after:border-r-2 tw:after:border-b-2 tw:after:border-l-0 tw:after:border-t-0',
     listitemUnchecked:
-      'tw:relative tw:mx-2 tw:px-6 tw:list-none tw:outline-none tw:before:content-[""] tw:before:w-4 tw:before:h-4 tw:before:top-0.5 tw:before:left-0 tw:before:cursor-pointer tw:before:block tw:before:bg-cover tw:before:absolute tw:before:border tw:before:border-primary tw:before:rounded',
+      'tw:relative tw:mx-2 tw:px-6 tw:list-none tw:outline-hidden tw:before:content-[""] tw:before:w-4 tw:before:h-4 tw:before:top-0.5 tw:before:left-0 tw:before:cursor-pointer tw:before:block tw:before:bg-cover tw:before:absolute tw:before:border tw:before:border-primary tw:before:rounded',
     nested: {
       listitem: 'tw:list-none tw:before:hidden tw:after:hidden',
     },

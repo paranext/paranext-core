@@ -110,7 +110,7 @@ export function DictionaryList({
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           ref={listboxRef as RefObject<HTMLUListElement>}
           aria-activedescendant={activeId ?? undefined}
-          className="tw:outline-none tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background"
+          className="tw:outline-hidden tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background"
           onKeyDown={handleKeyDown}
         >
           {dictionaryData.map((entry) => {

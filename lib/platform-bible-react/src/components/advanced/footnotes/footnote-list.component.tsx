@@ -118,7 +118,7 @@ export function FootnoteList({
                   'tw:gap-x-3 tw:gap-y-1 tw:p-2 tw:data-[state=selected]:bg-muted',
                   onFootnoteSelected && 'tw:hover:bg-muted/50',
                   'tw:w-full tw:rounded-sm tw:border-0 tw:bg-transparent tw:shadow-none',
-                  'tw:focus:outline-none tw:focus-visible:outline-none',
+                  'tw:focus:outline-hidden tw:focus-visible:outline-hidden',
                   /* ENHANCE: After considerable fiddling, this set of styles makes a focus ring
                      that looks great in Storybook. However, the left edge of the ring is clipped in
                      P.B app. These are similar, but not identical to, the customizations made in

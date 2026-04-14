@@ -1270,7 +1270,7 @@ global.webViewComponent = function FindWebView({
   }, [scope, selectedBookIds, verseRefSetting, localizedBookData]);
 
   return (
-    <div className="pr-twp tw:container tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
+    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
       <div className="tw:space-y-3">
         {/* Find/Replace mode toggle */}

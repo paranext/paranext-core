@@ -112,13 +112,13 @@ export const BookItem = forwardRef<HTMLDivElement, BookItemProps>(
           {showCheck && (
             <Check
               className={cn(
-                'tw:me-2 tw:h-4 tw:w-4 tw:flex-shrink-0',
+                'tw:me-2 tw:h-4 tw:w-4 tw:shrink-0',
                 isSelected ? 'tw:opacity-100' : 'tw:opacity-0',
               )}
             />
           )}
           <span className="tw:min-w-0 tw:flex-1">{bookDisplayName}</span>
-          <span className="tw:ms-2 tw:flex-shrink-0 tw:text-xs tw:text-muted-foreground">
+          <span className="tw:ms-2 tw:shrink-0 tw:text-xs tw:text-muted-foreground">
             {bookDisplayId}
           </span>
         </CommandItem>

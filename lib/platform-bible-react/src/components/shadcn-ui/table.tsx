@@ -89,7 +89,7 @@ function Table({
         onKeyDown={handleKeyDownInTable} // CUSTOM: Enable keyboard behavior
         ref={tableRef} // CUSTOM: Use internal ref to manage keyboard navigation
         className={cn(
-          'tw:w-full tw:caption-bottom tw:text-sm tw:outline-none', // CUSTOM: Add outline-none to remove duplicate outline
+          'tw:w-full tw:caption-bottom tw:text-sm tw:outline-hidden', // CUSTOM: Add outline-hidden to remove duplicate outline
           'tw:focus:relative tw:focus:z-10 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background', // CUSTOM: Add focus styles
           className,
         )}
@@ -321,8 +321,8 @@ function TableRow({
       onKeyDown={handleKeyDown} // CUSTOM: Enable keyboard behavior
       onFocus={handleFocus} // CUSTOM: Handle focus event
       className={cn(
-        // CUSTOM: Add focus styles and add tw:outline-none so there isn't a duplicate outline
-        'tw:border-b tw:outline-none tw:transition-colors tw:hover:bg-muted/50',
+        // CUSTOM: Add focus styles and add tw:outline-hidden so there isn't a duplicate outline
+        'tw:border-b tw:outline-hidden tw:transition-colors tw:hover:bg-muted/50',
         'tw:focus:relative tw:focus:z-10 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
         'tw:data-[state=selected]:bg-muted',
         className,

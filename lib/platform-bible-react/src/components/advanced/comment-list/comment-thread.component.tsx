@@ -361,7 +361,7 @@ export function CommentThread({
       aria-selected={isSelected}
       id={threadId}
       className={cn(
-        'tw:group tw:w-full tw:rounded-none tw:border-none tw:p-4 tw:outline-none tw:transition-all tw:duration-200 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
+        'tw:group tw:w-full tw:rounded-none tw:border-none tw:p-4 tw:outline-hidden tw:transition-all tw:duration-200 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
         { 'tw:cursor-pointer tw:hover:shadow-md': !isSelected },
         {
           'tw:bg-primary-foreground': !isSelected && threadStatus !== 'Resolved' && isRead,

@@ -237,7 +237,7 @@ export default function CommentEditor({
         ref={editorContainerRef}
         role="textbox"
         tabIndex={-1}
-        className="tw:outline-none"
+        className="tw:outline-hidden"
         onKeyDownCapture={(e) => {
           if (e.key === 'Escape') {
             e.preventDefault();

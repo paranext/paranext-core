@@ -72,7 +72,7 @@ function MenubarTrigger({
     <MenubarPrimitive.Trigger
       ref={ref}
       className={cn(
-        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-3 tw:py-1.5 tw:text-sm tw:font-medium tw:outline-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[state=open]:bg-accent tw:data-[state=open]:text-accent-foreground',
+        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-3 tw:py-1.5 tw:text-sm tw:font-medium tw:outline-hidden tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[state=open]:bg-accent tw:data-[state=open]:text-accent-foreground',
         // CUSTOM
         'pr-twp',
         menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
@@ -97,7 +97,7 @@ function MenubarSubTrigger({
     <MenubarPrimitive.SubTrigger
       ref={ref}
       className={cn(
-        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[state=open]:bg-accent tw:data-[state=open]:text-accent-foreground',
+        'tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-hidden tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[state=open]:bg-accent tw:data-[state=open]:text-accent-foreground',
         inset && 'tw:pl-8',
         menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
         className,
@@ -182,7 +182,7 @@ function MenubarItem({
     <MenubarPrimitive.Item
       ref={ref}
       className={cn(
-        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
+        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-hidden tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
         inset && 'tw:pl-8',
         menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
         className,
@@ -206,7 +206,7 @@ function MenubarCheckboxItem({
     <MenubarPrimitive.CheckboxItem
       ref={ref}
       className={cn(
-        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:py-1.5 tw:pl-8 tw:pr-2 tw:text-sm tw:outline-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
+        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:py-1.5 tw:pl-8 tw:pr-2 tw:text-sm tw:outline-hidden tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
         menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
         className,
       )}
@@ -236,7 +236,7 @@ function MenubarRadioItem({
     <MenubarPrimitive.RadioItem
       ref={ref}
       className={cn(
-        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:py-1.5 tw:pl-8 tw:pr-2 tw:text-sm tw:outline-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
+        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:py-1.5 tw:pl-8 tw:pr-2 tw:text-sm tw:outline-hidden tw:focus:bg-accent tw:focus:text-accent-foreground tw:data-[disabled]:pointer-events-none tw:data-[disabled]:opacity-50',
         menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
         className,
       )}

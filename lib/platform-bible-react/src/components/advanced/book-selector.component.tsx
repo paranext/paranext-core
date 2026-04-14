@@ -111,7 +111,7 @@ export function BookSelector({
       onValueChange={(value: string) => onSelectionModeChange(value as BookSelectionMode)}
     >
       <div className="tw:flex tw:w-full tw:flex-col tw:gap-4">
-        <div className="tw:grid tw:grid-cols-[25%,25%,50%]">
+        <div className="tw:grid tw:grid-cols-[25%_25%_50%]">
           <div className="tw:flex tw:items-center">
             <RadioGroupItem value={BookSelectionMode.CurrentBook} />
             <Label className="tw:ms-1">{currentBookText}</Label>
@@ -128,7 +128,7 @@ export function BookSelector({
             />
           </div>
         </div>
-        <div className="tw:grid tw:grid-cols-[25%,50%,25%]">
+        <div className="tw:grid tw:grid-cols-[25%_50%_25%]">
           <div className="tw:flex tw:items-center">
             <RadioGroupItem value={BookSelectionMode.ChooseBooks} />
             <Label className="tw:ms-1">{chooseBooksText}</Label>

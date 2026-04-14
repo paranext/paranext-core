@@ -568,7 +568,7 @@ Each section below details the non-standard customizations for one component. Th
 - **`Table` — `<table> tabIndex={0}`** — Makes the table element focusable via Tab as the entry point for arrow key navigation.
 - **`Table` — `<table> onKeyDown={handleKeyDownInTable}`** — Attaches the custom keyboard handler.
 - **`Table` — `<table> ref={tableRef}`** — Uses the internal ref rather than the forwarded ref on `<table>`.
-- **`Table` — `<table>` className: `tw-outline-none` + focus ring** — Removes default outline; adds `focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background` as a custom accessible focus indicator.
+- **`Table` — `<table>` className: `tw-outline-hidden` + focus ring** — Removes default outline; adds `focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background` as a custom accessible focus indicator.
 - **`Table` — ARIA attributes** — `aria-label="Table"` and `aria-labelledby="table-label"` added to `<table>`.
 - **`useFocusableInRowKeyboardNavigation` hook** — New custom hook managing ArrowLeft/ArrowRight navigation between focusable elements in a row, and Escape to return focus to the row.
 - **`focusAdjacentFocusableElementInRow` function** — Helper that moves focus to the next/previous focusable element within a row.
@@ -578,7 +578,7 @@ Each section below details the non-standard customizations for one component. Th
 - **`TableRow` — `handleKeyDown` callback** — Full composite widget keyboard navigation: ArrowDown/Up between rows, ArrowLeft/Right within a row, Escape to return focus to the table.
 - **`TableRow` — `handleFocus` + `onFocus`** — When `setFocusAlsoRunsSelect` is true, calls `onSelect` when the row receives focus (selection-on-focus behavior).
 - **`TableRow` — `tabIndex={-1}`** — Rows are not directly Tab-reachable; only reachable via arrow keys from the table.
-- **`TableRow` — `tw-outline-none` + focus ring** — Same pattern as `Table` for accessible focus indicator on focused rows.
+- **`TableRow` — `tw-outline-hidden` + focus ring** — Same pattern as `Table` for accessible focus indicator on focused rows.
 
 #### Other comment-indicated customizations
 

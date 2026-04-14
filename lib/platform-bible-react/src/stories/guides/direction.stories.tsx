@@ -97,7 +97,7 @@ function DirectionGuide() {
           <Input
             value=""
             placeholder="placeholder text should clip before the icon"
-            className="tw:box-border tw:gap-2.5 tw:rounded-lg tw:border tw:border-solid tw:border-black tw:bg-white tw:py-2 tw:pl-4 tw:pr-3 tw:font-medium tw:text-slate-900 tw:shadow-none tw:outline-none"
+            className="tw:box-border tw:gap-2.5 tw:rounded-lg tw:border tw:border-solid tw:border-black tw:bg-white tw:py-2 tw:pl-4 tw:pr-3 tw:font-medium tw:text-slate-900 tw:shadow-none tw:outline-hidden"
             aria-label="Bad example input with placeholder clipping"
           />
           <History className="tw:absolute tw:right-3 tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:transform tw:cursor-pointer tw:text-gray-500" />
@@ -107,7 +107,7 @@ function DirectionGuide() {
         <div className="tw:relative">
           <Input
             value="text should clip before the icon"
-            className="tw:box-border tw:gap-2.5 tw:rounded-lg tw:border tw:border-solid tw:border-black tw:bg-white tw:py-2 tw:pl-4 tw:pr-3 tw:font-medium tw:text-slate-900 tw:shadow-none tw:outline-none"
+            className="tw:box-border tw:gap-2.5 tw:rounded-lg tw:border tw:border-solid tw:border-black tw:bg-white tw:py-2 tw:pl-4 tw:pr-3 tw:font-medium tw:text-slate-900 tw:shadow-none tw:outline-hidden"
             aria-label="Bad example input with text clipping"
           />
           <History className="tw:absolute tw:right-3 tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:transform tw:cursor-pointer tw:text-gray-500" />
