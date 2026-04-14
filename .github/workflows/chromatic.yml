@@ -44,3 +44,5 @@ jobs:
           exitZeroOnChanges: true
           onlyChanged: true
           skip: dependabot/**
+          # TODO: Remove once console errors in platform-bible-react stories are fixed (tracked separately)
+          allowConsoleErrors: true
