@@ -932,6 +932,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setFootnotesPaneVisible,
     setViewType,
     viewOptions.markerMode,
+    localizedStrings,
+    projectId,
   ]);
 
   const inlineMarkerMenuItems = useMemo(
@@ -1225,7 +1227,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [usjFromPdp, projectName, localizedStrings]);
+  }, [usjFromPdp, projectName, localizedStrings, projectId]);
 
   /**
    * Close the footnote editor, optionally deleting the note from the main editor first. Pass
