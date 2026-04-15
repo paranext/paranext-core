@@ -923,7 +923,7 @@ global.webViewComponent = function FindWebView({
             await papi.commands.sendCommand(
               'paratextBibleSendReceive.commitChanges',
               projectId,
-              `${localizedStrings['%versionHistoryCommit_beforeReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>}`,
+              `${localizedStrings['%versionHistoryCommit_beforeReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
               true,
             );
         } catch (err: unknown) {
@@ -939,7 +939,7 @@ global.webViewComponent = function FindWebView({
             await papi.commands.sendCommand(
               'paratextBibleSendReceive.commitChanges',
               projectId,
-              `${localizedStrings['%versionHistoryCommit_afterReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>}`,
+              `${localizedStrings['%versionHistoryCommit_afterReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
               false,
             );
         } catch (err: unknown) {
@@ -1008,6 +1008,8 @@ global.webViewComponent = function FindWebView({
       replaceTerm,
       results,
       usfmBookPdp,
+      searchTerm,
+      projectId,
     ],
   );
 
@@ -1064,7 +1066,7 @@ global.webViewComponent = function FindWebView({
           await papi.commands.sendCommand(
             'paratextBibleSendReceive.commitChanges',
             projectId,
-            `${localizedStrings['%versionHistoryCommit_beforeReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>}`,
+            `${localizedStrings['%versionHistoryCommit_beforeReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern> `,
             true,
           );
       } catch (err: unknown) {
@@ -1111,7 +1113,7 @@ global.webViewComponent = function FindWebView({
           await papi.commands.sendCommand(
             'paratextBibleSendReceive.commitChanges',
             projectId,
-            `${localizedStrings['%versionHistoryCommit_afterReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>}`,
+            `${localizedStrings['%versionHistoryCommit_afterReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
             false,
           );
       } catch (err: unknown) {
@@ -1163,6 +1165,8 @@ global.webViewComponent = function FindWebView({
     retrieveFindJobUpdate,
     totalNumberOfResults,
     usfmBookPdp,
+    searchTerm,
+    projectId,
   ]);
 
   const handleCancelReplace = useCallback(() => {
