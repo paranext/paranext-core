@@ -26,9 +26,9 @@ namespace TestParanextDataProvider.EnhancedResources
         )]
         public void FindLocalizedGlosses_HebrewElohimEnglish_ReturnsGod()
         {
-            // Arrange: Initialize marble data access
+            // Arrange: Initialize marble data access with test data
             var service = new MarbleDataAccessService();
-            service.Initialize();
+            MarbleTestHelper.InitializeWithTestData(service);
 
             // Golden master input:
             //   termLemma: "אֱלֹהִים" (Elohim)
@@ -64,7 +64,7 @@ namespace TestParanextDataProvider.EnhancedResources
         {
             // Arrange
             var service = new MarbleDataAccessService();
-            service.Initialize();
+            MarbleTestHelper.InitializeWithTestData(service);
 
             // Golden master input:
             //   termLemma: "אֱלֹהִים" (Elohim)
@@ -106,7 +106,7 @@ namespace TestParanextDataProvider.EnhancedResources
         {
             // Arrange
             var service = new MarbleDataAccessService();
-            service.Initialize();
+            MarbleTestHelper.InitializeWithTestData(service);
 
             // Golden master input:
             //   termLemma: "אֱלֹהִים" (Elohim)
