@@ -71,6 +71,8 @@ import { SearchResultsInBook } from './find/search-results-in-book.component';
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%general_countOfTotal%',
+  '%versionHistoryCommit_beforeReplace%',
+  '%versionHistoryCommit_afterReplace%',
   '%webView_find_allText%',
   '%webView_find_allText_tooltip%',
   '%webView_find_allowRegex%',
@@ -915,7 +917,37 @@ global.webViewComponent = function FindWebView({
       try {
         // Snapshot the book before replacing so revert can restore USFM exactly
         const bookSnapshot = await usfmBookPdp?.getBookUSFM(bookVerseRef);
+        // Also commits changes to the version history
+        try {
+          if (projectId)
+            await papi.commands.sendCommand(
+              'paratextBibleSendReceive.commitChanges',
+              projectId,
+              `${localizedStrings['%versionHistoryCommit_beforeReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>}`,
+              true,
+            );
+        } catch (err: unknown) {
+          logger.error(
+            `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
+          );
+        }
         await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
+
+        // Commits resulting changes from the replace to the version history
+        try {
+          if (projectId)
+            await papi.commands.sendCommand(
+              'paratextBibleSendReceive.commitChanges',
+              projectId,
+              `${localizedStrings['%versionHistoryCommit_afterReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>}`,
+              false,
+            );
+        } catch (err: unknown) {
+          logger.error(
+            `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
+          );
+        }
+
         // Mark the replaced result with visual feedback before re-running the search
         setResults((prev) =>
           prev.map((r, i) => (i === indexToReplace ? { ...r, isReplaced: true } : r)),
@@ -1026,6 +1058,21 @@ global.webViewComponent = function FindWebView({
         }),
       );
 
+      // Also commits changes to the version history
+      try {
+        if (projectId)
+          await papi.commands.sendCommand(
+            'paratextBibleSendReceive.commitChanges',
+            projectId,
+            `${localizedStrings['%versionHistoryCommit_beforeReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>}`,
+            true,
+          );
+      } catch (err: unknown) {
+        logger.error(
+          `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
+        );
+      }
+
       // Group results by book and call replace() once per book (API requires all ranges in same book).
       const bookGroupMap = new Map<
         string,
@@ -1057,6 +1104,21 @@ global.webViewComponent = function FindWebView({
               count: count.toString(),
             }),
       );
+
+      // Commits resulting changes from the replace to the version history
+      try {
+        if (projectId)
+          await papi.commands.sendCommand(
+            'paratextBibleSendReceive.commitChanges',
+            projectId,
+            `${localizedStrings['%versionHistoryCommit_afterReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>}`,
+            false,
+          );
+      } catch (err: unknown) {
+        logger.error(
+          `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
+        );
+      }
 
       // Mark all visible results as replaced for visual feedback (red background + progress bar)
       setResults(allResults.map((r) => (r.isHidden ? r : { ...r, isReplaced: true })));
