@@ -39,20 +39,13 @@ export default function CommentList({
     }
   }, [externalSelectedThreadId]);
 
-  // Paratext 9 uses special negative tag IDs to categorize certain note types:
-  //   -2 = Spelling note (meant to be handled by the Wordlist, not the Comments List)
-  //   -3 = Biblical Terms note (meant to be displayed in the Biblical Terms tool, not the Comments List)
+  // Filter out spelling notes and biblical terms notes, which are meant to be handled by their
+  // respective tools (word list and Biblical Terms), not the Comments List.
   // Displaying these note types in their respective tools is a future improvement.
-  const SPELLING_NOTE_TAG = '-2';
-  const BIBLICAL_TERMS_NOTE_TAG = '-3';
-
-  const hasSpecialTag = (tag: string, comments: (typeof threads)[number]['comments']) =>
-    comments.some((comment) => comment.tagAdded?.split(',').includes(tag));
-
   const activeThreads = threads.filter(
     (thread) =>
-      !hasSpecialTag(SPELLING_NOTE_TAG, thread.comments) &&
-      !hasSpecialTag(BIBLICAL_TERMS_NOTE_TAG, thread.comments) &&
+      !thread.isSpellingNote &&
+      !thread.isBTNote &&
       thread.comments.some((comment) => !comment.deleted),
   );
 
