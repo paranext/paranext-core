@@ -1186,10 +1186,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               `Error committing version history after saving USJ to PDP: ${getErrorMessage(err)}`,
             );
           }
-        } else if (
-          !(await saveUsjToPdpRawStableRef.current(newUsj)) &&
-          currentlyWritingUsjToPdp.current
-        ) {
+        } else if (!saveResult && currentlyWritingUsjToPdp.current) {
           currentlyWritingUsjToPdp.current = false;
 
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
