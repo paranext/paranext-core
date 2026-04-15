@@ -258,6 +258,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [blockMarker, setBlockMarker] = useState<string | undefined>();
   const [contextMarker, setContextMarker] = useState<string | undefined>();
 
+  const isInsertingCrossReference = useRef(false);
+  const isInsertingFootnote = useRef(false);
+
   const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
 
   /**
@@ -700,21 +703,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }
 
           editorRef.current?.insertMarker('f');
-
-          // Commits the changes including the inserted footnote to the version history
-          try {
-            if (projectId)
-              await papi.commands.sendCommand(
-                'paratextBibleSendReceive.commitChanges',
-                projectId,
-                localizedStrings['%versionHistoryCommit_afterInsertFootnote%'],
-                true,
-              );
-          } catch (err: unknown) {
-            logger.error(
-              `Error committing changes to version history after inserting footnote: ${getErrorMessage(err)}`,
-            );
-          }
+          // Updates ref to indicate that the next PDP save is for inserting a footnote
+          isInsertingFootnote.current = true;
           break;
         }
         case 'insertCrossReferenceAtSelection': {
@@ -734,21 +724,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }
 
           editorRef.current?.insertMarker('x');
-
-          // Commits the changes including the inserted cross-reference to the version history
-          try {
-            if (projectId)
-              await papi.commands.sendCommand(
-                'paratextBibleSendReceive.commitChanges',
-                projectId,
-                localizedStrings['%versionHistoryCommit_afterInsertCrossReference%'],
-                true,
-              );
-          } catch (err: unknown) {
-            logger.error(
-              `Error committing changes to version history after inserting cross-reference: ${getErrorMessage(err)}`,
-            );
-          }
+          // Updates ref to indicate that the next PDP save is for inserting a cross-reference
+          isInsertingCrossReference.current = false;
           break;
         }
         case 'insertCommentAtSelection': {
@@ -1178,10 +1155,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         const saveResult = await saveUsjToPdpRawStableRef.current(newUsj);
 
         // Prompts the PDP to commit changes to the version history once a day if the save was successfully
-        if (saveResult) {
+        if (saveResult && projectId) {
           try {
-            if (projectId)
+            if (isInsertingFootnote.current) {
+              // Commits the changes including the inserted footnote to the version history
+              await papi.commands.sendCommand(
+                'paratextBibleSendReceive.commitChanges',
+                projectId,
+                localizedStrings['%versionHistoryCommit_afterInsertFootnote%'],
+                true,
+              );
+              isInsertingFootnote.current = false;
+            } else if (isInsertingCrossReference.current) {
+              // Commits the changes including the inserted cross-reference to the version history
+              await papi.commands.sendCommand(
+                'paratextBibleSendReceive.commitChanges',
+                projectId,
+                localizedStrings['%versionHistoryCommit_afterInsertCrossReference%'],
+                true,
+              );
+              isInsertingCrossReference.current = false;
+            } else {
               await papi.commands.sendCommand('paratextBibleSendReceive.commitDaily', projectId);
+            }
           } catch (err: unknown) {
             logger.error(
               `Error committing version history after saving USJ to PDP: ${getErrorMessage(err)}`,
