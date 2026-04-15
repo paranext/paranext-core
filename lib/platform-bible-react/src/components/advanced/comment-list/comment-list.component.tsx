@@ -1,6 +1,6 @@
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
 import { cn } from '@/utils/shadcn-ui.util';
-import React, { RefObject, useCallback, useEffect, useState } from 'react';
+import React, { RefObject, useCallback, useEffect, useMemo, useState } from 'react';
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 
@@ -45,27 +45,30 @@ export default function CommentList({
   // Merge duplicate thread IDs — the source data may contain duplicates (inherited data quality
   // issue). When duplicates exist, combine all their comments into the entry with the latest
   // modifiedDate so no comments are lost.
-  const threadMap = new Map<string, (typeof threads)[0]>();
-  threads.forEach((thread) => {
-    const existing = threadMap.get(thread.id);
-    if (!existing) {
-      threadMap.set(thread.id, thread);
-    } else {
-      const seenCommentIds = new Set(existing.comments.map((c) => c.id));
-      const mergedComments = [
-        ...existing.comments,
-        ...thread.comments.filter((c) => !seenCommentIds.has(c.id)),
-      ];
-      const latest = thread.modifiedDate > existing.modifiedDate ? thread : existing;
-      threadMap.set(thread.id, { ...latest, comments: mergedComments });
-    }
-  });
-  const activeThreads = [...threadMap.values()].filter(
-    (thread) =>
-      !thread.isSpellingNote &&
-      !thread.isBTNote &&
-      thread.comments.some((comment) => !comment.deleted),
-  );
+  const activeThreads = useMemo(() => {
+    const threadMap = new Map<string, (typeof threads)[0]>();
+    threads.forEach((thread) => {
+      const existing = threadMap.get(thread.id);
+      if (!existing) {
+        threadMap.set(thread.id, thread);
+      } else {
+        const seenCommentIds = new Set(existing.comments.map((c) => c.id));
+        const mergedComments = [
+          ...existing.comments,
+          ...thread.comments.filter((c) => !seenCommentIds.has(c.id)),
+        ];
+        const latest =
+          new Date(thread.modifiedDate) > new Date(existing.modifiedDate) ? thread : existing;
+        threadMap.set(thread.id, { ...latest, comments: mergedComments });
+      }
+    });
+    return [...threadMap.values()].filter(
+      (thread) =>
+        !thread.isSpellingNote &&
+        !thread.isBTNote &&
+        thread.comments.some((comment) => !comment.deleted),
+    );
+  }, [threads]);
 
   const options: ListboxOption[] = activeThreads.map((thread) => ({
     id: thread.id,
@@ -144,7 +147,10 @@ export default function CommentList({
     >
       {activeThreads.map((thread) => (
         <div
-          key={`${thread.id}-${thread.modifiedDate}`}
+          key={thread.id}
+          // NOTE: The duplicate-merge logic above guarantees thread.id is unique within activeThreads.
+          // This id is also used by aria-activedescendant and the listbox options array —
+          // if that merge block is ever removed, duplicate DOM ids would silently break keyboard navigation.
           id={thread.id}
           className={cn({
             'tw-opacity-60': thread.status === 'Resolved',
