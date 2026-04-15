@@ -96,6 +96,7 @@ export async function canConnectToPapi(
 async function connectWebSocket(): Promise<WebSocket> {
   for (let attempt = 1; attempt <= CONNECT_RETRIES; attempt++) {
     try {
+      // Sequential retries require awaiting each connection attempt before trying the next
       // eslint-disable-next-line no-await-in-loop -- intentional retry loop
       const ws = await new Promise<WebSocket>((resolve, reject) => {
         const socket = new WebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
@@ -115,7 +116,7 @@ async function connectWebSocket(): Promise<WebSocket> {
         });
       });
       return ws;
-    } catch (err) {
+    } catch {
       if (attempt === CONNECT_RETRIES) {
         throw new Error(
           `Failed to connect to PAPI WebSocket (ws://localhost:${WEBSOCKET_PORT}) after ${CONNECT_RETRIES} attempts. ` +
@@ -125,6 +126,7 @@ async function connectWebSocket(): Promise<WebSocket> {
       console.log(
         `PAPI WebSocket connection attempt ${attempt}/${CONNECT_RETRIES} failed, retrying in ${CONNECT_RETRY_DELAY_MS}ms...`,
       );
+      // Must wait between retries to give the server time to become available
       // eslint-disable-next-line no-await-in-loop -- intentional retry delay
       await new Promise<void>((resolve) => {
         setTimeout(resolve, CONNECT_RETRY_DELAY_MS);
@@ -185,9 +187,9 @@ export const test = base.extend<PapiLiveFixtures>({
       }
       const id = nextRequestId;
       nextRequestId += 1;
-      // createJSONRPCRequest expects JSONRPCParams (object | array); cast is safe because
-      // our callers always pass arrays (command args) or objects (rpc.discover params)
       const rpcParams: Record<string, unknown> | unknown[] | undefined =
+        // createJSONRPCRequest expects JSONRPCParams (object | array); cast is safe because
+        // our callers always pass arrays (command args) or objects (rpc.discover params)
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         params as Record<string, unknown> | unknown[] | undefined;
       const request: JSONRPCRequest = createJSONRPCRequest(id, method, rpcParams);
