@@ -1165,7 +1165,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 localizedStrings['%versionHistoryCommit_afterInsertFootnote%'],
                 true,
               );
-              isInsertingFootnote.current = false;
             } else if (isInsertingCrossReference.current) {
               // Commits the changes including the inserted cross-reference to the version history
               await papi.commands.sendCommand(
@@ -1174,7 +1173,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 localizedStrings['%versionHistoryCommit_afterInsertCrossReference%'],
                 true,
               );
-              isInsertingCrossReference.current = false;
             } else {
               await papi.commands.sendCommand('paratextBibleSendReceive.commitDaily', projectId);
             }
@@ -1182,6 +1180,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             logger.error(
               `Error committing version history after saving USJ to PDP: ${getErrorMessage(err)}`,
             );
+          } finally {
+            // Resets the status refs for inserting a footnote or cross-reference
+            if (isInsertingFootnote.current) isInsertingFootnote.current = false;
+            if (isInsertingCrossReference.current) isInsertingCrossReference.current = false;
           }
         } else if (!saveResult && currentlyWritingUsjToPdp.current) {
           currentlyWritingUsjToPdp.current = false;
