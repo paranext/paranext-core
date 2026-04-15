@@ -135,8 +135,6 @@ describe('extractCssVariables', () => {
 // ─── parseCssThemes (unit) ───────────────────────────────────────────────────
 
 const MINIMAL_CSS = `
-/* #region theme definitions */
-
 :root {
   --background: oklch(1 0 0); /* white */
   --primary: oklch(0.2079 0.0399 265.73);
@@ -154,8 +152,6 @@ const MINIMAL_CSS = `
 .custom-dark {
   --background: oklch(0.2 0 0);
 }
-
-/* #endregion theme definitions */
 `;
 
 describe('parseCssThemes', () => {
@@ -209,33 +205,40 @@ describe('parseCssThemes', () => {
     expect(userKeys).toHaveLength(NUM_USER_THEME_FAMILIES);
   });
 
-  it('throws when the theme definitions region is absent', () => {
-    expect(() => parseCssThemes('body { color: red; }')).toThrow(
-      'Could not find "/* #region theme definitions */"',
-    );
+  it('returns an empty (user-only) result when no matching theme blocks are present', () => {
+    const result = parseCssThemes('body { color: red; }');
+    const nonUserKeys = Object.keys(result).filter((k) => !k.startsWith('user-'));
+    expect(nonUserKeys).toHaveLength(0);
   });
 
-  it('ignores CSS blocks outside the theme definitions region', () => {
-    const cssWithExtraBlocks = `
-.outside-block {
-  --background: oklch(0.5 0 0);
+  it('ignores non-theme class blocks even when they contain CSS variables', () => {
+    const css = `
+.some-component {
+  --component-size: 2rem;
 }
-
-/* #region theme definitions */
 
 :root {
   --background: oklch(1 0 0);
 }
+`;
+    const result = parseCssThemes(css);
+    // .some-component has no theme-type suffix, so only :root -> "" family should exist
+    expect(Object.keys(result).filter((k) => !k.startsWith('user-'))).toEqual(['']);
+  });
 
-/* #endregion theme definitions */
+  it('ignores @-rule blocks even when they contain CSS custom properties', () => {
+    const css = `
+@theme inline {
+  --color-background: var(--background);
+}
 
-.also-outside {
-  --background: oklch(0.3 0 0);
+:root {
+  --background: oklch(1 0 0);
 }
 `;
-    const result = parseCssThemes(cssWithExtraBlocks);
-    // Only :root -> "" family should exist (plus user placeholders)
+    const result = parseCssThemes(css);
     expect(Object.keys(result).filter((k) => !k.startsWith('user-'))).toEqual(['']);
+    expect(result[''].light.cssVariables['color-background']).toBeUndefined();
   });
 });
 
@@ -319,8 +322,8 @@ describe('parseCssThemes integration with actual index.css', () => {
   });
 
   it('extracts a known variable value from :root', () => {
-    // `:root` in index.css: --radius: 0.5rem;
-    expect(result[''].light.cssVariables.radius).toBe('0.5rem');
+    // `:root` in index.css: --radius: 0.625rem;
+    expect(result[''].light.cssVariables.radius).toBe('0.625rem');
   });
 
   it('does not include radius in the dark theme (it has no --radius override)', () => {

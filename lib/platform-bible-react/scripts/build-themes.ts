@@ -1,8 +1,9 @@
 /**
  * Build script that reads src/index.css and generates src/shared/data/themes.data.json.
  *
- * Parses the `#region theme definitions` section of index.css and converts CSS custom property
- * blocks into the ThemeContribution JSON format consumed by Platform.Bible.
+ * Parses all CSS rule blocks in index.css that match known theme selectors (`:root`, `.dark`,
+ * `.light`, `.{family}-{type}`) and contain CSS custom properties, converting them into the
+ * ThemeContribution JSON format consumed by Platform.Bible.
  *
  * Run via: npm run build:themes
  */
@@ -100,36 +101,32 @@ export function extractCssVariables(body: string): ThemeCssVariables {
 }
 
 /**
- * Parses the `#region theme definitions` section of a CSS file and returns a
- * {@link ThemeContribution}-shaped object.
+ * Parses CSS rule blocks from a CSS file and returns a {@link ThemeContribution}-shaped object.
  *
- * CSS rule blocks are mapped to theme families and types using {@link selectorToFamilyAndType}. User
- * placeholder families (user-0, user-1, ...) with empty `cssVariables` are appended automatically.
- *
- * @throws If the `#region theme definitions` comment is not found in `cssContent`
+ * Any `:root`, `.{type}`, or `.{family}-{type}` rule block containing CSS custom properties is
+ * treated as a theme definition and mapped using {@link selectorToFamilyAndType}. `@`-rule blocks
+ * (like `@theme`, `@layer`) are naturally excluded because their selectors never match `:root` or
+ * `.class-name`. User placeholder families (user-0, user-1, ...) with empty `cssVariables` are
+ * appended automatically.
  */
 export function parseCssThemes(cssContent: string): ThemeContribution {
-  const regionMatch = cssContent.match(
-    /\/\* #region theme definitions \*\/([\s\S]*?)\/\* #endregion theme definitions \*\//,
-  );
-
-  if (!regionMatch) {
-    throw new Error('Could not find "/* #region theme definitions */" in CSS content');
-  }
-
-  const regionContent = regionMatch[1];
   const result: ThemeContribution = {};
 
-  // Match :root { ... } or .class-name { ... } blocks (no nested braces expected in this region)
-  Array.from(regionContent.matchAll(/(:root|\.[\w-]+)\s*\{([^{}]*)\}/g)).forEach((match) => {
+  // Match :root { ... } or .class-name { ... } blocks (no nested braces).
+  // @-rule blocks are implicitly skipped: their outer selectors (e.g. "@theme inline",
+  // "@layer base") don't match :root or .class-name, and nested blocks inside @-rules that
+  // don't contain CSS custom properties are filtered out by the cssVariables length check below.
+  Array.from(cssContent.matchAll(/(:root|\.[\w-]+)\s*\{([^{}]*)\}/g)).forEach((match) => {
     const selector = match[1].trim();
     const body = match[2];
 
     const parsed = selectorToFamilyAndType(selector);
     if (!parsed) return;
 
-    const { familyId, themeType } = parsed;
     const cssVariables = extractCssVariables(body);
+    if (Object.keys(cssVariables).length === 0) return;
+
+    const { familyId, themeType } = parsed;
     const label = generateThemeLabel(familyId, themeType);
 
     if (!result[familyId]) result[familyId] = {};
