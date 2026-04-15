@@ -40,9 +40,27 @@ export default function CommentList({
   }, [externalSelectedThreadId]);
 
   // Filter out spelling notes and biblical terms notes, which are meant to be handled by their
-  // respective tools (word list and Biblical Terms), not the Comments List.
+  // respective tools (Wordlist and Biblical Terms), not the Comments List.
   // Displaying these note types in their respective tools is a future improvement.
-  const activeThreads = threads.filter(
+  // Merge duplicate thread IDs — the source data may contain duplicates (inherited data quality
+  // issue). When duplicates exist, combine all their comments into the entry with the latest
+  // modifiedDate so no comments are lost.
+  const threadMap = new Map<string, (typeof threads)[0]>();
+  threads.forEach((thread) => {
+    const existing = threadMap.get(thread.id);
+    if (!existing) {
+      threadMap.set(thread.id, thread);
+    } else {
+      const seenCommentIds = new Set(existing.comments.map((c) => c.id));
+      const mergedComments = [
+        ...existing.comments,
+        ...thread.comments.filter((c) => !seenCommentIds.has(c.id)),
+      ];
+      const latest = thread.modifiedDate > existing.modifiedDate ? thread : existing;
+      threadMap.set(thread.id, { ...latest, comments: mergedComments });
+    }
+  });
+  const activeThreads = [...threadMap.values()].filter(
     (thread) =>
       !thread.isSpellingNote &&
       !thread.isBTNote &&
