@@ -44,13 +44,14 @@ function removeLightSelector(css: string): string {
   const lines = css.split('\n');
   const result: string[] = [];
   for (let i = 0; i < lines.length; i++) {
+    // Look ahead: skip .light, if the next content line is :root
+    let skipLine = false;
     if (lines[i].trim() === '.light,') {
-      // Look ahead: skip blank lines, check whether the next content line is :root
       let next = i + 1;
-      while (next < lines.length && lines[next].trim() === '') next++;
-      if (next < lines.length && /^\s*:root\b/.test(lines[next])) continue; // skip this line
+      while (next < lines.length && lines[next].trim() === '') next += 1;
+      skipLine = next < lines.length && /^\s*:root\b/.test(lines[next]);
     }
-    result.push(lines[i]);
+    if (!skipLine) result.push(lines[i]);
   }
   return result.join('\n');
 }
@@ -101,18 +102,13 @@ function parseRulesInLayerContent(content: string): ParsedRule[] {
     const fullStart = i;
 
     // Skip whitespace and block comments
-    for (;;) {
-      if (i >= content.length) break;
+    while (i < content.length && (/\s/.test(content[i]) || content.startsWith('/*', i))) {
       if (/\s/.test(content[i])) {
-        i++;
-        continue;
-      }
-      if (content.startsWith('/*', i)) {
+        i += 1;
+      } else {
         const end = content.indexOf('*/', i);
         i = end === -1 ? content.length : end + 2;
-        continue;
       }
-      break;
     }
 
     if (i >= content.length) break;
@@ -129,9 +125,9 @@ function parseRulesInLayerContent(content: string): ParsedRule[] {
     const bodyStart = i;
     let depth = 1;
     while (i < content.length && depth > 0) {
-      if (content[i] === '{') depth++;
-      else if (content[i] === '}') depth--;
-      i++;
+      if (content[i] === '{') depth += 1;
+      else if (content[i] === '}') depth -= 1;
+      i += 1;
     }
     const body = content.slice(bodyStart, i - 1);
 
@@ -212,9 +208,9 @@ function processLayerBase(css: string): string {
   let depth = 0;
   let layerEnd = -1;
   for (let i = openBrace; i < css.length; i++) {
-    if (css[i] === '{') depth++;
+    if (css[i] === '{') depth += 1;
     else if (css[i] === '}') {
-      depth--;
+      depth -= 1;
       if (depth === 0) {
         layerEnd = i;
         break;
@@ -384,14 +380,19 @@ function main(): void {
   // Commit message used in both paths so the user can reproduce it manually if needed
   const commitMessage = `Apply shadcn preset via \`npx shadcn apply --preset ${preset}\` to re-add shadcn components from latest version as a new baseline`;
 
+  const upgradeReminder =
+    'This script is meant to be run during /upgrade-shadcn.\n' +
+    'If this was not run during /upgrade-shadcn, make sure to follow /upgrade-shadcn carefully!';
+
   // Report problems and bail, giving the user the commit command to run after fixing
   if (problems.length > 0) {
     process.stderr.write('\n--- Problems encountered ---\n');
-    for (const p of problems) process.stderr.write(`  • ${p}\n`);
+    problems.forEach((p) => process.stderr.write(`  • ${p}\n`));
     process.stderr.write('\nFix the problems above, then commit with:\n');
     process.stderr.write(
       `  git add lib/platform-bible-react && git commit -m '${commitMessage}'\n`,
     );
+    console.log(`\n${upgradeReminder}`);
     process.exit(1);
   }
 
@@ -405,13 +406,11 @@ function main(): void {
         'Manually commit with:\n' +
         `  git add lib/platform-bible-react && git commit -m '${commitMessage}'\n`,
     );
+    console.log(`\n${upgradeReminder}`);
     process.exit(1);
   }
 
-  console.log(
-    '\nDone! Preset applied and committed successfully. This script is meant to be run during /upgrade-shadcn.' +
-      '\nIf this was not run during /upgrade-shadcn, make sure to follow /upgrade-shadcn carefully!',
-  );
+  console.log(`\nDone! Preset applied and committed successfully.\n${upgradeReminder}`);
 }
 
 main();

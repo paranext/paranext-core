@@ -1,6 +1,6 @@
 /**
- * Finds the most recently applied shadcn preset by searching git history for a commit whose
- * message contains `npx shadcn apply --preset <preset>`, then prints the preset code.
+ * Finds the most recently applied shadcn preset by searching git history for a commit whose message
+ * contains `npx shadcn apply --preset <preset>`, then prints the preset code.
  *
  * Run via: npm run get-latest-preset
  */
@@ -20,9 +20,7 @@ if (!commitBody.trim()) {
 
 const match = commitBody.match(/npx shadcn apply --preset\s+(\S+)/);
 if (!match) {
-  process.stderr.write(
-    `Could not extract preset from commit message:\n${commitBody}\n`,
-  );
+  process.stderr.write(`Could not extract preset from commit message:\n${commitBody}\n`);
   process.exit(1);
 }
 
