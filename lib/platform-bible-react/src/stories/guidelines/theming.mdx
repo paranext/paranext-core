@@ -101,6 +101,20 @@ Manual colors on primitives do not follow the active theme.
   </tbody>
 </table>
 
+```jsx
+<input
+  value="this has manual colors"
+  aria-label="Bad example input with manual colors"
+  readOnly
+  className="tw-full tw-file:border-0 tw-col-span-2 tw-flex tw-h-8 tw-rounded-md tw-border
+    tw-border-slate-300 tw-bg-white tw-px-3 tw-py-2 tw-text-sm tw-text-slate-900
+    tw-ring-offset-white file:tw-bg-transparent file:tw-text-sm file:tw-font-medium
+    placeholder:tw-text-slate-400 focus-visible:tw-outline-none focus-visible:tw-ring-2
+    focus-visible:tw-ring-slate-400 focus-visible:tw-ring-offset-2
+    disabled:tw-cursor-not-allowed disabled:tw-opacity-50"
+/>
+```
+
 ## Overwriting styles
 
 Try not to overwrite styles (colors). When you need to, use Tailwind classes that apply the same
