@@ -119,6 +119,10 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
     .map((item) => item[1].description)
     .filter((item) => !!item),
   '%paragraphMenu_misc_markerDescription%',
+  '%versionHistoryCommit_beforeInsertFootnote%',
+  '%versionHistoryCommit_afterInsertFootnote%',
+  '%versionHistoryCommit_beforeInsertCrossReference%',
+  '%versionHistoryCommit_afterInsertCrossReference%',
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_error_permissions_format%',
@@ -680,11 +684,71 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'insertFootnoteAtSelection': {
+          // Commits a snapshot of the project to the version history
+          try {
+            if (projectId)
+              await papi.commands.sendCommand(
+                'paratextBibleSendReceive.commitChanges',
+                projectId,
+                localizedStrings['%versionHistoryCommit_beforeInsertFootnote%'],
+                true,
+              );
+          } catch (err: unknown) {
+            logger.error(
+              `Error committing changes to version history before inserting footnote: ${getErrorMessage(err)}`,
+            );
+          }
+
           editorRef.current?.insertMarker('f');
+
+          // Commits the changes including the inserted footnote to the version history
+          try {
+            if (projectId)
+              await papi.commands.sendCommand(
+                'paratextBibleSendReceive.commitChanges',
+                projectId,
+                localizedStrings['%versionHistoryCommit_afterInsertFootnote%'],
+                true,
+              );
+          } catch (err: unknown) {
+            logger.error(
+              `Error committing changes to version history after inserting footnote: ${getErrorMessage(err)}`,
+            );
+          }
           break;
         }
         case 'insertCrossReferenceAtSelection': {
+          // Commits a snapshot of the project to the version history
+          try {
+            if (projectId)
+              await papi.commands.sendCommand(
+                'paratextBibleSendReceive.commitChanges',
+                projectId,
+                localizedStrings['%versionHistoryCommit_beforeInsertCrossReference%'],
+                true,
+              );
+          } catch (err: unknown) {
+            logger.error(
+              `Error committing changes to version history before inserting cross-reference: ${getErrorMessage(err)}`,
+            );
+          }
+
           editorRef.current?.insertMarker('x');
+
+          // Commits the changes including the inserted cross-reference to the version history
+          try {
+            if (projectId)
+              await papi.commands.sendCommand(
+                'paratextBibleSendReceive.commitChanges',
+                projectId,
+                localizedStrings['%versionHistoryCommit_afterInsertCrossReference%'],
+                true,
+              );
+          } catch (err: unknown) {
+            logger.error(
+              `Error committing changes to version history after inserting cross-reference: ${getErrorMessage(err)}`,
+            );
+          }
           break;
         }
         case 'insertCommentAtSelection': {
@@ -1118,6 +1182,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           let editorUsj = editorRef.current?.getUsj();
           if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
           if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
+        }
+
+        // Prompts the PDP to commit changes to the version history once a day
+        try {
+          if (projectId)
+            await papi.commands.sendCommand('paratextBibleSendReceive.commitDaily', projectId);
+        } catch (err: unknown) {
+          logger.error(
+            `Error committing version history after saving USJ to PDP: ${getErrorMessage(err)}`,
+          );
         }
       } catch (e) {
         const errorMessage = getErrorMessage(e);
