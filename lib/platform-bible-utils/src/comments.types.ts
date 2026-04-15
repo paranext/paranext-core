@@ -115,7 +115,7 @@ export type LegacyCommentThread = {
   contextScrTextName?: string;
   /** Whether this is a spelling note */
   isSpellingNote: boolean;
-  /** Whether this is a back translation note */
+  /** Whether this is a biblical terms note */
   isBTNote: boolean;
   /** Whether this is a consultant note */
   isConsultantNote: boolean;

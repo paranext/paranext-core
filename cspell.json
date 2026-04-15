@@ -110,7 +110,8 @@
     "verseref",
     "versification",
     "vref",
-    "vsthrd"
+    "vsthrd",
+    "Wordlist"
   ],
   "ignoreWords": [],
   "import": []
