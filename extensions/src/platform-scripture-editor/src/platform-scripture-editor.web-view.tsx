@@ -725,7 +725,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
           editorRef.current?.insertMarker('x');
           // Updates ref to indicate that the next PDP save is for inserting a cross-reference
-          isInsertingCrossReference.current = false;
+          isInsertingCrossReference.current = true;
           break;
         }
         case 'insertCommentAtSelection': {
