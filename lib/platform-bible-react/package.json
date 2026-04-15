@@ -40,6 +40,8 @@
   "files": ["dist", "src/localizedStrings.json", "src/localizedStrings.json.d.ts"],
   "scripts": {
     "start": "npm run storybook",
+    "apply-shadcn-preset-destructive": "tsx scripts/apply-shadcn-preset.ts",
+    "get-latest-preset": "tsx scripts/get-latest-preset.ts",
     "build:themes": "tsx scripts/build-themes.ts",
     "build:basic": "npm run build:themes && tsc && cross-env NODE_ENV=production vite build && dts-bundle-generator --config ./dts-bundle-generator.config.cts",
     "build:docs": "typedoc",
