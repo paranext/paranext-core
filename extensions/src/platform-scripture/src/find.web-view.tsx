@@ -944,7 +944,7 @@ global.webViewComponent = function FindWebView({
             );
         } catch (err: unknown) {
           logger.error(
-            `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
+            `Error committing changes to version history after replacing: ${getErrorMessage(err)}`,
           );
         }
 
@@ -1066,7 +1066,7 @@ global.webViewComponent = function FindWebView({
           await papi.commands.sendCommand(
             'paratextBibleSendReceive.commitChanges',
             projectId,
-            `${localizedStrings['%versionHistoryCommit_beforeReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern> `,
+            `${localizedStrings['%versionHistoryCommit_beforeReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
             true,
           );
       } catch (err: unknown) {
@@ -1118,7 +1118,7 @@ global.webViewComponent = function FindWebView({
           );
       } catch (err: unknown) {
         logger.error(
-          `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
+          `Error committing changes to version history after replacing: ${getErrorMessage(err)}`,
         );
       }
 

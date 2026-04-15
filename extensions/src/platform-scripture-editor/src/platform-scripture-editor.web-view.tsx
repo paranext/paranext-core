@@ -1175,7 +1175,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       currentlyWritingUsjToPdp.current = true;
       usjSentToPdp.current = newUsj;
       try {
-        if (!(await saveUsjToPdpRawStableRef.current(newUsj)) && currentlyWritingUsjToPdp.current) {
+        const saveResult = await saveUsjToPdpRawStableRef.current(newUsj);
+
+        // Prompts the PDP to commit changes to the version history once a day if the save was successfully
+        if (saveResult) {
+          try {
+            if (projectId)
+              await papi.commands.sendCommand('paratextBibleSendReceive.commitDaily', projectId);
+          } catch (err: unknown) {
+            logger.error(
+              `Error committing version history after saving USJ to PDP: ${getErrorMessage(err)}`,
+            );
+          }
+        } else if (
+          !(await saveUsjToPdpRawStableRef.current(newUsj)) &&
+          currentlyWritingUsjToPdp.current
+        ) {
           currentlyWritingUsjToPdp.current = false;
 
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
@@ -1184,16 +1199,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           let editorUsj = editorRef.current?.getUsj();
           if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
           if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
-        }
-
-        // Prompts the PDP to commit changes to the version history once a day
-        try {
-          if (projectId)
-            await papi.commands.sendCommand('paratextBibleSendReceive.commitDaily', projectId);
-        } catch (err: unknown) {
-          logger.error(
-            `Error committing version history after saving USJ to PDP: ${getErrorMessage(err)}`,
-          );
         }
       } catch (e) {
         const errorMessage = getErrorMessage(e);
