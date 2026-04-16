@@ -44,6 +44,24 @@ namespace TestParanextDataProvider.EnhancedResources;
 [ExcludeFromCodeCoverage]
 internal class SourceLanguageSearchServiceTests
 {
+    #region Test Setup
+
+    [SetUp]
+    public void SetUp()
+    {
+        // Ensure marble data is available for most tests (built-in lexicon data)
+        SourceLanguageSearchService.SetHaveMarbleData(true);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        // Reset service state after each test
+        SourceLanguageSearchService.ResetForTesting();
+    }
+
+    #endregion
+
     #region Test Data Constants
 
     private const string TestResourceId = "SDBG";
@@ -927,6 +945,7 @@ internal class SourceLanguageSearchServiceTests
     public void ExecuteSearch_NoMarbleData_ThrowsFailedPrecondition()
     {
         // Arrange: search when no marble data is installed
+        SourceLanguageSearchService.SetHaveMarbleData(false);
         var input = CreateInput("logos");
 
         // Act & Assert: should throw with FAILED_PRECONDITION error code
