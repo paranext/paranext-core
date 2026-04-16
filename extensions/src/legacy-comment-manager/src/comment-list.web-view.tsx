@@ -429,7 +429,9 @@ global.webViewComponent = function CommentListWebView({
 
       {/* Comments list */}
       <div className="tw-flex-1 tw-overflow-auto">
-        {!commentThreads || isPlatformError(commentThreads) || commentThreads.length === 0 ? (
+        {!commentThreads ||
+        isPlatformError(commentThreads) ||
+        commentThreads.filter((t) => !t.isSpellingNote && !t.isBTNote).length === 0 ? (
           <div className="tw-m-4 tw-flex tw-justify-center">
             <Label>
               {commentFilter === UNFILTERED && scopeFilter === UNFILTERED

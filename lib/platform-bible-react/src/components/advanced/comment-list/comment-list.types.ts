@@ -115,11 +115,6 @@ export interface CommentListProps {
   canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
   /** Callback when the user clicks a verse reference in a comment thread. */
   onVerseRefClick?: (thread: LegacyCommentThread) => void;
-  /**
-   * Message to display when no threads remain after filtering. If not provided, the component
-   * renders nothing when empty.
-   */
-  emptyStateMessage?: string;
 }
 
 /** Props for the CommentThread component */

@@ -1,5 +1,4 @@
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
-import { Label } from '@/components/shadcn-ui/label';
 import { cn } from '@/utils/shadcn-ui.util';
 import React, { RefObject, useCallback, useEffect, useMemo, useState } from 'react';
 import { LegacyCommentThread } from 'platform-bible-utils';
@@ -29,7 +28,6 @@ export default function CommentList({
   selectedThreadId: externalSelectedThreadId,
   onSelectedThreadChange,
   onVerseRefClick,
-  emptyStateMessage,
 }: CommentListProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const [lastInteractedThreadId, setLastInteractedThreadId] = useState<string | undefined>();
@@ -130,14 +128,6 @@ export default function CommentList({
     },
     [lastInteractedThreadId, expandedThreadIds, handleKeyDown, onSelectedThreadChange],
   );
-
-  if (activeThreads.length === 0 && emptyStateMessage) {
-    return (
-      <div className="tw-m-4 tw-flex tw-justify-center">
-        <Label>{emptyStateMessage}</Label>
-      </div>
-    );
-  }
 
   return (
     <div
