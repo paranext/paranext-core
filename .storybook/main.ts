@@ -121,7 +121,12 @@ const config: StorybookConfig = {
           }
           return u;
         });
-        newUse.splice(cssIdx + 1, 0, 'postcss-loader');
+        newUse.splice(cssIdx + 1, 0, {
+          loader: 'postcss-loader',
+          options: {
+            postcssOptions: { config: join(__dirname, 'postcss.config.ts') },
+          },
+        });
         return { ...rule, use: newUse };
       });
     }
