@@ -2,6 +2,7 @@ import { PlatformDockLayout } from '@renderer/components/docking/platform-dock-l
 import { TestContext } from '@renderer/context/papi-context/test.context';
 import { Route, MemoryRouter as Router, Routes } from 'react-router-dom';
 import './app.component.scss';
+import './styles/tailwind.css';
 import { NotificationDisplay } from './components/notification-display';
 import { OverlayHost } from './components/overlay-host.component';
 import { PlatformBibleToolbar } from './components/platform-bible-toolbar';

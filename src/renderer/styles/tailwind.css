@@ -1,0 +1,6 @@
+/* Core's Tailwind entry for the paranext-core Electron app build.
+ * Utilities-only — preflight (base) is intentionally omitted.
+ * Preflight continues to come from platform-bible-react's runtime-injected CSS, scoped under
+ * .pr-twp. See docs/tailwind.md for the overall Tailwind architecture. */
+@tailwind components;
+@tailwind utilities;
