@@ -116,8 +116,8 @@ function HoverableSubmenu({
   onSelect: (result: OverlayContextMenuResult) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const openTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const scheduleOpen = useCallback(() => {
     clearTimeout(closeTimerRef.current);
