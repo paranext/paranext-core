@@ -2,22 +2,14 @@ import React from 'react';
 
 import { cn } from '@/utils/shadcn-ui/utils';
 
-/**
- * Displays a form textarea or a component that looks like a textarea. This component is from Shadcn
- * UI. See Shadcn UI documentation: https://ui.shadcn.com/docs/components/textarea
- */
-function Textarea({
-  className,
-  ref,
-  ...props
-}: React.ComponentProps<'textarea'> & { ref?: React.Ref<HTMLTextAreaElement> }) {
+function Textarea({ className, ...props }: React.ComponentProps<'textarea'>) {
   return (
     <textarea
+      data-slot="textarea"
       className={cn(
-        'pr-twp tw:flex tw:min-h-[80px] tw:w-full tw:rounded-md tw:border tw:border-input tw:bg-background tw:px-3 tw:py-2 tw:text-base tw:ring-offset-background tw:placeholder:text-muted-foreground tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50 tw:md:text-sm',
+        'tw:flex tw:field-sizing-content tw:min-h-16 tw:w-full tw:rounded-lg tw:border tw:border-input tw:bg-transparent tw:px-2.5 tw:py-2 tw:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:disabled:cursor-not-allowed tw:disabled:bg-input/50 tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:md:text-sm tw:dark:bg-input/30 tw:dark:disabled:bg-input/80 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40',
         className,
       )}
-      ref={ref}
       {...props}
     />
   );

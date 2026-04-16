@@ -1,30 +1,22 @@
 import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { Slot } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
 
-/**
- * Style variants for the Badge component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
- */
 const badgeVariants = cva(
-  'pr-twp tw:inline-flex tw:items-center tw:rounded-full tw:px-2.5 tw:py-0.5 tw:text-xs tw:font-semibold tw:transition-colors tw:focus:outline-hidden tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-2',
+  'tw:group/badge tw:inline-flex tw:h-5 tw:w-fit tw:shrink-0 tw:items-center tw:justify-center tw:gap-1 tw:overflow-hidden tw:rounded-4xl tw:border tw:border-transparent tw:px-2 tw:py-0.5 tw:text-xs tw:font-medium tw:whitespace-nowrap tw:transition-all tw:focus-visible:border-ring tw:focus-visible:ring-[3px] tw:focus-visible:ring-ring/50 tw:has-data-[icon=inline-end]:pe-1.5 tw:has-data-[icon=inline-start]:ps-1.5 tw:aria-invalid:border-destructive tw:aria-invalid:ring-destructive/20 tw:dark:aria-invalid:ring-destructive/40 tw:[&>svg]:pointer-events-none tw:[&>svg]:size-3!',
   {
     variants: {
       variant: {
-        default:
-          'tw:border tw:border-transparent tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/80',
-        secondary:
-          'tw:border tw:border-transparent tw:bg-secondary tw:text-secondary-foreground tw:hover:bg-secondary/80',
-        muted:
-          'tw:border tw:border-transparent tw:bg-muted tw:text-muted-foreground tw:hover:bg-muted/80',
+        default: 'tw:bg-primary tw:text-primary-foreground tw:[a]:hover:bg-primary/80',
+        secondary: 'tw:bg-secondary tw:text-secondary-foreground tw:[a]:hover:bg-secondary/80',
         destructive:
-          'tw:border tw:border-transparent tw:bg-destructive tw:text-destructive-foreground tw:hover:bg-destructive/80',
-        outline: 'tw:border tw:text-foreground',
-        blueIndicator: 'tw:w-[5px] tw:h-[5px] tw:bg-blue-400 tw:px-0',
-        mutedIndicator: 'tw:w-[5px] tw:h-[5px] tw:bg-zinc-400 tw:px-0',
-        ghost: 'tw:hover:bg-accent tw:hover:text-accent-foreground tw:text-mu',
+          'tw:bg-destructive/10 tw:text-destructive tw:focus-visible:ring-destructive/20 tw:dark:bg-destructive/20 tw:dark:focus-visible:ring-destructive/40 tw:[a]:hover:bg-destructive/20',
+        outline:
+          'tw:border-border tw:text-foreground tw:[a]:hover:bg-muted tw:[a]:hover:text-muted-foreground',
+        ghost: 'tw:hover:bg-muted tw:hover:text-muted-foreground tw:dark:hover:bg-muted/50',
+        link: 'tw:text-primary tw:underline-offset-4 tw:hover:underline',
       },
     },
     defaultVariants: {
@@ -33,30 +25,21 @@ const badgeVariants = cva(
   },
 );
 
-/**
- * Props for the Badge component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
- */
-export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {}
-
-/**
- * The Badge component displays a badge or a component that looks like a badge. The component is
- * built and styled by Shadcn UI.
- *
- * @param BadgeProps
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
- */
 function Badge({
   className,
-  variant,
-  ref,
+  variant = 'default',
+  asChild = false,
   ...props
-}: BadgeProps & { ref?: React.Ref<HTMLDivElement> }) {
+}: React.ComponentProps<'span'> & VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
+  const Comp = asChild ? Slot.Root : 'span';
+
   return (
-    <div ref={ref} className={cn('pr-twp', badgeVariants({ variant }), className)} {...props} />
+    <Comp
+      data-slot="badge"
+      data-variant={variant}
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+    />
   );
 }
 

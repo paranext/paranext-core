@@ -1,29 +1,25 @@
+'use client';
+
 import React from 'react';
-import { type DialogProps } from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive } from 'cmdk';
-import { Search } from 'lucide-react';
 
 import { cn } from '@/utils/shadcn-ui/utils';
-import { Dialog, DialogContent } from '@/components/shadcn-ui/dialog';
-import { Direction, readDirection } from '@/utils/dir-helper.util';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/shadcn-ui/dialog';
+import { InputGroup, InputGroupAddon } from '@/components/shadcn-ui/input-group';
+import { IconSearch, IconCheck } from '@tabler/icons-react';
 
-/**
- * Command menu for React. These components are built on cmdk and styled with Shadcn UI. See Shadcn
- * UI documentation: https://ui.shadcn.com/docs/components/command See cmdk documentation:
- * https://cmdk.paco.me/
- */
-function Command({
-  className,
-  ref,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof CommandPrimitive> & {
-  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive>>;
-}) {
+function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
     <CommandPrimitive
-      ref={ref}
+      data-slot="command"
       className={cn(
-        'tw:flex tw:h-full tw:w-full tw:flex-col tw:overflow-hidden tw:rounded-md tw:bg-popover tw:text-popover-foreground',
+        'tw:flex tw:size-full tw:flex-col tw:overflow-hidden tw:rounded-xl! tw:bg-popover tw:p-1 tw:text-popover-foreground',
         className,
       )}
       {...props}
@@ -31,87 +27,67 @@ function Command({
   );
 }
 
-interface CommandDialogProps extends DialogProps {}
-
-/** @inheritdoc Command */
-function CommandDialog({ children, ...props }: CommandDialogProps) {
+function CommandDialog({
+  title = 'Command Palette',
+  description = 'Search for a command to run...',
+  children,
+  className,
+  showCloseButton = false,
+  ...props
+}: React.ComponentProps<typeof Dialog> & {
+  title?: string;
+  description?: string;
+  className?: string;
+  showCloseButton?: boolean;
+}) {
   return (
     <Dialog {...props}>
-      <DialogContent className="tw:overflow-hidden tw:p-0 tw:shadow-lg">
-        <Command className="tw:[&_[cmdk-group-heading]]:px-2 tw:[&_[cmdk-group-heading]]:font-medium tw:[&_[cmdk-group-heading]]:text-muted-foreground tw:[&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 tw:[&_[cmdk-group]]:px-2 tw:[&_[cmdk-input-wrapper]_svg]:h-5 tw:[&_[cmdk-input-wrapper]_svg]:w-5 tw:[&_[cmdk-input]]:h-12 tw:[&_[cmdk-item]]:px-2 tw:[&_[cmdk-item]]:py-3 tw:[&_[cmdk-item]_svg]:h-5 tw:[&_[cmdk-item]_svg]:w-5">
-          {children}
-        </Command>
+      <DialogHeader className="tw:sr-only">
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>{description}</DialogDescription>
+      </DialogHeader>
+      <DialogContent
+        className={cn(
+          'tw:top-1/3 tw:translate-y-0 tw:overflow-hidden tw:rounded-xl! tw:p-0',
+          className,
+        )}
+        showCloseButton={showCloseButton}
+      >
+        {children}
       </DialogContent>
     </Dialog>
   );
 }
 
-/** @inheritdoc Command */
 function CommandInput({
   className,
-  ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & {
-  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Input>>;
-}) {
-  const dir: Direction = readDirection();
+}: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
-    <div className="tw:flex tw:items-center tw:border-b tw:px-3" dir={dir}>
-      <Search className="tw:me-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />
-      <CommandPrimitive.Input
-        ref={ref}
-        className={cn(
-          'tw:flex tw:h-11 tw:w-full tw:rounded-md tw:bg-transparent tw:py-3 tw:text-sm tw:outline-hidden tw:placeholder:text-muted-foreground tw:disabled:cursor-not-allowed tw:disabled:opacity-50',
-          className,
-        )}
-        {...props}
-      />
+    <div data-slot="command-input-wrapper" className="tw:p-1 tw:pb-0">
+      <InputGroup className="tw:h-8! tw:rounded-lg! tw:border-input/30 tw:bg-input/30 tw:shadow-none! tw:*:data-[slot=input-group-addon]:ps-2!">
+        <CommandPrimitive.Input
+          data-slot="command-input"
+          className={cn(
+            'tw:w-full tw:text-sm tw:outline-hidden tw:disabled:cursor-not-allowed tw:disabled:opacity-50',
+            className,
+          )}
+          {...props}
+        />
+        <InputGroupAddon>
+          <IconSearch className="tw:size-4 tw:shrink-0 tw:opacity-50" />
+        </InputGroupAddon>
+      </InputGroup>
     </div>
   );
 }
 
-/** @inheritdoc Command */
-function CommandList({
-  className,
-  ref,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.List> & {
-  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.List>>;
-}) {
+function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
   return (
     <CommandPrimitive.List
-      ref={ref}
-      className={cn('tw:max-h-[300px] tw:overflow-y-auto tw:overflow-x-hidden', className)}
-      {...props}
-    />
-  );
-}
-
-/** @inheritdoc Command */
-function CommandEmpty({
-  ref,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty> & {
-  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Empty>>;
-}) {
-  return (
-    <CommandPrimitive.Empty ref={ref} className="tw:py-6 tw:text-center tw:text-sm" {...props} />
-  );
-}
-
-/** @inheritdoc Command */
-function CommandGroup({
-  className,
-  ref,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Group> & {
-  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Group>>;
-}) {
-  return (
-    <CommandPrimitive.Group
-      ref={ref}
+      data-slot="command-list"
       className={cn(
-        'tw:overflow-hidden tw:p-1 tw:text-foreground tw:[&_[cmdk-group-heading]]:px-2 tw:[&_[cmdk-group-heading]]:py-1.5 tw:[&_[cmdk-group-heading]]:text-xs tw:[&_[cmdk-group-heading]]:font-medium tw:[&_[cmdk-group-heading]]:text-muted-foreground',
+        'tw:no-scrollbar tw:max-h-72 tw:scroll-py-1 tw:overflow-x-hidden tw:overflow-y-auto tw:outline-none',
         className,
       )}
       {...props}
@@ -119,48 +95,76 @@ function CommandGroup({
   );
 }
 
-/** @inheritdoc Command */
+function CommandEmpty({
+  className,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Empty>) {
+  return (
+    <CommandPrimitive.Empty
+      data-slot="command-empty"
+      className={cn('tw:py-6 tw:text-center tw:text-sm', className)}
+      {...props}
+    />
+  );
+}
+
+function CommandGroup({
+  className,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Group>) {
+  return (
+    <CommandPrimitive.Group
+      data-slot="command-group"
+      className={cn(
+        'tw:overflow-hidden tw:p-1 tw:text-foreground tw:**:[[cmdk-group-heading]]:px-2 tw:**:[[cmdk-group-heading]]:py-1.5 tw:**:[[cmdk-group-heading]]:text-xs tw:**:[[cmdk-group-heading]]:font-medium tw:**:[[cmdk-group-heading]]:text-muted-foreground',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 function CommandSeparator({
   className,
-  ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator> & {
-  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Separator>>;
-}) {
+}: React.ComponentProps<typeof CommandPrimitive.Separator>) {
   return (
     <CommandPrimitive.Separator
-      ref={ref}
+      data-slot="command-separator"
       className={cn('tw:-mx-1 tw:h-px tw:bg-border', className)}
       {...props}
     />
   );
 }
 
-/** @inheritdoc Command */
 function CommandItem({
   className,
-  ref,
+  children,
   ...props
-}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item> & {
-  ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive.Item>>;
-}) {
+}: React.ComponentProps<typeof CommandPrimitive.Item>) {
   return (
     <CommandPrimitive.Item
-      ref={ref}
+      data-slot="command-item"
       className={cn(
-        'tw:relative tw:flex tw:cursor-default tw:select-none tw:items-center tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-hidden tw:data-[disabled=true]:pointer-events-none tw:data-[selected=true]:bg-accent tw:data-[selected=true]:text-accent-foreground tw:data-[disabled=true]:opacity-50',
+        'tw:group/command-item tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-hidden tw:select-none tw:in-data-[slot=dialog-content]:rounded-lg! tw:data-[disabled=true]:pointer-events-none tw:data-[disabled=true]:opacity-50 tw:data-selected:bg-muted tw:data-selected:text-foreground tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4 tw:data-selected:*:[svg]:text-foreground',
         className,
       )}
       {...props}
-    />
+    >
+      {children}
+      <IconCheck className="tw:ms-auto tw:opacity-0 tw:group-has-data-[slot=command-shortcut]/command-item:hidden tw:group-data-[checked=true]/command-item:opacity-100" />
+    </CommandPrimitive.Item>
   );
 }
 
-/** @inheritdoc Command */
-function CommandShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
+function CommandShortcut({ className, ...props }: React.ComponentProps<'span'>) {
   return (
     <span
-      className={cn('tw:ms-auto tw:text-xs tw:tracking-widest tw:text-muted-foreground', className)}
+      data-slot="command-shortcut"
+      className={cn(
+        'tw:ms-auto tw:text-xs tw:tracking-widest tw:text-muted-foreground tw:group-data-selected/command-item:text-foreground',
+        className,
+      )}
       {...props}
     />
   );
