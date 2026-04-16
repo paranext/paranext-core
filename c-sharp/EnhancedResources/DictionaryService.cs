@@ -1,5 +1,3 @@
-using SIL.Scripture;
-
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
@@ -20,15 +18,7 @@ internal static class DictionaryService
     private static readonly Dictionary<
         string,
         (List<string> Glosses, List<string> Domains)
-    > s_lexicon =
-        new()
-        {
-            ["logos"] = (["word", "message"], ["Communication"]),
-            ["rhema"] = (["word"], ["Communication"]),
-            ["aggelia"] = (["message"], ["Communication"]),
-            ["graphe"] = (["scripture"], ["Sacred Texts"]),
-            ["kai"] = (["and"], []),
-        };
+    > s_lexicon = BuildDefaultLexicon();
 
     // Known resource IDs for test scaffolding
     private static readonly HashSet<string> s_knownResources =
@@ -226,11 +216,10 @@ internal static class DictionaryService
     internal static void ResetTestLexicon()
     {
         s_lexicon.Clear();
-        s_lexicon["logos"] = (["word", "message"], ["Communication"]);
-        s_lexicon["rhema"] = (["word"], ["Communication"]);
-        s_lexicon["aggelia"] = (["message"], ["Communication"]);
-        s_lexicon["graphe"] = (["scripture"], ["Sacred Texts"]);
-        s_lexicon["kai"] = (["and"], []);
+        foreach (var (lemma, entry) in BuildDefaultLexicon())
+        {
+            s_lexicon[lemma] = entry;
+        }
     }
 
     private static List<DictionaryDisplayItem> GetItemsForScope(
@@ -249,35 +238,27 @@ internal static class DictionaryService
     }
 
     // BHV-353: Deduplicate items by TokenId, aggregate occurrence counts
-    private static List<DictionaryDisplayItem> DeduplicateItems(List<DictionaryDisplayItem> items)
-    {
-        var grouped = items.GroupBy(i => i.TokenId);
-        var deduplicated = new List<DictionaryDisplayItem>();
-
-        foreach (var group in grouped)
-        {
-            var first = group.First();
-            int totalOccurrences = group.Sum(i => i.OccurrenceCount);
-            deduplicated.Add(first with { OccurrenceCount = totalOccurrences });
-        }
-
-        return deduplicated;
-    }
+    private static List<DictionaryDisplayItem> DeduplicateItems(
+        List<DictionaryDisplayItem> items
+    ) =>
+        items
+            .GroupBy(i => i.TokenId)
+            .Select(g => g.First() with { OccurrenceCount = g.Sum(i => i.OccurrenceCount) })
+            .ToList();
 
     // BHV-110: Populate related lexemes for each display item
     private static List<DictionaryDisplayItem> PopulateRelatedLexemes(
         List<DictionaryDisplayItem> items,
         string glossLanguage
-    )
-    {
-        var result = new List<DictionaryDisplayItem>();
-        foreach (var item in items)
-        {
-            var related = FindRelatedLexemes(item.Term, glossLanguage);
-            result.Add(item with { RelatedLexemes = related });
-        }
-        return result;
-    }
+    ) =>
+        items
+            .Select(item =>
+                item with
+                {
+                    RelatedLexemes = FindRelatedLexemes(item.Term, glossLanguage),
+                }
+            )
+            .ToList();
 
     // BHV-352: Generate empty state message based on input context
     private static string GetEmptyStateMessage(DictionaryLoadInput input)
@@ -332,6 +313,22 @@ internal static class DictionaryService
                 OccurrenceCount: 1
             ),
         ];
+    }
+
+    // Single source of truth for default lexicon entries
+    private static Dictionary<
+        string,
+        (List<string> Glosses, List<string> Domains)
+    > BuildDefaultLexicon()
+    {
+        return new()
+        {
+            ["logos"] = (["word", "message"], ["Communication"]),
+            ["rhema"] = (["word"], ["Communication"]),
+            ["aggelia"] = (["message"], ["Communication"]),
+            ["graphe"] = (["scripture"], ["Sacred Texts"]),
+            ["kai"] = (["and"], []),
+        };
     }
 
     // Build test display items for OT books

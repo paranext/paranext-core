@@ -952,53 +952,69 @@ internal class DictionaryServiceTests
         // Arrange: Build in-memory lexicon matching gm-024 input
         // Same as gm-023 but with euangelion added:
         //   euangelion: senses [{glosses: [{en, "gospel"}], domains: ["Communication", "Sacred Texts"]}]
-        var relatedLexemes = DictionaryService.FindRelatedLexemes(
-            sourceLexeme: "logos",
-            glossLanguage: "en"
+        DictionaryService.SetTestLexiconEntry(
+            "euangelion",
+            ["gospel"],
+            ["Communication", "Sacred Texts"]
         );
 
-        // Assert: gm-024 expected output - 5 related lexemes
-        Assert.That(
-            relatedLexemes.Count,
-            Is.EqualTo(5),
-            "gm-024: Expected 5 related lexemes for logos"
-        );
+        try
+        {
+            var relatedLexemes = DictionaryService.FindRelatedLexemes(
+                sourceLexeme: "logos",
+                glossLanguage: "en"
+            );
 
-        // All from gm-023 should still be present
-        Assert.That(
-            relatedLexemes.Any(r => r.Lemma == "rhema" && r.RelationType == "Gloss"),
-            Is.True,
-            "gm-024: rhema still related via Gloss"
-        );
-        Assert.That(
-            relatedLexemes.Any(r => r.Lemma == "rhema" && r.RelationType == "SemanticDomain"),
-            Is.True,
-            "gm-024: rhema still related via SemanticDomain"
-        );
-        Assert.That(
-            relatedLexemes.Any(r => r.Lemma == "aggelia" && r.RelationType == "Gloss"),
-            Is.True,
-            "gm-024: aggelia still related via Gloss"
-        );
-        Assert.That(
-            relatedLexemes.Any(r => r.Lemma == "aggelia" && r.RelationType == "SemanticDomain"),
-            Is.True,
-            "gm-024: aggelia still related via SemanticDomain"
-        );
+            // Assert: gm-024 expected output - 5 related lexemes
+            Assert.That(
+                relatedLexemes.Count,
+                Is.EqualTo(5),
+                "gm-024: Expected 5 related lexemes for logos"
+            );
 
-        // New: euangelion via SemanticDomain ("Communication")
-        Assert.That(
-            relatedLexemes.Any(r => r.Lemma == "euangelion" && r.RelationType == "SemanticDomain"),
-            Is.True,
-            "gm-024: euangelion should be related via SemanticDomain 'Communication'"
-        );
+            // All from gm-023 should still be present
+            Assert.That(
+                relatedLexemes.Any(r => r.Lemma == "rhema" && r.RelationType == "Gloss"),
+                Is.True,
+                "gm-024: rhema still related via Gloss"
+            );
+            Assert.That(
+                relatedLexemes.Any(r => r.Lemma == "rhema" && r.RelationType == "SemanticDomain"),
+                Is.True,
+                "gm-024: rhema still related via SemanticDomain"
+            );
+            Assert.That(
+                relatedLexemes.Any(r => r.Lemma == "aggelia" && r.RelationType == "Gloss"),
+                Is.True,
+                "gm-024: aggelia still related via Gloss"
+            );
+            Assert.That(
+                relatedLexemes.Any(r => r.Lemma == "aggelia" && r.RelationType == "SemanticDomain"),
+                Is.True,
+                "gm-024: aggelia still related via SemanticDomain"
+            );
 
-        // Self-exclusion still holds
-        Assert.That(
-            relatedLexemes.Any(r => r.Lemma == "logos"),
-            Is.False,
-            "gm-024/INV-C07: logos must not appear in its own related lexemes"
-        );
+            // New: euangelion via SemanticDomain ("Communication")
+            Assert.That(
+                relatedLexemes.Any(r =>
+                    r.Lemma == "euangelion" && r.RelationType == "SemanticDomain"
+                ),
+                Is.True,
+                "gm-024: euangelion should be related via SemanticDomain 'Communication'"
+            );
+
+            // Self-exclusion still holds
+            Assert.That(
+                relatedLexemes.Any(r => r.Lemma == "logos"),
+                Is.False,
+                "gm-024/INV-C07: logos must not appear in its own related lexemes"
+            );
+        }
+        finally
+        {
+            // Restore default lexicon so other tests are not affected
+            DictionaryService.ResetTestLexicon();
+        }
     }
 
     #endregion
