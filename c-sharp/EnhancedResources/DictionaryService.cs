@@ -40,6 +40,21 @@ internal static class DictionaryService
     // Pre-built display items for "test-resource" style resources (OT books)
     private static readonly List<DictionaryDisplayItem> s_otDisplayItems = BuildOtTestItems();
 
+    // === STUB: CAP-008 GetDictionaryEntry ===
+    // Source: EXT-055 (DictionaryTab.GetDefinitionHtml -> Structured DTO)
+    // Maps to: Section 4.8 M-008, BHV-364
+    /// <summary>
+    /// Get structured dictionary entry data for a single entry.
+    /// Returns DictionaryEntryData with senses, glosses, semantic domains,
+    /// related lexemes, and morphology. No HTML generation (Theme 2).
+    /// Source: EXT-055, Section 4.8 M-008
+    /// </summary>
+    public static DictionaryEntryData GetDictionaryEntry(DictionaryEntryInput input)
+    {
+        // RED phase stub - implementation pending
+        throw new NotImplementedException("CAP-008: GetDictionaryEntry not yet implemented");
+    }
+
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/DictionaryTab.cs
     // Method: DictionaryTab.LoadResources (main entry point)
