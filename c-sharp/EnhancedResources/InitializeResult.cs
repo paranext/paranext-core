@@ -1,4 +1,3 @@
-// TDD RED stub: Type definition for RED phase testing.
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>

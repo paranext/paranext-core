@@ -30,36 +30,29 @@ internal class MarbleDataAccessService
     private readonly Dictionary<string, string> _languageMapping = new();
 
     /// <summary>
-    /// Singleton access. INV-C11: Only one instance across application lifetime.
+    /// Singleton access. Only one instance across application lifetime (INV-C11).
     /// </summary>
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:20-25
-    // Method: MarbleDataAccess.Default
-    // Maps to: INV-C11
     public static MarbleDataAccessService Default => s_default ??= new MarbleDataAccessService();
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:45
-    // Method: MarbleDataAccess.HaveMarbleData
-    // Maps to: BHV-105
+    /// <summary>
+    /// Whether marble package data has been discovered and loaded.
+    /// </summary>
     public bool HaveMarbleData => _haveMarbleData;
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:47
-    // Method: MarbleDataAccess.AvailableGlossLanguages
-    // Maps to: BHV-105
-    public List<string> AvailableGlossLanguages => new(_availableGlossLanguages);
+    /// <summary>
+    /// Languages available for gloss lookup. Returns a defensive copy.
+    /// </summary>
+    public List<string> AvailableGlossLanguages => [.. _availableGlossLanguages];
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:50
-    // Method: MarbleDataAccess.AvailableBibles (IEnhancedResourceProvider)
-    // Maps to: BHV-102
+    /// <summary>
+    /// Installed marble Bible resources as read-only ScrText instances.
+    /// </summary>
     public IEnumerable<ScrText> AvailableBibles => _availableBibles.AsReadOnly();
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:100-300
-    // Method: MarbleDataAccess.Initialize()
-    // Maps to: BHV-105, BHV-350
+    /// <summary>
+    /// Discovers installed marble packages and loads lexicon data.
+    /// Idempotent - subsequent calls are no-ops.
+    /// </summary>
     public void Initialize()
     {
         if (_initialized)
@@ -73,20 +66,14 @@ internal class MarbleDataAccessService
         DiscoverPackages();
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:400-500
-    // Method: MarbleDataAccess.FindLocalizedGlossesForTerm()
-    // Maps to: BHV-105, gm-020, gm-021, gm-022
-    // EXPLANATION:
-    // Gloss lookup with language fallback chain:
-    // 1. Try the requested language directly
-    // 2. For Chinese variants (zh-Hant, zh-Hans), try mapped variant
-    // 3. Fall back to English ("en")
-    // 4. Return empty if no glosses found
+    /// <summary>
+    /// Looks up localized glosses for a term lemma with language fallback:
+    /// requested language -> mapped variant (e.g. zh-Hant -> zh-Hans) -> English.
+    /// </summary>
     public IList<string> FindLocalizedGlossesForTerm(string termLemma, string language)
     {
         if (!_haveMarbleData)
-            return new List<string>();
+            return [];
 
         // Try the requested language directly
         if (TryGetGlosses(termLemma, language, out var glosses))
@@ -103,28 +90,21 @@ internal class MarbleDataAccessService
         if (language != "en" && TryGetGlosses(termLemma, "en", out glosses))
             return glosses;
 
-        return new List<string>();
+        return [];
     }
 
     /// <summary>
-    /// Returns a snapshot list of all enhanced resources. INV-C09: New list each call.
+    /// Returns a snapshot list of all enhanced resources. New list each call (INV-C09).
     /// </summary>
-    // === PORTED FROM PT9 ===
-    // Source: PT9/ParatextData/Plugins/Host.cs:62-63
-    // Method: Host.AllEnhancedResources
-    // Maps to: INV-C09, BHV-618
     public List<ScrText> GetAllEnhancedResources()
     {
-        return new List<ScrText>(_availableBibles);
+        return [.. _availableBibles];
     }
 
     /// <summary>
     /// Null-safe delegation for Host.AllEnhancedResources pattern.
-    /// Returns empty list when provider is null. INV-C09 + TS-047.
+    /// Returns empty list when provider is null.
     /// </summary>
-    // === NEW IN PT10 ===
-    // Reason: Static null-safe wrapper matches Host.AllEnhancedResources delegation pattern
-    // Maps to: BHV-618, TS-047
     public static List<ScrText> GetAllEnhancedResourcesNullSafe(MarbleDataAccessService? provider)
     {
         if (provider == null)
@@ -173,7 +153,7 @@ internal class MarbleDataAccessService
         s_default = null;
     }
 
-    private static void DiscoverPackages()
+    private void DiscoverPackages()
     {
         // In production, this would scan for installed marble packages.
         // When no packages are found, state remains as initialized (empty/false).
@@ -187,10 +167,10 @@ internal class MarbleDataAccessService
             && langData.TryGetValue(termLemma, out var glossList)
         )
         {
-            glosses = new List<string>(glossList);
+            glosses = [.. glossList];
             return true;
         }
-        glosses = new List<string>();
+        glosses = [];
         return false;
     }
 }

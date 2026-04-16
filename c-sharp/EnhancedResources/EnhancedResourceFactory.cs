@@ -24,9 +24,6 @@ internal class EnhancedResourceFactory : NetworkObject
     private InitializeResult? _initializeResult;
     private string[] _availableResources = [];
 
-    // === NEW IN PT10 ===
-    // Reason: PAPI factory pattern constructor
-    // Maps to: CAP-001
     public EnhancedResourceFactory(PapiClient papiClient, LocalParatextProjects paratextProjects)
         : base(papiClient)
     {
@@ -38,9 +35,6 @@ internal class EnhancedResourceFactory : NetworkObject
     /// Factory initialization: discovers marble packages, loads lexicons.
     /// Blocks until cache build completes.
     /// </summary>
-    // === NEW IN PT10 ===
-    // Reason: Async initialization replaces PT9 synchronous startup
-    // Maps to: CAP-001, BHV-102, BHV-105
     public Task InitializeAsync()
     {
         _dataAccessService.Initialize();
@@ -51,35 +45,34 @@ internal class EnhancedResourceFactory : NetworkObject
             _availableResources = _dataAccessService.AvailableBibles.Select(b => b.Name).ToArray();
         }
 
-        _initializeResult = new InitializeResult(
-            _dataAccessService.HaveMarbleData,
-            _availableResources,
-            [.. _dataAccessService.AvailableGlossLanguages],
-            false
-        );
+        _initializeResult = BuildInitializeResult();
 
         return Task.CompletedTask;
     }
 
-    // === NEW IN PT10 ===
-    // Reason: PAPI command for resource enumeration
-    // Maps to: BHV-102, TS-001, TS-002
     public string[] GetAvailableResources()
     {
         return _availableResources;
     }
 
-    // === NEW IN PT10 ===
-    // Reason: PAPI command for per-resource NetworkObject creation
-    // Maps to: BHV-105, TS-068
-    // EXPLANATION:
-    // Creates a NetworkObject ID for the requested resource. Uses a concurrent
-    // dictionary to cache created IDs. Thread-safe via lock on creation.
-    // Error codes:
-    // - FAILED_PRECONDITION when no marble data is installed
-    // - NOT_FOUND when resource ID is unknown
-    // - ArgumentException for non-MarbleResource types
+    /// <summary>
+    /// Creates or retrieves a cached NetworkObject ID for the given resource.
+    /// Thread-safe via double-checked locking pattern.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// FAILED_PRECONDITION when no marble data is installed;
+    /// NOT_FOUND when resource ID is unknown.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// When the resource is not a MarbleResource type.
+    /// </exception>
     public string GetResourceObjectId(string resourceId)
+    {
+        ValidateResourceId(resourceId);
+        return GetOrCreateNetworkObjectId(resourceId);
+    }
+
+    private void ValidateResourceId(string resourceId)
     {
         if (!_dataAccessService.HaveMarbleData)
         {
@@ -89,27 +82,25 @@ internal class EnhancedResourceFactory : NetworkObject
             );
         }
 
-        // Check if the resource is a known marble resource
-        if (!_availableResources.Contains(resourceId))
-        {
-            // Check if it could be a non-marble resource (standard translation)
-            // For resources that don't exist at all, throw NOT_FOUND
-            // For known non-marble resources, throw ArgumentException
-            if (IsKnownNonMarbleResource(resourceId))
-            {
-                throw new ArgumentException(
-                    $"Resource '{resourceId}' is not a MarbleResource type",
-                    nameof(resourceId)
-                );
-            }
+        if (_availableResources.Contains(resourceId))
+            return;
 
-            throw PlatformErrorCodes.WithCode(
-                PlatformErrorCodes.NotFound,
-                $"Unknown resource ID: {resourceId}"
+        if (IsKnownNonMarbleResource(resourceId))
+        {
+            throw new ArgumentException(
+                $"Resource '{resourceId}' is not a MarbleResource type",
+                nameof(resourceId)
             );
         }
 
-        // Return cached object ID or create new one
+        throw PlatformErrorCodes.WithCode(
+            PlatformErrorCodes.NotFound,
+            $"Unknown resource ID: {resourceId}"
+        );
+    }
+
+    private string GetOrCreateNetworkObjectId(string resourceId)
+    {
         if (_networkObjectIds.TryGetValue(resourceId, out var existingId))
             return existingId;
 
@@ -118,19 +109,19 @@ internal class EnhancedResourceFactory : NetworkObject
             if (_networkObjectIds.TryGetValue(resourceId, out var existingIdInLock))
                 return existingIdInLock;
 
-            // Generate a unique network object ID
-            var objectId = new string(
-                Enumerable.Range(0, 30).Select(_ => (char)_random.Next(65, 90)).ToArray()
-            );
-
+            var objectId = GenerateObjectId();
             _networkObjectIds.TryAdd(resourceId, objectId);
             return objectId;
         }
     }
 
-    // === NEW IN PT10 ===
-    // Reason: Exposes initialization result for PAPI
-    // Maps to: CAP-001
+    private string GenerateObjectId()
+    {
+        return new string(
+            Enumerable.Range(0, 30).Select(_ => (char)_random.Next(65, 90)).ToArray()
+        );
+    }
+
     public InitializeResult GetInitializeResult()
     {
         return _initializeResult ?? new InitializeResult(false, [], [], false);
@@ -147,7 +138,12 @@ internal class EnhancedResourceFactory : NetworkObject
     internal void SetTestResourceIds(string[] resourceIds)
     {
         _availableResources = resourceIds;
-        _initializeResult = new InitializeResult(
+        _initializeResult = BuildInitializeResult();
+    }
+
+    private InitializeResult BuildInitializeResult()
+    {
+        return new InitializeResult(
             _dataAccessService.HaveMarbleData,
             _availableResources,
             [.. _dataAccessService.AvailableGlossLanguages],

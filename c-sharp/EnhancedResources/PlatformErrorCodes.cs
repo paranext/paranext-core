@@ -1,4 +1,3 @@
-// TDD RED stub: Error code helper for RED phase testing.
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
