@@ -1,173 +1,105 @@
+'use client';
+
 import React from 'react';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
 import { cn } from '@/utils/shadcn-ui/utils';
 
-// CUSTOM: Added context to manage drawer direction
-const DrawerContext = React.createContext<{
-  direction?: 'top' | 'bottom' | 'left' | 'right';
-}>({
-  direction: 'bottom',
-});
-
-/**
- * A drawer component for React. These components are built on Vaul and styled with Shadcn UI. See
- * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/drawer See Vaul Documentation:
- * https://vaul.emilkowal.ski/getting-started
- */
-function Drawer({
-  shouldScaleBackground = true,
-  direction = 'bottom',
-  ...props
-}: React.ComponentProps<typeof DrawerPrimitive.Root>) {
-  // CUSTOM: Use context to provide direction to child components
-  const contextValue = React.useMemo(() => ({ direction }), [direction]);
-  return (
-    <DrawerContext.Provider value={contextValue}>
-      <DrawerPrimitive.Root
-        shouldScaleBackground={shouldScaleBackground}
-        direction={direction}
-        {...props}
-      />
-    </DrawerContext.Provider>
-  );
+function Drawer({ ...props }: React.ComponentProps<typeof DrawerPrimitive.Root>) {
+  return <DrawerPrimitive.Root data-slot="drawer" {...props} />;
 }
 
-/** @inheritdoc Drawer */
-const DrawerTrigger = DrawerPrimitive.Trigger;
+function DrawerTrigger({ ...props }: React.ComponentProps<typeof DrawerPrimitive.Trigger>) {
+  return <DrawerPrimitive.Trigger data-slot="drawer-trigger" {...props} />;
+}
 
-/** @inheritdoc Drawer */
-const DrawerPortal = DrawerPrimitive.Portal;
+function DrawerPortal({ ...props }: React.ComponentProps<typeof DrawerPrimitive.Portal>) {
+  return <DrawerPrimitive.Portal data-slot="drawer-portal" {...props} />;
+}
 
-/** @inheritdoc Drawer */
-const DrawerClose = DrawerPrimitive.Close;
+function DrawerClose({ ...props }: React.ComponentProps<typeof DrawerPrimitive.Close>) {
+  return <DrawerPrimitive.Close data-slot="drawer-close" {...props} />;
+}
 
-/** @inheritdoc Drawer */
 function DrawerOverlay({
   className,
-  ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay> & {
-  ref?: React.Ref<React.ComponentRef<typeof DrawerPrimitive.Overlay>>;
-}) {
+}: React.ComponentProps<typeof DrawerPrimitive.Overlay>) {
   return (
     <DrawerPrimitive.Overlay
-      ref={ref}
-      className={cn('tw:fixed tw:inset-0 tw:z-50 tw:bg-black/80', className)}
+      data-slot="drawer-overlay"
+      className={cn(
+        'tw:fixed tw:inset-0 tw:z-50 tw:bg-black/10 tw:supports-backdrop-filter:backdrop-blur-xs tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-closed:animate-out tw:data-closed:fade-out-0',
+        className,
+      )}
       {...props}
     />
   );
 }
 
-/* CUSTOM: Extend DrawerPrimitive.Content with additional props */
-interface DrawerContentProps
-  extends React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> {
-  /** Optionally hide the drawer handle */
-  hideDrawerHandle?: boolean;
-}
-
-/** @inheritdoc Drawer */
 function DrawerContent({
   className,
   children,
-  hideDrawerHandle = false,
-  ref,
   ...props
-}: DrawerContentProps & {
-  ref?: React.Ref<React.ComponentRef<typeof DrawerPrimitive.Content>>;
-}) {
-  // CUSTOM: Use context to provide direction to child components
-  const { direction = 'bottom' } = React.useContext(DrawerContext);
-
-  // CUSTOM: Define positioning and styling based on direction
-  const directionStyles = {
-    bottom: 'tw:inset-x-0 tw:bottom-0 tw:mt-24 tw:rounded-t-[10px]',
-    top: 'tw:inset-x-0 tw:top-0 tw:mb-24 tw:rounded-b-[10px]',
-    left: 'tw:inset-y-0 tw:left-0 tw:mr-24 tw:rounded-r-[10px] tw:w-auto tw:max-w-sm',
-    right: 'tw:inset-y-0 tw:right-0 tw:ml-24 tw:rounded-l-[10px] tw:w-auto tw:max-w-sm',
-  };
-
-  // CUSTOM: Define handle styles for each direction
-  const handleStyles = {
-    bottom: 'tw:mx-auto tw:mt-4 tw:h-2 tw:w-[100px] tw:rounded-full tw:bg-muted',
-    top: 'tw:mx-auto tw:mb-4 tw:h-2 tw:w-[100px] tw:rounded-full tw:bg-muted',
-    left: 'tw:my-auto tw:mr-4 tw:w-2 tw:h-[100px] tw:rounded-full tw:bg-muted',
-    right: 'tw:my-auto tw:ml-4 tw:w-2 tw:h-[100px] tw:rounded-full tw:bg-muted',
-  };
-
+}: React.ComponentProps<typeof DrawerPrimitive.Content>) {
   return (
-    <DrawerPortal>
+    <DrawerPortal data-slot="drawer-portal">
       <DrawerOverlay />
       <DrawerPrimitive.Content
-        ref={ref}
+        data-slot="drawer-content"
         className={cn(
-          // CUSTOM: Change Tailwind CSS classes for styling
-          // Removed tw:inset-x-0 tw:bottom-0 tw:mt-24 tw:rounded-t-[10px] tw:flex-col
-          'pr-twp tw:fixed tw:z-50 tw:flex tw:h-auto tw:border tw:bg-background',
-          direction === 'bottom' || direction === 'top' ? 'tw:flex-col' : 'tw:flex-row',
-          directionStyles[direction],
+          'tw:group/drawer-content tw:fixed tw:z-50 tw:flex tw:h-auto tw:flex-col tw:bg-popover tw:text-sm tw:text-popover-foreground tw:data-[vaul-drawer-direction=bottom]:inset-x-0 tw:data-[vaul-drawer-direction=bottom]:bottom-0 tw:data-[vaul-drawer-direction=bottom]:mt-24 tw:data-[vaul-drawer-direction=bottom]:max-h-[80vh] tw:data-[vaul-drawer-direction=bottom]:rounded-t-xl tw:data-[vaul-drawer-direction=bottom]:border-t tw:data-[vaul-drawer-direction=left]:inset-y-0 tw:data-[vaul-drawer-direction=left]:start-0 tw:data-[vaul-drawer-direction=left]:w-3/4 tw:data-[vaul-drawer-direction=left]:rounded-e-xl tw:data-[vaul-drawer-direction=left]:border-e tw:data-[vaul-drawer-direction=right]:inset-y-0 tw:data-[vaul-drawer-direction=right]:end-0 tw:data-[vaul-drawer-direction=right]:w-3/4 tw:data-[vaul-drawer-direction=right]:rounded-s-xl tw:data-[vaul-drawer-direction=right]:border-s tw:data-[vaul-drawer-direction=top]:inset-x-0 tw:data-[vaul-drawer-direction=top]:top-0 tw:data-[vaul-drawer-direction=top]:mb-24 tw:data-[vaul-drawer-direction=top]:max-h-[80vh] tw:data-[vaul-drawer-direction=top]:rounded-b-xl tw:data-[vaul-drawer-direction=top]:border-b tw:data-[vaul-drawer-direction=left]:sm:max-w-sm tw:data-[vaul-drawer-direction=right]:sm:max-w-sm',
           className,
         )}
         {...props}
       >
-        {/* CUSTOM: Render handles and children based on direction and if the drawer handle is hidden */}
-        {!hideDrawerHandle && (direction === 'bottom' || direction === 'right') && (
-          <div className={handleStyles[direction]} />
-        )}
-        <div className="tw:flex tw:flex-col">{children}</div>
-        {!hideDrawerHandle && (direction === 'top' || direction === 'left') && (
-          <div className={handleStyles[direction]} />
-        )}
+        <div className="tw:mx-auto tw:mt-4 tw:hidden tw:h-1 tw:w-[100px] tw:shrink-0 tw:rounded-full tw:bg-muted tw:group-data-[vaul-drawer-direction=bottom]/drawer-content:block" />
+        {children}
       </DrawerPrimitive.Content>
     </DrawerPortal>
   );
 }
 
-/** @inheritdoc Drawer */
-function DrawerHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function DrawerHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
-      className={cn('tw:grid tw:gap-1.5 tw:p-4 tw:text-center tw:sm:text-left', className)}
+      data-slot="drawer-header"
+      className={cn(
+        'tw:flex tw:flex-col tw:gap-0.5 tw:p-4 tw:group-data-[vaul-drawer-direction=bottom]/drawer-content:text-center tw:group-data-[vaul-drawer-direction=top]/drawer-content:text-center tw:md:gap-0.5 tw:md:text-start',
+        className,
+      )}
       {...props}
     />
   );
 }
 
-/** @inheritdoc Drawer */
-function DrawerFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function DrawerFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
-    <div className={cn('tw:mt-auto tw:flex tw:flex-col tw:gap-2 tw:p-4', className)} {...props} />
+    <div
+      data-slot="drawer-footer"
+      className={cn('tw:mt-auto tw:flex tw:flex-col tw:gap-2 tw:p-4', className)}
+      {...props}
+    />
   );
 }
 
-/** @inheritdoc Drawer */
-function DrawerTitle({
-  className,
-  ref,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title> & {
-  ref?: React.Ref<React.ComponentRef<typeof DrawerPrimitive.Title>>;
-}) {
+function DrawerTitle({ className, ...props }: React.ComponentProps<typeof DrawerPrimitive.Title>) {
   return (
     <DrawerPrimitive.Title
-      ref={ref}
-      className={cn('tw:text-lg tw:font-semibold tw:leading-none tw:tracking-tight', className)}
+      data-slot="drawer-title"
+      className={cn('tw:font-heading tw:text-base tw:font-medium tw:text-foreground', className)}
       {...props}
     />
   );
 }
 
-/** @inheritdoc Drawer */
 function DrawerDescription({
   className,
-  ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Description> & {
-  ref?: React.Ref<React.ComponentRef<typeof DrawerPrimitive.Description>>;
-}) {
+}: React.ComponentProps<typeof DrawerPrimitive.Description>) {
   return (
     <DrawerPrimitive.Description
-      ref={ref}
+      data-slot="drawer-description"
       className={cn('tw:text-sm tw:text-muted-foreground', className)}
       {...props}
     />

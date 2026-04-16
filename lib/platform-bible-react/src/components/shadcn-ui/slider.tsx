@@ -1,38 +1,52 @@
+'use client';
+
 import React from 'react';
-import * as SliderPrimitive from '@radix-ui/react-slider';
+import { Slider as SliderPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
-import { Direction, readDirection } from '@/utils/dir-helper.util';
 
-/**
- * The Slider component is an input where the user selects a value from within a given range. This
- * component is built on Radix UI primitives and styled with Shadcn UI.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/slider}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/slider}
- */
 function Slider({
   className,
-  ref,
+  defaultValue,
+  value,
+  min = 0,
+  max = 100,
   ...props
-}: React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> & {
-  ref?: React.Ref<React.ComponentRef<typeof SliderPrimitive.Root>>;
-}) {
-  const dir: Direction = readDirection();
+}: React.ComponentProps<typeof SliderPrimitive.Root>) {
+  const _values = React.useMemo(
+    () => (Array.isArray(value) ? value : Array.isArray(defaultValue) ? defaultValue : [min, max]),
+    [value, defaultValue, min, max],
+  );
+
   return (
     <SliderPrimitive.Root
-      ref={ref}
+      data-slot="slider"
+      defaultValue={defaultValue}
+      value={value}
+      min={min}
+      max={max}
       className={cn(
-        'pr-twp tw:relative tw:flex tw:w-full tw:touch-none tw:select-none tw:items-center',
+        'tw:relative tw:flex tw:w-full tw:touch-none tw:items-center tw:select-none tw:data-disabled:opacity-50 tw:data-vertical:h-full tw:data-vertical:min-h-40 tw:data-vertical:w-auto tw:data-vertical:flex-col',
         className,
       )}
       {...props}
-      dir={dir}
     >
-      <SliderPrimitive.Track className="tw:relative tw:h-2 tw:w-full tw:grow tw:overflow-hidden tw:rounded-full tw:bg-secondary">
-        <SliderPrimitive.Range className="tw:absolute tw:h-full tw:bg-primary" />
+      <SliderPrimitive.Track
+        data-slot="slider-track"
+        className="tw:relative tw:grow tw:overflow-hidden tw:rounded-full tw:bg-muted tw:data-horizontal:h-1 tw:data-horizontal:w-full tw:data-vertical:h-full tw:data-vertical:w-1"
+      >
+        <SliderPrimitive.Range
+          data-slot="slider-range"
+          className="tw:absolute tw:bg-primary tw:select-none tw:data-horizontal:h-full tw:data-vertical:w-full"
+        />
       </SliderPrimitive.Track>
-      <SliderPrimitive.Thumb className="tw:block tw:h-5 tw:w-5 tw:rounded-full tw:border-2 tw:border-primary tw:bg-background tw:ring-offset-background tw:transition-colors tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:pointer-events-none tw:disabled:opacity-50" />
+      {Array.from({ length: _values.length }, (_, index) => (
+        <SliderPrimitive.Thumb
+          data-slot="slider-thumb"
+          key={index}
+          className="tw:relative tw:block tw:size-3 tw:shrink-0 tw:rounded-full tw:border tw:border-ring tw:bg-white tw:ring-ring/50 tw:transition-[color,box-shadow] tw:select-none tw:after:absolute tw:after:-inset-2 tw:hover:ring-3 tw:focus-visible:ring-3 tw:focus-visible:outline-hidden tw:active:ring-3 tw:disabled:pointer-events-none tw:disabled:opacity-50"
+        />
+      ))}
     </SliderPrimitive.Root>
   );
 }

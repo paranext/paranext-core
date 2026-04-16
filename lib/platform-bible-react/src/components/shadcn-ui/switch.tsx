@@ -1,47 +1,32 @@
-import * as SwitchPrimitives from '@radix-ui/react-switch';
+'use client';
+
 import React from 'react';
+import { Switch as SwitchPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
-import { Direction, readDirection } from '@/utils/dir-helper.util';
 
-/**
- * The Switch component is a control that allows the user to toggle between checked and not checked.
- * This component is built on Radix UI primitives and styled with Shadcn UI.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/switch}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/switch}
- */
 function Switch({
   className,
-  ref,
+  size = 'default',
   ...props
-}: React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root> & {
-  ref?: React.Ref<React.ComponentRef<typeof SwitchPrimitives.Root>>;
+}: React.ComponentProps<typeof SwitchPrimitive.Root> & {
+  size?: 'sm' | 'default';
 }) {
-  const dir: Direction = readDirection();
   return (
-    <SwitchPrimitives.Root
+    <SwitchPrimitive.Root
+      data-slot="switch"
+      data-size={size}
       className={cn(
-        'tw:peer pr-twp tw:inline-flex tw:h-6 tw:w-11 tw:shrink-0 tw:cursor-pointer tw:items-center tw:rounded-full tw:border-2 tw:border-transparent tw:transition-colors tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:focus-visible:ring-offset-background tw:disabled:cursor-not-allowed tw:disabled:opacity-50 tw:data-[state=checked]:bg-primary tw:data-[state=unchecked]:bg-input',
+        'tw:peer tw:group/switch tw:relative tw:inline-flex tw:shrink-0 tw:items-center tw:rounded-full tw:border tw:border-transparent tw:transition-all tw:outline-none tw:after:absolute tw:after:-inset-x-3 tw:after:-inset-y-2 tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:data-[size=default]:h-[18.4px] tw:data-[size=default]:w-[32px] tw:data-[size=sm]:h-[14px] tw:data-[size=sm]:w-[24px] tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40 tw:data-checked:bg-primary tw:data-unchecked:bg-input tw:dark:data-unchecked:bg-input/80 tw:data-disabled:cursor-not-allowed tw:data-disabled:opacity-50',
         className,
       )}
       {...props}
-      ref={ref}
     >
-      <SwitchPrimitives.Thumb
-        className={cn(
-          'pr-twp tw:pointer-events-none tw:block tw:h-5 tw:w-5 tw:rounded-full tw:bg-background tw:shadow-lg tw:ring-0 tw:transition-transform',
-          {
-            'tw:data-[state=checked]:translate-x-5 tw:data-[state=unchecked]:translate-x-0':
-              dir === 'ltr',
-          },
-          {
-            'tw:data-[state=checked]:translate-x-[-20px] tw:data-[state=unchecked]:translate-x-0':
-              dir === 'rtl',
-          },
-        )}
+      <SwitchPrimitive.Thumb
+        data-slot="switch-thumb"
+        className="tw:pointer-events-none tw:block tw:rounded-full tw:bg-background tw:ring-0 tw:transition-transform tw:group-data-[size=default]/switch:size-4 tw:group-data-[size=sm]/switch:size-3 tw:group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] rtl:tw:group-data-[size=default]/switch:data-checked:-translate-x-[calc(100%-2px)] tw:group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] rtl:tw:group-data-[size=sm]/switch:data-checked:-translate-x-[calc(100%-2px)] tw:dark:data-checked:bg-primary-foreground tw:group-data-[size=default]/switch:data-unchecked:translate-x-0 rtl:tw:group-data-[size=default]/switch:data-unchecked:-translate-x-0 tw:group-data-[size=sm]/switch:data-unchecked:translate-x-0 rtl:tw:group-data-[size=sm]/switch:data-unchecked:-translate-x-0 tw:dark:data-unchecked:bg-foreground"
       />
-    </SwitchPrimitives.Root>
+    </SwitchPrimitive.Root>
   );
 }
 

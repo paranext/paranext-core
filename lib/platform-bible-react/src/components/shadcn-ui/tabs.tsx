@@ -1,67 +1,65 @@
+'use client';
+
 import React from 'react';
-import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { Tabs as TabsPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
-import { Direction, readDirection } from '@/utils/dir-helper.util';
 
-/**
- * Tabs components provide a set of layered sections of content—known as tab panels–that are
- * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
- * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
- * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
- */
-export const Tabs = TabsPrimitive.Root;
-
-/** @inheritdoc Tabs */
-export type TabsListProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & {
-  className?: string;
-};
-
-/** @inheritdoc Tabs */
-export type TabsTriggerProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
-  className?: string;
-};
-
-/** @inheritdoc Tabs */
-export type TabsContentProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content> & {
-  className?: string;
-};
-
-/** @inheritdoc Tabs */
-export function TabsList({
+function Tabs({
   className,
-  ref,
+  orientation = 'horizontal',
   ...props
-}: TabsListProps & {
-  ref?: React.Ref<React.ComponentRef<typeof TabsPrimitive.List>>;
-}) {
-  const dir: Direction = readDirection();
+}: React.ComponentProps<typeof TabsPrimitive.Root>) {
+  return (
+    <TabsPrimitive.Root
+      data-slot="tabs"
+      data-orientation={orientation}
+      className={cn('tw:group/tabs tw:flex tw:gap-2 tw:data-horizontal:flex-col', className)}
+      {...props}
+    />
+  );
+}
+
+const tabsListVariants = cva(
+  'tw:group/tabs-list tw:inline-flex tw:w-fit tw:items-center tw:justify-center tw:rounded-lg tw:p-[3px] tw:text-muted-foreground tw:group-data-horizontal/tabs:h-8 tw:group-data-vertical/tabs:h-fit tw:group-data-vertical/tabs:flex-col tw:data-[variant=line]:rounded-none',
+  {
+    variants: {
+      variant: {
+        default: 'tw:bg-muted',
+        line: 'tw:gap-1 tw:bg-transparent',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
+  },
+);
+
+function TabsList({
+  className,
+  variant = 'default',
+  ...props
+}: React.ComponentProps<typeof TabsPrimitive.List> & VariantProps<typeof tabsListVariants>) {
   return (
     <TabsPrimitive.List
-      ref={ref}
-      className={cn(
-        'pr-twp tw:inline-flex tw:h-10 tw:items-center tw:justify-center tw:rounded-md tw:bg-muted tw:p-1 tw:text-muted-foreground',
-        className,
-      )}
+      data-slot="tabs-list"
+      data-variant={variant}
+      className={cn(tabsListVariants({ variant }), className)}
       {...props}
-      dir={dir}
     />
   );
 }
 
-/** @inheritdoc Tabs */
-export function TabsTrigger({
-  className,
-  ref,
-  ...props
-}: TabsTriggerProps & {
-  ref?: React.Ref<React.ComponentRef<typeof TabsPrimitive.Trigger>>;
-}) {
+function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
   return (
     <TabsPrimitive.Trigger
-      ref={ref}
+      data-slot="tabs-trigger"
       className={cn(
-        'pr-twp tw:inline-flex tw:items-center tw:justify-center tw:whitespace-nowrap tw:rounded-sm tw:px-3 tw:py-1.5 tw:text-sm tw:font-medium tw:ring-offset-background tw:transition-all tw:hover:text-foreground tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:pointer-events-none tw:disabled:opacity-50 tw:data-[state=active]:bg-background tw:data-[state=active]:text-foreground tw:data-[state=active]:shadow-sm',
+        'tw:relative tw:inline-flex tw:h-[calc(100%-1px)] tw:flex-1 tw:items-center tw:justify-center tw:gap-1.5 tw:rounded-md tw:border tw:border-transparent tw:px-1.5 tw:py-0.5 tw:text-sm tw:font-medium tw:whitespace-nowrap tw:text-foreground/60 tw:transition-all tw:group-data-vertical/tabs:w-full tw:group-data-vertical/tabs:justify-start tw:hover:text-foreground tw:focus-visible:border-ring tw:focus-visible:ring-[3px] tw:focus-visible:ring-ring/50 tw:focus-visible:outline-1 tw:focus-visible:outline-ring tw:disabled:pointer-events-none tw:disabled:opacity-50 tw:has-data-[icon=inline-end]:pe-1 tw:has-data-[icon=inline-start]:ps-1 tw:dark:text-muted-foreground tw:dark:hover:text-foreground tw:group-data-[variant=default]/tabs-list:data-active:shadow-sm tw:group-data-[variant=line]/tabs-list:data-active:shadow-none tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
+        'tw:group-data-[variant=line]/tabs-list:bg-transparent tw:group-data-[variant=line]/tabs-list:data-active:bg-transparent tw:dark:group-data-[variant=line]/tabs-list:data-active:border-transparent tw:dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent',
+        'tw:data-active:bg-background tw:data-active:text-foreground tw:dark:data-active:border-input tw:dark:data-active:bg-input/30 tw:dark:data-active:text-foreground',
+        'tw:after:absolute tw:after:bg-foreground tw:after:opacity-0 tw:after:transition-opacity tw:group-data-horizontal/tabs:after:inset-x-0 tw:group-data-horizontal/tabs:after:bottom-[-5px] tw:group-data-horizontal/tabs:after:h-0.5 tw:group-data-vertical/tabs:after:inset-y-0 tw:group-data-vertical/tabs:after:-end-1 tw:group-data-vertical/tabs:after:w-0.5 tw:group-data-[variant=line]/tabs-list:data-active:after:opacity-100',
         className,
       )}
       {...props}
@@ -69,22 +67,14 @@ export function TabsTrigger({
   );
 }
 
-/** @inheritdoc Tabs */
-export function TabsContent({
-  className,
-  ref,
-  ...props
-}: TabsContentProps & {
-  ref?: React.Ref<React.ComponentRef<typeof TabsPrimitive.Content>>;
-}) {
+function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Content>) {
   return (
     <TabsPrimitive.Content
-      ref={ref}
-      className={cn(
-        'pr-twp tw:mt-2 tw:ring-offset-background tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2',
-        className,
-      )}
+      data-slot="tabs-content"
+      className={cn('tw:flex-1 tw:text-sm tw:outline-none', className)}
       {...props}
     />
   );
 }
+
+export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants };
