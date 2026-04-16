@@ -43,7 +43,7 @@ export const WithCustomSize: Story = {
         {...args}
         scrollGroupId={selected}
         onChangeScrollGroupId={setSelected}
-        size="lg"
+        size="default"
       />
     );
   },

@@ -2,6 +2,13 @@ import React from 'react';
 
 import { cn } from '@/utils/shadcn-ui/utils';
 
+/**
+ * The Card component displays a card with header, content, and footer. The component is built and
+ * styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
+// CUSTOM: Added TSDoc comment with link to upstream shadcn/ui documentation.
 function Card({
   className,
   size = 'default',
@@ -12,7 +19,8 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        'tw:group/card tw:flex tw:flex-col tw:gap-4 tw:overflow-hidden tw:rounded-xl tw:bg-card tw:py-4 tw:text-sm tw:text-card-foreground tw:ring-1 tw:ring-foreground/10 tw:has-data-[slot=card-footer]:pb-0 tw:has-[>img:first-child]:pt-0 tw:data-[size=sm]:gap-3 tw:data-[size=sm]:py-3 tw:data-[size=sm]:has-data-[slot=card-footer]:pb-0 tw:*:[img:first-child]:rounded-t-xl tw:*:[img:last-child]:rounded-b-xl',
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:group/card tw:flex tw:flex-col tw:gap-4 tw:overflow-hidden tw:rounded-xl tw:bg-card tw:py-4 tw:text-sm tw:text-card-foreground tw:ring-1 tw:ring-foreground/10 tw:has-data-[slot=card-footer]:pb-0 tw:has-[>img:first-child]:pt-0 tw:data-[size=sm]:gap-3 tw:data-[size=sm]:py-3 tw:data-[size=sm]:has-data-[slot=card-footer]:pb-0 tw:*:[img:first-child]:rounded-t-xl tw:*:[img:last-child]:rounded-b-xl',
         className,
       )}
       {...props}
@@ -20,12 +28,15 @@ function Card({
   );
 }
 
+/** @inheritdoc Card */
+// CUSTOM: Added @inheritdoc TSDoc referencing Card for documentation inheritance.
 function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="card-header"
       className={cn(
-        'tw:group/card-header tw:@container/card-header tw:grid tw:auto-rows-min tw:items-start tw:gap-1 tw:rounded-t-xl tw:px-4 tw:group-data-[size=sm]/card:px-3 tw:has-data-[slot=card-action]:grid-cols-[1fr_auto] tw:has-data-[slot=card-description]:grid-rows-[auto_auto] tw:[.border-b]:pb-4 tw:group-data-[size=sm]/card:[.border-b]:pb-3',
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:group/card-header tw:@container/card-header tw:grid tw:auto-rows-min tw:items-start tw:gap-1 tw:rounded-t-xl tw:px-4 tw:group-data-[size=sm]/card:px-3 tw:has-data-[slot=card-action]:grid-cols-[1fr_auto] tw:has-data-[slot=card-description]:grid-rows-[auto_auto] tw:[.border-b]:pb-4 tw:group-data-[size=sm]/card:[.border-b]:pb-3',
         className,
       )}
       {...props}
@@ -33,12 +44,15 @@ function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
+/** @inheritdoc Card */
+// CUSTOM: Added @inheritdoc TSDoc referencing Card for documentation inheritance.
 function CardTitle({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="card-title"
       className={cn(
-        'tw:font-heading tw:text-base tw:leading-snug tw:font-medium tw:group-data-[size=sm]/card:text-sm',
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:font-heading tw:text-base tw:leading-snug tw:font-medium tw:group-data-[size=sm]/card:text-sm',
         className,
       )}
       {...props}
@@ -46,22 +60,31 @@ function CardTitle({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
+/** @inheritdoc Card */
+// CUSTOM: Added @inheritdoc TSDoc referencing Card for documentation inheritance.
 function CardDescription({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="card-description"
-      className={cn('tw:text-sm tw:text-muted-foreground', className)}
+      className={cn(
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:text-sm tw:text-muted-foreground',
+        className,
+      )}
       {...props}
     />
   );
 }
 
+/** @inheritdoc Card */
+// CUSTOM: Added @inheritdoc TSDoc referencing Card for documentation inheritance.
 function CardAction({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="card-action"
       className={cn(
-        'tw:col-start-2 tw:row-span-2 tw:row-start-1 tw:self-start tw:justify-self-end',
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:col-start-2 tw:row-span-2 tw:row-start-1 tw:self-start tw:justify-self-end',
         className,
       )}
       {...props}
@@ -69,22 +92,31 @@ function CardAction({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
+/** @inheritdoc Card */
+// CUSTOM: Added @inheritdoc TSDoc referencing Card for documentation inheritance.
 function CardContent({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="card-content"
-      className={cn('tw:px-4 tw:group-data-[size=sm]/card:px-3', className)}
+      className={cn(
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:px-4 tw:group-data-[size=sm]/card:px-3',
+        className,
+      )}
       {...props}
     />
   );
 }
 
+/** @inheritdoc Card */
+// CUSTOM: Added @inheritdoc TSDoc referencing Card for documentation inheritance.
 function CardFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="card-footer"
       className={cn(
-        'tw:flex tw:items-center tw:rounded-b-xl tw:border-t tw:bg-muted/50 tw:p-4 tw:group-data-[size=sm]/card:p-3',
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:flex tw:items-center tw:rounded-b-xl tw:border-t tw:bg-muted/50 tw:p-4 tw:group-data-[size=sm]/card:p-3',
         className,
       )}
       {...props}
