@@ -81,77 +81,76 @@ internal static class DictionaryService
             );
         }
 
-        // Build senses with glosses in the requested language
-        var senses = new List<DictionarySense>();
-        foreach (var s in entry.Senses)
-        {
-            var filteredGlosses = s
-                .Glosses.Where(g =>
-                    string.Equals(g.Language, input.GlossLanguage, StringComparison.Ordinal)
-                )
-                .ToList();
-            senses.Add(new DictionarySense(s.SenseId, filteredGlosses, s.Definition));
-        }
-
-        // Build related lexemes from the lexicon, excluding self
-        var relatedLexemes = new List<RelatedLexemeData>();
-        if (s_lexicon.TryGetValue(entry.Lemma, out var sourceInfo))
-        {
-            foreach (var (lemma, otherInfo) in s_lexicon)
-            {
-                if (lemma == entry.Lemma)
-                    continue;
-
-                var sharedGlosses = sourceInfo.Glosses.Intersect(otherInfo.Glosses).ToList();
-                if (sharedGlosses.Count > 0)
-                {
-                    // Find the entryId for this lemma
-                    var otherEntryId = FindEntryIdForLemma(lemma);
-                    relatedLexemes.Add(
-                        new RelatedLexemeData(
-                            Lemma: lemma,
-                            EntryId: otherEntryId ?? lemma,
-                            Relationship: "Gloss",
-                            Gloss: sharedGlosses[0]
-                        )
-                    );
-                }
-
-                var sharedDomains = sourceInfo.Domains.Intersect(otherInfo.Domains).ToList();
-                if (sharedDomains.Count > 0)
-                {
-                    var otherEntryId = FindEntryIdForLemma(lemma);
-                    relatedLexemes.Add(
-                        new RelatedLexemeData(
-                            Lemma: lemma,
-                            EntryId: otherEntryId ?? lemma,
-                            Relationship: "SemanticDomain",
-                            Gloss: otherInfo.Glosses.Count > 0 ? otherInfo.Glosses[0] : ""
-                        )
-                    );
-                }
-            }
-        }
-
         return new DictionaryEntryData(
             EntryId: input.EntryId,
             Lemma: entry.Lemma,
-            Senses: senses,
+            Senses: BuildSenses(entry.Senses, input.GlossLanguage),
             SemanticDomains: entry.SemanticDomains,
-            RelatedLexemes: relatedLexemes,
+            RelatedLexemes: BuildRelatedLexemes(entry.Lemma),
             Morphology: entry.Morphology
         );
     }
 
-    private static string? FindEntryIdForLemma(string lemma)
+    // Build senses with glosses filtered to the requested language
+    private static List<DictionarySense> BuildSenses(List<SenseRecord> senses, string glossLanguage)
     {
-        foreach (var (entryId, entry) in s_entryData)
-        {
-            if (entry.Lemma == lemma)
-                return entryId;
-        }
-        return null;
+        return senses
+            .Select(s =>
+            {
+                var filteredGlosses = s
+                    .Glosses.Where(g =>
+                        string.Equals(g.Language, glossLanguage, StringComparison.Ordinal)
+                    )
+                    .ToList();
+                return new DictionarySense(s.SenseId, filteredGlosses, s.Definition);
+            })
+            .ToList();
     }
+
+    // Build related lexemes from the shared lexicon, excluding self
+    private static List<RelatedLexemeData> BuildRelatedLexemes(string sourceLemma)
+    {
+        if (!s_lexicon.TryGetValue(sourceLemma, out var sourceInfo))
+            return [];
+
+        var results = new List<RelatedLexemeData>();
+        foreach (var (lemma, otherInfo) in s_lexicon)
+        {
+            if (lemma == sourceLemma)
+                continue;
+
+            var sharedGlosses = sourceInfo.Glosses.Intersect(otherInfo.Glosses).ToList();
+            if (sharedGlosses.Count > 0)
+            {
+                results.Add(
+                    new RelatedLexemeData(
+                        Lemma: lemma,
+                        EntryId: FindEntryIdForLemma(lemma) ?? lemma,
+                        Relationship: "Gloss",
+                        Gloss: sharedGlosses[0]
+                    )
+                );
+            }
+
+            var sharedDomains = sourceInfo.Domains.Intersect(otherInfo.Domains).ToList();
+            if (sharedDomains.Count > 0)
+            {
+                results.Add(
+                    new RelatedLexemeData(
+                        Lemma: lemma,
+                        EntryId: FindEntryIdForLemma(lemma) ?? lemma,
+                        Relationship: "SemanticDomain",
+                        Gloss: otherInfo.Glosses.Count > 0 ? otherInfo.Glosses[0] : ""
+                    )
+                );
+            }
+        }
+
+        return results;
+    }
+
+    private static string? FindEntryIdForLemma(string lemma) =>
+        s_entryData.FirstOrDefault(kvp => kvp.Value.Lemma == lemma).Key;
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/DictionaryTab.cs
