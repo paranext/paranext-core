@@ -85,13 +85,13 @@ function MarkerMenuCommandItem({
 }) {
   return (
     <CommandItem
-      className="tw-flex tw-gap-2 hover:tw-bg-accent"
+      className="tw:flex tw:gap-2 tw:hover:bg-accent"
       disabled={item.isDisallowed || item.isDeprecated}
       onSelect={item.action}
     >
-      <div className="tw-w-8 tw-min-w-8">
+      <div className="tw:w-8 tw:min-w-8">
         {item.marker ? (
-          <span className="tw-text-xs">{item.marker}</span>
+          <span className="tw:text-xs">{item.marker}</span>
         ) : (
           <div>
             <MenuMarkerIcon icon={item.icon} />
@@ -99,11 +99,11 @@ function MarkerMenuCommandItem({
         )}
       </div>
       <div>
-        <p className="tw-text-sm">{item.title}</p>
-        {item.subtitle && <p className="tw-text-xs tw-text-muted-foreground">{item.subtitle}</p>}
+        <p className="tw:text-sm">{item.title}</p>
+        {item.subtitle && <p className="tw:text-xs tw:text-muted-foreground">{item.subtitle}</p>}
       </div>
       {(item.isDisallowed || item.isDeprecated) && (
-        <CommandShortcut className="tw-font-sans">
+        <CommandShortcut className="tw:font-sans">
           {item.isDisallowed
             ? localizedStrings['%markerMenu_disallowed_label%']
             : localizedStrings['%markerMenu_deprecated_label%']}
@@ -138,7 +138,7 @@ export function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: Mar
   }, [commandSearch, markerMenuItems]);
 
   return (
-    <Command className="tw-p-1" shouldFilter={false} loop>
+    <Command className="tw:p-1" shouldFilter={false} loop>
       <CommandInput
         className="marker-menu-search"
         ref={searchRef}

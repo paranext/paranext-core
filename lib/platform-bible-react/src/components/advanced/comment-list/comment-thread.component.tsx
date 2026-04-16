@@ -8,7 +8,7 @@ import { Badge } from '@/components/shadcn-ui/badge';
 import { Button } from '@/components/shadcn-ui/button';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { Separator } from '@/components/shadcn-ui/separator';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import {
   SerializedEditorState,
   SerializedElementNode,
@@ -437,13 +437,13 @@ export function CommentThread({
       aria-selected={isSelected}
       id={threadId}
       className={cn(
-        'tw-group tw-w-full tw-rounded-none tw-border-none tw-p-4 tw-outline-none tw-transition-all tw-duration-200 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
-        { 'tw-cursor-pointer hover:tw-shadow-md': !isSelected },
+        'tw:group tw:w-full tw:rounded-none tw:border-none tw:p-4 tw:outline-hidden tw:transition-all tw:duration-200 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
+        { 'tw:cursor-pointer tw:hover:shadow-md': !isSelected },
         {
-          'tw-bg-primary-foreground': !isSelected && threadStatus !== 'Resolved' && isRead,
-          'tw-bg-background': isSelected && threadStatus !== 'Resolved' && isRead,
-          'tw-bg-muted': threadStatus === 'Resolved',
-          'tw-bg-accent': !isRead && !isSelected && threadStatus !== 'Resolved',
+          'tw:bg-primary-foreground': !isSelected && threadStatus !== 'Resolved' && isRead,
+          'tw:bg-background': isSelected && threadStatus !== 'Resolved' && isRead,
+          'tw:bg-muted': threadStatus === 'Resolved',
+          'tw:bg-accent': !isRead && !isSelected && threadStatus !== 'Resolved',
         },
       )}
       onClick={() => {
@@ -451,11 +451,11 @@ export function CommentThread({
       }}
       tabIndex={-1}
     >
-      <CardContent className="tw-flex tw-flex-col tw-gap-2 tw-p-0">
-        <div className="tw-flex tw-flex-col tw-content-center tw-items-start tw-gap-4">
-          <div className="tw-flex tw-items-center tw-gap-2">
+      <CardContent className="tw:flex tw:flex-col tw:gap-2 tw:p-0">
+        <div className="tw:flex tw:flex-col tw:content-center tw:items-start tw:gap-4">
+          <div className="tw:flex tw:items-center tw:gap-2">
             {localizedAssignedToText && (
-              <Badge className="tw-rounded-sm tw-bg-input tw-text-sm tw-font-normal tw-text-primary hover:tw-bg-input">
+              <Badge className="tw:rounded-sm tw:bg-input tw:text-sm tw:font-normal tw:text-primary tw:hover:bg-input">
                 {localizedAssignedToText}
               </Badge>
             )}
@@ -466,7 +466,7 @@ export function CommentThread({
                 e.stopPropagation();
                 toggleRead();
               }}
-              className="tw-text-muted-foreground tw-transition hover:tw-text-foreground"
+              className="tw:text-muted-foreground tw:transition tw:hover:text-foreground"
               aria-label={
                 isRead
                   ? (localizedStrings['%comment_aria_mark_as_unread%'] ?? 'Mark as unread')
@@ -480,9 +480,9 @@ export function CommentThread({
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  'tw-ms-auto',
-                  'tw-text-primary tw-transition-opacity tw-duration-200 hover:tw-bg-primary/10',
-                  'tw-opacity-0 group-hover:tw-opacity-100',
+                  'tw:ms-auto',
+                  'tw:text-primary tw:transition-opacity tw:duration-200 tw:hover:bg-primary/10',
+                  'tw:opacity-0 tw:group-hover:opacity-100',
                 )}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -493,29 +493,29 @@ export function CommentThread({
                 }}
                 aria-label={localizedStrings['%comment_aria_resolve_thread%'] ?? 'Resolve thread'}
               >
-                <Check className="tw-h-4 tw-w-4" />
+                <Check className="tw:h-4 tw:w-4" />
               </Button>
             )}
           </div>
-          <div className="tw-flex tw-max-w-full tw-flex-wrap tw-items-baseline tw-gap-2">
+          <div className="tw:flex tw:max-w-full tw:flex-wrap tw:items-baseline tw:gap-2">
             {/* Allow clicking to expand thread when collapsed, but allow text selection when expanded */}
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
             <p
               ref={verseTextRef}
               className={cn(
-                'tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal tw-text-muted-foreground',
+                'tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal tw:text-muted-foreground',
                 {
-                  'tw-overflow-visible tw-text-clip tw-whitespace-normal tw-break-words':
+                  'tw:overflow-visible tw:text-clip tw:whitespace-normal tw:break-words':
                     isVerseExpanded,
                 },
-                { 'tw-whitespace-nowrap': !isVerseExpanded },
+                { 'tw:whitespace-nowrap': !isVerseExpanded },
               )}
             >
               {verseRef && onVerseRefClick ? (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="tw-h-auto tw-px-1 tw-py-0 tw-text-sm tw-font-normal tw-text-muted-foreground"
+                  className="tw:h-auto tw:px-1 tw:py-0 tw:text-sm tw:font-normal tw:text-muted-foreground"
                   onClick={(e) => {
                     e.stopPropagation();
                     onVerseRefClick(thread);
@@ -528,7 +528,7 @@ export function CommentThread({
               )}
               <span className={classNameForVerseText}>
                 {firstComment.contextBefore}
-                <span className="tw-font-bold">{firstComment.selectedText}</span>
+                <span className="tw:font-bold">{firstComment.selectedText}</span>
                 {firstComment.contextAfter}
               </span>
             </p>
@@ -550,11 +550,11 @@ export function CommentThread({
         </div>
         <>
           {hasReplies && !isSelected && (
-            <div className="tw-flex tw-items-center tw-gap-5">
-              <div className="tw-w-8">
+            <div className="tw:flex tw:items-center tw:gap-5">
+              <div className="tw:w-8">
                 <Separator />
               </div>
-              <p className="tw-text-sm tw-text-muted-foreground">{replyText}</p>
+              <p className="tw:text-sm tw:text-muted-foreground">{replyText}</p>
             </div>
           )}
           {/* Show Editor on an unselected thread when it has drafted content */}
@@ -570,7 +570,7 @@ export function CommentThread({
               {/* Show "hidden replies" separator before the visible replies if there are hidden replies */}
               {hiddenReplyCount > 0 && (
                 <div
-                  className="tw-flex tw-cursor-pointer tw-items-center tw-gap-5 tw-py-2"
+                  className="tw:flex tw:cursor-pointer tw:items-center tw:gap-5 tw:py-2"
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowAllReplies(true);
@@ -585,11 +585,11 @@ export function CommentThread({
                     }
                   }}
                 >
-                  <div className="tw-w-8">
+                  <div className="tw:w-8">
                     <Separator />
                   </div>
-                  <div className="tw-flex tw-items-center tw-gap-2">
-                    <p className="tw-text-sm tw-text-muted-foreground">{hiddenReplyText}</p>
+                  <div className="tw:flex tw:items-center tw:gap-2">
+                    <p className="tw:text-sm tw:text-muted-foreground">{hiddenReplyText}</p>
                     {showAllReplies ? <ChevronUp /> : <ChevronDown />}
                   </div>
                 </div>
@@ -617,7 +617,7 @@ export function CommentThread({
                   <div
                     role="textbox"
                     tabIndex={-1}
-                    className="tw-w-full tw-space-y-2"
+                    className="tw:w-full tw:space-y-2"
                     onClick={(e) => e.stopPropagation()}
                     onKeyDownCapture={(e) => {
                       if (didPressCtrlOrCmdEnter(e)) {
@@ -652,11 +652,11 @@ export function CommentThread({
                         clearEditorRef.current = clearFn;
                       }}
                     />
-                    <div className="tw-flex tw-flex-row tw-items-center tw-justify-end tw-gap-2">
+                    <div className="tw:flex tw:flex-row tw:items-center tw:justify-end tw:gap-2">
                       {pendingCommentAssignedUser !== undefined &&
                         (hasEditorContent(pendingCommentEditorState) ||
                           pendingCommentAssignedUser !== lastSubmittedAssignedUser) && (
-                          <span className="tw-flex-1 tw-text-sm tw-text-muted-foreground">
+                          <span className="tw:flex-1 tw:text-sm tw:text-muted-foreground">
                             {formatReplacementString(
                               localizedStrings['%comment_assigning_to%'] ??
                                 'Assigning to: {assignedUser}',
@@ -674,7 +674,7 @@ export function CommentThread({
                           <Button
                             size="icon"
                             variant="outline"
-                            className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
+                            className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
                             disabled={
                               !canAssign ||
                               !assignableUsers ||
@@ -689,7 +689,7 @@ export function CommentThread({
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent
-                          className="tw-w-auto tw-p-0"
+                          className="tw:w-auto tw:p-0"
                           align="end"
                           onKeyDown={(e) => {
                             if (e.key === 'Escape') {
@@ -718,7 +718,7 @@ export function CommentThread({
                                     setLastSubmittedAssignedUser(undefined);
                                     setIsAssignPopoverOpen(false);
                                   }}
-                                  className="tw-flex tw-items-center"
+                                  className="tw:flex tw:items-center"
                                 >
                                   <span>{getAssignedUserDisplayName(user, localizedStrings)}</span>
                                 </CommandItem>
@@ -730,7 +730,7 @@ export function CommentThread({
                       <Button
                         size="icon"
                         onClick={handleSubmitComment}
-                        className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
+                        className="tw:flex tw:items-center tw:justify-center tw:rounded-md"
                         disabled={
                           !hasEditorContent(pendingCommentEditorState) &&
                           (pendingCommentAssignedUser === undefined ||

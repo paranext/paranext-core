@@ -132,7 +132,7 @@ const getActionButtonContent = (
 ) => {
   return (
     <Button
-      className="tw-bg-muted"
+      className="tw:bg-muted"
       variant="ghost"
       onClick={() => installResource(resource.dblEntryUid, 'install')}
     >
@@ -152,8 +152,8 @@ const getActionContent = (
   const isBeingHandled = idsBeingHandled.includes(resource.dblEntryUid);
   if (isBeingHandled) {
     return (
-      <Button className="tw-bg-muted" variant="ghost">
-        <Spinner className="tw-h-5 tw-py-[1px]" />
+      <Button className="tw:bg-muted" variant="ghost">
+        <Spinner className="tw:h-5 tw:py-[1px]" />
       </Button>
     );
   }
@@ -163,7 +163,7 @@ const getActionContent = (
   if (resource.updateAvailable) {
     return getActionButtonContent(resource, updateText, installResource);
   }
-  return <Label className="tw-my-2 tw-flex tw-h-6 tw-items-center">{installedText}</Label>;
+  return <Label className="tw:my-2 tw:flex tw:h-6 tw:items-center">{installedText}</Label>;
 };
 
 const emptyArray: DblResourceData[] = [];
@@ -382,14 +382,14 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const buildTableHead = useCallback(
     (key: SortConfig['key'], label: string) => (
       <TableHead onClick={() => handleSort(key)}>
-        <div className="tw-flex tw-items-center">
-          <div className="tw-font-normal">{label}</div>
-          {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
+        <div className="tw:flex tw:items-center">
+          <div className="tw:font-normal">{label}</div>
+          {sortConfig.key !== key && <ChevronsUpDown className="tw:pl-1" size={16} />}
           {sortConfig.key === key &&
             (sortConfig.direction === 'ascending' ? (
-              <ChevronUp className="tw-pl-1" size={16} />
+              <ChevronUp className="tw:pl-1" size={16} />
             ) : (
-              <ChevronDown className="tw-pl-1" size={16} />
+              <ChevronDown className="tw:pl-1" size={16} />
             ))}
         </div>
       </TableHead>
@@ -399,24 +399,24 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   return (
     <div>
-      <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
-        <CardHeader className="tw-flex-shrink-0">
-          <div className="tw-flex">
-            <div className="tw-flex tw-items-center tw-pr-4">
-              <BookOpen size={36} className="tw-me-4" />
-              <div className="tw-flex tw-flex-col tw-gap-2">
+      <Card className="tw:flex tw:h-screen tw:flex-col tw:rounded-none tw:border-0">
+        <CardHeader className="tw:shrink-0">
+          <div className="tw:flex">
+            <div className="tw:flex tw:items-center tw:pr-4">
+              <BookOpen size={36} className="tw:me-4" />
+              <div className="tw:flex tw:flex-col tw:gap-2">
                 <CardTitle>{dialogTitleText}</CardTitle>
-                <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>
+                <CardDescription className="tw:mt-1">{dialogSubtitleText}</CardDescription>
                 <SearchBar
                   value={textFilter}
-                  className="tw-min-w-72"
+                  className="tw:min-w-72"
                   onSearch={setTextFilter}
                   placeholder={filterInputText}
                 />
               </div>
             </div>
-            <div className="tw-flex tw-flex-col tw-gap-1">
-              <Label className="tw-mb-2 tw-text-muted-foreground">{filterByText}</Label>
+            <div className="tw:flex tw:flex-col tw:gap-1">
+              <Label className="tw:mb-2 tw:text-muted-foreground">{filterByText}</Label>
               <Filter
                 entries={typeOptions}
                 selected={selectedTypes}
@@ -443,9 +443,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
             </div>
           </div>
         </CardHeader>
-        <CardContent className="tw-flex-grow tw-overflow-auto">
+        <CardContent className="tw:flex-grow tw:overflow-auto">
           {isLoadingResources ? (
-            <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
+            <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
               <Spinner />
             </div>
           ) : (
@@ -453,16 +453,16 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
             /* eslint-disable no-nested-ternary */
             <div>
               {isPlatformError(resources) ? (
-                <div className="tw-m-4 tw-flex tw-justify-center">
+                <div className="tw:m-4 tw:flex tw:justify-center">
                   <Label>{noResultsErrorText}</Label>
                 </div>
               ) : sortedResources.length === 0 ? (
-                <div className="tw-m-4 tw-flex tw-justify-center">
+                <div className="tw:m-4 tw:flex tw:justify-center">
                   <Label>{noResultsText}</Label>
                 </div>
               ) : (
                 <Table stickyHeader>
-                  <TableHeader className="tw-bg-none" stickyHeader>
+                  <TableHeader className="tw:bg-none" stickyHeader>
                     <TableRow>
                       <TableHead />
                       <TableHead />
@@ -482,10 +482,10 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                         key={resource.displayName + resource.fullName}
                       >
                         <TableCell>
-                          <BookOpen className="tw-pr-0" size={18} />
+                          <BookOpen className="tw:pr-0" size={18} />
                         </TableCell>
                         <TableCell>{resource.displayName}</TableCell>
-                        <TableCell className="tw-font-medium">{resource.fullName}</TableCell>
+                        <TableCell className="tw:font-medium">{resource.fullName}</TableCell>
                         <TableCell>{resource.bestLanguageName}</TableCell>
                         <TableCell>
                           {typeOptions.find((type) => type.value === resource.type)?.label ??
@@ -493,7 +493,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                         </TableCell>
                         <TableCell>{resource.size}</TableCell>
                         <TableCell>
-                          <div className="tw-flex tw-justify-between">
+                          <div className="tw:flex tw:justify-between">
                             {getActionContent(
                               resource,
                               idsBeingHandled,
@@ -506,7 +506,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost">
-                                    <Ellipsis className="tw-w-4" />
+                                    <Ellipsis className="tw:w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start">
@@ -537,9 +537,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
             </div>
           )}
         </CardContent>
-        <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-border-t tw-p-4">
+        <CardFooter className="tw:shrink-0 tw:justify-center tw:border-t tw:p-4">
           {sortedResources.length > 0 && (
-            <Label className="tw-font-normal">{`${showingText} ${sortedResources.length} ${resultsText}`}</Label>
+            <Label className="tw:font-normal">{`${showingText} ${sortedResources.length} ${resultsText}`}</Label>
           )}
         </CardFooter>
       </Card>

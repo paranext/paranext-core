@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { LocalizedStringValue, formatReplacementString } from 'platform-bible-utils';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../shadcn-ui/select';
 import { Label } from '../shadcn-ui/label';
@@ -139,7 +139,7 @@ export function UiLanguageSelector({
   };
 
   return (
-    <div id={id} className={cn('pr-twp tw-max-w-sm', className)}>
+    <div id={id} className={cn('pr-twp tw:max-w-sm', className)}>
       {/* Language Selector */}
       <Select
         name="uiLanguage"
@@ -166,8 +166,8 @@ export function UiLanguageSelector({
 
       {/* Fallback Language Button */}
       {primaryLanguage !== 'en' && (
-        <div className="tw-pt-3">
-          <Label className="tw-font-normal tw-text-muted-foreground">
+        <div className="tw:pt-3">
+          <Label className="tw:font-normal tw:text-muted-foreground">
             {formatReplacementString(fallbackLanguagesText, {
               fallbackLanguages:
                 fallbackLanguages?.length > 0

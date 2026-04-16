@@ -140,7 +140,7 @@ export function FootnotesLayout({
     20,
   );
 
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const debouncedSetFootnotesPaneSize = useCallback(
     (size: number) => {
@@ -226,27 +226,27 @@ export function FootnotesLayout({
   );
 
   return (
-    <div ref={setContainerRef} className="tw-h-full tw-w-full tw-min-h-0">
+    <div ref={setContainerRef} className="tw:h-full tw:w-full tw:min-h-0">
       <ResizablePanelGroup
         direction={footnotesPanePosition === 'bottom' ? 'vertical' : 'horizontal'}
-        className="tw-h-full tw-w-full tw-min-h-0"
+        className="tw:h-full tw:w-full tw:min-h-0"
         onLayout={onLayoutFootnotesPane}
       >
         {children && (
           <>
-            <ResizablePanel className="tw-flex tw-flex-col tw-min-h-0">
-              <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">{children}</div>
+            <ResizablePanel className="tw:flex tw:flex-col tw:min-h-0">
+              <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">{children}</div>
             </ResizablePanel>
             <ResizableHandle />
           </>
         )}
         <ResizablePanel
           defaultSize={footnotesPaneSizePercent}
-          className="tw-bg-sidebar tw-pl-2 tw-pt-2 tw-pb-0 tw-pr-0 tw-flex tw-flex-col tw-min-h-0"
+          className="tw:bg-sidebar tw:pl-2 tw:pt-2 tw:pb-0 tw:pr-0 tw:flex tw:flex-col tw:min-h-0"
           minSize={footnotesPaneMinPercent}
           maxSize={footnotesPaneMaxPercent}
         >
-          <div className="tw-flex tw-flex-col tw-flex-1 tw-min-h-0">
+          <div className="tw:flex tw:flex-col tw:flex-1 tw:min-h-0">
             <FootnoteList
               classNameForItems="scripture-font"
               listId={footnoteListKey}

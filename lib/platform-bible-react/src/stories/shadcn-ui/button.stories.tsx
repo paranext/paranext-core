@@ -42,9 +42,9 @@ export const Default: Story = {
 
 export const LiveEditable: Story = {
   render: (args) => (
-    <div className="tw-space-y-4">
+    <div className="tw:space-y-4">
       <Button {...args}>{args.children || 'Click me!'}</Button>
-      <p className="tw-text-sm tw-text-gray-600">
+      <p className="tw:text-sm tw:text-gray-600">
         Use the Code Editor tab to modify this button in real-time!
       </p>
     </div>
@@ -65,7 +65,7 @@ export const LiveEditable: Story = {
 
 export const VariantsDemo: Story = {
   render: () => (
-    <div className="tw-flex tw-flex-wrap tw-gap-2">
+    <div className="tw:flex tw:flex-wrap tw:gap-2">
       <Button variant="default">Default</Button>
       <Button variant="destructive">Destructive</Button>
       <Button variant="outline">Outline</Button>
@@ -86,21 +86,21 @@ export const VariantsDemo: Story = {
 
 export const SizesDemo: Story = {
   render: () => (
-    <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-4">
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <span className="tw-text-sm">default:</span>
+    <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-4">
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <span className="tw:text-sm">default:</span>
         <Button size="default">Button</Button>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <span className="tw-text-sm">sm:</span>
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <span className="tw:text-sm">sm:</span>
         <Button size="sm">Button</Button>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <span className="tw-text-sm">lg:</span>
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <span className="tw:text-sm">lg:</span>
         <Button size="lg">Button</Button>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-2">
-        <span className="tw-text-sm">icon:</span>
+      <div className="tw:flex tw:items-center tw:gap-2">
+        <span className="tw:text-sm">icon:</span>
         <Button size="icon">★</Button>
       </div>
     </div>
@@ -215,7 +215,7 @@ export const VariantTest: Story = {
 
     // Verify button is rendered with destructive variant styles
     await expect(button).toBeInTheDocument();
-    await expect(button).toHaveClass('tw-bg-destructive');
+    await expect(button).toHaveClass('tw:bg-destructive');
 
     // Test button interaction
     await userEvent.click(button);
@@ -242,7 +242,7 @@ export const SizeTest: Story = {
 
     // Verify button is rendered with large size styles
     await expect(button).toBeInTheDocument();
-    await expect(button).toHaveClass('tw-h-11'); // Large size class
+    await expect(button).toHaveClass('tw:h-11'); // Large size class
 
     // Test double click
     await userEvent.dblClick(button);

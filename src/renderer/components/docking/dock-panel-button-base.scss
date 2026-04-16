@@ -4,7 +4,7 @@
 %panel-button-base {
   height: 30px;
   width: 30px;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   border-radius: vars.$space--sm;
 
   &:hover {
@@ -32,8 +32,8 @@
   &:focus-visible {
     outline: none;
     box-shadow:
-      0 0 0 2px hsl(var(--ring)),
-      0 0 0 4px hsl(var(--ring-offset));
+      0 0 0 2px var(--ring),
+      0 0 0 4px var(--ring-offset);
   }
 
   &:disabled {

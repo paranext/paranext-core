@@ -100,13 +100,13 @@ export const WithIcons: Story = {
     return (
       <ToggleGroup type="multiple" value={formatting} onValueChange={setFormatting}>
         <ToggleGroupItem value="bold" aria-label="Bold">
-          <Bold className="tw-h-4 tw-w-4" />
+          <Bold className="tw:h-4 tw:w-4" />
         </ToggleGroupItem>
         <ToggleGroupItem value="italic" aria-label="Italic">
-          <Italic className="tw-h-4 tw-w-4" />
+          <Italic className="tw:h-4 tw:w-4" />
         </ToggleGroupItem>
         <ToggleGroupItem value="underline" aria-label="Underline">
-          <Underline className="tw-h-4 tw-w-4" />
+          <Underline className="tw:h-4 tw:w-4" />
         </ToggleGroupItem>
       </ToggleGroup>
     );
@@ -131,13 +131,13 @@ export const Alignment: Story = {
         onValueChange={(value) => value && setAlignment(value)}
       >
         <ToggleGroupItem value="left" aria-label="Align left">
-          <AlignLeft className="tw-h-4 tw-w-4" />
+          <AlignLeft className="tw:h-4 tw:w-4" />
         </ToggleGroupItem>
         <ToggleGroupItem value="center" aria-label="Align center">
-          <AlignCenter className="tw-h-4 tw-w-4" />
+          <AlignCenter className="tw:h-4 tw:w-4" />
         </ToggleGroupItem>
         <ToggleGroupItem value="right" aria-label="Align right">
-          <AlignRight className="tw-h-4 tw-w-4" />
+          <AlignRight className="tw:h-4 tw:w-4" />
         </ToggleGroupItem>
       </ToggleGroup>
     );
@@ -153,9 +153,9 @@ export const Alignment: Story = {
 
 export const Sizes: Story = {
   render: () => (
-    <div className="tw-space-y-4">
+    <div className="tw:space-y-4">
       <div>
-        <h4 className="tw-mb-2 tw-text-sm tw-font-medium">Small</h4>
+        <h4 className="tw:mb-2 tw:text-sm tw:font-medium">Small</h4>
         <ToggleGroup type="single" size="sm">
           <ToggleGroupItem value="a">A</ToggleGroupItem>
           <ToggleGroupItem value="b">B</ToggleGroupItem>
@@ -163,7 +163,7 @@ export const Sizes: Story = {
         </ToggleGroup>
       </div>
       <div>
-        <h4 className="tw-mb-2 tw-text-sm tw-font-medium">Default</h4>
+        <h4 className="tw:mb-2 tw:text-sm tw:font-medium">Default</h4>
         <ToggleGroup type="single" size="default">
           <ToggleGroupItem value="a">A</ToggleGroupItem>
           <ToggleGroupItem value="b">B</ToggleGroupItem>
@@ -171,7 +171,7 @@ export const Sizes: Story = {
         </ToggleGroup>
       </div>
       <div>
-        <h4 className="tw-mb-2 tw-text-sm tw-font-medium">Large</h4>
+        <h4 className="tw:mb-2 tw:text-sm tw:font-medium">Large</h4>
         <ToggleGroup type="single" size="lg">
           <ToggleGroupItem value="a">A</ToggleGroupItem>
           <ToggleGroupItem value="b">B</ToggleGroupItem>
@@ -208,9 +208,9 @@ export const Disabled: Story = {
 
 export const Variants: Story = {
   render: () => (
-    <div className="tw-space-y-4">
+    <div className="tw:space-y-4">
       <div>
-        <h4 className="tw-mb-2 tw-text-sm tw-font-medium">Default Variant - Multiple</h4>
+        <h4 className="tw:mb-2 tw:text-sm tw:font-medium">Default Variant - Multiple</h4>
         <ToggleGroup type="multiple">
           <ToggleGroupItem value="a">A</ToggleGroupItem>
           <ToggleGroupItem value="b">B</ToggleGroupItem>
@@ -218,7 +218,7 @@ export const Variants: Story = {
         </ToggleGroup>
       </div>
       <div>
-        <h4 className="tw-mb-2 tw-text-sm tw-font-medium">Outline Variant - Single</h4>
+        <h4 className="tw:mb-2 tw:text-sm tw:font-medium">Outline Variant - Single</h4>
         <ToggleGroup variant="outline" type="single">
           <ToggleGroupItem value="a">A</ToggleGroupItem>
           <ToggleGroupItem value="b">B</ToggleGroupItem>
@@ -239,13 +239,13 @@ export const Variants: Story = {
 
 export const Interactive: Story = {
   render: (args) => (
-    <div className="tw-space-y-4">
+    <div className="tw:space-y-4">
       <ToggleGroup {...args}>
         <ToggleGroupItem value="option1">Option 1</ToggleGroupItem>
         <ToggleGroupItem value="option2">Option 2</ToggleGroupItem>
         <ToggleGroupItem value="option3">Option 3</ToggleGroupItem>
       </ToggleGroup>
-      <div className="tw-text-sm tw-text-muted-foreground">
+      <div className="tw:text-sm tw:text-muted-foreground">
         Use the controls to experiment with different properties.
       </div>
     </div>

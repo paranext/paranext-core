@@ -8,7 +8,7 @@ export function Grid({ children, className, title }: GridComponentProps) {
   return (
     <div
       className={cn(
-        'tw-m-2 tw-grid tw-grid-cols-[1fr_2fr] max-[300px]:tw-grid-cols-1 tw-gap-y-4 tw-gap-x-5 tw-items-center [&>*:nth-child(odd)]:min-[300px]:tw-justify-self-end',
+        'tw:m-2 tw:grid tw:grid-cols-[1fr_2fr] tw:max-[300px]:grid-cols-1 tw:gap-y-4 tw:gap-x-5 tw:items-center tw:[&>*:nth-child(odd)]:min-[300px]:justify-self-end',
         className,
       )}
       title={title}

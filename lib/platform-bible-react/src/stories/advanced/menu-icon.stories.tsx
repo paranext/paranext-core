@@ -105,24 +105,24 @@ export const NoIcon: Story = {
 
 export const IconSizeExample: Story = {
   render: () => (
-    <div className="tw-space-y-4">
-      <h3 className="tw-text-lg tw-font-semibold">Icon Size Demonstration</h3>
-      <div className="tw-space-y-2">
-        <div className="tw-flex tw-items-center tw-rounded tw-border tw-p-2">
+    <div className="tw:space-y-4">
+      <h3 className="tw:text-lg tw:font-semibold">Icon Size Demonstration</h3>
+      <div className="tw:space-y-2">
+        <div className="tw:flex tw:items-center tw:rounded tw:border tw:p-2">
           <MenuItemIcon icon={homeIcon} menuLabel="Home" leading />
-          <span className="tw-text-sm">Home (Leading)</span>
+          <span className="tw:text-sm">Home (Leading)</span>
         </div>
-        <div className="tw-flex tw-items-center tw-rounded tw-border tw-p-2">
-          <span className="tw-text-sm">Settings</span>
+        <div className="tw:flex tw:items-center tw:rounded tw:border tw:p-2">
+          <span className="tw:text-sm">Settings</span>
           <MenuItemIcon icon={settingsIcon} menuLabel="Settings" leading={false} />
         </div>
-        <div className="tw-flex tw-items-center tw-rounded tw-border tw-p-2">
+        <div className="tw:flex tw:items-center tw:rounded tw:border tw:p-2">
           <MenuItemIcon icon={sampleIcon} menuLabel="Star" leading />
-          <span className="tw-text-sm">Star (Leading)</span>
+          <span className="tw:text-sm">Star (Leading)</span>
         </div>
       </div>
-      <p className="tw-text-xs tw-text-muted-foreground">
-        Icons are constrained to max 20px (tw-max-h-5 tw-max-w-5) for consistent sizing.
+      <p className="tw:text-xs tw:text-muted-foreground">
+        Icons are constrained to max 20px (tw:max-h-5 tw:max-w-5) for consistent sizing.
       </p>
     </div>
   ),
@@ -137,19 +137,19 @@ export const IconSizeExample: Story = {
 
 export const AccessibilityExample: Story = {
   render: () => (
-    <div className="tw-space-y-4">
-      <h3 className="tw-text-lg tw-font-semibold">Accessibility Features</h3>
-      <div className="tw-space-y-2">
-        <div className="tw-flex tw-items-center tw-rounded tw-border tw-p-2">
+    <div className="tw:space-y-4">
+      <h3 className="tw:text-lg tw:font-semibold">Accessibility Features</h3>
+      <div className="tw:space-y-2">
+        <div className="tw:flex tw:items-center tw:rounded tw:border tw:p-2">
           <MenuItemIcon icon={homeIcon} menuLabel="Dashboard" leading />
-          <span className="tw-text-sm">Dashboard</span>
+          <span className="tw:text-sm">Dashboard</span>
         </div>
-        <div className="tw-flex tw-items-center tw-rounded tw-border tw-p-2">
-          <span className="tw-text-sm">User Profile</span>
+        <div className="tw:flex tw:items-center tw:rounded tw:border tw:p-2">
+          <span className="tw:text-sm">User Profile</span>
           <MenuItemIcon icon={settingsIcon} menuLabel="User Profile" leading={false} />
         </div>
       </div>
-      <div className="tw-space-y-1 tw-text-xs">
+      <div className="tw:space-y-1 tw:text-xs">
         <p>
           <strong>Alt text:</strong> &quot;Leading icon for Dashboard&quot;
         </p>
@@ -157,7 +157,7 @@ export const AccessibilityExample: Story = {
           <strong>Alt text:</strong> &quot;Trailing icon for User Profile&quot;
         </p>
       </div>
-      <p className="tw-text-xs tw-text-muted-foreground">
+      <p className="tw:text-xs tw:text-muted-foreground">
         Icons include descriptive alt text that indicates position and menu item context.
       </p>
     </div>

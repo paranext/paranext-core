@@ -2,7 +2,7 @@ import React from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 
 /**
@@ -21,10 +21,16 @@ const PopoverTrigger = PopoverPrimitive.Trigger;
 const PopoverAnchor = PopoverPrimitive.Anchor;
 
 /** @inheritdoc Popover */
-const PopoverContent = React.forwardRef<
-  React.ElementRef<typeof PopoverPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = 'center', sideOffset = 4, style, ...props }, ref) => {
+function PopoverContent({
+  className,
+  align = 'center',
+  sideOffset = 4,
+  style,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & {
+  ref?: React.Ref<React.ComponentRef<typeof PopoverPrimitive.Content>>;
+}) {
   const dir: Direction = readDirection();
   return (
     <PopoverPrimitive.Portal>
@@ -33,17 +39,17 @@ const PopoverContent = React.forwardRef<
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          'pr-twp tw-w-72 tw-rounded-md tw-border tw-bg-popover tw-p-4 tw-text-popover-foreground tw-shadow-md tw-outline-none data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
+          // CUSTOM removed tw:z-50 to use const below
+          'pr-twp tw:w-72 tw:rounded-md tw:border tw:bg-popover tw:p-4 tw:text-popover-foreground tw:shadow-md tw:outline-hidden tw:data-[state=open]:animate-in tw:data-[state=closed]:animate-out tw:data-[state=closed]:fade-out-0 tw:data-[state=open]:fade-in-0 tw:data-[state=closed]:zoom-out-95 tw:data-[state=open]:zoom-in-95 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2',
           className,
         )}
-        // CUSTOM z-index uses shared constant instead of default tw-z-50
+        // CUSTOM z-index uses shared constant instead of default tw:z-50
         style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
         {...props}
         dir={dir}
       />
     </PopoverPrimitive.Portal>
   );
-});
-PopoverContent.displayName = PopoverPrimitive.Content.displayName;
+}
 
 export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor };

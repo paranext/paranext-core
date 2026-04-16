@@ -42,12 +42,12 @@ export function TrackProjectDropdown({
   );
 
   return (
-    <div className="tw-flex tw-items-center tw-gap-2">
-      <Label htmlFor="track-project" className="tw-text-xs tw-whitespace-nowrap">
+    <div className="tw:flex tw:items-center tw:gap-2">
+      <Label htmlFor="track-project" className="tw:text-xs tw:whitespace-nowrap">
         {localizedStrings['%platformLexicalTools_dictionary_trackProjectDropdownLabel%']}
       </Label>
       <Select value={projectToTrack ?? 'no-project'} onValueChange={handleTrackProjectChange}>
-        <SelectTrigger className="tw-w-36 tw-h-8" id="track-project">
+        <SelectTrigger className="tw:w-36 tw:h-8" id="track-project">
           <SelectValue placeholder="Project to track" />
         </SelectTrigger>
         <SelectContent>

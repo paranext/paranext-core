@@ -104,9 +104,9 @@ export function FilterDropdown({ id, label, groups }: FilterDropdownProps) {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="default">
-            <Filter size={16} className="tw-mr-2 tw-h-4 tw-w-4" />
+            <Filter size={16} className="tw:mr-2 tw:h-4 tw:w-4" />
             {label}
-            <ChevronDown size={16} className="tw-ml-2 tw-h-4 tw-w-4" />
+            <ChevronDown size={16} className="tw:ml-2 tw:h-4 tw:w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>

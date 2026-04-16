@@ -61,20 +61,20 @@ export const Vertical: Story = {
         <VerticalTabsTrigger value="tab3">Third Tab</VerticalTabsTrigger>
       </VerticalTabsList>
       <VerticalTabsContent value="tab1">
-        <div className="tw-p-4">
-          <h3 className="tw-text-lg tw-font-semibold">First Tab Content</h3>
+        <div className="tw:p-4">
+          <h3 className="tw:text-lg tw:font-semibold">First Tab Content</h3>
           <p>This is the content for the first vertical tab.</p>
         </div>
       </VerticalTabsContent>
       <VerticalTabsContent value="tab2">
-        <div className="tw-p-4">
-          <h3 className="tw-text-lg tw-font-semibold">Second Tab Content</h3>
+        <div className="tw:p-4">
+          <h3 className="tw:text-lg tw:font-semibold">Second Tab Content</h3>
           <p>This is the content for the second vertical tab.</p>
         </div>
       </VerticalTabsContent>
       <VerticalTabsContent value="tab3">
-        <div className="tw-p-4">
-          <h3 className="tw-text-lg tw-font-semibold">Third Tab Content</h3>
+        <div className="tw:p-4">
+          <h3 className="tw:text-lg tw:font-semibold">Third Tab Content</h3>
           <p>This is the content for the third vertical tab.</p>
         </div>
       </VerticalTabsContent>
@@ -130,40 +130,40 @@ export const NestedVertical: Story = {
 
 export const Rich: Story = {
   render: () => (
-    <Tabs defaultValue="account" className="tw-w-96">
-      <TabsList className="tw-grid tw-w-full tw-grid-cols-2">
+    <Tabs defaultValue="account" className="tw:w-96">
+      <TabsList className="tw:grid tw:w-full tw:grid-cols-2">
         <TabsTrigger value="account">Account</TabsTrigger>
         <TabsTrigger value="password">Password</TabsTrigger>
       </TabsList>
-      <TabsContent value="account" className="tw-space-y-4">
-        <div className="tw-space-y-2">
-          <h3 className="tw-text-lg tw-font-medium">Account Settings</h3>
-          <p className="tw-text-sm tw-text-muted-foreground">
+      <TabsContent value="account" className="tw:space-y-4">
+        <div className="tw:space-y-2">
+          <h3 className="tw:text-lg tw:font-medium">Account Settings</h3>
+          <p className="tw:text-sm tw:text-muted-foreground">
             Manage your account settings and preferences.
           </p>
         </div>
-        <div className="tw-space-y-2">
+        <div className="tw:space-y-2">
           {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label className="tw-text-sm tw-font-medium">Username</label>
+          <label className="tw:text-sm tw:font-medium">Username</label>
           <input
-            className="tw-w-full tw-rounded-md tw-border tw-px-3 tw-py-2"
+            className="tw:w-full tw:rounded-md tw:border tw:px-3 tw:py-2"
             placeholder="Enter username"
           />
         </div>
       </TabsContent>
-      <TabsContent value="password" className="tw-space-y-4">
-        <div className="tw-space-y-2">
-          <h3 className="tw-text-lg tw-font-medium">Password Settings</h3>
-          <p className="tw-text-sm tw-text-muted-foreground">
+      <TabsContent value="password" className="tw:space-y-4">
+        <div className="tw:space-y-2">
+          <h3 className="tw:text-lg tw:font-medium">Password Settings</h3>
+          <p className="tw:text-sm tw:text-muted-foreground">
             Change your password and security settings.
           </p>
         </div>
-        <div className="tw-space-y-2">
+        <div className="tw:space-y-2">
           {/* Story uses a plain <label> without htmlFor; associating it would complicate the demo */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label className="tw-text-sm tw-font-medium">Current Password</label>
-          <input type="password" className="tw-w-full tw-rounded-md tw-border tw-px-3 tw-py-2" />
+          <label className="tw:text-sm tw:font-medium">Current Password</label>
+          <input type="password" className="tw:w-full tw:rounded-md tw:border tw:px-3 tw:py-2" />
         </div>
       </TabsContent>
     </Tabs>
@@ -186,20 +186,20 @@ export const Interactive: Story = {
         <TabsTrigger value="settings">Settings</TabsTrigger>
       </TabsList>
       <TabsContent value="overview">
-        <div className="tw-p-4">
-          <h3 className="tw-text-lg tw-font-semibold">Overview</h3>
+        <div className="tw:p-4">
+          <h3 className="tw:text-lg tw:font-semibold">Overview</h3>
           <p>Overview content here.</p>
         </div>
       </TabsContent>
       <TabsContent value="analytics">
-        <div className="tw-p-4">
-          <h3 className="tw-text-lg tw-font-semibold">Analytics</h3>
+        <div className="tw:p-4">
+          <h3 className="tw:text-lg tw:font-semibold">Analytics</h3>
           <p>Analytics content here.</p>
         </div>
       </TabsContent>
       <TabsContent value="settings">
-        <div className="tw-p-4">
-          <h3 className="tw-text-lg tw-font-semibold">Settings</h3>
+        <div className="tw:p-4">
+          <h3 className="tw:text-lg tw:font-semibold">Settings</h3>
           <p>Settings content here.</p>
         </div>
       </TabsContent>

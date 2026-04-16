@@ -1,5 +1,5 @@
 import { ComponentProps } from 'react';
-import { toast as sonner, Toaster } from 'sonner';
+import { Toaster as Sonner, toast as sonner } from 'sonner';
 
 /**
  * Props for Sonner component.
@@ -7,7 +7,7 @@ import { toast as sonner, Toaster } from 'sonner';
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
  */
-type SonnerProps = ComponentProps<typeof Toaster>;
+type SonnerProps = ComponentProps<typeof Sonner>;
 
 /**
  * The Sonner component is an opinionated toast component for React. It is built on Sonner and
@@ -17,18 +17,19 @@ type SonnerProps = ComponentProps<typeof Toaster>;
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
  */
-function Sonner({ ...props }: SonnerProps) {
+function Toaster({ ...props }: SonnerProps) {
   return (
-    <Toaster
-      className="tw-toaster tw-group"
+    <Sonner
+      className="tw:toaster tw:group"
       toastOptions={{
         classNames: {
           toast:
-            'tw-group tw-toast group-[.tw-toaster]:tw-bg-background group-[.tw-toaster]:tw-text-foreground group-[.tw-toaster]:tw-border-border group-[.tw-toaster]:tw-shadow-lg',
-          description: 'group-[.tw-toast]:tw-text-muted-foreground',
+            'tw:group tw:toast tw:group-[.tw\\:toaster]:bg-background tw:group-[.tw\\:toaster]:text-foreground tw:group-[.tw\\:toaster]:border-border tw:group-[.tw\\:toaster]:shadow-lg',
+          description: 'tw:group-[.tw\\:toast]:text-muted-foreground',
           actionButton:
-            'group-[.tw-toast]:tw-bg-primary group-[.tw-toast]:tw-text-primary-foreground',
-          cancelButton: 'group-[.tw-toast]:tw-bg-muted group-[.tw-toast]:tw-text-muted-foreground',
+            'tw:group-[.tw\\:toast]:bg-primary tw:group-[.tw\\:toast]:text-primary-foreground',
+          cancelButton:
+            'tw:group-[.tw\\:toast]:bg-muted tw:group-[.tw\\:toast]:text-muted-foreground',
         },
       }}
       {...props}
@@ -36,5 +37,6 @@ function Sonner({ ...props }: SonnerProps) {
   );
 }
 
+// Toaster exported as Sonner to maintain the API names
 // The re-export of the sonner function was added manually
-export { Sonner, sonner };
+export { Toaster as Sonner, sonner };
