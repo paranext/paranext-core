@@ -67,67 +67,28 @@ const config: StorybookConfig = {
         !conflictingPlugins.includes(plugin?.constructor?.name ?? ''),
     );
 
-    // Inject postcss-loader into the renderer's CSS rules for Storybook only.
-    // postcss-loader is intentionally omitted from the shared renderer webpack configs so that
-    // Tailwind CSS is not processed in the Electron app build — only in Storybook.
+    // Override the inherited postcss-loader's config path so Storybook uses
+    // .storybook/postcss.config.ts (which scans extensions and platform-bible-react source)
+    // rather than the root postcss.config.ts (app-scoped). postcss-loader is now supplied
+    // by the shared renderer webpack config, so we just need to point it at the right config.
+    // See docs/tailwind.md for the overall Tailwind architecture.
+    const storybookPostcssConfigPath = join(__dirname, 'postcss.config.ts');
     if (rendererConfigSanitized.module?.rules) {
       const rendererRules: RuleSetRule[] = rendererConfigSanitized.module.rules;
       rendererConfigSanitized.module.rules = rendererRules.map((rule) => {
         if (!rule || typeof rule !== 'object' || !Array.isArray(rule.use)) return rule;
-        const useArr = rule.use;
-        const cssIdx = useArr.findIndex(
-          (u) =>
-            u === 'css-loader' ||
-            (!!u &&
-              typeof u === 'object' &&
-              typeof u !== 'function' &&
-              'loader' in u &&
-              u.loader === 'css-loader'),
-        );
-        if (cssIdx < 0) return rule;
-        // Bump importLoaders by 1 so postcss-loader processes CSS @imports.
-        // Handles both the plain string form ('css-loader') and the object form ({ loader: 'css-loader', options: {...} }).
-        const newUse = useArr.map((u, i) => {
-          if (i !== cssIdx) return u;
-          // Plain string form: convert to object with importLoaders: 1
-          if (u === 'css-loader') {
-            return { loader: 'css-loader', options: { importLoaders: 1 } };
-          }
-          // Object form: bump existing importLoaders count
-          if (
-            !!u &&
-            typeof u === 'object' &&
-            typeof u !== 'function' &&
-            'options' in u &&
-            typeof u.options === 'object' &&
-            !!u.options &&
-            'importLoaders' in u.options &&
-            typeof u.options.importLoaders === 'number'
-          ) {
-            return { ...u, options: { ...u.options, importLoaders: u.options.importLoaders + 1 } };
-          }
-          // Object form without importLoaders: add importLoaders: 1
-          if (
-            !!u &&
-            typeof u === 'object' &&
-            typeof u !== 'function' &&
-            'loader' in u &&
-            u.loader === 'css-loader' &&
-            (!('options' in u) || typeof u.options !== 'function')
-          ) {
-            const existingOptions =
-              'options' in u && typeof u.options === 'object' ? (u.options ?? {}) : {};
-            return { ...u, options: { ...existingOptions, importLoaders: 1 } };
-          }
-          return u;
-        });
-        newUse.splice(cssIdx + 1, 0, {
-          loader: 'postcss-loader',
-          options: {
-            postcssOptions: { config: join(__dirname, 'postcss.config.ts') },
-          },
-        });
-        return { ...rule, use: newUse };
+        return {
+          ...rule,
+          use: rule.use.map((u) => {
+            if (u === 'postcss-loader') {
+              return {
+                loader: 'postcss-loader',
+                options: { postcssOptions: { config: storybookPostcssConfigPath } },
+              };
+            }
+            return u;
+          }),
+        };
       });
     }
 
