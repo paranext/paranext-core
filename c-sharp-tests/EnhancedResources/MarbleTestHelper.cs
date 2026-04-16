@@ -29,6 +29,7 @@ internal static class MarbleTestHelper
             {
                 [Elohim] = ["God"],
                 ["sampleTerm"] = ["sample gloss"],
+                ["\u03BB\u03CC\u03B3\u03BF\u03C2"] = ["word", "speech", "reason"],
             },
             ["zh-Hans"] = new Dictionary<string, List<string>>
             {
