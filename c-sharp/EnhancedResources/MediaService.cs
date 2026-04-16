@@ -26,7 +26,7 @@ internal static class MediaService
         new(StringComparer.OrdinalIgnoreCase) { "SDBG", "SDBH" };
 
     // Pre-built test image data: mixed collection with both General and SBA images
-    private static readonly List<TestImageEntry> s_testImages = BuildTestImages();
+    private static readonly List<MediaDisplayItem> s_testImages = BuildTestImages();
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/MediaTab.cs
@@ -76,28 +76,10 @@ internal static class MediaService
         var allImages = GetImagesForScope(input);
 
         // Apply Satellite Bible Atlas filter (EXT-067)
-        var filteredItems = new List<MediaDisplayItem>();
-        int displayIndex = 0;
-        foreach (var image in allImages)
-        {
-            if (!InvalidImageForTab(image.Collection, input.TabType))
-            {
-                filteredItems.Add(
-                    new MediaDisplayItem(
-                        ImageId: image.ImageId,
-                        ImageSource: image.ImageSource,
-                        Title: image.Title,
-                        ThumbnailSource: image.ThumbnailSource,
-                        StartRef: image.StartRef,
-                        EndRef: image.EndRef,
-                        Collection: image.Collection,
-                        LanguageCode: image.LanguageCode,
-                        DisplayIndex: displayIndex
-                    )
-                );
-                displayIndex++;
-            }
-        }
+        var filteredItems = allImages
+            .Where(image => !InvalidImageForTab(image.Collection, input.TabType))
+            .Select((image, index) => image with { DisplayIndex = index })
+            .ToList();
 
         // Build count label
         string countLabel = BuildCountLabel(filteredItems.Count, input.TabType);
@@ -123,7 +105,7 @@ internal static class MediaService
         return $"{count} {itemType} files";
     }
 
-    private static List<TestImageEntry> GetImagesForScope(MediaLoadInput input)
+    private static List<MediaDisplayItem> GetImagesForScope(MediaLoadInput input)
     {
         // Filter test images by reference range overlap
         int queryBbbcccvvv = input.CurrentReference.BBBCCCVVV;
@@ -136,13 +118,14 @@ internal static class MediaService
             .ToList();
     }
 
-    private static List<TestImageEntry> BuildTestImages()
+    private static List<MediaDisplayItem> BuildTestImages()
     {
         // Test data: mixed collection for Matthew 1:1 (book 40, chapter 1, verse 1)
         // Includes both General and SBA images to exercise the filter
+        // DisplayIndex is 0 as placeholder; reassigned during LoadResources filtering
         return
         [
-            new TestImageEntry(
+            new MediaDisplayItem(
                 ImageId: "img-001",
                 ImageSource: "images/genesis-creation.jpg",
                 Title: "Creation Scene",
@@ -150,9 +133,10 @@ internal static class MediaService
                 StartRef: new VerseRef(40, 1, 1),
                 EndRef: new VerseRef(40, 1, 25),
                 Collection: "General",
-                LanguageCode: "en"
+                LanguageCode: "en",
+                DisplayIndex: 0
             ),
-            new TestImageEntry(
+            new MediaDisplayItem(
                 ImageId: "img-002",
                 ImageSource: "images/holy-land-map.jpg",
                 Title: "Holy Land Map",
@@ -160,9 +144,10 @@ internal static class MediaService
                 StartRef: new VerseRef(40, 1, 1),
                 EndRef: new VerseRef(40, 28, 20),
                 Collection: "Satellite Bible Atlas",
-                LanguageCode: "en"
+                LanguageCode: "en",
+                DisplayIndex: 0
             ),
-            new TestImageEntry(
+            new MediaDisplayItem(
                 ImageId: "img-003",
                 ImageSource: "images/bethlehem-scene.jpg",
                 Title: "Bethlehem Scene",
@@ -170,19 +155,9 @@ internal static class MediaService
                 StartRef: new VerseRef(40, 1, 1),
                 EndRef: new VerseRef(40, 2, 23),
                 Collection: "General",
-                LanguageCode: "en"
+                LanguageCode: "en",
+                DisplayIndex: 0
             ),
         ];
     }
-
-    private record TestImageEntry(
-        string ImageId,
-        string ImageSource,
-        string Title,
-        string ThumbnailSource,
-        VerseRef StartRef,
-        VerseRef EndRef,
-        string Collection,
-        string LanguageCode
-    );
 }
