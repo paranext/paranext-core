@@ -7,11 +7,11 @@
   "tailwind": {
     "config": "",
     "css": "src/index.css",
-    "baseColor": "slate",
+    "baseColor": "olive",
     "cssVariables": true,
     "prefix": "tw"
   },
-  "iconLibrary": "lucide",
+  "iconLibrary": "tabler",
   "aliases": {
     "components": "@/components/shadcn-ui",
     "utils": "@/utils/shadcn-ui.util",
@@ -19,6 +19,8 @@
     "lib": "@/utils/shadcn-ui",
     "hooks": "@/hooks/shadcn-ui"
   },
+  "menuColor": "default-translucent",
+  "menuAccent": "subtle",
   "registries": {
     "@shadcn-editor": "https://shadcn-editor.vercel.app/r/{name}.json"
   }

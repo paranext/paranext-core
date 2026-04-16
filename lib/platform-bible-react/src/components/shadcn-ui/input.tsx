@@ -1,35 +1,19 @@
 import React from 'react';
+
 import { cn } from '@/utils/shadcn-ui/utils';
 
-/**
- * Props for Input component
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
- */
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
-
-/**
- * Input component displays a form input field or a component that looks like an input field. This
- * components is built and styled with Shadcn UI.
- *
- * @param InputProps
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
- */
-export function Input({
-  className,
-  type,
-  ref,
-  ...props
-}: InputProps & { ref?: React.Ref<HTMLInputElement> }) {
+function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
   return (
     <input
       type={type}
+      data-slot="input"
       className={cn(
-        'pr-twp tw:flex tw:h-10 tw:rounded-md tw:border tw:border-input tw:bg-background tw:px-3 tw:py-2 tw:text-sm tw:ring-offset-background tw:file:border-0 tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:file:text-foreground tw:placeholder:text-muted-foreground tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50',
+        'tw:h-8 tw:w-full tw:min-w-0 tw:rounded-lg tw:border tw:border-input tw:bg-transparent tw:px-2.5 tw:py-1 tw:text-base tw:transition-colors tw:outline-none tw:file:inline-flex tw:file:h-6 tw:file:border-0 tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:file:text-foreground tw:placeholder:text-muted-foreground tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:disabled:pointer-events-none tw:disabled:cursor-not-allowed tw:disabled:bg-input/50 tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:md:text-sm tw:dark:bg-input/30 tw:dark:disabled:bg-input/80 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40',
         className,
       )}
-      ref={ref}
       {...props}
     />
   );
 }
+
+export { Input };

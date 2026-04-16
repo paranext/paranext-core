@@ -1,39 +1,21 @@
+'use client';
+
 import React from 'react';
-import * as LabelPrimitive from '@radix-ui/react-label';
-import { cva, type VariantProps } from 'class-variance-authority';
+import { Label as LabelPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
 
-/**
- * Style variants for the Label component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/label}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
- */
-const labelVariants = cva(
-  'tw:text-sm tw:font-medium tw:leading-none tw:peer-disabled:cursor-not-allowed tw:peer-disabled:opacity-70',
-);
-
-/**
- * The Label component renders an accessible label associated with controls. This components is
- * built on Radix UI primitives and styled with Shadcn UI.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/label}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
- */
-export function Label({
-  className,
-  ref,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root> &
-  VariantProps<typeof labelVariants> & {
-    ref?: React.Ref<React.ComponentRef<typeof LabelPrimitive.Root>>;
-  }) {
+function Label({ className, ...props }: React.ComponentProps<typeof LabelPrimitive.Root>) {
   return (
     <LabelPrimitive.Root
-      ref={ref}
-      className={cn('pr-twp', labelVariants(), className)}
+      data-slot="label"
+      className={cn(
+        'tw:flex tw:items-center tw:gap-2 tw:text-sm tw:leading-none tw:font-medium tw:select-none tw:group-data-[disabled=true]:pointer-events-none tw:group-data-[disabled=true]:opacity-50 tw:peer-disabled:cursor-not-allowed tw:peer-disabled:opacity-50',
+        className,
+      )}
       {...props}
     />
   );
 }
+
+export { Label };

@@ -4,23 +4,13 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/shadcn-ui/utils';
 
 const alertVariants = cva(
-  // CUSTOM: Copied all `svg` arbitrary selector variant classes as `img` variants so we can use
-  // images (or svgs from file) as icons
-  // Implemented by TJ Couch
-  // Approved by Alex Mercado
-  // 20 February 2025
-  'tw:relative tw:w-full tw:rounded-lg tw:border tw:p-4 tw:[&>svg~*]:pl-7 tw:[&>svg+div]:translate-y-[-3px] tw:[&>svg]:absolute tw:[&>svg]:left-4 tw:[&>svg]:top-4 tw:[&>svg]:text-foreground tw:[&>img~*]:pl-7 tw:[&>img+div]:translate-y-[-3px] tw:[&>img]:absolute tw:[&>img]:left-4 tw:[&>img]:top-4 tw:[&>img]:text-foreground',
+  'tw:group/alert tw:relative tw:grid tw:w-full tw:gap-0.5 tw:rounded-lg tw:border tw:px-2.5 tw:py-2 tw:text-start tw:text-sm tw:has-data-[slot=alert-action]:relative tw:has-data-[slot=alert-action]:pe-18 tw:has-[>svg]:grid-cols-[auto_1fr] tw:has-[>svg]:gap-x-2 tw:*:[svg]:row-span-2 tw:*:[svg]:translate-y-0.5 tw:*:[svg]:text-current tw:*:[svg:not([class*=size-])]:size-4',
   {
     variants: {
       variant: {
-        default: 'tw:bg-background tw:text-foreground',
+        default: 'tw:bg-card tw:text-card-foreground',
         destructive:
-          // CUSTOM: Copied all `svg` arbitrary selector variant classes as `img` variants so we can
-          // use images (or svgs from file) as icons
-          // Implemented by TJ Couch
-          // Approved by Alex Mercado
-          // 20 February 2025
-          'tw:border-destructive/50 tw:text-destructive tw:dark:border-destructive tw:[&>svg]:text-destructive tw:[&>img]:text-destructive',
+          'tw:bg-card tw:text-destructive tw:*:data-[slot=alert-description]:text-destructive/90 tw:*:[svg]:text-current',
       },
     },
     defaultVariants: {
@@ -29,25 +19,27 @@ const alertVariants = cva(
   },
 );
 
-/**
- * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
- * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
- */
 function Alert({
   className,
   variant,
-  ref,
   ...props
-}: React.HTMLAttributes<HTMLDivElement> &
-  VariantProps<typeof alertVariants> & { ref?: React.Ref<HTMLDivElement> }) {
+}: React.ComponentProps<'div'> & VariantProps<typeof alertVariants>) {
   return (
     <div
-      ref={ref}
+      data-slot="alert"
       role="alert"
+      className={cn(alertVariants({ variant }), className)}
+      {...props}
+    />
+  );
+}
+
+function AlertTitle({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="alert-title"
       className={cn(
-        // CUSTOM
-        'pr-twp',
-        alertVariants({ variant }),
+        'tw:font-medium tw:group-has-[>svg]/alert:col-start-2 tw:[&_a]:underline tw:[&_a]:underline-offset-3 tw:[&_a]:hover:text-foreground',
         className,
       )}
       {...props}
@@ -55,33 +47,27 @@ function Alert({
   );
 }
 
-/** @inheritdoc Alert */
-function AlertTitle({
-  className,
-  ref,
-  ...props
-}: React.HTMLAttributes<HTMLHeadingElement> & { ref?: React.Ref<HTMLParagraphElement> }) {
+function AlertDescription({ className, ...props }: React.ComponentProps<'div'>) {
   return (
-    <h5
-      ref={ref}
-      className={cn('tw:mb-1 tw:font-medium tw:leading-none tw:tracking-tight', className)}
+    <div
+      data-slot="alert-description"
+      className={cn(
+        'tw:text-sm tw:text-balance tw:text-muted-foreground tw:md:text-pretty tw:[&_a]:underline tw:[&_a]:underline-offset-3 tw:[&_a]:hover:text-foreground tw:[&_p:not(:last-child)]:mb-4',
+        className,
+      )}
       {...props}
-    >
-      {/* added because of https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md  */}
-      {props.children}{' '}
-    </h5>
+    />
   );
 }
 
-/** @inheritdoc Alert */
-function AlertDescription({
-  className,
-  ref,
-  ...props
-}: React.HTMLAttributes<HTMLParagraphElement> & { ref?: React.Ref<HTMLParagraphElement> }) {
+function AlertAction({ className, ...props }: React.ComponentProps<'div'>) {
   return (
-    <div ref={ref} className={cn('tw:text-sm tw:[&_p]:leading-relaxed', className)} {...props} />
+    <div
+      data-slot="alert-action"
+      className={cn('tw:absolute tw:top-2 tw:end-2', className)}
+      {...props}
+    />
   );
 }
 
-export { Alert, AlertTitle, AlertDescription };
+export { Alert, AlertTitle, AlertDescription, AlertAction };
