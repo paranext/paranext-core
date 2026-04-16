@@ -1,0 +1,93 @@
+<?xml version='1.0' encoding='utf-8'?>
+<EmdrosDump>
+<usx version="2.0">
+<book code="GEN">
+<usx_book style="id" code="GEN">
+<chapter style="c" code="GEN" pubnumber="" chapter="1" altnumber=""/>
+<para style="s1">The Creation of the World</para>
+<para style="p">
+<verse chapter="1" style="v" code="GEN" pubnumber="1"/>
+In the 
+<note style="x" caller="+">
+<char style="xo" closed="false">1:1 </char>
+<char style="xt" closed="false">Job 38:4-7; Ps. 33:6; 136:5; Isa. 42:5; 45:18; John 1:1-3; Acts 14:15; 17:24; Col. 1:16, 17; Heb. 1:10; 11:3; Rev. 4:11</char>
+</note>
+<wg target_links="00100100100004" strong="H7225" thematic_links="" lexical_links="SDBH:רֵאשִׁית:001001000" textual_links="HOTTP0" image_links="" map_links="" >
+beginning, 
+</wg>
+<char style="nd" closed="">
+<wg target_links="00100100100008" strong="H0430" thematic_links="" lexical_links="SDBH:אֱלֹהִים:001003000" textual_links="HOTTP0" image_links="" map_links="" >
+God 
+</wg>
+</char>
+<wg target_links="00100100100006" strong="H1254a" thematic_links="" lexical_links="SDBH:ברא:001002000" textual_links="HOTTP0" image_links="" map_links="" >
+created 
+</wg>
+the 
+<wg target_links="00100100100014" strong="H8064" thematic_links="" lexical_links="SDBH:שָׁמַיִם:001001000;SDBH:שָׁמַיִם:001001001" textual_links="" image_links="" map_links="" >
+heavens 
+</wg>
+and the 
+<wg target_links="00100100100022" strong="H0776" thematic_links="" lexical_links="SDBH:אֶרֶץ:001001000" textual_links="" image_links="" map_links="" >
+earth. 
+</wg>
+<verse chapter="1" style="v" code="GEN" pubnumber="2"/>
+The 
+<wg target_links="00100100200006" strong="H0776" thematic_links="" lexical_links="SDBH:אֶרֶץ:001001000" textual_links="" image_links="" map_links="" >
+earth 
+</wg>
+<wg target_links="00100100200008" strong="H1961" thematic_links="" lexical_links="SDBH:היה:001001000" textual_links="" image_links="" map_links="" >
+was 
+</wg>
+<note style="x" caller="+"><char style="xo" closed="false">1:2 </char><char style="xt" closed="false">Jer. 4:23</char></note>
+<wg target_links="00100100200010" strong="H8414" thematic_links="" lexical_links="SDBH:תֹּהוּ:001001000" textual_links="" image_links="" map_links="" >
+without form 
+</wg>
+and 
+<wg target_links="00100100200014" strong="H0922" thematic_links="" lexical_links="SDBH:בֹּהוּ:001001000" textual_links="" image_links="" map_links="" >
+void, 
+</wg>
+and 
+<wg target_links="00100100200018" strong="H2822" thematic_links="" lexical_links="SDBH:חשׁךְ:001001000;SDBH:חֹשֶׁךְ:001001000" textual_links="" image_links="" map_links="" >
+darkness 
+</wg>
+was 
+<wg target_links="00100100200020" strong="H5921a" thematic_links="" lexical_links="SDBH:עַל:001002000" textual_links="" image_links="" map_links="" >
+over 
+</wg>
+the 
+<wg target_links="00100100200022" strong="H6440" thematic_links="" lexical_links="SDBH:פָּנֶה:001003000" textual_links="" image_links="" map_links="" >
+face 
+</wg>
+of the 
+<wg target_links="00100100200024" strong="H8415" thematic_links="" lexical_links="SDBH:תְּהוֹם:001001000" textual_links="" image_links="" map_links="" >
+deep. 
+</wg>
+And the 
+<wg target_links="00100100200028" strong="H7307" thematic_links="" lexical_links="SDBH:רוּחַ:001001000;SDBH:רוּחַ:001001001;SDBH:רוּחַ:001001017;SDBH:רוּחַ:002001000" textual_links="" image_links="" map_links="" >
+Spirit 
+</wg>
+of 
+<wg target_links="00100100200030" strong="H0430" thematic_links="" lexical_links="SDBH:אֱלֹהִים:001003000;SDBH:אֱלֹהִים:001003060;SDBH:אֱלֹהִים:001009000;SDBH:אֱלֹהִים:001009004" textual_links="" image_links="" map_links="" >
+God 
+</wg>
+was 
+<wg target_links="00100100200032" strong="H7363b" thematic_links="" lexical_links="SDBH:רחף:001002000" textual_links="" image_links="" map_links="" >
+hovering 
+</wg>
+<wg target_links="00100100200034" strong="H5921a" thematic_links="" lexical_links="SDBH:עַל:001002000" textual_links="" image_links="" map_links="" >
+over 
+</wg>
+the 
+<wg target_links="00100100200036" strong="H6440" thematic_links="" lexical_links="SDBH:פָּנֶה:001003000" textual_links="" image_links="" map_links="" >
+face 
+</wg>
+of the 
+<wg target_links="00100100200040" strong="H4325" thematic_links="" lexical_links="SDBH:מַיִם:001001000" textual_links="" image_links="" map_links="" >
+waters.
+</wg>
+</para>
+</usx_book>
+</book>
+</usx>
+</EmdrosDump>
