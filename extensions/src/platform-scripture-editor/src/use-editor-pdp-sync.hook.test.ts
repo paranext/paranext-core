@@ -19,7 +19,7 @@ import { act, renderHook } from '@testing-library/react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { useRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import type { EditorHandle } from './use-editor-pdp-sync.hook';
+import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 
 // Empty USJ — returned by useProjectData while loading or when a book doesn't exist
@@ -48,7 +48,9 @@ describe('useEditorPdpSync', () => {
     const saveUsjToPdpIfUpdated = vi.fn();
 
     renderHook(() => {
-      const editorRef = useRef<EditorHandle | null>({ setUsj: setUsjSpy });
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const editorRef = useRef<EditorRef | null>({ setUsj: setUsjSpy } as unknown as EditorRef);
       const usjSentToPdp = useRef<Usj | undefined>(undefined);
       const setEditorUsj = useRef((usj: Usj) => setUsjSpy(usj));
       const currentlyWritingUsjToPdp = useRef(false);
@@ -76,9 +78,14 @@ describe('useEditorPdpSync', () => {
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
 
-    // Shared refs so rerenders observe the same state
-    const editorRef = { current: { setUsj: setUsjSpy } as EditorHandle | null };
-    const usjSentToPdp = { current: undefined as Usj | undefined };
+    // Plain objects instead of useRef so that state mutations are visible across rerenders without
+    // closure capture. useRef would re-create the ref on each render inside renderHook's callback.
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: { setUsj: setUsjSpy } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
     const currentlyWritingUsjToPdp = { current: false };
 
@@ -118,8 +125,12 @@ describe('useEditorPdpSync', () => {
     const saveUsjToPdpIfUpdated = vi.fn();
 
     // Shared refs that persist across rerenders, just like in the real component
-    const editorRef = { current: { setUsj: setUsjSpy } as EditorHandle | null };
-    const usjSentToPdp = { current: undefined as Usj | undefined };
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: { setUsj: setUsjSpy } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
     const currentlyWritingUsjToPdp = { current: false };
 
@@ -144,6 +155,7 @@ describe('useEditorPdpSync', () => {
 
     // Step 2: Navigate to non-existent 2KI — editor unmounts (editorRef.current = null) and
     // usjFromPdp becomes emptyUsj (the "book doesn't exist" state)
+    // eslint-disable-next-line no-null/no-null -- simulates React unmounting an element ref (which uses null)
     editorRef.current = null;
     act(() => rerender({ usjFromPdp: emptyUsj }));
 
@@ -152,7 +164,8 @@ describe('useEditorPdpSync', () => {
     expect(setUsjSpy).not.toHaveBeenCalled();
 
     // Step 3: Navigate back to LEV — same chapter data arrives and the editor remounts fresh
-    editorRef.current = { setUsj: setUsjSpy };
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    editorRef.current = { setUsj: setUsjSpy } as unknown as EditorRef;
     act(() => rerender({ usjFromPdp: levUsj }));
 
     // The fresh (empty) editor must receive its content even though the data hasn't changed

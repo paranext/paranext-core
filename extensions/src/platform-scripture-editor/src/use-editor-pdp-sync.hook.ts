@@ -1,10 +1,7 @@
+import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
-import { MutableRefObject, RefObject, useEffect } from 'react';
-
-export type EditorHandle = {
-  setUsj(usj: Usj): void;
-};
+import { MutableRefObject, useEffect } from 'react';
 
 /**
  * Synchronizes the editor's displayed content with data received from the PDP.
@@ -27,10 +24,10 @@ export function useEditorPdpSync({
   saveUsjToPdpIfUpdated,
 }: {
   usjFromPdp: Usj | undefined;
-  editorRef: MutableRefObject<EditorHandle | null>;
+  editorRef: MutableRefObject<EditorRef | null>;
   usjSentToPdp: MutableRefObject<Usj | undefined>;
   /** Stable ref whose `.current` is the function to call to update the editor's displayed content */
-  setEditorUsj: RefObject<(usj: Usj) => void>;
+  setEditorUsj: MutableRefObject<(usj: Usj) => void>;
   currentlyWritingUsjToPdp: MutableRefObject<boolean>;
   saveUsjToPdpIfUpdated: () => void;
 }): void {
@@ -50,9 +47,19 @@ export function useEditorPdpSync({
     // the editor wrote to the PDP.
     if (!areUsjContentsEqualExceptWhitespace(usjFromPdp, usjSentToPdp.current)) {
       usjSentToPdp.current = usjFromPdp;
-      setEditorUsj.current?.(usjFromPdp);
+      setEditorUsj.current(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
     else saveUsjToPdpIfUpdated();
-  }, [saveUsjToPdpIfUpdated, usjFromPdp]);
+  }, [
+    // usjFromPdp and saveUsjToPdpIfUpdated are the only deps that actually change and trigger
+    // re-runs. The refs below are stable (their identities never change), but are listed to
+    // satisfy the exhaustive-deps lint rule.
+    currentlyWritingUsjToPdp,
+    editorRef,
+    saveUsjToPdpIfUpdated,
+    setEditorUsj,
+    usjFromPdp,
+    usjSentToPdp,
+  ]);
 }
