@@ -1270,9 +1270,9 @@ global.webViewComponent = function FindWebView({
   }, [scope, selectedBookIds, verseRefSetting, localizedBookData]);
 
   return (
-    <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-gap-4 tw-p-4 tw-min-w-[10rem] tw-max-h-screen">
+    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
-      <div className="tw-space-y-3">
+      <div className="tw:space-y-3">
         {/* Find/Replace mode toggle */}
         <ToggleGroup
           type="single"
@@ -1280,26 +1280,26 @@ global.webViewComponent = function FindWebView({
           onValueChange={(value) => {
             if (value === 'find' || value === 'replace') setActiveMode(value);
           }}
-          className="tw-w-fit tw-rounded-lg tw-bg-muted tw-p-1"
+          className="tw:w-fit tw:rounded-lg tw:bg-muted tw:p-1"
         >
           <ToggleGroupItem
             value="find"
-            className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
+            className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
           >
             {localizedStrings['%webView_find_findTab%']}
           </ToggleGroupItem>
           <ToggleGroupItem
             value="replace"
-            className="data-[state=on]:!tw-bg-background data-[state=on]:!tw-text-foreground data-[state=on]:tw-shadow-sm data-[state=off]:tw-text-muted-foreground"
+            className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
           >
             {localizedStrings['%webView_find_replaceTab%']}
           </ToggleGroupItem>
         </ToggleGroup>
 
         {/* Find input row */}
-        <div className="tw-flex tw-gap-2 tw-flex-wrap">
-          <div className="tw-relative tw-flex-1">
-            <TextSearch className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
+        <div className="tw:flex tw:gap-2 tw:flex-wrap">
+          <div className="tw:relative tw:flex-1">
+            <TextSearch className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:text-muted-foreground" />
             <Input
               id="search-term"
               value={searchTerm}
@@ -1310,7 +1310,7 @@ global.webViewComponent = function FindWebView({
                 }
               }}
               placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-              className={`tw-w-full tw-min-w-16 tw-text-ellipsis !tw-pl-8 scripture-font ${searchTerm ? '!tw-pe-8' : '!tw-pr-4'}`}
+              className={`tw:w-full tw:min-w-16 tw:text-ellipsis tw:!pl-8 scripture-font ${searchTerm ? 'tw:!pe-8' : 'tw:!pr-4'}`}
             />
             {searchTerm && (
               <button
@@ -1319,9 +1319,9 @@ global.webViewComponent = function FindWebView({
                   setSearchTerm('');
                   handleStopSearch(true);
                 }}
-                className="tw-absolute tw-end-2 tw-top-1/2 -tw-translate-y-1/2 tw-text-muted-foreground hover:tw-text-foreground tw-bg-transparent tw-border-0 tw-p-0 tw-cursor-pointer"
+                className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground tw:hover:text-foreground tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer"
               >
-                <X className="tw-h-4 tw-w-4" />
+                <X className="tw:h-4 tw:w-4" />
               </button>
             )}
           </div>
@@ -1331,7 +1331,7 @@ global.webViewComponent = function FindWebView({
             onSearchItemSelect={setSearchTerm}
             ariaLabel={localizedStrings['%webView_find_showRecentSearches%']}
             groupHeading={localizedStrings['%webView_find_recent%']}
-            buttonClassName="tw-h-10 tw-w-10"
+            buttonClassName="tw:h-10 tw:w-10"
             buttonVariant="outline"
           />
 
@@ -1367,40 +1367,40 @@ global.webViewComponent = function FindWebView({
         {/* Replace input row — shown in Replace mode */}
         {activeMode === 'replace' && (
           <>
-            <div className="tw-relative tw-flex-1">
-              <ArrowRight className="tw-pointer-events-none tw-absolute tw-left-2 tw-top-1/2 tw-h-4 tw-w-4 -tw-translate-y-1/2 tw-text-muted-foreground" />
+            <div className="tw:relative tw:flex-1">
+              <ArrowRight className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:text-muted-foreground" />
               <Input
                 id="replace-term"
                 value={replaceTerm}
                 onChange={(e) => setReplaceTerm(e.target.value)}
                 placeholder={localizedStrings['%webView_find_replaceTerm_placeholder%']}
-                className="tw-w-full tw-min-w-16 !tw-pl-8 !tw-pr-4 scripture-font"
+                className="tw:w-full tw:min-w-16 tw:!pl-8 tw:!pr-4 scripture-font"
               />
             </div>
-            <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-flex-wrap">
-              <div className="tw-flex tw-items-center tw-gap-2">
+            <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:flex-wrap">
+              <div className="tw:flex tw:items-center tw:gap-2">
                 <Checkbox
                   id="preserve-case"
                   checked={preserveCase}
                   onCheckedChange={(checked) => setPreserveCase(checked === true)}
                 />
-                <Label htmlFor="preserve-case" className="tw-cursor-pointer">
+                <Label htmlFor="preserve-case" className="tw:cursor-pointer">
                   {localizedStrings['%webView_find_preserveCase%']}
                 </Label>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Info className="tw-h-3.5 tw-w-3.5 tw-text-muted-foreground tw-cursor-default" />
+                      <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground tw:cursor-default" />
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="tw-max-w-xs tw-whitespace-pre-line">
+                      <p className="tw:max-w-xs tw:whitespace-pre-line">
                         {localizedStrings['%webView_find_preserveCase_tooltip%']}
                       </p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <div className="tw-flex tw-gap-2">
+              <div className="tw:flex tw:gap-2">
                 <Button
                   variant="outline"
                   onClick={handleReplaceAll}
@@ -1408,7 +1408,7 @@ global.webViewComponent = function FindWebView({
                     visibleResults.length === 0 || searchStatus === 'running' || isReplacing
                   }
                 >
-                  <ReplaceAll className="tw-h-4 tw-w-4" />
+                  <ReplaceAll className="tw:h-4 tw:w-4" />
                   {localizedStrings['%webView_find_replaceAll%']}
                 </Button>
                 <Button
@@ -1417,7 +1417,7 @@ global.webViewComponent = function FindWebView({
                     focusedResultIndex === undefined || searchStatus === 'running' || isReplacing
                   }
                 >
-                  <Replace className="tw-h-4 tw-w-4" />
+                  <Replace className="tw:h-4 tw:w-4" />
                   {localizedStrings['%webView_find_replace%']}
                 </Button>
               </div>
@@ -1426,22 +1426,22 @@ global.webViewComponent = function FindWebView({
         )}
 
         {/* Scope selector row */}
-        <div className="tw-flex tw-items-center tw-justify-between">
+        <div className="tw:flex tw:items-center tw:justify-between">
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className="tw-h-auto tw-gap-1 tw-px-2 tw-py-1 tw-font-normal"
+                className="tw:h-auto tw:gap-1 tw:px-2 tw:py-1 tw:font-normal"
               >
-                <span className="tw-text-sm tw-text-muted-foreground">
+                <span className="tw:text-sm tw:text-muted-foreground">
                   {localizedStrings['%webView_find_showing%']}
                 </span>
-                <span className="tw-text-sm tw-font-medium">{scopeDisplayText}</span>
-                <ChevronDown className="tw-h-3 tw-w-3 tw-text-muted-foreground" />
+                <span className="tw:text-sm tw:font-medium">{scopeDisplayText}</span>
+                <ChevronDown className="tw:h-3 tw:w-3 tw:text-muted-foreground" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="tw-w-auto tw-p-3">
+            <PopoverContent align="start" className="tw:w-auto tw:p-3">
               <ScopeSelector
                 scope={scope}
                 availableScopes={['chapter', 'book', 'selectedBooks']}
@@ -1455,8 +1455,8 @@ global.webViewComponent = function FindWebView({
             </PopoverContent>
           </Popover>
           {visibleResults.length > 0 && (
-            <div className="tw-flex tw-items-center tw-gap-1">
-              <span className="tw-text-sm tw-text-muted-foreground tw-tabular-nums">
+            <div className="tw:flex tw:items-center tw:gap-1">
+              <span className="tw:text-sm tw:text-muted-foreground tw:tabular-nums">
                 {formatReplacementString(localizedStrings['%general_countOfTotal%'], {
                   count: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',
                   total: String(visibleResults.length),
@@ -1465,22 +1465,22 @@ global.webViewComponent = function FindWebView({
               <Button
                 variant="ghost"
                 size="icon"
-                className="tw-h-7 tw-w-7"
+                className="tw:h-7 tw:w-7"
                 disabled={visibleResults.length === 0}
                 onClick={handlePreviousResult}
                 aria-label={localizedStrings['%webView_find_previousResult%']}
               >
-                <ChevronUp className="tw-h-4 tw-w-4" />
+                <ChevronUp className="tw:h-4 tw:w-4" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="tw-h-7 tw-w-7"
+                className="tw:h-7 tw:w-7"
                 disabled={visibleResults.length === 0}
                 onClick={handleNextResult}
                 aria-label={localizedStrings['%webView_find_nextResult%']}
               >
-                <ChevronDown className="tw-h-4 tw-w-4" />
+                <ChevronDown className="tw:h-4 tw:w-4" />
               </Button>
             </div>
           )}
@@ -1489,15 +1489,15 @@ global.webViewComponent = function FindWebView({
 
       {/* Search Results Placeholder */}
       {results && results.length === 0 && searchStatus === 'running' && (
-        <div className="tw-space-y-2">
+        <div className="tw:space-y-2">
           {Array.from({ length: 5 }).map((_value, index) => (
             // As this is a placeholder, it is safe to use the index as a key
             // eslint-disable-next-line react/no-array-index-key
             <Card key={index}>
-              <CardContent className="tw-flex tw-items-center tw-space-x-4 tw-p-4">
-                <div className="tw-space-y-2">
-                  <Skeleton className="tw-h-4 tw-w-[250px]" />
-                  <Skeleton className="tw-h-4 tw-w-[200px]" />
+              <CardContent className="tw:flex tw:items-center tw:space-x-4 tw:p-4">
+                <div className="tw:space-y-2">
+                  <Skeleton className="tw:h-4 tw:w-[250px]" />
+                  <Skeleton className="tw:h-4 tw:w-[200px]" />
                 </div>
               </CardContent>
             </Card>
@@ -1513,7 +1513,7 @@ global.webViewComponent = function FindWebView({
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={resultsContainerRef}
-        className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto tw-pe-2"
+        className="tw:min-h-48 tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2"
         // This div is a keyboard-navigable scroll container; tabIndex is required to receive focus for arrow-key navigation between results
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
@@ -1561,10 +1561,10 @@ global.webViewComponent = function FindWebView({
 
       {/* Status bar */}
       {searchStatus && (
-        <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-4 tw-border-t tw-pt-4">
+        <div className="tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:border-t tw:pt-4">
           {searchStatus === 'running' && (activeMode !== 'replace' || !isPostReplaceSearch) && (
-            <div className="tw-flex tw-items-center tw-gap-4">
-              <Progress value={searchProgress} className="tw-w-64" />
+            <div className="tw:flex tw:items-center tw:gap-4">
+              <Progress value={searchProgress} className="tw:w-64" />
               <Button onClick={() => handleStopSearch(false)}>
                 {localizedStrings['%webView_find_cancelSearch%']}
               </Button>
@@ -1573,9 +1573,9 @@ global.webViewComponent = function FindWebView({
           {(searchStatus === 'completed' ||
             searchStatus === 'stopped' ||
             searchStatus === 'exceeded') &&
-            results && <p className="tw-font-light tw-text-center">{resultsMessage}</p>}
+            results && <p className="tw:font-light tw:text-center">{resultsMessage}</p>}
           {searchStatus === 'errored' && searchError && (
-            <p className="tw-font-light tw-text-center">
+            <p className="tw:font-light tw:text-center">
               {formatReplacementString(localizedStrings['%webView_find_errorOccurred%'], {
                 error: searchError,
               })}

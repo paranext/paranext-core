@@ -13,7 +13,7 @@ const meta: Meta<typeof Editor> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-2xl tw-bg-background tw-p-4">
+        <div className="tw:max-w-2xl tw:bg-background tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -66,30 +66,30 @@ export const WithHtmlContent: StoryObj = {
     };
 
     return (
-      <div className="tw-space-y-4">
-        <div className="tw-space-y-2">
-          <h3 className="tw-text-lg tw-font-semibold">Editor with Pre-populated HTML Content</h3>
-          <p className="tw-text-sm tw-text-muted-foreground">
+      <div className="tw:space-y-4">
+        <div className="tw:space-y-2">
+          <h3 className="tw:text-lg tw:font-semibold">Editor with Pre-populated HTML Content</h3>
+          <p className="tw:text-sm tw:text-muted-foreground">
             The editor below is populated with HTML that has been converted to editor format. You
             can edit it, and see the HTML output below.
           </p>
         </div>
-        <div className="tw-rounded-md tw-border tw-border-border">
+        <div className="tw:rounded-md tw:border tw:border-border">
           <Editor
             editorSerializedState={editorState}
             onSerializedChange={handleChange}
             placeholder="Type something..."
           />
         </div>
-        <div className="tw-space-y-2">
-          <h4 className="tw-text-sm tw-font-semibold">HTML Output:</h4>
-          <p className="tw-overflow-x-auto tw-rounded-md tw-border tw-border-border tw-bg-muted tw-p-3 tw-text-xs">
+        <div className="tw:space-y-2">
+          <h4 className="tw:text-sm tw:font-semibold">HTML Output:</h4>
+          <p className="tw:overflow-x-auto tw:rounded-md tw:border tw:border-border tw:bg-muted tw:p-3 tw:text-xs">
             {htmlOutput || '(Edit the content above to see HTML output)'}
           </p>
         </div>
-        <div className="tw-space-y-2">
-          <h4 className="tw-text-sm tw-font-semibold">Original HTML Input:</h4>
-          <p className="tw-overflow-x-auto tw-rounded-md tw-border tw-border-border tw-bg-muted tw-p-3 tw-text-xs">
+        <div className="tw:space-y-2">
+          <h4 className="tw:text-sm tw:font-semibold">Original HTML Input:</h4>
+          <p className="tw:overflow-x-auto tw:rounded-md tw:border tw:border-border tw:bg-muted tw:p-3 tw:text-xs">
             {originalHtml}
           </p>
         </div>

@@ -3363,7 +3363,7 @@ export declare function endsWith(string: string, searchString: string, endPositi
  * <p>
  *   {formatReplacementStringToArray('Hi {other}! I am {name}.', {
  *     other: 'Billy',
- *     name: <span className="tw-text-red-500">Jim</span>,
+ *     name: <span className="tw:text-red-500">Jim</span>,
  *   })}
  * </p>
  * ```
@@ -4909,8 +4909,8 @@ export interface ThemeDefinition {
 	label: LocalizeKey;
 	/**
 	 * Theme colors and other CSS variable properties that adjust the looks of the application. These
-	 * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
-	 * `tw-bg-primary`
+	 * are applied in CSS properties using `var(--variableName)` or Tailwind classes like
+	 * `tw:bg-primary`
 	 *
 	 * See the wiki's [Matching Application
 	 * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
@@ -4920,42 +4920,111 @@ export interface ThemeDefinition {
 }
 /**
  * Theme colors and other CSS variable properties that adjust the looks of the application. These
- * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
- * `tw-bg-primary`
+ * are applied in CSS properties using `var(--variableName)` or Tailwind classes like
+ * `tw:bg-primary`
  *
- * See the wiki's [Matching Application
+ * See [shadcn's Theming page](https://ui.shadcn.com/docs/theming#theme-tokens) and the wiki's
+ * [Matching Application
  * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
  * section for more information.
  */
 export interface ThemeCssVariables {
 	[variableName: string]: string | undefined;
+	/** Default application background color. Applied to the page shell and page sections. */
 	background?: string;
+	/** Default text color. Applied to the page shell and general text content. */
 	foreground?: string;
+	/** Surface color for elevated containers such as cards and dashboard panels. */
 	card?: string;
+	/** Text and content color inside card surfaces. */
 	"card-foreground"?: string;
+	/** Surface color for floating overlays such as dropdowns and context menus. */
 	popover?: string;
+	/** Text and content color inside floating overlay surfaces. */
 	"popover-foreground"?: string;
+	/**
+	 * High-emphasis action and brand surface color. Applied to the default button, selected states,
+	 * and active accents.
+	 */
 	primary?: string;
+	/** Text and content color rendered on primary surfaces. */
 	"primary-foreground"?: string;
+	/**
+	 * Lower-emphasis filled action and supporting surface color. Applied to secondary buttons and
+	 * supporting UI.
+	 */
 	secondary?: string;
+	/** Text and content color rendered on secondary surfaces. */
 	"secondary-foreground"?: string;
+	/** Subtle background surface color for de-emphasized regions. */
 	muted?: string;
+	/**
+	 * Lower-emphasis text color. Applied to descriptions, placeholders, helper text, and subdued
+	 * content.
+	 */
 	"muted-foreground"?: string;
+	/**
+	 * Interactive hover, focus, and active surface color. Applied to ghost buttons, menu highlights,
+	 * and hovered rows.
+	 */
 	accent?: string;
+	/** Text and content color rendered on accent surfaces. */
 	"accent-foreground"?: string;
+	/**
+	 * Color representing destructive actions and error states. Applied to destructive buttons and
+	 * invalid states.
+	 */
 	destructive?: string;
+	/** Text and content color rendered on destructive surfaces. */
 	"destructive-foreground"?: string;
+	/** Default border and separator color. Applied to cards, menus, tables, and layout dividers. */
 	border?: string;
+	/** Border and surface treatment color for form controls such as inputs, text areas, and selects. */
 	input?: string;
+	/**
+	 * Focus ring and outline color applied to buttons, inputs, checkboxes, and other focusable
+	 * controls.
+	 */
 	ring?: string;
-	"sidebar-background"?: string;
+	/** First color in the default chart palette. */
+	"chart-1"?: string;
+	/** Second color in the default chart palette. */
+	"chart-2"?: string;
+	/** Third color in the default chart palette. */
+	"chart-3"?: string;
+	/** Fourth color in the default chart palette. */
+	"chart-4"?: string;
+	/** Fifth color in the default chart palette. */
+	"chart-5"?: string;
+	/** Base sidebar container surface color. */
+	sidebar?: string;
+	/** Default text color inside the sidebar. */
 	"sidebar-foreground"?: string;
+	/**
+	 * High-emphasis action color inside the sidebar. Applied to active items, icon tiles, and sidebar
+	 * badges.
+	 */
 	"sidebar-primary"?: string;
+	/** Text and content color rendered on primary sidebar surfaces. */
 	"sidebar-primary-foreground"?: string;
+	/**
+	 * Hover and selected state surface color inside the sidebar. Applied to menu hover states and
+	 * open items.
+	 */
 	"sidebar-accent"?: string;
+	/** Text and content color rendered on sidebar accent surfaces. */
 	"sidebar-accent-foreground"?: string;
+	/**
+	 * Border and separator color specific to the sidebar. Applied to sidebar headers, groups, and
+	 * internal dividers.
+	 */
 	"sidebar-border"?: string;
+	/** Focus ring color for controls inside the sidebar. */
 	"sidebar-ring"?: string;
+	/**
+	 * Base corner radius scale. Applied to cards, inputs, buttons, popovers, and the derived radius-*
+	 * tokens.
+	 */
 	radius?: string;
 }
 /** JSON schema object for ThemeContribution */
@@ -4972,87 +5041,135 @@ export declare const themeDocumentSchema: {
 			type: string;
 			properties: {
 				background: {
+					description: string;
 					type: string;
 				};
 				foreground: {
+					description: string;
 					type: string;
 				};
 				card: {
+					description: string;
 					type: string;
 				};
 				"card-foreground": {
+					description: string;
 					type: string;
 				};
 				popover: {
+					description: string;
 					type: string;
 				};
 				"popover-foreground": {
+					description: string;
 					type: string;
 				};
 				primary: {
+					description: string;
 					type: string;
 				};
 				"primary-foreground": {
+					description: string;
 					type: string;
 				};
 				secondary: {
+					description: string;
 					type: string;
 				};
 				"secondary-foreground": {
+					description: string;
 					type: string;
 				};
 				muted: {
+					description: string;
 					type: string;
 				};
 				"muted-foreground": {
+					description: string;
 					type: string;
 				};
 				accent: {
+					description: string;
 					type: string;
 				};
 				"accent-foreground": {
+					description: string;
 					type: string;
 				};
 				destructive: {
+					description: string;
 					type: string;
 				};
 				"destructive-foreground": {
+					description: string;
 					type: string;
 				};
 				border: {
+					description: string;
 					type: string;
 				};
 				input: {
+					description: string;
 					type: string;
 				};
 				ring: {
+					description: string;
 					type: string;
 				};
-				"sidebar-background": {
+				"chart-1": {
+					description: string;
+					type: string;
+				};
+				"chart-2": {
+					description: string;
+					type: string;
+				};
+				"chart-3": {
+					description: string;
+					type: string;
+				};
+				"chart-4": {
+					description: string;
+					type: string;
+				};
+				"chart-5": {
+					description: string;
+					type: string;
+				};
+				sidebar: {
+					description: string;
 					type: string;
 				};
 				"sidebar-foreground": {
+					description: string;
 					type: string;
 				};
 				"sidebar-primary": {
+					description: string;
 					type: string;
 				};
 				"sidebar-primary-foreground": {
+					description: string;
 					type: string;
 				};
 				"sidebar-accent": {
+					description: string;
 					type: string;
 				};
 				"sidebar-accent-foreground": {
+					description: string;
 					type: string;
 				};
 				"sidebar-border": {
+					description: string;
 					type: string;
 				};
 				"sidebar-ring": {
+					description: string;
 					type: string;
 				};
 				radius: {
+					description: string;
 					type: string;
 				};
 			};

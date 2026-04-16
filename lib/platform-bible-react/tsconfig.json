@@ -19,7 +19,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "noImplicitReturns": true,
-    "skipLibCheck": false,
+    "skipLibCheck": true,
     "useDefineForClassFields": true,
     "outDir": "",
     "paths": {
@@ -27,6 +27,6 @@
     }
   },
   "include": ["src"],
-  "exclude": ["node_modules"],
+  "exclude": ["node_modules", "src/components/shadcn-ui-old/*"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

@@ -1,25 +1,26 @@
 import React from 'react';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * Displays a form textarea or a component that looks like a textarea. This component is from Shadcn
  * UI. See Shadcn UI documentation: https://ui.shadcn.com/docs/components/textarea
  */
-const Textarea = React.forwardRef<HTMLTextAreaElement, React.ComponentProps<'textarea'>>(
-  ({ className, ...props }, ref) => {
-    return (
-      <textarea
-        className={cn(
-          'pr-twp tw-flex tw-min-h-[80px] tw-w-full tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-base tw-ring-offset-background placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50 md:tw-text-sm',
-          className,
-        )}
-        ref={ref}
-        {...props}
-      />
-    );
-  },
-);
-Textarea.displayName = 'Textarea';
+function Textarea({
+  className,
+  ref,
+  ...props
+}: React.ComponentProps<'textarea'> & { ref?: React.Ref<HTMLTextAreaElement> }) {
+  return (
+    <textarea
+      className={cn(
+        'pr-twp tw:flex tw:min-h-[80px] tw:w-full tw:rounded-md tw:border tw:border-input tw:bg-background tw:px-3 tw:py-2 tw:text-base tw:ring-offset-background tw:placeholder:text-muted-foreground tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50 tw:md:text-sm',
+        className,
+      )}
+      ref={ref}
+      {...props}
+    />
+  );
+}
 
 export { Textarea };

@@ -168,10 +168,10 @@ globalThis.webViewComponent = function Dictionary({
   // );
 
   return (
-    <div className="tw-flex tw-flex-col tw-h-[100dvh]">
-      <div className="tw-sticky tw-bg-background tw-top-0 tw-z-10 tw-shrink-0 tw-p-2 tw-border-b tw-h-auto">
-        <div className="tw-flex tw-items-center tw-gap-2">
-          <div className="tw-max-w-56">
+    <div className="tw:flex tw:flex-col tw:h-[100dvh]">
+      <div className="tw:sticky tw:bg-background tw:top-0 tw:z-10 tw:shrink-0 tw:p-2 tw:border-b tw:h-auto">
+        <div className="tw:flex tw:items-center tw:gap-2">
+          <div className="tw:max-w-56">
             <Select value={scope} onValueChange={setScope}>
               <SelectTrigger>
                 <SelectValue />
@@ -192,7 +192,7 @@ globalThis.webViewComponent = function Dictionary({
               </SelectContent>
             </Select>
           </div>
-          <div className="tw-max-w-72">
+          <div className="tw:max-w-72">
             <SearchBar
               ref={searchInputRef}
               value={searchQuery}
@@ -204,37 +204,37 @@ globalThis.webViewComponent = function Dictionary({
         </div>
       </div>
       {isLoadingEntriesById && (
-        <div className="tw-flex-1 tw-p-2 tw-space-y-4">
+        <div className="tw:flex-1 tw:p-2 tw:space-y-4">
           {[...Array(10)].map((_, index) => (
             <Skeleton
               // There are no other unique identifiers for these items
               // eslint-disable-next-line react/no-array-index-key
               key={`dictionary-list-item-skeleton-${index}`}
-              className="tw-h-14 tw-w-full"
+              className="tw:h-14 tw:w-full"
             />
           ))}
         </div>
       )}
       {entriesError && (
-        <div className="tw-m-4 tw-flex tw-items-center tw-gap-2">
+        <div className="tw:m-4 tw:flex tw:items-center tw:gap-2">
           <Label>{localizedStrings['%platformLexicalTools_dictionary_dataLoadError%']}</Label>
           <ErrorPopover
             errorDetails={getErrorMessage(entriesError)}
             localizedStrings={localizedStrings}
           >
-            <Button variant="link" className="tw-h-auto tw-p-0">
+            <Button variant="link" className="tw:h-auto tw:p-0">
               {localizedStrings['%settings_errorMessages_viewError%']}
             </Button>
           </ErrorPopover>
         </div>
       )}
       {entriesFiltered.length === 0 && !isLoadingEntriesById && !entriesError && (
-        <div className="tw-m-4 tw-flex tw-justify-center">
+        <div className="tw:m-4 tw:flex tw:justify-center">
           <Label>{localizedStrings['%platformLexicalTools_dictionary_noResults%']}</Label>
         </div>
       )}
       {entriesFiltered.length === 1 && (
-        <div ref={dictionaryEntryRef} className="tw-overflow-y-auto tw-p-4">
+        <div ref={dictionaryEntryRef} className="tw:overflow-y-auto tw:p-4">
           <DictionaryEntryDisplay
             scriptureReferenceToFilterBy={scrRef}
             isDrawer={false}

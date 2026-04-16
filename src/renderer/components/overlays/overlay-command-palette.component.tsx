@@ -79,24 +79,24 @@ function PaletteItem({
       value={searchValue}
       disabled={item.disabled}
       onSelect={() => onSelect(item.id)}
-      className="tw-flex tw-items-center tw-gap-2"
+      className="tw:flex tw:items-center tw:gap-2"
     >
       {item.icon && (
-        <span className="tw-flex tw-h-4 tw-w-4 tw-shrink-0 tw-items-center tw-justify-center tw-text-muted-foreground">
+        <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center tw:text-muted-foreground">
           {item.icon}
         </span>
       )}
-      <div className="tw-flex tw-flex-1 tw-flex-col tw-overflow-hidden">
-        <span className="tw-truncate">{item.label}</span>
+      <div className="tw:flex tw:flex-1 tw:flex-col tw:overflow-hidden">
+        <span className="tw:truncate">{item.label}</span>
         {item.description && (
-          <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
+          <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
             {item.description}
           </span>
         )}
       </div>
       {item.badge && (
         <span
-          className="tw-ms-auto tw-shrink-0 tw-rounded tw-bg-muted tw-py-0.5 tw-text-xs tw-text-muted-foreground"
+          className="tw:ms-auto tw:shrink-0 tw:rounded tw:bg-muted tw:py-0.5 tw:text-xs tw:text-muted-foreground"
           style={{ paddingLeft: '0.375rem', paddingRight: '0.375rem' }}
         >
           {item.badge}
@@ -196,7 +196,7 @@ export function OverlayCommandPalettePresentational({
   const paletteContent = (
     <Command
       data-overlay-command-palette
-      className="tw-rounded-lg tw-border tw-shadow-md"
+      className="tw:rounded-lg tw:border tw:shadow-md"
       onKeyDown={handleKeyDown}
     >
       <CommandInput ref={inputRef} placeholder={placeholder} />
@@ -214,7 +214,7 @@ export function OverlayCommandPalettePresentational({
       // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
       <div
         data-overlay-command-palette-backdrop
-        className="tw-fixed tw-inset-0 tw-flex tw-items-start tw-justify-center"
+        className="tw:fixed tw:inset-0 tw:flex tw:items-start tw:justify-center"
         style={{ zIndex: Z_INDEX_OVERLAY, paddingTop: '20vh' }}
         onClick={(e) => {
           // Dismiss only when clicking the backdrop itself, not the palette content
@@ -248,7 +248,7 @@ export function OverlayCommandPalettePresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-command-palette
-        className="tw-p-0"
+        className="tw:p-0"
         side={side}
         align="start"
         sideOffset={4}
@@ -262,8 +262,8 @@ export function OverlayCommandPalettePresentational({
       >
         <PopoverPrimitive.Arrow
           style={{
-            fill: 'hsl(var(--popover))',
-            stroke: 'hsl(var(--border))',
+            fill: 'var(--popover)',
+            stroke: 'var(--border)',
             strokeWidth: 1,
           }}
         />

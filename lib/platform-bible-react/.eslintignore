@@ -11,3 +11,7 @@ docs
 # Formats not supported by Prettier
 ## MDXv2+ (used by Storybook)
 *.mdx
+
+# old shadcn files that are temporarily used for reference when upgrading shadcn components.
+# These should be removed once all components have been updated.
+src/components/shadcn-ui-old

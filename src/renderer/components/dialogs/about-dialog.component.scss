@@ -14,7 +14,7 @@
   justify-content: center;
   margin-block: auto; // Center vertically when content fits, collapse when it overflows
   width: 100%; // Fill container so padding shrinks content at small widths
-  max-width: 448px; // tw-max-w-md equivalent
+  max-width: 448px; // tw:max-w-md equivalent
   padding-inline: clamp(
     1rem,
     10%,

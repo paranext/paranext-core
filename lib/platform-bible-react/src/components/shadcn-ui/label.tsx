@@ -2,7 +2,7 @@ import React from 'react';
 import * as LabelPrimitive from '@radix-ui/react-label';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * Style variants for the Label component.
@@ -11,7 +11,7 @@ import { cn } from '@/utils/shadcn-ui.util';
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
  */
 const labelVariants = cva(
-  'tw-text-sm tw-font-medium tw-leading-none peer-disabled:tw-cursor-not-allowed peer-disabled:tw-opacity-70',
+  'tw:text-sm tw:font-medium tw:leading-none tw:peer-disabled:cursor-not-allowed tw:peer-disabled:opacity-70',
 );
 
 /**
@@ -21,10 +21,19 @@ const labelVariants = cva(
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/label}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
  */
-export const Label = React.forwardRef<
-  React.ElementRef<typeof LabelPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root> & VariantProps<typeof labelVariants>
->(({ className, ...props }, ref) => (
-  <LabelPrimitive.Root ref={ref} className={cn('pr-twp', labelVariants(), className)} {...props} />
-));
-Label.displayName = LabelPrimitive.Root.displayName;
+export function Label({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root> &
+  VariantProps<typeof labelVariants> & {
+    ref?: React.Ref<React.ComponentRef<typeof LabelPrimitive.Root>>;
+  }) {
+  return (
+    <LabelPrimitive.Root
+      ref={ref}
+      className={cn('pr-twp', labelVariants(), className)}
+      {...props}
+    />
+  );
+}

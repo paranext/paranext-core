@@ -1,119 +1,48 @@
-import { scopedPreflightStyles } from 'tailwindcss-scoped-preflight';
-
 // #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/tailwind.config.ts and https://github.com/paranext/paranext-extension-template/blob/main/tailwind.config.ts
 
 import { Config } from 'tailwindcss';
 import typography from '@tailwindcss/typography';
-import tailwindCssAnimate from 'tailwindcss-animate';
-import containerQueries from '@tailwindcss/container-queries';
 
 const config: Config = {
-  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
-  // Prefix on all tailwind classes so they don't clash with built-in classes
-  // short for tailwind - we hope to have the same prefix as users of this library so the cn
-  // function that uses tailwind-merge can properly overwrite related tailwind classes
-  prefix: 'tw-',
   // Theme from shadcn/ui
   theme: {
-    container: {
-      center: true,
-      padding: '2rem',
-      screens: {
-        '2xl': '1400px',
-      },
-    },
     extend: {
-      colors: {
-        border: 'hsl(var(--border))',
-        input: 'hsl(var(--input))',
-        ring: 'hsl(var(--ring))',
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
-        primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
-        },
-        secondary: {
-          DEFAULT: 'hsl(var(--secondary))',
-          foreground: 'hsl(var(--secondary-foreground))',
-        },
-        destructive: {
-          DEFAULT: 'hsl(var(--destructive))',
-          foreground: 'hsl(var(--destructive-foreground))',
-        },
-        muted: {
-          DEFAULT: 'hsl(var(--muted))',
-          foreground: 'hsl(var(--muted-foreground))',
-        },
-        accent: {
-          DEFAULT: 'hsl(var(--accent))',
-          foreground: 'hsl(var(--accent-foreground))',
-        },
-        popover: {
-          DEFAULT: 'hsl(var(--popover))',
-          foreground: 'hsl(var(--popover-foreground))',
-        },
-        card: {
-          DEFAULT: 'hsl(var(--card))',
-          foreground: 'hsl(var(--card-foreground))',
-        },
-        sidebar: {
-          DEFAULT: 'hsl(var(--sidebar-background))',
-          foreground: 'hsl(var(--sidebar-foreground))',
-          primary: 'hsl(var(--sidebar-primary))',
-          'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
-          accent: 'hsl(var(--sidebar-accent))',
-          'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
-          border: 'hsl(var(--sidebar-border))',
-          ring: 'hsl(var(--sidebar-ring))',
-        },
-      },
-      borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
-      },
-      keyframes: {
-        'accordion-down': {
-          from: {
-            height: '0',
-          },
-          to: {
-            height: 'var(--radix-accordion-content-height)',
-          },
-        },
-        'accordion-up': {
-          from: {
-            height: 'var(--radix-accordion-content-height)',
-          },
-          to: {
-            height: '0',
-          },
-        },
-      },
-      animation: {
-        'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out',
-      },
       typography: {
         DEFAULT: {
           css: {
-            '--tw-prose-body': 'hsl(var(--foreground))',
-            '--tw-prose-headings': 'hsl(var(--foreground))',
-            '--tw-prose-lead': 'hsl(var(--muted-foreground))',
-            '--tw-prose-links': 'hsl(var(--primary))',
-            '--tw-prose-bold': 'hsl(var(--foreground))',
-            '--tw-prose-counters': 'hsl(var(--muted-foreground))',
-            '--tw-prose-bullets': 'hsl(var(--muted-foreground))',
-            '--tw-prose-hr': 'hsl(var(--border))',
-            '--tw-prose-quotes': 'hsl(var(--foreground))',
-            '--tw-prose-quote-borders': 'hsl(var(--border))',
-            '--tw-prose-captions': 'hsl(var(--muted-foreground))',
-            '--tw-prose-code': 'hsl(var(--foreground))',
-            '--tw-prose-pre-code': 'hsl(var(--muted-foreground))',
-            '--tw-prose-pre-bg': 'hsl(var(--muted))',
-            '--tw-prose-th-borders': 'hsl(var(--border))',
-            '--tw-prose-td-borders': 'hsl(var(--border))',
+            '--tw-prose-body': 'var(--foreground)',
+            '--tw-prose-headings': 'var(--foreground)',
+            '--tw-prose-lead': 'var(--muted-foreground)',
+            '--tw-prose-links': 'var(--primary)',
+            '--tw-prose-bold': 'var(--foreground)',
+            '--tw-prose-counters': 'var(--muted-foreground)',
+            '--tw-prose-bullets': 'var(--muted-foreground)',
+            '--tw-prose-hr': 'var(--border)',
+            '--tw-prose-quotes': 'var(--foreground)',
+            '--tw-prose-quote-borders': 'var(--border)',
+            '--tw-prose-captions': 'var(--muted-foreground)',
+            '--tw-prose-code': 'var(--foreground)',
+            '--tw-prose-pre-code': 'var(--muted-foreground)',
+            '--tw-prose-pre-bg': 'var(--muted)',
+            '--tw-prose-th-borders': 'var(--border)',
+            '--tw-prose-td-borders': 'var(--border)',
+            // We handle dark mode with CSS variables, so the invert colors are the same as normal
+            '--tw-prose-invert-body': 'var(--foreground)',
+            '--tw-prose-invert-headings': 'var(--foreground)',
+            '--tw-prose-invert-lead': 'var(--muted-foreground)',
+            '--tw-prose-invert-links': 'var(--primary)',
+            '--tw-prose-invert-bold': 'var(--foreground)',
+            '--tw-prose-invert-counters': 'var(--muted-foreground)',
+            '--tw-prose-invert-bullets': 'var(--muted-foreground)',
+            '--tw-prose-invert-hr': 'var(--border)',
+            '--tw-prose-invert-quotes': 'var(--foreground)',
+            '--tw-prose-invert-quote-borders': 'var(--border)',
+            '--tw-prose-invert-captions': 'var(--muted-foreground)',
+            '--tw-prose-invert-code': 'var(--foreground)',
+            '--tw-prose-invert-pre-code': 'var(--muted-foreground)',
+            '--tw-prose-invert-pre-bg': 'var(--muted)',
+            '--tw-prose-invert-th-borders': 'var(--border)',
+            '--tw-prose-invert-td-borders': 'var(--border)',
             blockquote: {
               // The default quotes are encoded with 0o or \, and it makes them not display in our
               // environment. So override them with not encoded characters to make them work.
@@ -121,7 +50,7 @@ const config: Config = {
             },
           },
         },
-        // Can use `tw-prose tw-prose-quoteless` to remove quotes on `blockquote`s
+        // Can use `tw:prose tw:prose-quoteless` to remove quotes on `blockquote`s
         // Thanks to RobinMalfait https://github.com/tailwindlabs/tailwindcss-typography/issues/66#issuecomment-756834635
         quoteless: {
           css: {
@@ -135,23 +64,9 @@ const config: Config = {
   plugins: [
     // Prose styles as sensible defaults for markdown renderer component
     typography(),
-    // Animations in tailwind style
-    tailwindCssAnimate,
-    // Container queries first-party plugin
-    containerQueries,
-
-    // #endregion
-    // Restrict tailwind's preflight base css style modifications to within this component library
-    scopedPreflightStyles({
-      // short for platform-bible-react tailwind-preflight - need to put this class on top of each
-      // component to apply our expected styling. This is named something unique to our library
-      // because we want our preflight to be ours alone and not to affect anyone else's css. If they
-      // want to use our preflight for some reason, they can. But generally if they make their own
-      // scoped preflight, they would expect that putting their own scope class would apply their
-      // preflight, not ours.
-      cssSelector: '.pr-twp',
-    }),
   ],
 };
 
 export default config;
+
+// #endregion

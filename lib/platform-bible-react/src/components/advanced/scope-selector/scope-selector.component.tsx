@@ -142,17 +142,17 @@ export function ScopeSelector({
     : SCOPE_OPTIONS;
 
   return (
-    <div id={id} className="tw-grid tw-gap-4">
-      <div className="tw-grid tw-gap-2">
+    <div id={id} className="tw:grid tw:gap-4">
+      <div className="tw:grid tw:gap-2">
         <Label>{scopeText}</Label>
         <RadioGroup
           value={scope}
           onValueChange={onScopeChange}
-          className="tw-flex tw-flex-col tw-space-y-1"
+          className="tw:flex tw:flex-col tw:space-y-1"
         >
           {displayedScopes.map(({ value, label, id: scopeId }) => (
-            <div key={scopeId} className="tw-flex tw-items-center">
-              <RadioGroupItem className="tw-me-2" value={value} id={scopeId} />
+            <div key={scopeId} className="tw:flex tw:items-center">
+              <RadioGroupItem className="tw:me-2" value={value} id={scopeId} />
               <Label htmlFor={scopeId}>{label}</Label>
             </div>
           ))}
@@ -160,7 +160,7 @@ export function ScopeSelector({
       </div>
 
       {scope === 'selectedBooks' && (
-        <div className="tw-grid tw-gap-2">
+        <div className="tw:grid tw:gap-2">
           <Label>{selectBooksText}</Label>
           <BookSelector
             availableBookInfo={availableBookInfo}

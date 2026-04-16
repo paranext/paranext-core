@@ -63,7 +63,7 @@ export const Complex: Story = {
       <DropdownMenuTrigger asChild>
         <Button>
           Open
-          <ChevronDown className="tw-ms-2" />
+          <ChevronDown className="tw:ms-2" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent>
@@ -105,31 +105,31 @@ export const WithIcons: Story = {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline">
-          <User className="tw-mr-2 tw-h-4 tw-w-4" />
+          <User className="tw:mr-2 tw:h-4 tw:w-4" />
           Account
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="tw-w-56">
+      <DropdownMenuContent className="tw:w-56">
         <DropdownMenuLabel>My Account</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem>
-          <User className="tw-mr-2 tw-h-4 tw-w-4" />
+          <User className="tw:mr-2 tw:h-4 tw:w-4" />
           <span>Profile</span>
           <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem>
-          <CreditCard className="tw-mr-2 tw-h-4 tw-w-4" />
+          <CreditCard className="tw:mr-2 tw:h-4 tw:w-4" />
           <span>Billing</span>
           <DropdownMenuShortcut>⌘B</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem>
-          <Settings className="tw-mr-2 tw-h-4 tw-w-4" />
+          <Settings className="tw:mr-2 tw:h-4 tw:w-4" />
           <span>Settings</span>
           <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem>
-          <LogOut className="tw-mr-2 tw-h-4 tw-w-4" />
+          <LogOut className="tw:mr-2 tw:h-4 tw:w-4" />
           <span>Log out</span>
           <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
         </DropdownMenuItem>
@@ -156,7 +156,7 @@ export const WithCheckboxes: Story = {
         <DropdownMenuTrigger asChild>
           <Button variant="outline">View Options</Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="tw-w-56">
+        <DropdownMenuContent className="tw:w-56">
           <DropdownMenuLabel>Appearance</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuCheckboxItem checked={showStatusBar} onCheckedChange={setShowStatusBar}>
@@ -190,7 +190,7 @@ export const WithRadioGroup: Story = {
         <DropdownMenuTrigger asChild>
           <Button variant="outline">Panel Position</Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="tw-w-56">
+        <DropdownMenuContent className="tw:w-56">
           <DropdownMenuLabel>Panel Position</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuRadioGroup value={position} onValueChange={setPosition}>

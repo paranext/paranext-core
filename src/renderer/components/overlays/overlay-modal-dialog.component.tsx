@@ -48,7 +48,7 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
         data-overlay-modal-dialog
         role={typeof overlay.props.role === 'string' ? overlay.props.role : 'dialog'}
         aria-modal="true"
-        className="tw-flex tw-max-h-[85vh] tw-min-h-0 tw-flex-col tw-overflow-hidden"
+        className="tw:flex tw:max-h-[85vh] tw:min-h-0 tw:flex-col tw:overflow-hidden"
       >
         {/* Radix requires DialogTitle and DialogDescription inside DialogContent for
             accessibility. The inner dialog component may render its own visible versions;
@@ -70,7 +70,7 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
         {/* Flex-1 + min-h-0 + overflow-hidden fills the modal shell; each dialog body scrolls its
             own region. An outer overflow-y here scrolls the whole body and can push action buttons
             off-screen for tall dialogs (e.g. select books), breaking hit-testing in E2E. */}
-        <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
+        <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-hidden">
           {createElement(overlay.Component, overlay.props)}
         </div>
       </DialogContent>

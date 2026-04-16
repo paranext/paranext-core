@@ -32,7 +32,7 @@ The sidebar displays two main sections: extension settings (as clickable menu it
   decorators: [
     (Story) => (
       <SidebarProvider>
-        <div className="tw-flex tw-h-96">
+        <div className="tw:flex tw:h-96">
           <Story />
         </div>
       </SidebarProvider>
@@ -125,7 +125,7 @@ function SettingsSidebarDemo({
   };
 
   return (
-    <div className="tw-flex tw-w-full">
+    <div className="tw:flex tw:w-full">
       <SettingsSidebar
         extensionLabels={extensions}
         projectInfo={projects}
@@ -136,12 +136,12 @@ function SettingsSidebarDemo({
         buttonPlaceholderText={placeholder}
       />
 
-      <div className="tw-flex-1 tw-bg-gray-50 tw-p-6">
-        <div className="tw-space-y-4">
-          <h2 className="tw-text-xl tw-font-semibold">Settings Content</h2>
-          <div className="tw-rounded tw-border tw-bg-white tw-p-4">
-            <h3 className="tw-mb-2 tw-font-medium">Currently Selected:</h3>
-            <div className="tw-space-y-1 tw-text-sm">
+      <div className="tw:flex-1 tw:bg-gray-50 tw:p-6">
+        <div className="tw:space-y-4">
+          <h2 className="tw:text-xl tw:font-semibold">Settings Content</h2>
+          <div className="tw:rounded tw:border tw:bg-white tw:p-4">
+            <h3 className="tw:mb-2 tw:font-medium">Currently Selected:</h3>
+            <div className="tw:space-y-1 tw:text-sm">
               <div>
                 <strong>Label:</strong> {selectedItem.label}
               </div>
@@ -155,8 +155,8 @@ function SettingsSidebarDemo({
             </div>
           </div>
 
-          <div className="tw-rounded tw-bg-blue-50 tw-p-4">
-            <p className="tw-text-sm tw-text-blue-800">
+          <div className="tw:rounded tw:bg-blue-50 tw:p-4">
+            <p className="tw:text-sm tw:text-blue-800">
               {selectedItem.projectId
                 ? `Configure settings for the selected project: ${selectedItem.label}`
                 : `Configure settings for the ${selectedItem.label} extension`}
@@ -271,7 +271,7 @@ export const InteractiveDemo: Story = {
     };
 
     return (
-      <div className="tw-flex tw-w-full">
+      <div className="tw:flex tw:w-full">
         <SettingsSidebar
           id="interactive-sidebar"
           extensionLabels={sampleExtensions}
@@ -283,13 +283,13 @@ export const InteractiveDemo: Story = {
           buttonPlaceholderText="Select a project..."
         />
 
-        <div className="tw-flex-1 tw-bg-gray-50 tw-p-6">
-          <div className="tw-space-y-4">
-            <h2 className="tw-text-xl tw-font-semibold">Interactive Settings Demo</h2>
+        <div className="tw:flex-1 tw:bg-gray-50 tw:p-6">
+          <div className="tw:space-y-4">
+            <h2 className="tw:text-xl tw:font-semibold">Interactive Settings Demo</h2>
 
-            <div className="tw-rounded tw-border tw-bg-white tw-p-4">
-              <h3 className="tw-mb-2 tw-font-medium">Current Selection:</h3>
-              <div className="tw-space-y-1 tw-text-sm">
+            <div className="tw:rounded tw:border tw:bg-white tw:p-4">
+              <h3 className="tw:mb-2 tw:font-medium">Current Selection:</h3>
+              <div className="tw:space-y-1 tw:text-sm">
                 <div>
                   <strong>Label:</strong> {selectedItem.label}
                 </div>
@@ -303,17 +303,17 @@ export const InteractiveDemo: Story = {
               </div>
             </div>
 
-            <div className="tw-rounded tw-border tw-bg-white tw-p-4">
-              <h3 className="tw-mb-2 tw-font-medium">Selection History:</h3>
-              <div className="tw-space-y-1">
+            <div className="tw:rounded tw:border tw:bg-white tw:p-4">
+              <h3 className="tw:mb-2 tw:font-medium">Selection History:</h3>
+              <div className="tw:space-y-1">
                 {selectionHistory.length === 0 ? (
-                  <div className="tw-text-sm tw-text-muted-foreground">No selections yet</div>
+                  <div className="tw:text-sm tw:text-muted-foreground">No selections yet</div>
                 ) : (
                   selectionHistory.map((selection, index) => (
                     // Items have no stable unique id; index is the only available key
                     // eslint-disable-next-line react/no-array-index-key
-                    <div key={index} className="tw-flex tw-items-center tw-gap-2 tw-text-sm">
-                      <span className="tw-flex tw-h-4 tw-w-4 tw-items-center tw-justify-center tw-rounded tw-bg-blue-100 tw-text-xs tw-text-blue-800">
+                    <div key={index} className="tw:flex tw:items-center tw:gap-2 tw:text-sm">
+                      <span className="tw:flex tw:h-4 tw:w-4 tw:items-center tw:justify-center tw:rounded tw:bg-blue-100 tw:text-xs tw:text-blue-800">
                         {index + 1}
                       </span>
                       {selection}
@@ -323,9 +323,9 @@ export const InteractiveDemo: Story = {
               </div>
             </div>
 
-            <div className="tw-rounded tw-bg-yellow-50 tw-p-4">
-              <h3 className="tw-mb-2 tw-font-medium">Try This:</h3>
-              <ul className="tw-list-inside tw-list-disc tw-space-y-1 tw-text-sm">
+            <div className="tw:rounded tw:bg-yellow-50 tw:p-4">
+              <h3 className="tw:mb-2 tw:font-medium">Try This:</h3>
+              <ul className="tw:list-inside tw:list-disc tw:space-y-1 tw:text-sm">
                 <li>Click different extension settings to see them highlighted</li>
                 <li>Use the project dropdown to select different projects</li>
                 <li>Notice how the selection history tracks your choices</li>

@@ -2,8 +2,8 @@ import { ESLintUtils, TSESTree } from '@typescript-eslint/utils';
 
 const createRule = ESLintUtils.RuleCreator(() => '');
 
-/** Pattern to detect shadow classes: tw-shadow, tw-shadow-sm, tw-shadow-lg, etc. */
-const SHADOW_PATTERN = /^tw-shadow(-[a-z]+)?$/;
+/** Pattern to detect shadow classes: tw-shadow, tw-shadow-sm, tw-shadow-lg, tw:shadow, etc. */
+const SHADOW_PATTERN = /^tw[:-]shadow(-[a-z]+)?$/;
 
 /** Check if a class string contains shadow classes */
 function findShadowClasses(classString: string): string[] {
@@ -15,7 +15,7 @@ function findShadowClasses(classString: string): string[] {
  *
  * Prevents shadow classes in Tailwind. Shadows are not used in Platform.Bible.
  *
- * Bad: tw-shadow, tw-shadow-sm, tw-shadow-lg, tw-shadow-md
+ * Bad: tw-shadow, tw-shadow-sm, tw-shadow-lg, tw-shadow-md, tw:shadow, tw:shadow-sm
  *
  * See: .context/standards/Code-Style-Guide.md "Theming Requirements" See:
  * .claude/agents/references/component-builder-patterns.md "PROHIBITED Styling Patterns"

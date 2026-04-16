@@ -18,7 +18,7 @@ const meta: Meta<typeof Alert> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-lg tw-p-4">
+        <div className="tw:max-w-lg tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -33,7 +33,7 @@ type Story = StoryObj<typeof Alert>;
 export const Default: Story = {
   render: (args) => (
     <Alert {...args}>
-      <Terminal className="tw-h-4 tw-w-4" />
+      <Terminal className="tw:h-4 tw:w-4" />
       <AlertTitle>Heads up!</AlertTitle>
       <AlertDescription>
         You can add an svg icon, title, and description to your alert.
@@ -52,7 +52,7 @@ export const Default: Story = {
 export const Destructive: Story = {
   render: (args) => (
     <Alert {...args} variant="destructive">
-      <AlertCircle className="tw-h-4 tw-w-4" />
+      <AlertCircle className="tw:h-4 tw:w-4" />
       <AlertTitle>Settings are incomplete</AlertTitle>
       <AlertDescription>
         Results from the Capitalization check may be misleading because settings are incomplete
@@ -71,7 +71,7 @@ export const Destructive: Story = {
 export const DescriptionOnly: Story = {
   render: (args) => (
     <Alert {...args}>
-      <Terminal className="tw-h-4 tw-w-4" />
+      <Terminal className="tw:h-4 tw:w-4" />
       <AlertDescription>
         You don&apos;t have to provide a title. Here is just an svg icon and a description.
       </AlertDescription>
@@ -90,7 +90,7 @@ export const WithImageIcon: Story = {
   render: (args) => (
     <Alert {...args}>
       <img
-        className="tw-h-4 tw-w-4"
+        className="tw:h-4 tw:w-4"
         src="https://raw.githubusercontent.com/Iconscout/unicons/refs/heads/master/svg/line/wifi.svg"
         alt="Wifi icon"
       />
@@ -141,22 +141,22 @@ export const WithMarkdown: Story = {
   render: (args) => (
     <Alert {...args}>
       <img
-        className="tw-h-4 tw-w-4"
+        className="tw:h-4 tw:w-4"
         src="https://upload.wikimedia.org/wikipedia/commons/4/48/Markdown-mark.svg"
         alt="Markdown icon"
       />
       <AlertTitle>
         <MarkdownRenderer
           anchorTarget="_blank"
-          className="tw-mb-1 tw-max-w-none tw-font-medium tw-leading-none tw-tracking-tight"
+          className="tw:mb-1 tw:max-w-none tw:font-medium tw:leading-none tw:tracking-tight"
           markdown="[Markdown Support](https://www.markdownguide.org/cheat-sheet/)"
         />
       </AlertTitle>
       <AlertDescription>
         <MarkdownRenderer
           anchorTarget="_blank"
-          className="tw-max-w-none tw-text-sm"
-          markdown={`You can put a **markdown editor** in the *title* and *description*!\n- To match the markdown title with the original title, add \`tw-max-w-none tw-mb-1 tw-font-medium tw-leading-none tw-tracking-tight\` to the \`MarkdownRenderer\` class.\n- To match the markdown description with the normal description, add \`tw-max-w-none tw-text-sm\` to the \`MarkdownRenderer\` class.`}
+          className="tw:max-w-none tw:text-sm"
+          markdown={`You can put a **markdown editor** in the *title* and *description*!\n- To match the markdown title with the original title, add \`tw:max-w-none tw:mb-1 tw:font-medium tw:leading-none tw:tracking-tight\` to the \`MarkdownRenderer\` class.\n- To match the markdown description with the normal description, add \`tw:max-w-none tw:text-sm\` to the \`MarkdownRenderer\` class.`}
         />
       </AlertDescription>
     </Alert>
@@ -172,21 +172,21 @@ export const WithMarkdown: Story = {
 
 export const VariantsShowcase: Story = {
   render: () => (
-    <div className="tw-space-y-4">
+    <div className="tw:space-y-4">
       <Alert>
-        <Info className="tw-h-4 tw-w-4" />
+        <Info className="tw:h-4 tw:w-4" />
         <AlertTitle>Info</AlertTitle>
         <AlertDescription>This is an informational alert.</AlertDescription>
       </Alert>
 
       <Alert variant="destructive">
-        <XCircle className="tw-h-4 tw-w-4" />
+        <XCircle className="tw:h-4 tw:w-4" />
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>This is an error alert.</AlertDescription>
       </Alert>
 
       <Alert>
-        <CheckCircle2 className="tw-h-4 tw-w-4" />
+        <CheckCircle2 className="tw:h-4 tw:w-4" />
         <AlertTitle>Success</AlertTitle>
         <AlertDescription>
           This looks like a success alert (using default variant).
@@ -206,7 +206,7 @@ export const VariantsShowcase: Story = {
 export const Interactive: Story = {
   render: (args) => (
     <Alert {...args}>
-      <Terminal className="tw-h-4 tw-w-4" />
+      <Terminal className="tw:h-4 tw:w-4" />
       <AlertTitle>Interactive Alert</AlertTitle>
       <AlertDescription>
         Use the controls panel to experiment with different variants and properties.

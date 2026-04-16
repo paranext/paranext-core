@@ -84,7 +84,7 @@ export const Default: Story = {
 
 export const Complex: Story = {
   render: (args) => (
-    <Menubar className="pr-twp tw-border-0 tw-bg-transparent" {...args}>
+    <Menubar className="pr-twp tw:border-0 tw:bg-transparent" {...args}>
       <MenubarMenu>
         <MenubarTrigger>File</MenubarTrigger>
         <MenubarContent>
@@ -240,9 +240,9 @@ export const WithState: Story = {
 
 export const Variants: Story = {
   render: () => (
-    <div className="tw-space-y-4">
+    <div className="tw:space-y-4">
       <div>
-        <h4 className="tw-mb-2 tw-text-sm tw-font-medium">Default Variant</h4>
+        <h4 className="tw:mb-2 tw:text-sm tw:font-medium">Default Variant</h4>
         <Menubar variant="default">
           <MenubarMenu>
             <MenubarTrigger>File</MenubarTrigger>
@@ -262,7 +262,7 @@ export const Variants: Story = {
         </Menubar>
       </div>
       <div>
-        <h4 className="tw-mb-2 tw-text-sm tw-font-medium">Muted Variant</h4>
+        <h4 className="tw:mb-2 tw:text-sm tw:font-medium">Muted Variant</h4>
         <Menubar variant="muted">
           <MenubarMenu>
             <MenubarTrigger>File</MenubarTrigger>

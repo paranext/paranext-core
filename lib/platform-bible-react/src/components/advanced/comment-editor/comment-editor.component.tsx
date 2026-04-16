@@ -150,14 +150,14 @@ export default function CommentEditor({
   const assignToLabel = localizedStrings['%commentEditor_assignTo_label%'] ?? 'Assign to';
 
   return (
-    <div className="pr-twp tw-grid tw-gap-3">
-      <div className="tw-flex tw-items-center tw-justify-between">
-        <span className="tw-text-sm tw-font-medium">{assignToLabel}</span>
-        <div className="tw-flex tw-gap-2">
+    <div className="pr-twp tw:grid tw:gap-3">
+      <div className="tw:flex tw:items-center tw:justify-between">
+        <span className="tw:text-sm tw:font-medium">{assignToLabel}</span>
+        <div className="tw:flex tw:gap-2">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="secondary">
+                <Button onClick={onClose} className="tw:h-6 tw:w-6" size="icon" variant="secondary">
                   <X />
                 </Button>
               </TooltipTrigger>
@@ -171,7 +171,7 @@ export default function CommentEditor({
               <TooltipTrigger asChild>
                 <Button
                   onClick={handleSave}
-                  className="tw-h-6 tw-w-6"
+                  className="tw:h-6 tw:w-6"
                   size="icon"
                   variant="default"
                   disabled={!hasEditorContent(editorState)}
@@ -187,15 +187,15 @@ export default function CommentEditor({
         </div>
       </div>
 
-      <div className="tw-flex tw-items-center tw-gap-2">
+      <div className="tw:flex tw:items-center tw:gap-2">
         <Popover open={isAssignPopoverOpen} onOpenChange={setIsAssignPopoverOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
-              className="tw-flex tw-w-full tw-items-center tw-justify-start tw-gap-2"
+              className="tw:flex tw:w-full tw:items-center tw:justify-start tw:gap-2"
               disabled={assignableUsers.length === 0}
             >
-              <AtSign className="tw-h-4 tw-w-4" />
+              <AtSign className="tw:h-4 tw:w-4" />
               <span>
                 {selectedUser !== undefined
                   ? getAssignedUserDisplayName(selectedUser, localizedStrings)
@@ -204,7 +204,7 @@ export default function CommentEditor({
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            className="tw-w-auto tw-p-0"
+            className="tw:w-auto tw:p-0"
             align="start"
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
@@ -222,7 +222,7 @@ export default function CommentEditor({
                       setSelectedUser(user === '' ? undefined : user);
                       setIsAssignPopoverOpen(false);
                     }}
-                    className="tw-flex tw-items-center"
+                    className="tw:flex tw:items-center"
                   >
                     <span>{getAssignedUserDisplayName(user, localizedStrings)}</span>
                   </CommandItem>
@@ -237,7 +237,7 @@ export default function CommentEditor({
         ref={editorContainerRef}
         role="textbox"
         tabIndex={-1}
-        className="tw-outline-none"
+        className="tw:outline-hidden"
         onKeyDownCapture={(e) => {
           if (e.key === 'Escape') {
             e.preventDefault();
