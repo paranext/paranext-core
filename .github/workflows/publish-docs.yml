@@ -52,6 +52,9 @@ jobs:
           cd lib/platform-bible-react
           npm run build:storybook -- --output-dir ../../docs-for-pages/platform-bible-react-storybook
 
+      - name: Build Storybook for paranext-core
+        run: npm run storybook:build -- --output-dir docs-for-pages/paranext-core-storybook
+
       - name: Add nojekyll # needed so that HTML pages that start with _ do not cause 404
         run: touch docs-for-pages/.nojekyll
 
