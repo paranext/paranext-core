@@ -1,6 +1,7 @@
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
 import { cn } from '@/utils/shadcn-ui.util';
 import React, { RefObject, useCallback, useEffect, useMemo, useState } from 'react';
+import { LegacyCommentThread } from 'platform-bible-utils';
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 
@@ -46,27 +47,28 @@ export default function CommentList({
   // issue). When duplicates exist, combine all their comments into the entry with the latest
   // modifiedDate so no comments are lost.
   const activeThreads = useMemo(() => {
-    const threadMap = new Map<string, (typeof threads)[0]>();
-    threads.forEach((thread) => {
-      const existing = threadMap.get(thread.id);
-      if (!existing) {
-        threadMap.set(thread.id, thread);
-      } else {
-        const seenCommentIds = new Set(existing.comments.map((c) => c.id));
-        const mergedComments = [
-          ...existing.comments,
-          ...thread.comments.filter((c) => !seenCommentIds.has(c.id)),
-        ];
-        const latest =
-          new Date(thread.modifiedDate) > new Date(existing.modifiedDate) ? thread : existing;
-        threadMap.set(thread.id, { ...latest, comments: mergedComments });
-      }
-    });
-    return [...threadMap.values()].filter(
-      (thread) =>
-        !thread.isSpellingNote &&
-        !thread.isBTNote &&
-        thread.comments.some((comment) => !comment.deleted),
+    const threadMap = new Map<string, LegacyCommentThread>();
+    // Filter out spelling notes and biblical terms notes before deduplication so that note-type
+    // flags from filtered threads cannot bleed into the merged metadata of a surviving thread.
+    threads
+      .filter((thread) => !thread.isSpellingNote && !thread.isBTNote)
+      .forEach((thread) => {
+        const existing = threadMap.get(thread.id);
+        if (!existing) {
+          threadMap.set(thread.id, thread);
+        } else {
+          const seenCommentIds = new Set(existing.comments.map((c) => c.id));
+          const mergedComments = [
+            ...existing.comments,
+            ...thread.comments.filter((c) => !seenCommentIds.has(c.id)),
+          ];
+          const latest =
+            new Date(thread.modifiedDate) > new Date(existing.modifiedDate) ? thread : existing;
+          threadMap.set(thread.id, { ...latest, comments: mergedComments });
+        }
+      });
+    return [...threadMap.values()].filter((thread) =>
+      thread.comments.some((comment) => !comment.deleted),
     );
   }, [threads]);
 
