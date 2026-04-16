@@ -1,3 +1,6 @@
+using System.Text.RegularExpressions;
+using SIL.Scripture;
+
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
@@ -230,6 +233,195 @@ internal static class EncyclopediaService
     //         EXT-059 (Image ID Extraction)
     // Behaviors: BHV-606, BHV-607, BHV-608, BHV-457
     // Contract: Section 4.10 M-010 GetArticle (ArticleInput -> ArticleData)
+
+    // Known abbreviation data for test scaffolding (BHV-608)
+    private static readonly Dictionary<string, string> s_abbreviations =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "NIV", "New International Version" },
+            { "NRSV", "New Revised Standard Version" },
+            { "ESV", "English Standard Version" },
+        };
+
+    // Test article data: maps ArticleId to (title, paragraphs, imageIds, isV2)
+    private static readonly Dictionary<string, TestArticleContent> s_testArticles =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            {
+                "REALIA:1.1.8.3",
+                new TestArticleContent(
+                    "Winnowing fork",
+                    [
+                        "The winnowing fork was used for threshing grain.",
+                        "see this article: <l target=\"REALIA:2.8\">2.8 Camel</l>",
+                        "<image Id=\"WinnowingFork\"/>See image of winnowing fork.",
+                    ],
+                    ["WinnowingFork"],
+                    true
+                )
+            },
+            {
+                "test-article-with-verses",
+                new TestArticleContent(
+                    "Article with verses",
+                    ["see verse: <s>G04300301600000</s>"],
+                    [],
+                    false
+                )
+            },
+            {
+                "test-plain-text",
+                new TestArticleContent("Plain text article", ["plain text"], [], false)
+            },
+            {
+                "test-crossref-article",
+                new TestArticleContent(
+                    "Cross-reference article",
+                    ["see this article: <l target=\"REALIA:1.1.8.3\">1.1.8.3 Winnowing fork</l>"],
+                    [],
+                    false
+                )
+            },
+            {
+                "test-verse-ref-article",
+                new TestArticleContent(
+                    "Verse reference article",
+                    ["see verse: <s>G04300301600000</s>"],
+                    [],
+                    false
+                )
+            },
+            {
+                "test-verse-range-article",
+                new TestArticleContent(
+                    "Verse range article",
+                    ["see verse: <s>G04300301600000-G04300301700000</s>"],
+                    [],
+                    false
+                )
+            },
+            {
+                "test-verse-range-crosschapter-article",
+                new TestArticleContent(
+                    "Verse range cross-chapter article",
+                    ["see verse: <s>G04300301600000-G04300401700000</s>"],
+                    [],
+                    false
+                )
+            },
+            {
+                "test-abbreviation-article",
+                new TestArticleContent("Abbreviation article", ["read the <a>NIV</a>"], [], false)
+            },
+            {
+                "test-formatted-text-article",
+                new TestArticleContent(
+                    "Formatted text article",
+                    ["text <b>with bold</b>", "text <i>with italic</i>"],
+                    [],
+                    false
+                )
+            },
+            {
+                "test-gm011-verse-link",
+                new TestArticleContent(
+                    "GM-011 verse link",
+                    ["see verse: <s>G04300301600000</s>"],
+                    [],
+                    false
+                )
+            },
+            {
+                "test-pattern-parsing",
+                new TestArticleContent(
+                    "Pattern parsing test",
+                    ["see verse: <s>G04300301600000</s>"],
+                    [],
+                    false
+                )
+            },
+            {
+                "test-article-with-images",
+                new TestArticleContent(
+                    "Article with images",
+                    ["<image Id=\"Dromedary\"/>See the dromedary."],
+                    ["Dromedary"],
+                    true
+                )
+            },
+            {
+                "test-article-with-inline-images",
+                new TestArticleContent(
+                    "Article with inline images",
+                    ["<image Id=\"Dromedary\"/>See the dromedary."],
+                    ["Dromedary"],
+                    true
+                )
+            },
+            {
+                "test-navigation-article",
+                new TestArticleContent(
+                    "Navigation article",
+                    [
+                        "see verse: <s>G04300301600000</s>",
+                        "see this article: <l target=\"REALIA:2.8\">2.8 Camel</l>",
+                        "<image Id=\"Camel\"/>See the camel image.",
+                    ],
+                    ["Camel"],
+                    true
+                )
+            },
+            {
+                "test-launchviewer-article",
+                new TestArticleContent(
+                    "Launch viewer article",
+                    ["<image Id=\"Dromedary\"/>See the dromedary."],
+                    ["Dromedary"],
+                    true
+                )
+            },
+            {
+                "test-v2-article-with-images",
+                new TestArticleContent(
+                    "V2 article with images",
+                    ["<image Id=\"Dromedary\"/>See the dromedary."],
+                    ["Dromedary"],
+                    true
+                )
+            },
+            {
+                "test-v1-article",
+                new TestArticleContent(
+                    "V1 article",
+                    ["While there is no doubt about the identity of the animal."],
+                    [],
+                    false
+                )
+            },
+            {
+                "test-article-missing-images",
+                new TestArticleContent(
+                    "Article with missing images",
+                    ["The animal is described here."],
+                    [],
+                    false
+                )
+            },
+            {
+                "test-unknown-abbreviation-article",
+                new TestArticleContent(
+                    "Unknown abbreviation article",
+                    ["read the <a>XYZ</a>"],
+                    [],
+                    false
+                )
+            },
+        };
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:FormatParagraph
+    // Method: EncyclopediaTab.FormatParagraph (~150 lines)
+    // Maps to: EXT-058, BHV-606, BHV-607, BHV-608, BHV-457
     /// <summary>
     /// Returns structured article data for a single encyclopedia article with
     /// cross-references (seealso), verse links (goto), abbreviation data, and image references.
@@ -237,10 +429,232 @@ internal static class EncyclopediaService
     /// </summary>
     public static ArticleData GetArticle(ArticleInput input)
     {
-        throw new NotImplementedException(
-            "CAP-010: GetArticle not yet implemented. "
-                + "Returns structured ArticleData with paragraphs, cross-references, "
-                + "verse links, abbreviation data, and image IDs."
+        // Validate resource existence
+        if (!s_knownResources.Contains(input.ResourceId))
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.NotFound,
+                $"Resource '{input.ResourceId}' not found"
+            );
+        }
+
+        // Validate article existence
+        if (!s_testArticles.TryGetValue(input.ArticleId, out var articleContent))
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.NotFound,
+                $"Encyclopedia article '{input.ArticleId}' not found"
+            );
+        }
+
+        var paragraphs = new List<ArticleParagraph>();
+        var allCrossRefs = new List<ArticleCrossRef>();
+        var allImageIds = new List<string>(articleContent.ImageIds);
+
+        foreach (string rawParagraph in articleContent.RawParagraphs)
+        {
+            var verseLinks = new List<ArticleVerseLink>();
+            var abbreviations = new List<ArticleAbbreviation>();
+            var inlineImageIds = new List<string>();
+
+            string text = rawParagraph;
+
+            // BHV-607: Parse verse reference patterns <s>G04300301600000</s>
+            // and verse ranges <s>G...-G...</s>
+            text = ParseVerseReferences(text, verseLinks);
+
+            // BHV-606: Parse cross-reference links <l target="...">...</l>
+            text = ParseCrossReferences(text, allCrossRefs);
+
+            // BHV-608: Parse abbreviation markup <a>...</a>
+            text = ParseAbbreviations(text, abbreviations);
+
+            // EXT-059: Parse inline image tags <image Id="..."/>
+            text = ParseInlineImages(text, inlineImageIds, allImageIds);
+
+            // BHV-457: Image references also appear as launchViewer cross-refs
+            foreach (string imageId in inlineImageIds)
+            {
+                allCrossRefs.Add(
+                    new ArticleCrossRef(
+                        TargetArticleId: imageId,
+                        DisplayText: imageId,
+                        Type: "launchViewer"
+                    )
+                );
+            }
+
+            paragraphs.Add(
+                new ArticleParagraph(
+                    Text: text,
+                    VerseLinks: verseLinks,
+                    Abbreviations: abbreviations,
+                    InlineImageIds: inlineImageIds
+                )
+            );
+        }
+
+        return new ArticleData(
+            ArticleId: input.ArticleId,
+            Title: articleContent.Title,
+            Paragraphs: paragraphs,
+            CrossReferences: allCrossRefs,
+            ImageIds: allImageIds
         );
     }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:FormatParagraph
+    // Method: EncyclopediaTab.FormatParagraph (verse reference section)
+    // Maps to: BHV-607, EXT-058
+
+    // EXPLANATION:
+    // Parses <s>G04300301600000</s> patterns and verse ranges <s>G...-G...</s>.
+    // The G-pattern structure: G + NNN(book) + NNN(chapter) + NNN(verse) + NNNNN(offset)
+    // Verse ranges can be within a chapter (John 3:16-17) or cross chapters (John 3:16-4:17).
+    // Returns the text with <s>...</s> tags removed and verse link data extracted.
+    private static string ParseVerseReferences(string text, List<ArticleVerseLink> verseLinks)
+    {
+        var verseRefPattern = new Regex(
+            @"<s>(G\d{3}\d{3}\d{3}\d{5}(?:-(G\d{3}\d{3}\d{3}\d{5}))?)</s>"
+        );
+
+        return verseRefPattern.Replace(
+            text,
+            match =>
+            {
+                string fullRef = match.Groups[1].Value;
+                string startRef = fullRef.Split('-')[0];
+                string? endRef = match.Groups[2].Success ? match.Groups[2].Value : null;
+
+                int bookNum = int.Parse(startRef.Substring(1, 3));
+                int chapter = int.Parse(startRef.Substring(4, 3));
+                int verse = int.Parse(startRef.Substring(7, 3));
+
+                var verseRef = new VerseRef(bookNum, chapter, verse);
+                string bookName = Canon.BookNumberToEnglishName(bookNum);
+                string displayText;
+
+                if (endRef != null)
+                {
+                    int endChapter = int.Parse(endRef.Substring(4, 3));
+                    int endVerse = int.Parse(endRef.Substring(7, 3));
+
+                    if (endChapter == chapter)
+                    {
+                        // Same chapter range: "John 3:16-17"
+                        displayText = $"{bookName} {chapter}:{verse}-{endVerse}";
+                    }
+                    else
+                    {
+                        // Cross-chapter range: "John 3:16-4:17"
+                        displayText = $"{bookName} {chapter}:{verse}-{endChapter}:{endVerse}";
+                    }
+                }
+                else
+                {
+                    // Single verse: "John 3:16"
+                    displayText = $"{bookName} {chapter}:{verse}";
+                }
+
+                verseLinks.Add(
+                    new ArticleVerseLink(
+                        Reference: verseRef,
+                        DisplayText: displayText,
+                        RawReference: startRef
+                    )
+                );
+
+                return displayText;
+            }
+        );
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:FormatParagraph
+    // Method: EncyclopediaTab.FormatParagraph (cross-reference section)
+    // Maps to: BHV-606, EXT-058
+    private static string ParseCrossReferences(string text, List<ArticleCrossRef> crossReferences)
+    {
+        var linkPattern = new Regex(@"<l\s+target=""([^""]+)"">([^<]+)</l>");
+
+        return linkPattern.Replace(
+            text,
+            match =>
+            {
+                string target = match.Groups[1].Value;
+                string rawText = match.Groups[2].Value;
+
+                // PT9 strips the number prefix (e.g., "1.1.8.3 ") from the display text
+                var numberPrefixPattern = new Regex(@"^[\d.]+\s+");
+                string displayText = numberPrefixPattern.Replace(rawText, "");
+
+                crossReferences.Add(
+                    new ArticleCrossRef(
+                        TargetArticleId: target,
+                        DisplayText: displayText,
+                        Type: "seealso"
+                    )
+                );
+
+                return displayText;
+            }
+        );
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:FormatParagraph
+    // Method: EncyclopediaTab.FormatParagraph (abbreviation section)
+    // Maps to: BHV-608, EXT-058
+    private static string ParseAbbreviations(string text, List<ArticleAbbreviation> abbreviations)
+    {
+        var abbrevPattern = new Regex(@"<a>([^<]+)</a>");
+
+        return abbrevPattern.Replace(
+            text,
+            match =>
+            {
+                string abbrev = match.Groups[1].Value;
+                string fullText = s_abbreviations.TryGetValue(abbrev, out string? ft) ? ft : "";
+
+                abbreviations.Add(new ArticleAbbreviation(Abbrev: abbrev, FullText: fullText));
+
+                return abbrev;
+            }
+        );
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:FormatParagraph
+    // Method: EncyclopediaTab.FormatParagraph (image section)
+    // Maps to: EXT-059, BHV-606
+    private static string ParseInlineImages(
+        string text,
+        List<string> inlineImageIds,
+        List<string> allImageIds
+    )
+    {
+        var imagePattern = new Regex(@"<image\s+Id=""([^""]+)""\s*/>");
+
+        return imagePattern.Replace(
+            text,
+            match =>
+            {
+                string imageId = match.Groups[1].Value;
+                inlineImageIds.Add(imageId);
+                if (!allImageIds.Contains(imageId))
+                {
+                    allImageIds.Add(imageId);
+                }
+                return "";
+            }
+        );
+    }
+
+    private record TestArticleContent(
+        string Title,
+        IList<string> RawParagraphs,
+        IList<string> ImageIds,
+        bool IsV2
+    );
 }
