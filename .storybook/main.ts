@@ -8,11 +8,9 @@ const config: StorybookConfig = {
     '../src/**/*.mdx',
     '../src/**/*.stories.@(js|jsx|ts|tsx)',
     '../extensions/src/**/*.stories.@(js|jsx|ts|tsx)', // Collect stories from bundled extensions - at lease until https://paratextstudio.atlassian.net/browse/PT-3307 is implemented
-    '../lib/platform-bible-react/src/stories/**/*.stories.@(js|jsx|ts|tsx)', // Include only stories directory from platform-bible-react library
   ],
   staticDirs: [
     '../src/stories/assets', // static asset folder
-    '../lib/platform-bible-react/src', // platform-bible-react static assets
     '../extensions/src/platform-scripture-editor/assets', // Scripture editor assets
   ],
   addons: [
