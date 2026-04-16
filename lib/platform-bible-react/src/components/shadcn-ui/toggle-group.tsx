@@ -59,7 +59,7 @@ function ToggleGroup({
       style={{ '--gap': spacing } as React.CSSProperties}
       // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
       className={cn(
-        'pr-twp tw:group/toggle-group tw:flex tw:w-fit tw:flex-row tw:items-center tw:gap-[--spacing(var(--gap))] tw:rounded-lg tw:data-[size=sm]:rounded-[min(var(--radius-md),10px)] tw:data-vertical:flex-col tw:data-vertical:items-stretch',
+        'pr-twp tw:group/toggle-group tw:flex tw:w-fit tw:flex-row tw:items-center tw:gap-[--spacing(var(--gap))] tw:rounded-lg tw:data-[size=sm]:rounded-[min(var(--tw-radius-md),10px)] tw:data-vertical:flex-col tw:data-vertical:items-stretch',
         className,
       )}
       // CUSTOM: Pass dir to Radix UI so it uses correct RTL keyboard navigation direction

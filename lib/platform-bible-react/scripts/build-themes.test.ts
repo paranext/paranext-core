@@ -285,7 +285,9 @@ describe('parseCssThemes integration with actual index.css', () => {
   it('uses oklch() format for "" light theme colour values', () => {
     const vars = result[''].light.cssVariables;
     const nonOklch = Object.entries(vars)
-      .filter(([name, value]) => name !== 'radius' && !value.startsWith('oklch('))
+      .filter(
+        ([name, value]) => name !== 'radius' && name !== 'spacing' && !value.startsWith('oklch('),
+      )
       .map(([name]) => name);
     expect(nonOklch).toHaveLength(0);
   });

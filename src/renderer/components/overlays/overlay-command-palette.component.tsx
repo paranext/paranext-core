@@ -8,7 +8,7 @@
  * LocalizeKeys and connects to the overlay store.
  */
 
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import {
@@ -196,7 +196,7 @@ export function OverlayCommandPalettePresentational({
   const paletteContent = (
     <Command
       data-overlay-command-palette
-      className="tw:rounded-lg tw:border tw:shadow-md"
+      className="tw:rounded-lg tw:border"
       onKeyDown={handleKeyDown}
     >
       <CommandInput ref={inputRef} placeholder={placeholder} />

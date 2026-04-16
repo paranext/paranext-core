@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { Badge } from '@/components/shadcn-ui/badge';
-import { X, Star, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { X, Star, CheckCircle, AlertCircle, Info, Link } from 'lucide-react';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const meta: Meta<typeof Badge> = {
@@ -10,7 +10,17 @@ const meta: Meta<typeof Badge> = {
   tags: ['autodocs', 'test'],
   argTypes: {
     variant: {
-      options: ['default', 'destructive', 'outline', 'secondary', 'muted'],
+      options: [
+        'default',
+        'destructive',
+        'outline',
+        'secondary',
+        'muted',
+        'ghost',
+        'link',
+        'blueIndicator',
+        'mutedIndicator',
+      ],
       control: { type: 'select' },
     },
     className: { control: 'text' },
@@ -52,6 +62,10 @@ export const Variants: Story = {
       <Badge variant="outline">Outline</Badge>
       <Badge variant="secondary">Secondary</Badge>
       <Badge variant="muted">Muted</Badge>
+      <Badge variant="ghost">Ghost</Badge>
+      <Badge variant="link">Link</Badge>
+      <Badge variant="blueIndicator">Blue Indicator</Badge>
+      <Badge variant="mutedIndicator">Muted Indicator</Badge>
     </div>
   ),
   parameters: {
@@ -81,6 +95,24 @@ export const WithIcons: Story = {
       <Badge variant="outline">
         <Info className="tw:me-1 tw:h-3 tw:w-3" />
         Info
+      </Badge>
+      <Badge variant="ghost">
+        <X className="tw:me-1 tw:h-3 tw:w-3" />
+        Ghost
+      </Badge>
+      <Badge variant="link">
+        {/* False positive - this isn't actually an anchor but is just a link icon */}
+        {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
+        <Link className="tw:me-1 tw:h-3 tw:w-3" />
+        Link
+      </Badge>
+      <Badge variant="blueIndicator">
+        <Star className="tw:me-1 tw:h-3 tw:w-3" />
+        Blue Indicator
+      </Badge>
+      <Badge variant="mutedIndicator">
+        <Info className="tw:me-1 tw:h-3 tw:w-3" />
+        Muted Indicator
       </Badge>
     </div>
   ),

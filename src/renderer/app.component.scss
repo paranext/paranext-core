@@ -2,19 +2,21 @@
 
 /* #region Styles from `platform-bible-react`'s `README.md` to apply its styles to the whole page */
 
-* {
-  border-color: var(--border);
-  outline-color: var(--ring);
-}
-@supports (color: color-mix(in lab, red, red)) {
+@layer base {
   * {
-    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+    border-color: var(--border);
+    outline-color: var(--ring);
   }
-}
+  @supports (color: color-mix(in lab, red, red)) {
+    * {
+      outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+    }
+  }
 
-body {
-  background-color: var(--background);
-  color: var(--foreground);
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
 }
 
 /* #endregion */

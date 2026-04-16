@@ -144,15 +144,32 @@ function handleDataProviderSubscriptionError(
   callback: (data: unknown) => void,
   dataType: string,
   selector: unknown,
-  context: 'retrieve' | 'callback',
+  context: 'retrieve-after-update' | 'retrieve-immediate' | 'callback',
 ): void {
   const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
-  const message =
-    context === 'callback'
-      ? `Callback for subscription to ${dataType} with selector ${selectorDetails.substring(0, 120)} threw. ${getErrorMessage(error)}`
-      : `Tried to retrieve data ${context === 'retrieve' ? 'after an update event ' : ''}for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(error)}`;
+  let message: string;
+  switch (context) {
+    case 'callback':
+      message = `Callback for subscription to ${dataType} with selector ${selectorDetails.substring(0, 120)} threw. ${getErrorMessage(error)}`;
+      break;
+    case 'retrieve-after-update':
+      message = `Tried to retrieve data after an update event for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(error)}`;
+      break;
+    case 'retrieve-immediate':
+      message = `Tried to retrieve data immediately for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(error)}`;
+      break;
+    default:
+      context satisfies never;
+      message = `Subscription to ${dataType} with selector ${selectorDetails.substring(0, 120)} threw. ${getErrorMessage(error)}`;
+  }
   logger.warn(message);
-  callback(newPlatformError(error));
+  try {
+    callback(newPlatformError(error));
+  } catch (callbackError) {
+    logger.warn(
+      `handleDataProviderSubscriptionError: callback threw while reporting error for ${dataType}. ${getErrorMessage(callbackError)}`,
+    );
+  }
   const notification = constructErrorNotification(error);
   if (notification) notificationService.send(notification);
 }
@@ -264,7 +281,13 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
           }
         }
       } catch (e) {
-        handleDataProviderSubscriptionError(e, callback, dataType, selector, 'retrieve');
+        handleDataProviderSubscriptionError(
+          e,
+          callback,
+          dataType,
+          selector,
+          'retrieve-after-update',
+        );
       }
     };
 
@@ -299,7 +322,13 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
             }
           }
         } catch (e) {
-          handleDataProviderSubscriptionError(e, callback, dataType, selector, 'retrieve');
+          handleDataProviderSubscriptionError(
+            e,
+            callback,
+            dataType,
+            selector,
+            'retrieve-immediate',
+          );
         }
       })();
     }

@@ -3,6 +3,14 @@
 # ============================================
 # Standard hooks (ALL branches)
 # ============================================
+# Block commits when package-lock.json contains yalc-linked entries (staged or unstaged)
+if grep -q '\.yalc' package-lock.json 2>/dev/null; then
+  echo ""
+  echo "Error: package-lock.json contains yalc links (.yalc entries)."
+  echo "Run 'npm run unlink-dev-packages' to fix, then inspect package.json for unintentional changes and commit again."
+  exit 1
+fi
+
 echo "Format and stylelint fixes..."
 npm run lint:staged
 echo "Format and stylelint fixes finished"

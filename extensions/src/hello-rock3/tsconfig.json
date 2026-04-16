@@ -12,8 +12,6 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
-    // Required: rc-dock uses removed React.ReactChild type; @types/mdx uses global JSX namespace
-    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     // Platform.Bible requires modules to be CommonJS
     // Running webpack.config.ts also requires CommonJS
@@ -25,11 +23,17 @@
     "jsx": "react-jsx",
     "typeRoots": [
       // Include default type declarations
-      "node_modules/@types",
+      "../../../node_modules/@types",
       // Include papi-dts type declarations (for papi.d.ts)
       "../../../lib",
       // Include core extensions' type declarations
       "../../../extensions/src",
+      // Include core's React 19 / library compat type shims (see src/@types/react-19-compat).
+      // Required because extensions intentionally do not set `compilerOptions.types`
+      // (so TypeScript can find ambient type declarations across all extensions). That
+      // means `../../../node_modules/@types` auto-loads every `@types/*` package found
+      // there, including ones with broken React 19 types (e.g. `@types/mdx`).
+      "../../../src/@types",
       // Include this extension's type declarations. It's in this location so there aren't any
       // unexpected files there for typeRoots to include
       "src/types"

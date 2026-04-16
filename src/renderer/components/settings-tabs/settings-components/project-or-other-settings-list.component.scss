@@ -1,6 +1,9 @@
 .card {
   margin-bottom: 1rem;
   width: 600px;
+  /* Cards are flex items inside a scroll container; prevent flex-shrink from compressing them
+     below their content height (which would cause overflow-hidden to clip their content). */
+  flex-shrink: 0;
 }
 
 .card-content {
