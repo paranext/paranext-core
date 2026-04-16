@@ -32,12 +32,10 @@ internal static class GlossLookupFunction
             );
         }
 
-        IList<string> glosses = dataAccess.FindLocalizedGlossesForTerm(
+        var (glosses, actualLanguage) = dataAccess.FindGlossesWithLanguage(
             input.TermId,
             input.PreferredLanguage
         );
-
-        string actualLanguage = dataAccess.ResolveLanguage(input.TermId, input.PreferredLanguage);
 
         return new GlossLookupResult(
             Glosses: glosses,

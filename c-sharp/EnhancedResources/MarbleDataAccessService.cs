@@ -72,25 +72,7 @@ internal class MarbleDataAccessService
     /// </summary>
     public IList<string> FindLocalizedGlossesForTerm(string termLemma, string language)
     {
-        if (!_haveMarbleData)
-            return [];
-
-        // Try the requested language directly
-        if (TryGetGlosses(termLemma, language, out var glosses))
-            return glosses;
-
-        // Try Chinese/Portuguese variant mapping
-        if (
-            _languageMapping.TryGetValue(language, out var mappedLanguage)
-            && TryGetGlosses(termLemma, mappedLanguage, out glosses)
-        )
-            return glosses;
-
-        // Fall back to English
-        if (language != "en" && TryGetGlosses(termLemma, "en", out glosses))
-            return glosses;
-
-        return [];
+        return FindGlossesWithLanguage(termLemma, language).Glosses;
     }
 
     /// <summary>
@@ -171,28 +153,39 @@ internal class MarbleDataAccessService
     /// </summary>
     internal string ResolveLanguage(string termLemma, string language)
     {
-        if (!_haveMarbleData)
-            return string.Empty;
-
-        if (HasGlosses(termLemma, language))
-            return language;
-
-        if (
-            _languageMapping.TryGetValue(language, out var mappedLanguage)
-            && HasGlosses(termLemma, mappedLanguage)
-        )
-            return mappedLanguage;
-
-        if (language != "en" && HasGlosses(termLemma, "en"))
-            return "en";
-
-        return string.Empty;
+        return FindGlossesWithLanguage(termLemma, language).ResolvedLanguage;
     }
 
-    private bool HasGlosses(string termLemma, string language)
+    /// <summary>
+    /// Core fallback logic: walks the language chain once and returns both glosses and
+    /// the resolved language. Single source of truth for the fallback chain:
+    /// requested language -> mapped variant (e.g. zh-Hant -> zh-Hans) -> English.
+    /// Used by GlossLookupFunction to avoid walking the fallback chain twice.
+    /// </summary>
+    internal (IList<string> Glosses, string ResolvedLanguage) FindGlossesWithLanguage(
+        string termLemma,
+        string language
+    )
     {
-        return _glossData.TryGetValue(language, out var langData)
-            && langData.ContainsKey(termLemma);
+        if (!_haveMarbleData)
+            return ([], string.Empty);
+
+        // Try the requested language directly
+        if (TryGetGlosses(termLemma, language, out var glosses))
+            return (glosses, language);
+
+        // Try Chinese/Portuguese variant mapping
+        if (
+            _languageMapping.TryGetValue(language, out var mappedLanguage)
+            && TryGetGlosses(termLemma, mappedLanguage, out glosses)
+        )
+            return (glosses, mappedLanguage);
+
+        // Fall back to English
+        if (language != "en" && TryGetGlosses(termLemma, "en", out glosses))
+            return (glosses, "en");
+
+        return ([], string.Empty);
     }
 
     private bool TryGetGlosses(string termLemma, string language, out IList<string> glosses)
