@@ -1,4 +1,5 @@
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
+import { Label } from '@/components/shadcn-ui/label';
 import { cn } from '@/utils/shadcn-ui.util';
 import React, { RefObject, useCallback, useEffect, useMemo, useState } from 'react';
 import { LegacyCommentThread } from 'platform-bible-utils';
@@ -28,6 +29,7 @@ export default function CommentList({
   selectedThreadId: externalSelectedThreadId,
   onSelectedThreadChange,
   onVerseRefClick,
+  emptyStateMessage,
 }: CommentListProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const [lastInteractedThreadId, setLastInteractedThreadId] = useState<string | undefined>();
@@ -42,14 +44,13 @@ export default function CommentList({
 
   // Filter out spelling notes and biblical terms notes, which are meant to be handled by their
   // respective tools (Wordlist and Biblical Terms), not the Comments List.
-  // Displaying these note types in their respective tools is a future improvement.
+  // Filter before deduplication so that note-type flags from filtered threads cannot bleed into
+  // the merged metadata of a surviving thread.
   // Merge duplicate thread IDs — the source data may contain duplicates (inherited data quality
   // issue). When duplicates exist, combine all their comments into the entry with the latest
   // modifiedDate so no comments are lost.
   const activeThreads = useMemo(() => {
     const threadMap = new Map<string, LegacyCommentThread>();
-    // Filter out spelling notes and biblical terms notes before deduplication so that note-type
-    // flags from filtered threads cannot bleed into the merged metadata of a surviving thread.
     threads
       .filter((thread) => !thread.isSpellingNote && !thread.isBTNote)
       .forEach((thread) => {
@@ -129,6 +130,14 @@ export default function CommentList({
     },
     [lastInteractedThreadId, expandedThreadIds, handleKeyDown, onSelectedThreadChange],
   );
+
+  if (activeThreads.length === 0 && emptyStateMessage) {
+    return (
+      <div className="tw-m-4 tw-flex tw-justify-center">
+        <Label>{emptyStateMessage}</Label>
+      </div>
+    );
+  }
 
   return (
     <div
