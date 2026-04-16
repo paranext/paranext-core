@@ -85,10 +85,10 @@ export type OverlayContextMenuPresentationalProps = {
 /**
  * Tailwind classes for hover highlighting on menu items. In overlay context menus (force-opened via
  * `open` prop with a hidden trigger and `modal={false}`), Radix's focus-based highlighting
- * (`focus:tw-bg-accent`) doesn't reliably activate on pointer hover. These classes ensure items
+ * (`tw:focus:bg-accent`) doesn't reliably activate on pointer hover. These classes ensure items
  * highlight instantly on hover, matching the top-level menubar behavior.
  */
-const HOVER_HIGHLIGHT_CLASSES = 'hover:tw-bg-accent hover:tw-text-accent-foreground';
+const HOVER_HIGHLIGHT_CLASSES = 'tw:hover:bg-accent tw:hover:text-accent-foreground';
 
 /** Inline style for instant hover highlight (no transition delay) */
 const HOVER_HIGHLIGHT_STYLE: CSSProperties = { transitionDuration: '0ms' };
@@ -116,8 +116,8 @@ function HoverableSubmenu({
   onSelect: (result: OverlayContextMenuResult) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const openTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const scheduleOpen = useCallback(() => {
     clearTimeout(closeTimerRef.current);

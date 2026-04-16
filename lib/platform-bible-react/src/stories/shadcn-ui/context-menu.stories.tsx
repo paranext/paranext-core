@@ -25,7 +25,7 @@ const meta: Meta<typeof ContextMenu> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-8">
+        <div className="tw:p-8">
           <Story />
         </div>
       </ThemeProvider>
@@ -48,7 +48,7 @@ type Story = StoryObj<typeof ContextMenu>;
 export const Default: Story = {
   render: () => (
     <ContextMenu>
-      <ContextMenuTrigger className="tw-flex tw-h-32 tw-w-64 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-md tw-border tw-border-dashed tw-text-sm">
+      <ContextMenuTrigger className="tw:flex tw:h-32 tw:w-64 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-dashed tw:text-sm">
         Right click here
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -71,7 +71,7 @@ export const Default: Story = {
 export const WithShortcuts: Story = {
   render: () => (
     <ContextMenu>
-      <ContextMenuTrigger className="tw-flex tw-h-32 tw-w-64 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-md tw-border tw-border-dashed tw-text-sm">
+      <ContextMenuTrigger className="tw:flex tw:h-32 tw:w-64 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-dashed tw:text-sm">
         Right click for shortcuts
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -113,7 +113,7 @@ export const WithCheckboxItems: Story = {
 
     return (
       <ContextMenu>
-        <ContextMenuTrigger className="tw-flex tw-h-32 tw-w-64 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-md tw-border tw-border-dashed tw-text-sm">
+        <ContextMenuTrigger className="tw:flex tw:h-32 tw:w-64 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-dashed tw:text-sm">
           Right click for options
         </ContextMenuTrigger>
         <ContextMenuContent>
@@ -156,7 +156,7 @@ export const WithRadioGroup: Story = {
 
     return (
       <ContextMenu>
-        <ContextMenuTrigger className="tw-flex tw-h-32 tw-w-64 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-md tw-border tw-border-dashed tw-text-sm">
+        <ContextMenuTrigger className="tw:flex tw:h-32 tw:w-64 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-dashed tw:text-sm">
           Right click for view options
         </ContextMenuTrigger>
         <ContextMenuContent>
@@ -185,7 +185,7 @@ export const WithRadioGroup: Story = {
 export const WithSubmenu: Story = {
   render: () => (
     <ContextMenu>
-      <ContextMenuTrigger className="tw-flex tw-h-32 tw-w-64 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-md tw-border tw-border-dashed tw-text-sm">
+      <ContextMenuTrigger className="tw:flex tw:h-32 tw:w-64 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-dashed tw:text-sm">
         Right click for submenu
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -229,7 +229,7 @@ export const WithSubmenu: Story = {
 export const WithGroupsAndLabels: Story = {
   render: () => (
     <ContextMenu>
-      <ContextMenuTrigger className="tw-flex tw-h-32 tw-w-64 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-md tw-border tw-border-dashed tw-text-sm">
+      <ContextMenuTrigger className="tw:flex tw:h-32 tw:w-64 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-dashed tw:text-sm">
         Right click for organized menu
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -282,10 +282,10 @@ export const ComplexExample: Story = {
 
     return (
       <ContextMenu>
-        <ContextMenuTrigger className="tw-flex tw-h-40 tw-w-80 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-md tw-border tw-border-dashed tw-bg-muted/50 tw-text-sm">
+        <ContextMenuTrigger className="tw:flex tw:h-40 tw:w-80 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-dashed tw:bg-muted/50 tw:text-sm">
           Right click for complete example
         </ContextMenuTrigger>
-        <ContextMenuContent className="tw-w-64">
+        <ContextMenuContent className="tw:w-64">
           <ContextMenuGroup>
             <ContextMenuItem>
               Back

@@ -21,7 +21,7 @@ const meta: Meta<typeof CommentEditor> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-w-80">
+        <div className="tw:w-80">
           <Story />
         </div>
       </ThemeProvider>

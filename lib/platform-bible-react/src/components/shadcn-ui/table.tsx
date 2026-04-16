@@ -1,15 +1,20 @@
 import React from 'react';
 import { getFocusableElements } from '@/utils/focus.util';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * Table components provide a responsive table. These components are built and styled with Shadcn
  * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/table
  */
-const Table = React.forwardRef<
-  HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement> & { stickyHeader?: boolean }
->(({ className, stickyHeader, ...props }, ref) => {
+function Table({
+  className,
+  stickyHeader,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLTableElement> & {
+  stickyHeader?: boolean;
+  ref?: React.Ref<HTMLTableElement>;
+}) {
   // CUSTOM: Use internal ref to manage keyboard navigation and Enter key behavior
   // This ref gets passed into the table row ref property which expects null and not undefined
   // eslint-disable-next-line no-null/no-null
@@ -74,7 +79,7 @@ const Table = React.forwardRef<
   };
 
   return (
-    <div className={cn('pr-twp tw-relative tw-w-full', { 'tw-p-1': stickyHeader })}>
+    <div className={cn('pr-twp tw:relative tw:w-full', { 'tw:p-1': stickyHeader })}>
       {/* Table element is not interactive by default but we need to add a keydown handler */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <table
@@ -84,8 +89,8 @@ const Table = React.forwardRef<
         onKeyDown={handleKeyDownInTable} // CUSTOM: Enable keyboard behavior
         ref={tableRef} // CUSTOM: Use internal ref to manage keyboard navigation
         className={cn(
-          'tw-w-full tw-caption-bottom tw-text-sm tw-outline-none', // CUSTOM: Add outline-none to remove duplicate outline
-          'focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background', // CUSTOM: Add focus styles
+          'tw:w-full tw:caption-bottom tw:text-sm tw:outline-hidden', // CUSTOM: Add outline-hidden to remove duplicate outline
+          'tw:focus:relative tw:focus:z-10 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background', // CUSTOM: Add focus styles
           className,
         )}
         aria-label="Table" // CUSTOM: Add aria-label for accessibility
@@ -94,52 +99,62 @@ const Table = React.forwardRef<
       />
     </div>
   );
-});
-Table.displayName = 'Table';
+}
 
 /** @inheritdoc Table */
-const TableHeader = React.forwardRef<
-  HTMLTableSectionElement,
-  React.HTMLAttributes<HTMLTableSectionElement> & { stickyHeader?: boolean }
->(({ className, stickyHeader, ...props }, ref) => (
-  <thead
-    ref={ref}
-    className={cn(
-      {
-        'tw-sticky tw-top-[-1px] tw-z-20 tw-bg-background tw-drop-shadow-sm': stickyHeader,
-      },
-      '[&_tr]:tw-border-b',
-      className,
-    )}
-    {...props}
-  />
-));
-TableHeader.displayName = 'TableHeader';
+function TableHeader({
+  className,
+  stickyHeader,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLTableSectionElement> & {
+  stickyHeader?: boolean;
+  ref?: React.Ref<HTMLTableSectionElement>;
+}) {
+  return (
+    <thead
+      ref={ref}
+      className={cn(
+        {
+          'tw:sticky tw:top-[-1px] tw:z-20 tw:bg-background tw:drop-shadow-sm': stickyHeader,
+        },
+        'tw:[&_tr]:border-b',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Table */
-const TableBody = React.forwardRef<
-  HTMLTableSectionElement,
-  React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => (
-  <tbody ref={ref} className={cn('[&_tr:last-child]:tw-border-0', className)} {...props} />
-));
-TableBody.displayName = 'TableBody';
+function TableBody({
+  className,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLTableSectionElement> & { ref?: React.Ref<HTMLTableSectionElement> }) {
+  return <tbody ref={ref} className={cn('tw:[&_tr:last-child]:border-0', className)} {...props} />;
+}
 
 /** @inheritdoc Table */
-const TableFooter = React.forwardRef<
-  HTMLTableSectionElement,
-  React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => (
-  <tfoot
-    ref={ref}
-    className={cn('tw-border-t tw-bg-muted/50 tw-font-medium [&>tr]:last:tw-border-b-0', className)}
-    {...props}
-  />
-));
-TableFooter.displayName = 'TableFooter';
+function TableFooter({
+  className,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLTableSectionElement> & { ref?: React.Ref<HTMLTableSectionElement> }) {
+  return (
+    <tfoot
+      ref={ref}
+      className={cn(
+        'tw:border-t tw:bg-muted/50 tw:font-medium tw:[&>tr]:last:border-b-0',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 // CUSTOM: Manage keyboard navigation and Enter key behavior for focusable elements in a row
-function useFocusableInRowKeyboardNavigation(rowRef: React.RefObject<HTMLTableRowElement>) {
+function useFocusableInRowKeyboardNavigation(rowRef: React.RefObject<HTMLTableRowElement | null>) {
   React.useEffect(() => {
     const row = rowRef.current;
     if (!row) return;
@@ -217,10 +232,17 @@ function focusAdjacentRow(
 }
 
 /** @inheritdoc Table */
-const TableRow = React.forwardRef<
-  HTMLTableRowElement,
-  React.HTMLAttributes<HTMLTableRowElement> & { setFocusAlsoRunsSelect?: boolean }
->(({ className, onKeyDown, onSelect, setFocusAlsoRunsSelect = false, ...props }, ref) => {
+function TableRow({
+  className,
+  onKeyDown,
+  onSelect,
+  setFocusAlsoRunsSelect = false,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLTableRowElement> & {
+  setFocusAlsoRunsSelect?: boolean;
+  ref?: React.Ref<HTMLTableRowElement>;
+}) {
   // CUSTOM: Use internal ref to manage keyboard navigation and Enter key behavior
   // This ref gets passed into the table row ref property which expects null and not undefined
   // eslint-disable-next-line no-null/no-null
@@ -299,58 +321,63 @@ const TableRow = React.forwardRef<
       onKeyDown={handleKeyDown} // CUSTOM: Enable keyboard behavior
       onFocus={handleFocus} // CUSTOM: Handle focus event
       className={cn(
-        // CUSTOM: Add focus styles and add tw-outline-none so there isn't a duplicate outline
-        'tw-border-b tw-outline-none tw-transition-colors hover:tw-bg-muted/50',
-        'focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
-        'data-[state=selected]:tw-bg-muted',
+        // CUSTOM: Add focus styles and add tw:outline-hidden so there isn't a duplicate outline
+        'tw:border-b tw:outline-hidden tw:transition-colors tw:hover:bg-muted/50',
+        'tw:focus:relative tw:focus:z-10 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
+        'tw:data-[state=selected]:bg-muted',
         className,
       )}
       {...props}
     />
   );
-});
-TableRow.displayName = 'TableRow';
+}
 
 /** @inheritdoc Table */
-const TableHead = React.forwardRef<
-  HTMLTableCellElement,
-  React.ThHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
-  <th
-    ref={ref}
-    className={cn(
-      'tw-h-12 tw-px-4 tw-text-start tw-align-middle tw-font-medium tw-text-muted-foreground [&:has([role=checkbox])]:tw-pe-0',
-      className,
-    )}
-    {...props}
-  />
-));
-TableHead.displayName = 'TableHead';
+function TableHead({
+  className,
+  ref,
+  ...props
+}: React.ThHTMLAttributes<HTMLTableCellElement> & { ref?: React.Ref<HTMLTableCellElement> }) {
+  return (
+    <th
+      ref={ref}
+      className={cn(
+        'tw:h-12 tw:px-4 tw:text-start tw:align-middle tw:font-medium tw:text-muted-foreground tw:[&:has([role=checkbox])]:pe-0',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Table */
-const TableCell = React.forwardRef<
-  HTMLTableCellElement,
-  React.TdHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
-  <td
-    ref={ref}
-    className={cn('tw-p-4 tw-align-middle [&:has([role=checkbox])]:tw-pe-0', className)}
-    {...props}
-  />
-));
-TableCell.displayName = 'TableCell';
+function TableCell({
+  className,
+  ref,
+  ...props
+}: React.TdHTMLAttributes<HTMLTableCellElement> & { ref?: React.Ref<HTMLTableCellElement> }) {
+  return (
+    <td
+      ref={ref}
+      className={cn('tw:p-4 tw:align-middle tw:[&:has([role=checkbox])]:pe-0', className)}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Table */
-const TableCaption = React.forwardRef<
-  HTMLTableCaptionElement,
-  React.HTMLAttributes<HTMLTableCaptionElement>
->(({ className, ...props }, ref) => (
-  <caption
-    ref={ref}
-    className={cn('tw-mt-4 tw-text-sm tw-text-muted-foreground', className)}
-    {...props}
-  />
-));
-TableCaption.displayName = 'TableCaption';
+function TableCaption({
+  className,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLTableCaptionElement> & { ref?: React.Ref<HTMLTableCaptionElement> }) {
+  return (
+    <caption
+      ref={ref}
+      className={cn('tw:mt-4 tw:text-sm tw:text-muted-foreground', className)}
+      {...props}
+    />
+  );
+}
 
 export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption };

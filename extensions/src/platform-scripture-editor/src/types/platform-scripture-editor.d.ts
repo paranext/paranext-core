@@ -445,7 +445,7 @@ declare module 'platform-scripture-editor' {
      *
      * @example 'rgba(255, 255, 0, 0.3)'
      *
-     * @example 'hsl(var(--accent))'
+     * @example 'var(--accent)'
      */
     backgroundColor?: string;
 
@@ -454,7 +454,7 @@ declare module 'platform-scripture-editor' {
      *
      * @example '1px solid red'
      *
-     * @example '2px dashed hsl(var(--border))'
+     * @example '2px dashed var(--border)'
      */
     border?: string;
 
@@ -474,7 +474,7 @@ declare module 'platform-scripture-editor' {
      *
      * @example '#ff0000'
      *
-     * @example 'hsl(var(--primary))'
+     * @example 'var(--primary)'
      *
      * @example 'var(--destructive)'
      */
@@ -539,7 +539,7 @@ declare module 'platform-scripture-editor' {
      *
      * @example 'red'
      *
-     * @example 'hsl(var(--destructive))'
+     * @example 'var(--destructive)'
      */
     textDecorationColor?: string;
 
@@ -602,7 +602,7 @@ declare module 'platform-scripture-editor' {
      *   {
      *     textDecorationLine: 'underline',
      *     textDecorationStyle: 'wavy',
-     *     textDecorationColor: 'hsl(var(--destructive))',
+     *     textDecorationColor: 'var(--destructive)',
      *     cursor: 'pointer',
      *   },
      * );

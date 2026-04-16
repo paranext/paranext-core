@@ -34,9 +34,9 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
   }, []);
 
   return (
-    <div className="tw-flex tw-flex-col tw-gap-4 tw-h-screen tw-p-4">
+    <div className="tw:flex tw:flex-col tw:gap-4 tw:h-screen tw:p-4">
       {isInitialRegistration ? (
-        <div className="tw-flex tw-flex-col tw-gap-2">
+        <div className="tw:flex tw:flex-col tw:gap-2">
           <p>
             {formatReplacementString(
               localizedStrings['%paratextRegistration_app_startup_description%'],

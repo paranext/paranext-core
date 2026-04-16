@@ -1,4 +1,4 @@
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { MoreVertical } from 'lucide-react';
 import React, { ReactNode } from 'react';
 import { Button } from '../shadcn-ui/button';
@@ -71,25 +71,25 @@ export function ResultsCard({
       tabIndex={0}
       aria-pressed={isSelected}
       className={cn(
-        'tw-group tw-relative tw-min-w-36 tw-rounded-xl tw-border tw-shadow-none hover:tw-bg-muted/50',
-        { 'tw-opacity-50 hover:tw-opacity-100': isDenied && !isSelected },
-        { 'tw-bg-accent': isSelected },
-        { 'tw-bg-transparent': !isSelected },
+        'tw:group tw:relative tw:min-w-36 tw:rounded-xl tw:border tw:shadow-none tw:hover:bg-muted/50',
+        { 'tw:opacity-50 tw:hover:opacity-100': isDenied && !isSelected },
+        { 'tw:bg-accent': isSelected },
+        { 'tw:bg-transparent': !isSelected },
         className,
       )}
     >
-      <div className="tw-flex tw-flex-col tw-gap-2 tw-p-4">
-        <div className="tw-flex tw-justify-between tw-overflow-hidden">
-          <div className="tw-min-w-0 tw-flex-1">{children}</div>
+      <div className="tw:flex tw:flex-col tw:gap-2 tw:p-4">
+        <div className="tw:flex tw:justify-between tw:overflow-hidden">
+          <div className="tw:min-w-0 tw:flex-1">{children}</div>
           {isSelected && selectedButtons}
           {!isSelected && hoverButtons && (
-            <div className="tw-invisible group-hover:tw-visible">{hoverButtons}</div>
+            <div className="tw:invisible tw:group-hover:visible">{hoverButtons}</div>
           )}
           {!isSelected && showDropdownOnHover && dropdownContent && (
-            <div className="tw-invisible group-hover:tw-visible">
+            <div className="tw:invisible tw:group-hover:visible">
               <DropdownMenu>
-                <DropdownMenuTrigger className={cn(accentColor && 'tw-me-1')} asChild>
-                  <Button className="tw-m-1 tw-h-6 tw-w-6" variant="ghost" size="icon">
+                <DropdownMenuTrigger className={cn(accentColor && 'tw:me-1')} asChild>
+                  <Button className="tw:m-1 tw:h-6 tw:w-6" variant="ghost" size="icon">
                     <MoreVertical />
                   </Button>
                 </DropdownMenuTrigger>
@@ -99,8 +99,8 @@ export function ResultsCard({
           )}
           {isSelected && dropdownContent && (
             <DropdownMenu>
-              <DropdownMenuTrigger className={cn(accentColor && 'tw-me-1')} asChild>
-                <Button className="tw-m-1 tw-h-6 tw-w-6" variant="ghost" size="icon">
+              <DropdownMenuTrigger className={cn(accentColor && 'tw:me-1')} asChild>
+                <Button className="tw:m-1 tw:h-6 tw:w-6" variant="ghost" size="icon">
                   <MoreVertical />
                 </Button>
               </DropdownMenuTrigger>
@@ -109,14 +109,14 @@ export function ResultsCard({
           )}
         </div>
         {additionalContent && (
-          <div className="tw-w-fit tw-min-w-0 tw-max-w-full tw-overflow-hidden">
+          <div className="tw:w-fit tw:min-w-0 tw:max-w-full tw:overflow-hidden">
             {additionalContent}
           </div>
         )}
       </div>
       {accentColor && (
         <div
-          className={`tw-absolute tw-right-0 tw-top-0 tw-h-full tw-w-2 tw-rounded-r-xl ${accentColor}`}
+          className={`tw:absolute tw:right-0 tw:top-0 tw:h-full tw:w-2 tw:rounded-r-xl ${accentColor}`}
         />
       )}
     </div>

@@ -1,5 +1,5 @@
 import { ComponentProps } from 'react';
-import { toast as sonner, Toaster } from 'sonner';
+import { Toaster as Sonner, toast as sonner } from 'sonner';
 
 /**
  * Props for Sonner component.
@@ -7,7 +7,7 @@ import { toast as sonner, Toaster } from 'sonner';
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
  */
-type SonnerProps = ComponentProps<typeof Toaster>;
+type SonnerProps = ComponentProps<typeof Sonner>;
 
 /**
  * The Sonner component is an opinionated toast component for React. It is built on Sonner and
@@ -17,10 +17,10 @@ type SonnerProps = ComponentProps<typeof Toaster>;
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
  */
-function Sonner({ ...props }: SonnerProps) {
+function Toaster({ ...props }: SonnerProps) {
   return (
-    <Toaster
-      className="tw-toaster tw-group"
+    <Sonner
+      className="tw:toaster tw:group"
       toastOptions={{
         classNames: {
           toast:
@@ -35,5 +35,6 @@ function Sonner({ ...props }: SonnerProps) {
   );
 }
 
+// Toaster exported as Sonner to maintain the API names
 // The re-export of the sonner function was added manually
-export { Sonner, sonner };
+export { Toaster as Sonner, sonner };

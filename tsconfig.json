@@ -26,6 +26,7 @@
       // Include additions and overrides
       "src/@types"
     ],
+    "skipLibCheck": true,
     "allowJs": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,

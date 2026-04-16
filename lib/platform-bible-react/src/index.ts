@@ -189,7 +189,7 @@ export {
   CardDescription,
   CardContent,
 } from './components/shadcn-ui/card';
-export { default as Checkbox } from './components/shadcn-ui/checkbox';
+export { Checkbox } from './components/shadcn-ui/checkbox';
 export {
   Command,
   CommandEmpty,
@@ -266,5 +266,5 @@ export {
 } from './components/z-index';
 
 // Utils
-export { cn } from './utils/shadcn-ui.util';
+export { cn } from './utils/shadcn-ui/utils';
 export { getToolbarOSReservedSpaceClassName } from './components/advanced/toolbar.component';
