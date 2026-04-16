@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * Use to show a placeholder while content is loading. This component is from Shadcn UI. See Shadcn
@@ -8,7 +8,7 @@ import { cn } from '@/utils/shadcn-ui.util';
 function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('pr-twp tw-animate-pulse tw-rounded-md tw-bg-muted', className)}
+      className={cn('pr-twp tw:animate-pulse tw:rounded-md tw:bg-muted', className)}
       {...props}
     />
   );

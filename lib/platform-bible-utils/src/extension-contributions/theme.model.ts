@@ -38,8 +38,8 @@ export interface ThemeDefinition {
   label: LocalizeKey;
   /**
    * Theme colors and other CSS variable properties that adjust the looks of the application. These
-   * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
-   * `tw-bg-primary`
+   * are applied in CSS properties using `var(--variableName)` or Tailwind classes like
+   * `tw:bg-primary`
    *
    * See the wiki's [Matching Application
    * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
@@ -49,79 +49,253 @@ export interface ThemeDefinition {
 }
 /**
  * Theme colors and other CSS variable properties that adjust the looks of the application. These
- * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
- * `tw-bg-primary`
+ * are applied in CSS properties using `var(--variableName)` or Tailwind classes like
+ * `tw:bg-primary`
  *
- * See the wiki's [Matching Application
+ * See [shadcn's Theming page](https://ui.shadcn.com/docs/theming#theme-tokens) and the wiki's
+ * [Matching Application
  * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
  * section for more information.
  */
 export interface ThemeCssVariables {
   [variableName: string]: string | undefined;
+  /** Default application background color. Applied to the page shell and page sections. */
   background?: string;
+  /** Default text color. Applied to the page shell and general text content. */
   foreground?: string;
+  /** Surface color for elevated containers such as cards and dashboard panels. */
   card?: string;
+  /** Text and content color inside card surfaces. */
   'card-foreground'?: string;
+  /** Surface color for floating overlays such as dropdowns and context menus. */
   popover?: string;
+  /** Text and content color inside floating overlay surfaces. */
   'popover-foreground'?: string;
+  /**
+   * High-emphasis action and brand surface color. Applied to the default button, selected states,
+   * and active accents.
+   */
   primary?: string;
+  /** Text and content color rendered on primary surfaces. */
   'primary-foreground'?: string;
+  /**
+   * Lower-emphasis filled action and supporting surface color. Applied to secondary buttons and
+   * supporting UI.
+   */
   secondary?: string;
+  /** Text and content color rendered on secondary surfaces. */
   'secondary-foreground'?: string;
+  /** Subtle background surface color for de-emphasized regions. */
   muted?: string;
+  /**
+   * Lower-emphasis text color. Applied to descriptions, placeholders, helper text, and subdued
+   * content.
+   */
   'muted-foreground'?: string;
+  /**
+   * Interactive hover, focus, and active surface color. Applied to ghost buttons, menu highlights,
+   * and hovered rows.
+   */
   accent?: string;
+  /** Text and content color rendered on accent surfaces. */
   'accent-foreground'?: string;
+  /**
+   * Color representing destructive actions and error states. Applied to destructive buttons and
+   * invalid states.
+   */
   destructive?: string;
+  /** Text and content color rendered on destructive surfaces. */
   'destructive-foreground'?: string;
+  /** Color to emphasize the success of some action */
+  success?: string;
+  /** Default border and separator color. Applied to cards, menus, tables, and layout dividers. */
   border?: string;
+  /** Border and surface treatment color for form controls such as inputs, text areas, and selects. */
   input?: string;
+  /**
+   * Focus ring and outline color applied to buttons, inputs, checkboxes, and other focusable
+   * controls.
+   */
   ring?: string;
-  'sidebar-background'?: string;
+  /** First color in the default chart palette. */
+  'chart-1'?: string;
+  /** Second color in the default chart palette. */
+  'chart-2'?: string;
+  /** Third color in the default chart palette. */
+  'chart-3'?: string;
+  /** Fourth color in the default chart palette. */
+  'chart-4'?: string;
+  /** Fifth color in the default chart palette. */
+  'chart-5'?: string;
+  /** Base sidebar container surface color. */
+  sidebar?: string;
+  /** Default text color inside the sidebar. */
   'sidebar-foreground'?: string;
+  /**
+   * High-emphasis action color inside the sidebar. Applied to active items, icon tiles, and sidebar
+   * badges.
+   */
   'sidebar-primary'?: string;
+  /** Text and content color rendered on primary sidebar surfaces. */
   'sidebar-primary-foreground'?: string;
+  /**
+   * Hover and selected state surface color inside the sidebar. Applied to menu hover states and
+   * open items.
+   */
   'sidebar-accent'?: string;
+  /** Text and content color rendered on sidebar accent surfaces. */
   'sidebar-accent-foreground'?: string;
+  /**
+   * Border and separator color specific to the sidebar. Applied to sidebar headers, groups, and
+   * internal dividers.
+   */
   'sidebar-border'?: string;
+  /** Focus ring color for controls inside the sidebar. */
   'sidebar-ring'?: string;
+  /**
+   * Base corner radius scale. Applied to cards, inputs, buttons, popovers, and the derived radius-*
+   * tokens.
+   */
   radius?: string;
 }
 
 const themeDefs = {
   themeCssVariables: {
     description:
-      "Theme colors and other CSS variable properties that adjust the looks of the application. These are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like `tw-bg-primary`\n\nSee the wiki's [Matching Application Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme) section for more information.",
+      "Theme colors and other CSS variable properties that adjust the looks of the application. These are applied in CSS properties using `var(--variableName)` or Tailwind classes like `tw:bg-primary`\n\nSee [shadcn's Theming page](https://ui.shadcn.com/docs/theming#theme-tokens) and the wiki's [Matching Application Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme) section for more information.",
     type: 'object',
     properties: {
-      background: { type: 'string' },
-      foreground: { type: 'string' },
-      card: { type: 'string' },
-      'card-foreground': { type: 'string' },
-      popover: { type: 'string' },
-      'popover-foreground': { type: 'string' },
-      primary: { type: 'string' },
-      'primary-foreground': { type: 'string' },
-      secondary: { type: 'string' },
-      'secondary-foreground': { type: 'string' },
-      muted: { type: 'string' },
-      'muted-foreground': { type: 'string' },
-      accent: { type: 'string' },
-      'accent-foreground': { type: 'string' },
-      destructive: { type: 'string' },
-      'destructive-foreground': { type: 'string' },
-      border: { type: 'string' },
-      input: { type: 'string' },
-      ring: { type: 'string' },
-      'sidebar-background': { type: 'string' },
-      'sidebar-foreground': { type: 'string' },
-      'sidebar-primary': { type: 'string' },
-      'sidebar-primary-foreground': { type: 'string' },
-      'sidebar-accent': { type: 'string' },
-      'sidebar-accent-foreground': { type: 'string' },
-      'sidebar-border': { type: 'string' },
-      'sidebar-ring': { type: 'string' },
-      radius: { type: 'string' },
+      background: {
+        description:
+          'Default application background color. Applied to the page shell and page sections.',
+        type: 'string',
+      },
+      foreground: {
+        description: 'Default text color. Applied to the page shell and general text content.',
+        type: 'string',
+      },
+      card: {
+        description: 'Surface color for elevated containers such as cards and dashboard panels.',
+        type: 'string',
+      },
+      'card-foreground': {
+        description: 'Text and content color inside card surfaces.',
+        type: 'string',
+      },
+      popover: {
+        description: 'Surface color for floating overlays such as dropdowns and context menus.',
+        type: 'string',
+      },
+      'popover-foreground': {
+        description: 'Text and content color inside floating overlay surfaces.',
+        type: 'string',
+      },
+      primary: {
+        description:
+          'High-emphasis action and brand surface color. Applied to the default button, selected states, and active accents.',
+        type: 'string',
+      },
+      'primary-foreground': {
+        description: 'Text and content color rendered on primary surfaces.',
+        type: 'string',
+      },
+      secondary: {
+        description:
+          'Lower-emphasis filled action and supporting surface color. Applied to secondary buttons and supporting UI.',
+        type: 'string',
+      },
+      'secondary-foreground': {
+        description: 'Text and content color rendered on secondary surfaces.',
+        type: 'string',
+      },
+      muted: {
+        description: 'Subtle background surface color for de-emphasized regions.',
+        type: 'string',
+      },
+      'muted-foreground': {
+        description:
+          'Lower-emphasis text color. Applied to descriptions, placeholders, helper text, and subdued content.',
+        type: 'string',
+      },
+      accent: {
+        description:
+          'Interactive hover, focus, and active surface color. Applied to ghost buttons, menu highlights, and hovered rows.',
+        type: 'string',
+      },
+      'accent-foreground': {
+        description: 'Text and content color rendered on accent surfaces.',
+        type: 'string',
+      },
+      destructive: {
+        description:
+          'Color representing destructive actions and error states. Applied to destructive buttons and invalid states.',
+        type: 'string',
+      },
+      'destructive-foreground': {
+        description: 'Text and content color rendered on destructive surfaces.',
+        type: 'string',
+      },
+      success: {
+        description: 'Color to emphasize the success of some action',
+        type: 'string',
+      },
+      border: {
+        description:
+          'Default border and separator color. Applied to cards, menus, tables, and layout dividers.',
+        type: 'string',
+      },
+      input: {
+        description:
+          'Border and surface treatment color for form controls such as inputs, text areas, and selects.',
+        type: 'string',
+      },
+      ring: {
+        description:
+          'Focus ring and outline color applied to buttons, inputs, checkboxes, and other focusable controls.',
+        type: 'string',
+      },
+      'chart-1': { description: 'First color in the default chart palette.', type: 'string' },
+      'chart-2': { description: 'Second color in the default chart palette.', type: 'string' },
+      'chart-3': { description: 'Third color in the default chart palette.', type: 'string' },
+      'chart-4': { description: 'Fourth color in the default chart palette.', type: 'string' },
+      'chart-5': { description: 'Fifth color in the default chart palette.', type: 'string' },
+      sidebar: { description: 'Base sidebar container surface color.', type: 'string' },
+      'sidebar-foreground': {
+        description: 'Default text color inside the sidebar.',
+        type: 'string',
+      },
+      'sidebar-primary': {
+        description:
+          'High-emphasis action color inside the sidebar. Applied to active items, icon tiles, and sidebar badges.',
+        type: 'string',
+      },
+      'sidebar-primary-foreground': {
+        description: 'Text and content color rendered on primary sidebar surfaces.',
+        type: 'string',
+      },
+      'sidebar-accent': {
+        description:
+          'Hover and selected state surface color inside the sidebar. Applied to menu hover states and open items.',
+        type: 'string',
+      },
+      'sidebar-accent-foreground': {
+        description: 'Text and content color rendered on sidebar accent surfaces.',
+        type: 'string',
+      },
+      'sidebar-border': {
+        description:
+          'Border and separator color specific to the sidebar. Applied to sidebar headers, groups, and internal dividers.',
+        type: 'string',
+      },
+      'sidebar-ring': {
+        description: 'Focus ring color for controls inside the sidebar.',
+        type: 'string',
+      },
+      radius: {
+        description:
+          'Base corner radius scale. Applied to cards, inputs, buttons, popovers, and the derived radius-* tokens.',
+        type: 'string',
+      },
     },
     additionalProperties: { anyOf: [{ type: 'string' }, { type: 'null' }] },
   },

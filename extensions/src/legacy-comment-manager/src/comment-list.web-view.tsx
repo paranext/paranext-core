@@ -364,13 +364,13 @@ global.webViewComponent = function CommentListWebView({
 
   if (isLoadingCommentThreads || !commentsPdp) {
     return (
-      <div className="tw-bg-background tw-flex-1 tw-p-2 tw-space-y-4">
+      <div className="tw:bg-background tw:flex-1 tw:p-2 tw:space-y-4">
         {[...Array(10)].map((_, index) => (
           <Skeleton
             // There are no other unique identifiers for these items
             // eslint-disable-next-line react/no-array-index-key
             key={`comment-thread-skeleton-${index}`}
-            className="tw-h-48 tw-w-full"
+            className="tw:h-48 tw:w-full"
           />
         ))}
       </div>
@@ -378,9 +378,9 @@ global.webViewComponent = function CommentListWebView({
   }
 
   return (
-    <div className="tw-flex tw-flex-col tw-h-full">
+    <div className="tw:flex tw:flex-col tw:h-full">
       {/* Filter toolbar */}
-      <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-px-4 tw-pt-4">
+      <div className="tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
         {/* Comment filter dropdown */}
         <Select
           value={commentFilter}
@@ -388,14 +388,14 @@ global.webViewComponent = function CommentListWebView({
             if (isCommentFilter(value)) setCommentFilter(value);
           }}
         >
-          <SelectTrigger className="tw-w-auto tw-min-w-48">
+          <SelectTrigger className="tw:w-auto tw:min-w-48">
             <SelectValue>
-              <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
+              <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
                 {localizedStrings[commentFilterToLabelKey[commentFilter]]}
               </div>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent className="tw-max-w-sm" align="start">
+          <SelectContent className="tw:max-w-sm" align="start">
             {Object.keys(commentFilterToLabelKey)
               .filter(isCommentFilter)
               .map((value) => (
@@ -413,14 +413,14 @@ global.webViewComponent = function CommentListWebView({
             if (isScopeFilter(value)) setScopeFilter(value);
           }}
         >
-          <SelectTrigger className="tw-w-auto tw-min-w-48">
+          <SelectTrigger className="tw:w-auto tw:min-w-48">
             <SelectValue>
-              <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
+              <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
                 {localizedStrings[scopeFilterToLabelKey[scopeFilter]]}
               </div>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent className="tw-max-w-sm" align="start">
+          <SelectContent className="tw:max-w-sm" align="start">
             {Object.keys(scopeFilterToLabelKey)
               .filter(isScopeFilter)
               .map((value) => (
@@ -433,9 +433,9 @@ global.webViewComponent = function CommentListWebView({
       </div>
 
       {/* Comments list */}
-      <div className="tw-flex-1 tw-overflow-auto">
+      <div className="tw:flex-1 tw:overflow-auto">
         {safeCommentThreads.length === 0 ? (
-          <div className="tw-m-4 tw-flex tw-justify-center">
+          <div className="tw:m-4 tw:flex tw:justify-center">
             <Label>
               {commentFilter === UNFILTERED && scopeFilter === UNFILTERED
                 ? localizedStrings['%no_comments%']

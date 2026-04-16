@@ -35,7 +35,7 @@ export function Filter({
   id,
 }: FilterProps) {
   return (
-    <div id={id} className="tw-flex tw-items-center tw-gap-2">
+    <div id={id} className="tw:flex tw:items-center tw:gap-2">
       <MultiSelectComboBox
         entries={entries}
         selected={selected}
@@ -49,16 +49,16 @@ export function Filter({
         className={className}
       />
       {selected.length > 0 ? (
-        <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
+        <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
           {selected.map((type) => (
-            <Badge key={type} variant="muted" className="tw-flex tw-items-center tw-gap-1">
+            <Badge key={type} variant="muted" className="tw:flex tw:items-center tw:gap-1">
               <Button
                 variant="ghost"
                 size="icon"
-                className="tw-h-4 tw-w-4 tw-p-0 hover:tw-bg-transparent"
+                className="tw:h-4 tw:w-4 tw:p-0 tw:hover:bg-transparent"
                 onClick={() => onChange(selected.filter((selectedType) => selectedType !== type))}
               >
-                <X className="tw-h-3 tw-w-3" />
+                <X className="tw:h-3 tw:w-3" />
               </Button>
               {entries.find((entry) => entry.value === type)?.label}
             </Badge>

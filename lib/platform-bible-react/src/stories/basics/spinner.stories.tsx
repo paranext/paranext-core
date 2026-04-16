@@ -75,7 +75,7 @@ export const CustomSize: Story = {
 
 export const Colored: Story = {
   args: {
-    className: 'tw-text-red-600',
+    className: 'tw:text-red-600',
   },
   parameters: {
     docs: {
@@ -88,22 +88,22 @@ export const Colored: Story = {
 
 export const Variants: Story = {
   render: () => (
-    <div className="tw-flex tw-items-center tw-gap-6">
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
+    <div className="tw:flex tw:items-center tw:gap-6">
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
         <Spinner />
-        <span className="tw-text-sm">Default</span>
+        <span className="tw:text-sm">Default</span>
       </div>
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
-        <Spinner className="tw-text-red-600" />
-        <span className="tw-text-sm">Red</span>
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
+        <Spinner className="tw:text-red-600" />
+        <span className="tw:text-sm">Red</span>
       </div>
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
-        <Spinner className="tw-text-blue-600" />
-        <span className="tw-text-sm">Blue</span>
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
+        <Spinner className="tw:text-blue-600" />
+        <span className="tw:text-sm">Blue</span>
       </div>
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
-        <Spinner className="tw-text-green-600" />
-        <span className="tw-text-sm">Green</span>
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
+        <Spinner className="tw:text-green-600" />
+        <span className="tw:text-sm">Green</span>
       </div>
     </div>
   ),
@@ -118,26 +118,26 @@ export const Variants: Story = {
 
 export const Sizes: Story = {
   render: () => (
-    <div className="tw-flex tw-items-center tw-gap-6">
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
+    <div className="tw:flex tw:items-center tw:gap-6">
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
         <Spinner size={3} />
-        <span className="tw-text-sm">Size 3</span>
+        <span className="tw:text-sm">Size 3</span>
       </div>
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
         <Spinner size={4} />
-        <span className="tw-text-sm">Size 4</span>
+        <span className="tw:text-sm">Size 4</span>
       </div>
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
         <Spinner />
-        <span className="tw-text-sm">Default</span>
+        <span className="tw:text-sm">Default</span>
       </div>
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
         <Spinner size={8} />
-        <span className="tw-text-sm">Size 8</span>
+        <span className="tw:text-sm">Size 8</span>
       </div>
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
         <Spinner size={10} />
-        <span className="tw-text-sm">Size 10</span>
+        <span className="tw:text-sm">Size 10</span>
       </div>
     </div>
   ),
@@ -152,9 +152,9 @@ export const Sizes: Story = {
 
 export const Interactive: Story = {
   render: (args) => (
-    <div className="tw-flex tw-flex-col tw-items-center tw-gap-4">
+    <div className="tw:flex tw:flex-col tw:items-center tw:gap-4">
       <Spinner {...args} />
-      <p className="tw-text-sm tw-text-muted-foreground">
+      <p className="tw:text-sm tw:text-muted-foreground">
         Use the controls to adjust the spinner size and styling.
       </p>
     </div>

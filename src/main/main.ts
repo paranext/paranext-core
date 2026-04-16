@@ -14,6 +14,7 @@ import path from 'path';
 import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
+import chroma from 'chroma-js';
 import {
   APP_NAME,
   APP_URI_SCHEME,
@@ -490,12 +491,12 @@ async function main() {
                 return;
               }
 
-              // Need to put commas between the numbers for it to work here
-              const newThemePrimaryString = newTheme.cssVariables.primary.split(' ').join(', ');
+              // Convert oklch color to hex format for Electron compatibility
+              const symbolColorHex = chroma(newTheme.cssVariables.primary).hex();
 
               mainWindow?.setTitleBarOverlay({
                 color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
-                symbolColor: `hsl(${newThemePrimaryString})`,
+                symbolColor: symbolColorHex,
                 height: TITLE_BAR_BUTTON_HEIGHT,
               });
             }),

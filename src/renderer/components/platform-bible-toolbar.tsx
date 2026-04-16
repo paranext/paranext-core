@@ -231,7 +231,7 @@ export function PlatformBibleToolbar() {
       }}
       onSelectMenuItem={handleMenuCommand}
       className={cn(
-        'tw-h-12 tw-bg-transparent',
+        'tw:h-12 tw:bg-transparent',
         getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
       )}
       menubarVariant="muted"
@@ -241,8 +241,8 @@ export function PlatformBibleToolbar() {
         <>
           {isSendReceiveAvailable !== false && (
             // While loading (undefined), the button stays in the DOM so layout doesn't shift, but
-            // is hidden via tw-invisible (visual), aria-hidden (accessibility tree), and tabIndex=-1
-            // (keyboard navigation). All three are required: tw-invisible alone is still reachable
+            // is hidden via tw:invisible (visual), aria-hidden (accessibility tree), and tabIndex=-1
+            // (keyboard navigation). All three are required: tw:invisible alone is still reachable
             // by AT and keyboard; aria-hidden alone is still tab-focusable.
             <TooltipProvider delayDuration={TOOLTIP_DELAY}>
               <Tooltip>
@@ -252,8 +252,8 @@ export function PlatformBibleToolbar() {
                     variant="ghost"
                     size="sm"
                     className={cn(
-                      'pr-twp tw-h-8 tw-flex-shrink-0',
-                      isSendReceiveAvailable === undefined && 'tw-invisible',
+                      'pr-twp tw:h-8 tw:shrink-0',
+                      isSendReceiveAvailable === undefined && 'tw:invisible',
                     )}
                     // || undefined removes the attribute entirely when visible; aria-hidden="false" has different semantics than omitting it
                     aria-hidden={isSendReceiveAvailable === undefined || undefined}
@@ -269,9 +269,9 @@ export function PlatformBibleToolbar() {
                       );
                     }}
                   >
-                    {syncState === 'syncing' && <Spinner className="tw-h-4 tw-w-4" />}
+                    {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
                     {syncState === 'synced' && (
-                      <CircleCheck className="tw-h-4 tw-w-4 tw-text-success" />
+                      <CircleCheck className="tw:h-4 tw:w-4 tw:text-success" />
                     )}
                     {
                       {
@@ -283,7 +283,7 @@ export function PlatformBibleToolbar() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="tw-font-light">{localizedStrings['%toolbar_sync_open_status%']}</p>
+                  <p className="tw:font-light">{localizedStrings['%toolbar_sync_open_status%']}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -294,13 +294,13 @@ export function PlatformBibleToolbar() {
                 <TooltipTrigger asChild>
                   <Badge
                     variant="ghost"
-                    className="tw-block tw-max-w-[150px] tw-shrink tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-font-normal"
+                    className="tw:block tw:max-w-[150px] tw:shrink tw:overflow-hidden tw:font-normal tw:text-ellipsis tw:whitespace-nowrap"
                   >
                     {marketingVersion}
                   </Badge>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="tw-font-light">{marketingVersion}</p>
+                  <p className="tw:font-light">{marketingVersion}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -311,7 +311,7 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  className="pr-twp tw:h-8 tw:shrink-0"
                   aria-label={themeButtonTooltip}
                   data-testid="theme-toggle"
                   onClick={() => {
@@ -332,7 +332,7 @@ export function PlatformBibleToolbar() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="tw-font-light">{themeButtonTooltip}</p>
+                <p className="tw:font-light">{themeButtonTooltip}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -343,7 +343,7 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  className="pr-twp tw:h-8 tw:shrink-0"
                   onClick={() => {
                     // This command comes from an extension and is not typed in CommandHandlers.
                     // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
@@ -355,7 +355,7 @@ export function PlatformBibleToolbar() {
               </TooltipTrigger>
               {localizedStrings['%mainMenu_openInternetSettings%'] && (
                 <TooltipContent>
-                  <p className="tw-font-light">
+                  <p className="tw:font-light">
                     {localizedStrings['%mainMenu_openInternetSettings%']}
                   </p>
                 </TooltipContent>
@@ -368,7 +368,7 @@ export function PlatformBibleToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  className="pr-twp tw:h-8 tw:shrink-0"
                   onClick={() => {
                     // This command comes from an extension and is not typed in CommandHandlers.
                     // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
@@ -380,7 +380,7 @@ export function PlatformBibleToolbar() {
               </TooltipTrigger>
               {localizedStrings['%mainMenu_openParatextRegistration%'] && (
                 <TooltipContent>
-                  <p className="tw-font-light">
+                  <p className="tw:font-light">
                     {localizedStrings['%mainMenu_openParatextRegistration%']}
                   </p>
                 </TooltipContent>
@@ -396,7 +396,7 @@ export function PlatformBibleToolbar() {
             <Button
               variant="ghost"
               size="icon"
-              className="tw-h-8"
+              className="tw:h-8"
               onClick={() => {
                 // This command comes from an extension and is not typed in CommandHandlers.
                 // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
@@ -408,7 +408,7 @@ export function PlatformBibleToolbar() {
           </TooltipTrigger>
           {localizedStrings['%mainMenu_openHome%'] && (
             <TooltipContent>
-              <p className="tw-font-light">{localizedStrings['%mainMenu_openHome%']}</p>
+              <p className="tw:font-light">{localizedStrings['%mainMenu_openHome%']}</p>
             </TooltipContent>
           )}
         </Tooltip>
@@ -416,7 +416,7 @@ export function PlatformBibleToolbar() {
       <BookChapterControl
         scrRef={scrRef}
         handleSubmit={setScrRef}
-        className="tw-w-96"
+        className="tw:w-96"
         recentSearches={recentScriptureRefs}
         onAddRecentSearch={addRecentScriptureRef}
       />
@@ -425,7 +425,7 @@ export function PlatformBibleToolbar() {
         scrollGroupId={scrollGroupId}
         onChangeScrollGroupId={setScrollGroupId}
         localizedStrings={scrollGroupLocalizedStrings}
-        className="tw-h-8"
+        className="tw:h-8"
       />
     </Toolbar>
   );

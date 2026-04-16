@@ -154,7 +154,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     render(<PlatformBibleToolbar />);
     // Not reachable via accessibility tree (aria-hidden) or keyboard (tabIndex=-1)
     expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeInTheDocument();
-    // But physically present in the DOM, reserving layout space (tw-invisible)
+    // But physically present in the DOM, reserving layout space (tw:invisible)
     const loadingBtn = document.querySelector('button[data-testid="toolbar-sync-button"]');
     expect(loadingBtn).toBeInTheDocument();
     expect(loadingBtn).toHaveAttribute('aria-hidden', 'true');

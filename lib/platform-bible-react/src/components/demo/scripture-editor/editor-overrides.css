@@ -9,31 +9,31 @@
 
 .editor-container {
   max-width: none;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   overflow-y: auto;
   flex-grow: 1;
   margin: 0;
 
   /*  remove rounded top corners to look better in tabs */
   .toolbar {
-    border-bottom: 1px solid hsl(var(--border));
+    border-bottom: 1px solid var(--border);
     border-top-left-radius: 0;
     border-top-right-radius: 0;
 
-    background-color: hsl(var(--background));
-    color: hsl(var(--color));
+    background-color: var(--background);
+    color: var(--color);
   }
 }
 
 /*  text selection */
 :focus ::selection {
-  color: hsl(var(--primary-foreground));
-  background-color: hsl(var(--primary));
+  color: var(--primary-foreground);
+  background-color: var(--primary);
 }
 
 ::selection {
-  color: hsl(var(--secondary-foreground));
-  background-color: hsl(var(--secondary));
+  color: var(--secondary-foreground);
+  background-color: var(--secondary);
 }
 
 /*  focus ring */
@@ -42,12 +42,12 @@
   outline: 2px solid transparent;
   outline-offset: 2px;
   --tw-ring-offset-width: 2px;
-  --tw-ring-color: hsl(var(--ring));
+  --tw-ring-color: var(--ring);
   --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width)
     var(--tw-ring-offset-color);
   --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width))
     var(--tw-ring-color);
-  --tw-ring-offset-color: hsl(var(--background));
+  --tw-ring-offset-color: var(--background);
   box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
 }
 
@@ -56,7 +56,7 @@
 /*  icon button variant "ghost" */
 .Button__root,
 button.toolbar-item {
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 
   i,
   i.format {
@@ -72,18 +72,18 @@ button.toolbar-item {
 /*  hover button, input button */
 .CommentPlugin_CommentsPanel_SendButton,
 .CommentPlugin_CommentsPanel_List_DeleteButton {
-  color: hsl(var(--accent-foreground));
+  color: var(--accent-foreground);
 }
 
 /*  text button variant "ghost" on popover */
 .Modal__closeButton {
-  color: hsl(var(--popover-foreground));
-  background-color: hsl(var(--popover));
+  color: var(--popover-foreground);
+  background-color: var(--popover);
 }
 
 /*  toggle button */
 .CommentPlugin_ShowCommentsButton.active {
-  background-color: hsl(var(--accent));
+  background-color: var(--accent);
 }
 
 /*  hover and active states */
@@ -99,8 +99,8 @@ button.toolbar-item {
 .CommentPlugin_CommentsPanel_List_DeleteButton:hover:not([disabled]),
 .CommentPlugin_CommentsPanel_List_DeleteButton:active:not([disabled]),
 .Modal__closeButton:hover:not([disabled]) {
-  color: hsl(var(--accent-foreground));
-  background-color: hsl(var(--accent));
+  color: var(--accent-foreground);
+  background-color: var(--accent);
 }
 
 .CommentPlugin_CommentsPanel_List_DeleteButton:hover,
@@ -116,28 +116,28 @@ button.toolbar-item {
 /*  toolbar */
 
 .toolbar .toolbar-item .text {
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 .toolbar .divider {
-  background-color: hsl(var(--border));
+  background-color: var(--border);
 }
 
 .dropdown {
-  background-color: hsl(var(--popover));
+  background-color: var(--popover);
 
   .item {
-    color: hsl(var(--popover-foreground));
-    background-color: hsl(var(--popover));
+    color: var(--popover-foreground);
+    background-color: var(--popover);
   }
 
   .item:hover {
-    background-color: hsl(var(--accent));
-    color: hsl(var(--accent-foreground));
+    background-color: var(--accent);
+    color: var(--accent-foreground);
   }
 
   .divider {
-    background-color: hsl(var(--muted));
+    background-color: var(--muted);
   }
 }
 
@@ -163,22 +163,22 @@ button.toolbar-item {
 
 .CommentPlugin_CommentInputBox,
 .Modal__modal {
-  background-color: hsl(var(--popover));
-  color: hsl(var(--popover-foreground));
+  background-color: var(--popover);
+  color: var(--popover-foreground);
 
   &::before {
-    background-color: hsl(var(--popover));
-    border-color: transparent transparent hsl(var(--popover)) hsl(var(--popover));
+    background-color: var(--popover);
+    border-color: transparent transparent var(--popover) var(--popover);
   }
 
   .Button__root {
-    background-color: hsl(var(--secondary));
-    color: hsl(var(--secondary-foreground));
+    background-color: var(--secondary);
+    color: var(--secondary-foreground);
   }
 
   .Button__root.primary {
-    background-color: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
+    background-color: var(--primary);
+    color: var(--primary-foreground);
   }
 
   .Button__root:hover:not([disabled]) {
@@ -188,27 +188,27 @@ button.toolbar-item {
 
 .typeahead-popover,
 .typeahead-popover li {
-  background-color: hsl(var(--popover));
-  color: hsl(var(--popover-foreground));
+  background-color: var(--popover);
+  color: var(--popover-foreground);
 }
 
 .typeahead-popover ul li.selected,
 .typeahead-popover li:hover {
-  background-color: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
+  background-color: var(--accent);
+  color: var(--accent-foreground);
 }
 
 .CommentPlugin_CommentInputBox_Editor,
 .CommentPlugin_CommentsPanel_Editor {
-  background-color: hsl(var(--popover));
-  color: hsl(var(--popover-foreground));
-  border-color: hsl(var(--border));
-  caret-color: hsl(var(--foreground));
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+  border-color: var(--border);
+  caret-color: var(--foreground);
 }
 
 .CommentPlugin_CommentsPanel_Heading,
 .CommentPlugin_CommentsPanel_List_Thread {
-  border-color: hsl(var(--border));
+  border-color: var(--border);
 }
 
 .CommentPlugin_ShowCommentsButton {
@@ -221,23 +221,23 @@ button.toolbar-item {
   left: unset !important;
   right: 0 !important;
 
-  background-color: hsl(var(--popover));
-  color: hsl(var(--popover-foreground));
-  border: 1px solid hsl(var(--border));
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
 }
 
 .CommentPlugin_AddCommentBox_button {
-  color: hsl(var(--popover-foreground));
+  color: var(--popover-foreground);
 
   &:hover {
-    background-color: hsl(var(--accent));
-    color: hsl(var(--accent-foreground));
+    background-color: var(--accent);
+    color: var(--accent-foreground);
   }
 }
 
 .CommentPlugin_CommentsPanel {
-  background-color: hsl(var(--popover));
-  color: hsl(var(--popover-foreground));
+  background-color: var(--popover);
+  color: var(--popover-foreground);
 }
 
 .CommentPlugin_CommentsPanel_SendButton {
@@ -249,11 +249,11 @@ button.toolbar-item {
 /*  inside the editor */
 
 .editor-inner {
-  background: hsl(var(--background));
+  background: var(--background);
 }
 
 .formatted-font .verse {
-  background-color: hsl(var(--secondary));
+  background-color: var(--secondary);
 }
 
 /*  icons */
@@ -489,7 +489,7 @@ i.chevron-down {
 
 /* Darker background when the Pilcrow toggle is active to match other toggles */
 .toolbar .toolbar-item.active[aria-pressed='true'] {
-  background-color: color-mix(in oklab, hsl(var(--accent)) 85%, black);
+  background-color: color-mix(in oklab, var(--accent) 85%, black);
 }
 
 /* Ensure the pilcrow glyph matches icon sizing and vertical centering */

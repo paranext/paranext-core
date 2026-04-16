@@ -759,16 +759,16 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   if (isLoadingAvailableChecks || !checkAggregator) {
     return (
-      <div className="pr-twp tw-h-screen tw-box-border tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
+      <div className="pr-twp tw:h-screen tw:box-border tw:w-full tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-2">
         <Spinner />
       </div>
     );
   }
 
   return (
-    <div className="pr-twp tw-container tw-mx-auto tw-flex tw-flex-col tw-max-h-screen tw-gap-6 tw-p-4 tw-min-w-[10rem]">
+    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:max-h-screen tw:gap-6 tw:p-4 tw:min-w-[10rem]">
       {/* Check configuration */}
-      <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
+      <div className="tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:w-full">
         {/* Project Filter */}
         <ComboBox<ProjectEntry>
           options={projectOptionsGrouped}
@@ -785,23 +785,23 @@ global.webViewComponent = function ChecksSidePanelWebView({
             localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
           }
           buttonVariant="outline"
-          buttonClassName="tw-flex-1 tw-min-w-32 tw-font-normal"
-          popoverContentClassName="tw-w-[300px]"
+          buttonClassName="tw:flex-1 tw:min-w-32 tw:font-normal"
+          popoverContentClassName="tw:w-[300px]"
           alignDropDown="start"
         />
 
         {/* Scope Filter */}
         <Select value={scope} onValueChange={handleSelectScope}>
-          <SelectTrigger className="tw-flex-1 tw-min-w-32">
+          <SelectTrigger className="tw:flex-1 tw:min-w-32">
             <SelectValue
               placeholder={localizedStrings['%webView_checksSidePanel_scopeFilter_label%']}
             >
-              <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">
+              <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
                 {getScopeLabel(scope)}
               </div>
             </SelectValue>
           </SelectTrigger>
-          <SelectContent className="tw-max-w-sm" align="start">
+          <SelectContent className="tw:max-w-sm" align="start">
             {Object.values(CheckScopes).map((scopeOption) => (
               <SelectItem key={scopeOption} value={scopeOption}>
                 {getScopeLabel(scopeOption)}
@@ -823,7 +823,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
           isOpen={isCheckTypesOpen}
           onOpenChange={setIsCheckTypesOpen}
           sortSelected={false}
-          className="tw-flex-[2] tw-min-w-32"
+          className="tw:flex-[2] tw:min-w-32"
           variant="outline"
         />
       </div>
@@ -831,8 +831,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
       {
         // TODO: Display something else if there is an error getting check results
         !checkResults || isPlatformError(checkResults) || checkResults.length === 0 ? (
-          <div className="tw-min-h-48 tw-flex-1 tw-flex tw-flex-col tw-items-center tw-justify-center tw-w-full">
-            <div className="tw-mb-2">
+          <div className="tw:min-h-48 tw:flex-1 tw:flex tw:flex-col tw:items-center tw:justify-center tw:w-full">
+            <div className="tw:mb-2">
               {selectedCheckTypeIds.length === 0
                 ? localizedStrings['%webView_checksSidePanel_noChecksSelected%']
                 : localizedStrings['%webView_checksSidePanel_noCheckResults%']}
@@ -842,7 +842,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
             </Button>
           </div>
         ) : (
-          <div className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto tw-pe-2">
+          <div className="tw:min-h-48 tw:flex-1 tw:space-y-2 tw:overflow-y-auto tw:pe-2">
             {checkResults.map((result, index) => (
               <CheckCard
                 key={writeCheckId(result, index)}
@@ -869,14 +869,14 @@ global.webViewComponent = function ChecksSidePanelWebView({
       {activeJobStatusReport &&
         activeJobStatusReport !== defaultJobStatusReport &&
         checkResults && (
-          <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-4 tw-border-t tw-pt-4">
+          <div className="tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:border-t tw:pt-4">
             {/* The job is active */}
             {activeJobStatusReport.status === 'queued' ||
               (activeJobStatusReport.status === 'running' &&
                 // While starting up, % complete stays stuck at 0 and looks strange with the Cancel button
                 activeJobStatusReport.percentComplete > 0 && (
-                  <div className="tw-flex tw-items-center tw-gap-4">
-                    <Progress value={activeJobStatusReport.percentComplete} className="tw-w-64" />
+                  <div className="tw:flex tw:items-center tw:gap-4">
+                    <Progress value={activeJobStatusReport.percentComplete} className="tw:w-64" />
                     <Button onClick={handleCancelOperation} disabled={isResultLoadingCancelled}>
                       {localizedStrings['%general_cancel%']}
                     </Button>
@@ -887,10 +887,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
               activeJobStatusReport.status === 'stopped') &&
               checkResults &&
               checkResults.length < activeJobStatusReport.totalResultsCount && (
-                <div className="tw-flex tw-items-center tw-gap-4">
+                <div className="tw:flex tw:items-center tw:gap-4">
                   <Progress
                     value={(checkResults.length / activeJobStatusReport.totalResultsCount) * 100}
-                    className="tw-w-64"
+                    className="tw:w-64"
                   />
                   {checkResults.length.toString()} /{' '}
                   {activeJobStatusReport.totalResultsCount.toString()}
@@ -904,7 +904,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
               activeJobStatusReport.status === 'stopped') &&
               checkResults &&
               checkResults.length === activeJobStatusReport.totalResultsCount && (
-                <p className="tw-font-light">
+                <p className="tw:font-light">
                   {checkResults.length > 0
                     ? checkResults.length.toString()
                     : localizedStrings['%webView_find_noResultsFound%']}
@@ -912,7 +912,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
               )}
             {/* The job encountered an error while running */}
             {activeJobStatusReport.status === 'errored' && activeJobStatusReport.error && (
-              <p className="tw-font-light"> {activeJobStatusReport.error}</p>
+              <p className="tw:font-light"> {activeJobStatusReport.error}</p>
             )}
           </div>
         )}

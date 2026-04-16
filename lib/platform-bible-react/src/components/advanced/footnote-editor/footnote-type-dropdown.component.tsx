@@ -78,7 +78,7 @@ export function FootnoteTypeDropdown({
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="tw-h-6">
+              <Button variant="outline" className="tw:h-6">
                 {renderNoteTypeButtonContent(noteType, localizedStrings)}
               </Button>
             </DropdownMenuTrigger>
@@ -97,7 +97,7 @@ export function FootnoteTypeDropdown({
           disabled={noteType !== 'x' && !isTypeSwitchable}
           checked={noteType === 'x'}
           onCheckedChange={() => handleNoteTypeChange('x')}
-          className="tw-gap-2"
+          className="tw:gap-2"
         >
           <SquareX />
           <span>{localizedStrings['%footnoteEditor_noteType_crossReference_label%']}</span>
@@ -106,7 +106,7 @@ export function FootnoteTypeDropdown({
           disabled={noteType === 'x' && !isTypeSwitchable}
           checked={noteType === 'f'}
           onCheckedChange={() => handleNoteTypeChange('f')}
-          className="tw-gap-2"
+          className="tw:gap-2"
         >
           <FunctionSquare />
           <span>{localizedStrings['%footnoteEditor_noteType_footnote_label%']}</span>
@@ -115,7 +115,7 @@ export function FootnoteTypeDropdown({
           disabled={noteType === 'x' && !isTypeSwitchable}
           checked={noteType === 'fe'}
           onCheckedChange={() => handleNoteTypeChange('fe')}
-          className="tw-gap-2"
+          className="tw:gap-2"
         >
           <SquareSigma />
           <span>{localizedStrings['%footnoteEditor_noteType_endNote_label%']}</span>

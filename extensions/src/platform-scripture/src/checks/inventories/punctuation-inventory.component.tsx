@@ -49,7 +49,7 @@ const createColumns = (
     {
       ...inventoryItemColumn(itemLabel),
       cell: ({ row }) => (
-        <div className="tw-text-lg tw-font-bold tw-font-mono tw-flex tw-justify-center">
+        <div className="tw:text-lg tw:font-bold tw:font-mono tw:flex tw:justify-center">
           {row.getValue('item')}
         </div>
       ),
@@ -60,7 +60,7 @@ const createColumns = (
       header: ({ column }) => getInventoryHeader(column, unicodeValueLabel),
       //  Q: How to style the <td> and <th> directly?
       cell: ({ row }) => (
-        <div className="tw-font-mono tw-flex tw-justify-center">
+        <div className="tw:font-mono tw:flex tw:justify-center">
           {getUnicodeValue(row.getValue('item'))}
         </div>
       ),

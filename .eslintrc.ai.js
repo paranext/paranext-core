@@ -36,7 +36,7 @@ module.exports = {
 
     // === Styling (Tailwind) ===
 
-    // No hardcoded colors - use theme tokens (tw-bg-background, tw-text-foreground)
+    // No hardcoded colors - use theme tokens (tw:bg-background, tw:text-foreground)
     // See: Code-Style-Guide.md "Theming Requirements"
     'paranext/no-hardcoded-tailwind-colors': 'error',
 

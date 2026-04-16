@@ -59,7 +59,7 @@ export function PlatformDockLayout() {
    * TODO: Strange pattern that we are setting a ref to a service function. Investigate changing
    * this pattern in some way. Maybe just export `onLayoutChange`?
    */
-  const onLayoutChangeRef = useRef<OnLayoutChangeRCDock | undefined>();
+  const onLayoutChangeRef = useRef<OnLayoutChangeRCDock | undefined>(undefined);
 
   useEffect(() => {
     // Register with `web-view.service.ts` so it can perform operations on us
