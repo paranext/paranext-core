@@ -3,6 +3,14 @@ import { Progress as ProgressPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
 
+/**
+ * Displays an indicator showing the completion progress of a task, typically displayed as a
+ * progress bar. This component is built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/progress}
+ * @see Radix UI Documentation:
+ *   {@link https://www.radix-ui.com/primitives/docs/components/progress#api-reference}
+ */
 function Progress({
   className,
   value,
@@ -12,7 +20,8 @@ function Progress({
     <ProgressPrimitive.Root
       data-slot="progress"
       className={cn(
-        'tw:relative tw:flex tw:h-1 tw:w-full tw:items-center tw:overflow-x-hidden tw:rounded-full tw:bg-muted',
+        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+        'pr-twp tw:relative tw:flex tw:h-1 tw:w-full tw:items-center tw:overflow-x-hidden tw:rounded-full tw:bg-muted',
         className,
       )}
       {...props}

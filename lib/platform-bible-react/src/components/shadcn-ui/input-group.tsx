@@ -6,13 +6,20 @@ import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { Textarea } from '@/components/shadcn-ui/textarea';
 
+/**
+ * A compound input group component that wraps an input with optional addons, buttons, or text.
+ * Provides focus-ring coordination and layout management for inline input decorations.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 function InputGroup({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="input-group"
       role="group"
       className={cn(
-        'tw:group/input-group tw:relative tw:flex tw:h-8 tw:w-full tw:min-w-0 tw:items-center tw:rounded-lg tw:border tw:border-input tw:transition-colors tw:outline-none tw:in-data-[slot=combobox-content]:focus-within:border-inherit tw:in-data-[slot=combobox-content]:focus-within:ring-0 tw:has-disabled:bg-input/50 tw:has-disabled:opacity-50 tw:has-[[data-slot=input-group-control]:focus-visible]:border-ring tw:has-[[data-slot=input-group-control]:focus-visible]:ring-3 tw:has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 tw:has-[[data-slot][aria-invalid=true]]:border-destructive tw:has-[[data-slot][aria-invalid=true]]:ring-3 tw:has-[[data-slot][aria-invalid=true]]:ring-destructive/20 tw:has-[>[data-align=block-end]]:h-auto tw:has-[>[data-align=block-end]]:flex-col tw:has-[>[data-align=block-start]]:h-auto tw:has-[>[data-align=block-start]]:flex-col tw:has-[>textarea]:h-auto tw:dark:bg-input/30 tw:dark:has-disabled:bg-input/80 tw:dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40 tw:has-[>[data-align=block-end]]:[&>input]:pt-3 tw:has-[>[data-align=block-start]]:[&>input]:pb-3 tw:has-[>[data-align=inline-end]]:[&>input]:pe-1.5 tw:has-[>[data-align=inline-start]]:[&>input]:ps-1.5',
+        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+        'pr-twp tw:group/input-group tw:relative tw:flex tw:h-8 tw:w-full tw:min-w-0 tw:items-center tw:rounded-lg tw:border tw:border-input tw:transition-colors tw:outline-none tw:in-data-[slot=combobox-content]:focus-within:border-inherit tw:in-data-[slot=combobox-content]:focus-within:ring-0 tw:has-disabled:bg-input/50 tw:has-disabled:opacity-50 tw:has-[[data-slot=input-group-control]:focus-visible]:border-ring tw:has-[[data-slot=input-group-control]:focus-visible]:ring-3 tw:has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 tw:has-[[data-slot][aria-invalid=true]]:border-destructive tw:has-[[data-slot][aria-invalid=true]]:ring-3 tw:has-[[data-slot][aria-invalid=true]]:ring-destructive/20 tw:has-[>[data-align=block-end]]:h-auto tw:has-[>[data-align=block-end]]:flex-col tw:has-[>[data-align=block-start]]:h-auto tw:has-[>[data-align=block-start]]:flex-col tw:has-[>textarea]:h-auto tw:dark:bg-input/30 tw:dark:has-disabled:bg-input/80 tw:dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40 tw:has-[>[data-align=block-end]]:[&>input]:pt-3 tw:has-[>[data-align=block-start]]:[&>input]:pb-3 tw:has-[>[data-align=inline-end]]:[&>input]:pe-1.5 tw:has-[>[data-align=inline-start]]:[&>input]:ps-1.5',
         className,
       )}
       {...props}
@@ -20,6 +27,11 @@ function InputGroup({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
+/**
+ * Variants for the {@link InputGroupAddon} component controlling its inline or block placement.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 const inputGroupAddonVariants = cva(
   'tw:flex tw:h-auto tw:cursor-text tw:items-center tw:justify-center tw:gap-2 tw:py-1.5 tw:text-sm tw:font-medium tw:text-muted-foreground tw:select-none tw:group-data-[disabled=true]/input-group:opacity-50 tw:[&>kbd]:rounded-[calc(var(--radius)-5px)] tw:[&>svg:not([class*=size-])]:size-4',
   {
@@ -41,6 +53,12 @@ const inputGroupAddonVariants = cva(
   },
 );
 
+/**
+ * An addon placed inside an {@link InputGroup}, used to display icons, buttons, or text adjacent to
+ * the input. Clicking the addon area proxies focus to the associated input.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 function InputGroupAddon({
   className,
   align = 'inline-start',
@@ -69,6 +87,11 @@ function InputGroupAddon({
   );
 }
 
+/**
+ * Variants for the {@link InputGroupButton} component controlling size.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 const inputGroupButtonVariants = cva('tw:flex tw:items-center tw:gap-2 tw:text-sm tw:shadow-none', {
   variants: {
     size: {
@@ -83,6 +106,11 @@ const inputGroupButtonVariants = cva('tw:flex tw:items-center tw:gap-2 tw:text-s
   },
 });
 
+/**
+ * A ghost button sized to fit inside an {@link InputGroup}.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 function InputGroupButton({
   className,
   type = 'button',
@@ -102,11 +130,17 @@ function InputGroupButton({
   );
 }
 
+/**
+ * A plain text span styled to fit inline inside an {@link InputGroup}.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 function InputGroupText({ className, ...props }: React.ComponentProps<'span'>) {
   return (
     <span
       className={cn(
-        'tw:flex tw:items-center tw:gap-2 tw:text-sm tw:text-muted-foreground tw:[&_svg]:pointer-events-none tw:[&_svg:not([class*=size-])]:size-4',
+        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+        'pr-twp tw:flex tw:items-center tw:gap-2 tw:text-sm tw:text-muted-foreground tw:[&_svg]:pointer-events-none tw:[&_svg:not([class*=size-])]:size-4',
         className,
       )}
       {...props}
@@ -114,6 +148,12 @@ function InputGroupText({ className, ...props }: React.ComponentProps<'span'>) {
   );
 }
 
+/**
+ * An `<input>` styled to occupy its slot inside an {@link InputGroup}, with borders and rings
+ * suppressed so the group provides the visual boundary.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 function InputGroupInput({ className, ...props }: React.ComponentProps<'input'>) {
   return (
     <Input
@@ -127,6 +167,12 @@ function InputGroupInput({ className, ...props }: React.ComponentProps<'input'>)
   );
 }
 
+/**
+ * A `<textarea>` styled to occupy its slot inside an {@link InputGroup}, with borders and rings
+ * suppressed so the group provides the visual boundary.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 function InputGroupTextarea({ className, ...props }: React.ComponentProps<'textarea'>) {
   return (
     <Textarea
