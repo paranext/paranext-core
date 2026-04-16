@@ -20,12 +20,7 @@ import {
   useProjectDataProvider,
   useWebViewController,
 } from '@papi/frontend/react';
-import {
-  isPlatformError,
-  LegacyComment,
-  LegacyCommentThread,
-  serialize,
-} from 'platform-bible-utils';
+import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-utils';
 import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
