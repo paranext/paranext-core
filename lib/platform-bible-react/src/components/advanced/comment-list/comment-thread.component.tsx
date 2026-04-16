@@ -355,6 +355,9 @@ export function CommentThread({
     [clearEditor, pendingCommentEditorState, handleAddCommentToThread, pendingCommentAssignedUser],
   );
 
+  // If all comments have been deleted there is nothing to render
+  if (!firstComment) return <></>;
+
   return (
     <Card
       role="option"
