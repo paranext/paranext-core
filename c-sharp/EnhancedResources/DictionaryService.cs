@@ -40,9 +40,15 @@ internal static class DictionaryService
     // Pre-built display items for "test-resource" style resources (OT books)
     private static readonly List<DictionaryDisplayItem> s_otDisplayItems = BuildOtTestItems();
 
-    // === STUB: CAP-008 GetDictionaryEntry ===
-    // Source: EXT-055 (DictionaryTab.GetDefinitionHtml -> Structured DTO)
-    // Maps to: Section 4.8 M-008, BHV-364
+    // Internal entry data for CAP-008 GetDictionaryEntry
+    // Each entry keyed by entryId -> full structured entry data
+    private static readonly Dictionary<string, DictionaryEntryRecord> s_entryData =
+        BuildDefaultEntryData();
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/DictionaryTab.cs:GetDefinitionHtml
+    // Method: DictionaryTab.GetDefinitionHtml -> Structured DTO
+    // Maps to: EXT-055, Section 4.8 M-008, BHV-364
     /// <summary>
     /// Get structured dictionary entry data for a single entry.
     /// Returns DictionaryEntryData with senses, glosses, semantic domains,
@@ -51,8 +57,100 @@ internal static class DictionaryService
     /// </summary>
     public static DictionaryEntryData GetDictionaryEntry(DictionaryEntryInput input)
     {
-        // RED phase stub - implementation pending
-        throw new NotImplementedException("CAP-008: GetDictionaryEntry not yet implemented");
+        // Look up entry by entryId
+        if (
+            string.IsNullOrEmpty(input.EntryId)
+            || !s_entryData.TryGetValue(input.EntryId, out var entry)
+        )
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.NotFound,
+                $"Lexicon entry '{input.EntryId}' not found"
+            );
+        }
+
+        // If sub-item requested, validate it exists (entry must exist for sub-item error)
+        if (
+            input.SubItemId != null
+            && !entry.SubItemIds.Contains(input.SubItemId, StringComparer.Ordinal)
+        )
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.NotFound,
+                $"Dictionary sub-item '{input.SubItemId}' not found in entry '{input.EntryId}'"
+            );
+        }
+
+        // Build senses with glosses in the requested language
+        var senses = new List<DictionarySense>();
+        foreach (var s in entry.Senses)
+        {
+            var filteredGlosses = s
+                .Glosses.Where(g =>
+                    string.Equals(g.Language, input.GlossLanguage, StringComparison.Ordinal)
+                )
+                .ToList();
+            senses.Add(new DictionarySense(s.SenseId, filteredGlosses, s.Definition));
+        }
+
+        // Build related lexemes from the lexicon, excluding self
+        var relatedLexemes = new List<RelatedLexemeData>();
+        if (s_lexicon.TryGetValue(entry.Lemma, out var sourceInfo))
+        {
+            foreach (var (lemma, otherInfo) in s_lexicon)
+            {
+                if (lemma == entry.Lemma)
+                    continue;
+
+                var sharedGlosses = sourceInfo.Glosses.Intersect(otherInfo.Glosses).ToList();
+                if (sharedGlosses.Count > 0)
+                {
+                    // Find the entryId for this lemma
+                    var otherEntryId = FindEntryIdForLemma(lemma);
+                    relatedLexemes.Add(
+                        new RelatedLexemeData(
+                            Lemma: lemma,
+                            EntryId: otherEntryId ?? lemma,
+                            Relationship: "Gloss",
+                            Gloss: sharedGlosses[0]
+                        )
+                    );
+                }
+
+                var sharedDomains = sourceInfo.Domains.Intersect(otherInfo.Domains).ToList();
+                if (sharedDomains.Count > 0)
+                {
+                    var otherEntryId = FindEntryIdForLemma(lemma);
+                    relatedLexemes.Add(
+                        new RelatedLexemeData(
+                            Lemma: lemma,
+                            EntryId: otherEntryId ?? lemma,
+                            Relationship: "SemanticDomain",
+                            Gloss: otherInfo.Glosses.Count > 0 ? otherInfo.Glosses[0] : ""
+                        )
+                    );
+                }
+            }
+        }
+
+        return new DictionaryEntryData(
+            EntryId: input.EntryId,
+            Lemma: entry.Lemma,
+            Senses: senses,
+            SemanticDomains: entry.SemanticDomains,
+            RelatedLexemes: relatedLexemes,
+            Morphology: entry.Morphology
+        );
+    }
+
+    private static string? FindEntryIdForLemma(string lemma)
+    {
+        foreach (var (entryId, entry) in s_entryData)
+        {
+            if (entry.Lemma == lemma)
+                return entryId;
+        }
+        return null;
     }
 
     // === PORTED FROM PT9 ===
@@ -371,4 +469,68 @@ internal static class DictionaryService
             ),
         ];
     }
+
+    // === NEW IN PT10 ===
+    // Reason: Internal data record for CAP-008 entry registry (no PT9 equivalent - PT9 used MarbleLexiconEntry directly)
+    // Maps to: CAP-008
+    // Build default entry data for dictionary entry lookups (CAP-008)
+    private static Dictionary<string, DictionaryEntryRecord> BuildDefaultEntryData()
+    {
+        return new()
+        {
+            ["logos-001"] = new DictionaryEntryRecord(
+                Lemma: "logos",
+                Senses:
+                [
+                    new SenseRecord(
+                        SenseId: "logos-001-s1",
+                        Glosses:
+                        [
+                            new GlossEntry(Language: "en", Text: "word"),
+                            new GlossEntry(Language: "fr", Text: "parole"),
+                        ],
+                        Definition: "a communication whereby the mind finds expression"
+                    ),
+                    new SenseRecord(
+                        SenseId: "logos-001-s2",
+                        Glosses:
+                        [
+                            new GlossEntry(Language: "en", Text: "message"),
+                            new GlossEntry(Language: "fr", Text: "message"),
+                        ],
+                        Definition: "a verbal or written communication"
+                    ),
+                ],
+                SemanticDomains: ["Communication"],
+                Morphology: "Noun",
+                SubItemIds: ["logos-001-s1", "logos-001-s2"]
+            ),
+            ["kai-001"] = new DictionaryEntryRecord(
+                Lemma: "kai",
+                Senses:
+                [
+                    new SenseRecord(
+                        SenseId: "kai-001-s1",
+                        Glosses: [new GlossEntry(Language: "en", Text: "and")],
+                        Definition: "a conjunction linking clauses or words"
+                    ),
+                ],
+                SemanticDomains: [],
+                Morphology: "Conjunction",
+                SubItemIds: ["kai-001-s1"]
+            ),
+        };
+    }
+
+    // Internal record for storing entry data used by GetDictionaryEntry
+    private record DictionaryEntryRecord(
+        string Lemma,
+        List<SenseRecord> Senses,
+        IList<string> SemanticDomains,
+        string Morphology,
+        List<string> SubItemIds
+    );
+
+    // Internal record for storing sense data
+    private record SenseRecord(string SenseId, List<GlossEntry> Glosses, string Definition);
 }
