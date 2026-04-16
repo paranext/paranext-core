@@ -1,31 +1,37 @@
 import React from 'react';
-import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { Slot } from 'radix-ui';
+
 import { cn } from '@/utils/shadcn-ui/utils';
 
-/**
- * Style variants for the Button component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export const buttonVariants = cva(
-  'pr-twp tw:inline-flex tw:items-center tw:justify-center tw:gap-2 tw:whitespace-nowrap tw:rounded-md tw:text-sm tw:font-medium tw:ring-offset-background tw:transition-colors tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:pointer-events-none tw:disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:size-4 tw:[&_svg]:shrink-0',
+const buttonVariants = cva(
+  'tw:group/button tw:inline-flex tw:shrink-0 tw:items-center tw:justify-center tw:rounded-lg tw:border tw:border-transparent tw:bg-clip-padding tw:text-sm tw:font-medium tw:whitespace-nowrap tw:transition-all tw:outline-none tw:select-none tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:active:not-aria-[haspopup]:translate-y-px tw:disabled:pointer-events-none tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
   {
     variants: {
       variant: {
-        default: 'tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
-        destructive: 'tw:bg-destructive tw:text-destructive-foreground tw:hover:bg-destructive/90',
+        default: 'tw:bg-primary tw:text-primary-foreground tw:[a]:hover:bg-primary/80',
         outline:
-          'tw:border tw:border-input tw:bg-background tw:hover:bg-accent tw:hover:text-accent-foreground',
-        secondary: 'tw:bg-secondary tw:text-secondary-foreground tw:hover:bg-secondary/80',
-        ghost: 'tw:hover:bg-accent tw:hover:text-accent-foreground',
+          'tw:border-border tw:bg-background tw:hover:bg-muted tw:hover:text-foreground tw:aria-expanded:bg-muted tw:aria-expanded:text-foreground tw:dark:border-input tw:dark:bg-input/30 tw:dark:hover:bg-input/50',
+        secondary:
+          'tw:bg-secondary tw:text-secondary-foreground tw:hover:bg-secondary/80 tw:aria-expanded:bg-secondary tw:aria-expanded:text-secondary-foreground',
+        ghost:
+          'tw:hover:bg-muted tw:hover:text-foreground tw:aria-expanded:bg-muted tw:aria-expanded:text-foreground tw:dark:hover:bg-muted/50',
+        destructive:
+          'tw:bg-destructive/10 tw:text-destructive tw:hover:bg-destructive/20 tw:focus-visible:border-destructive/40 tw:focus-visible:ring-destructive/20 tw:dark:bg-destructive/20 tw:dark:hover:bg-destructive/30 tw:dark:focus-visible:ring-destructive/40',
         link: 'tw:text-primary tw:underline-offset-4 tw:hover:underline',
       },
       size: {
-        default: 'tw:h-10 tw:px-4 tw:py-2',
-        sm: 'tw:h-9 tw:rounded-md tw:px-3',
-        lg: 'tw:h-11 tw:rounded-md tw:px-8',
-        icon: 'tw:h-10 tw:w-10',
+        default:
+          'tw:h-8 tw:gap-1.5 tw:px-2.5 tw:has-data-[icon=inline-end]:pe-2 tw:has-data-[icon=inline-start]:ps-2',
+        xs: 'tw:h-6 tw:gap-1 tw:rounded-[min(var(--radius-md),10px)] tw:px-2 tw:text-xs tw:in-data-[slot=button-group]:rounded-lg tw:has-data-[icon=inline-end]:pe-1.5 tw:has-data-[icon=inline-start]:ps-1.5 tw:[&_svg:not([class*=size-])]:size-3',
+        sm: 'tw:h-7 tw:gap-1 tw:rounded-[min(var(--radius-md),12px)] tw:px-2.5 tw:text-[0.8rem] tw:in-data-[slot=button-group]:rounded-lg tw:has-data-[icon=inline-end]:pe-1.5 tw:has-data-[icon=inline-start]:ps-1.5 tw:[&_svg:not([class*=size-])]:size-3.5',
+        lg: 'tw:h-9 tw:gap-1.5 tw:px-2.5 tw:has-data-[icon=inline-end]:pe-2 tw:has-data-[icon=inline-start]:ps-2',
+        icon: 'tw:size-8',
+        'icon-xs':
+          'tw:size-6 tw:rounded-[min(var(--radius-md),10px)] tw:in-data-[slot=button-group]:rounded-lg tw:[&_svg:not([class*=size-])]:size-3',
+        'icon-sm':
+          'tw:size-7 tw:rounded-[min(var(--radius-md),12px)] tw:in-data-[slot=button-group]:rounded-lg',
+        'icon-lg': 'tw:size-9',
       },
     },
     defaultVariants: {
@@ -35,32 +41,27 @@ export const buttonVariants = cva(
   },
 );
 
-/**
- * Props for Button component
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean;
+function Button({
+  className,
+  variant = 'default',
+  size = 'default',
+  asChild = false,
+  ...props
+}: React.ComponentProps<'button'> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean;
+  }) {
+  const Comp = asChild ? Slot.Root : 'button';
+
+  return (
+    <Comp
+      data-slot="button"
+      data-variant={variant}
+      data-size={size}
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  );
 }
 
-/**
- * The Button component displays a button or a component that looks like a button. The component is
- * built and styled by Shadcn UI.
- *
- * @param ButtonProps
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export function Button({
-  className,
-  variant,
-  size,
-  asChild = false,
-  ref,
-  ...props
-}: ButtonProps & { ref?: React.Ref<HTMLButtonElement> }) {
-  const Comp = asChild ? Slot : 'button';
-  return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
-}
+export { Button, buttonVariants };
