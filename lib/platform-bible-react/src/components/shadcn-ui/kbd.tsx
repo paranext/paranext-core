@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * Props for the Kbd component.
@@ -21,7 +21,7 @@ const Kbd = React.forwardRef<HTMLElement, KbdProps>(({ className, ...props }, re
     <kbd
       ref={ref}
       className={cn(
-        'pr-twp tw-rounded tw-border tw-border-border tw-bg-muted tw-px-1 tw-py-0.5 tw-font-mono tw-text-xs',
+        'pr-twp tw:rounded tw:border tw:border-border tw:bg-muted tw:px-1 tw:py-0.5 tw:font-mono tw:text-xs',
         className,
       )}
       {...props}

@@ -99,19 +99,19 @@ function InteractiveTemplate(args: any) {
         searchValue={searchValue}
         onSearch={handleSearch}
       >
-        <div className="tw-p-6">
-          <h2 className="tw-mb-4 tw-text-2xl tw-font-bold">
+        <div className="tw:p-6">
+          <h2 className="tw:mb-4 tw:text-2xl tw:font-bold">
             Settings for: {extensionLabels[selectedItem] || selectedItem}
           </h2>
-          <p className="tw-mb-4 tw-text-muted-foreground">
+          <p className="tw:mb-4 tw:text-muted-foreground">
             This is where the settings content would be displayed for the selected item.
           </p>
           {searchValue && (
-            <div className="tw-rounded-md tw-bg-muted tw-p-4">
-              <p className="tw-text-sm">
+            <div className="tw:rounded-md tw:bg-muted tw:p-4">
+              <p className="tw:text-sm">
                 <strong>Active search:</strong> &quot;{searchValue}&quot;
               </p>
-              <p className="tw-mt-1 tw-text-xs tw-text-muted-foreground">
+              <p className="tw:mt-1 tw:text-xs tw:text-muted-foreground">
                 Showing filtered results in the sidebar
               </p>
             </div>

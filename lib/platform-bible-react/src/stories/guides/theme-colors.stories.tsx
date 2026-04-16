@@ -21,7 +21,7 @@ function createPreviewCell(color: string, foreground: string, text: string) {
   return (
     <td>
       <Input
-        className={`tw-bg-${color} tw-border-2 tw-text-${foreground}`}
+        className={`tw:bg-${color} tw:border-2 tw:text-${foreground}`}
         value={text}
         aria-label={`${color} color preview showing value ${text}`}
         readOnly
@@ -36,7 +36,7 @@ function ThemeColorDisplay() {
       <p>
         Color variables are defined in{' '}
         <a
-          className="tw-text-blue-600 hover:tw-underline"
+          className="tw:text-blue-600 tw:hover:underline"
           href="https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css"
         >
           index.css
@@ -86,7 +86,7 @@ function ThemeColorDisplay() {
           {['border', 'input', 'ring'].map((color) => {
             return (
               <tr key={color}>
-                <td className="tw-text-center">—</td>
+                <td className="tw:text-center">—</td>
                 {createColorCells(color)}
               </tr>
             );
@@ -104,7 +104,7 @@ const meta: Meta<typeof ThemeColorDisplay> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-6xl tw-p-6">
+        <div className="tw:max-w-6xl tw:p-6">
           <Story />
         </div>
       </ThemeProvider>

@@ -698,7 +698,7 @@ globalThis.webViewComponent = function HelloRock3({
         </Button>
       </div>
       <div>
-        <div className="tw-flex tw-align-middle tw-gap-2">
+        <div className="tw:flex tw:align-middle tw:gap-2">
           <span>{localizedEditorHeaderTextLabel}</span>
           <Input
             disabled={!editorWebViewController}
@@ -706,7 +706,7 @@ globalThis.webViewComponent = function HelloRock3({
             onChange={(event) => setEditorHeaderText(event.target.value)}
           />
         </div>
-        <div className="tw-flex tw-align-middle tw-gap-2">
+        <div className="tw:flex tw:align-middle tw:gap-2">
           <span>{localizedEditorBorderColorLabel}</span>
           <Input
             disabled={!editorWebViewController}

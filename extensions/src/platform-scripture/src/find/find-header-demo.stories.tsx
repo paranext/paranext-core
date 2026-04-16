@@ -7,7 +7,7 @@ const meta: Meta<typeof FindHeaderDemo> = {
   tags: ['autodocs'],
   decorators: [
     (Story) => (
-      <div className="tw-p-4">
+      <div className="tw:p-4">
         <Story />
       </div>
     ),

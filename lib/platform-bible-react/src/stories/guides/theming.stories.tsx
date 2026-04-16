@@ -11,7 +11,7 @@ function ThemingGuide() {
         which properties the shadcn components expect (so that they will set their style themselves)
         and use them accordingly.
       </p>
-      <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
         Try it: change theme
         <ThemeButton />
       </div>
@@ -24,20 +24,20 @@ function ThemingGuide() {
         <tbody>
           <tr>
             <td>
-              Bad example<div className="tw-text-xs">manual styles, unable to be themed</div>
+              Bad example<div className="tw:text-xs">manual styles, unable to be themed</div>
             </td>
             <td>
               <input
                 value="this has manual colors"
                 aria-label="Bad example input with manual colors"
                 readOnly
-                className="tw-full tw-file:border-0 tw-col-span-2 tw-flex tw-h-8 tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-sm tw-ring-offset-background file:tw-bg-transparent file:tw-text-sm file:tw-font-medium placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50"
+                className="tw:full tw:file:border-0 tw:col-span-2 tw:flex tw:h-8 tw:rounded-md tw:border tw:border-input tw:bg-background tw:px-3 tw:py-2 tw:text-sm tw:ring-offset-background tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:placeholder:text-muted-foreground tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
               />
             </td>
           </tr>
         </tbody>
       </table>
-      <h2 className="tw-py-2 tw-font-bold">Overwriting styles</h2>
+      <h2 className="tw:py-2 tw:font-bold">Overwriting styles</h2>
       <p>
         Try to not overwrite styles (colors). In case you need to, use Tailwind classes to apply
         color variables, in the same way that shadcn does it. Shadcn defines the colors that you can
@@ -46,12 +46,12 @@ function ThemingGuide() {
       <br />
       <p>
         To overwrite styles use Tailwind css classes like{' '}
-        <code>className=&quot;tw-bg-muted&quot;</code> on a header-like component and{' '}
-        <code>className=&quot;tw-text-muted-foreground&quot;</code> for text on this component.
+        <code>className=&quot;tw:bg-muted&quot;</code> on a header-like component and{' '}
+        <code>className=&quot;tw:text-muted-foreground&quot;</code> for text on this component.
       </p>
       <p>
         You can also use shades of these colors with{' '}
-        <code>className=&quot;tw-bg-muted/50&quot;</code>, but try to stay consistent with how
+        <code>className=&quot;tw:bg-muted/50&quot;</code>, but try to stay consistent with how
         shadcn applies these styles in a very deliberate, rare choice.
       </p>
       <br />
@@ -60,7 +60,7 @@ function ThemingGuide() {
         preview app. If you are unsure, check out how{' '}
         <a
           href="https://ui.shadcn.com/"
-          className="tw-text-blue-600 hover:tw-underline"
+          className="tw:text-blue-600 tw:hover:underline"
           target="_blank"
           rel="noreferrer"
         >
@@ -69,7 +69,7 @@ function ThemingGuide() {
         uses a similar thing or talk to the{' '}
         <a
           href="https://discord.com/channels/1064938364597436416/1082713526780575845"
-          className="tw-text-blue-600 hover:tw-underline"
+          className="tw:text-blue-600 tw:hover:underline"
           target="_blank"
           rel="noreferrer"
         >
@@ -88,7 +88,7 @@ const meta: Meta<typeof ThemingGuide> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-4xl tw-p-6">
+        <div className="tw:max-w-4xl tw:p-6">
           <Story />
         </div>
       </ThemeProvider>

@@ -61,20 +61,20 @@ export function DictionaryListItem({
         id={`${entry.lexicalReferenceTextId}-entry-${entry.id}`}
         onClick={onClick}
         className={cn(
-          'tw-flex tw-flex-col tw-p-2 tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+          'tw:flex tw:flex-col tw:p-2 tw:outline-hidden tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
           {
-            'tw-bg-muted': isSelected,
-            'hover:tw-bg-muted': !isSelected,
+            'tw:bg-muted': isSelected,
+            'tw:hover:bg-muted': !isSelected,
           },
         )}
         tabIndex={-1}
       >
-        <div className="tw-flex tw-items-baseline tw-gap-2">
-          <span className="tw-text-sm scripture-font">{entry.lemma}</span>
+        <div className="tw:flex tw:items-baseline tw:gap-2">
+          <span className="tw:text-sm scripture-font">{entry.lemma}</span>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="tw-text-xs tw-bg-accent tw-px-1.5 tw-py-0.5 tw-rounded tw-ml-1 tw-cursor-help">
+                <span className="tw:text-xs tw:bg-accent tw:px-1.5 tw:py-0.5 tw:rounded tw:ml-1 tw:cursor-help">
                   {getCombinedOccurrencesCountFromDictionaryEntrySenses(entry, scrRef)}
                 </span>
               </TooltipTrigger>
@@ -91,15 +91,15 @@ export function DictionaryListItem({
           </TooltipProvider>
         </div>
 
-        <div className="tw-flex tw-items-center tw-gap-2 tw-mt-0.5 tw-overflow-hidden">
-          <p className="tw-text-sm tw-text-muted-foreground tw-truncate">
+        <div className="tw:flex tw:items-center tw:gap-2 tw:mt-0.5 tw:overflow-hidden">
+          <p className="tw:text-sm tw:text-muted-foreground tw:truncate">
             {getFormatGlossesStringFromDictionaryEntrySenses(entry, scrRef)}
           </p>
           {entry.strongsCodes.map((strongsCode) => (
             <TooltipProvider key={strongsCode}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="tw-text-xs tw-bg-accent tw-px-1.5 tw-py-0.5 tw-rounded tw-ml-1 tw-shrink-0 tw-cursor-help">
+                  <span className="tw:text-xs tw:bg-accent tw:px-1.5 tw:py-0.5 tw:rounded tw:ml-1 tw:shrink-0 tw:cursor-help">
                     {strongsCode}
                   </span>
                 </TooltipTrigger>
