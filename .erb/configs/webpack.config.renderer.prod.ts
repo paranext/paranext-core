@@ -10,6 +10,7 @@ import { merge } from 'webpack-merge';
 import TerserPlugin from 'terser-webpack-plugin';
 import baseConfig from './webpack.config.base';
 import webpackPaths from './webpack.paths';
+import { buildRendererCssLoaders } from './css-loaders';
 import checkNodeEnv from '../scripts/check-node-env';
 import deleteSourceMaps from '../scripts/delete-source-maps';
 
@@ -51,35 +52,13 @@ const configuration: webpack.Configuration = {
       {
         test: /\.s?(a|c)ss$/,
         resourceQuery: { not: [/raw/] },
-        use: [
-          MiniCssExtractPlugin.loader,
-          {
-            loader: 'css-loader',
-            options: {
-              modules: true,
-              sourceMap: true,
-              // postcss-loader + sass-loader both run before css-loader resolves @imports
-              importLoaders: 2,
-            },
-          },
-          'postcss-loader',
-          'sass-loader',
-        ],
+        use: buildRendererCssLoaders(MiniCssExtractPlugin.loader, { modules: true }),
         include: /\.module\.s?(c|a)ss$/,
       },
       {
         test: /\.s?(a|c)ss$/,
         resourceQuery: { not: [/raw/] },
-        use: [
-          MiniCssExtractPlugin.loader,
-          {
-            loader: 'css-loader',
-            // postcss-loader + sass-loader both run before css-loader resolves @imports
-            options: { importLoaders: 2 },
-          },
-          'postcss-loader',
-          'sass-loader',
-        ],
+        use: buildRendererCssLoaders(MiniCssExtractPlugin.loader, { modules: false }),
         exclude: /\.module\.s?(c|a)ss$/,
       },
       // Fonts

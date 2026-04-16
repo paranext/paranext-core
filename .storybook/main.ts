@@ -93,8 +93,8 @@ const config: StorybookConfig = {
               !!u &&
               typeof u === 'object' &&
               'options' in u &&
-              typeof u.options === 'object' &&
-              u.options !== null
+              u.options &&
+              typeof u.options === 'object'
                 ? u.options
                 : {};
             return {

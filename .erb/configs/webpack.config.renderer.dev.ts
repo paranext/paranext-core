@@ -9,6 +9,7 @@ import { ChildProcess, execSync, spawn } from 'child_process';
 import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin';
 import baseConfig from './webpack.config.base';
 import webpackPaths from './webpack.paths';
+import { buildRendererCssLoaders } from './css-loaders';
 import checkNodeEnv from '../scripts/check-node-env';
 
 // When an ESLint server is running, we can't set the NODE_ENV so we'll check if it's
@@ -60,35 +61,13 @@ const configuration: webpack.Configuration = {
       {
         test: /\.s?(c|a)ss$/,
         resourceQuery: { not: [/raw/] },
-        use: [
-          'style-loader',
-          {
-            loader: 'css-loader',
-            options: {
-              modules: true,
-              sourceMap: true,
-              // postcss-loader + sass-loader both run before css-loader resolves @imports
-              importLoaders: 2,
-            },
-          },
-          'postcss-loader',
-          'sass-loader',
-        ],
+        use: buildRendererCssLoaders('style-loader', { modules: true }),
         include: /\.module\.s?(c|a)ss$/,
       },
       {
         test: /\.s?css$/,
         resourceQuery: { not: [/raw/] },
-        use: [
-          'style-loader',
-          {
-            loader: 'css-loader',
-            // postcss-loader + sass-loader both run before css-loader resolves @imports
-            options: { importLoaders: 2 },
-          },
-          'postcss-loader',
-          'sass-loader',
-        ],
+        use: buildRendererCssLoaders('style-loader', { modules: false }),
         exclude: /\.module\.s?(c|a)ss$/,
       },
       // Fonts
