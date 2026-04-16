@@ -159,10 +159,6 @@ export default function CommentList({
       {activeThreads.map((thread) => (
         <div
           key={thread.id}
-          // NOTE: The duplicate-merge logic above guarantees thread.id is unique within activeThreads.
-          // This id is also used by aria-activedescendant and the listbox options array —
-          // if that merge block is ever removed, duplicate DOM ids would silently break keyboard navigation.
-          id={thread.id}
           className={cn({
             'tw-opacity-60': thread.status === 'Resolved',
           })}
