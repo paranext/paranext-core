@@ -1,36 +1,24 @@
 // === PORTED FROM PT9 ===
 // Source: PT9/Paratext/Marble/PartOfSpeechTranslator.cs:1-1138
-// Method: PartOfSpeechTranslator.Translate(), TranslateToStandardForm(), LocalizeStandardForm(), FindOption(), Matches()
 // Maps to: EXT-052, BHV-615
 
-// EXPLANATION:
-// This class translates compound POS (Part-of-Speech) tag strings into human-readable
-// long or short form English strings. The PT9 implementation uses embedded JSON structures
-// parsed via JObject (Newtonsoft.Json) to define tag grammars and translations for Greek
-// (28 codes) and Hebrew (14 codes). This port converts those JSON structures into static
-// C# dictionaries and lists to avoid the JSON dependency while preserving identical behavior.
-//
-// Algorithm:
-// 1. For Hebrew, strip trailing 'H' (language marker) before lookup
-// 2. Match the root POS code by trying each option from part_of_speech list against
-//    the start of the tag string (longest match wins since options are multi-char)
-// 3. Look up the tag_sequence for that root to get the ordered list of sub-categories
-// 4. For each sub-category, try to match its options against the remaining tag string
-// 5. Look up each matched code in the translation table (eng-long)
-// 6. For short form, map each long translation to its short equivalent
-// 7. Join with spaces, trim trailing dashes and spaces
+using System.Text;
 
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
-/// Translates Greek and Hebrew POS tag codes to localized display strings.
-/// Static dictionaries map tag codes to localization keys.
-/// Hebrew: final 'H' stripped before lookup. 28 Greek codes, 14 Hebrew codes.
-/// Localization keys: EnhancedResource.PartOfSpeech.{form}
+/// Translates compound POS (Part-of-Speech) tag strings into human-readable long or short
+/// form English strings. 28 Greek codes and 14 Hebrew codes. Hebrew trailing 'H' stripped
+/// before lookup. Localization keys follow EnhancedResource.PartOfSpeech.{form} pattern.
 ///
-/// Source: EXT-052, BHV-615
+/// <para>Algorithm: match root POS code against tag_options, look up tag_sequence for
+/// sub-categories, match each sub-category option, translate via long-form table,
+/// map to short form if requested, join with spaces.</para>
+///
+/// <para>PT9 used embedded JSON (JObject/Newtonsoft.Json) for lookup tables. This port uses
+/// static C# dictionaries to avoid the JSON dependency while preserving identical behavior.</para>
 /// </summary>
-public static class PartOfSpeechTranslator
+internal static class PartOfSpeechTranslator
 {
     private const string MarbleLocIdPrefix = "EnhancedResource.PartOfSpeech.";
 
@@ -51,11 +39,7 @@ public static class PartOfSpeechTranslator
     private static readonly Dictionary<string, string> s_greekShortTranslations;
     private static readonly Dictionary<string, string> s_hebrewShortTranslations;
 
-    // === NEW IN PT10 ===
-    // Reason: PT10 contract uses single-letter POS codes (e.g., "N" for noun) as shortcuts
-    // in addition to the full multi-character PT9 compound codes. These mappings convert
-    // single-letter convenience codes to the full codes before lookup.
-    // Maps to: CAP-005
+    // PT10-only: single-letter shortcut codes (e.g., "N" for noun) that expand to full PT9 codes
     private static readonly Dictionary<
         string,
         (string FullCode, string? DisplayLabel)
@@ -90,10 +74,6 @@ public static class PartOfSpeechTranslator
     /// <param name="language">"Greek" or "Hebrew"</param>
     /// <param name="form">"long" or "short"</param>
     /// <returns>Translation result with display string, known flag, and localization key</returns>
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/PartOfSpeechTranslator.cs:32-38
-    // Method: PartOfSpeechTranslator.Translate()
-    // Maps to: EXT-052
     public static PosTranslateResult Translate(string tag, string language, string form)
     {
         if (string.IsNullOrEmpty(tag))
@@ -126,33 +106,18 @@ public static class PartOfSpeechTranslator
             longTranslations
         );
 
-        // NEW IN PT10: If the tag didn't match the full PT9 code tables,
-        // try shortcut codes (single-letter convenience mappings) before returning unknown.
-        string? shortcutDisplayLabel = null;
-        if (standardForm == null)
-        {
-            var shortcuts = isHebrew ? s_hebrewShortcutCodes : s_greekShortcutCodes;
-            if (shortcuts.TryGetValue(effectiveTag, out var shortcut))
-            {
-                standardForm = TranslateToStandardForm(
-                    shortcut.FullCode,
-                    tagOptions,
-                    tagSequence,
-                    longTranslations
-                );
-                shortcutDisplayLabel = shortcut.DisplayLabel;
-            }
-        }
+        // PT10 shortcut codes: single-letter convenience mappings (e.g., "N" -> "noun")
+        standardForm ??= TryExpandShortcut(
+            effectiveTag,
+            isHebrew,
+            tagOptions,
+            tagSequence,
+            longTranslations
+        );
 
         if (standardForm == null)
         {
             return new PosTranslateResult("", false, "");
-        }
-
-        // If a shortcut display label was set, replace the root word
-        if (shortcutDisplayLabel != null && standardForm.Count > 0)
-        {
-            standardForm[0] = shortcutDisplayLabel;
         }
 
         string displayString = LocalizeStandardForm(standardForm, shortFormat);
@@ -163,13 +128,9 @@ public static class PartOfSpeechTranslator
 
     #region Core Algorithm
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/PartOfSpeechTranslator.cs:42-56
-    // Method: PartOfSpeechTranslator.LocalizeStandardForm()
-    // Maps to: EXT-052
     private static string LocalizeStandardForm(List<string> standardForm, bool shortFormat)
     {
-        var result = new System.Text.StringBuilder();
+        var result = new StringBuilder();
         foreach (string word in standardForm)
         {
             string displayWord = word;
@@ -180,8 +141,6 @@ public static class PartOfSpeechTranslator
                     : word;
             }
 
-            // PT9 uses Localizer.Default[key] which returns the default value
-            // when no localization is available. We use the English default directly.
             result.Append(displayWord);
             result.Append(' ');
         }
@@ -201,10 +160,6 @@ public static class PartOfSpeechTranslator
         return "";
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/PartOfSpeechTranslator.cs:58-84
-    // Method: PartOfSpeechTranslator.TranslateToStandardForm()
-    // Maps to: EXT-052
     private static List<string>? TranslateToStandardForm(
         string partOfSpeech,
         Dictionary<string, List<string>> tagOptions,
@@ -261,10 +216,6 @@ public static class PartOfSpeechTranslator
         return null;
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/PartOfSpeechTranslator.cs:86-98
-    // Method: PartOfSpeechTranslator.FindOption()
-    // Maps to: EXT-052
     private static bool FindOption(
         List<string> options,
         ref string curValue,
@@ -284,15 +235,11 @@ public static class PartOfSpeechTranslator
         return false;
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/PartOfSpeechTranslator.cs:100-109
-    // Method: PartOfSpeechTranslator.Matches()
-    // Maps to: EXT-052
     private static bool Matches(string compareValue, ref string curValue)
     {
         if (curValue.StartsWith(compareValue, StringComparison.Ordinal))
         {
-            curValue = curValue.Substring(compareValue.Length);
+            curValue = curValue[compareValue.Length..];
             return true;
         }
 
@@ -303,11 +250,38 @@ public static class PartOfSpeechTranslator
 
     #region Shortcut Code Expansion
 
-    // === NEW IN PT10 ===
-    // Reason: PT10 contract supports single-letter convenience codes (e.g., "N" for noun)
-    // that map to the full multi-character PT9 POS codes. When a shortcut has a custom
-    // displayLabel, it is used as the display string instead of the PT9 translation table value.
-    // Maps to: CAP-005
+    /// <summary>
+    /// PT10 shortcut codes: maps single-letter convenience codes (e.g., "N" for noun) to full
+    /// multi-character PT9 POS codes. When a shortcut has a custom DisplayLabel, it replaces
+    /// the root translation (e.g., "V" -> "verb" instead of "v, finite").
+    /// </summary>
+    private static List<string>? TryExpandShortcut(
+        string effectiveTag,
+        bool isHebrew,
+        Dictionary<string, List<string>> tagOptions,
+        Dictionary<string, List<string>> tagSequence,
+        Dictionary<string, string> longTranslations
+    )
+    {
+        var shortcuts = isHebrew ? s_hebrewShortcutCodes : s_greekShortcutCodes;
+        if (!shortcuts.TryGetValue(effectiveTag, out var shortcut))
+            return null;
+
+        List<string>? standardForm = TranslateToStandardForm(
+            shortcut.FullCode,
+            tagOptions,
+            tagSequence,
+            longTranslations
+        );
+
+        if (standardForm != null && shortcut.DisplayLabel != null && standardForm.Count > 0)
+        {
+            standardForm[0] = shortcut.DisplayLabel;
+        }
+
+        return standardForm;
+    }
+
     private static Dictionary<
         string,
         (string FullCode, string? DisplayLabel)
@@ -340,10 +314,6 @@ public static class PartOfSpeechTranslator
 
     #region Long-to-Short Mapping
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/PartOfSpeechTranslator.cs:1085-1116
-    // Method: PartOfSpeechTranslator.GetLongToShortValues(), GetLongAndShortTranslations()
-    // Maps to: EXT-052
     private static Dictionary<string, string> BuildLongToShortValues()
     {
         var result = new Dictionary<string, string>();
@@ -366,14 +336,9 @@ public static class PartOfSpeechTranslator
             if (string.IsNullOrEmpty(longTranslation))
                 continue;
 
-            // Skip category heading items: keys like "case-" where removing trailing '-'
-            // gives a string with no remaining '-' and the original key ends with '-'
-            string trimmedKey = key.Trim('-');
-            if (
-                key.Length > 1
-                && key.Substring(0, key.Length - 1) == trimmedKey
-                && !trimmedKey.Contains('-')
-            )
+            // Skip category heading keys (e.g., "case-", "gender-") - these have exactly
+            // one dash as the last character and represent category labels, not option codes.
+            if (key.Length > 1 && key[^1] == '-' && !key.AsSpan(0, key.Length - 1).Contains('-'))
                 continue;
 
             if (
