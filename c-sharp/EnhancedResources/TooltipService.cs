@@ -26,26 +26,7 @@ internal static class TooltipService
         MarbleDataAccessService dataAccess
     )
     {
-        // Look up token by Index matching TokenId
-        int tokenIndex = int.TryParse(input.TokenId, out int parsed) ? parsed : -1;
-
-        MarbleToken? token = null;
-        foreach (MarbleToken t in parsedTokens)
-        {
-            if (t.Index == tokenIndex)
-            {
-                token = t;
-                break;
-            }
-        }
-
-        if (token == null)
-        {
-            throw PlatformErrorCodes.WithCode(
-                PlatformErrorCodes.NotFound,
-                $"Token '{input.TokenId}' not found"
-            );
-        }
+        MarbleToken token = FindTokenOrThrow(input.TokenId, parsedTokens);
 
         string lemma = token.Text;
         string? strongNumber = token.StrongNumber;
@@ -72,15 +53,33 @@ internal static class TooltipService
         MarbleDataAccessService dataAccess
     )
     {
-        if (token.LexicalLinks == null || token.LexicalLinks.Count == 0)
+        if (token.LexicalLinks is not { Count: > 0 })
             return null;
 
         IList<string> glosses = dataAccess.FindLocalizedGlossesForTerm(token.Text, glossLanguage);
 
-        if (glosses.Count == 0)
-            return null;
+        return glosses.Count > 0 ? string.Join(", ", glosses) : null;
+    }
 
-        return string.Join(", ", glosses);
+    /// <summary>
+    /// Look up a token by its ID (parsed as an index) in the token array.
+    /// Throws NOT_FOUND PlatformError if no matching token exists.
+    /// </summary>
+    private static MarbleToken FindTokenOrThrow(string tokenId, MarbleToken[] parsedTokens)
+    {
+        int tokenIndex = int.TryParse(tokenId, out int parsed) ? parsed : -1;
+
+        MarbleToken? token = parsedTokens.FirstOrDefault(t => t.Index == tokenIndex);
+
+        if (token == null)
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.NotFound,
+                $"Token '{tokenId}' not found"
+            );
+        }
+
+        return token;
     }
 
     private static string? ResolvePosDisplay(MarbleToken token)
@@ -88,9 +87,8 @@ internal static class TooltipService
         if (string.IsNullOrEmpty(token.Style))
             return null;
 
-        // Determine language from strong number prefix
-        string language =
-            token.StrongNumber != null && token.StrongNumber.StartsWith('H') ? "Hebrew" : "Greek";
+        // Determine language from strong number prefix: 'H' = Hebrew, default = Greek
+        string language = token.StrongNumber is { } sn && sn.StartsWith('H') ? "Hebrew" : "Greek";
 
         PosTranslateResult result = PartOfSpeechTranslator.Translate(token.Style, language, "long");
 
