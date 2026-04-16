@@ -1,39 +1,29 @@
+'use client';
+
 import React from 'react';
-import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
-import { Check } from 'lucide-react';
+import { Checkbox as CheckboxPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
+import { IconCheck } from '@tabler/icons-react';
 
-/**
- * Checkbox component provides a control that allows the user to toggle between checked and not
- * checked. This components is built on Radix UI primitives and styled with Shadcn UI.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/checkbox}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/checkbox}
- */
-export function Checkbox({
-  className,
-  ref,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root> & {
-  ref?: React.Ref<React.ComponentRef<typeof CheckboxPrimitive.Root>>;
-}) {
+function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
   return (
     <CheckboxPrimitive.Root
-      ref={ref}
+      data-slot="checkbox"
       className={cn(
-        'tw:peer pr-twp tw:h-4 tw:w-4 tw:shrink-0 tw:rounded-sm tw:border tw:border-primary tw:ring-offset-background tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:cursor-not-allowed tw:disabled:opacity-50 tw:data-[state=checked]:bg-primary tw:data-[state=checked]:text-primary-foreground',
+        'tw:peer tw:relative tw:flex tw:size-4 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-[4px] tw:border tw:border-input tw:transition-colors tw:outline-none tw:group-has-disabled/field:opacity-50 tw:after:absolute tw:after:-inset-x-3 tw:after:-inset-y-2 tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:disabled:cursor-not-allowed tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:aria-invalid:aria-checked:border-primary tw:dark:bg-input/30 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40 tw:data-checked:border-primary tw:data-checked:bg-primary tw:data-checked:text-primary-foreground tw:dark:data-checked:bg-primary',
         className,
       )}
       {...props}
     >
       <CheckboxPrimitive.Indicator
-        className={cn('tw:flex tw:items-center tw:justify-center tw:text-current')}
+        data-slot="checkbox-indicator"
+        className="tw:grid tw:place-content-center tw:text-current tw:transition-none tw:[&>svg]:size-3.5"
       >
-        <Check className="tw:h-4 tw:w-4" />
+        <IconCheck />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   );
 }
 
-export default Checkbox;
+export { Checkbox };
