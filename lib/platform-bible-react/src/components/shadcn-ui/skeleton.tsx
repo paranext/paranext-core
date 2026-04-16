@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * Use to show a placeholder while content is loading. This component is from Shadcn UI. See Shadcn

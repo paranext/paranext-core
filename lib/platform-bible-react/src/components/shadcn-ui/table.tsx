@@ -1,6 +1,6 @@
 import React from 'react';
 import { getFocusableElements } from '@/utils/focus.util';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * Table components provide a responsive table. These components are built and styled with Shadcn

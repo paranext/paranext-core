@@ -4,7 +4,7 @@ import {
   menuVariants,
   useMenuContext,
 } from '@/context/menu.context';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import * as MenubarPrimitive from '@radix-ui/react-menubar';
 import { Check, ChevronRight, Circle } from 'lucide-react';
 import React from 'react';

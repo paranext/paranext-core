@@ -1,7 +1,7 @@
 import React from 'react';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 // CUSTOM: Added context to manage drawer direction
 const DrawerContext = React.createContext<{

@@ -1,7 +1,7 @@
 import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 const alertVariants = cva(
   // CUSTOM: Copied all `svg` arbitrary selector variant classes as `img` variants so we can use

@@ -1,6 +1,6 @@
 /*
  * CUSTOM: broke out tailwind imports to disable default preflight as it is scoped below. See
- * https://tailwindcss.com/docs/preflight#disabling-preflight for syntax
+ * https://tailwindcss.com/docs/preflight#disabling-preflight for syntax. Also added `tw:` prefix.
  */
 @layer theme, base, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme) prefix(tw);
@@ -88,7 +88,8 @@
  * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
  * properties using `var(--variableName)` or Tailwind classes like `tw:bg-primary`
  *
- * See the wiki's [Matching Application
+ * See [shadcn's Theming page](https://ui.shadcn.com/docs/theming#theme-tokens) and the wiki's
+ * [Matching Application
  * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
  * section for more information
  */
@@ -249,9 +250,10 @@
 /*
  * CUSTOM: shared region opener.
  *
- * The following shared region is from shadcn/ui's styles at
- * https://ui.shadcn.com/docs/installation/manual#configure-styles but is scoped down to `.pr-twp`
- * because this is just a component library and should not apply its styles to the entire page.
+ * The following shared region is installed by `shadcn apply` but is scoped down to `.pr-twp`
+ * because this is just a component library and should not apply its styles to the entire page. Note
+ * that `shadcn apply` adds more styles than the website shows at
+ * https://ui.shadcn.com/docs/installation/manual#configure-styles. Maybe the website is outdated.
  *
  * There is now a section in this library's README.md that explains how to apply these styles to the
  * entire page if desired.

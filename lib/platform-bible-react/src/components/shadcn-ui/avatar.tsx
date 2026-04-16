@@ -1,7 +1,7 @@
 import React from 'react';
 import * as AvatarPrimitive from '@radix-ui/react-avatar';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * The Avatar component displays a user's profile picture or initials. The component is built and

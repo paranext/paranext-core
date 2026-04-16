@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * Displays a form textarea or a component that looks like a textarea. This component is from Shadcn

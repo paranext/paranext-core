@@ -2,7 +2,7 @@ import React from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 
 /**

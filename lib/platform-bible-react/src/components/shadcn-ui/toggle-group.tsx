@@ -2,7 +2,7 @@ import React from 'react';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 import { type VariantProps } from 'class-variance-authority';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { toggleVariants } from '@/components/shadcn-ui/toggle';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 

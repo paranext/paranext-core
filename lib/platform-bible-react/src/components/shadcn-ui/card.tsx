@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * The Card component displays a card with header, content, and footer. This component is built and

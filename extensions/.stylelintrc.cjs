@@ -39,6 +39,7 @@ module.exports = {
           'theme',
           'plugin',
           'source',
+          'custom-variant',
         ],
       },
     ],

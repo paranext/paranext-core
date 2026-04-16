@@ -4,8 +4,6 @@ import { Config } from 'tailwindcss';
 import typography from '@tailwindcss/typography';
 
 const config: Config = {
-  // TW4: prefix is now handled by CSS `prefix(tw)` in index.css
-  // TW4: content array removed — TW4 auto-detects source files
   // Theme from shadcn/ui
   theme: {
     extend: {
@@ -52,7 +50,7 @@ const config: Config = {
             },
           },
         },
-        // Can use `tw-prose tw-prose-quoteless` to remove quotes on `blockquote`s
+        // Can use `tw:prose tw:prose-quoteless` to remove quotes on `blockquote`s
         // Thanks to RobinMalfait https://github.com/tailwindlabs/tailwindcss-typography/issues/66#issuecomment-756834635
         quoteless: {
           css: {
@@ -66,12 +64,9 @@ const config: Config = {
   plugins: [
     // Prose styles as sensible defaults for markdown renderer component
     typography(),
-
-    // #endregion
-    // TW4: containerQueries removed — built into TW4
-    // TW4: tailwindCssAnimate removed — not needed with TW4
-    // TW4: scopedPreflightStyles removed — replaced by @plugin "tailwindcss-scoped-preflight" in index.css
   ],
 };
 
 export default config;
+
+// #endregion

@@ -1,7 +1,7 @@
 import React from 'react';
 import * as ProgressPrimitive from '@radix-ui/react-progress';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * Displays an indicator showing the completion progress of a task, typically displayed as a

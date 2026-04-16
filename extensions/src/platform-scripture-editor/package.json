@@ -82,6 +82,7 @@
     "react-reverse-portal": "^2.2.0",
     "sass": "^1.85.0",
     "sass-loader": "^16.0.5",
+    "shadcn": "^4.2.0",
     "stylelint": "^16.17.0",
     "stylelint-config-recommended": "^14.0.1",
     "stylelint-config-sass-guidelines": "^12.1.0",

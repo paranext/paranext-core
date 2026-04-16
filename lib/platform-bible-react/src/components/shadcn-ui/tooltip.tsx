@@ -1,7 +1,7 @@
 import React from 'react';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { ButtonProps, buttonVariants } from '@/components/shadcn-ui/button';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 
