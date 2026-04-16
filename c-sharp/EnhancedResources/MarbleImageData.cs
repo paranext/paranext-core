@@ -16,6 +16,18 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal class MarbleImageData
 {
+    /// <summary>Multiplier for the book component of BBBCCCVVV encoding.</summary>
+    private const int BookMultiplier = 1_000_000;
+
+    /// <summary>Multiplier for the chapter component of BBBCCCVVV encoding.</summary>
+    private const int ChapterMultiplier = 1_000;
+
+    /// <summary>
+    /// Sentinel max value for chapter/verse in BBBCCCVVV encoding.
+    /// Used in place of versification-dependent LastChapter/LastVerse.
+    /// </summary>
+    private const int MaxChapterOrVerse = 999;
+
     public string ImageId { get; }
     public VerseRef StartRef { get; }
     public VerseRef EndRef { get; }
@@ -29,10 +41,6 @@ internal class MarbleImageData
     public MarbleImageData(string imageId, VerseRef startRef, VerseRef endRef)
         : this(imageId, startRef, endRef, ["en"]) { }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleImageData.cs:30-68
-    // Method: BibleImages.Images setter (reference expansion logic)
-    // Maps to: EXT-009, BHV-612
     public MarbleImageData(
         string imageId,
         VerseRef startRef,
@@ -55,38 +63,13 @@ internal class MarbleImageData
             EndRef = endRef;
         }
 
-        // EXPLANATION:
-        // PT9 expands reference ranges at initialization time:
-        // - Book-level (chapter=0): expand endRef to last chapter + last verse of book
-        // - Chapter-level (verse=0): expand endRef to last verse of chapter
-        // Since we may not have versification info, we use 999 as max sentinel value
-        // (matching PT9 pattern where BBBCCCVVV caps at 999 for chapter/verse).
         _effectiveStartBbbcccvvv = StartRef.BBBCCCVVV;
-
-        if (StartRef.ChapterNum == 0)
-        {
-            // Book-level: cover entire book
-            _effectiveEndBbbcccvvv = EndRef.BookNum * 1000000 + 999 * 1000 + 999;
-        }
-        else if (EndRef.VerseNum == 0)
-        {
-            // Chapter-level: cover through last verse of end chapter
-            _effectiveEndBbbcccvvv = EndRef.BookNum * 1000000 + EndRef.ChapterNum * 1000 + 999;
-        }
-        else
-        {
-            _effectiveEndBbbcccvvv = EndRef.BBBCCCVVV;
-        }
+        _effectiveEndBbbcccvvv = ExpandEndBbbcccvvv(StartRef, EndRef);
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleImageData.cs:122-150
-    // Method: BibleImages.GetForReferenceRangeInternal()
-    // Maps to: EXT-009, BHV-612
     /// <summary>
     /// Matches images to a verse reference range at book, chapter, or verse level.
     /// Returns images whose reference ranges overlap with the query range.
-    /// Source: EXT-009, BHV-612
     /// </summary>
     public static IList<MarbleImageData> GetForReferenceRange(
         IList<MarbleImageData> allImages,
@@ -95,39 +78,20 @@ internal class MarbleImageData
     )
     {
         int queryStart = startRef.BBBCCCVVV;
-        int queryEnd = endRef.BBBCCCVVV;
+        int queryEnd = ExpandQueryEndBbbcccvvv(endRef);
 
-        // Expand query end for chapter-level queries (verse=0)
-        if (endRef.VerseNum == 0 && endRef.ChapterNum > 0)
-        {
-            queryEnd = endRef.BookNum * 1000000 + endRef.ChapterNum * 1000 + 999;
-        }
-
-        var result = new List<MarbleImageData>();
-
-        foreach (var image in allImages)
-        {
-            // PT9 overlap check: otherStartRef <= EndRef && otherEndRef >= StartRef
-            if (
+        // PT9 overlap check: otherStartRef <= EndRef && otherEndRef >= StartRef
+        return allImages
+            .Where(image =>
                 queryStart <= image._effectiveEndBbbcccvvv
                 && queryEnd >= image._effectiveStartBbbcccvvv
             )
-            {
-                result.Add(image);
-            }
-        }
-
-        return result;
+            .ToList();
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleImageData.cs:264-267
-    // Method: BibleImage.GetBestDefinition() (delegates to Localizer.GetBestLocalization)
-    // Maps to: BHV-612
     /// <summary>
     /// Returns the best language code for image captions.
     /// Defaults to English if the user's language is not available.
-    /// Source: BHV-612
     /// </summary>
     public string GetBestLanguageCode(string userLanguage)
     {
@@ -135,5 +99,49 @@ internal class MarbleImageData
             return userLanguage;
 
         return "en";
+    }
+
+    /// <summary>
+    /// Expands the end BBBCCCVVV value for image reference ranges at initialization.
+    /// PT9 expands stored image ranges:
+    /// - Book-level (chapter=0): expand to last chapter + last verse of book
+    /// - Chapter-level (verse=0): expand to last verse of chapter
+    /// Since versification info may be unavailable, uses 999 as max sentinel.
+    /// </summary>
+    private static int ExpandEndBbbcccvvv(VerseRef startRef, VerseRef endRef)
+    {
+        if (startRef.ChapterNum == 0)
+        {
+            // Book-level: cover entire book
+            return endRef.BookNum * BookMultiplier
+                + MaxChapterOrVerse * ChapterMultiplier
+                + MaxChapterOrVerse;
+        }
+
+        if (endRef.VerseNum == 0 && endRef.ChapterNum > 0)
+        {
+            // Chapter-level: cover through last verse of end chapter
+            return endRef.BookNum * BookMultiplier
+                + endRef.ChapterNum * ChapterMultiplier
+                + MaxChapterOrVerse;
+        }
+
+        return endRef.BBBCCCVVV;
+    }
+
+    /// <summary>
+    /// Expands the query end BBBCCCVVV value for chapter-level queries (verse=0).
+    /// Unlike image range expansion, queries do not expand at book level.
+    /// </summary>
+    private static int ExpandQueryEndBbbcccvvv(VerseRef endRef)
+    {
+        if (endRef.VerseNum == 0 && endRef.ChapterNum > 0)
+        {
+            return endRef.BookNum * BookMultiplier
+                + endRef.ChapterNum * ChapterMultiplier
+                + MaxChapterOrVerse;
+        }
+
+        return endRef.BBBCCCVVV;
     }
 }

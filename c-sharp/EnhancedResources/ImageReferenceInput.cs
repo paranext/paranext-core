@@ -1,6 +1,4 @@
-// === STUB FOR TDD RED PHASE ===
 // Source: Section 2.4, EXT-009, BHV-612
-// Will be replaced during GREEN phase implementation.
 
 using SIL.Scripture;
 
