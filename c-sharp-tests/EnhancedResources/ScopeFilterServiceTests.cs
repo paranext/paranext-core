@@ -347,13 +347,15 @@ internal class ScopeFilterServiceTests
             chapterNumber: 2
         );
 
-        // Filter for Hebrew shamayim - golden master says this returns 0 tokens
-        // in the section containing GEN 2:4 ("The Creation of Man and Woman")
+        // Filter for Hebrew shamayim using the golden master's normalization order
+        // (shin+qamats+shin-dot). This differs from the XML's byte order
+        // (shin+shin-dot+qamats), so exact ordinal comparison returns 0 matches.
+        // This matches PT9 behavior: exact string match, no Unicode normalization.
         var input = new ScopeFilterInput(
             CurrentRef: new VerseRef(1, 2, 4), // GEN 2:4
             Scope: ScopeEnum.CurrentSection,
             LinkType: MarbleLinkType.Lexical,
-            FilterText: "\u05E9\u05C8\u05DE\u05B7\u05D9\u05B4\u05DD", // שָׁמַיִם
+            FilterText: "\u05E9\u05B8\u05C1\u05DE\u05B7\u05D9\u05B4\u05DD", // שָׁמַיִם (NFC order: shin+qamats+shin-dot) - differs from XML's NFD order
             FilterSenses: "",
             FilterClickOrigin: FilterClickOrigin.ScripturePane,
             ResourceId: "ESV16UK+"
@@ -565,7 +567,7 @@ internal class ScopeFilterServiceTests
             CurrentRef: new VerseRef(1, 2, 1), // GEN 2:1
             Scope: ScopeEnum.CurrentChapter,
             LinkType: MarbleLinkType.Lexical,
-            FilterText: "\u05E9\u05C8\u05DE\u05B7\u05D9\u05B4\u05DD", // שָׁמַיִם
+            FilterText: "\u05E9\u05C1\u05B8\u05DE\u05B7\u05D9\u05B4\u05DD", // שָׁמַיִם (shin+shin-dot+qamats+mem+patah+yod+hiriq+final-mem)
             FilterSenses: "",
             FilterClickOrigin: FilterClickOrigin.ScripturePane,
             ResourceId: "ESV16UK+"

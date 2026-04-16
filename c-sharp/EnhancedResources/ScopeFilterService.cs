@@ -7,6 +7,9 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal static class ScopeFilterService
 {
+    private static readonly ScopeFilterResult s_emptyResult =
+        new(Links: [], TotalLinkCount: 0, IsEmpty: true);
+
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/MarbleForm.cs:425-503
     // Method: MarbleBookTokens.GetLinksInScope()
@@ -19,15 +22,8 @@ internal static class ScopeFilterService
     public static ScopeFilterResult GetLinksForScope(ScopeFilterInput input, MarbleToken[] tokens)
     {
         if (tokens == null || tokens.Length == 0)
-        {
-            return new ScopeFilterResult(
-                Links: new List<MarbleLexicalLinkOutput>(),
-                TotalLinkCount: 0,
-                IsEmpty: true
-            );
-        }
+            return s_emptyResult;
 
-        // Validate scope enum value
         if (!Enum.IsDefined(typeof(ScopeEnum), input.Scope))
         {
             throw PlatformErrorCodes.WithCode(
@@ -37,44 +33,18 @@ internal static class ScopeFilterService
         }
 
         // Count total links of the requested type across all tokens (BHV-305)
-        int totalLinkCount = CountLinksOfType(tokens, input.LinkType);
+        int totalLinkCount = tokens.Count(t =>
+            t.Type == MarbleTokenType.TextLink && HasLinksOfType(t, input.LinkType)
+        );
 
-        // Determine which token indices are in scope
-        var inScopeIndices = GetInScopeTokenIndices(tokens, input);
+        // Compute section boundary once (only for section scope)
+        SectionBoundary? sectionBoundary =
+            input.Scope == ScopeEnum.CurrentSection
+                ? DetectSectionBoundary(tokens, input.CurrentRef)
+                : null;
 
-        // Extract TextLink tokens in scope with matching link type
-        var scopedLinks = new List<MarbleLexicalLinkOutput>();
-        foreach (int idx in inScopeIndices)
-        {
-            MarbleToken token = tokens[idx];
-            if (token.Type != MarbleTokenType.TextLink)
-                continue;
-
-            IList<string>? linkList = GetLinksForType(token, input.LinkType);
-            if (linkList == null || linkList.Count == 0)
-                continue;
-
-            // Build MarbleLexicalLinkOutput from the token
-            var linkOutput = TokenToLinkOutput(token, input.LinkType, linkList);
-            if (linkOutput == null)
-                continue;
-
-            // Apply text filter (BHV-602)
-            if (!string.IsNullOrEmpty(input.FilterText))
-            {
-                if (!LemmaMatchesFilter(linkList, input.FilterText))
-                    continue;
-            }
-
-            scopedLinks.Add(linkOutput);
-        }
-
-        // Compute section boundary if CurrentSection scope
-        SectionBoundary? sectionBoundary = null;
-        if (input.Scope == ScopeEnum.CurrentSection)
-        {
-            sectionBoundary = DetectSectionBoundary(tokens, input.CurrentRef);
-        }
+        // Single pass: track verse, filter by scope, extract matching links
+        var scopedLinks = CollectScopedLinks(tokens, input, sectionBoundary);
 
         return new ScopeFilterResult(
             Links: scopedLinks,
@@ -82,6 +52,88 @@ internal static class ScopeFilterService
             IsEmpty: scopedLinks.Count == 0,
             SectionBoundary: sectionBoundary
         );
+    }
+
+    /// <summary>
+    /// Single-pass collection of in-scope links. Tracks current verse from Verse tokens,
+    /// applies scope filtering, link type matching, and optional text filter.
+    /// </summary>
+    private static List<MarbleLexicalLinkOutput> CollectScopedLinks(
+        MarbleToken[] tokens,
+        ScopeFilterInput input,
+        SectionBoundary? sectionBoundary
+    )
+    {
+        var result = new List<MarbleLexicalLinkOutput>();
+        int currentVerse = 0;
+
+        int sectionStart = sectionBoundary?.StartIndex ?? 0;
+        int sectionEnd = sectionBoundary?.EndIndex ?? tokens.Length - 1;
+
+        for (int i = 0; i < tokens.Length; i++)
+        {
+            MarbleToken token = tokens[i];
+
+            // Track current verse from Verse tokens
+            if (token.Type == MarbleTokenType.Verse && int.TryParse(token.Text, out int verseNum))
+                currentVerse = verseNum;
+
+            // Check scope inclusion
+            if (
+                !IsInScope(
+                    input.Scope,
+                    i,
+                    currentVerse,
+                    input.CurrentRef.VerseNum,
+                    sectionStart,
+                    sectionEnd
+                )
+            )
+                continue;
+
+            if (token.Type != MarbleTokenType.TextLink)
+                continue;
+
+            IList<string>? linkList = GetLinksForType(token, input.LinkType);
+            if (linkList == null || linkList.Count == 0)
+                continue;
+
+            var linkOutput = BuildLinkOutput(token, input.LinkType, linkList);
+            if (linkOutput == null)
+                continue;
+
+            // Apply text filter (BHV-602)
+            if (
+                !string.IsNullOrEmpty(input.FilterText)
+                && !LemmaMatchesFilter(linkList, input.FilterText)
+            )
+                continue;
+
+            result.Add(linkOutput);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Determines whether a token at the given index is within the requested scope.
+    /// </summary>
+    private static bool IsInScope(
+        ScopeEnum scope,
+        int tokenIndex,
+        int currentVerse,
+        int targetVerse,
+        int sectionStart,
+        int sectionEnd
+    )
+    {
+        return scope switch
+        {
+            ScopeEnum.CurrentVerse => currentVerse == targetVerse,
+            ScopeEnum.CurrentSection => tokenIndex >= sectionStart && tokenIndex <= sectionEnd,
+            ScopeEnum.CurrentChapter => true,
+            _ => false,
+        };
     }
 
     // === PORTED FROM PT9 ===
@@ -92,7 +144,7 @@ internal static class ScopeFilterService
     /// Detects section boundaries from ParagraphStart markers with section styles (s1, s2, etc.).
     /// Returns the boundary containing the given verse reference.
     /// </summary>
-    private static SectionBoundary? DetectSectionBoundary(
+    private static SectionBoundary DetectSectionBoundary(
         MarbleToken[] tokens,
         SIL.Scripture.VerseRef currentRef
     )
@@ -102,14 +154,11 @@ internal static class ScopeFilterService
         for (int i = 0; i < tokens.Length; i++)
         {
             if (tokens[i].Type == MarbleTokenType.ParagraphStart && IsSectionStyle(tokens[i].Style))
-            {
                 sectionMarkerIndices.Add(i);
-            }
         }
 
         // Find which section contains the current verse
-        int currentVerse = currentRef.VerseNum;
-        int currentVerseTokenIndex = FindVerseTokenIndex(tokens, currentVerse);
+        int currentVerseTokenIndex = FindVerseTokenIndex(tokens, currentRef.VerseNum);
 
         if (currentVerseTokenIndex < 0)
         {
@@ -139,84 +188,12 @@ internal static class ScopeFilterService
     }
 
     /// <summary>
-    /// Get the token indices that are in scope for the given input.
-    /// Tracks current verse by scanning Verse tokens.
+    /// Check whether a token has links of the specified type.
     /// </summary>
-    private static List<int> GetInScopeTokenIndices(MarbleToken[] tokens, ScopeFilterInput input)
+    private static bool HasLinksOfType(MarbleToken token, MarbleLinkType linkType)
     {
-        var indices = new List<int>();
-        int currentVerse = 0;
-
-        // For section scope, compute the boundary first
-        int sectionStart = 0;
-        int sectionEnd = tokens.Length - 1;
-        if (input.Scope == ScopeEnum.CurrentSection)
-        {
-            var boundary = DetectSectionBoundary(tokens, input.CurrentRef);
-            if (boundary != null)
-            {
-                sectionStart = boundary.StartIndex;
-                sectionEnd = boundary.EndIndex;
-            }
-        }
-
-        for (int i = 0; i < tokens.Length; i++)
-        {
-            MarbleToken token = tokens[i];
-
-            // Track current verse from Verse tokens
-            if (token.Type == MarbleTokenType.Verse)
-            {
-                if (int.TryParse(token.Text, out int verseNum))
-                {
-                    currentVerse = verseNum;
-                }
-            }
-
-            switch (input.Scope)
-            {
-                case ScopeEnum.CurrentVerse:
-                    if (currentVerse == input.CurrentRef.VerseNum)
-                    {
-                        indices.Add(i);
-                    }
-                    break;
-
-                case ScopeEnum.CurrentSection:
-                    if (i >= sectionStart && i <= sectionEnd)
-                    {
-                        indices.Add(i);
-                    }
-                    break;
-
-                case ScopeEnum.CurrentChapter:
-                    // All tokens in the chapter are in scope
-                    indices.Add(i);
-                    break;
-            }
-        }
-
-        return indices;
-    }
-
-    /// <summary>
-    /// Count all TextLink tokens that have links of the specified type.
-    /// </summary>
-    private static int CountLinksOfType(MarbleToken[] tokens, MarbleLinkType linkType)
-    {
-        int count = 0;
-        foreach (MarbleToken token in tokens)
-        {
-            if (token.Type != MarbleTokenType.TextLink)
-                continue;
-
-            IList<string>? links = GetLinksForType(token, linkType);
-            if (links != null && links.Count > 0)
-            {
-                count++;
-            }
-        }
-        return count;
+        IList<string>? links = GetLinksForType(token, linkType);
+        return links != null && links.Count > 0;
     }
 
     /// <summary>
@@ -228,7 +205,7 @@ internal static class ScopeFilterService
         {
             MarbleLinkType.Lexical => token.LexicalLinks,
             MarbleLinkType.Thematic => token.ThematicLinks,
-            MarbleLinkType.Textual => token.TargetLinks, // Textual links stored in TargetLinks
+            MarbleLinkType.Textual => token.TargetLinks,
             MarbleLinkType.Image => token.ImageLinks,
             MarbleLinkType.Map => token.MapLinks,
             _ => null,
@@ -240,15 +217,14 @@ internal static class ScopeFilterService
     /// Parses the first entry in the link list for lemma/senseId/entryReference.
     /// Format: "SDBH:lemma:senseId" or "SDBG:lemma:senseId"
     /// </summary>
-    private static MarbleLexicalLinkOutput? TokenToLinkOutput(
+    private static MarbleLexicalLinkOutput? BuildLinkOutput(
         MarbleToken token,
         MarbleLinkType linkType,
         IList<string> linkList
     )
     {
-        // Parse the first link entry for metadata
         string firstEntry = linkList[0];
-        ParseLinkEntry(firstEntry, out string lemma, out string senseId, out string entryRef);
+        var (lemma, senseId, entryRef) = ParseLinkEntry(firstEntry);
 
         return new MarbleLexicalLinkOutput(
             Lemma: lemma,
@@ -256,34 +232,21 @@ internal static class ScopeFilterService
             EntryReference: entryRef,
             LinkType: linkType,
             SourceText: token.Text ?? "",
-            Transliteration: "", // Not available from token data
+            Transliteration: "",
             StrongNumber: token.StrongNumber ?? ""
         );
     }
 
     /// <summary>
-    /// Parse a link entry in format "DICT:lemma:senseId" (e.g., "SDBH:רֵאשִׁית:001001000")
+    /// Parse a link entry in format "DICT:lemma:senseId" (e.g., "SDBH:lemma:001001000").
+    /// Returns (lemma, senseId, fullEntry as entryReference).
     /// </summary>
-    private static void ParseLinkEntry(
-        string entry,
-        out string lemma,
-        out string senseId,
-        out string entryRef
-    )
+    private static (string Lemma, string SenseId, string EntryRef) ParseLinkEntry(string entry)
     {
-        entryRef = entry;
-        lemma = "";
-        senseId = "";
-
         string[] parts = entry.Split(':');
-        if (parts.Length >= 2)
-        {
-            lemma = parts[1];
-        }
-        if (parts.Length >= 3)
-        {
-            senseId = parts[2];
-        }
+        string lemma = parts.Length >= 2 ? parts[1] : "";
+        string senseId = parts.Length >= 3 ? parts[2] : "";
+        return (lemma, senseId, entry);
     }
 
     /// <summary>
@@ -296,9 +259,7 @@ internal static class ScopeFilterService
         {
             string[] parts = entry.Split(':');
             if (parts.Length >= 2 && parts[1] == filterText)
-            {
                 return true;
-            }
         }
         return false;
     }
