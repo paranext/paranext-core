@@ -8,7 +8,7 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// EncyclopediaLoadResult with display items for the Encyclopedia Tab.
 /// Source: CAP-009, EXT-057, BHV-604
 /// </summary>
-internal static class EncyclopediaService
+internal static partial class EncyclopediaService
 {
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/EncyclopediaTab.cs
@@ -234,6 +234,22 @@ internal static class EncyclopediaService
     // Behaviors: BHV-606, BHV-607, BHV-608, BHV-457
     // Contract: Section 4.10 M-010 GetArticle (ArticleInput -> ArticleData)
 
+    // Compiled regex patterns for article paragraph parsing (BHV-606, BHV-607, BHV-608, EXT-059)
+    [GeneratedRegex(@"<s>(G\d{3}\d{3}\d{3}\d{5}(?:-(G\d{3}\d{3}\d{3}\d{5}))?)</s>")]
+    private static partial Regex VerseRefPattern();
+
+    [GeneratedRegex(@"<l\s+target=""([^""]+)"">([^<]+)</l>")]
+    private static partial Regex LinkPattern();
+
+    [GeneratedRegex(@"^[\d.]+\s+")]
+    private static partial Regex NumberPrefixPattern();
+
+    [GeneratedRegex(@"<a>([^<]+)</a>")]
+    private static partial Regex AbbrevPattern();
+
+    [GeneratedRegex(@"<image\s+Id=""([^""]+)""\s*/>")]
+    private static partial Regex ImagePattern();
+
     // Known abbreviation data for test scaffolding (BHV-608)
     private static readonly Dictionary<string, string> s_abbreviations =
         new(StringComparer.OrdinalIgnoreCase)
@@ -447,52 +463,12 @@ internal static class EncyclopediaService
             );
         }
 
-        var paragraphs = new List<ArticleParagraph>();
         var allCrossRefs = new List<ArticleCrossRef>();
         var allImageIds = new List<string>(articleContent.ImageIds);
 
-        foreach (string rawParagraph in articleContent.RawParagraphs)
-        {
-            var verseLinks = new List<ArticleVerseLink>();
-            var abbreviations = new List<ArticleAbbreviation>();
-            var inlineImageIds = new List<string>();
-
-            string text = rawParagraph;
-
-            // BHV-607: Parse verse reference patterns <s>G04300301600000</s>
-            // and verse ranges <s>G...-G...</s>
-            text = ParseVerseReferences(text, verseLinks);
-
-            // BHV-606: Parse cross-reference links <l target="...">...</l>
-            text = ParseCrossReferences(text, allCrossRefs);
-
-            // BHV-608: Parse abbreviation markup <a>...</a>
-            text = ParseAbbreviations(text, abbreviations);
-
-            // EXT-059: Parse inline image tags <image Id="..."/>
-            text = ParseInlineImages(text, inlineImageIds, allImageIds);
-
-            // BHV-457: Image references also appear as launchViewer cross-refs
-            foreach (string imageId in inlineImageIds)
-            {
-                allCrossRefs.Add(
-                    new ArticleCrossRef(
-                        TargetArticleId: imageId,
-                        DisplayText: imageId,
-                        Type: "launchViewer"
-                    )
-                );
-            }
-
-            paragraphs.Add(
-                new ArticleParagraph(
-                    Text: text,
-                    VerseLinks: verseLinks,
-                    Abbreviations: abbreviations,
-                    InlineImageIds: inlineImageIds
-                )
-            );
-        }
+        var paragraphs = articleContent
+            .RawParagraphs.Select(raw => ProcessParagraph(raw, allCrossRefs, allImageIds))
+            .ToList();
 
         return new ArticleData(
             ArticleId: input.ArticleId,
@@ -500,6 +476,46 @@ internal static class EncyclopediaService
             Paragraphs: paragraphs,
             CrossReferences: allCrossRefs,
             ImageIds: allImageIds
+        );
+    }
+
+    /// <summary>
+    /// Processes a single raw paragraph: extracts verse links, cross-references,
+    /// abbreviations, inline images, and generates launchViewer cross-refs for images.
+    /// </summary>
+    private static ArticleParagraph ProcessParagraph(
+        string rawParagraph,
+        List<ArticleCrossRef> allCrossRefs,
+        List<string> allImageIds
+    )
+    {
+        var verseLinks = new List<ArticleVerseLink>();
+        var abbreviations = new List<ArticleAbbreviation>();
+        var inlineImageIds = new List<string>();
+
+        string text = rawParagraph;
+        text = ParseVerseReferences(text, verseLinks);
+        text = ParseCrossReferences(text, allCrossRefs);
+        text = ParseAbbreviations(text, abbreviations);
+        text = ParseInlineImages(text, inlineImageIds, allImageIds);
+
+        // BHV-457: Image references also appear as launchViewer cross-refs
+        foreach (string imageId in inlineImageIds)
+        {
+            allCrossRefs.Add(
+                new ArticleCrossRef(
+                    TargetArticleId: imageId,
+                    DisplayText: imageId,
+                    Type: "launchViewer"
+                )
+            );
+        }
+
+        return new ArticleParagraph(
+            Text: text,
+            VerseLinks: verseLinks,
+            Abbreviations: abbreviations,
+            InlineImageIds: inlineImageIds
         );
     }
 
@@ -515,59 +531,56 @@ internal static class EncyclopediaService
     // Returns the text with <s>...</s> tags removed and verse link data extracted.
     private static string ParseVerseReferences(string text, List<ArticleVerseLink> verseLinks)
     {
-        var verseRefPattern = new Regex(
-            @"<s>(G\d{3}\d{3}\d{3}\d{5}(?:-(G\d{3}\d{3}\d{3}\d{5}))?)</s>"
-        );
-
-        return verseRefPattern.Replace(
-            text,
-            match =>
-            {
-                string fullRef = match.Groups[1].Value;
-                string startRef = fullRef.Split('-')[0];
-                string? endRef = match.Groups[2].Success ? match.Groups[2].Value : null;
-
-                int bookNum = int.Parse(startRef.Substring(1, 3));
-                int chapter = int.Parse(startRef.Substring(4, 3));
-                int verse = int.Parse(startRef.Substring(7, 3));
-
-                var verseRef = new VerseRef(bookNum, chapter, verse);
-                string bookName = Canon.BookNumberToEnglishName(bookNum);
-                string displayText;
-
-                if (endRef != null)
+        return VerseRefPattern()
+            .Replace(
+                text,
+                match =>
                 {
-                    int endChapter = int.Parse(endRef.Substring(4, 3));
-                    int endVerse = int.Parse(endRef.Substring(7, 3));
+                    string fullRef = match.Groups[1].Value;
+                    string startRef = fullRef.Split('-')[0];
+                    string? endRef = match.Groups[2].Success ? match.Groups[2].Value : null;
 
-                    if (endChapter == chapter)
+                    int bookNum = int.Parse(startRef.Substring(1, 3));
+                    int chapter = int.Parse(startRef.Substring(4, 3));
+                    int verse = int.Parse(startRef.Substring(7, 3));
+
+                    var verseRef = new VerseRef(bookNum, chapter, verse);
+                    string bookName = Canon.BookNumberToEnglishName(bookNum);
+                    string displayText;
+
+                    if (endRef != null)
                     {
-                        // Same chapter range: "John 3:16-17"
-                        displayText = $"{bookName} {chapter}:{verse}-{endVerse}";
+                        int endChapter = int.Parse(endRef.Substring(4, 3));
+                        int endVerse = int.Parse(endRef.Substring(7, 3));
+
+                        if (endChapter == chapter)
+                        {
+                            // Same chapter range: "John 3:16-17"
+                            displayText = $"{bookName} {chapter}:{verse}-{endVerse}";
+                        }
+                        else
+                        {
+                            // Cross-chapter range: "John 3:16-4:17"
+                            displayText = $"{bookName} {chapter}:{verse}-{endChapter}:{endVerse}";
+                        }
                     }
                     else
                     {
-                        // Cross-chapter range: "John 3:16-4:17"
-                        displayText = $"{bookName} {chapter}:{verse}-{endChapter}:{endVerse}";
+                        // Single verse: "John 3:16"
+                        displayText = $"{bookName} {chapter}:{verse}";
                     }
-                }
-                else
-                {
-                    // Single verse: "John 3:16"
-                    displayText = $"{bookName} {chapter}:{verse}";
-                }
 
-                verseLinks.Add(
-                    new ArticleVerseLink(
-                        Reference: verseRef,
-                        DisplayText: displayText,
-                        RawReference: startRef
-                    )
-                );
+                    verseLinks.Add(
+                        new ArticleVerseLink(
+                            Reference: verseRef,
+                            DisplayText: displayText,
+                            RawReference: startRef
+                        )
+                    );
 
-                return displayText;
-            }
-        );
+                    return displayText;
+                }
+            );
     }
 
     // === PORTED FROM PT9 ===
@@ -576,30 +589,28 @@ internal static class EncyclopediaService
     // Maps to: BHV-606, EXT-058
     private static string ParseCrossReferences(string text, List<ArticleCrossRef> crossReferences)
     {
-        var linkPattern = new Regex(@"<l\s+target=""([^""]+)"">([^<]+)</l>");
+        return LinkPattern()
+            .Replace(
+                text,
+                match =>
+                {
+                    string target = match.Groups[1].Value;
+                    string rawText = match.Groups[2].Value;
 
-        return linkPattern.Replace(
-            text,
-            match =>
-            {
-                string target = match.Groups[1].Value;
-                string rawText = match.Groups[2].Value;
+                    // PT9 strips the number prefix (e.g., "1.1.8.3 ") from the display text
+                    string displayText = NumberPrefixPattern().Replace(rawText, "");
 
-                // PT9 strips the number prefix (e.g., "1.1.8.3 ") from the display text
-                var numberPrefixPattern = new Regex(@"^[\d.]+\s+");
-                string displayText = numberPrefixPattern.Replace(rawText, "");
+                    crossReferences.Add(
+                        new ArticleCrossRef(
+                            TargetArticleId: target,
+                            DisplayText: displayText,
+                            Type: "seealso"
+                        )
+                    );
 
-                crossReferences.Add(
-                    new ArticleCrossRef(
-                        TargetArticleId: target,
-                        DisplayText: displayText,
-                        Type: "seealso"
-                    )
-                );
-
-                return displayText;
-            }
-        );
+                    return displayText;
+                }
+            );
     }
 
     // === PORTED FROM PT9 ===
@@ -608,20 +619,19 @@ internal static class EncyclopediaService
     // Maps to: BHV-608, EXT-058
     private static string ParseAbbreviations(string text, List<ArticleAbbreviation> abbreviations)
     {
-        var abbrevPattern = new Regex(@"<a>([^<]+)</a>");
+        return AbbrevPattern()
+            .Replace(
+                text,
+                match =>
+                {
+                    string abbrev = match.Groups[1].Value;
+                    string fullText = s_abbreviations.TryGetValue(abbrev, out string? ft) ? ft : "";
 
-        return abbrevPattern.Replace(
-            text,
-            match =>
-            {
-                string abbrev = match.Groups[1].Value;
-                string fullText = s_abbreviations.TryGetValue(abbrev, out string? ft) ? ft : "";
+                    abbreviations.Add(new ArticleAbbreviation(Abbrev: abbrev, FullText: fullText));
 
-                abbreviations.Add(new ArticleAbbreviation(Abbrev: abbrev, FullText: fullText));
-
-                return abbrev;
-            }
-        );
+                    return abbrev;
+                }
+            );
     }
 
     // === PORTED FROM PT9 ===
@@ -634,21 +644,20 @@ internal static class EncyclopediaService
         List<string> allImageIds
     )
     {
-        var imagePattern = new Regex(@"<image\s+Id=""([^""]+)""\s*/>");
-
-        return imagePattern.Replace(
-            text,
-            match =>
-            {
-                string imageId = match.Groups[1].Value;
-                inlineImageIds.Add(imageId);
-                if (!allImageIds.Contains(imageId))
+        return ImagePattern()
+            .Replace(
+                text,
+                match =>
                 {
-                    allImageIds.Add(imageId);
+                    string imageId = match.Groups[1].Value;
+                    inlineImageIds.Add(imageId);
+                    if (!allImageIds.Contains(imageId))
+                    {
+                        allImageIds.Add(imageId);
+                    }
+                    return "";
                 }
-                return "";
-            }
-        );
+            );
     }
 
     private record TestArticleContent(
