@@ -16,18 +16,6 @@ internal static class NoteService
     // Methods: GetNoteHtml, GetCallerType - restructured to return NoteData instead of HTML
     // Maps to: EXT-010
 
-    // EXPLANATION:
-    // This method parses USX note XML to extract structured NoteData:
-    // 1. Validates input is not null/empty (INVALID_ARGUMENT error)
-    // 2. Detects plain text vs XML input (plain text has no '<' character)
-    // 3. For plain text: returns NoteData with body=input, caller='-', no refs
-    // 4. For XML: parses the note element to extract:
-    //    - callerType from style attribute ('f'->'footnote', 'fe'->'endnote', 'x'->'cross-reference')
-    //    - callerMarker from caller attribute (default '-', trimmed)
-    //    - body text from all char elements (concatenated inner text)
-    //    - references from ref elements' loc attributes (parsed to VerseRef)
-    // 5. Malformed XML throws INTERNAL error
-
     /// <summary>
     /// Get structured note data from USX note XML.
     /// Extracts caller type from style attribute ('f' -> footnote, 'fe' -> endnote, 'x' -> cross-reference).
@@ -65,7 +53,7 @@ internal static class NoteService
         {
             noteElement = XElement.Parse(input.NoteXml);
         }
-        catch (Exception)
+        catch (System.Xml.XmlException)
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.Internal,
@@ -120,41 +108,24 @@ internal static class NoteService
     // Maps to: BHV-613
     private static string ExtractBodyText(XElement noteElement)
     {
-        var charElements = noteElement.Elements("char");
-        var textParts = new List<string>();
-
-        foreach (var charEl in charElements)
-        {
-            // Get inner text of char element (includes text from nested ref elements)
-            string text = charEl.Value;
-            if (!string.IsNullOrEmpty(text))
-            {
-                textParts.Add(text);
-            }
-        }
-
-        return string.Join("", textParts);
+        return string.Concat(
+            noteElement.Elements("char").Select(c => c.Value).Where(t => !string.IsNullOrEmpty(t))
+        );
     }
 
     // === NEW IN PT10 ===
     // Reason: PT9 generated HTML with anchor tags for refs; PT10 extracts structured VerseRef data
     // Maps to: CAP-015
-    private static IList<VerseRef> ExtractReferences(XElement noteElement)
+    private static List<VerseRef> ExtractReferences(XElement noteElement)
     {
-        var refs = new List<VerseRef>();
-
-        foreach (var refElement in noteElement.Descendants("ref"))
-        {
-            string? loc = refElement.Attribute("loc")?.Value;
-            if (string.IsNullOrEmpty(loc))
-                continue;
-
-            VerseRef? verseRef = ParseLocAttribute(loc);
-            if (verseRef.HasValue)
-                refs.Add(verseRef.Value);
-        }
-
-        return refs;
+        return noteElement
+            .Descendants("ref")
+            .Select(r => r.Attribute("loc")?.Value)
+            .Where(loc => !string.IsNullOrEmpty(loc))
+            .Select(loc => ParseLocAttribute(loc!))
+            .Where(vr => vr.HasValue)
+            .Select(vr => vr!.Value)
+            .ToList();
     }
 
     // === NEW IN PT10 ===
