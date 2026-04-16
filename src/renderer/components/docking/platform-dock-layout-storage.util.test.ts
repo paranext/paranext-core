@@ -1,9 +1,10 @@
 import { vi } from 'vitest';
-import DockLayout from 'rc-dock';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import DockLayout, { LayoutBase } from 'rc-dock';
+import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import {
   FloatLayout,
   Layout,
+  LayoutInfo,
   SavedTabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
@@ -11,7 +12,9 @@ import { WebViewDefinition } from '@shared/models/web-view.model';
 import {
   addTabToDock,
   addWebViewToDock,
+  findFirstWebViewDefinitionByType,
   getAllWebViewDefinitions,
+  loadLayout,
   loadTab,
 } from './platform-dock-layout-storage.util';
 
@@ -105,6 +108,124 @@ describe('Dock Layout Component', () => {
         },
       );
       expect(getAllWebViewDefinitions(instance(localMockDockLayout))).toEqual([docked, floated]);
+    });
+  });
+
+  describe('findFirstWebViewDefinitionByType()', () => {
+    let localMockDockLayout: DockLayout;
+
+    beforeEach(() => {
+      localMockDockLayout = mock(DockLayout);
+    });
+
+    /**
+     * Simulates rc-dock's `find(callback, Filter.AnyTab)` behavior: iterate items, return the first
+     * one for which `callback` returns true, otherwise undefined.
+     */
+    function whenFindReturnsFirstMatch(items: unknown[]) {
+      when(localMockDockLayout.find(anything(), anything())).thenCall(
+        (callback: (item: unknown) => boolean) => items.find((item) => callback(item)),
+      );
+    }
+
+    it('returns undefined when no tabs match the requested webViewType', () => {
+      // Intentionally minimal fixtures — only fields exercised by the filter.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const wvDef = { id: 'wv1', webViewType: 'OtherType' } as unknown as WebViewDefinition;
+      whenFindReturnsFirstMatch([
+        { id: 'wv1', title: 'WebView 1', tabType: 'webView', data: wvDef },
+        { id: 'settings', title: 'Settings', tabType: 'settings', data: { kind: 'general' } },
+      ]);
+
+      expect(
+        findFirstWebViewDefinitionByType(instance(localMockDockLayout), 'TargetType'),
+      ).toBeUndefined();
+    });
+
+    it('returns the WebViewDefinition of the first matching tab', () => {
+      // Intentionally constructing partial test fixture that only includes fields relevant to this test.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const matching = {
+        id: 'wv-match',
+        webViewType: 'TargetType',
+      } as unknown as WebViewDefinition;
+      // Intentionally constructing partial test fixture that only includes fields relevant to this test.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const otherTypeWebView = {
+        id: 'wv-other',
+        webViewType: 'OtherType',
+      } as unknown as WebViewDefinition;
+      whenFindReturnsFirstMatch([
+        { id: 'wv-other', title: 'Other', tabType: 'webView', data: otherTypeWebView },
+        { id: 'wv-match', title: 'Match', tabType: 'webView', data: matching },
+      ]);
+
+      expect(findFirstWebViewDefinitionByType(instance(localMockDockLayout), 'TargetType')).toBe(
+        matching,
+      );
+    });
+
+    it('skips non-webview tabs while searching', () => {
+      // Intentionally constructing partial test fixture that only includes fields relevant to this test.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const matching = {
+        id: 'wv-match',
+        webViewType: 'TargetType',
+      } as unknown as WebViewDefinition;
+      whenFindReturnsFirstMatch([
+        // Settings tab — wrong tabType, must be skipped even though it has data
+        { id: 'settings', title: 'Settings', tabType: 'settings', data: { kind: 'general' } },
+        { id: 'wv-match', title: 'Match', tabType: 'webView', data: matching },
+      ]);
+
+      expect(findFirstWebViewDefinitionByType(instance(localMockDockLayout), 'TargetType')).toBe(
+        matching,
+      );
+    });
+
+    it('returns undefined when find returns undefined', () => {
+      when(localMockDockLayout.find(anything(), anything())).thenReturn(undefined);
+
+      expect(
+        findFirstWebViewDefinitionByType(instance(localMockDockLayout), 'TargetType'),
+      ).toBeUndefined();
+    });
+  });
+
+  describe('loadLayout()', () => {
+    it('forwards the saved layout to the underlying rc-dock loadLayout', () => {
+      const localMock = mock(DockLayout);
+      // LayoutInfo is opaque to consumers; from rc-dock's perspective it is a LayoutBase, which
+      // is what gets persisted in the store. The exact shape is not part of this util's contract.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const layout = {
+        dockbox: { mode: 'horizontal', children: [] },
+      } as unknown as LayoutInfo;
+
+      loadLayout(instance(localMock), layout);
+
+      // The util internally casts `LayoutInfo` -> `LayoutBase` before forwarding to rc-dock.
+      // Cast here as well so the matcher's parameter type matches `DockLayout.loadLayout`.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      verify(localMock.loadLayout(deepEqual(layout as unknown as LayoutBase))).once();
+      const [forwarded] = capture(localMock.loadLayout).last();
+      expect(forwarded).toEqual(layout);
+    });
+
+    it('passes the layout through unchanged (does not mutate the opaque layout)', () => {
+      const localMock = mock(DockLayout);
+      // LayoutInfo is opaque to consumers; constructing a minimal stand-in shape here is sufficient
+      // because this test only verifies referential identity, not the content of the layout.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const layout = {
+        floatbox: { mode: 'float', children: [] },
+        maxbox: { mode: 'maximize', children: [] },
+      } as unknown as LayoutInfo;
+
+      loadLayout(instance(localMock), layout);
+
+      const [forwarded] = capture(localMock.loadLayout).last();
+      expect(forwarded).toBe(layout);
     });
   });
 

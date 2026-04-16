@@ -157,6 +157,11 @@ export interface ThemeCssVariables {
    * tokens.
    */
   radius?: string;
+  /**
+   * Base spacing unit. Controls the size of all Tailwind spacing utilities (padding, margin, gap,
+   * etc.).
+   */
+  spacing?: string;
 }
 
 const themeDefs = {
@@ -294,6 +299,11 @@ const themeDefs = {
       radius: {
         description:
           'Base corner radius scale. Applied to cards, inputs, buttons, popovers, and the derived radius-* tokens.',
+        type: 'string',
+      },
+      spacing: {
+        description:
+          'Base spacing unit. Controls the size of all Tailwind spacing utilities (padding, margin, gap, etc.).',
         type: 'string',
       },
     },

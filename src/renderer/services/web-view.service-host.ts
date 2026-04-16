@@ -19,7 +19,8 @@ import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { LogError } from '@shared/log-error.model';
 import {
   Layout,
-  OnLayoutChangeRCDock,
+  LayoutInfo,
+  OnLayoutChange,
   PapiDockLayout,
   SavedTabInfo,
   TabInfo,
@@ -75,7 +76,6 @@ import {
   THEME_STYLE_ELEMENT_ID,
   Unsubscriber,
 } from 'platform-bible-utils';
-import { LayoutBase } from 'rc-dock';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -83,6 +83,10 @@ import {
   USERSNAP_PROJECT_REPORT_ISSUE_API_KEY,
   USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
 } from './usersnap.service';
+import {
+  buildLegacyColorVarsLogMessage,
+  transformLegacyColorVars,
+} from './web-views/web-view-legacy-color-vars.util';
 
 /**
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
@@ -608,25 +612,20 @@ function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
 }
 
 /**
- * When rc-dock detects a changed layout, save it and do other processing as needed. This function
- * is given to the registered papiDockLayout to run when the dock layout changes.
+ * When the dock layout changes, save it and do other processing as needed. This function is given
+ * to the registered papiDockLayout to run when the dock layout changes.
  *
  * @param newLayout The changed layout to save.
  * @param _currentTabId The tab being changed
- * @param direction The direction the tab is being moved (or deleted or other things - RCDock uses
- *   the word "direction" here loosely)
- * @param webViewDefinition The web view definition if the edit was on a web view; `undefined`
- *   otherwise
+ * @param changeInfo Optional metadata about the change. Currently used only to detect a closed web
+ *   view so the close event can be emitted with its definition.
  */
-// TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
-const onLayoutChange: OnLayoutChangeRCDock = async (
-  newLayout,
-  _currentTabId,
-  direction,
-  webViewDefinition,
-) => {
-  if (direction === 'remove' && webViewDefinition)
-    onDidCloseWebViewEmitter.emit({ webView: convertWebViewDefinitionToSaved(webViewDefinition) });
+// TODO: We could short-circuit saveLayout when no meaningful change happened. - IJH 2023-05-1
+const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeInfo) => {
+  if (changeInfo?.didCloseWebView && changeInfo.webViewDefinition)
+    onDidCloseWebViewEmitter.emit({
+      webView: convertWebViewDefinitionToSaved(changeInfo.webViewDefinition),
+    });
 
   return saveLayout(newLayout);
 };
@@ -637,14 +636,14 @@ const onLayoutChange: OnLayoutChangeRCDock = async (
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
  *   the persisted layout information and loads it into the dock layout.
  */
-async function loadLayout(layout?: LayoutBase): Promise<void> {
+async function loadLayout(layout?: LayoutInfo): Promise<void> {
   const dockLayoutVar = await getDockLayout();
   const layoutToLoad = layout || getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
 
-  dockLayoutVar.dockLayout.loadLayout(layoutToLoad);
+  dockLayoutVar.loadLayout(layoutToLoad);
   if (layout) {
-    // A layout was provided, meaning this is a layout change. Since `dockLayout.loadLayout` doesn't
-    // run `onLayoutChange`, we run it manually
+    // A layout was provided, meaning this is a layout change. Since `loadLayout` doesn't run
+    // `onLayoutChange`, we run it manually.
     await onLayoutChange(layoutToLoad);
   }
 }
@@ -667,7 +666,7 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
  *
  * @param layout Layout to persist
  */
-async function saveLayout(layout: LayoutBase): Promise<void> {
+async function saveLayout(layout: LayoutInfo): Promise<void> {
   const currentLayout = layout;
   localStorage.setItem(DOCK_LAYOUT_KEY, serialize(currentLayout));
 }
@@ -1146,6 +1145,34 @@ globalThis.resetWebViewStateById = resetWebViewStateSync;
 // #region openWebView and reloadWebView
 
 /**
+ * Transforms legacy `hsl(var(--TOKEN))` patterns in WebView content and optional styles, and logs a
+ * debug message if any replacements are made.
+ *
+ * @deprecated 28 April 2026 — backwards compatibility shim for extensions that haven't yet updated
+ *   to the new oklch color variable format introduced with the Tailwind 4 / shadcn upgrade.
+ */
+function applyAndLogLegacyColorVarTransforms(
+  webView: { id: string; webViewType: string },
+  content: string,
+  styles: string | undefined,
+  tokenNames: ReadonlySet<string>,
+): { content: string; styles: string | undefined } {
+  const start = performance.now();
+  const stylesResult = styles ? transformLegacyColorVars(styles, tokenNames) : undefined;
+  const contentResult = transformLegacyColorVars(content, tokenNames);
+  const totalMs = performance.now() - start;
+  const logMessage = buildLegacyColorVarsLogMessage(
+    webView.id,
+    webView.webViewType,
+    stylesResult,
+    contentResult,
+    totalMs,
+  );
+  if (logMessage) logger.debug(logMessage);
+  return { content: contentResult.text, styles: stylesResult?.text };
+}
+
+/**
  * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
  * @param savedWebViewDefinition Saved WebView definition to pass to
@@ -1307,19 +1334,30 @@ async function openOrReloadWebView(
   // Or this could solve the problem as well https://github.com/paranext/paranext-core/issues/282
   const srcNonce = newNonce();
 
+  // Deprecated 28 April 2026 - token names for backwards-compatible hsl(var(--TOKEN)) transform.
+  const legacyTokenNames = new Set(Object.keys(theme.cssVariables));
+
   // Build the contents of the iframe
   let webViewContent: string;
   /** CSP for allowing only certain scripts and styles */
   let specificSrcPolicy: string;
   switch (contentType) {
-    case WEB_VIEW_CONTENT_TYPE.HTML:
+    case WEB_VIEW_CONTENT_TYPE.HTML: {
+      const { content: htmlContent } = applyAndLogLegacyColorVarTransforms(
+        webView,
+        webView.content,
+        undefined,
+        legacyTokenNames,
+      );
+
       // Add wrapping to turn a plain string into an iframe
-      webViewContent = webView.content.includes('<html')
-        ? webView.content
-        : `<html><head></head><body>${webView.content}</body></html>`;
+      webViewContent = htmlContent.includes('<html')
+        ? htmlContent
+        : `<html><head></head><body>${htmlContent}</body></html>`;
       // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
       specificSrcPolicy = "'unsafe-inline'";
       break;
+    }
     case WEB_VIEW_CONTENT_TYPE.URL:
       webViewContent = webView.content;
       // CSP does not apply to these webViews. If we ever add a `csp` attribute to WebView iframes,
@@ -1331,6 +1369,14 @@ async function openOrReloadWebView(
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const reactWebView = webView as WebViewDefinitionReact;
 
+      const { content: legacyTransformedContent, styles: legacyTransformedStyles } =
+        applyAndLogLegacyColorVarTransforms(
+          webView,
+          reactWebView.content,
+          reactWebView.styles,
+          legacyTokenNames,
+        );
+
       // Add the component as a script
       // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
       // reactWebView.contents. Doing so would mess up debugging web views
@@ -1338,10 +1384,10 @@ async function openOrReloadWebView(
         <html>
           <head>
             ${
-              reactWebView.styles
+              legacyTransformedStyles
                 ? `<style nonce="${srcNonce}">
               /* extension styles */
-              ${reactWebView.styles}
+              ${legacyTransformedStyles}
             </style>`
                 : ''
             }
@@ -1349,7 +1395,7 @@ async function openOrReloadWebView(
           <body>
             <div id="root">
             </div>
-            <script nonce="${srcNonce}">${reactWebView.content}
+            <script nonce="${srcNonce}">${legacyTransformedContent}
 
               function initializeReact() {
                 const container = document.getElementById('root');
@@ -1553,22 +1599,13 @@ export const openWebView = async (
 
   // Find existing webView if one exists and handle it if it does
   if (optionsDefaulted.existingId) {
-    // Expect this to be a tab.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const existingWebView = (await getDockLayout()).dockLayout.find(
+    const dockLayout = await getDockLayout();
+    const existingWebView =
       optionsDefaulted.existingId === '?'
         ? // If they provided '?', that means look for any webview with a matching webViewType
-          (item) => {
-            // This is not a webview
-            if (!('data' in item)) return false;
-
-            // Find any webview with the specified webViewType. Type assert the unknown `data`.
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            return (item.data as WebViewDefinition).webViewType === webViewType;
-          }
+          dockLayout.findFirstWebViewDefinitionByType(webViewType)
         : // If they provided any other string, look for a webview with that ID
-          optionsDefaulted.existingId,
-    ) as TabInfo | undefined;
+          dockLayout.getWebViewDefinition(optionsDefaulted.existingId);
 
     // If we found an existing WebView, handle it and return it
     if (existingWebView) {

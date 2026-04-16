@@ -2683,9 +2683,34 @@ declare module 'shared/services/network-object-status.service' {
 }
 declare module 'shared/models/docking-framework.model' {
   import { MutableRefObject, ReactNode } from 'react';
-  import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
   import { WebViewDefinition, WebViewDefinitionUpdateInfo } from 'shared/models/web-view.model';
   import { LocalizeKey } from 'platform-bible-utils';
+  /**
+   * Opaque object representing a saved dock layout. Treat this as a black box: it round-trips through
+   * `localStorage` and back into the dock layout component, but no consumer should inspect its
+   * contents. The renderer's `platform-dock-layout` is the only place that knows the real shape (it
+   * is `LayoutBase` from `rc-dock`).
+   *
+   * Kept opaque here so this shared model does not have to import from `rc-dock`, which keeps
+   * `papi.d.ts` (and therefore every extension's typecheck) free of the rc-dock dependency.
+   *
+   * Eventually, to decouple further from rc-dock, we may implement this as our own layout format and
+   * convert to/from `LayoutBase` at the dock layout boundary.
+   */
+  export type LayoutInfo = Record<string, unknown>;
+  /** Information about a layout change passed from the dock layout to the web view service. */
+  export type LayoutChangeInfo = {
+    /**
+     * Whether the most recent layout change closed a web view. When `true`, `webViewDefinition` is
+     * the definition of the web view that was just closed.
+     */
+    didCloseWebView: boolean;
+    /**
+     * The web view definition associated with the layout change, if the change involved a web view.
+     * `undefined` for non-web-view tabs and for changes that don't target a single tab.
+     */
+    webViewDefinition?: WebViewDefinition;
+  };
   /**
    * Saved information used to recreate a tab.
    *
@@ -2750,10 +2775,19 @@ declare module 'shared/models/docking-framework.model' {
    * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
    */
   export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
+  export const DIRECTION_NEXT_TAB: 'nextTab';
+  export const DIRECTION_PREVIOUS_TAB: 'previousTab';
+  export const DIRECTION_NEXT_TAB_OR_GROUP: 'nextTabOrGroup';
+  export const DIRECTION_PREVIOUS_TAB_OR_GROUP: 'previousTabOrGroup';
+  export const DIRECTION_NEAR_TAB_OR_NEXT_GROUP: 'nearTabOrNextGroup';
+  export const DIRECTION_NEXT_TAB_GROUP: 'nextTabGroup';
+  export const DIRECTION_PREVIOUS_TAB_GROUP: 'previousTabGroup';
   /**
    *
    * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
-   * dock layout.
+   * dock layout. These directions are for navigating to a tab directly before or after the current
+   * tab, which may be within the same tab group or may cross tab groups. For directions that can also
+   * navigate to tabs specifically in other tab groups, see {@link DirectionFromTab}.
    *
    * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
    * "backward"/"previous" means left in LTR and right in RTL
@@ -2763,9 +2797,6 @@ declare module 'shared/models/docking-framework.model' {
    * - `previousTab` - go backward one tab. If there are no more tabs before this tab in this tab's tab
    *   group, go to the forward-most tab in the previous tab group (useful for cycling through all
    *   tabs)
-   * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
-   * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
-   *   is in
    * - `nextTabOrGroup` - go forward one tab. If there are no more tabs after this tab in this tab's tab
    *   group, go to the active tab in the next tab group
    * - `previousTabOrGroup` - go backward one tab. If there are no more tabs before this tab in this
@@ -2774,11 +2805,9 @@ declare module 'shared/models/docking-framework.model' {
    *   If there are no more tabs in this tab's tab group, go to the active tab in the next tab group
    *   (useful for closing a tab)
    */
-  export const DIRECTION_FROM_TAB: readonly [
+  export const DIRECTION_FROM_TAB_ADJACENT: readonly [
     'nextTab',
     'previousTab',
-    'nextTabGroup',
-    'previousTabGroup',
     'nextTabOrGroup',
     'previousTabOrGroup',
     'nearTabOrNextGroup',
@@ -2786,7 +2815,9 @@ declare module 'shared/models/docking-framework.model' {
   /**
    *
    * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
-   * dock layout.
+   * dock layout. These directions are for navigating to a tab directly before or after the current
+   * tab, which may be within the same tab group or may cross tab groups. For directions that can also
+   * navigate to tabs specifically in other tab groups, see {@link DirectionFromTab}.
    *
    * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
    * "backward"/"previous" means left in LTR and right in RTL
@@ -2796,9 +2827,6 @@ declare module 'shared/models/docking-framework.model' {
    * - `previousTab` - go backward one tab. If there are no more tabs before this tab in this tab's tab
    *   group, go to the forward-most tab in the previous tab group (useful for cycling through all
    *   tabs)
-   * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
-   * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
-   *   is in
    * - `nextTabOrGroup` - go forward one tab. If there are no more tabs after this tab in this tab's tab
    *   group, go to the active tab in the next tab group
    * - `previousTabOrGroup` - go backward one tab. If there are no more tabs before this tab in this
@@ -2806,6 +2834,48 @@ declare module 'shared/models/docking-framework.model' {
    * - `nearTabOrNextGroup` - go forward or backward one tab if there is another in the same tab group.
    *   If there are no more tabs in this tab's tab group, go to the active tab in the next tab group
    *   (useful for closing a tab)
+   */
+  export type DirectionFromTabAdjacent = (typeof DIRECTION_FROM_TAB_ADJACENT)[number];
+  /**
+   *
+   * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
+   * dock layout. In addition to navigating sequentially between tabs, these directions can navigate
+   * to tabs specifically in other tab groups. For directions that only navigate to a tab directly
+   * before or after the current tab, see {@link DirectionFromTabAdjacent}.
+   *
+   * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
+   * "backward"/"previous" means left in LTR and right in RTL
+   *
+   * - See {@link DirectionFromTabAdjacent} for directions that look for a tab directly before or after
+   *   the current tab, which may be in the same or a different tab group
+   * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
+   * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
+   *   is in
+   */
+  export const DIRECTION_FROM_TAB: readonly [
+    'nextTab',
+    'previousTab',
+    'nextTabOrGroup',
+    'previousTabOrGroup',
+    'nearTabOrNextGroup',
+    'nextTabGroup',
+    'previousTabGroup',
+  ];
+  /**
+   *
+   * Direction relative to a tab pointing to another tab. Can be used to navigate between tabs in the
+   * dock layout. In addition to navigating sequentially between tabs, these directions can navigate
+   * to tabs specifically in other tab groups. For directions that only navigate to a tab directly
+   * before or after the current tab, see {@link DirectionFromTabAdjacent}.
+   *
+   * Note: In the following descriptions, "forward"/"next" means right in LTR and left in RTL, and
+   * "backward"/"previous" means left in LTR and right in RTL
+   *
+   * - See {@link DirectionFromTabAdjacent} for directions that look for a tab directly before or after
+   *   the current tab, which may be in the same or a different tab group
+   * - `nextTabGroup` - go to the active tab in the tab group forward from the tab group this tab is in
+   * - `previousTabGroup` - go to the active tab in the tab group backward from the tab group this tab
+   *   is in
    */
   export type DirectionFromTab = (typeof DIRECTION_FROM_TAB)[number];
   /**
@@ -2869,32 +2939,42 @@ declare module 'shared/models/docking-framework.model' {
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
   /**
-   * Rc-dock's onLayoutChange prop made asynchronous with `webViewDefinition` added. The dock layout
-   * component calls this on the web view service when the layout changes.
+   * Async callback invoked by the dock layout component when the layout changes. The web view service
+   * implements this to persist the layout and to emit web-view lifecycle events.
    *
    * @param newLayout The changed layout to save.
-   * @param currentTabId The tab being changed
-   * @param direction The direction the tab is being moved (or deleted or other things - RCDock uses
-   *   the word "direction" here loosely)
-   * @param webViewDefinition The web view definition if the edit was on a web view; `undefined`
-   *   otherwise
-   * @returns Promise that resolves when finished doing things
+   * @param currentTabId The tab being changed, if a single tab is identifiable.
+   * @param changeInfo Optional metadata about the change (e.g. whether a web view was closed). Only
+   *   populated when meaningful — for example, calls from `loadLayout` pass only `newLayout`.
+   * @returns Promise that resolves when the service has finished handling the change.
    */
-  export type OnLayoutChangeRCDock = (
-    newLayout: LayoutBase,
+  export type OnLayoutChange = (
+    newLayout: LayoutInfo,
     currentTabId?: string,
-    direction?: DropDirection,
-    webViewDefinition?: WebViewDefinition,
+    changeInfo?: LayoutChangeInfo,
   ) => Promise<void>;
   /** Properties related to the dock layout */
   export type PapiDockLayout = {
-    /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
-    dockLayout: DockLayout;
     /**
      * A ref to a function that runs when the layout changes. We set this ref to our
      * {@link onLayoutChange} function
      */
-    onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
+    onLayoutChangeRef: MutableRefObject<OnLayoutChange | undefined>;
+    /**
+     * Apply a saved layout to the dock. Used by the web view service when restoring layouts from
+     * persistent storage. Does not invoke `onLayoutChangeRef`.
+     *
+     * @param layout Saved layout to apply
+     */
+    loadLayout: (layout: LayoutInfo) => void;
+    /**
+     * Find the ID of the first open web view whose `webViewType` matches the one supplied.
+     *
+     * @param webViewType The web view type to search for
+     * @returns The WebViewDefinition of the matching web view, or `undefined` if no web view of that
+     *   type is open
+     */
+    findFirstWebViewDefinitionByType: (webViewType: string) => WebViewDefinition | undefined;
     /**
      * Add or update a tab in the layout
      *
@@ -3033,7 +3113,7 @@ declare module 'shared/models/docking-framework.model' {
      * `platform-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
      * service is currently all shared code. Refactor should happen in #203
      */
-    testLayout: LayoutBase;
+    testLayout: LayoutInfo;
   };
 }
 declare module 'shared/services/web-view.service-model' {
@@ -8899,7 +8979,10 @@ declare module '@papi/core' {
   export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
   export type { IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
-  export type { DirectionFromTab } from 'shared/models/docking-framework.model';
+  export type {
+    DirectionFromTab,
+    DirectionFromTabAdjacent,
+  } from 'shared/models/docking-framework.model';
   export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
   export type {
     HandleUri,

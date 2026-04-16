@@ -107,7 +107,6 @@ export async function prebuildTailwind(): Promise<void> {
   );
 
   // Process with PostCSS + TW4 (firstContent was already read above for comparison)
-  // TW4: @tailwindcss/postcss replaces both tailwindcss and autoprefixer plugins
   const result = await postcss([tailwindcssPostcss()]).process(firstContent, {
     from: firstFile,
     to: tailwindPrebuiltPath,

@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from './resizable';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '@/components/shadcn-ui/resizable';
 
 const meta: Meta = {
   title: 'Shadcn/Resizable',

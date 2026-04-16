@@ -22,7 +22,34 @@ const moduleMap = new Map<string, any>();
 moduleMap.set('@papi/core', papiCore);
 moduleMap.set('@papi/frontend', papiFrontend);
 moduleMap.set('@papi/frontend/react', papiReact);
-moduleMap.set('react', ReactModule);
+// Deprecated 27 April 2026 - __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED is an internal
+// React 18 API that is not available in React 19. Providing it here gives old extensions an extra
+// chance to run successfully.
+const reactCompat = {
+  ...ReactModule,
+  // Allow accessing old internals that are just stubbed to undefined with a proxy that logs a warning
+  __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: new Proxy(
+    {
+      ReactCurrentOwner: { current: undefined },
+      ReactCurrentBatchConfig: { transition: undefined },
+    },
+    {
+      get(target, prop) {
+        // Can't use logger here because it will create a circular dependency. This console warning
+        // runs after the logger is set up, though, so it will work just fine
+        // eslint-disable-next-line no-console
+        console.warn(
+          // Use String(prop) to explicitly convert symbols to strings, which does not work implicitly
+          `Extension WebView accessed React 18 internal property __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.${String(
+            prop,
+          )}! We are no longer running React 18; please upgrade. You may see errors.`,
+        );
+        return Reflect.get(target, prop);
+      },
+    },
+  ),
+};
+moduleMap.set('react', reactCompat);
 moduleMap.set('react/jsx-runtime', ReactJsxRuntime);
 moduleMap.set('react-dom', ReactDOM);
 moduleMap.set('react-dom/client', ReactDOMClient);
