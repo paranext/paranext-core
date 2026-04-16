@@ -5,10 +5,10 @@
 import { TabsContentProps, TabsListProps, TabsTriggerProps } from '@/components/shadcn-ui/tabs';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
-import * as TabsPrimitive from '@radix-ui/react-tabs';
+import * as RadixTabs from '@radix-ui/react-tabs';
 import React from 'react';
 
-export type VerticalTabsProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root> & {
+export type VerticalTabsProps = React.ComponentPropsWithoutRef<typeof RadixTabs.Root> & {
   className?: string;
 };
 
@@ -24,12 +24,12 @@ export type LeftTabsTriggerProps = TabsTriggerProps & {
  * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
  */
 export const VerticalTabs = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.Root>,
+  React.ElementRef<typeof RadixTabs.Root>,
   VerticalTabsProps
 >(({ className, ...props }, ref) => {
   const dir: Direction = readDirection();
   return (
-    <TabsPrimitive.Root
+    <RadixTabs.Root
       orientation="vertical"
       ref={ref}
       className={cn('tw:flex tw:gap-1 tw:rounded-md tw:text-muted-foreground', className)}
@@ -39,14 +39,14 @@ export const VerticalTabs = React.forwardRef<
   );
 });
 
-VerticalTabs.displayName = TabsPrimitive.List.displayName;
+VerticalTabs.displayName = RadixTabs.List.displayName;
 
 /** @inheritdoc VerticalTabs */
 export const VerticalTabsList = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.List>,
+  React.ElementRef<typeof RadixTabs.List>,
   TabsListProps
 >(({ className, ...props }, ref) => (
-  <TabsPrimitive.List
+  <RadixTabs.List
     ref={ref}
     className={cn(
       'tw:flex-fit tw:mlk-items-center tw:w-[124px] tw:justify-center tw:rounded-md tw:bg-muted tw:p-1 tw:text-muted-foreground',
@@ -55,14 +55,14 @@ export const VerticalTabsList = React.forwardRef<
     {...props}
   />
 ));
-VerticalTabsList.displayName = TabsPrimitive.List.displayName;
+VerticalTabsList.displayName = RadixTabs.List.displayName;
 
 /** @inheritdoc VerticalTabs */
 export const VerticalTabsTrigger = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.Trigger>,
+  React.ElementRef<typeof RadixTabs.Trigger>,
   LeftTabsTriggerProps
 >(({ className, ...props }, ref) => (
-  <TabsPrimitive.Trigger
+  <RadixTabs.Trigger
     ref={ref}
     {...props}
     className={cn(
@@ -74,10 +74,10 @@ export const VerticalTabsTrigger = React.forwardRef<
 
 /** @inheritdoc VerticalTabs */
 export const VerticalTabsContent = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.Content>,
+  React.ElementRef<typeof RadixTabs.Content>,
   TabsContentProps
 >(({ className, ...props }, ref) => (
-  <TabsPrimitive.Content
+  <RadixTabs.Content
     ref={ref}
     className={cn(
       // Removed tw:mt-2 because Sebastian said so
@@ -87,4 +87,4 @@ export const VerticalTabsContent = React.forwardRef<
     {...props}
   />
 ));
-VerticalTabsContent.displayName = TabsPrimitive.Content.displayName;
+VerticalTabsContent.displayName = RadixTabs.Content.displayName;
