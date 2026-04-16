@@ -6,7 +6,11 @@ import { ToggleGroup as ToggleGroupPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
 import { toggleVariants } from '@/components/shadcn-ui/toggle';
+// CUSTOM: Import readDirection for RTL support in ToggleGroup
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
+// CUSTOM: Added @inheritdoc TSDoc pointing to ToggleGroup for documentation inheritance
+/** @inheritdoc ToggleGroup */
 const ToggleGroupContext = React.createContext<
   VariantProps<typeof toggleVariants> & {
     spacing?: number;
@@ -19,6 +23,14 @@ const ToggleGroupContext = React.createContext<
   orientation: 'horizontal',
 });
 
+// CUSTOM: Added TSDoc with links to shadcn/ui and Radix UI documentation for this component
+/**
+ * ToggleGroup components provide a set of two-state buttons that can be toggled on or off. These
+ * components are built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/toggle-group}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/toggle-group}
+ */
 function ToggleGroup({
   className,
   variant,
@@ -32,6 +44,8 @@ function ToggleGroup({
     spacing?: number;
     orientation?: 'horizontal' | 'vertical';
   }) {
+  // CUSTOM: Read text direction so ToggleGroup passes dir to Radix, enabling RTL support
+  const dir: Direction = readDirection();
   return (
     <ToggleGroupPrimitive.Root
       data-slot="toggle-group"
@@ -43,10 +57,13 @@ function ToggleGroup({
       // is the standard React pattern for passing CSS variables via style prop. No cleaner alternative.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       style={{ '--gap': spacing } as React.CSSProperties}
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
       className={cn(
-        'tw:group/toggle-group tw:flex tw:w-fit tw:flex-row tw:items-center tw:gap-[--spacing(var(--gap))] tw:rounded-lg tw:data-[size=sm]:rounded-[min(var(--radius-md),10px)] tw:data-vertical:flex-col tw:data-vertical:items-stretch',
+        'pr-twp tw:group/toggle-group tw:flex tw:w-fit tw:flex-row tw:items-center tw:gap-[--spacing(var(--gap))] tw:rounded-lg tw:data-[size=sm]:rounded-[min(var(--radius-md),10px)] tw:data-vertical:flex-col tw:data-vertical:items-stretch',
         className,
       )}
+      // CUSTOM: Pass dir to Radix UI so it uses correct RTL keyboard navigation direction
+      dir={dir}
       {...props}
     >
       {/* CUSTOM: Memoize context value to avoid creating a new object reference on every render,
@@ -63,6 +80,8 @@ function ToggleGroup({
   );
 }
 
+// CUSTOM: Added @inheritdoc TSDoc pointing to ToggleGroup for documentation inheritance
+/** @inheritdoc ToggleGroup */
 function ToggleGroupItem({
   className,
   children,

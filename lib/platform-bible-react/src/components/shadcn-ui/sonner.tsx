@@ -1,7 +1,8 @@
 // CUSTOM: Added React import - file uses React.CSSProperties which requires the React namespace
 import React from 'react';
 import { useTheme } from 'next-themes';
-import { Toaster as Sonner, type ToasterProps } from 'sonner';
+// CUSTOM: Imported toast function as 'sonner' to re-export it alongside the Toaster component
+import { Toaster as Sonner, toast as sonner, type ToasterProps } from 'sonner';
 import {
   IconCircleCheck,
   IconInfoCircle,
@@ -10,7 +11,24 @@ import {
   IconLoader,
 } from '@tabler/icons-react';
 
-function Toaster({ ...props }: ToasterProps) {
+/**
+ * Props for the Sonner toast component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
+ * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
+ */
+// CUSTOM: Added SonnerProps type alias with TSDoc linking to shadcn/ui and Sonner documentation
+type SonnerProps = ToasterProps;
+
+/**
+ * The Sonner component is an opinionated toast component for React. It is built on Sonner and
+ * styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
+ * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
+ */
+// CUSTOM: Added TSDoc with links to shadcn/ui and Sonner documentation
+function Toaster({ ...props }: SonnerProps) {
   const { theme: rawTheme = 'system' } = useTheme();
   // CUSTOM: Narrow the string returned by useTheme() to the specific union type ToasterProps['theme']
   // requires, avoiding a type assertion. useTheme() returns string | undefined; ToasterProps expects
@@ -51,4 +69,7 @@ function Toaster({ ...props }: ToasterProps) {
   );
 }
 
-export { Toaster };
+// CUSTOM: Exported Toaster as Sonner to maintain the Platform.Bible API name; also re-exported the
+// sonner toast function so consumers have a single import point for both the component and the
+// imperative toast trigger.
+export { Toaster as Sonner, sonner };

@@ -5,11 +5,22 @@ import { Select as SelectPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
 import { IconSelector, IconCheck, IconChevronUp, IconChevronDown } from '@tabler/icons-react';
+// CUSTOM: Added Direction and readDirection imports for RTL support in SelectTrigger and SelectContent
+import { type Direction, readDirection } from '@/utils/dir-helper.util';
 
+/**
+ * Select components display a list of options for the user to pick from—triggered by a button.
+ * These components are built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ */
+// CUSTOM: Added TSDoc with links to shadcn/ui and Radix UI documentation
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
   return <SelectPrimitive.Root data-slot="select" {...props} />;
 }
 
+/** @inheritdoc Select */
 function SelectGroup({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.Group>) {
   return (
     <SelectPrimitive.Group
@@ -20,10 +31,12 @@ function SelectGroup({ className, ...props }: React.ComponentProps<typeof Select
   );
 }
 
+/** @inheritdoc Select */
 function SelectValue({ ...props }: React.ComponentProps<typeof SelectPrimitive.Value>) {
   return <SelectPrimitive.Value data-slot="select-value" {...props} />;
 }
 
+/** @inheritdoc Select */
 function SelectTrigger({
   className,
   size = 'default',
@@ -32,14 +45,22 @@ function SelectTrigger({
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
   size?: 'sm' | 'default';
 }) {
+  // CUSTOM: Added readDirection() call and dir prop for RTL layout support
+  const dir: Direction = readDirection();
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       data-size={size}
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+      // CUSTOM: Removed tw:justify-between; added tw:gap-2, tw:*:data-[slot=select-value]:flex-1,
+      // tw:*:data-[slot=select-value]:text-start to keep the chevron tight against text content
+      // instead of drifting to the far edge on resize
       className={cn(
-        'tw:flex tw:w-fit tw:items-center tw:justify-between tw:gap-1.5 tw:rounded-lg tw:border tw:border-input tw:bg-transparent tw:py-2 tw:pe-2 tw:ps-2.5 tw:text-sm tw:whitespace-nowrap tw:transition-colors tw:outline-none tw:select-none tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:disabled:cursor-not-allowed tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:data-placeholder:text-muted-foreground tw:data-[size=default]:h-8 tw:data-[size=sm]:h-7 tw:data-[size=sm]:rounded-[min(var(--radius-md),10px)] tw:*:data-[slot=select-value]:line-clamp-1 tw:*:data-[slot=select-value]:flex tw:*:data-[slot=select-value]:items-center tw:*:data-[slot=select-value]:gap-1.5 tw:dark:bg-input/30 tw:dark:hover:bg-input/50 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
+        'pr-twp tw:flex tw:w-fit tw:items-center tw:gap-2 tw:rounded-lg tw:border tw:border-input tw:bg-transparent tw:py-2 tw:pe-2 tw:ps-2.5 tw:text-sm tw:whitespace-nowrap tw:transition-colors tw:outline-none tw:select-none tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:disabled:cursor-not-allowed tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:data-placeholder:text-muted-foreground tw:data-[size=default]:h-8 tw:data-[size=sm]:h-7 tw:data-[size=sm]:rounded-[min(var(--radius-md),10px)] tw:*:data-[slot=select-value]:line-clamp-1 tw:*:data-[slot=select-value]:flex tw:*:data-[slot=select-value]:flex-1 tw:*:data-[slot=select-value]:items-center tw:*:data-[slot=select-value]:gap-1.5 tw:*:data-[slot=select-value]:text-start tw:dark:bg-input/30 tw:dark:hover:bg-input/50 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
         className,
       )}
+      // CUSTOM: Added dir prop so Radix UI renders in the correct text direction for RTL layouts
+      dir={dir}
       {...props}
     >
       {children}
@@ -50,6 +71,7 @@ function SelectTrigger({
   );
 }
 
+/** @inheritdoc Select */
 function SelectContent({
   className,
   children,
@@ -57,13 +79,16 @@ function SelectContent({
   align = 'center',
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  // CUSTOM: Added readDirection() call; children wrapped in <div dir={dir}> for RTL text direction
+  const dir: Direction = readDirection();
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         data-slot="select-content"
         data-align-trigger={position === 'item-aligned'}
+        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
         className={cn(
-          'tw: tw: tw:relative tw:z-50 tw:max-h-(--radix-select-content-available-height) tw:min-w-36 tw:origin-(--radix-select-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[align-trigger=true]:animate-none tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 animate-none! bg-popover/70 before:-z-1 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground! relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150',
+          'pr-twp tw: tw: tw:relative tw:z-50 tw:max-h-(--radix-select-content-available-height) tw:min-w-36 tw:origin-(--radix-select-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[align-trigger=true]:animate-none tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 animate-none! bg-popover/70 before:-z-1 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground! relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150',
           position === 'popper' &&
             'tw:data-[side=bottom]:translate-y-1 tw:data-[side=left]:-translate-x-1 rtl:tw:data-[side=left]:translate-x-1 tw:data-[side=right]:translate-x-1 rtl:tw:data-[side=right]:-translate-x-1 tw:data-[side=top]:-translate-y-1',
           className,
@@ -80,7 +105,8 @@ function SelectContent({
             position === 'popper' && 'tw:',
           )}
         >
-          {children}
+          {/* CUSTOM: Wrapped children in <div dir={dir}> so item text renders in correct RTL/LTR direction */}
+          <div dir={dir}>{children}</div>
         </SelectPrimitive.Viewport>
         <SelectScrollDownButton />
       </SelectPrimitive.Content>
@@ -88,16 +114,20 @@ function SelectContent({
   );
 }
 
+/** @inheritdoc Select */
+// CUSTOM: Added TSDoc via @inheritdoc
 function SelectLabel({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.Label>) {
   return (
     <SelectPrimitive.Label
       data-slot="select-label"
-      className={cn('tw:px-1.5 tw:py-1 tw:text-xs tw:text-muted-foreground', className)}
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+      className={cn('pr-twp tw:px-1.5 tw:py-1 tw:text-xs tw:text-muted-foreground', className)}
       {...props}
     />
   );
 }
 
+/** @inheritdoc Select */
 function SelectItem({
   className,
   children,
@@ -106,8 +136,9 @@ function SelectItem({
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
       className={cn(
-        'tw:relative tw:flex tw:w-full tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-8 tw:ps-1.5 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:not-data-[variant=destructive]:focus:**:text-accent-foreground tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4 tw:*:[span]:last:flex tw:*:[span]:last:items-center tw:*:[span]:last:gap-2',
+        'pr-twp tw:relative tw:flex tw:w-full tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-8 tw:ps-1.5 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:not-data-[variant=destructive]:focus:**:text-accent-foreground tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4 tw:*:[span]:last:flex tw:*:[span]:last:items-center tw:*:[span]:last:gap-2',
         className,
       )}
       {...props}
@@ -122,6 +153,7 @@ function SelectItem({
   );
 }
 
+/** @inheritdoc Select */
 function SelectSeparator({
   className,
   ...props
@@ -129,12 +161,17 @@ function SelectSeparator({
   return (
     <SelectPrimitive.Separator
       data-slot="select-separator"
-      className={cn('tw:pointer-events-none tw:-mx-1 tw:my-1 tw:h-px tw:bg-border', className)}
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+      className={cn(
+        'pr-twp tw:pointer-events-none tw:-mx-1 tw:my-1 tw:h-px tw:bg-border',
+        className,
+      )}
       {...props}
     />
   );
 }
 
+/** @inheritdoc Select */
 function SelectScrollUpButton({
   className,
   ...props
@@ -142,8 +179,9 @@ function SelectScrollUpButton({
   return (
     <SelectPrimitive.ScrollUpButton
       data-slot="select-scroll-up-button"
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
       className={cn(
-        'tw:z-10 tw:flex tw:cursor-default tw:items-center tw:justify-center tw:bg-popover tw:py-1 tw:[&_svg:not([class*=size-])]:size-4',
+        'pr-twp tw:z-10 tw:flex tw:cursor-default tw:items-center tw:justify-center tw:bg-popover tw:py-1 tw:[&_svg:not([class*=size-])]:size-4',
         className,
       )}
       {...props}
@@ -153,6 +191,7 @@ function SelectScrollUpButton({
   );
 }
 
+/** @inheritdoc Select */
 function SelectScrollDownButton({
   className,
   ...props
@@ -160,8 +199,9 @@ function SelectScrollDownButton({
   return (
     <SelectPrimitive.ScrollDownButton
       data-slot="select-scroll-down-button"
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
       className={cn(
-        'tw:z-10 tw:flex tw:cursor-default tw:items-center tw:justify-center tw:bg-popover tw:py-1 tw:[&_svg:not([class*=size-])]:size-4',
+        'pr-twp tw:z-10 tw:flex tw:cursor-default tw:items-center tw:justify-center tw:bg-popover tw:py-1 tw:[&_svg:not([class*=size-])]:size-4',
         className,
       )}
       {...props}

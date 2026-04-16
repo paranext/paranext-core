@@ -1,31 +1,70 @@
 import React from 'react';
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
 
+// CUSTOM: Import menu context for variant propagation down the menu tree
+import {
+  MenuContext,
+  MenuContextProps,
+  menuVariants,
+  useMenuContext,
+} from '@/context/menu.context';
+// CUSTOM: Import readDirection for RTL support
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { IconCheck, IconChevronRight } from '@tabler/icons-react';
 
-function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
+/**
+ * Dropdown Menu components providing accessible dropdown menus and submenus. Built on Radix UI
+ * primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
+// CUSTOM: Add variant prop to DropdownMenuProps to support different menu styles via context
+export type DropdownMenuProps = React.ComponentProps<typeof DropdownMenuPrimitive.Root> & {
+  variant?: MenuContextProps['variant'];
+};
+
+// CUSTOM: Wrap DropdownMenuPrimitive.Root in MenuContext.Provider to propagate variant down the tree
+/** @inheritdoc DropdownMenuProps */
+export function DropdownMenu({ variant = 'default', ...props }: DropdownMenuProps) {
+  const contextValue = React.useMemo<MenuContextProps>(
+    () => ({
+      variant,
+    }),
+    [variant],
+  );
+  return (
+    <MenuContext.Provider value={contextValue}>
+      <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+    </MenuContext.Provider>
+  );
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuPortal({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Portal>) {
   return <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />;
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuTrigger({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>) {
   return <DropdownMenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />;
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuContent({
   className,
   align = 'start',
   sideOffset = 4,
+  children,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  // CUSTOM: Use readDirection for RTL support — wraps children in dir div to mirror layout
+  const dir: Direction = readDirection();
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -33,19 +72,28 @@ function DropdownMenuContent({
         sideOffset={sideOffset}
         align={align}
         className={cn(
-          'tw: tw: tw:z-50 tw:max-h-(--radix-dropdown-menu-content-available-height) tw:w-(--radix-dropdown-menu-trigger-width) tw:min-w-32 tw:origin-(--radix-dropdown-menu-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-[state=closed]:overflow-hidden tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 animate-none! bg-popover/70 before:-z-1 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground! relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150',
+          /* CUSTOM: adding pr-twp because the dropdown content is added to the dom as a sibling to the app root */
+          'pr-twp tw: tw: tw:z-50 tw:max-h-(--radix-dropdown-menu-content-available-height) tw:w-(--radix-dropdown-menu-trigger-width) tw:min-w-32 tw:origin-(--radix-dropdown-menu-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-[state=closed]:overflow-hidden tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 animate-none! bg-popover/70 before:-z-1 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground! relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150',
           className,
         )}
         {...props}
-      />
+      >
+        {/* CUSTOM: Wrap children in dir div for RTL support — scrollbar-position limitation noted below */}
+        {/* TODO: bug in shadcn component: DropdownMenuContent does not support a dir prop.
+For the content we can work around this by adding a div with dir, but that would not cause
+the scrollbar to appear left in an rtl layout (e.g. see book-chapter-control.component) */}
+        <div dir={dir}>{children}</div>
+      </DropdownMenuPrimitive.Content>
     </DropdownMenuPrimitive.Portal>
   );
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuGroup({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Group>) {
   return <DropdownMenuPrimitive.Group data-slot="dropdown-menu-group" {...props} />;
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuItem({
   className,
   inset,
@@ -55,6 +103,10 @@ function DropdownMenuItem({
   inset?: boolean;
   variant?: 'default' | 'destructive';
 }) {
+  // CUSTOM: Use readDirection for RTL support
+  const dir: Direction = readDirection();
+  // CUSTOM: Use menu context to apply variant-driven styles
+  const context = useMenuContext();
   return (
     <DropdownMenuPrimitive.Item
       data-slot="dropdown-menu-item"
@@ -63,12 +115,17 @@ function DropdownMenuItem({
       className={cn(
         'tw:group/dropdown-menu-item tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:px-1.5 tw:py-1 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:not-data-[variant=destructive]:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-[variant=destructive]:text-destructive tw:data-[variant=destructive]:focus:bg-destructive/10 tw:data-[variant=destructive]:focus:text-destructive tw:dark:data-[variant=destructive]:focus:bg-destructive/20 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4 tw:data-[variant=destructive]:*:[svg]:text-destructive',
         className,
+        // CUSTOM: Apply variant-driven styles from menu context
+        menuVariants({ variant: context.variant }),
       )}
+      // CUSTOM: Set dir for RTL support
+      dir={dir}
       {...props}
     />
   );
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuCheckboxItem({
   className,
   children,
@@ -78,6 +135,10 @@ function DropdownMenuCheckboxItem({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem> & {
   inset?: boolean;
 }) {
+  // CUSTOM: Use readDirection for RTL support
+  const dir: Direction = readDirection();
+  // CUSTOM: Use menu context to apply variant-driven styles
+  const context = useMenuContext();
   return (
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
@@ -85,8 +146,12 @@ function DropdownMenuCheckboxItem({
       className={cn(
         'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-8 tw:ps-1.5 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
         className,
+        // CUSTOM: Apply variant-driven styles from menu context
+        menuVariants({ variant: context.variant }),
       )}
       checked={checked}
+      // CUSTOM: Set dir for RTL support
+      dir={dir}
       {...props}
     >
       <span
@@ -102,12 +167,14 @@ function DropdownMenuCheckboxItem({
   );
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuRadioGroup({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.RadioGroup>) {
   return <DropdownMenuPrimitive.RadioGroup data-slot="dropdown-menu-radio-group" {...props} />;
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuRadioItem({
   className,
   children,
@@ -116,6 +183,10 @@ function DropdownMenuRadioItem({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem> & {
   inset?: boolean;
 }) {
+  // CUSTOM: Use readDirection for RTL support
+  const dir: Direction = readDirection();
+  // CUSTOM: Use menu context to apply variant-driven styles
+  const context = useMenuContext();
   return (
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
@@ -123,7 +194,11 @@ function DropdownMenuRadioItem({
       className={cn(
         'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:py-1 tw:pe-8 tw:ps-1.5 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-disabled:pointer-events-none tw:data-disabled:opacity-50 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
         className,
+        // CUSTOM: Apply variant-driven styles from menu context
+        menuVariants({ variant: context.variant }),
       )}
+      // CUSTOM: Set dir for RTL support
+      dir={dir}
       {...props}
     >
       <span
@@ -139,6 +214,7 @@ function DropdownMenuRadioItem({
   );
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuLabel({
   className,
   inset,
@@ -159,6 +235,7 @@ function DropdownMenuLabel({
   );
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuSeparator({
   className,
   ...props
@@ -172,6 +249,7 @@ function DropdownMenuSeparator({
   );
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<'span'>) {
   return (
     <span
@@ -185,10 +263,12 @@ function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<'spa
   );
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuSub({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Sub>) {
   return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...props} />;
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuSubTrigger({
   className,
   inset,
@@ -197,6 +277,8 @@ function DropdownMenuSubTrigger({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger> & {
   inset?: boolean;
 }) {
+  // CUSTOM: Use menu context to apply variant-driven styles
+  const context = useMenuContext();
   return (
     <DropdownMenuPrimitive.SubTrigger
       data-slot="dropdown-menu-sub-trigger"
@@ -204,6 +286,8 @@ function DropdownMenuSubTrigger({
       className={cn(
         'tw:flex tw:cursor-default tw:items-center tw:gap-1.5 tw:rounded-md tw:px-1.5 tw:py-1 tw:text-sm tw:outline-hidden tw:select-none tw:focus:bg-accent tw:focus:text-accent-foreground tw:not-data-[variant=destructive]:focus:**:text-accent-foreground tw:data-inset:ps-7 tw:data-open:bg-accent tw:data-open:text-accent-foreground tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
         className,
+        // CUSTOM: Apply variant-driven styles from menu context
+        menuVariants({ variant: context.variant }),
       )}
       {...props}
     >
@@ -213,24 +297,31 @@ function DropdownMenuSubTrigger({
   );
 }
 
+/** @inheritdoc DropdownMenuProps */
 function DropdownMenuSubContent({
   className,
+  children,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+  // CUSTOM: Use readDirection for RTL support — wraps children in dir div to mirror layout
+  const dir: Direction = readDirection();
   return (
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        'tw: tw: tw:z-50 tw:min-w-[96px] tw:origin-(--radix-dropdown-menu-content-transform-origin) tw:overflow-hidden tw:rounded-lg tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-lg tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 animate-none! bg-popover/70 before:-z-1 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground! relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150',
+        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+        'pr-twp tw: tw: tw:z-50 tw:min-w-[96px] tw:origin-(--radix-dropdown-menu-content-transform-origin) tw:overflow-hidden tw:rounded-lg tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-lg tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 animate-none! bg-popover/70 before:-z-1 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground! relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150',
         className,
       )}
       {...props}
-    />
+    >
+      {/* CUSTOM: Wrap children in dir div for RTL support */}
+      <div dir={dir}>{children}</div>
+    </DropdownMenuPrimitive.SubContent>
   );
 }
 
 export {
-  DropdownMenu,
   DropdownMenuPortal,
   DropdownMenuTrigger,
   DropdownMenuContent,
