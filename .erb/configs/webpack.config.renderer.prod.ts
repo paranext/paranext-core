@@ -66,7 +66,13 @@ const configuration: webpack.Configuration = {
         include: /\.module\.s?(c|a)ss$/,
       },
       {
-        test: /\.s?(a|c)ss$/,
+        test: /\.css$/,
+        resourceQuery: { not: [/raw/] },
+        use: [MiniCssExtractPlugin.loader, 'css-loader'],
+        exclude: /\.module\.s?(c|a)ss$/,
+      },
+      {
+        test: /\.s(a|c)ss$/,
         resourceQuery: { not: [/raw/] },
         use: [MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader'],
         exclude: /\.module\.s?(c|a)ss$/,

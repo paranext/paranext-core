@@ -266,9 +266,11 @@ run_architecture_check() {
   fi
 
   # Rule 2: shared cannot import from process-specific directories
+  # Exception: papi-core.service.ts is an intentional type-only re-export aggregator
+  local shared_boundary_allowlist="src/shared/services/papi-core.service.ts"
   if [[ -n "$shared_files" ]]; then
     local shared_violations
-    shared_violations=$(echo "$shared_files" | xargs grep -El "from '@main/|from '@renderer/|from '@extension-host/" 2>/dev/null || true)
+    shared_violations=$(echo "$shared_files" | grep -vF "$shared_boundary_allowlist" | xargs grep -El "from '@main/|from '@renderer/|from '@extension-host/" 2>/dev/null || true)
     [[ -n "$shared_violations" ]] && violations+=("shared→process-specific: $shared_violations")
   fi
 

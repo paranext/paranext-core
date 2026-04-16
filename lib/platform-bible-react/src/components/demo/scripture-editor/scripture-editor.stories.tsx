@@ -463,19 +463,23 @@ export const EditorViewOptions: ViewOptionsStory = {
     // Destructure flattened view options from args
     const { markerMode, noteMode, hasSpacing, isFormattedFont } = args;
 
-    // Reconstruct the args with the options.view settings
-    const mergedArgs = {
-      defaultUsj: usjWeb,
-      options: {
-        hasExternalUI: true,
-        view: {
-          markerMode,
-          noteMode,
-          hasSpacing,
-          isFormattedFont,
+    // Memoize to avoid passing a new options object reference on every render, which would cause
+    // Editorial to re-initialize in a loop via its options useEffect → onStateChange → re-render.
+    const mergedArgs = useMemo(
+      () => ({
+        defaultUsj: usjWeb,
+        options: {
+          hasExternalUI: true,
+          view: {
+            markerMode,
+            noteMode,
+            hasSpacing,
+            isFormattedFont,
+          },
         },
-      },
-    };
+      }),
+      [markerMode, noteMode, hasSpacing, isFormattedFont],
+    );
 
     return renderEditorialWithToolbar(mergedArgs, context, defaultScrRef);
   },

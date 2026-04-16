@@ -57,6 +57,8 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-heading: var(--font-sans);
   --font-sans: 'IBM Plex Sans Variable', sans-serif;
+  /* CUSTOM: allow spacing scale to be overridden by --spacing CSS variable */
+  --spacing: calc(var(--spacing));
 }
 
 /*
@@ -75,6 +77,86 @@
 .light,
 :root {
   --radius: 0.625rem;
+  /* CUSTOM: variable that controls all Tailwind spacing utilities. 0.25rem in tailwind@4.2.2 */
+  --spacing: 0.25rem;
+  --background: oklch(1 0 0); /* white */
+  --foreground: oklch(0.1371 0.036 258.53); /* slate-950 */
+  --card: oklch(1 0 0); /* white */
+  --card-foreground: oklch(0.1371 0.036 258.53); /* slate-950 */
+  --popover: oklch(0.9843 0.0018 248.56); /* popover platform */
+  --popover-foreground: oklch(0.1371 0.036 258.53); /* slate-950 */
+  --primary: oklch(0.2079 0.0399 265.73); /* slate-900 */
+  --primary-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
+  --secondary: oklch(0.9589 0.011 248.06);
+  --secondary-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
+  --muted: oklch(0.9589 0.011 248.06);
+  --muted-foreground: oklch(0.5547 0.0408 257.45); /* slate-500 */
+  --accent: oklch(0.9589 0.011 248.06);
+  --accent-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
+  --destructive: oklch(0.6369 0.2077 25.32);
+  /* CUSTOM: destructive-foreground is not in shadcn/ui anymore */
+  --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
+  /* CUSTOM: success added */
+  --success: oklch(62.7% 0.194 149.214); /* green-600 */
+  --border: oklch(0.929 0.0127 255.58); /* slate-200 */
+  --input: oklch(0.929 0.0127 255.58); /* slate-200 */
+  --ring: oklch(0.1371 0.036 258.53); /* slate-950 */
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.9843 0.0018 248.56); /* popover platform */
+  --sidebar-foreground: oklch(0.1371 0.036 258.53); /* slate-950 */
+  --sidebar-primary: oklch(0.2079 0.0399 265.73); /* slate-900 */
+  --sidebar-primary-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
+  --sidebar-accent: oklch(0.9589 0.011 248.06);
+  --sidebar-accent-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
+  --sidebar-border: oklch(0.929 0.0127 255.58); /* slate-200 */
+  --sidebar-ring: oklch(0.1371 0.036 258.53); /* slate-950 */
+}
+
+/* CUSTOM: dark theme colors changed. Some colors have comments after them explaining their meaning. */
+.dark {
+  --background: oklch(0.1371 0.036 258.53); /* slate-950 */
+  --foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
+  --card: oklch(0.1371 0.036 258.53); /* slate-950 */
+  --card-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
+  --popover: oklch(0.1371 0.036 258.53); /* slate-950 */
+  --popover-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
+  --primary: oklch(0.9838 0.0036 248.23); /* slate-50 */
+  --primary-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
+  --secondary: oklch(0.28 0.037 259.98); /* slate-800 */
+  --secondary-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
+  --muted: oklch(0.28 0.037 259.98); /* slate-800 */
+  --muted-foreground: oklch(0.7107 0.0351 256.8); /* slate-400 */
+  --accent: oklch(0.28 0.037 259.98); /* slate-800 */
+  --accent-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
+  --destructive: oklch(0.396 0.1331 25.71);
+  /* CUSTOM: destructive-foreground is not in shadcn/ui anymore */
+  --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
+  /* CUSTOM: success added */
+  --success: oklch(79.2% 0.209 151.711); /* green-400 */
+  --border: oklch(0.4454 0.0374 257.3); /* slate-600 */
+  --input: oklch(0.4454 0.0374 257.3); /* slate-600 */
+  --ring: oklch(0.8688 0.0199 252.89); /* slate-300 */
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.1371 0.036 258.53); /* slate-950 */
+  --sidebar-foreground: oklch(0.7107 0.0351 256.8); /* slate-400 */
+  --sidebar-primary: oklch(0.9838 0.0036 248.23); /* slate-50 */
+  --sidebar-primary-foreground: oklch(0.2079 0.0399 265.73); /* slate-900 */
+  --sidebar-accent: oklch(0.28 0.037 259.98); /* slate-800 */
+  --sidebar-accent-foreground: oklch(0.7107 0.0351 256.8); /* slate-400 */
+  --sidebar-border: oklch(0.28 0.037 259.98); /* slate-800 */
+  --sidebar-ring: oklch(0.8688 0.0199 252.89); /* slate-300 */
+}
+
+/* CUSTOM: new theme not built into shadcn. Applied shadcn preset b6rt8cvlC colors. */
+.paratext-light {
   --background: oklch(1 0 0); /* white */
   --foreground: oklch(0.153 0.006 107.1); /* slate-950 */
   --card: oklch(1 0 0); /* white */
@@ -90,9 +172,7 @@
   --accent: oklch(0.966 0.005 106.5);
   --accent-foreground: oklch(0.228 0.013 107.4); /* slate-900 */
   --destructive: oklch(0.577 0.245 27.325);
-  /* CUSTOM: destructive-foreground is not in shadcn/ui anymore */
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
-  /* CUSTOM: success added */
   --success: oklch(62.7% 0.194 149.214); /* green-600 */
   --border: oklch(0.93 0.007 106.5); /* slate-200 */
   --input: oklch(0.93 0.007 106.5); /* slate-200 */
@@ -112,8 +192,8 @@
   --sidebar-ring: oklch(0.737 0.021 106.9); /* slate-950 */
 }
 
-/* CUSTOM: dark theme colors changed. Some colors have comments after them explaining their meaning. */
-.dark {
+/* CUSTOM: new theme not built into shadcn. Applied shadcn preset b6rt8cvlC colors. */
+.paratext-dark {
   --background: oklch(0.153 0.006 107.1); /* slate-950 */
   --foreground: oklch(0.988 0.003 106.5); /* slate-50 */
   --card: oklch(0.228 0.013 107.4); /* slate-950 */
@@ -129,9 +209,7 @@
   --accent: oklch(0.286 0.016 107.4); /* slate-800 */
   --accent-foreground: oklch(0.988 0.003 106.5); /* slate-50 */
   --destructive: oklch(0.704 0.191 22.216);
-  /* CUSTOM: destructive-foreground is not in shadcn/ui anymore */
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
-  /* CUSTOM: success added */
   --success: oklch(79.2% 0.209 151.711); /* green-400 */
   --border: oklch(1 0 0 / 10%); /* slate-600 */
   --input: oklch(1 0 0 / 15%); /* slate-600 */
@@ -148,84 +226,6 @@
   --sidebar-accent: oklch(0.286 0.016 107.4); /* slate-800 */
   --sidebar-accent-foreground: oklch(0.988 0.003 106.5); /* slate-400 */
   --sidebar-ring: oklch(0.58 0.031 107.3); /* slate-300 */
-}
-
-/*
- * CUSTOM: new theme not built into shadcn.
- *
- * Palette built in https://tweakcn.com/themes/cmeukcpoj000204l45lxw5a74 based on "Caffeine" theme
- */
-.paratext-light {
-  --background: oklch(0.9821 0 0);
-  --foreground: oklch(0.2435 0 0);
-  --muted: oklch(0.9521 0 0);
-  --muted-foreground: oklch(0.5032 0 0);
-  --popover: oklch(0.9911 0 0);
-  --popover-foreground: oklch(0.2435 0 0);
-  --card: oklch(0.9911 0 0);
-  --card-foreground: oklch(0.2435 0 0);
-  --border: oklch(0.8822 0 0);
-  --input: oklch(0.8822 0 0);
-  --primary: oklch(0.3548 0.0611 180.17);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.92 0.065 74.36);
-  --secondary-foreground: oklch(0.3499 0.0685 40.82);
-  --accent: oklch(0.931 0 0);
-  --accent-foreground: oklch(0.2435 0 0);
-  --destructive: oklch(0.6271 0.1935 33.33);
-  --destructive-foreground: oklch(1 0 0);
-  --success: oklch(62.7% 0.194 149.214); /* green-600 */
-  --ring: oklch(0.4341 0.0392 41.96);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.9881 0 0);
-  --sidebar-foreground: oklch(0.2645 0 0);
-  --sidebar-primary: oklch(0.325 0 0);
-  --sidebar-primary-foreground: oklch(0.9881 0 0);
-  --sidebar-accent: oklch(0.9521 0 0);
-  --sidebar-accent-foreground: oklch(0.325 0 0);
-  --sidebar-border: oklch(0.9401 0 0);
-  --sidebar-ring: oklch(0.7731 0 0);
-}
-
-/* CUSTOM: new theme not built into shadcn */
-.paratext-dark {
-  --background: oklch(0.1776 0 0);
-  --foreground: oklch(0.9491 0 0);
-  --muted: oklch(0.252 0 0);
-  --muted-foreground: oklch(0.7699 0 0);
-  --popover: oklch(0.2134 0 0);
-  --popover-foreground: oklch(0.9491 0 0);
-  --card: oklch(0.2134 0 0);
-  --card-foreground: oklch(0.9491 0 0);
-  --border: oklch(0.2351 0.0115 91.77);
-  --input: oklch(0.4017 0 0);
-  --primary: oklch(0.986 0.0113 84.59);
-  --primary-foreground: oklch(0.2029 0.024 200.24);
-  --secondary: oklch(0.3163 0.019 63.68);
-  --secondary-foreground: oklch(0.9247 0.0523 66.15);
-  --accent: oklch(0.285 0 0);
-  --accent-foreground: oklch(0.9491 0 0);
-  --destructive: oklch(0.6271 0.1935 33.33);
-  --destructive-foreground: oklch(1 0 0);
-  --success: oklch(79.2% 0.209 151.711); /* green-400 */
-  --ring: oklch(0.9247 0.0523 66.15);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.2103 0.0059 285.82);
-  --sidebar-foreground: oklch(0.9674 0.0014 285.04);
-  --sidebar-primary: oklch(0.4882 0.2172 264.38);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.2739 0.0055 285.94);
-  --sidebar-accent-foreground: oklch(0.9674 0.0014 285.04);
-  --sidebar-border: oklch(0.2739 0.0055 285.94);
-  --sidebar-ring: oklch(0.8711 0.0055 285.98);
 }
 
 /* CUSTOM: shared region closer. */

@@ -12,14 +12,14 @@
     "typeRoots": ["./node_modules/@types", "../../node_modules/@types", "./src/types"],
     // Need vite-env here for css imports during dts-bundle-generator runs because it replaces
     // `include` (which normally includes ./src/types/vite-env.d.ts) with its single `filePath`
-    "types": ["node", "jest", "vite-env"],
+    "types": ["node", "jest", "vite-env", "react-19-compat"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "forceConsistentCasingInFileNames": true,
     "incremental": false,
     "isolatedModules": true,
     "noEmit": true,
     "noImplicitReturns": true,
-    "skipLibCheck": true,
+    "skipLibCheck": false,
     "useDefineForClassFields": true,
     "outDir": "",
     "paths": {

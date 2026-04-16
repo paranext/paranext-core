@@ -492,13 +492,19 @@ async function main() {
               }
 
               // Convert oklch color to hex format for Electron compatibility
-              const symbolColorHex = chroma(newTheme.cssVariables.primary).hex();
+              try {
+                const symbolColorHex = chroma(newTheme.cssVariables.primary).hex();
 
-              mainWindow?.setTitleBarOverlay({
-                color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
-                symbolColor: symbolColorHex,
-                height: TITLE_BAR_BUTTON_HEIGHT,
-              });
+                mainWindow?.setTitleBarOverlay({
+                  color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
+                  symbolColor: symbolColorHex,
+                  height: TITLE_BAR_BUTTON_HEIGHT,
+                });
+              } catch (e) {
+                logger.warn(
+                  `Failed to set title bar window button colors: Could not convert primary color '${newTheme.cssVariables.primary}' to hex: ${getErrorMessage(e)}`,
+                );
+              }
             }),
           );
         } catch (e) {
@@ -940,8 +946,7 @@ async function main() {
     },
   );
 
-  const liveDocsUrl =
-    'https://playground.open-rpc.org/?transport=websocket&schemaUrl=ws%3A%2F%2Flocalhost%3A8876%0A&uiSchema[appBar][ui:splitView]=false&uiSchema[appBar][ui:input]=false&uiSchema[appBar][ui:examplesDropdown]=false&uiSchema[appBar][ui:transports]=false&uiSchema[appBar][ui:darkMode]=true&uiSchema[appBar][ui:title]=PAPI';
+  const liveDocsUrl = `https://playground.open-rpc.org/?transport=websocket&schemaUrl=${encodeURIComponent('ws://localhost:8876\n')}&uiSchema[appBar][ui:splitView]=false&uiSchema[appBar][ui:input]=false&uiSchema[appBar][ui:examplesDropdown]=false&uiSchema[appBar][ui:transports]=false&uiSchema[appBar][ui:darkMode]=true&uiSchema[appBar][ui:title]=PAPI`;
   commandService.registerCommand(
     'platform.openDeveloperDocumentationUrl',
     async () => {

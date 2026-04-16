@@ -66,6 +66,13 @@ module.exports = {
   },
   overrides: [
     {
+      // Service files are not WebView source files even if they live in a web-views subfolder
+      files: ['src/renderer/services/**'],
+      rules: {
+        'paranext/webview-file-naming': 'off',
+      },
+    },
+    {
       // Extension entry points - strict registration and cleanup
       files: ['extensions/src/**/main.ts', 'src/extension-host/**/*.ts'],
       rules: {
