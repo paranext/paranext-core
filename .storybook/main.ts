@@ -73,6 +73,12 @@ const config: StorybookConfig = {
     // by the shared renderer webpack config, so we just need to point it at the right config.
     // See docs/tailwind.md for the overall Tailwind architecture.
     const storybookPostcssConfigPath = join(__dirname, 'postcss.config.ts');
+    // Matches both shapes the renderer webpack config could produce for postcss-loader:
+    // - bare string form: `'postcss-loader'`
+    // - object form: `{ loader: 'postcss-loader', ... }`
+    const isPostcssLoader = (u: unknown) =>
+      u === 'postcss-loader' ||
+      (!!u && typeof u === 'object' && 'loader' in u && u.loader === 'postcss-loader');
     if (rendererConfigSanitized.module?.rules) {
       const rendererRules: RuleSetRule[] = rendererConfigSanitized.module.rules;
       rendererConfigSanitized.module.rules = rendererRules.map((rule) => {
@@ -80,13 +86,24 @@ const config: StorybookConfig = {
         return {
           ...rule,
           use: rule.use.map((u) => {
-            if (u === 'postcss-loader') {
-              return {
-                loader: 'postcss-loader',
-                options: { postcssOptions: { config: storybookPostcssConfigPath } },
-              };
-            }
-            return u;
+            if (!isPostcssLoader(u)) return u;
+            // Preserve any existing options the renderer config may have set, then override
+            // the postcss config path.
+            const existingOptions =
+              !!u &&
+              typeof u === 'object' &&
+              'options' in u &&
+              typeof u.options === 'object' &&
+              u.options !== null
+                ? u.options
+                : {};
+            return {
+              loader: 'postcss-loader',
+              options: {
+                ...existingOptions,
+                postcssOptions: { config: storybookPostcssConfigPath },
+              },
+            };
           }),
         };
       });
