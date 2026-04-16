@@ -1,7 +1,6 @@
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
 import { cn } from '@/utils/shadcn-ui.util';
-import React, { RefObject, useCallback, useEffect, useMemo, useState } from 'react';
-import { LegacyCommentThread } from 'platform-bible-utils';
+import React, { RefObject, useCallback, useEffect, useState } from 'react';
 import { CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 
@@ -40,38 +39,7 @@ export default function CommentList({
     }
   }, [externalSelectedThreadId]);
 
-  // Filter out spelling notes and biblical terms notes, which are meant to be handled by their
-  // respective tools (Wordlist and Biblical Terms), not the Comments List.
-  // Filter before deduplication so that note-type flags from filtered threads cannot bleed into
-  // the merged metadata of a surviving thread.
-  // Merge duplicate thread IDs — the source data may contain duplicates (inherited data quality
-  // issue). When duplicates exist, combine all their comments into the entry with the latest
-  // modifiedDate so no comments are lost.
-  const activeThreads = useMemo(() => {
-    const threadMap = new Map<string, LegacyCommentThread>();
-    threads
-      .filter((thread) => !thread.isSpellingNote && !thread.isBTNote)
-      .forEach((thread) => {
-        const existing = threadMap.get(thread.id);
-        if (!existing) {
-          threadMap.set(thread.id, thread);
-        } else {
-          const seenCommentIds = new Set(existing.comments.map((c) => c.id));
-          const mergedComments = [
-            ...existing.comments,
-            ...thread.comments.filter((c) => !seenCommentIds.has(c.id)),
-          ];
-          const latest =
-            new Date(thread.modifiedDate) > new Date(existing.modifiedDate) ? thread : existing;
-          threadMap.set(thread.id, { ...latest, comments: mergedComments });
-        }
-      });
-    return [...threadMap.values()].filter((thread) =>
-      thread.comments.some((comment) => !comment.deleted),
-    );
-  }, [threads]);
-
-  const options: ListboxOption[] = activeThreads.map((thread) => ({
+  const options: ListboxOption[] = threads.map((thread) => ({
     id: thread.id,
   }));
 
@@ -146,7 +114,7 @@ export default function CommentList({
       )}
       onKeyDown={handleKeyDownWithEscape}
     >
-      {activeThreads.map((thread) => (
+      {threads.map((thread) => (
         <div
           key={thread.id}
           className={cn({
