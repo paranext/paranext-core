@@ -7,22 +7,37 @@ import { cn } from '@/utils/shadcn-ui/utils';
 import { Button } from '@/components/shadcn-ui/button';
 import { IconX } from '@tabler/icons-react';
 
+/**
+ * Sheet components display a panel that slides in from the edge of the screen. These components are
+ * built on Radix UI Dialog primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sheet}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
+ */
+// CUSTOM: Added TSDoc with links to shadcn/ui and Radix UI documentation
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
 }
 
+/** @inheritdoc Sheet */
+// CUSTOM: Added TSDoc via @inheritdoc
 function SheetTrigger({ ...props }: React.ComponentProps<typeof SheetPrimitive.Trigger>) {
   return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />;
 }
 
+/** @inheritdoc Sheet */
+// CUSTOM: Added TSDoc via @inheritdoc
 function SheetClose({ ...props }: React.ComponentProps<typeof SheetPrimitive.Close>) {
   return <SheetPrimitive.Close data-slot="sheet-close" {...props} />;
 }
 
+/** @inheritdoc Sheet */
+// CUSTOM: Added TSDoc via @inheritdoc
 function SheetPortal({ ...props }: React.ComponentProps<typeof SheetPrimitive.Portal>) {
   return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />;
 }
 
+/** @inheritdoc Sheet */
 function SheetOverlay({
   className,
   ...props
@@ -30,8 +45,9 @@ function SheetOverlay({
   return (
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
       className={cn(
-        'tw:fixed tw:inset-0 tw:z-50 tw:bg-black/10 tw:duration-100 tw:supports-backdrop-filter:backdrop-blur-xs tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-closed:animate-out tw:data-closed:fade-out-0',
+        'pr-twp tw:fixed tw:inset-0 tw:z-50 tw:bg-black/10 tw:duration-100 tw:supports-backdrop-filter:backdrop-blur-xs tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-closed:animate-out tw:data-closed:fade-out-0',
         className,
       )}
       {...props}
@@ -39,6 +55,7 @@ function SheetOverlay({
   );
 }
 
+/** @inheritdoc Sheet */
 function SheetContent({
   className,
   children,
@@ -55,8 +72,9 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         data-side={side}
+        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
         className={cn(
-          'tw:fixed tw:z-50 tw:flex tw:flex-col tw:gap-4 tw:bg-popover tw:bg-clip-padding tw:text-sm tw:text-popover-foreground tw:shadow-lg tw:transition tw:duration-200 tw:ease-in-out tw:data-[side=bottom]:inset-x-0 tw:data-[side=bottom]:bottom-0 tw:data-[side=bottom]:h-auto tw:data-[side=bottom]:border-t tw:data-[side=left]:inset-y-0 tw:data-[side=left]:left-0 tw:data-[side=left]:h-full tw:data-[side=left]:w-3/4 tw:data-[side=left]:border-e tw:data-[side=right]:inset-y-0 tw:data-[side=right]:right-0 tw:data-[side=right]:h-full tw:data-[side=right]:w-3/4 tw:data-[side=right]:border-s tw:data-[side=top]:inset-x-0 tw:data-[side=top]:top-0 tw:data-[side=top]:h-auto tw:data-[side=top]:border-b tw:data-[side=left]:sm:max-w-sm tw:data-[side=right]:sm:max-w-sm tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-[side=bottom]:data-open:slide-in-from-bottom-10 tw:data-[side=left]:data-open:slide-in-from-left-10 tw:data-[side=right]:data-open:slide-in-from-right-10 tw:data-[side=top]:data-open:slide-in-from-top-10 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-[side=bottom]:data-closed:slide-out-to-bottom-10 tw:data-[side=left]:data-closed:slide-out-to-left-10 tw:data-[side=right]:data-closed:slide-out-to-right-10 tw:data-[side=top]:data-closed:slide-out-to-top-10',
+          'pr-twp tw:fixed tw:z-50 tw:flex tw:flex-col tw:gap-4 tw:bg-popover tw:bg-clip-padding tw:text-sm tw:text-popover-foreground tw:shadow-lg tw:transition tw:duration-200 tw:ease-in-out tw:data-[side=bottom]:inset-x-0 tw:data-[side=bottom]:bottom-0 tw:data-[side=bottom]:h-auto tw:data-[side=bottom]:border-t tw:data-[side=left]:inset-y-0 tw:data-[side=left]:left-0 tw:data-[side=left]:h-full tw:data-[side=left]:w-3/4 tw:data-[side=left]:border-e tw:data-[side=right]:inset-y-0 tw:data-[side=right]:right-0 tw:data-[side=right]:h-full tw:data-[side=right]:w-3/4 tw:data-[side=right]:border-s tw:data-[side=top]:inset-x-0 tw:data-[side=top]:top-0 tw:data-[side=top]:h-auto tw:data-[side=top]:border-b tw:data-[side=left]:sm:max-w-sm tw:data-[side=right]:sm:max-w-sm tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-[side=bottom]:data-open:slide-in-from-bottom-10 tw:data-[side=left]:data-open:slide-in-from-left-10 tw:data-[side=right]:data-open:slide-in-from-right-10 tw:data-[side=top]:data-open:slide-in-from-top-10 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-[side=bottom]:data-closed:slide-out-to-bottom-10 tw:data-[side=left]:data-closed:slide-out-to-left-10 tw:data-[side=right]:data-closed:slide-out-to-right-10 tw:data-[side=top]:data-closed:slide-out-to-top-10',
           className,
         )}
         {...props}
@@ -75,36 +93,46 @@ function SheetContent({
   );
 }
 
+/** @inheritdoc Sheet */
 function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-header"
-      className={cn('tw:flex tw:flex-col tw:gap-0.5 tw:p-4', className)}
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+      className={cn('pr-twp tw:flex tw:flex-col tw:gap-0.5 tw:p-4', className)}
       {...props}
     />
   );
 }
 
+/** @inheritdoc Sheet */
 function SheetFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-footer"
-      className={cn('tw:mt-auto tw:flex tw:flex-col tw:gap-2 tw:p-4', className)}
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+      className={cn('pr-twp tw:mt-auto tw:flex tw:flex-col tw:gap-2 tw:p-4', className)}
       {...props}
     />
   );
 }
 
+/** @inheritdoc Sheet */
 function SheetTitle({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Title>) {
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn('tw:font-heading tw:text-base tw:font-medium tw:text-foreground', className)}
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+      className={cn(
+        'pr-twp tw:font-heading tw:text-base tw:font-medium tw:text-foreground',
+        className,
+      )}
       {...props}
     />
   );
 }
 
+/** @inheritdoc Sheet */
 function SheetDescription({
   className,
   ...props
@@ -112,7 +140,8 @@ function SheetDescription({
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn('tw:text-sm tw:text-muted-foreground', className)}
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+      className={cn('pr-twp tw:text-sm tw:text-muted-foreground', className)}
       {...props}
     />
   );

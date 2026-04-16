@@ -6,6 +6,13 @@ import { Slot } from 'radix-ui';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Separator } from '@/components/shadcn-ui/separator';
 
+/**
+ * Style variants for the ButtonGroup component — controls horizontal vs. vertical orientation
+ * styling.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+// CUSTOM: Added TSDoc comment for documentation purposes.
 const buttonGroupVariants = cva(
   'tw:group/button-group tw:flex tw:w-fit tw:items-stretch tw:*:focus-visible:relative tw:*:focus-visible:z-10 tw:has-[>[data-slot=button-group]]:gap-2 tw:has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-e-lg tw:[&>[data-slot=select-trigger]:not([class*=w-])]:w-fit tw:[&>input]:flex-1',
   {
@@ -23,6 +30,14 @@ const buttonGroupVariants = cva(
   },
 );
 
+/**
+ * ButtonGroup groups multiple buttons together with merged borders and consistent sizing, making
+ * them appear as a single cohesive unit. Use `orientation` to switch between horizontal (default)
+ * and vertical layouts. Built and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+// CUSTOM: Added TSDoc comment for documentation purposes.
 function ButtonGroup({
   className,
   orientation,
@@ -33,12 +48,24 @@ function ButtonGroup({
       role="group"
       data-slot="button-group"
       data-orientation={orientation}
-      className={cn(buttonGroupVariants({ orientation }), className)}
+      className={cn(
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp',
+        buttonGroupVariants({ orientation }),
+        className,
+      )}
       {...props}
     />
   );
 }
 
+/**
+ * ButtonGroupText renders a non-interactive text/label element styled to fit inside a ButtonGroup,
+ * styled to match the height and border of adjacent buttons.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+// CUSTOM: Added TSDoc comment for documentation purposes.
 function ButtonGroupText({
   className,
   asChild = false,
@@ -51,7 +78,8 @@ function ButtonGroupText({
   return (
     <Comp
       className={cn(
-        'tw:flex tw:items-center tw:gap-2 tw:rounded-lg tw:border tw:bg-muted tw:px-2.5 tw:text-sm tw:font-medium tw:[&_svg]:pointer-events-none tw:[&_svg:not([class*=size-])]:size-4',
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:flex tw:items-center tw:gap-2 tw:rounded-lg tw:border tw:bg-muted tw:px-2.5 tw:text-sm tw:font-medium tw:[&_svg]:pointer-events-none tw:[&_svg:not([class*=size-])]:size-4',
         className,
       )}
       {...props}
@@ -59,6 +87,12 @@ function ButtonGroupText({
   );
 }
 
+/**
+ * ButtonGroupSeparator renders a visual separator between items in a ButtonGroup.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/separator}
+ */
+// CUSTOM: Added TSDoc comment for documentation purposes.
 function ButtonGroupSeparator({
   className,
   orientation = 'vertical',
@@ -69,7 +103,8 @@ function ButtonGroupSeparator({
       data-slot="button-group-separator"
       orientation={orientation}
       className={cn(
-        'tw:relative tw:self-stretch tw:bg-input tw:data-horizontal:mx-px tw:data-horizontal:w-auto tw:data-vertical:my-px tw:data-vertical:h-auto',
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:relative tw:self-stretch tw:bg-input tw:data-horizontal:mx-px tw:data-horizontal:w-auto tw:data-vertical:my-px tw:data-vertical:h-auto',
         className,
       )}
       {...props}

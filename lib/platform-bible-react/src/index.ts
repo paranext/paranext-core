@@ -221,7 +221,7 @@ export * from './components/shadcn-ui/button-group';
 export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
-export { Kbd, type KbdProps } from './components/shadcn-ui/kbd';
+export { Kbd } from './components/shadcn-ui/kbd';
 export { Label } from './components/shadcn-ui/label';
 export * from './components/shadcn-ui/popover';
 export { Progress } from './components/shadcn-ui/progress';
