@@ -198,7 +198,7 @@ function CommentListStory({
 const meta: Meta<typeof CommentList> = {
   title: 'Advanced/CommentList',
   component: CommentList,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
   decorators: [
     (Story) => (
       <ThemeProvider>

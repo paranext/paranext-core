@@ -53,8 +53,8 @@ export interface CommentListProps {
   /** Class name to apply to the display of the verse text for the first comment in the thread */
   classNameForVerseText?: string;
   /**
-   * Comment threads to render. The component renders exactly what is passed — it does not filter or
-   * deduplicate threads. Callers are responsible for pre-filtering (e.g. excluding
+   * Comment threads to render. The component filters out threads where all comments are deleted, but
+   * does not deduplicate threads. Callers are responsible for pre-filtering (e.g. excluding
    * {@link LegacyCommentThread.isSpellingNote} and {@link LegacyCommentThread.isBTNote} threads,
    * which belong in Wordlist and Biblical Terms respectively) and for deduplicating threads with
    * repeated IDs before passing them in.

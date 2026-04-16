@@ -29,6 +29,7 @@ import {
 import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
+import { prepareCommentThreads } from './comment-list.utils';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -230,37 +231,9 @@ global.webViewComponent = function CommentListWebView({
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
 
-  // Filter out spelling notes and biblical terms notes, which are meant to be handled by their
-  // respective tools (Wordlist and Biblical Terms), not the Comments List.
-  // Filter before deduplication so that note-type flags from filtered threads cannot bleed into
-  // the merged metadata of a surviving thread.
-  // Merge duplicate thread IDs — the source data may contain duplicates (inherited data quality
-  // issue). When duplicates exist, combine all their comments into the entry with the latest
-  // modifiedDate so no comments are lost.
-  // Finally, drop threads where all comments have been deleted.
   const preparedThreads = useMemo<LegacyCommentThread[]>(() => {
     if (!commentThreads || isPlatformError(commentThreads)) return [];
-    const threadMap = new Map<string, LegacyCommentThread>();
-    commentThreads
-      .filter((thread) => !thread.isSpellingNote && !thread.isBTNote)
-      .forEach((thread) => {
-        const existing = threadMap.get(thread.id);
-        if (!existing) {
-          threadMap.set(thread.id, thread);
-        } else {
-          const seenCommentIds = new Set<string>(existing.comments.map((c: LegacyComment) => c.id));
-          const mergedComments = [
-            ...existing.comments,
-            ...thread.comments.filter((c: LegacyComment) => !seenCommentIds.has(c.id)),
-          ];
-          const latest =
-            new Date(thread.modifiedDate) > new Date(existing.modifiedDate) ? thread : existing;
-          threadMap.set(thread.id, { ...latest, comments: mergedComments });
-        }
-      });
-    return [...threadMap.values()].filter((thread) =>
-      thread.comments.some((comment: LegacyComment) => !comment.deleted),
-    );
+    return prepareCommentThreads(commentThreads);
   }, [commentThreads]);
 
   // Process any pending thread selection once data finishes loading

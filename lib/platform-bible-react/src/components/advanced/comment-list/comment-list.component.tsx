@@ -39,9 +39,11 @@ export default function CommentList({
     }
   }, [externalSelectedThreadId]);
 
-  const options: ListboxOption[] = threads
-    .filter((thread) => thread.comments.some((comment) => !comment.deleted))
-    .map((thread) => ({ id: thread.id }));
+  const activeThreads = threads.filter((thread) =>
+    thread.comments.some((comment) => !comment.deleted),
+  );
+
+  const options: ListboxOption[] = activeThreads.map((thread) => ({ id: thread.id }));
 
   const handleKeyboardSelectThread = useCallback(
     (option: ListboxOption) => {
@@ -114,7 +116,7 @@ export default function CommentList({
       )}
       onKeyDown={handleKeyDownWithEscape}
     >
-      {threads.map((thread) => (
+      {activeThreads.map((thread) => (
         <div
           key={thread.id}
           className={cn({
