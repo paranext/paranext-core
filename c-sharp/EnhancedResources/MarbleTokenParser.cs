@@ -14,26 +14,8 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// Source: EXT-016, BHV-600, BHV-603
 /// CAP-002: ParseMarbleTokens
 /// </summary>
-public static class MarbleTokenParser
+internal static class MarbleTokenParser
 {
-    // EXPLANATION:
-    // This parser walks Marble XML (EmdrosDump format) and produces a flat
-    // array of MarbleToken with 11 token types. The algorithm:
-    // 1. Validate input (null/empty -> INVALID_ARGUMENT, malformed -> INTERNAL)
-    // 2. Parse XML with PreserveWhitespace to maintain BHV-603
-    // 3. Find the <usx_book> element (BHV-600: skip everything before it)
-    // 4. Emit a Book token from usx_book's code attribute
-    // 5. Recursively walk child nodes of usx_book:
-    //    - <chapter> -> Chapter token (self-closing)
-    //    - <verse> -> Verse token (self-closing)
-    //    - <para> -> ParagraphStart, recurse children, ParagraphEnd
-    //    - <char> -> CharacterStart, recurse children, CharacterEnd
-    //    - <wg> -> TextLink with 7 annotation attributes (semicolon-split)
-    //    - <note> -> Note with inner XML as text
-    //    - <ref> -> Reference with inner text
-    //    - text nodes -> PlainText (whitespace preserved)
-    // 6. Each token gets a sequential Index starting from 0.
-
     /// <summary>
     /// Parse Marble-enhanced XML into structured tokens. 11 token types.
     /// </summary>
