@@ -148,7 +148,7 @@ internal static class EncyclopediaService
         )
         {
             return new EncyclopediaLoadResult(
-                Items: new List<EncyclopediaDisplayItem>(),
+                Items: [],
                 EmptyStateMessage: "No encyclopedia data available for the current scope."
             );
         }
@@ -157,44 +157,12 @@ internal static class EncyclopediaService
         bool isV2 = input.ResourceId.Contains("v2", StringComparison.OrdinalIgnoreCase);
         string xmlData = isV2 ? s_v2Xml : s_v1Xml;
 
-        // Parse entries from the XML
-        var entries = MarbleEncyclopediaEntry.ParseAll(xmlData);
-
-        // Build display items from entries (skip key=0 contents entry)
-        var items = new List<EncyclopediaDisplayItem>();
-
-        foreach (var entry in entries)
-        {
-            if (entry.Key == "0")
-                continue; // Skip contents/introduction entry
-
-            int formatVersion = entry.BibleImageIds.Count > 0 ? 2 : 1;
-
-            // Build teaser text from first paragraph
-            string teaserText =
-                entry.Paragraphs.Count > 0 ? TruncateTeaser(entry.Paragraphs[0]) : "";
-
-            var entryRef = new EncyclopediaEntryRef(
-                Key: entry.Key,
-                Title: entry.Title,
-                TeaserText: teaserText,
-                FormatVersion: formatVersion,
-                InlineImageIds: entry.BibleImageIds.Count > 0 ? entry.BibleImageIds : null
-            );
-
-            items.Add(
-                new EncyclopediaDisplayItem(
-                    TokenId: $"enc-{entry.Key}",
-                    Lemma: "gamal",
-                    SourceText: "gamal",
-                    Translit: "gamal",
-                    Glosses: new List<string> { "camel" },
-                    Entries: new List<EncyclopediaEntryRef> { entryRef },
-                    ImageIds: entry.BibleImageIds.ToList(),
-                    Collection: "FAUNA"
-                )
-            );
-        }
+        // Parse entries and build display items (skip key=0 contents entry)
+        var items = MarbleEncyclopediaEntry
+            .ParseAll(xmlData)
+            .Where(e => e.Key != "0")
+            .Select(BuildDisplayItem)
+            .ToList();
 
         // Apply word filter (BHV-352)
         if (input.Filter != null)
@@ -206,14 +174,34 @@ internal static class EncyclopediaService
                 .ToList();
         }
 
-        // BHV-352: Set empty state message when no items
-        string? emptyStateMessage = null;
-        if (items.Count == 0)
-        {
-            emptyStateMessage = GetEmptyStateMessage(input);
-        }
+        string? emptyStateMessage = items.Count == 0 ? GetEmptyStateMessage(input) : null;
 
         return new EncyclopediaLoadResult(Items: items, EmptyStateMessage: emptyStateMessage);
+    }
+
+    private static EncyclopediaDisplayItem BuildDisplayItem(MarbleEncyclopediaEntry entry)
+    {
+        int formatVersion = entry.BibleImageIds.Count > 0 ? 2 : 1;
+        string teaserText = entry.Paragraphs.Count > 0 ? TruncateTeaser(entry.Paragraphs[0]) : "";
+
+        var entryRef = new EncyclopediaEntryRef(
+            Key: entry.Key,
+            Title: entry.Title,
+            TeaserText: teaserText,
+            FormatVersion: formatVersion,
+            InlineImageIds: entry.BibleImageIds.Count > 0 ? entry.BibleImageIds : null
+        );
+
+        return new EncyclopediaDisplayItem(
+            TokenId: $"enc-{entry.Key}",
+            Lemma: "gamal",
+            SourceText: "gamal",
+            Translit: "gamal",
+            Glosses: ["camel"],
+            Entries: [entryRef],
+            ImageIds: entry.BibleImageIds.ToList(),
+            Collection: "FAUNA"
+        );
     }
 
     // BHV-352: Generate empty state message based on input context

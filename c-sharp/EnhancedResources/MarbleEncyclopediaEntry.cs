@@ -27,90 +27,18 @@ public class MarbleEncyclopediaEntry
     public IList<string> BibleImageIds { get; }
 
     public MarbleEncyclopediaEntry(string xmlData)
-    {
-        var element = XElement.Parse(xmlData);
+        : this(XElement.Parse(xmlData)) { }
 
+    internal MarbleEncyclopediaEntry(XElement element)
+    {
         Key = element.Attribute("Key")?.Value ?? "";
         Title = element.Element("Title")?.Value ?? "";
 
-        // Extract paragraphs from all Section elements
-        var paragraphs = new List<string>();
-        var sectionsElement = element.Element("Sections");
-        if (sectionsElement != null)
-        {
-            foreach (var section in sectionsElement.Elements("Section"))
-            {
-                var paragraphsElement = section.Element("Paragraphs");
-                if (paragraphsElement != null)
-                {
-                    foreach (var p in paragraphsElement.Elements("Paragraph"))
-                    {
-                        // For V2, paragraph content may contain child elements like <image/>
-                        // Use the inner XML representation to preserve them
-                        string content = GetParagraphContent(p);
-                        if (!string.IsNullOrEmpty(content))
-                        {
-                            paragraphs.Add(content);
-                        }
-                    }
-                }
-            }
-        }
+        var sections = element.Element("Sections")?.Elements("Section");
 
-        Paragraphs = paragraphs;
-
-        // Extract cross-references from LanguageSet/References elements
-        var crossRefs = new List<string>();
-        if (sectionsElement != null)
-        {
-            foreach (var section in sectionsElement.Elements("Section"))
-            {
-                var languageSets = section.Element("LanguageSets");
-                if (languageSets != null)
-                {
-                    foreach (var langSet in languageSets.Elements("LanguageSet"))
-                    {
-                        var refs = langSet.Element("References");
-                        if (refs != null)
-                        {
-                            foreach (var r in refs.Elements("Reference"))
-                            {
-                                var refValue = r.Value;
-                                if (!string.IsNullOrEmpty(refValue))
-                                {
-                                    crossRefs.Add(refValue);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        CrossReferences = crossRefs;
-
-        // Extract BibleImageIds from BibleImages sections (V2 only)
-        var imageIds = new List<string>();
-        if (sectionsElement != null)
-        {
-            foreach (var section in sectionsElement.Elements("Section"))
-            {
-                var bibleImages = section.Element("BibleImages");
-                if (bibleImages != null)
-                {
-                    foreach (var img in bibleImages.Elements("BibleImage"))
-                    {
-                        var id = img.Attribute("Id")?.Value;
-                        if (!string.IsNullOrEmpty(id))
-                        {
-                            imageIds.Add(id);
-                        }
-                    }
-                }
-            }
-        }
-
-        BibleImageIds = imageIds;
+        Paragraphs = ExtractParagraphs(sections);
+        CrossReferences = ExtractCrossReferences(sections);
+        BibleImageIds = ExtractBibleImageIds(sections);
     }
 
     // === PORTED FROM PT9 ===
@@ -123,18 +51,60 @@ public class MarbleEncyclopediaEntry
     public static IList<MarbleEncyclopediaEntry> ParseAll(string thematicLexiconXml)
     {
         var doc = XDocument.Parse(thematicLexiconXml);
-        var entries = new List<MarbleEncyclopediaEntry>();
+        if (doc.Root == null)
+            return [];
 
-        var root = doc.Root;
-        if (root != null)
-        {
-            foreach (var entryElement in root.Elements("ThemLex_Entry"))
-            {
-                entries.Add(new MarbleEncyclopediaEntry(entryElement.ToString()));
-            }
-        }
+        return doc
+            .Root.Elements("ThemLex_Entry")
+            .Select(e => new MarbleEncyclopediaEntry(e))
+            .ToList();
+    }
 
-        return entries;
+    /// <summary>
+    /// Extracts paragraph text from all Section elements. Handles both V1 plain text
+    /// and V2 mixed content with child elements like &lt;image/&gt;.
+    /// </summary>
+    private static IList<string> ExtractParagraphs(IEnumerable<XElement>? sections)
+    {
+        if (sections == null)
+            return [];
+
+        return sections
+            .SelectMany(s => s.Element("Paragraphs")?.Elements("Paragraph") ?? [])
+            .Select(GetParagraphContent)
+            .Where(c => !string.IsNullOrEmpty(c))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Extracts cross-reference strings from LanguageSet/References elements.
+    /// </summary>
+    private static IList<string> ExtractCrossReferences(IEnumerable<XElement>? sections)
+    {
+        if (sections == null)
+            return [];
+
+        return sections
+            .SelectMany(s => s.Element("LanguageSets")?.Elements("LanguageSet") ?? [])
+            .SelectMany(ls => ls.Element("References")?.Elements("Reference") ?? [])
+            .Select(r => r.Value)
+            .Where(v => !string.IsNullOrEmpty(v))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Extracts BibleImage IDs from BibleImages sections (V2 format only).
+    /// </summary>
+    private static IList<string> ExtractBibleImageIds(IEnumerable<XElement>? sections)
+    {
+        if (sections == null)
+            return [];
+
+        return sections
+            .SelectMany(s => s.Element("BibleImages")?.Elements("BibleImage") ?? [])
+            .Select(img => img.Attribute("Id")?.Value)
+            .Where(id => !string.IsNullOrEmpty(id))
+            .ToList()!;
     }
 
     /// <summary>
@@ -143,27 +113,18 @@ public class MarbleEncyclopediaEntry
     /// </summary>
     private static string GetParagraphContent(XElement paragraph)
     {
-        // If the paragraph has child elements (V2 format with <image/> etc.),
-        // concatenate all text nodes and child element string representations
-        if (paragraph.HasElements)
-        {
-            // Use the inner content: nodes concatenated
-            var parts = new List<string>();
-            foreach (var node in paragraph.Nodes())
-            {
-                if (node is XText textNode)
-                {
-                    parts.Add(textNode.Value);
-                }
-                else if (node is XElement elem)
-                {
-                    parts.Add(elem.ToString());
-                }
-            }
+        if (!paragraph.HasElements)
+            return paragraph.Value;
 
-            return string.Concat(parts);
-        }
-
-        return paragraph.Value;
+        // V2 format: concatenate text nodes and child element representations
+        return string.Concat(paragraph.Nodes().Select(NodeToString));
     }
+
+    private static string NodeToString(XNode node) =>
+        node switch
+        {
+            XText textNode => textNode.Value,
+            XElement elem => elem.ToString(),
+            _ => "",
+        };
 }
