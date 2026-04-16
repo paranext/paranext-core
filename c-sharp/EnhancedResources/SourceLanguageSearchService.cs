@@ -81,20 +81,12 @@ internal static class SourceLanguageSearchService
         var strippedText = StripTrailingNotation(input.SearchText);
 
         // Step 4: Match lemma against lexicon (EXT-071)
-        // BHV-T013: Escape regex special characters to avoid catastrophic backtracking
-        var escapedSearchText = Regex.Escape(strippedText);
-        var matchedEntries = FindMatchingEntries(escapedSearchText, strippedText);
+        // BHV-T013: Dictionary lookup (not regex) inherently avoids catastrophic backtracking
+        var matchedEntries = FindMatchingEntries(strippedText);
 
         if (matchedEntries.Count == 0)
         {
-            return Task.FromResult(
-                new SourceLanguageSearchResult(
-                    Results: new List<LemmaSearchResult>(),
-                    TotalOccurrences: 0,
-                    ExceedsLimit: false,
-                    ErrorMessage: "No matching lemma"
-                )
-            );
+            return Task.FromResult(NoMatchingLemmaResult());
         }
 
         // Step 5: Find occurrences across book range (EXT-072, EXT-073)
@@ -122,14 +114,7 @@ internal static class SourceLanguageSearchService
         // If book range filtering removed all results
         if (results.Count == 0)
         {
-            return Task.FromResult(
-                new SourceLanguageSearchResult(
-                    Results: new List<LemmaSearchResult>(),
-                    TotalOccurrences: 0,
-                    ExceedsLimit: false,
-                    ErrorMessage: "No matching lemma"
-                )
-            );
+            return Task.FromResult(NoMatchingLemmaResult());
         }
 
         // Step 7: Calculate totals and check limit (EXT-076, VAL-009)
@@ -155,10 +140,8 @@ internal static class SourceLanguageSearchService
     /// "logos:2" -> "logos", "agape:1" -> "agape", "logos:10" -> "logos"
     /// Non-numeric suffixes are not stripped: "a:b:c" stays as "a:b:c".
     /// </summary>
-    private static string StripTrailingNotation(string searchText)
-    {
-        return s_trailingNotation.Replace(searchText, string.Empty);
-    }
+    private static string StripTrailingNotation(string searchText) =>
+        s_trailingNotation.Replace(searchText, string.Empty);
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/EditMenu/FindReplaceForm.cs
@@ -166,25 +149,13 @@ internal static class SourceLanguageSearchService
     // Maps to: EXT-071
     /// <summary>
     /// Finds matching lexicon entries for the given search text.
-    /// Uses case-insensitive matching against lemma names.
-    /// The escapedText parameter is used for regex safety (BHV-T013) but
-    /// matching is done against the stripped (unescaped) text.
+    /// Uses case-insensitive dictionary lookup against lemma names.
+    /// BHV-T013: Dictionary lookup inherently avoids regex-related issues.
     /// </summary>
-    private static List<LexiconEntry> FindMatchingEntries(
-        string escapedSearchText,
-        string strippedText
-    )
+    private static List<LexiconEntry> FindMatchingEntries(string searchText)
     {
-        // Match against the original stripped text (case-insensitive)
-        var results = new List<LexiconEntry>();
-        foreach (var kvp in s_lexicon)
-        {
-            if (kvp.Key.Equals(strippedText, StringComparison.OrdinalIgnoreCase))
-            {
-                results.AddRange(kvp.Value);
-            }
-        }
-        return results;
+        // s_lexicon uses OrdinalIgnoreCase comparer, so TryGetValue is case-insensitive
+        return s_lexicon.TryGetValue(searchText, out var entries) ? entries : [];
     }
 
     // === PORTED FROM PT9 ===
@@ -197,15 +168,24 @@ internal static class SourceLanguageSearchService
     private static IList<VerseRef> FilterByBookRange(
         IList<VerseRef> occurrences,
         BookRange? bookRange
-    )
-    {
-        if (bookRange == null)
-            return occurrences;
+    ) =>
+        bookRange == null
+            ? occurrences
+            : occurrences
+                .Where(vr => vr.BookNum >= bookRange.Start && vr.BookNum <= bookRange.End)
+                .ToList();
 
-        return occurrences
-            .Where(vr => vr.BookNum >= bookRange.Start && vr.BookNum <= bookRange.End)
-            .ToList();
-    }
+    /// <summary>
+    /// Creates a standard "no matching lemma" result with empty results, zero occurrences,
+    /// and ExceedsLimit = false.
+    /// </summary>
+    private static SourceLanguageSearchResult NoMatchingLemmaResult() =>
+        new(
+            Results: new List<LemmaSearchResult>(),
+            TotalOccurrences: 0,
+            ExceedsLimit: false,
+            ErrorMessage: "No matching lemma"
+        );
 
     /// <summary>
     /// Sets marble data availability for testing.
