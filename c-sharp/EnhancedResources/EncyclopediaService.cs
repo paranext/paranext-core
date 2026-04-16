@@ -224,4 +224,23 @@ internal static class EncyclopediaService
 
         return text[..maxLength] + "...";
     }
+
+    // === CAP-010: GetArticle ===
+    // Source: EXT-058 (Encyclopedia Article HTML), EXT-082 (ArticleViewer Navigation),
+    //         EXT-059 (Image ID Extraction)
+    // Behaviors: BHV-606, BHV-607, BHV-608, BHV-457
+    // Contract: Section 4.10 M-010 GetArticle (ArticleInput -> ArticleData)
+    /// <summary>
+    /// Returns structured article data for a single encyclopedia article with
+    /// cross-references (seealso), verse links (goto), abbreviation data, and image references.
+    /// [Revised: Theme 2] Returns ArticleData, not HTML.
+    /// </summary>
+    public static ArticleData GetArticle(ArticleInput input)
+    {
+        throw new NotImplementedException(
+            "CAP-010: GetArticle not yet implemented. "
+                + "Returns structured ArticleData with paragraphs, cross-references, "
+                + "verse links, abbreviation data, and image IDs."
+        );
+    }
 }
