@@ -923,7 +923,9 @@ global.webViewComponent = function FindWebView({
             await papi.commands.sendCommand(
               'paratextBibleSendReceive.commitChanges',
               projectId,
-              `${localizedStrings['%versionHistoryCommit_beforeReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+              formatReplacementString(localizedStrings['%versionHistoryCommit_beforeReplace%'], {
+                replaceTerms: `<vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+              }),
               true,
             );
         } catch (err: unknown) {
@@ -939,7 +941,9 @@ global.webViewComponent = function FindWebView({
             await papi.commands.sendCommand(
               'paratextBibleSendReceive.commitChanges',
               projectId,
-              `${localizedStrings['%versionHistoryCommit_afterReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+              formatReplacementString(localizedStrings['%versionHistoryCommit_afterReplace%'], {
+                replaceTerms: `<vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+              }),
               false,
             );
         } catch (err: unknown) {
@@ -1066,7 +1070,9 @@ global.webViewComponent = function FindWebView({
           await papi.commands.sendCommand(
             'paratextBibleSendReceive.commitChanges',
             projectId,
-            `${localizedStrings['%versionHistoryCommit_beforeReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+            formatReplacementString(localizedStrings['%versionHistoryCommit_beforeReplace%'], {
+              replaceTerms: `<vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+            }),
             true,
           );
       } catch (err: unknown) {
@@ -1113,7 +1119,9 @@ global.webViewComponent = function FindWebView({
           await papi.commands.sendCommand(
             'paratextBibleSendReceive.commitChanges',
             projectId,
-            `${localizedStrings['%versionHistoryCommit_afterReplace%']}: <vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+            formatReplacementString(localizedStrings['%versionHistoryCommit_afterReplace%'], {
+              replaceTerms: `<vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+            }),
             false,
           );
       } catch (err: unknown) {
