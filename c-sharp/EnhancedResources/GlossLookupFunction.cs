@@ -9,6 +9,10 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal static class GlossLookupFunction
 {
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:1-1998
+    // Method: MarbleDataAccess.FindLocalizedGlossesForTerm (gloss lookup delegation)
+    // Maps to: EXT-051, CAP-006
     /// <summary>
     /// Execute the gloss lookup: maps GlossLookupInput through the service
     /// and wraps the result in GlossLookupResult with metadata.
@@ -18,10 +22,28 @@ internal static class GlossLookupFunction
         GlossLookupInput input
     )
     {
-        throw new NotImplementedException(
-            "CAP-006: GlossLookupFunction.Execute not yet implemented. "
-                + "Implementer must map GlossLookupInput through "
-                + "MarbleDataAccessService.FindLocalizedGlossesForTerm and return GlossLookupResult."
+        if (!dataAccess.HaveMarbleData)
+        {
+            return new GlossLookupResult(
+                Glosses: [],
+                ActualLanguage: string.Empty,
+                AvailableLanguages: [],
+                HaveMarbleData: false
+            );
+        }
+
+        IList<string> glosses = dataAccess.FindLocalizedGlossesForTerm(
+            input.TermId,
+            input.PreferredLanguage
+        );
+
+        string actualLanguage = dataAccess.ResolveLanguage(input.TermId, input.PreferredLanguage);
+
+        return new GlossLookupResult(
+            Glosses: glosses,
+            ActualLanguage: actualLanguage,
+            AvailableLanguages: dataAccess.AvailableGlossLanguages,
+            HaveMarbleData: true
         );
     }
 }

@@ -160,6 +160,41 @@ internal class MarbleDataAccessService
         // Real implementation will use ParatextData APIs to discover installed packages.
     }
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:1-1998
+    // Method: MarbleDataAccess.FindLocalizedGlossesForTerm (language resolution logic)
+    // Maps to: EXT-051, CAP-006
+    /// <summary>
+    /// Resolves the actual language used in gloss lookup by following the fallback chain:
+    /// requested language -> mapped variant (e.g. zh-Hant -> zh-Hans) -> English -> empty.
+    /// Returns the language code that would yield glosses, or empty string if none found.
+    /// </summary>
+    internal string ResolveLanguage(string termLemma, string language)
+    {
+        if (!_haveMarbleData)
+            return string.Empty;
+
+        if (HasGlosses(termLemma, language))
+            return language;
+
+        if (
+            _languageMapping.TryGetValue(language, out var mappedLanguage)
+            && HasGlosses(termLemma, mappedLanguage)
+        )
+            return mappedLanguage;
+
+        if (language != "en" && HasGlosses(termLemma, "en"))
+            return "en";
+
+        return string.Empty;
+    }
+
+    private bool HasGlosses(string termLemma, string language)
+    {
+        return _glossData.TryGetValue(language, out var langData)
+            && langData.ContainsKey(termLemma);
+    }
+
     private bool TryGetGlosses(string termLemma, string language, out IList<string> glosses)
     {
         if (
