@@ -7,7 +7,8 @@
  *   equivalents)
  * - Restores the original structure regardless of success or failure
  * - Reverts shadcn's changes to utils.ts (we keep our version)
- * - Replaces `import * as React from "react"` with `import React from 'react'` in changed files
+ * - In changed .ts/.tsx files: replaces `import * as React from "react"` with `import React from
+ *   'react'`, and replaces `rtl:tw:` with `tw:rtl:`
  *
  * Run via: tsx scripts/apply-shadcn-preset.ts <preset-name>
  */
@@ -25,7 +26,7 @@ const UTILS_TS = join(LIB_DIR, 'src', 'utils', 'shadcn-ui', 'utils.ts');
 // ---- CSS transformation helpers ----
 
 /** Changes single quotes to double quotes on `@import` lines */
-function fixImportQuotes(css: string): string {
+export function fixImportQuotes(css: string): string {
   return css
     .split('\n')
     .map((line) => (line.trimStart().startsWith('@import') ? line.replace(/'/g, '"') : line))
@@ -33,7 +34,7 @@ function fixImportQuotes(css: string): string {
 }
 
 /** Restores double quotes to single quotes on `@import` lines */
-function restoreImportQuotes(css: string): string {
+export function restoreImportQuotes(css: string): string {
   return css
     .split('\n')
     .map((line) => (line.trimStart().startsWith('@import') ? line.replace(/"/g, "'") : line))
@@ -41,7 +42,7 @@ function restoreImportQuotes(css: string): string {
 }
 
 /** Removes the `.light,` line that appears immediately above `:root {` */
-function removeLightSelector(css: string): string {
+export function removeLightSelector(css: string): string {
   const lines = css.split('\n');
   const result: string[] = [];
   for (let i = 0; i < lines.length; i++) {
@@ -57,19 +58,124 @@ function removeLightSelector(css: string): string {
   return result.join('\n');
 }
 
-/** Puts `.light,` back immediately above the first `:root {` */
-function addLightSelector(css: string): string {
+/**
+ * Puts `.light,` back immediately above the first `:root {` (opening brace on the same line).
+ *
+ * Skips `:root,` lines (where `:root` is followed by a comma, not a brace) to avoid prepending
+ * `.light,` to multi-selector rules like `:root, html { ... }`.
+ */
+export function addLightSelector(css: string): string {
   let added = false;
   return css
     .split('\n')
     .flatMap((line) => {
-      if (!added && /^\s*:root\b/.test(line)) {
+      if (!added && /^\s*:root\s*\{/.test(line)) {
         added = true;
         return ['.light,', line];
       }
       return [line];
     })
     .join('\n');
+}
+
+// ---- CSS variable rewriting helpers ----
+
+/**
+ * Blanks out all `@theme { ... }` blocks in a CSS string (replaces their characters with spaces to
+ * preserve string length and offsets). This prevents Tailwind theme variable declarations — like
+ * `--radius-md` inside `@theme inline { }` — from being treated as protected raw CSS vars.
+ */
+export function removeAtThemeBlocks(css: string): string {
+  const regions: Array<[number, number]> = [];
+  let i = 0;
+
+  while (i < css.length) {
+    const atIdx = css.indexOf('@theme', i);
+    if (atIdx === -1) break;
+
+    const openBrace = css.indexOf('{', atIdx);
+    if (openBrace === -1) break;
+
+    let depth = 0;
+    let end = -1;
+    for (let j = openBrace; j < css.length; j++) {
+      if (css[j] === '{') depth += 1;
+      else if (css[j] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          end = j;
+          break;
+        }
+      }
+    }
+    if (end === -1) break;
+
+    regions.push([atIdx, end + 1]);
+    i = end + 1;
+  }
+
+  // Replace from end to start so earlier indices remain valid
+  let result = css;
+  for (let r = regions.length - 1; r >= 0; r--) {
+    const [start, end] = regions[r];
+    result = result.slice(0, start) + ' '.repeat(end - start) + result.slice(end);
+  }
+
+  return result;
+}
+
+/**
+ * Returns the set of CSS custom property names declared in raw CSS selector blocks of index.css
+ * (e.g. `:root`, `.dark`, `.paratext-light`), excluding `@theme` blocks.
+ *
+ * These variables exist at runtime without any Tailwind prefix, so `var(--foo)` is correct for them
+ * and must not be rewritten to `var(--tw-foo)`.
+ */
+export function parseProtectedVarsFromIndexCss(css: string): Set<string> {
+  const vars = new Set<string>();
+  const withoutTheme = removeAtThemeBlocks(css);
+  const varPattern = /--([\w-]+)\s*:/g;
+  let match = varPattern.exec(withoutTheme);
+  while (match) {
+    vars.add(`--${match[1]}`);
+    match = varPattern.exec(withoutTheme);
+  }
+  return vars;
+}
+
+/**
+ * Returns the set of CSS custom property names declared within a TSX component file via inline
+ * style object keys (`'--varname': ...`) or `setProperty('--varname', ...)` calls. These
+ * component-level vars must not be rewritten.
+ */
+export function parseComponentDeclaredVars(content: string): Set<string> {
+  const vars = new Set<string>();
+  const objKeyPattern = /['"](--[\w-]+)['"]\s*:/g;
+  let match = objKeyPattern.exec(content);
+  while (match) {
+    vars.add(match[1]);
+    match = objKeyPattern.exec(content);
+  }
+
+  const setPropPattern = /\.setProperty\(\s*['"](--[\w-]+)['"]/g;
+  let setPropMatch = setPropPattern.exec(content);
+  while (setPropMatch) {
+    vars.add(setPropMatch[1]);
+    setPropMatch = setPropPattern.exec(content);
+  }
+
+  return vars;
+}
+
+/**
+ * Replaces `var(--xxx)` with `var(--tw-xxx)` in content for any variable not in protectedVars and
+ * not already prefixed with `tw-`.
+ */
+export function rewriteCssVarReferences(content: string, protectedVars: Set<string>): string {
+  return content.replace(/var\(--([\w-]+)\)/g, (match, varName: string) => {
+    if (varName.startsWith('tw-') || protectedVars.has(`--${varName}`)) return match;
+    return `var(--tw-${varName})`;
+  });
 }
 
 // ---- @layer base processing ----
@@ -157,7 +263,7 @@ function parseRulesInLayerContent(content: string): ParsedRule[] {
  * - `body.pr-twp` → `body`
  * - `html.pr-twp` → `html`
  */
-function normalizeScopedSelector(selector: string): string {
+export function normalizeScopedSelector(selector: string): string {
   const parts = selector
     .split(',')
     .map((p) => p.trim())
@@ -188,7 +294,10 @@ function normalizeScopedSelector(selector: string): string {
  * Returns true when every class in `unscopedClasses` appears in `scopedClasses` with a `tw:` prefix
  * (same order, same count).
  */
-function applyClassesAreEquivalent(scopedClasses: string[], unscopedClasses: string[]): boolean {
+export function applyClassesAreEquivalent(
+  scopedClasses: string[],
+  unscopedClasses: string[],
+): boolean {
   if (scopedClasses.length !== unscopedClasses.length) return false;
   return unscopedClasses.every((uc, idx) => scopedClasses[idx] === `tw:${uc}`);
 }
@@ -199,7 +308,7 @@ function applyClassesAreEquivalent(scopedClasses: string[], unscopedClasses: str
  *
  * Returns the updated CSS string. Throws if verification fails (the CSS is not modified).
  */
-function processLayerBase(css: string): string {
+export function processLayerBase(css: string): string {
   const layerIdx = css.indexOf('@layer base {');
   if (layerIdx === -1) return css;
 
@@ -262,10 +371,12 @@ function processLayerBase(css: string): string {
   }
 
   // Remove unscoped rules: keep everything up to (but not including) the whitespace before the
-  // first unscoped rule, then trim trailing whitespace and add a newline before the closing `}`
+  // first unscoped rule, then trim any trailing whitespace and ensure a single newline precedes
+  // the layer's closing `}` (matches `\s*$` so the newline is always added, even when the slice
+  // ends directly at the previous rule's closing `}` with no trailing whitespace).
   const trimmedLayerContent = layerContent
     .slice(0, unscopedRules[0].fullStart)
-    .replace(/\s+$/, '\n');
+    .replace(/\s*$/, '\n');
 
   const newCss = css.slice(0, layerContentStart) + trimmedLayerContent + css.slice(layerEnd);
 
@@ -354,11 +465,39 @@ function main(): void {
     problems.push(`Failed to revert utils.ts: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // Step 13: Replace `import * as React from "react"` with `import React from 'react'` (always runs)
-  const reactImportRetryNote =
-    "Manually replace 'import * as React from \"react\"' with 'import React from \\'react\\'' in all changed .ts/.tsx files.";
+  // Step 13: Apply fixes to changed .ts/.tsx files (always runs)
+  const changedFilesRetryNote =
+    "Manually fix changed .ts/.tsx files: replace 'import * as React from \"react\"' with 'import React from \\'react\\'', replace 'rtl:tw:' with 'tw:rtl:', and rewrite var(--xxx) to var(--tw-xxx) for Tailwind theme vars.";
 
-  console.log('Replacing React namespace imports in changed files…');
+  interface FileTransformation {
+    description: string;
+    apply: (content: string) => string;
+  }
+
+  // Pre-compute protected CSS vars from index.css (vars in :root / theme selectors that must NOT
+  // get the --tw- prefix). Done once here; component-declared vars are detected per file below.
+  const rootVars = parseProtectedVarsFromIndexCss(css);
+
+  const fileTransformations: FileTransformation[] = [
+    {
+      description: 'React namespace import → default import',
+      apply: (content) =>
+        content.replace(/^import \* as React from ['"]react['"]/gm, "import React from 'react'"),
+    },
+    {
+      description: 'rtl:tw: → tw:rtl:',
+      apply: (content) => content.replaceAll('rtl:tw:', 'tw:rtl:'),
+    },
+    {
+      description: 'var(--xxx) → var(--tw-xxx) for Tailwind theme vars',
+      apply: (content) => {
+        const protectedVars = new Set([...rootVars, ...parseComponentDeclaredVars(content)]);
+        return rewriteCssVarReferences(content, protectedVars);
+      },
+    },
+  ];
+
+  console.log('Applying fixes to changed files…');
   try {
     const gitRoot = execSync('git rev-parse --show-toplevel', {
       encoding: 'utf8',
@@ -376,28 +515,25 @@ function main(): void {
       .map((line) => line.slice(3).trim())
       .filter((f) => /\.(ts|tsx)$/.test(f));
 
-    const replacedFiles = changedFiles.reduce((count, relPath) => {
+    const modifiedFiles = changedFiles.reduce((count, relPath) => {
       const fullPath = join(gitRoot, relPath);
-      const content = readFileSync(fullPath, 'utf8');
-      const updated = content.replace(
-        /^import \* as React from ['"]react['"]/gm,
-        "import React from 'react'",
-      );
-      if (updated !== content) {
+      const original = readFileSync(fullPath, 'utf8');
+      const updated = fileTransformations.reduce((content, t) => t.apply(content), original);
+      if (updated !== original) {
         writeFileSync(fullPath, updated, 'utf8');
         return count + 1;
       }
       return count;
     }, 0);
 
-    if (replacedFiles > 0) {
-      console.log(`Replaced React namespace imports in ${replacedFiles} file(s).`);
+    if (modifiedFiles > 0) {
+      console.log(`Applied fixes to ${modifiedFiles} file(s).`);
     } else {
-      console.log('No React namespace imports found in changed files.');
+      console.log('No fixes needed in changed files.');
     }
   } catch (e) {
     problems.push(
-      `React import replacement failed: ${e instanceof Error ? e.message : String(e)}. ${reactImportRetryNote}`,
+      `Changed file fixes failed: ${e instanceof Error ? e.message : String(e)}. ${changedFilesRetryNote}`,
     );
   }
 
@@ -462,4 +598,7 @@ function main(): void {
   console.log(`\nDone! Preset applied and committed successfully.\n${upgradeReminder}`);
 }
 
-main();
+// Only run main() when this file is invoked directly (e.g. via `tsx`), not when imported by tests.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main();
+}

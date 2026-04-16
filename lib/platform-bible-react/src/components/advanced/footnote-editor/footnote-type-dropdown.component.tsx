@@ -7,8 +7,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipProvider } from '@/components/shadcn-ui/tooltip';
-import { TooltipTrigger } from '@radix-ui/react-tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { FunctionSquare, SquareSigma, SquareX } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { Z_INDEX_FOOTNOTE_EDITOR } from '@/components/z-index';

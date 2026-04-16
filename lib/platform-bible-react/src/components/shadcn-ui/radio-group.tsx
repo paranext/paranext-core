@@ -56,7 +56,7 @@ function RadioGroupItem({
         data-slot="radio-group-indicator"
         className="tw:flex tw:size-4 tw:items-center tw:justify-center"
       >
-        <span className="tw:absolute tw:top-1/2 tw:start-1/2 tw:size-2 tw:-translate-x-1/2 rtl:tw:translate-x-1/2 tw:-translate-y-1/2 tw:rounded-full tw:bg-primary-foreground" />
+        <span className="tw:absolute tw:top-1/2 tw:start-1/2 tw:size-2 tw:-translate-x-1/2 tw:rtl:translate-x-1/2 tw:-translate-y-1/2 tw:rounded-full tw:bg-primary-foreground" />
       </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
   );

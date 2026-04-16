@@ -2,33 +2,17 @@
 
 import { DeltaOpInsertNoteEmbed, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
-import * as AvatarPrimitive from '@radix-ui/react-avatar';
-import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
-import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
-import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
-import * as LabelPrimitive from '@radix-ui/react-label';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { PopoverProps } from '@radix-ui/react-popover';
-import * as ProgressPrimitive from '@radix-ui/react-progress';
-import * as RadioGroupPrimitive from '@radix-ui/react-radio-group';
-import * as SelectPrimitive from '@radix-ui/react-select';
-import * as SeparatorPrimitive from '@radix-ui/react-separator';
-import * as SliderPrimitive from '@radix-ui/react-slider';
-import * as SwitchPrimitives from '@radix-ui/react-switch';
-import * as TabsPrimitive from '@radix-ui/react-tabs';
-import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
-import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
 import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
-import { Toaster as Sonner, toast as sonner } from 'sonner';
+import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
 /**
@@ -549,27 +533,24 @@ type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "destructive" | "outline" | "secondary" | "ghost" | null | undefined;
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+	variant?: "link" | "default" | "outline" | "secondary" | "ghost" | "destructive" | null | undefined;
+	size?: "default" | "icon" | "xs" | "sm" | "lg" | "icon-xs" | "icon-sm" | "icon-lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
- * Props for Button component
+ * Props for the Button component.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
-export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+export interface ButtonProps extends React$1.ComponentProps<"button">, VariantProps<typeof buttonVariants> {
 	asChild?: boolean;
 }
 /**
  * The Button component displays a button or a component that looks like a button. The component is
  * built and styled by Shadcn UI.
  *
- * @param ButtonProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
-export declare function Button({ className, variant, size, asChild, ref, ...props }: ButtonProps & {
-	ref?: React$1.Ref<HTMLButtonElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function Button({ className, variant, size, asChild, ...props }: ButtonProps): import("react/jsx-runtime").JSX.Element;
 export type MultiSelectComboBoxEntry = {
 	value: string;
 	label: string;
@@ -1300,7 +1281,7 @@ export type ScrollGroupSelectorProps = {
 	 */
 	localizedStrings?: LanguageStrings;
 	/** Size of the scroll group dropdown button. Defaults to 'sm' */
-	size?: "default" | "sm" | "lg" | "icon";
+	size?: "default" | "sm";
 	/** Additional css classes to help with unique styling */
 	className?: string;
 	/** Optional id for the select element */
@@ -1655,6 +1636,26 @@ export type ChecklistProps = {
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
 export declare function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Popover component displays rich content in a portal, triggered by a button. This component is
+ * built on Radix UI's Popover component and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/popover}
+ */
+export declare function Popover({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverTrigger({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverContent({ className, align, sideOffset, style, ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverAnchor({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Anchor>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverTitle({ className, ...props }: React$1.ComponentProps<"h2">): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverDescription({ className, ...props }: React$1.ComponentProps<"p">): import("react/jsx-runtime").JSX.Element;
 export type ComboBoxLabelOption = {
 	label: string;
 	secondaryLabel?: string;
@@ -1718,7 +1719,7 @@ export type ComboBoxProps<T> = {
 	isDisabled?: boolean;
 	/** Optional aria-label for the trigger button for accessibility */
 	ariaLabel?: string;
-} & PopoverProps;
+} & React$1.ComponentProps<typeof Popover>;
 /**
  * Autocomplete input and command palette with a list of suggestions.
  *
@@ -1913,484 +1914,407 @@ declare const alertVariants: (props?: ({
 } & ClassProp) | undefined) => string;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
- * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/alert}
  */
-export declare function Alert({ className, variant, ref, ...props }: React$1.HTMLAttributes<HTMLDivElement> & VariantProps<typeof alertVariants> & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function Alert({ className, variant, ...props }: React$1.ComponentProps<"div"> & VariantProps<typeof alertVariants>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Alert */
-export declare function AlertTitle({ className, ref, ...props }: React$1.HTMLAttributes<HTMLHeadingElement> & {
-	ref?: React$1.Ref<HTMLParagraphElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function AlertTitle({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Alert */
-export declare function AlertDescription({ className, ref, ...props }: React$1.HTMLAttributes<HTMLParagraphElement> & {
-	ref?: React$1.Ref<HTMLParagraphElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function AlertDescription({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /**
  * The Avatar component displays a user's profile picture or initials. The component is built and
- * styled by Shadcn UI. See Shadcn UI Documentation https://ui.shadcn.com/docs/components/avatar
+ * styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/avatar}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/avatar}
  */
-export declare function Avatar({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof AvatarPrimitive.Root>>;
+export declare function Avatar({ className, size, ...props }: React$1.ComponentProps<typeof AvatarPrimitive.Root> & {
+	size?: "default" | "sm" | "lg";
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Avatar */
-export declare function AvatarImage({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof AvatarPrimitive.Image>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function AvatarImage({ className, ...props }: React$1.ComponentProps<typeof AvatarPrimitive.Image>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Avatar */
-export declare function AvatarFallback({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof AvatarPrimitive.Fallback>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function AvatarFallback({ className, ...props }: React$1.ComponentProps<typeof AvatarPrimitive.Fallback>): import("react/jsx-runtime").JSX.Element;
 /**
  * Style variants for the Badge component.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
 export declare const badgeVariants: (props?: ({
-	variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "muted" | "blueIndicator" | "mutedIndicator" | null | undefined;
+	variant?: "link" | "default" | "outline" | "muted" | "secondary" | "ghost" | "destructive" | "blueIndicator" | "mutedIndicator" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
  * Props for the Badge component.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
-export interface BadgeProps extends React$1.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {
+export interface BadgeProps extends React$1.ComponentProps<"span">, VariantProps<typeof badgeVariants> {
+	asChild?: boolean;
 }
 /**
  * The Badge component displays a badge or a component that looks like a badge. The component is
  * built and styled by Shadcn UI.
  *
- * @param BadgeProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
-export declare function Badge({ className, variant, ref, ...props }: BadgeProps & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function Badge({ className, variant, asChild, ...props }: BadgeProps): import("react/jsx-runtime").JSX.Element;
 /**
- * The Card component displays a card with header, content, and footer. This component is built and
- * styled with Shadcn UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/card
+ * The Card component displays a card with header, content, and footer. The component is built and
+ * styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
  */
-export declare function Card({ className, ref, ...props }: React$1.HTMLAttributes<HTMLDivElement> & {
-	ref?: React$1.Ref<HTMLDivElement>;
+export declare function Card({ className, size, ...props }: React$1.ComponentProps<"div"> & {
+	size?: "default" | "sm";
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Card */
-export declare function CardHeader({ className, ref, ...props }: React$1.HTMLAttributes<HTMLDivElement> & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function CardHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Card */
-export declare function CardTitle({ className, ref, ...props }: React$1.HTMLAttributes<HTMLHeadingElement> & {
-	ref?: React$1.Ref<HTMLParagraphElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function CardTitle({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Card */
-export declare function CardDescription({ className, ref, ...props }: React$1.HTMLAttributes<HTMLParagraphElement> & {
-	ref?: React$1.Ref<HTMLParagraphElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function CardDescription({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Card */
-export declare function CardContent({ className, ref, ...props }: React$1.HTMLAttributes<HTMLDivElement> & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function CardContent({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Card */
-export declare function CardFooter({ className, ref, ...props }: React$1.HTMLAttributes<HTMLDivElement> & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function CardFooter({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /**
  * Checkbox component provides a control that allows the user to toggle between checked and not
- * checked. This components is built on Radix UI primitives and styled with Shadcn UI.
+ * checked. This component is built on Radix UI primitives and styled with Shadcn UI.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/checkbox}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/checkbox}
  */
-export declare function Checkbox({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof CheckboxPrimitive.Root>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function Checkbox({ className, ...props }: React$1.ComponentProps<typeof CheckboxPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 /**
- * Command menu for React. These components are built on cmdk and styled with Shadcn UI. See Shadcn
- * UI documentation: https://ui.shadcn.com/docs/components/command See cmdk documentation:
- * https://cmdk.paco.me/
- */
-export declare function Command({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof CommandPrimitive> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof CommandPrimitive>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Command */
-export declare function CommandInput({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof CommandPrimitive.Input>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Command */
-export declare function CommandList({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof CommandPrimitive.List> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof CommandPrimitive.List>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Command */
-export declare function CommandEmpty({ ref, ...props }: React$1.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof CommandPrimitive.Empty>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Command */
-export declare function CommandGroup({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof CommandPrimitive.Group> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof CommandPrimitive.Group>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Command */
-export declare function CommandItem({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof CommandPrimitive.Item> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof CommandPrimitive.Item>>;
-}): import("react/jsx-runtime").JSX.Element;
-/**
- * Context Menu component displays a menu to the user — such as a set of actions or functions,
- * triggered by a button.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/context-menu}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/context-menu}
- */
-export declare const ContextMenu: React$1.FC<ContextMenuPrimitive.ContextMenuProps>;
-/** @inheritdoc ContextMenu */
-export declare const ContextMenuTrigger: React$1.ForwardRefExoticComponent<ContextMenuPrimitive.ContextMenuTriggerProps & React$1.RefAttributes<HTMLSpanElement>>;
-/** @inheritdoc ContextMenu */
-export declare const ContextMenuGroup: React$1.ForwardRefExoticComponent<ContextMenuPrimitive.ContextMenuGroupProps & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc ContextMenu */
-export declare const ContextMenuPortal: React$1.FC<ContextMenuPrimitive.ContextMenuPortalProps>;
-/** @inheritdoc ContextMenu */
-export declare const ContextMenuSub: React$1.FC<ContextMenuPrimitive.ContextMenuSubProps>;
-/** @inheritdoc ContextMenu */
-export declare const ContextMenuRadioGroup: React$1.ForwardRefExoticComponent<ContextMenuPrimitive.ContextMenuRadioGroupProps & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc ContextMenu */
-export declare function ContextMenuSubTrigger({ className, inset, children, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubTrigger> & {
-	inset?: boolean;
-	ref?: React$1.Ref<React$1.ComponentRef<typeof ContextMenuPrimitive.SubTrigger>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc ContextMenu */
-export declare function ContextMenuSubContent({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof ContextMenuPrimitive.SubContent>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc ContextMenu */
-export declare function ContextMenuContent({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Content> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof ContextMenuPrimitive.Content>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc ContextMenu */
-export declare function ContextMenuItem({ className, inset, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Item> & {
-	inset?: boolean;
-	ref?: React$1.Ref<React$1.ComponentRef<typeof ContextMenuPrimitive.Item>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc ContextMenu */
-export declare function ContextMenuCheckboxItem({ className, children, checked, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.CheckboxItem> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof ContextMenuPrimitive.CheckboxItem>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc ContextMenu */
-export declare function ContextMenuRadioItem({ className, children, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.RadioItem> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof ContextMenuPrimitive.RadioItem>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc ContextMenu */
-export declare function ContextMenuLabel({ className, inset, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Label> & {
-	inset?: boolean;
-	ref?: React$1.Ref<React$1.ComponentRef<typeof ContextMenuPrimitive.Label>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc ContextMenu */
-export declare function ContextMenuSeparator({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Separator> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof ContextMenuPrimitive.Separator>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc ContextMenu */
-export declare function ContextMenuShortcut({ className, ...props }: React$1.HTMLAttributes<HTMLSpanElement>): import("react/jsx-runtime").JSX.Element;
-/**
- * The Dialog component displays a modal dialog window. Built on Radix UI's Dialog component and
+ * The Dialog component displays a modal dialog window. Built on Radix UI's Dialog primitive and
  * styled by Shadcn UI.
  *
- * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/dialog See Radix UI
- * Documentation https://www.radix-ui.com/docs/primitives/components/dialog
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
  */
-export declare const Dialog: React$1.FC<DialogPrimitive.DialogProps>;
-/** Button or element that opens the dialog when clicked. */
-export declare const DialogTrigger: React$1.ForwardRefExoticComponent<DialogPrimitive.DialogTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
-/** Portals the dialog content into `document.body` to avoid z-index and overflow issues. */
-export declare const DialogPortal: React$1.FC<DialogPrimitive.DialogPortalProps>;
-/** Button or element that closes the dialog when clicked. */
-export declare const DialogClose: React$1.ForwardRefExoticComponent<DialogPrimitive.DialogCloseProps & React$1.RefAttributes<HTMLButtonElement>>;
-/** Semi-transparent backdrop rendered behind the dialog content. Animates on open/close. */
-export declare function DialogOverlay({ className, style, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DialogPrimitive.Overlay>>;
-}): import("react/jsx-runtime").JSX.Element;
-type DialogContentProps = React$1.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+export declare function Dialog({ ...props }: React$1.ComponentProps<typeof DialogPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
+/**
+ * Button or element that opens the dialog when clicked.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
+ */
+export declare function DialogTrigger({ ...props }: React$1.ComponentProps<typeof DialogPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
+/**
+ * Portals the dialog content into `document.body` to avoid z-index and overflow issues.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
+ */
+export declare function DialogPortal({ ...props }: React$1.ComponentProps<typeof DialogPrimitive.Portal>): import("react/jsx-runtime").JSX.Element;
+/**
+ * Button or element that closes the dialog when clicked.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
+ */
+export declare function DialogClose({ ...props }: React$1.ComponentProps<typeof DialogPrimitive.Close>): import("react/jsx-runtime").JSX.Element;
+/**
+ * Semi-transparent backdrop rendered behind the dialog content. Animates on open/close.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
+ */
+export declare function DialogOverlay({ className, style, ...props }: React$1.ComponentProps<typeof DialogPrimitive.Overlay>): import("react/jsx-runtime").JSX.Element;
+type DialogContentProps = React$1.ComponentProps<typeof DialogPrimitive.Content> & {
 	/**
 	 * Additional CSS classes for the backdrop (`DialogOverlay`). Use when one dialog needs different
 	 * overlay styling than the default.
 	 */
 	overlayClassName?: string;
+	showCloseButton?: boolean;
 };
 /**
  * Main container for dialog content. Renders inside a portal with an overlay backdrop, centered on
- * screen. Includes a close button in the top corner.
+ * screen. Includes an optional close button in the top corner.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
  */
-export declare function DialogContent({ className, children, overlayClassName, style, ref, ...props }: DialogContentProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DialogPrimitive.Content>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** Container for the dialog's header area. Stacks title and description vertically. */
-export declare function DialogHeader({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
-/** Container for the dialog's footer area. Lays out action buttons in a row on larger screens. */
-export declare function DialogFooter({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
-/** Renders the dialog's title as a styled heading. Used inside DialogHeader. */
-export declare function DialogTitle({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof DialogPrimitive.Title> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DialogPrimitive.Title>>;
-}): import("react/jsx-runtime").JSX.Element;
-/** Renders the dialog's description text in a muted style. Used inside DialogHeader. */
-export declare function DialogDescription({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof DialogPrimitive.Description> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DialogPrimitive.Description>>;
+export declare function DialogContent({ className, children, showCloseButton, overlayClassName, style, ...props }: DialogContentProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the dialog's header area. Stacks title and description vertically.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
+ */
+export declare function DialogHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the dialog's footer area. Lays out action buttons in a row on larger screens.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
+ */
+export declare function DialogFooter({ className, showCloseButton, children, ...props }: React$1.ComponentProps<"div"> & {
+	showCloseButton?: boolean;
 }): import("react/jsx-runtime").JSX.Element;
 /**
- * A drawer component for React. These components are built on Vaul and styled with Shadcn UI. See
- * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/drawer See Vaul Documentation:
- * https://vaul.emilkowal.ski/getting-started
+ * Renders the dialog's title as a styled heading. Used inside DialogHeader.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
  */
-export declare function Drawer({ shouldScaleBackground, direction, ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Drawer */
-export declare const DrawerTrigger: React$1.ForwardRefExoticComponent<import("@radix-ui/react-dialog").DialogTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc Drawer */
-export declare const DrawerPortal: typeof import("vaul").Portal;
-/** @inheritdoc Drawer */
-export declare const DrawerClose: React$1.ForwardRefExoticComponent<import("@radix-ui/react-dialog").DialogCloseProps & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc Drawer */
-export declare function DrawerOverlay({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DrawerPrimitive.Overlay>>;
+export declare function DialogTitle({ className, ...props }: React$1.ComponentProps<typeof DialogPrimitive.Title>): import("react/jsx-runtime").JSX.Element;
+/**
+ * Renders the dialog's description text in a muted style. Used inside DialogHeader.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
+ */
+export declare function DialogDescription({ className, ...props }: React$1.ComponentProps<typeof DialogPrimitive.Description>): import("react/jsx-runtime").JSX.Element;
+/**
+ * Command menu for React. These components are built on cmdk and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/command}
+ * @see cmdk Documentation: {@link https://cmdk.paco.me/}
+ */
+export declare function Command({ className, ...props }: React$1.ComponentProps<typeof CommandPrimitive>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Command */
+export declare function CommandInput({ className, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Input>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Command */
+export declare function CommandList({ className, ...props }: React$1.ComponentProps<typeof CommandPrimitive.List>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Command */
+export declare function CommandEmpty({ className, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Empty>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Command */
+export declare function CommandGroup({ className, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Command */
+export declare function CommandItem({ className, children, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Item>): import("react/jsx-runtime").JSX.Element;
+/**
+ * Context Menu component displays a menu to the user — such as a set of actions or functions,
+ * triggered by a right-click or long-press.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/context-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/context-menu}
+ */
+export declare function ContextMenu({ ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuTrigger({ className, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuGroup({ ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuPortal({ ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Portal>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuSub({ ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Sub>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuRadioGroup({ ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.RadioGroup>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuContent({ className, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Content> & {
+	side?: "top" | "right" | "bottom" | "left";
 }): import("react/jsx-runtime").JSX.Element;
-interface DrawerContentProps extends React$1.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> {
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuItem({ className, inset, variant, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Item> & {
+	inset?: boolean;
+	variant?: "default" | "destructive";
+}): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuSubTrigger({ className, inset, children, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.SubTrigger> & {
+	inset?: boolean;
+}): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuSubContent({ className, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.SubContent>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuCheckboxItem({ className, children, checked, inset, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.CheckboxItem> & {
+	inset?: boolean;
+}): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuRadioItem({ className, children, inset, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.RadioItem> & {
+	inset?: boolean;
+}): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuLabel({ className, inset, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Label> & {
+	inset?: boolean;
+}): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuSeparator({ className, ...props }: React$1.ComponentProps<typeof ContextMenuPrimitive.Separator>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc ContextMenu */
+export declare function ContextMenuShortcut({ className, ...props }: React$1.ComponentProps<"span">): import("react/jsx-runtime").JSX.Element;
+/**
+ * A drawer component for React. Built on Vaul and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/drawer}
+ * @see Vaul Documentation: {@link https://vaul.emilkowal.ski/getting-started}
+ */
+export declare function Drawer({ ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Drawer */
+export declare function DrawerTrigger({ ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Drawer */
+export declare function DrawerPortal({ ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Portal>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Drawer */
+export declare function DrawerClose({ ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Close>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Drawer */
+export declare function DrawerOverlay({ className, ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Overlay>): import("react/jsx-runtime").JSX.Element;
+/**
+ * Props for {@link DrawerContent}. Extends the Vaul DrawerPrimitive.Content props with
+ * `hideDrawerHandle` to allow callers to suppress the drag handle.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/drawer}
+ * @see Vaul Documentation: {@link https://vaul.emilkowal.ski/getting-started}
+ */
+export interface DrawerContentProps extends React$1.ComponentProps<typeof DrawerPrimitive.Content> {
 	/** Optionally hide the drawer handle */
 	hideDrawerHandle?: boolean;
 }
 /** @inheritdoc Drawer */
-export declare function DrawerContent({ className, children, hideDrawerHandle, ref, ...props }: DrawerContentProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DrawerPrimitive.Content>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function DrawerContent({ className, children, hideDrawerHandle, ...props }: DrawerContentProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Drawer */
-export declare function DrawerHeader({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
+export declare function DrawerHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Drawer */
-export declare function DrawerFooter({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
+export declare function DrawerFooter({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Drawer */
-export declare function DrawerTitle({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DrawerPrimitive.Title>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function DrawerTitle({ className, ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Title>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Drawer */
-export declare function DrawerDescription({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof DrawerPrimitive.Description> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DrawerPrimitive.Description>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function DrawerDescription({ className, ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Description>): import("react/jsx-runtime").JSX.Element;
 type MenuContextProps = {
 	variant?: "default" | "muted";
 };
 /**
- * Dropdown Menu components providing accessible dropdown menus and submenus. These components are
- * built on Radix UI primitives and styled with Shadcn UI. See Shadcn UI Documentation:
- * https://ui.shadcn.com/docs/components/dropdown-menu See Radix UI Documentation:
- * https://www.radix-ui.com/primitives/docs/components/dropdown-menu
+ * Dropdown Menu components providing accessible dropdown menus and submenus. Built on Radix UI
+ * primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
-export type DropdownMenuProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Root> & {
+export type DropdownMenuProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Root> & {
 	variant?: MenuContextProps["variant"];
 };
-/** @inheritdoc DropdownMenuProps */
-export declare const DropdownMenuTrigger: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc DropdownMenuProps */
-export declare const DropdownMenuGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuGroupProps & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc DropdownMenuProps */
-export declare const DropdownMenuPortal: React$1.FC<DropdownMenuPrimitive.DropdownMenuPortalProps>;
-/** @inheritdoc DropdownMenuProps */
-export declare const DropdownMenuSub: React$1.FC<DropdownMenuPrimitive.DropdownMenuSubProps>;
-/** @inheritdoc DropdownMenuProps */
-export declare const DropdownMenuRadioGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuRadioGroupProps & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuSubTriggerProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
-	className?: string;
+export type DropdownMenuSubTriggerProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger> & {
 	inset?: boolean;
 };
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuSubContentProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent> & {
-	className?: string;
+/** @inheritdoc DropdownMenuSubTriggerProps */
+export type DropdownMenuSubContentProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.SubContent>;
+/** @inheritdoc DropdownMenuSubTriggerProps */
+export type DropdownMenuContentProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Content>;
+/** @inheritdoc DropdownMenuSubTriggerProps */
+export type DropdownMenuItemProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
+	inset?: boolean;
+	variant?: "default" | "destructive";
 };
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuContentProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
-	className?: string;
-	sideOffset?: number;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
-	className?: string;
+/** @inheritdoc DropdownMenuSubTriggerProps */
+export type DropdownMenuCheckboxItemProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem> & {
 	inset?: boolean;
 };
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuCheckboxItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> & {
-	className?: string;
-	checked?: boolean;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuRadioItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem> & {
-	className?: string;
-};
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuLabelProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> & {
-	className?: string;
+/** @inheritdoc DropdownMenuSubTriggerProps */
+export type DropdownMenuRadioItemProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.RadioItem> & {
 	inset?: boolean;
 };
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuSeparatorProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator> & {
-	className?: string;
+/** @inheritdoc DropdownMenuSubTriggerProps */
+export type DropdownMenuLabelProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Label> & {
+	inset?: boolean;
 };
-/** @inheritdoc DropdownMenuProps */
-export type DropdownMenuShortcutProps = React$1.HTMLAttributes<HTMLSpanElement> & {
-	className?: string;
-};
+/** @inheritdoc DropdownMenuSubTriggerProps */
+export type DropdownMenuSeparatorProps = React$1.ComponentProps<typeof DropdownMenuPrimitive.Separator>;
+/** @inheritdoc DropdownMenuSubTriggerProps */
+export type DropdownMenuShortcutProps = React$1.ComponentProps<"span">;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenu({ variant, ...props }: DropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuSubTrigger({ className, inset, children, ref, ...props }: DropdownMenuSubTriggerProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DropdownMenuPrimitive.SubTrigger>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuPortal({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Portal>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuSubContent({ className, children, ref, ...props }: DropdownMenuSubContentProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DropdownMenuPrimitive.SubContent>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuTrigger({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuContent({ className, sideOffset, children, ref, ...props }: DropdownMenuContentProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DropdownMenuPrimitive.Content>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuContent({ className, align, sideOffset, children, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuItem({ className, inset, ref, ...props }: DropdownMenuItemProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DropdownMenuPrimitive.Item>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuCheckboxItem({ className, children, checked, ref, ...props }: DropdownMenuCheckboxItemProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DropdownMenuPrimitive.CheckboxItem>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuItem({ className, inset, variant, ...props }: DropdownMenuItemProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuRadioItem({ className, children, ref, ...props }: DropdownMenuRadioItemProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DropdownMenuPrimitive.RadioItem>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuCheckboxItem({ className, children, checked, inset, ...props }: DropdownMenuCheckboxItemProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuLabel({ className, inset, ref, ...props }: DropdownMenuLabelProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DropdownMenuPrimitive.Label>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuRadioGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.RadioGroup>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuSeparator({ className, ref, ...props }: DropdownMenuSeparatorProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof DropdownMenuPrimitive.Separator>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuRadioItem({ className, children, inset, ...props }: DropdownMenuRadioItemProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuLabel({ className, inset, ...props }: DropdownMenuLabelProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuSeparator({ className, ...props }: DropdownMenuSeparatorProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortcutProps): import("react/jsx-runtime").JSX.Element;
-interface InputProps extends React$1.InputHTMLAttributes<HTMLInputElement> {
-}
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuSub({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Sub>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuSubTrigger({ className, inset, children, ...props }: DropdownMenuSubTriggerProps): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc DropdownMenuProps */
+export declare function DropdownMenuSubContent({ className, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
 /**
- * Input component displays a form input field or a component that looks like an input field. This
- * components is built and styled with Shadcn UI.
+ * Input component displays a form input field or a component that looks like an input field. Built
+ * and styled with Shadcn UI.
  *
- * @param InputProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
  */
-export declare function Input({ className, type, ref, ...props }: InputProps & {
-	ref?: React$1.Ref<HTMLInputElement>;
-}): import("react/jsx-runtime").JSX.Element;
-declare const labelVariants: (props?: ClassProp | undefined) => string;
+export declare function Input({ className, type, ...props }: React$1.ComponentProps<"input">): import("react/jsx-runtime").JSX.Element;
 /**
- * The Label component renders an accessible label associated with controls. This components is
- * built on Radix UI primitives and styled with Shadcn UI.
+ * The Label component renders an accessible label associated with controls. This component is built
+ * on Radix UI primitives and styled with Shadcn UI.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/label}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
  */
-export declare function Label({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof LabelPrimitive.Root> & VariantProps<typeof labelVariants> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof LabelPrimitive.Root>>;
-}): import("react/jsx-runtime").JSX.Element;
-/**
- * The Popover component displays rich content in a portal, triggered by a button. This popover is
- * built on Radix UI's Popover component and styled by Shadcn UI.
- *
- * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/popover See Radix UI
- * Documentation https://www.radix-ui.com/docs/primitives/components/popover
- */
-export declare const Popover: React$1.FC<PopoverPrimitive.PopoverProps>;
-/** @inheritdoc Popover */
-export declare const PopoverTrigger: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc Popover */
-export declare const PopoverAnchor: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverAnchorProps & React$1.RefAttributes<HTMLDivElement>>;
-/** @inheritdoc Popover */
-export declare function PopoverContent({ className, align, sideOffset, style, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof PopoverPrimitive.Content>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function Label({ className, ...props }: React$1.ComponentProps<typeof LabelPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 /**
  * Displays an indicator showing the completion progress of a task, typically displayed as a
- * progress bar. This component is built on Radix UI primitives and styled with Shadcn UI. See
- * Shadcn UI documentation: https://ui.shadcn.com/docs/components/progress See Radix UI
- * documentation: https://www.radix-ui.com/primitives/docs/components/progress#api-reference
+ * progress bar. This component is built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/progress}
+ * @see Radix UI Documentation:
+ *   {@link https://www.radix-ui.com/primitives/docs/components/progress#api-reference}
  */
-export declare function Progress({ className, value, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof ProgressPrimitive.Root>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function Progress({ className, value, ...props }: React$1.ComponentProps<typeof ProgressPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 /**
  * Radio Group components providing a set of checkable buttons—known as radio buttons—where no more
  * than one of the buttons can be checked at a time. These components are built on Radix UI
  * primitives and styled with Shadcn UI.
  *
- * See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/radio-group See Radix UI
- * Documentation: https://www.radix-ui.com/primitives/docs/components/radio-group
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radio-group}
+ * @see Radix UI Documentation:
+ *   {@link https://www.radix-ui.com/primitives/docs/components/radio-group}
  */
-export declare function RadioGroup({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof RadioGroupPrimitive.Root>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function RadioGroup({ className, ...props }: React$1.ComponentProps<typeof RadioGroupPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc RadioGroup */
-export declare function RadioGroupItem({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof RadioGroupPrimitive.Item>>;
-}): import("react/jsx-runtime").JSX.Element;
-/**
- * Props for Select component
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
- */
-export interface SelectTriggerProps extends React$1.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>, VariantProps<typeof selectTriggerVariants> {
-	asChild?: boolean;
-}
+export declare function RadioGroupItem({ className, ...props }: React$1.ComponentProps<typeof RadioGroupPrimitive.Item>): import("react/jsx-runtime").JSX.Element;
 /**
  * Select components display a list of options for the user to pick from—triggered by a button.
  * These components are built on Radix UI primitives and styled with Shadcn UI.
  *
- * See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/select See Radix UI
- * Documentation: https://www.radix-ui.com/primitives/docs/components/select
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
  */
-export declare const Select: React$1.FC<SelectPrimitive.SelectProps>;
+export declare function Select({ ...props }: React$1.ComponentProps<typeof SelectPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare const SelectGroup: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+export declare function SelectGroup({ className, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare const SelectValue: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectValueProps & React$1.RefAttributes<HTMLSpanElement>>;
-/**
- * Style variants for the Select Trigger component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const selectTriggerVariants: (props?: ({
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
-} & ClassProp) | undefined) => string;
+export declare function SelectValue({ ...props }: React$1.ComponentProps<typeof SelectPrimitive.Value>): import("react/jsx-runtime").JSX.Element;
+export type SelectTriggerProps = React$1.ComponentProps<typeof SelectPrimitive.Trigger> & {
+	size?: "sm" | "default";
+};
 /** @inheritdoc Select */
-export declare function SelectTrigger({ className, children, size, ref, ...props }: SelectTriggerProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof SelectPrimitive.Trigger>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SelectTrigger({ className, size, children, ...props }: SelectTriggerProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare function SelectScrollUpButton({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollUpButton> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof SelectPrimitive.ScrollUpButton>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SelectContent({ className, children, position, align, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare function SelectScrollDownButton({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollDownButton> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof SelectPrimitive.ScrollDownButton>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SelectLabel({ className, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Label>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare function SelectContent({ className, children, position, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof SelectPrimitive.Content> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof SelectPrimitive.Content>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SelectItem({ className, children, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Item>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare function SelectLabel({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof SelectPrimitive.Label> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof SelectPrimitive.Label>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SelectSeparator({ className, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Separator>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare function SelectItem({ className, children, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof SelectPrimitive.Item>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SelectScrollUpButton({ className, ...props }: React$1.ComponentProps<typeof SelectPrimitive.ScrollUpButton>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare function SelectSeparator({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof SelectPrimitive.Separator>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SelectScrollDownButton({ className, ...props }: React$1.ComponentProps<typeof SelectPrimitive.ScrollDownButton>): import("react/jsx-runtime").JSX.Element;
 /**
  * Accessible resizable panel groups and layouts with keyboard support. This component is built on
- * react-resizable-panels and styled with Shadcn UI. See Shadcn UI documentation:
- * https://ui.shadcn.com/docs/components/resizable See react-resizable-panels documentation:
- * https://github.com/bvaughn/react-resizable-panels/tree/main/packages/react-resizable-panels
+ * react-resizable-panels and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/resizable}
+ * @see react-resizable-panels Documentation:
+ *   {@link https://github.com/bvaughn/react-resizable-panels/tree/main/packages/react-resizable-panels}
  */
-export declare function ResizablePanelGroup({ className, direction, onLayout, orientation, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.Group> & {
+export declare function ResizablePanelGroup({ className, direction, onLayout, orientation, ...props }: ResizablePrimitive.GroupProps & {
 	/** @deprecated 16 April 2026. Renamed to `orientation` */
 	direction?: "horizontal" | "vertical";
 	/**
@@ -2403,7 +2327,7 @@ export declare function ResizablePanelGroup({ className, direction, onLayout, or
 }): import("react/jsx-runtime").JSX.Element;
 type PanelSizeProp = ResizablePrimitive.PanelProps["defaultSize"];
 /** @inheritdoc ResizablePanelGroup */
-export declare function ResizablePanel({ defaultSize, minSize, maxSize, collapsedSize, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.Panel> & {
+export declare function ResizablePanel({ defaultSize, minSize, maxSize, collapsedSize, ...props }: ResizablePrimitive.PanelProps & {
 	/**
 	 * From `react-resize-panels` docs:
 	 *
@@ -2447,7 +2371,7 @@ export declare function ResizablePanel({ defaultSize, minSize, maxSize, collapse
 	collapsedSize?: PanelSizeProp;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ResizablePanelGroup */
-export declare function ResizableHandle({ withHandle, className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.Separator> & {
+export declare function ResizableHandle({ withHandle, className, ...props }: ResizablePrimitive.SeparatorProps & {
 	withHandle?: boolean;
 }): import("react/jsx-runtime").JSX.Element;
 /**
@@ -2457,26 +2381,21 @@ export declare function ResizableHandle({ withHandle, className, ...props }: Rea
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/separator}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/separator}
  */
-export declare function Separator({ className, orientation, decorative, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof SeparatorPrimitive.Root> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof SeparatorPrimitive.Root>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function Separator({ className, orientation, decorative, ...props }: React$1.ComponentProps<typeof SeparatorPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
-export declare const TooltipProvider: React$1.FC<TooltipPrimitive.TooltipProviderProps>;
+export declare function TooltipProvider({ delayDuration, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Provider>): import("react/jsx-runtime").JSX.Element;
 /**
  * Tooltip components provide a popover that displays information related to an element when hovered
- * or focused. These components are built on Radix UI primitives and styled with Shadcn UI. See
- * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tooltip See Radix UI
- * Documentation: https://www.radix-ui.com/primitives/docs/components/tooltip
+ * or focused. These components are built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tooltip}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tooltip}
  */
-export declare const Tooltip: React$1.FC<TooltipPrimitive.TooltipProps>;
+export declare function Tooltip({ ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
-export declare function TooltipTrigger({ className, variant, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger> & ButtonProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof TooltipPrimitive.Trigger>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function TooltipTrigger({ className, variant, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Trigger> & ButtonProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
-export declare function TooltipContent({ className, sideOffset, style, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof TooltipPrimitive.Content>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function TooltipContent({ className, sideOffset, style, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 type Side = "primary" | "secondary";
 type SidebarContextProps = {
 	state: "expanded" | "collapsed";
@@ -2489,140 +2408,100 @@ type SidebarContextProps = {
 export declare function useSidebar(): SidebarContextProps;
 /**
  * Sidebar components providing an accessible sidebar along with all the sub components that can be
- * used to populate and style it. These components are adapted from Shadcn UI. See Shadcn UI
- * Documentation: https://ui.shadcn.com/docs/components/sidebar
+ * used to populate and style it. These components are adapted from Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sidebar}
  */
-export declare function SidebarProvider({ defaultOpen, open: openProp, onOpenChange: setOpenProp, className, style, children, side, ref, ...props }: React$1.ComponentProps<"div"> & {
-	/** Whether the sidebar is initially open. */
+export declare function SidebarProvider({ defaultOpen, open: openProp, onOpenChange: setOpenProp, className, style, children, side, ...props }: React$1.ComponentProps<"div"> & {
 	defaultOpen?: boolean;
-	/** Whether the sidebar is open. */
 	open?: boolean;
-	/** Callback fired when the open state changes. */
 	onOpenChange?: (open: boolean) => void;
 	/** The side of the sidebar. */
 	side?: Side;
-	ref?: React$1.Ref<HTMLDivElement>;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function Sidebar({ variant, collapsible, className, children, ref, ...props }: React$1.ComponentProps<"div"> & {
+export declare function Sidebar({ variant, collapsible, className, children, ...props }: React$1.ComponentProps<"div"> & {
 	variant?: "sidebar" | "floating" | "inset";
 	collapsible?: "offcanvas" | "icon" | "none";
-	ref?: React$1.Ref<HTMLDivElement>;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarTrigger({ className, onClick, ref, ...props }: React$1.ComponentProps<typeof Button> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof Button>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarTrigger({ className, onClick, ...props }: React$1.ComponentProps<typeof Button>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarRail({ className, ref, ...props }: React$1.ComponentProps<"button"> & {
-	ref?: React$1.Ref<HTMLButtonElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarRail({ className, ...props }: React$1.ComponentProps<"button">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarInset({ className, ref, ...props }: React$1.ComponentProps<"main"> & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarInset({ className, ...props }: React$1.ComponentProps<"main">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarInput({ className, ref, ...props }: React$1.ComponentProps<typeof Input> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof Input>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarInput({ className, ...props }: React$1.ComponentProps<typeof Input>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarHeader({ className, ref, ...props }: React$1.ComponentProps<"div"> & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarFooter({ className, ref, ...props }: React$1.ComponentProps<"div"> & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarFooter({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarSeparator({ className, ref, ...props }: React$1.ComponentProps<typeof Separator> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof Separator>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarSeparator({ className, ...props }: React$1.ComponentProps<typeof Separator>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarContent({ className, ref, ...props }: React$1.ComponentProps<"div"> & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarContent({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarGroup({ className, ref, ...props }: React$1.ComponentProps<"div"> & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarGroup({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarGroupLabel({ className, asChild, ref, ...props }: React$1.ComponentProps<"div"> & {
+export declare function SidebarGroupLabel({ className, asChild, ...props }: React$1.ComponentProps<"div"> & {
 	asChild?: boolean;
-	ref?: React$1.Ref<HTMLDivElement>;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarGroupAction({ className, asChild, ref, ...props }: React$1.ComponentProps<"button"> & {
+export declare function SidebarGroupAction({ className, asChild, ...props }: React$1.ComponentProps<"button"> & {
 	asChild?: boolean;
-	ref?: React$1.Ref<HTMLButtonElement>;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarGroupContent({ className, ref, ...props }: React$1.ComponentProps<"div"> & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarGroupContent({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarMenu({ className, ref, ...props }: React$1.ComponentProps<"ul"> & {
-	ref?: React$1.Ref<HTMLUListElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarMenu({ className, ...props }: React$1.ComponentProps<"ul">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarMenuItem({ className, ref, ...props }: React$1.ComponentProps<"li"> & {
-	ref?: React$1.Ref<HTMLLIElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarMenuItem({ className, ...props }: React$1.ComponentProps<"li">): import("react/jsx-runtime").JSX.Element;
 declare const sidebarMenuButtonVariants: (props?: ({
 	variant?: "default" | "outline" | null | undefined;
 	size?: "default" | "sm" | "lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarMenuButton({ asChild, isActive, variant, size, tooltip, className, ref, ...props }: React$1.ComponentProps<"button"> & {
+export declare function SidebarMenuButton({ asChild, isActive, variant, size, tooltip, className, ...props }: React$1.ComponentProps<"button"> & {
 	asChild?: boolean;
 	isActive?: boolean;
 	tooltip?: string | React$1.ComponentProps<typeof TooltipContent>;
-	ref?: React$1.Ref<HTMLButtonElement>;
 } & VariantProps<typeof sidebarMenuButtonVariants>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarMenuAction({ className, asChild, showOnHover, ref, ...props }: React$1.ComponentProps<"button"> & {
+export declare function SidebarMenuAction({ className, asChild, showOnHover, ...props }: React$1.ComponentProps<"button"> & {
 	asChild?: boolean;
 	showOnHover?: boolean;
-	ref?: React$1.Ref<HTMLButtonElement>;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarMenuBadge({ className, ref, ...props }: React$1.ComponentProps<"div"> & {
-	ref?: React$1.Ref<HTMLDivElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarMenuBadge({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarMenuSkeleton({ className, showIcon, ref, ...props }: React$1.ComponentProps<"div"> & {
+export declare function SidebarMenuSkeleton({ className, showIcon, ...props }: React$1.ComponentProps<"div"> & {
 	showIcon?: boolean;
-	ref?: React$1.Ref<HTMLDivElement>;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarMenuSub({ className, ref, ...props }: React$1.ComponentProps<"ul"> & {
-	ref?: React$1.Ref<HTMLUListElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarMenuSub({ className, ...props }: React$1.ComponentProps<"ul">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarMenuSubItem({ ref, ...props }: React$1.ComponentProps<"li"> & {
-	ref?: React$1.Ref<HTMLLIElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function SidebarMenuSubItem({ className, ...props }: React$1.ComponentProps<"li">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc SidebarProvider */
-export declare function SidebarMenuSubButton({ asChild, size, isActive, className, ref, ...props }: React$1.ComponentProps<"a"> & {
+export declare function SidebarMenuSubButton({ asChild, size, isActive, className, ...props }: React$1.ComponentProps<"a"> & {
 	asChild?: boolean;
 	size?: "sm" | "md";
 	isActive?: boolean;
-	ref?: React$1.Ref<HTMLAnchorElement>;
 }): import("react/jsx-runtime").JSX.Element;
-type SonnerProps = React$1.ComponentProps<typeof Sonner>;
+type SonnerProps = ToasterProps;
 /**
  * The Sonner component is an opinionated toast component for React. It is built on Sonner and
  * styled with Shadcn UI.
  *
- * @param SonnerProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
  */
 declare function Toaster({ ...props }: SonnerProps): import("react/jsx-runtime").JSX.Element;
 /**
- * Use to show a placeholder while content is loading. This component is from Shadcn UI. See Shadcn
- * UI documentation: https://ui.shadcn.com/docs/components/skeleton
+ * Use to show a placeholder while content is loading. This component is from Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/skeleton}
  */
-export declare function Skeleton({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
+export declare function Skeleton({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /**
  * The Slider component is an input where the user selects a value from within a given range. This
  * component is built on Radix UI primitives and styled with Shadcn UI.
@@ -2630,9 +2509,7 @@ export declare function Skeleton({ className, ...props }: React$1.HTMLAttributes
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/slider}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/slider}
  */
-export declare function Slider({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof SliderPrimitive.Root>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function Slider({ className, defaultValue, value, min, max, ...props }: React$1.ComponentProps<typeof SliderPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 /**
  * The Switch component is a control that allows the user to toggle between checked and not checked.
  * This component is built on Radix UI primitives and styled with Shadcn UI.
@@ -2640,75 +2517,65 @@ export declare function Slider({ className, ref, ...props }: React$1.ComponentPr
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/switch}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/switch}
  */
-export declare function Switch({ className, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof SwitchPrimitives.Root>>;
+export declare function Switch({ className, size, ...props }: React$1.ComponentProps<typeof SwitchPrimitive.Root> & {
+	size?: "sm" | "default";
 }): import("react/jsx-runtime").JSX.Element;
 /**
  * Table components provide a responsive table. These components are built and styled with Shadcn
- * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/table
+ * UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
  */
-export declare function Table({ className, stickyHeader, ref, ...props }: React$1.HTMLAttributes<HTMLTableElement> & {
+export declare function Table({ className, stickyHeader, ref, ...props }: React$1.ComponentProps<"table"> & {
 	stickyHeader?: boolean;
 	ref?: React$1.Ref<HTMLTableElement>;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Table */
-export declare function TableHeader({ className, stickyHeader, ref, ...props }: React$1.HTMLAttributes<HTMLTableSectionElement> & {
+export declare function TableHeader({ className, stickyHeader, ...props }: React$1.ComponentProps<"thead"> & {
 	stickyHeader?: boolean;
-	ref?: React$1.Ref<HTMLTableSectionElement>;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Table */
-export declare function TableBody({ className, ref, ...props }: React$1.HTMLAttributes<HTMLTableSectionElement> & {
-	ref?: React$1.Ref<HTMLTableSectionElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function TableBody({ className, ...props }: React$1.ComponentProps<"tbody">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Table */
-export declare function TableFooter({ className, ref, ...props }: React$1.HTMLAttributes<HTMLTableSectionElement> & {
-	ref?: React$1.Ref<HTMLTableSectionElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function TableFooter({ className, ...props }: React$1.ComponentProps<"tfoot">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Table */
-export declare function TableRow({ className, onKeyDown, onSelect, setFocusAlsoRunsSelect, ref, ...props }: React$1.HTMLAttributes<HTMLTableRowElement> & {
+export declare function TableRow({ className, onKeyDown, onSelect, setFocusAlsoRunsSelect, ref, ...props }: React$1.ComponentProps<"tr"> & {
 	setFocusAlsoRunsSelect?: boolean;
 	ref?: React$1.Ref<HTMLTableRowElement>;
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Table */
-export declare function TableHead({ className, ref, ...props }: React$1.ThHTMLAttributes<HTMLTableCellElement> & {
-	ref?: React$1.Ref<HTMLTableCellElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function TableHead({ className, ...props }: React$1.ComponentProps<"th">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Table */
-export declare function TableCell({ className, ref, ...props }: React$1.TdHTMLAttributes<HTMLTableCellElement> & {
-	ref?: React$1.Ref<HTMLTableCellElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function TableCell({ className, ...props }: React$1.ComponentProps<"td">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Table */
-export declare function TableCaption({ className, ref, ...props }: React$1.HTMLAttributes<HTMLTableCaptionElement> & {
-	ref?: React$1.Ref<HTMLTableCaptionElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function TableCaption({ className, ...props }: React$1.ComponentProps<"caption">): import("react/jsx-runtime").JSX.Element;
 /**
- * Tabs components provide a set of layered sections of content—known as tab panels–that are
+ * Tabs components provide a set of layered sections of content—known as tab panels—that are
  * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
- * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
- * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
+ * UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
  */
-export declare const Tabs: React$1.ForwardRefExoticComponent<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>>;
-type TabsListProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & {
+export declare function Tabs({ className, orientation, ...props }: React$1.ComponentProps<typeof TabsPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
+type TabsListProps = React$1.ComponentProps<typeof TabsPrimitive.List> & {
 	className?: string;
 };
-type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
+type TabsTriggerProps = React$1.ComponentProps<typeof TabsPrimitive.Trigger> & {
 	className?: string;
 };
-type TabsContentProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Content> & {
+type TabsContentProps = React$1.ComponentProps<typeof TabsPrimitive.Content> & {
 	className?: string;
 };
+declare const tabsListVariants: (props?: ({
+	variant?: "default" | "line" | null | undefined;
+} & ClassProp) | undefined) => string;
 /** @inheritdoc Tabs */
-export declare function TabsList({ className, ref, ...props }: TabsListProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof TabsPrimitive.List>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function TabsList({ className, variant, ...props }: React$1.ComponentProps<typeof TabsPrimitive.List> & VariantProps<typeof tabsListVariants>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tabs */
-export declare function TabsTrigger({ className, ref, ...props }: TabsTriggerProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof TabsPrimitive.Trigger>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function TabsTrigger({ className, ...props }: React$1.ComponentProps<typeof TabsPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tabs */
-export declare function TabsContent({ className, ref, ...props }: TabsContentProps & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof TabsPrimitive.Content>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function TabsContent({ className, ...props }: React$1.ComponentProps<typeof TabsPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 type LeftTabsTriggerProps = TabsTriggerProps & {
 	value: string;
 	ref?: React$1.Ref<HTMLButtonElement>;
@@ -2719,43 +2586,39 @@ type LeftTabsTriggerProps = TabsTriggerProps & {
  * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
  * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
  */
-export declare const VerticalTabs: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+export declare const VerticalTabs: React$1.ForwardRefExoticComponent<Omit<RadixTabs.TabsProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc VerticalTabs */
-export declare const VerticalTabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const VerticalTabsList: React$1.ForwardRefExoticComponent<Omit<TabsListProps, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc VerticalTabs */
 export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit<LeftTabsTriggerProps, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc VerticalTabs */
-export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsContentProps, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * Displays a form textarea or a component that looks like a textarea. This component is from Shadcn
- * UI. See Shadcn UI documentation: https://ui.shadcn.com/docs/components/textarea
+ * UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/textarea}
  */
-export declare function Textarea({ className, ref, ...props }: React$1.ComponentProps<"textarea"> & {
-	ref?: React$1.Ref<HTMLTextAreaElement>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function Textarea({ className, ...props }: React$1.ComponentProps<"textarea">): import("react/jsx-runtime").JSX.Element;
 declare const toggleVariants: (props?: ({
 	variant?: "default" | "outline" | null | undefined;
 	size?: "default" | "sm" | "lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
  * ToggleGroup components provide a set of two-state buttons that can be toggled on or off. These
- * components are built on Radix UI primitives and styled with Shadcn UI. See Shadcn UI
- * Documentation: https://ui.shadcn.com/docs/components/toggle-group See Radix UI Documentation:
- * https://www.radix-ui.com/primitives/docs/components/toggle-group
+ * components are built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/toggle-group}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/toggle-group}
  */
-export declare function ToggleGroup({ className, variant, size, children, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> & VariantProps<typeof toggleVariants> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof ToggleGroupPrimitive.Root>>;
+export declare function ToggleGroup({ className, variant, size, spacing, orientation, children, ...props }: React$1.ComponentProps<typeof ToggleGroupPrimitive.Root> & VariantProps<typeof toggleVariants> & {
+	spacing?: number;
+	orientation?: "horizontal" | "vertical";
 }): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ToggleGroup */
-export declare function ToggleGroupItem({ className, children, variant, size, ref, ...props }: React$1.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item> & VariantProps<typeof toggleVariants> & {
-	ref?: React$1.Ref<React$1.ComponentRef<typeof ToggleGroupPrimitive.Item>>;
-}): import("react/jsx-runtime").JSX.Element;
+export declare function ToggleGroupItem({ className, children, variant, size, ...props }: React$1.ComponentProps<typeof ToggleGroupPrimitive.Item> & VariantProps<typeof toggleVariants>): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.

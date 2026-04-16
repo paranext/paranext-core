@@ -215,7 +215,7 @@ export const VariantTest: Story = {
 
     // Verify button is rendered with destructive variant styles
     await expect(button).toBeInTheDocument();
-    await expect(button).toHaveClass('tw:bg-destructive');
+    await expect(button).toHaveClass('tw:bg-destructive/10');
 
     // Test button interaction
     await userEvent.click(button);
@@ -242,7 +242,7 @@ export const SizeTest: Story = {
 
     // Verify button is rendered with large size styles
     await expect(button).toBeInTheDocument();
-    await expect(button).toHaveClass('tw:h-11'); // Large size class
+    await expect(button).toHaveClass('tw:h-9'); // Large size class
 
     // Test double click
     await userEvent.dblClick(button);
