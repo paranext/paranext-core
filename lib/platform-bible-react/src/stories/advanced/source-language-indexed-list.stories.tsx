@@ -677,7 +677,10 @@ function InlineListDetail<T extends { id: string }>({
 }) {
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const listRef = useRef<HTMLUListElement>(null);
   const [narrow, setNarrow] = useState(false);
+  const [focusedIdx, setFocusedIdx] = useState(-1);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -692,9 +695,40 @@ function InlineListDetail<T extends { id: string }>({
   const showSideBySide = selectedItem && !narrow;
   const showFullDetail = selectedItem && narrow;
 
+  // Keyboard navigation: arrows move focus, behavior depends on narrow/wide
+  const handleListKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (items.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = Math.min(focusedIdx + 1, items.length - 1);
+        setFocusedIdx(next);
+        // Wide mode: immediately select to show details side-by-side
+        if (!narrow) onSelectItem(items[next]);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = Math.max(focusedIdx - 1, 0);
+        setFocusedIdx(prev);
+        if (!narrow) onSelectItem(items[prev]);
+      } else if ((e.key === 'Enter' || e.key === ' ') && narrow && focusedIdx >= 0) {
+        // Narrow mode: Enter/Space submits the focused item
+        e.preventDefault();
+        onSelectItem(items[focusedIdx]);
+      }
+    },
+    [items, focusedIdx, narrow, onSelectItem],
+  );
+
+  // Scroll focused item into view
+  useEffect(() => {
+    if (focusedIdx < 0 || !listRef.current) return;
+    const li = listRef.current.children[focusedIdx] as HTMLElement | undefined;
+    li?.scrollIntoView({ block: 'nearest' });
+  }, [focusedIdx]);
+
   return (
     <div ref={containerRef} className="tw-relative tw-flex tw-h-full tw-overflow-hidden">
-      {/* List pane: hidden overflow (no scroll) when detail is shown side-by-side, full-width scroll when alone */}
       {!showFullDetail && (
         <div
           className={cn(
@@ -704,18 +738,29 @@ function InlineListDetail<T extends { id: string }>({
               : 'tw-w-full tw-overflow-y-auto',
           )}
         >
-          <ul role="listbox" className="tw-outline-none">
-            {items.map((item) => {
+          <ul
+            ref={listRef}
+            role="listbox"
+            tabIndex={0}
+            className="tw-outline-none focus:tw-ring-1 focus:tw-ring-inset focus:tw-ring-ring"
+            onKeyDown={handleListKeyDown}
+          >
+            {items.map((item, idx) => {
               const isSelected = selectedItem?.id === item.id;
+              const isFocused = focusedIdx === idx;
               return (
                 <li
                   key={item.id}
                   role="option"
                   aria-selected={isSelected}
-                  onClick={() => onSelectItem(isSelected ? undefined : item)}
+                  onClick={() => {
+                    setFocusedIdx(idx);
+                    onSelectItem(isSelected ? undefined : item);
+                  }}
                   className={cn('tw-cursor-pointer tw-border-b tw-p-2', {
                     'tw-bg-muted': isSelected,
                     'hover:tw-bg-muted': !isSelected,
+                    'tw-ring-1 tw-ring-inset tw-ring-ring': isFocused && !isSelected,
                   })}
                 >
                   {renderListItem(item, !!selectedItem)}
@@ -725,7 +770,6 @@ function InlineListDetail<T extends { id: string }>({
           </ul>
         </div>
       )}
-      {/* Detail pane */}
       {selectedItem && (
         <div
           className={cn(
@@ -944,7 +988,7 @@ export const AllErTabs: Story = {
               <DrawerContent
                 container={tabContentRef.current}
                 hideDrawerHandle
-                className="tw-top-2 tw-h-full tw-max-h-full tw-rounded-t-lg"
+                className="tw-top-[0.5rem] tw-mt-0 tw-h-full tw-max-h-full tw-rounded-t-lg"
               >
                 {domainPath && (
                   <DomainFilteredView

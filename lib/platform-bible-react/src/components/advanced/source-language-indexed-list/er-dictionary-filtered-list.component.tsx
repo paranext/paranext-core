@@ -23,10 +23,9 @@ import type {
 /**
  * ER Dictionary list filtered by semantic domain with breadcrumb navigation.
  *
- * Each breadcrumb segment (including the ellipsis) is clickable and opens a DropdownMenu (modal)
- * aligned to that segment, showing the expandable domain tree with that segment's level expanded.
- * The DropdownMenu captures keyboard: arrow keys move through items, Tab cycles expand/collapse
- * buttons, Esc closes only the dropdown (not the parent drawer).
+ * Each breadcrumb segment opens a DropdownMenu with a keyboard-navigable domain tree. The list
+ * supports arrow-key navigation: in wide mode arrows immediately select items; in narrow mode
+ * arrows move focus and Enter/Space submits.
  */
 export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   items,
@@ -43,9 +42,12 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   className,
 }: ErDictionaryFilteredListProps<T>) {
   const [selectedId, setSelectedId] = useState<string | undefined>(selectedItemId);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
 
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const listRef = useRef<HTMLUListElement>(null);
   const [narrow, setNarrow] = useState(false);
 
   useEffect(() => {
@@ -67,13 +69,46 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   );
 
   const selectedItem = items.find((item) => item.id === selectedId);
-  const handleItemClick = (item: T) => {
-    onItemClick?.(item);
-    setSelectedId(item.id === selectedId ? undefined : item.id);
-  };
-
   const showSideBySide = selectedItem && !narrow;
   const showFullDetail = selectedItem && narrow;
+
+  const selectItem = useCallback(
+    (item: T) => {
+      onItemClick?.(item);
+      setSelectedId(item.id === selectedId ? undefined : item.id);
+    },
+    [onItemClick, selectedId],
+  );
+
+  // List keyboard: arrow keys navigate, behavior depends on narrow/wide
+  const handleListKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (items.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = Math.min(focusedIndex + 1, items.length - 1);
+        setFocusedIndex(next);
+        if (!narrow) selectItem(items[next]);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = Math.max(focusedIndex - 1, 0);
+        setFocusedIndex(prev);
+        if (!narrow) selectItem(items[prev]);
+      } else if ((e.key === 'Enter' || e.key === ' ') && narrow && focusedIndex >= 0) {
+        e.preventDefault();
+        selectItem(items[focusedIndex]);
+      }
+    },
+    [items, focusedIndex, narrow, selectItem],
+  );
+
+  // Scroll focused item into view
+  useEffect(() => {
+    if (focusedIndex < 0 || !listRef.current) return;
+    const li = listRef.current.children[focusedIndex] as HTMLElement | undefined;
+    li?.scrollIntoView({ block: 'nearest' });
+  }, [focusedIndex]);
 
   return (
     <div className={cn('tw-flex tw-h-full tw-flex-col tw-overflow-hidden', className)}>
@@ -112,18 +147,29 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
                 {emptyStateMessage ?? 'No items found'}
               </div>
             ) : (
-              <ul role="listbox" className="tw-outline-none">
-                {items.map((item) => {
+              <ul
+                ref={listRef}
+                role="listbox"
+                tabIndex={0}
+                className="tw-outline-none focus:tw-ring-1 focus:tw-ring-inset focus:tw-ring-ring"
+                onKeyDown={handleListKeyDown}
+              >
+                {items.map((item, idx) => {
                   const isSelected = selectedId === item.id;
+                  const isFocused = focusedIndex === idx;
                   return (
                     <li
                       key={item.id}
                       role="option"
                       aria-selected={isSelected}
-                      onClick={() => handleItemClick(item)}
+                      onClick={() => {
+                        setFocusedIndex(idx);
+                        selectItem(item);
+                      }}
                       className={cn('tw-cursor-pointer tw-border-b tw-p-2', {
                         'tw-bg-muted': isSelected,
                         'hover:tw-bg-muted': !isSelected,
+                        'tw-ring-1 tw-ring-inset tw-ring-ring': isFocused && !isSelected,
                       })}
                     >
                       {renderItem ? (
@@ -222,7 +268,6 @@ function BreadcrumbBar({
       : path.slice(1, hideCount + 1)
     : [];
   const hiddenTooltip = hiddenSegments.map((d) => d.label).join(' > ');
-  // The expand target for the ellipsis dropdown: first hidden segment
   const ellipsisExpandId = hiddenSegments[0]?.id ?? path[0]?.id;
 
   return (
@@ -243,7 +288,6 @@ function BreadcrumbBar({
 
       {/* Visible breadcrumbs */}
       <div className="tw-inline-flex tw-items-center tw-gap-0.5">
-        {/* Root */}
         {!hideRoot && path[0] && (
           <SegmentDropdown
             label={path[0].label}
@@ -255,7 +299,6 @@ function BreadcrumbBar({
           />
         )}
 
-        {/* Ellipsis: clickable (opens dropdown) + tooltip (immediate) */}
         {showEllipsis && (
           <>
             {!hideRoot && (
@@ -284,7 +327,6 @@ function BreadcrumbBar({
           </>
         )}
 
-        {/* Trailing segments */}
         {path.map((domain, idx) => {
           if (idx === 0) return undefined;
           if (idx <= hideCount) return undefined;
@@ -309,7 +351,7 @@ function BreadcrumbBar({
 }
 
 // ---------------------------------------------------------------------------
-// SegmentDropdown: a breadcrumb segment that opens a DropdownMenu with domain tree
+// SegmentDropdown
 // ---------------------------------------------------------------------------
 
 function SegmentDropdown({
@@ -331,10 +373,13 @@ function SegmentDropdown({
 }) {
   const [open, setOpen] = useState(false);
 
-  const handleSelect = (newPath: SemanticDomain[]) => {
-    onDomainSelect(newPath);
-    setOpen(false);
-  };
+  const handleSelect = useCallback(
+    (newPath: SemanticDomain[]) => {
+      onDomainSelect(newPath);
+      setOpen(false);
+    },
+    [onDomainSelect],
+  );
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen} modal>
@@ -354,17 +399,24 @@ function SegmentDropdown({
         align="start"
         className="tw-max-h-[500px] tw-w-[300px] tw-overflow-y-auto tw-p-1"
         style={{ zIndex: Z_INDEX_MODAL + 10 }}
-        // Prevent Esc from propagating to the parent Drawer
         onEscapeKeyDown={(e) => {
           e.stopPropagation();
+          e.preventDefault();
           setOpen(false);
         }}
+        onKeyDown={(e) => {
+          // Prevent all keyboard events from reaching the parent Drawer
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+          }
+        }}
       >
-        <DomainTreeContent
+        <TreeKeyboardContainer
           domains={allDomains}
           currentPath={currentPath}
           expandToId={expandToId}
           onSelect={handleSelect}
+          onClose={() => setOpen(false)}
         />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -372,37 +424,91 @@ function SegmentDropdown({
 }
 
 // ---------------------------------------------------------------------------
-// Domain tree inside dropdown (proper keyboard: focusable buttons, Esc stops)
+// Tree with custom keyboard navigation
 // ---------------------------------------------------------------------------
 
-function DomainTreeContent({
+/**
+ * Wraps the domain tree and implements custom keyboard navigation:
+ *
+ * - ArrowDown / ArrowUp: move focus through all visible buttons (domain labels + expand/collapse)
+ * - Tab / Shift+Tab: same as arrow keys (cycle through buttons)
+ * - Enter / Space on a domain label: select it
+ * - Enter / Space on an expand/collapse button: toggle expand
+ * - Escape: close the dropdown (stops propagation so the parent drawer stays open)
+ */
+function TreeKeyboardContainer({
   domains,
   currentPath,
   expandToId,
   onSelect,
+  onClose,
 }: {
   domains: SemanticDomain[];
   currentPath: SemanticDomain[];
   expandToId: string;
   onSelect: (path: SemanticDomain[]) => void;
+  onClose: () => void;
 }) {
+  // eslint-disable-next-line no-null/no-null
+  const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line no-null/no-null
   const scrollRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     requestAnimationFrame(() => {
-      scrollRef.current?.scrollIntoView({ block: 'center' });
+      // Focus and scroll to the expand target
+      if (scrollRef.current) {
+        scrollRef.current.scrollIntoView({ block: 'center' });
+        scrollRef.current.focus();
+      }
     });
   }, [expandToId]);
 
+  const getFocusableButtons = (): HTMLButtonElement[] => {
+    if (!containerRef.current) return [];
+    return Array.from(containerRef.current.querySelectorAll('button'));
+  };
+
+  const moveFocus = (direction: 1 | -1) => {
+    const buttons = getFocusableButtons();
+    if (buttons.length === 0) return;
+    const currentIdx = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    let nextIdx = currentIdx + direction;
+    if (nextIdx < 0) nextIdx = buttons.length - 1;
+    if (nextIdx >= buttons.length) nextIdx = 0;
+    buttons[nextIdx].focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        e.stopPropagation();
+        moveFocus(1);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        e.stopPropagation();
+        moveFocus(-1);
+        break;
+      case 'Tab':
+        e.preventDefault();
+        e.stopPropagation();
+        moveFocus(e.shiftKey ? -1 : 1);
+        break;
+      case 'Escape':
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
-    // Role="menu" wrapping div so arrow keys work natively via the DropdownMenu Radix primitive.
-    // We use onKeyDown at this level to trap Esc.
-    <div
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') e.stopPropagation();
-      }}
-    >
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div ref={containerRef} onKeyDown={handleKeyDown}>
       <TreeNodeList
         domains={domains}
         currentPath={currentPath}
@@ -502,12 +608,8 @@ function TreeNode({
         {hasChildren ? (
           <button
             type="button"
-            tabIndex={0}
             className="tw-flex tw-h-5 tw-w-5 tw-shrink-0 tw-items-center tw-justify-center tw-rounded hover:tw-bg-muted focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring"
-            onClick={(e) => {
-              e.stopPropagation();
-              setExpanded(!expanded);
-            }}
+            onClick={() => setExpanded(!expanded)}
           >
             <ChevronRight
               className={cn('tw-h-3 tw-w-3 tw-transition-transform', {
@@ -520,7 +622,6 @@ function TreeNode({
         )}
         <button
           type="button"
-          tabIndex={0}
           ref={isScrollTarget ? scrollRef : undefined}
           className={cn(
             'tw-flex-1 tw-rounded tw-px-1.5 tw-py-0.5 tw-text-left tw-text-sm focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring',
