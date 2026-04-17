@@ -151,7 +151,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
                 ref={listRef}
                 role="listbox"
                 tabIndex={0}
-                className="tw-outline-none focus:tw-ring-1 focus:tw-ring-inset focus:tw-ring-ring"
+                className="tw-outline-none"
                 onKeyDown={handleListKeyDown}
               >
                 {items.map((item, idx) => {
@@ -163,7 +163,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
                       role="option"
                       aria-selected={isSelected}
                       onClick={() => {
-                        setFocusedIndex(idx);
+                        setFocusedIndex(-1);
                         selectItem(item);
                       }}
                       className={cn('tw-cursor-pointer tw-border-b tw-p-2', {

@@ -742,7 +742,7 @@ function InlineListDetail<T extends { id: string }>({
             ref={listRef}
             role="listbox"
             tabIndex={0}
-            className="tw-outline-none focus:tw-ring-1 focus:tw-ring-inset focus:tw-ring-ring"
+            className="tw-outline-none"
             onKeyDown={handleListKeyDown}
           >
             {items.map((item, idx) => {
@@ -754,7 +754,7 @@ function InlineListDetail<T extends { id: string }>({
                   role="option"
                   aria-selected={isSelected}
                   onClick={() => {
-                    setFocusedIdx(idx);
+                    setFocusedIdx(-1);
                     onSelectItem(isSelected ? undefined : item);
                   }}
                   className={cn('tw-cursor-pointer tw-border-b tw-p-2', {
