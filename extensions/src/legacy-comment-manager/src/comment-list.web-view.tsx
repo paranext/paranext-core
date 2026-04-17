@@ -24,6 +24,7 @@ import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-
 import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
+import { prepareCommentThreads } from './comment-list.utils';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -224,6 +225,11 @@ global.webViewComponent = function CommentListWebView({
     ]),
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
+
+  const preparedThreads = useMemo<LegacyCommentThread[]>(() => {
+    if (!commentThreads || isPlatformError(commentThreads)) return [];
+    return prepareCommentThreads(commentThreads);
+  }, [commentThreads]);
 
   // Process any pending thread selection once data finishes loading
   useEffect(() => {
@@ -429,7 +435,7 @@ global.webViewComponent = function CommentListWebView({
 
       {/* Comments list */}
       <div className="tw-flex-1 tw-overflow-auto">
-        {!commentThreads || isPlatformError(commentThreads) || commentThreads.length === 0 ? (
+        {preparedThreads.length === 0 ? (
           <div className="tw-m-4 tw-flex tw-justify-center">
             <Label>
               {commentFilter === UNFILTERED && scopeFilter === UNFILTERED
@@ -440,7 +446,7 @@ global.webViewComponent = function CommentListWebView({
         ) : (
           <CommentList
             classNameForVerseText="scripture-font"
-            threads={commentThreads}
+            threads={preparedThreads}
             currentUser={currentUserName}
             localizedStrings={localizedStrings}
             handleAddCommentToThread={handleAddCommentToThread}
