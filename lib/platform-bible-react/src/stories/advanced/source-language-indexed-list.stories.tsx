@@ -456,7 +456,7 @@ function ErDictionaryDetail({
 }) {
   return (
     <div>
-      <Button onClick={onClose} variant="link" className="tw-mb-3 tw-h-auto tw-p-0">
+      <Button onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
         <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
         Back to list
       </Button>
@@ -522,7 +522,7 @@ function LexicalDetail({ item, onClose }: { item: LexicalEntryFull; onClose: () 
 
   return (
     <div>
-      <Button onClick={onClose} variant="link" className="tw-mb-3 tw-h-auto tw-p-0">
+      <Button onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
         <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
         Back to list
       </Button>
@@ -618,7 +618,7 @@ function LexicalDetail({ item, onClose }: { item: LexicalEntryFull; onClose: () 
 function EncyclopediaDetail({ item, onClose }: { item: EncyclopediaTeaser; onClose: () => void }) {
   return (
     <div>
-      <Button onClick={onClose} variant="link" className="tw-mb-3 tw-h-auto tw-p-0">
+      <Button onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
         <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
         Back to list
       </Button>
@@ -638,7 +638,7 @@ function EncyclopediaDetail({ item, onClose }: { item: EncyclopediaTeaser; onClo
 function MediaDetail({ item, onClose }: { item: MediaItem; onClose: () => void }) {
   return (
     <div>
-      <Button onClick={onClose} variant="link" className="tw-mb-3 tw-h-auto tw-p-0">
+      <Button onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
         <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
         Back to list
       </Button>
@@ -700,7 +700,7 @@ function InlineListDetail<T extends { id: string }>({
           className={cn(
             'tw-h-full',
             showSideBySide
-              ? 'tw-w-1/5 tw-min-w-[120px] tw-overflow-hidden tw-border-r'
+              ? 'tw-w-1/3 tw-min-w-[120px] tw-overflow-hidden tw-border-r'
               : 'tw-w-full tw-overflow-y-auto',
           )}
         >
@@ -730,7 +730,7 @@ function InlineListDetail<T extends { id: string }>({
         <div
           className={cn(
             'tw-overflow-y-auto tw-bg-background tw-p-4',
-            showFullDetail ? 'tw-w-full' : 'tw-w-4/5',
+            showFullDetail ? 'tw-w-full' : 'tw-w-2/3',
           )}
         >
           {renderDetail(selectedItem)}
@@ -834,16 +834,8 @@ export const AllErTabs: Story = {
       [resolveDomainPath],
     );
 
-    // Domain click from inside the filtered detail view: update the breadcrumb path and list
-    const handleDomainClickInFiltered = useCallback(
-      (_domain: EntryDomain, pathIds?: string[]) => {
-        if (pathIds) {
-          const path = resolveDomainPath(pathIds);
-          if (path.length > 0) setDomainPath(path);
-        }
-      },
-      [resolveDomainPath],
-    );
+    // Domain click from inside the filtered detail view reuses the same handler
+    const handleDomainClickInFiltered = handleDomainClick;
 
     return (
       <div className="tw-flex tw-h-[550px] tw-flex-col tw-rounded tw-border">
@@ -955,21 +947,11 @@ export const AllErTabs: Story = {
                 className="tw-mt-0 tw-h-full tw-max-h-full tw-rounded-none"
               >
                 {domainPath && (
-                  <ErDictionaryFilteredList
-                    items={sampleDictionaryItems}
+                  <DomainFilteredView
                     domainPath={domainPath}
-                    allDomains={sampleAllDomains}
                     onDomainChange={setDomainPath}
                     onClose={() => setDomainPath(undefined)}
-                    renderItem={(item) => <ErDictListItem item={item} />}
-                    renderDetailContent={(item, onCloseDetail) => (
-                      <ErDictionaryDetail
-                        item={item}
-                        onClose={onCloseDetail}
-                        onDomainClick={handleDomainClickInFiltered}
-                      />
-                    )}
-                    className="tw-h-full"
+                    onDomainClick={handleDomainClickInFiltered}
                   />
                 )}
               </DrawerContent>
@@ -1054,3 +1036,41 @@ export const DomainComboBoxAlternative: Story = {
     },
   },
 };
+
+// ---------------------------------------------------------------------------
+// Domain-filtered view used inside the bottom drawer in AllErTabs.
+// Uses InlineListDetail so the list, breadcrumbs, close button, and domain
+// links all remain interactive while the detail panel is open.
+// ---------------------------------------------------------------------------
+
+function DomainFilteredView({
+  domainPath,
+  onDomainChange,
+  onClose,
+  onDomainClick,
+}: {
+  domainPath: SemanticDomain[];
+  onDomainChange: (path: SemanticDomain[]) => void;
+  onClose: () => void;
+  onDomainClick: (domain: EntryDomain, pathIds?: string[]) => void;
+}) {
+  const [selectedItem, setSelectedItem] = useState<DictionaryEntryWithSenses | undefined>();
+
+  return (
+    <ErDictionaryFilteredList
+      items={sampleDictionaryItems}
+      domainPath={domainPath}
+      allDomains={sampleAllDomains}
+      onDomainChange={(newPath) => {
+        onDomainChange(newPath);
+        setSelectedItem(undefined);
+      }}
+      onClose={onClose}
+      renderItem={(item) => <ErDictListItem item={item} compact={!!selectedItem} />}
+      renderDetailContent={(item, onCloseDetail) => (
+        <ErDictionaryDetail item={item} onClose={onCloseDetail} onDomainClick={onDomainClick} />
+      )}
+      className="tw-h-full"
+    />
+  );
+}

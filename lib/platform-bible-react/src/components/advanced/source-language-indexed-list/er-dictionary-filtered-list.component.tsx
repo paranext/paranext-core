@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
-import { ChevronRight, MoreHorizontal, X } from 'lucide-react';
+import { ArrowUp, ChevronRight, MoreHorizontal } from 'lucide-react';
 import { Z_INDEX_MODAL } from '@/components/z-index';
 import SourceLanguageIndexedList from './source-language-indexed-list.component';
 import type {
@@ -15,16 +15,16 @@ import type {
 /**
  * ER Dictionary list filtered by semantic domain with breadcrumb-based navigation.
  *
- * **Breadcrumb bar**: A single clickable button showing the domain path left-aligned. When space is
- * limited, intermediate segments collapse into an ellipsis (`...`) while the root ("Domain") and
- * the deepest segments stay visible. The last segment is bold. Hovering a segment underlines it.
- * Clicking the breadcrumb bar opens a popover with a searchable expandable domain tree (combobox
- * pattern). The tree auto-expands to and scrolls to the currently selected domain. Filtering keeps
- * ancestor nodes visible and highlights matching characters.
+ * Header layout (top to bottom):
  *
- * **Close button**: An X button on the right to dismiss the filtered view.
+ * 1. "Back to dictionary" button with arrow-up icon to slide the drawer back down.
+ * 2. Breadcrumb bar: a single clickable button showing the domain path left-aligned. When space is
+ *    limited, intermediate segments collapse into an ellipsis while the root and deepest segments
+ *    stay visible. Last segment is bold. Clicking opens a popover with a searchable expandable
+ *    domain tree.
  *
- * Below the header: a `SourceLanguageIndexedList` for the filtered entries.
+ * The detail panel within `SourceLanguageIndexedList` does not block interaction with the list or
+ * header elements because it is rendered as an absolutely-positioned sibling, not a modal overlay.
  */
 export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   items,
@@ -42,20 +42,33 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
 }: ErDictionaryFilteredListProps<T>) {
   const [popoverOpen, setPopoverOpen] = useState(false);
 
-  const handleDomainSelect = (path: SemanticDomain[]) => {
-    onDomainChange(path);
-    setPopoverOpen(false);
-  };
+  const handleDomainSelect = useCallback(
+    (path: SemanticDomain[]) => {
+      onDomainChange(path);
+      setPopoverOpen(false);
+    },
+    [onDomainChange],
+  );
 
   return (
     <div className={cn('tw-relative tw-flex tw-h-full tw-flex-col tw-overflow-hidden', className)}>
-      {/* Header: breadcrumb button + close */}
-      <div className="tw-flex tw-items-center tw-gap-1 tw-border-b tw-px-2 tw-py-1.5">
+      {/* "Back to dictionary" button */}
+      {onClose && (
+        <div className="tw-border-b tw-px-2 tw-py-1">
+          <Button variant="ghost" size="sm" className="tw-gap-1" onClick={onClose}>
+            <ArrowUp className="tw-h-4 tw-w-4" />
+            Back to dictionary
+          </Button>
+        </div>
+      )}
+
+      {/* Breadcrumb bar */}
+      <div className="tw-border-b tw-px-2 tw-py-1">
         <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="tw-group tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-1 tw-overflow-hidden tw-rounded tw-px-1.5 tw-py-1 tw-text-left hover:tw-bg-muted"
+              className="tw-group tw-flex tw-w-full tw-min-w-0 tw-items-center tw-gap-1 tw-overflow-hidden tw-rounded tw-px-1.5 tw-py-1 tw-text-left hover:tw-bg-muted"
             >
               <BreadcrumbDisplay path={domainPath} />
             </button>
@@ -72,18 +85,6 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
             />
           </PopoverContent>
         </Popover>
-
-        {onClose && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="tw-h-7 tw-w-7 tw-shrink-0"
-            onClick={onClose}
-            aria-label="Close filtered view"
-          >
-            <X className="tw-h-4 tw-w-4" />
-          </Button>
-        )}
       </div>
 
       {/* Dictionary list */}
@@ -106,82 +107,126 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
 }
 
 // ---------------------------------------------------------------------------
-// Breadcrumb display: left-aligned, ellipsis collapse, last item bold,
-// hover underlines individual segments
+// Breadcrumb display: left-aligned, stable ellipsis (no flicker), last bold
 // ---------------------------------------------------------------------------
 
+/**
+ * Renders the breadcrumb path. Uses a hidden measurement pass to determine how many trailing
+ * segments fit before the component mounts visually, avoiding flicker. The root segment is always
+ * shown; intermediate ones collapse into an ellipsis (`...`) when the container is too narrow.
+ */
 function BreadcrumbDisplay({ path }: { path: SemanticDomain[] }) {
-  // ref.current expects null not undefined for div ref
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
-  const [visibleCount, setVisibleCount] = useState(path.length);
+  // eslint-disable-next-line no-null/no-null
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [visibleFromEnd, setVisibleFromEnd] = useState(path.length);
 
-  // Measure which segments fit. Show root + ellipsis + trailing segments.
+  // Measure once after layout, synchronously before paint, to avoid flicker
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const measure = measureRef.current;
+    if (!container || !measure) return;
+
+    const availableWidth = container.clientWidth;
+
+    // measureRef contains all segments rendered invisibly. We measure from the right:
+    // always keep the root, then try adding trailing segments + ellipsis until it overflows.
+    const segments = Array.from(measure.children) as HTMLElement[];
+    if (segments.length === 0) return;
+
+    // Full width of all segments
+    let totalWidth = 0;
+    for (const seg of segments) totalWidth += seg.scrollWidth;
+
+    if (totalWidth <= availableWidth) {
+      setVisibleFromEnd(path.length);
+      return;
+    }
+
+    // Root width + ellipsis (approx 32px for chevron+dots)
+    const rootWidth = segments[0].scrollWidth;
+    const ellipsisWidth = 32;
+    let budget = availableWidth - rootWidth - ellipsisWidth;
+    let count = 0;
+
+    // Count from the end how many fit
+    for (let i = segments.length - 1; i >= 1 && budget > 0; i -= 1) {
+      const segWidth = segments[i].scrollWidth;
+      if (segWidth > budget) break;
+      budget -= segWidth;
+      count += 1;
+    }
+
+    setVisibleFromEnd(Math.max(1, count) + 1); // +1 for root
+  }, [path]);
+
+  // Also re-measure on resize
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return undefined;
+    const container = containerRef.current;
+    if (!container) return undefined;
     const observer = new ResizeObserver(() => {
-      // Reset to try full path
-      setVisibleCount(path.length);
-      requestAnimationFrame(() => {
-        if (!el) return;
-        if (el.scrollWidth > el.clientWidth) {
-          // Binary search for how many trailing segments fit with ellipsis
-          let lo = 2;
-          let hi = path.length;
-          while (lo < hi) {
-            const mid = Math.ceil((lo + hi) / 2);
-            setVisibleCount(mid);
-            // We can't measure synchronously after setState, so use a simpler heuristic:
-            // just show fewer if overflowing
-            hi = mid - 1;
-          }
-          setVisibleCount(Math.max(2, lo));
-        }
-      });
+      // Re-run the layout effect by triggering a state update with the full count,
+      // then the layout effect will correct it synchronously before paint
+      setVisibleFromEnd(path.length);
     });
-    observer.observe(el);
+    observer.observe(container);
     return () => observer.disconnect();
   }, [path.length]);
 
-  // Always show root ("Domain" label). If collapsed, show root + ... + trailing segments.
-  const showEllipsis = visibleCount < path.length;
+  const showEllipsis = visibleFromEnd < path.length;
   const rootItem = path[0];
-  const trailingItems = showEllipsis ? path.slice(-(visibleCount - 1)) : path.slice(1);
+  const trailingItems = showEllipsis ? path.slice(-(visibleFromEnd - 1)) : path.slice(1);
 
   return (
-    <div ref={containerRef} className="tw-flex tw-items-center tw-gap-0.5 tw-overflow-hidden">
-      {rootItem && (
-        <span className="tw-shrink-0 tw-text-sm group-hover:tw-underline">{rootItem.label}</span>
-      )}
-      {showEllipsis && (
-        <>
-          <ChevronRight className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
-          <MoreHorizontal className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
-        </>
-      )}
-      {trailingItems.map((domain, idx) => {
-        const isLast = idx === trailingItems.length - 1;
-        return (
+    <>
+      {/* Hidden measurement div: renders all segments invisibly to measure their widths */}
+      <div
+        ref={measureRef}
+        className="tw-pointer-events-none tw-invisible tw-absolute tw-flex tw-items-center tw-gap-0.5 tw-whitespace-nowrap"
+        aria-hidden
+      >
+        {path.map((domain, idx) => (
           <span key={domain.id} className="tw-flex tw-shrink-0 tw-items-center tw-gap-0.5">
-            <ChevronRight className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
-            <span
-              className={cn('tw-text-sm group-hover:tw-underline', {
-                'tw-font-bold': isLast,
-              })}
-            >
-              {domain.label}
-            </span>
+            {idx > 0 && <ChevronRight className="tw-h-3 tw-w-3" />}
+            <span className="tw-text-sm">{domain.label}</span>
           </span>
-        );
-      })}
-    </div>
+        ))}
+      </div>
+
+      {/* Visible breadcrumbs */}
+      <div ref={containerRef} className="tw-flex tw-items-center tw-gap-0.5 tw-overflow-hidden">
+        {rootItem && (
+          <span className="tw-shrink-0 tw-text-sm group-hover:tw-underline">{rootItem.label}</span>
+        )}
+        {showEllipsis && (
+          <>
+            <ChevronRight className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
+            <MoreHorizontal className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
+          </>
+        )}
+        {trailingItems.map((domain, idx) => {
+          const isLast = idx === trailingItems.length - 1;
+          return (
+            <span key={domain.id} className="tw-flex tw-shrink-0 tw-items-center tw-gap-0.5">
+              <ChevronRight className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
+              <span
+                className={cn('tw-text-sm group-hover:tw-underline', {
+                  'tw-font-bold': isLast,
+                })}
+              >
+                {domain.label}
+              </span>
+            </span>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Domain search tree: filterable tree inside a popover, with highlight and
-// ancestor retention
+// Domain search tree
 // ---------------------------------------------------------------------------
 
 function DomainSearchTree({
@@ -194,11 +239,9 @@ function DomainSearchTree({
   onSelect: (path: SemanticDomain[]) => void;
 }) {
   const [filter, setFilter] = useState('');
-  // ref.current expects null not undefined for element ref
   // eslint-disable-next-line no-null/no-null
   const selectedRef = useRef<HTMLButtonElement>(null);
 
-  // Scroll to current selection when opening
   useEffect(() => {
     requestAnimationFrame(() => {
       selectedRef.current?.scrollIntoView({ block: 'center' });
@@ -232,13 +275,11 @@ function DomainSearchTree({
   );
 }
 
-/** Check if a domain or any descendant matches the filter */
 function domainMatchesFilter(domain: SemanticDomain, filter: string): boolean {
   if (domain.label.toLowerCase().includes(filter)) return true;
   return domain.children?.some((child) => domainMatchesFilter(child, filter)) ?? false;
 }
 
-/** Highlight matching characters in a label */
 function HighlightLabel({ label, filter }: { label: string; filter: string }) {
   if (!filter) return <span>{label}</span>;
   const idx = label.toLowerCase().indexOf(filter);
@@ -272,7 +313,6 @@ function FilterableTreeNodes({
   return (
     <ul className={cn('tw-space-y-0.5', { 'tw-ml-3': parentPath.length > 0 })}>
       {domains.map((domain) => {
-        // When filtering, skip domains (and subtrees) that don't match
         if (filter && !domainMatchesFilter(domain, filter)) return undefined;
 
         const thisPath = [...parentPath, domain];
@@ -280,7 +320,6 @@ function FilterableTreeNodes({
         const isSelected =
           currentPath.length > 0 && currentPath[currentPath.length - 1].id === domain.id;
         const hasChildren = domain.children && domain.children.length > 0;
-        // Auto-expand: when filtering (show all matches), or when on current path
         const shouldExpand = !!filter || isInCurrentPath;
 
         return (
@@ -325,7 +364,6 @@ function FilterableTreeNode({
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
-  // Re-expand when filter or path changes
   useEffect(() => {
     if (defaultExpanded) setExpanded(true);
   }, [defaultExpanded]);
