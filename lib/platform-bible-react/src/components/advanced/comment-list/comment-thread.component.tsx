@@ -126,11 +126,14 @@ export function CommentThread({
     };
   }, [threadId, canUserResolveThreadCallback]);
 
-  // Pre-populate the pending assignee when the thread opens, using the last assignee from the parent
+  // Pre-populate the pending assignee when the thread opens, using the last assignee from the parent.
+  // Clear it when the thread collapses so stale auto-populated values don't leak into future actions.
   const prevIsSelectedRef = useRef(isSelected);
   useEffect(() => {
     if (!prevIsSelectedRef.current && isSelected && initialAssignedUser !== undefined) {
       setPendingCommentAssignedUser(initialAssignedUser);
+    } else if (prevIsSelectedRef.current && !isSelected) {
+      setPendingCommentAssignedUser(undefined);
     }
     prevIsSelectedRef.current = isSelected;
   }, [isSelected, initialAssignedUser]);
@@ -349,10 +352,15 @@ export function CommentThread({
       const contents = hasEditorContent(pendingCommentEditorState)
         ? editorStateToHtml(pendingCommentEditorState)
         : undefined;
+      // Only apply the auto-populated pending assignee for new comments, not for
+      // status changes (resolve/reopen) where it would silently reassign the thread
+      const assignedUser = options.status
+        ? options.assignedUser
+        : (pendingCommentAssignedUser ?? options.assignedUser);
       const success = await handleAddCommentToThread({
         ...options,
         contents,
-        assignedUser: pendingCommentAssignedUser ?? options.assignedUser,
+        assignedUser,
       });
       if (success && contents) {
         clearEditor();

@@ -9,16 +9,36 @@ import { launchElectronApp, teardownElectronApp } from './helpers';
 
 export { expect } from '@playwright/test';
 
-/** Test-scoped fixtures — each test gets a fresh Electron instance. */
+/**
+ * Isolated test fixtures — each **test file** gets its own Electron instance.
+ *
+ * ## One instance per file, not per test
+ *
+ * All `test()` blocks within a single spec file share the same Electron process. This is
+ * intentional: spinning up a fresh Electron instance takes 30+ seconds, so launching one per
+ * `test()` block would make suites painfully slow.
+ *
+ * - **Tests that can share state** → put them in the same file. Use `test.step()` inside a single
+ *   `test()` if you want granular reporting without the overhead of a separate Electron instance.
+ * - **Tests that need a truly fresh Electron instance** → put them in separate `.spec.ts` files.
+ *   Playwright treats each file as an independent worker, so each file launches and tears down its
+ *   own Electron process.
+ *
+ * The renderer connects to a shared webpack dev server (`localhost:1212`), and ES module state
+ * (initialization guards, dock layout singletons, etc.) persists across navigations within the same
+ * renderer process. A second Electron instance launched against the same dev-server renderer will
+ * inherit stale module state, which prevents dock tabs from rendering correctly. Separate files
+ * avoid this because each file's Electron process gets its own renderer.
+ */
 export interface IsolatedFixtures {
   electronApp: ElectronApplication;
   mainPage: Page;
 }
 
 export const test = base.extend<IsolatedFixtures>({
-  // Test-scoped: a fresh Electron process is launched for every test, then torn
-  // down afterward. Use this for tests that mutate state in ways that are hard
-  // to clean up (e.g. creating/deleting projects, changing settings).
+  // Test-scoped fixture: Playwright creates one instance per test() block, but
+  // since all test() blocks in a file run in the same worker, they share this
+  // Electron process. See the IsolatedFixtures JSDoc for why this is intentional.
   // Playwright fixtures require destructured parameter even when no dependencies are needed
   // eslint-disable-next-line no-empty-pattern
   electronApp: async ({}, use) => {
