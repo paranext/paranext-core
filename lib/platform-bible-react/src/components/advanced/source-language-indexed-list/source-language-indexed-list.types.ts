@@ -72,13 +72,13 @@ export type ErDictionaryListProps<T extends IndexedListItem> = SourceLanguageInd
   getOccurrenceCount?: (item: T) => number;
 };
 
-/** A semantic domain in a 2-level hierarchy */
+/** A semantic domain in a hierarchical tree (up to 5 levels) */
 export type SemanticDomain = {
   /** Unique identifier for the domain */
   id: string;
   /** Display label for the domain */
   label: string;
-  /** Child domains (only top-level domains have children; domains are always 2 levels) */
+  /** Child domains */
   children?: SemanticDomain[];
 };
 
@@ -98,15 +98,13 @@ export type ErDictionaryFilteredListProps<T extends IndexedListItem> = {
   emptyStateMessage?: string;
   /** Whether items are currently being loaded */
   isLoading?: boolean;
-  /** The currently selected top-level domain (level 1) */
-  selectedLevel1Domain: SemanticDomain;
-  /** The currently selected child domain (level 2), or undefined if viewing all of level 1 */
-  selectedLevel2Domain?: SemanticDomain;
-  /** All top-level domains (for navigation) */
+  /** Breadcrumb path: array of domains from root to the currently selected domain */
+  domainPath: SemanticDomain[];
+  /** All top-level domains (root of the tree, for navigation) */
   allDomains: SemanticDomain[];
-  /** Callback when a different domain is selected via breadcrumb navigation */
-  onDomainChange: (level1: SemanticDomain, level2?: SemanticDomain) => void;
-  /** Callback for the back arrow button (left of breadcrumbs). When provided, renders a back arrow */
+  /** Callback when a different domain is selected. Receives the new full path. */
+  onDomainChange: (newPath: SemanticDomain[]) => void;
+  /** Callback for the back arrow button. When provided, renders a back button. */
   onBack?: () => void;
   /** Additional CSS class names */
   className?: string;
