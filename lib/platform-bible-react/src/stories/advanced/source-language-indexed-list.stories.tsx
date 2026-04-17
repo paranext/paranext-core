@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, useCallback } from 'react';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { ArrowLeft, BookA } from 'lucide-react';
+import { cn } from '@/utils/shadcn-ui.util';
 import { Button } from '@/components/shadcn-ui/button';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Badge } from '@/components/shadcn-ui/badge';
@@ -923,6 +924,209 @@ export const AllErTabs: Story = {
       description: {
         story:
           'All ER tabs combined with detail panels and domain-filtered dialog. Dictionary entries open a detail panel with clickable domain links. Clicking a domain opens the filtered dictionary dialog.',
+      },
+    },
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Alternative: Inline panel (flex layout, no Drawer)
+// ---------------------------------------------------------------------------
+
+/**
+ * Alternative layout using an inline flex panel instead of a Drawer. The detail view renders as a
+ * sibling div that takes 4/5 of the width while the list collapses. No portal or overlay involved.
+ */
+export const InlinePanelAlternative: Story = {
+  render: () => {
+    const [selectedItem, setSelectedItem] = useState<DictionaryEntryWithDomains | undefined>();
+
+    return (
+      <div className="tw-h-[500px] tw-rounded tw-border">
+        <h3 className="tw-border-b tw-px-3 tw-py-2 tw-text-sm tw-font-semibold">
+          Dictionary (Inline Panel Alternative)
+        </h3>
+        <div className="tw-relative tw-flex tw-h-[calc(100%-41px)] tw-overflow-hidden">
+          {/* List pane */}
+          <div
+            className={cn('tw-overflow-y-auto tw-transition-all tw-duration-200', {
+              'tw-w-full': !selectedItem,
+              'tw-w-1/5 tw-min-w-0': !!selectedItem,
+            })}
+          >
+            <ul role="listbox" className="tw-outline-none">
+              {sampleDictionaryItems.map((item) => {
+                const isSelected = selectedItem?.id === item.id;
+                return (
+                  <li
+                    key={item.id}
+                    role="option"
+                    aria-selected={isSelected}
+                    tabIndex={-1}
+                    onClick={() => setSelectedItem(isSelected ? undefined : item)}
+                    className={cn(
+                      'tw-flex tw-cursor-pointer tw-flex-col tw-gap-0.5 tw-border-b tw-p-2',
+                      {
+                        'tw-bg-muted': isSelected,
+                        'hover:tw-bg-muted': !isSelected,
+                      },
+                    )}
+                  >
+                    <span className="tw-text-sm tw-font-medium">{item.primaryText}</span>
+                    {!selectedItem && (
+                      <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
+                        {item.glosses}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          {/* Inline detail pane */}
+          {selectedItem && (
+            <div className="tw-w-4/5 tw-overflow-y-auto tw-border-l tw-bg-background tw-p-4">
+              <Button
+                onClick={() => setSelectedItem(undefined)}
+                className="tw-mb-4 tw-flex tw-items-center"
+                variant="link"
+              >
+                <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+                Back to list
+              </Button>
+              <h2 className="tw-text-2xl tw-font-normal">{selectedItem.primaryText}</h2>
+              <p className="tw-text-lg tw-text-muted-foreground">{selectedItem.glosses}</p>
+              {selectedItem.sourceLanguageText && (
+                <p className="tw-mt-1 tw-text-sm tw-text-muted-foreground">
+                  {selectedItem.sourceLanguageText}
+                  {selectedItem.transliteration && (
+                    <span className="tw-ml-1">({selectedItem.transliteration})</span>
+                  )}
+                </p>
+              )}
+              <Separator className="tw-my-3" />
+              {selectedItem.definition && (
+                <p className="tw-text-sm tw-text-muted-foreground">{selectedItem.definition}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Alternative layout using an inline flex panel instead of a Drawer. The list shrinks to 1/5 width and the detail panel takes 4/5. No portal, overlay, or z-index concerns. Compare with the Drawer-based ErDictionary story.',
+      },
+    },
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Alternative: Inline domain navigation (no Dialog)
+// ---------------------------------------------------------------------------
+
+/**
+ * Alternative to using a Dialog for domain-filtered navigation. Clicking a domain link in the
+ * dictionary detail view replaces the current dictionary list with the filtered domain view inline.
+ * A back button returns to the original list.
+ */
+export const ErDictionaryInlineNavigation: Story = {
+  render: () => {
+    const [activeDomain, setActiveDomain] = useState<
+      | {
+          level1: SemanticDomain;
+          level2?: SemanticDomain;
+        }
+      | undefined
+    >();
+    const [navMode, setNavMode] = useState<'tree' | 'dropdown'>('dropdown');
+
+    const handleDomainClick = (domain: EntryDomain) => {
+      const l1 = sampleAllDomains.find(
+        (d) => d.id === domain.id || d.children?.some((c) => c.id === domain.id),
+      );
+      if (l1) {
+        const l2 = l1.children?.find((c) => c.id === domain.id);
+        setActiveDomain({ level1: l1, level2: l2 });
+      }
+    };
+
+    return (
+      <div className="tw-h-[500px] tw-rounded tw-border">
+        {activeDomain ? (
+          /* Domain-filtered view (replaces the dictionary list) */
+          <>
+            <div className="tw-flex tw-items-center tw-gap-2 tw-border-b tw-px-3 tw-py-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setActiveDomain(undefined)}
+                className="tw-gap-1"
+              >
+                <ArrowLeft className="tw-h-4 tw-w-4" />
+                Back to Dictionary
+              </Button>
+              <span className="tw-text-sm tw-text-muted-foreground">
+                {activeDomain.level1.label}
+                {activeDomain.level2 && ` / ${activeDomain.level2.label}`}
+              </span>
+            </div>
+            <ErDictionaryFilteredList
+              items={sampleDictionaryItems.filter((entry) =>
+                entry.domains.some(
+                  (d) =>
+                    d.id === activeDomain.level1.id ||
+                    d.id === activeDomain.level2?.id ||
+                    d.parentId === activeDomain.level1.id,
+                ),
+              )}
+              selectedLevel1Domain={activeDomain.level1}
+              selectedLevel2Domain={activeDomain.level2}
+              allDomains={sampleAllDomains}
+              onDomainChange={(l1, l2) => setActiveDomain({ level1: l1, level2: l2 })}
+              navigationMode={navMode}
+              onNavigationModeChange={setNavMode}
+              renderDetailContent={(item, onClose) => (
+                <DictionaryDetailContent item={item} onClose={onClose} />
+              )}
+              className="tw-h-[calc(100%-45px)]"
+            />
+          </>
+        ) : (
+          /* Normal dictionary list */
+          <>
+            <h3 className="tw-border-b tw-px-3 tw-py-2 tw-text-sm tw-font-semibold">
+              Dictionary (Inline Navigation)
+            </h3>
+            <ErDictionaryList
+              items={sampleDictionaryItems}
+              showSourceLanguage
+              showTransliteration
+              getDescription={(item) => item.glosses}
+              getBadges={(item) => item.strongsCodes}
+              getOccurrenceCount={(item) => item.occurrenceCount}
+              renderDetailContent={(item, onClose) => (
+                <DictionaryDetailContent
+                  item={item}
+                  onClose={onClose}
+                  onDomainClick={handleDomainClick}
+                />
+              )}
+            />
+          </>
+        )}
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Alternative to using a Dialog for domain navigation. Clicking a domain link in the detail view replaces the entire dictionary with the domain-filtered view inline. A back button returns to the original list. Compare with the Dialog-based ErDictionary story.',
       },
     },
   },

@@ -205,7 +205,11 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
 
       {/* Domain tree Drawer - scoped to this component's bounding box */}
       <Drawer direction="right" modal={false} open={treeOpen} onOpenChange={setTreeOpen}>
-        <DrawerContent container={containerRef.current} hideDrawerHandle className="tw-max-w-full">
+        <DrawerContent
+          container={containerRef.current}
+          hideDrawerHandle
+          className="tw-ml-0 tw-w-4/5 tw-max-w-none tw-rounded-none"
+        >
           <div className="tw-flex tw-h-full tw-flex-col">
             <div className="tw-flex tw-items-center tw-justify-between tw-border-b tw-px-3 tw-py-2">
               <DrawerTitle className="tw-text-sm tw-font-semibold">Semantic Domains</DrawerTitle>

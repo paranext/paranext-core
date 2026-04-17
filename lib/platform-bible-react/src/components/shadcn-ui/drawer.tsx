@@ -99,7 +99,9 @@ const DrawerContent = React.forwardRef<
 
   return (
     <DrawerPortal container={container}>
-      <DrawerOverlay className={container ? 'tw-absolute' : undefined} />
+      {/* CUSTOM: Skip overlay for container-scoped drawers so clicks pass through to elements
+          underneath. The drawer is dismissed via vaul's built-in outside-click handling. */}
+      {!container && <DrawerOverlay />}
       <DrawerPrimitive.Content
         ref={ref}
         className={cn(

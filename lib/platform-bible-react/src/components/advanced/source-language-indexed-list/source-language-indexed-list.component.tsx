@@ -3,7 +3,7 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { useListbox, type ListboxOption } from '@/hooks/listbox-keyboard-navigation.hook';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Skeleton } from '@/components/shadcn-ui/skeleton';
-import { Drawer, DrawerContent, DrawerTrigger } from '@/components/shadcn-ui/drawer';
+import { Drawer, DrawerContent } from '@/components/shadcn-ui/drawer';
 import type {
   IndexedListItem,
   SourceLanguageIndexedListProps,
@@ -15,8 +15,10 @@ import type {
  * loading/empty states, and an optional detail drawer.
  *
  * When `renderDetailContent` is provided, clicking an item opens a right-side drawer **within the
- * component's own bounding box** using the Drawer component with a scoped `container` prop. This
- * pattern is extracted from the lexical dictionary extension's split-pane layout.
+ * component's own bounding box** using the Drawer component with a scoped `container` prop. The
+ * drawer opens to 4/5 of the available width. Clicking a different list item while the drawer is
+ * open swaps the content without requiring a close-then-reopen cycle. Clicking outside the drawer
+ * closes it while allowing the click to pass through to the underlying element.
  *
  * Used by Enhanced Resources (dictionary, encyclopedia, media) and lexical tools (dictionary).
  *
@@ -67,6 +69,8 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
   const handleItemSelect = (item: T) => {
     onItemClick?.(item);
     if (renderDetailContent) {
+      // Always set to the clicked item so the drawer stays open with new content.
+      // Clicking the already-selected item closes the drawer.
       setDrawerItemId(item.id === drawerItemId ? undefined : item.id);
     }
   };
@@ -169,31 +173,29 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
 
   return (
     <div ref={containerRef} className={cn('tw-relative tw-h-full tw-overflow-hidden', className)}>
-      <div className="tw-h-full tw-overflow-y-auto">
-        {renderDetailContent ? (
-          <Drawer
-            direction="right"
-            modal={false}
-            open={drawerItem !== undefined}
-            onOpenChange={(open) => {
-              if (!open) handleCloseDetail();
-            }}
+      <div className="tw-h-full tw-overflow-y-auto">{listContent}</div>
+
+      {/* Detail drawer - scoped to this component, 4/5 width, no overlay so clicks pass through */}
+      {renderDetailContent && (
+        <Drawer
+          direction="right"
+          modal={false}
+          open={drawerItem !== undefined}
+          onOpenChange={(open) => {
+            if (!open) handleCloseDetail();
+          }}
+        >
+          <DrawerContent
+            container={containerRef.current}
+            hideDrawerHandle
+            className="tw-ml-0 tw-w-4/5 tw-max-w-none tw-rounded-none"
           >
-            <DrawerTrigger asChild>{listContent}</DrawerTrigger>
-            <DrawerContent
-              container={containerRef.current}
-              hideDrawerHandle
-              className="tw-max-w-full"
-            >
-              <div className="tw-h-full tw-overflow-y-auto tw-p-4">
-                {drawerItem && renderDetailContent(drawerItem, handleCloseDetail)}
-              </div>
-            </DrawerContent>
-          </Drawer>
-        ) : (
-          listContent
-        )}
-      </div>
+            <div className="tw-h-full tw-overflow-y-auto tw-p-4">
+              {drawerItem && renderDetailContent(drawerItem, handleCloseDetail)}
+            </div>
+          </DrawerContent>
+        </Drawer>
+      )}
     </div>
   );
 }
