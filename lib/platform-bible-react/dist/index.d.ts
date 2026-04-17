@@ -224,13 +224,18 @@ export interface CommentEditorProps {
 	onClose: () => void;
 	/** Localized strings to be passed to the comment editor component */
 	localizedStrings: CommentEditorLocalizedStrings;
+	/**
+	 * The user to pre-select in the "Assign to" dropdown when the editor opens. Used to persist the
+	 * last chosen assignee across consecutive comment creations within a session.
+	 */
+	initialAssignedUser?: string;
 }
 /**
  * Component to create a new project comment from within the scripture editor
  *
  * @param CommentEditorProps - The properties for the comment editor component
  */
-export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrings, }: CommentEditorProps): import("react/jsx-runtime").JSX.Element;
+export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrings, initialAssignedUser, }: CommentEditorProps): import("react/jsx-runtime").JSX.Element;
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
 	/** The ID of the thread to add the comment to */

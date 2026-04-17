@@ -71,11 +71,22 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
   throw new Error(`WebSocket server not ready on port ${port} after ${timeout}ms`);
 }
 
+/** Options accepted by {@link launchElectronApp}. */
+export interface LaunchElectronAppOptions {
+  /**
+   * Additional environment variables to merge into the child process environment, applied after the
+   * defaults. Keys present here override the defaults (e.g. `{ DEV_NOISY: 'false' }`).
+   */
+  envOverrides?: Record<string, string>;
+}
+
 /**
  * Launch a fresh Electron instance with an isolated user-data directory. Returns the app handle,
  * the temp directory path, and a promise that resolves when the app closes.
  */
-export async function launchElectronApp(): Promise<ElectronAppContext> {
+export async function launchElectronApp(
+  opts: LaunchElectronAppOptions = {},
+): Promise<ElectronAppContext> {
   const rootDir = path.resolve(__dirname, '../..');
 
   console.log(`Launching Electron app from project root: ${rootDir}`);
@@ -93,6 +104,8 @@ export async function launchElectronApp(): Promise<ElectronAppContext> {
     // Enable noisy dev mode so test extensions (helloRock3, helloSomeone, etc.) are loaded.
     // Only set if not already defined, so other E2E suites can override.
     DEV_NOISY: process.env.DEV_NOISY ?? 'true',
+    // Caller-supplied overrides take precedence over all defaults above.
+    ...opts.envOverrides,
   };
 
   // Use an isolated user-data directory so the singleton instance lock does not
@@ -308,7 +321,7 @@ export async function sendPapiCommand<T = unknown>(
  * Send a single JSON-RPC request where `method` is a PAPI request type (e.g. `rpc.discover`). Opens
  * a connection, sends one request, waits for the matching response id, then closes.
  */
-async function sendPapiRequestOnce<T>(
+export async function sendPapiRequestOnce<T>(
   method: string,
   params: unknown[] = [],
   port: number = DEFAULT_WEBSOCKET_PORT,
@@ -387,6 +400,42 @@ export async function waitForAtLeastOneProjectMetadata(
   throw new Error(
     `Project lookup returned no projects within ${timeoutMs}ms (PDP factories may not be registered).`,
   );
+}
+
+/**
+ * Adds the given usernames as team members of the specified Paratext project so they appear in the
+ * "Assign to" dropdown.
+ *
+ * Writes a `ProjectUserAccess.xml` file into the project directory. The Paratext Data library
+ * (`CommentThread.GetAssignToUsers`) reads this file to determine assignable users. Call this
+ * before the data provider opens the project (i.e., during project setup) to avoid caching issues.
+ *
+ * @param projectDir Absolute path to the project directory
+ * @param users Usernames to add as project team members
+ */
+export function addUsersToProject(projectDir: string, users: string[]): void {
+  const userEntries = users
+    .map(
+      (name) =>
+        `  <User UserName="${name}" FirstUser="false" UnregisteredUser="false">
+    <Role>TeamMember</Role>
+    <AllBooks>true</AllBooks>
+    <Books/>
+    <Permissions>
+      <Permission Type="TermsList" Granted="false"/>
+      <Permission Type="Renderings" Granted="true"/>
+      <Permission Type="Spellings" Granted="true"/>
+      <Permission Type="Passages" Granted="true"/>
+      <Permission Type="Progress" Granted="false"/>
+    </Permissions>
+    <AutomaticBooks/>
+    <AutomaticPermissions/>
+  </User>`,
+    )
+    .join('\n');
+
+  const xml = `<ProjectUserAccess PeerSharing="false">\n${userEntries}\n</ProjectUserAccess>\n`;
+  fs.writeFileSync(path.join(projectDir, 'ProjectUserAccess.xml'), xml, 'utf8');
 }
 
 /**

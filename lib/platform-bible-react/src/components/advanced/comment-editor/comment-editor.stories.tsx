@@ -49,6 +49,24 @@ export const Default: Story = {
   },
 };
 
+/**
+ * Story demonstrating the editor with a pre-selected assignee. Simulates opening the editor after a
+ * previous comment was assigned to Alice — the dropdown shows Alice pre-selected.
+ */
+export const WithInitialAssignee: Story = {
+  args: {
+    assignableUsers: mockAssignableUsers,
+    localizedStrings: commentEditorLocalizedStrings,
+    initialAssignedUser: 'Alice',
+    onSave: (contents, assignedUser) => {
+      console.log('Comment saved:', { contents, assignedUser });
+    },
+    onClose: () => {
+      console.log('Editor closed');
+    },
+  },
+};
+
 /** Story demonstrating the editor when no users are available for assignment */
 export const NoAssignableUsers: Story = {
   args: {

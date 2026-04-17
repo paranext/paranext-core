@@ -32,7 +32,7 @@ export const test = base.extend<IsolatedFixtures>({
   },
 
   mainPage: async ({ electronApp }, use, testInfo: TestInfo) => {
-    const page = await electronApp.firstWindow();
+    const page = await electronApp.firstWindow({ timeout: 90_000 });
 
     // Ensure the window is large enough for WebView content to be visible.
     // On headless Linux (xvfb) or WSL2 the default window can be very small,

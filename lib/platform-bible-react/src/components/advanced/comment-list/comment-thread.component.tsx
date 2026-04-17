@@ -87,6 +87,7 @@ export function CommentThread({
   isRead: isReadProp = false,
   autoReadDelay = 5,
   onVerseRefClick,
+  initialAssignedUser,
 }: CommentThreadProps) {
   const [pendingCommentEditorState, setPendingCommentEditorState] =
     useState<SerializedEditorState>(initialValue);
@@ -124,6 +125,15 @@ export function CommentThread({
       isPromiseCurrent = false;
     };
   }, [threadId, canUserResolveThreadCallback]);
+
+  // Pre-populate the pending assignee when the thread opens, using the last assignee from the parent
+  const prevIsSelectedRef = useRef(isSelected);
+  useEffect(() => {
+    if (!prevIsSelectedRef.current && isSelected && initialAssignedUser !== undefined) {
+      setPendingCommentAssignedUser(initialAssignedUser);
+    }
+    prevIsSelectedRef.current = isSelected;
+  }, [isSelected, initialAssignedUser]);
 
   // Check remaining async permissions when thread is selected
   useEffect(() => {

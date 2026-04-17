@@ -231,6 +231,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // These control the placement of the comment editor popover by setting the location of the anchor
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
+  /** Remembers the last assignee chosen so the next new comment pre-selects the same user */
+  const [lastAssignedUser, setLastAssignedUser] = useState<string | undefined>(undefined);
   const [commentPopoverAnchorX, setCommentPopoverAnchorX] = useState<number>();
   const [commentPopoverAnchorY, setCommentPopoverAnchorY] = useState<number>();
   const [commentPopoverAnchorHeight, setCommentPopoverAnchorHeight] = useState<number>();
@@ -1427,6 +1429,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
 
         pendingCommentAnnotationRange.current = undefined;
+        setLastAssignedUser(assignedUser);
         setShowCommentEditor(false);
       } catch (error) {
         logger.error(`Error creating comment: ${getErrorMessage(error)}`);
@@ -1779,6 +1782,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onSave={onCommentEditorSave}
             onClose={onCommentEditorCancel}
             localizedStrings={localizedStrings}
+            initialAssignedUser={lastAssignedUser}
           />
         </PopoverContent>
       </Popover>
