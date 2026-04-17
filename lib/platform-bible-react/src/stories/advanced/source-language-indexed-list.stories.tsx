@@ -944,7 +944,7 @@ export const AllErTabs: Story = {
               <DrawerContent
                 container={tabContentRef.current}
                 hideDrawerHandle
-                className="tw-mt-2 tw-h-full tw-max-h-full"
+                className="tw-top-2 tw-h-full tw-max-h-full tw-rounded-t-lg"
               >
                 {domainPath && (
                   <DomainFilteredView
