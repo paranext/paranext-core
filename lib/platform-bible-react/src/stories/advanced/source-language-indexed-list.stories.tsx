@@ -695,29 +695,39 @@ function InlineListDetail<T extends { id: string }>({
   const showSideBySide = selectedItem && !narrow;
   const showFullDetail = selectedItem && narrow;
 
-  // Keyboard navigation: arrows move focus, behavior depends on narrow/wide
+  // Keyboard navigation: arrows move focus, behavior depends on narrow/wide.
+  // First keypress starts from the selected item (or first/last if none).
   const handleListKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (items.length === 0) return;
+      const selectedIdx = selectedItem ? items.findIndex((i) => i.id === selectedItem.id) : -1;
 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        const next = Math.min(focusedIdx + 1, items.length - 1);
+        let next: number;
+        if (focusedIdx < 0) {
+          next = selectedIdx >= 0 ? Math.min(selectedIdx + 1, items.length - 1) : 0;
+        } else {
+          next = Math.min(focusedIdx + 1, items.length - 1);
+        }
         setFocusedIdx(next);
-        // Wide mode: immediately select to show details side-by-side
         if (!narrow) onSelectItem(items[next]);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        const prev = Math.max(focusedIdx - 1, 0);
+        let prev: number;
+        if (focusedIdx < 0) {
+          prev = selectedIdx >= 0 ? Math.max(selectedIdx - 1, 0) : items.length - 1;
+        } else {
+          prev = Math.max(focusedIdx - 1, 0);
+        }
         setFocusedIdx(prev);
         if (!narrow) onSelectItem(items[prev]);
       } else if ((e.key === 'Enter' || e.key === ' ') && narrow && focusedIdx >= 0) {
-        // Narrow mode: Enter/Space submits the focused item
         e.preventDefault();
         onSelectItem(items[focusedIdx]);
       }
     },
-    [items, focusedIdx, narrow, onSelectItem],
+    [items, focusedIdx, narrow, onSelectItem, selectedItem],
   );
 
   // Scroll focused item into view

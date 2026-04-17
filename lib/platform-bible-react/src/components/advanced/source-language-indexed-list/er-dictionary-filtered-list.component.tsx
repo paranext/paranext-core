@@ -80,19 +80,33 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
     [onItemClick, selectedId],
   );
 
-  // List keyboard: arrow keys navigate, behavior depends on narrow/wide
+  // List keyboard: arrow keys navigate, behavior depends on narrow/wide.
+  // First keypress starts from the selected item (or first/last if none selected).
   const handleListKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (items.length === 0) return;
+      const selectedIdx = selectedId ? items.findIndex((i) => i.id === selectedId) : -1;
 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        const next = Math.min(focusedIndex + 1, items.length - 1);
+        let next: number;
+        if (focusedIndex < 0) {
+          // First press: start at selected item, or first item
+          next = selectedIdx >= 0 ? Math.min(selectedIdx + 1, items.length - 1) : 0;
+        } else {
+          next = Math.min(focusedIndex + 1, items.length - 1);
+        }
         setFocusedIndex(next);
         if (!narrow) selectItem(items[next]);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        const prev = Math.max(focusedIndex - 1, 0);
+        let prev: number;
+        if (focusedIndex < 0) {
+          // First press: start at selected item, or last item
+          prev = selectedIdx >= 0 ? Math.max(selectedIdx - 1, 0) : items.length - 1;
+        } else {
+          prev = Math.max(focusedIndex - 1, 0);
+        }
         setFocusedIndex(prev);
         if (!narrow) selectItem(items[prev]);
       } else if ((e.key === 'Enter' || e.key === ' ') && narrow && focusedIndex >= 0) {
@@ -100,7 +114,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
         selectItem(items[focusedIndex]);
       }
     },
-    [items, focusedIndex, narrow, selectItem],
+    [items, focusedIndex, narrow, selectItem, selectedId],
   );
 
   // Scroll focused item into view
