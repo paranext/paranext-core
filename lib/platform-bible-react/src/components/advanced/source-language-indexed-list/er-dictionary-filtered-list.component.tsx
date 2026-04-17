@@ -207,7 +207,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
         {selectedItem && renderDetailContent && (
           <div
             className={cn(
-              'tw-overflow-y-auto tw-bg-background tw-p-4',
+              'tw-h-full tw-overflow-y-auto tw-bg-background tw-p-4',
               showFullDetail ? 'tw-w-full' : 'tw-w-2/3',
             )}
           >
@@ -476,20 +476,21 @@ function TreeKeyboardContainer({
 
   useEffect(() => {
     const focusTarget = () => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollIntoView({ block: 'center' });
-        scrollRef.current.focus();
-      }
+      if (!scrollRef.current) return;
+      if (document.activeElement === scrollRef.current) return;
+      scrollRef.current.scrollIntoView({ block: 'center' });
+      scrollRef.current.focus();
     };
-    // rAF to run after initial paint
+    // Multiple staggered attempts to win the race against Radix's
+    // RovingFocusGroup, which re-focuses the first menu item asynchronously.
+    // A single rAF isn't enough on subsequent opens when focus was previously
+    // on another SegmentDropdown's trigger.
     const rafId = requestAnimationFrame(focusTarget);
-    // Fallback to override Radix's RovingFocusGroup, which re-focuses the first
-    // item asynchronously after our rAF when focus was previously on an element
-    // outside the dropdown (e.g. the detail panel's Back button).
-    const timeoutId = window.setTimeout(focusTarget, 50);
+    const delays = [0, 50, 120, 220];
+    const timeoutIds = delays.map((delay) => window.setTimeout(focusTarget, delay));
     return () => {
       cancelAnimationFrame(rafId);
-      window.clearTimeout(timeoutId);
+      timeoutIds.forEach((id) => window.clearTimeout(id));
     };
   }, [expandToId]);
 
@@ -513,21 +514,30 @@ function TreeKeyboardContainer({
       case 'ArrowDown':
         e.preventDefault();
         e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
         moveFocus(1);
         break;
       case 'ArrowUp':
         e.preventDefault();
         e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
         moveFocus(-1);
         break;
       case 'Tab':
+        // Stop native propagation so the surrounding drawer/dialog can't also
+        // process this keystroke (would otherwise move focus outside the
+        // dropdown or close the surrounding layer).
         e.preventDefault();
         e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
         moveFocus(e.shiftKey ? -1 : 1);
         break;
       case 'Escape':
+        // Same reasoning as Tab: prevent the ESC from bubbling out of the
+        // dropdown to document-level dismiss listeners on the drawer.
         e.preventDefault();
         e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
         onClose();
         break;
       default:

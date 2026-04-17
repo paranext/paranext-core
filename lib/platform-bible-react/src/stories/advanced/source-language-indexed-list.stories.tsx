@@ -6,7 +6,6 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { Button } from '@/components/shadcn-ui/button';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Badge } from '@/components/shadcn-ui/badge';
-import { Drawer, DrawerContent } from '@/components/shadcn-ui/drawer';
 import { Dialog, DialogContent, DialogTitle } from '@/components/shadcn-ui/dialog';
 import {
   Tooltip,
@@ -967,35 +966,27 @@ export const AllErTabs: Story = {
             />
           )}
 
-          {/* Domain-filtered bottom Drawer (slides up, fills full tab height).
-              shouldScaleBackground={false} stops vaul from scaling the page
-              wrapper — otherwise the tab buttons above the drawer container
-              become uninteractive while the drawer is open. */}
-          {activeTab === 'dictionary' && (
-            <Drawer
-              direction="bottom"
-              modal={false}
-              shouldScaleBackground={false}
-              open={domainPath !== undefined}
-              onOpenChange={(open) => {
-                if (!open) setDomainPath(undefined);
-              }}
-            >
-              <DrawerContent
-                container={tabContentRef.current}
-                hideDrawerHandle
-                className="tw-top-0.5 tw-mt-0 tw-h-full tw-max-h-full tw-rounded-t-lg"
-              >
-                {domainPath && (
-                  <DomainFilteredView
-                    domainPath={domainPath}
-                    onDomainChange={setDomainPath}
-                    onClose={() => setDomainPath(undefined)}
-                    onDomainClick={handleDomainClickInFiltered}
-                  />
-                )}
-              </DrawerContent>
-            </Drawer>
+          {/* Domain-filtered drawer — a custom absolute panel scoped to the tab
+              content area, with a modal backdrop. Implemented directly (not via
+              vaul) so tab switching above the drawer keeps working while open.
+              Clicking the visible backdrop strip (top-4) closes the drawer. */}
+          {activeTab === 'dictionary' && domainPath !== undefined && (
+            <>
+              {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+              <div
+                className="tw-absolute tw-inset-0 tw-z-40 tw-cursor-pointer tw-bg-black/50"
+                onClick={() => setDomainPath(undefined)}
+                aria-hidden
+              />
+              <div className="tw-absolute tw-inset-x-0 tw-bottom-0 tw-top-4 tw-z-50 tw-flex tw-flex-col tw-overflow-hidden tw-rounded-t-lg tw-border tw-bg-background tw-shadow-xl">
+                <DomainFilteredView
+                  domainPath={domainPath}
+                  onDomainChange={setDomainPath}
+                  onClose={() => setDomainPath(undefined)}
+                  onDomainClick={handleDomainClickInFiltered}
+                />
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -1079,10 +1070,11 @@ export const AllErTabsDialogVariant: Story = {
           <DialogContent className="tw-flex tw-h-[80vh] tw-max-h-[600px] tw-w-[90vw] tw-max-w-3xl tw-flex-col tw-overflow-hidden tw-p-0">
             <DialogTitle className="tw-sr-only">Filtered dictionary</DialogTitle>
             {domainPath && (
+              // Dialog already provides a close button + ESC dismiss, so we do
+              // not pass onClose (which hides the in-header Back button).
               <DomainFilteredView
                 domainPath={domainPath}
                 onDomainChange={setDomainPath}
-                onClose={() => setDomainPath(undefined)}
                 onDomainClick={handleDomainClick}
               />
             )}
@@ -1115,7 +1107,8 @@ function DomainFilteredView({
 }: {
   domainPath: SemanticDomain[];
   onDomainChange: (path: SemanticDomain[]) => void;
-  onClose: () => void;
+  /** When omitted, the Back button in the filtered list header is hidden. */
+  onClose?: () => void;
   onDomainClick: (domain: EntryDomain, pathIds?: string[]) => void;
 }) {
   return (
