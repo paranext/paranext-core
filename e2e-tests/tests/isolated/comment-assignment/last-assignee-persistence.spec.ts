@@ -106,9 +106,12 @@ async function openCommentList(
   //    list webview when the previous one is gone.
   let finalEditorWebViewId: string | undefined;
 
+  // Sequential retry loop: each attempt must await PAPI responses and iframe appearance before
+  // deciding whether to retry, so awaits in the loop body are intentional. `continue` skips to the
+  // next retry attempt on transient failures (race conditions with dock layout, missing iframes).
+  /* eslint-disable no-await-in-loop, no-continue */
   for (let attempt = 0; attempt < 5; attempt++) {
     if (attempt > 0) {
-      // eslint-disable-next-line no-await-in-loop
       await new Promise<void>((resolve) => {
         setTimeout(resolve, 1_000);
       });
@@ -116,7 +119,6 @@ async function openCommentList(
 
     // ── Phase A: open the editor and wait for its iframe ──────────────────────
 
-    // eslint-disable-next-line no-await-in-loop
     const editorId = await sendPapiRequestOnce<string | undefined>(
       'command:platformScriptureEditor.openResourceViewer',
       [project.projectId],
@@ -134,7 +136,6 @@ async function openCommentList(
     finalEditorWebViewId = editorId;
 
     const editorTimeout = attempt < 4 ? 8_000 : 20_000;
-    // eslint-disable-next-line no-await-in-loop
     const editorIframeFound = await mainPage
       .locator(`iframe[data-web-view-id="${finalEditorWebViewId}"]`)
       .waitFor({ state: 'attached', timeout: editorTimeout })
@@ -142,7 +143,6 @@ async function openCommentList(
       .catch(() => false);
 
     if (!editorIframeFound) {
-      // eslint-disable-next-line no-await-in-loop
       const allIframes = await mainPage.locator('iframe').evaluateAll((iframes) =>
         iframes.map((f) => ({
           id: f.getAttribute('data-web-view-id'),
@@ -159,7 +159,6 @@ async function openCommentList(
 
     // ── Phase B: open the comment list and wait for its iframe ────────────────
 
-    // eslint-disable-next-line no-await-in-loop
     const commentListWebViewId = await sendPapiRequestOnce<string | undefined>(
       'command:legacyCommentManager.openCommentList',
       [finalEditorWebViewId],
@@ -179,7 +178,6 @@ async function openCommentList(
     }
 
     const clTimeout = attempt < 4 ? 8_000 : 20_000;
-    // eslint-disable-next-line no-await-in-loop
     const iframeFound = await mainPage
       .locator(`iframe[data-web-view-id="${commentListWebViewId}"]`)
       .waitFor({ state: 'attached', timeout: clTimeout })
@@ -187,7 +185,6 @@ async function openCommentList(
       .catch(() => false);
 
     if (!iframeFound) {
-      // eslint-disable-next-line no-await-in-loop
       const allIframes = await mainPage.locator('iframe').evaluateAll((iframes) =>
         iframes.map((f) => ({
           id: f.getAttribute('data-web-view-id'),
@@ -203,13 +200,13 @@ async function openCommentList(
     }
 
     // iframe found — now also wait for its body to be visible (fully loaded).
-    // eslint-disable-next-line no-await-in-loop
     await mainPage
       .frameLocator(`iframe[data-web-view-id="${commentListWebViewId}"]`)
       .locator('body')
       .waitFor({ timeout: 10_000 });
     return;
   }
+  /* eslint-enable no-await-in-loop, no-continue */
 
   throw new Error(`Failed to open comment list after 5 attempts for project ${project.shortName}`);
 }
