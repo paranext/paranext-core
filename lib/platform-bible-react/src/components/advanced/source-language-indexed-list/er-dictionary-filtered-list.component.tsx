@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button } from '@/components/shadcn-ui/button';
-import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Drawer, DrawerClose, DrawerContent, DrawerTitle } from '@/components/shadcn-ui/drawer';
-import { ChevronRight, ChevronDown, List, FolderTree } from 'lucide-react';
+import { ArrowLeft, ChevronDown, FolderTree } from 'lucide-react';
 import { Z_INDEX_MODAL } from '@/components/z-index';
 import SourceLanguageIndexedList from './source-language-indexed-list.component';
 import type {
@@ -18,24 +17,21 @@ import type {
   SemanticDomain,
 } from './source-language-indexed-list.types';
 
-/** Z-index that sits above the Dialog modal layer so dropdowns/drawers are visible */
+/** Z-index that sits above the Dialog modal layer so dropdowns are visible */
 const Z_ABOVE_MODAL = Z_INDEX_MODAL + 10;
 
 /**
  * ER Dictionary list filtered by semantic domain with 2-level breadcrumb navigation.
  *
- * Layout (top to bottom):
+ * Breadcrumb row layout: `[← back] [Category ▼] · [Domain ▼] ........... [🌳]`
  *
- * 1. **Breadcrumbs**: Always shows exactly 2 levels (`Category > Domain`). Both breadcrumb segments
- *    are interactive. In **dropdown mode** each opens a dropdown with siblings at that level. In
- *    **tree mode** each opens a Drawer scoped to this component's bounding box showing the full
- *    domain tree. When switching a category the first child domain is auto-selected.
- * 2. **Dictionary list**: A `SourceLanguageIndexedList` showing entries filtered to the selected
- *    domain. Clicking an entry opens a detail Drawer scoped to the list area.
- * 3. **Navigation mode toggle**: Switch between dropdown and tree navigation.
+ * - **Back arrow** (icon only, no text): navigates back when `onBack` is provided.
+ * - **Breadcrumbs** with dot separator: both segments are dropdowns showing siblings at that level.
+ *   When switching a category the first child domain is auto-selected.
+ * - **Tree button** (right-aligned): opens a scoped Drawer with the full 2-level domain tree.
  *
- * All drawers render inside this component's bounding box via the Drawer `container` prop. Dropdown
- * menus use a z-index above `Z_INDEX_MODAL` so they layer correctly on top of a parent Dialog.
+ * Below the breadcrumbs: a `SourceLanguageIndexedList` showing entries filtered to the selected
+ * domain. Clicking an entry opens a detail panel inline within the list area.
  *
  * Domains are always exactly 2 levels deep.
  */
@@ -51,8 +47,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   selectedLevel2Domain,
   allDomains,
   onDomainChange,
-  navigationMode,
-  onNavigationModeChange,
+  onBack,
   className,
 }: ErDictionaryFilteredListProps<T>) {
   const [treeOpen, setTreeOpen] = useState(false);
@@ -73,8 +68,6 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
     setTreeOpen(false);
   };
 
-  const openTreePanel = () => setTreeOpen(true);
-
   // Sibling domains at level 2 (children of the selected level 1)
   const level2Siblings = selectedLevel1Domain.children ?? [];
 
@@ -83,83 +76,94 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
       ref={containerRef}
       className={cn('tw-relative tw-flex tw-h-full tw-flex-col tw-overflow-hidden', className)}
     >
-      {/* Breadcrumbs - always 2 levels: Category > Domain */}
-      <div className="tw-flex tw-items-center tw-gap-1 tw-border-b tw-px-3 tw-py-2">
+      {/* Breadcrumb row: [← back] [Category ▼] · [Domain ▼] ... [tree] */}
+      <div className="tw-flex tw-items-center tw-gap-1 tw-border-b tw-px-2 tw-py-1.5">
+        {/* Back arrow (icon only) */}
+        {onBack && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="tw-h-7 tw-w-7 tw-shrink-0"
+            onClick={onBack}
+            aria-label="Back to dictionary"
+          >
+            <ArrowLeft className="tw-h-4 tw-w-4" />
+          </Button>
+        )}
+
+        {/* Breadcrumbs with dot separator */}
         <nav
           aria-label="Semantic domain breadcrumbs"
-          className="tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-1"
+          className="tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-0.5"
         >
-          {/* Level 1 breadcrumb (Category) */}
-          {navigationMode === 'dropdown' ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="tw-h-auto tw-gap-1 tw-p-1 tw-text-sm">
-                  {selectedLevel1Domain.label}
-                  <ChevronDown className="tw-h-3 tw-w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" style={{ zIndex: Z_ABOVE_MODAL }}>
-                {allDomains.map((domain) => (
-                  <DropdownMenuItem
-                    key={domain.id}
-                    className={cn({
-                      'tw-font-medium': domain.id === selectedLevel1Domain.id,
-                    })}
-                    onClick={() => handleCategoryChange(domain)}
-                  >
-                    {domain.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Button variant="ghost" className="tw-h-auto tw-p-1 tw-text-sm" onClick={openTreePanel}>
-              {selectedLevel1Domain.label}
-            </Button>
-          )}
-
-          {/* Separator - always shown since we always have 2 levels */}
-          <ChevronRight className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
-
-          {/* Level 2 breadcrumb (Domain) */}
-          {navigationMode === 'dropdown' ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="tw-h-auto tw-gap-1 tw-p-1 tw-text-sm tw-font-medium"
+          {/* Level 1 (Category) dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="tw-h-auto tw-gap-1 tw-px-1.5 tw-py-0.5 tw-text-sm">
+                {selectedLevel1Domain.label}
+                <ChevronDown className="tw-h-3 tw-w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" style={{ zIndex: Z_ABOVE_MODAL }}>
+              {allDomains.map((domain) => (
+                <DropdownMenuItem
+                  key={domain.id}
+                  className={cn({
+                    'tw-font-medium': domain.id === selectedLevel1Domain.id,
+                  })}
+                  onClick={() => handleCategoryChange(domain)}
                 >
-                  {effectiveLevel2?.label ?? 'All'}
-                  <ChevronDown className="tw-h-3 tw-w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" style={{ zIndex: Z_ABOVE_MODAL }}>
-                {level2Siblings.map((domain) => (
-                  <DropdownMenuItem
-                    key={domain.id}
-                    className={cn({
-                      'tw-font-medium': domain.id === effectiveLevel2?.id,
-                    })}
-                    onClick={() => onDomainChange(selectedLevel1Domain, domain)}
-                  >
-                    {domain.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Button
-              variant="ghost"
-              className="tw-h-auto tw-p-1 tw-text-sm tw-font-medium"
-              onClick={openTreePanel}
-            >
-              {effectiveLevel2?.label ?? 'All'}
-            </Button>
-          )}
+                  {domain.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Dot separator */}
+          <span className="tw-select-none tw-text-muted-foreground" aria-hidden>
+            &middot;
+          </span>
+
+          {/* Level 2 (Domain) dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="tw-h-auto tw-gap-1 tw-px-1.5 tw-py-0.5 tw-text-sm tw-font-medium"
+              >
+                {effectiveLevel2?.label ?? 'All'}
+                <ChevronDown className="tw-h-3 tw-w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" style={{ zIndex: Z_ABOVE_MODAL }}>
+              {level2Siblings.map((domain) => (
+                <DropdownMenuItem
+                  key={domain.id}
+                  className={cn({
+                    'tw-font-medium': domain.id === effectiveLevel2?.id,
+                  })}
+                  onClick={() => onDomainChange(selectedLevel1Domain, domain)}
+                >
+                  {domain.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </nav>
+
+        {/* Tree button (right-aligned) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="tw-h-7 tw-w-7 tw-shrink-0"
+          onClick={() => setTreeOpen(true)}
+          aria-label="Browse domain tree"
+        >
+          <FolderTree className="tw-h-3.5 tw-w-3.5" />
+        </Button>
       </div>
 
-      {/* Dictionary list with optional detail drawer (scoped to SourceLanguageIndexedList) */}
+      {/* Dictionary list */}
       <div className="tw-flex-1 tw-overflow-hidden">
         <SourceLanguageIndexedList
           items={items}
@@ -175,35 +179,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
         />
       </div>
 
-      {/* Navigation mode toggle at the bottom */}
-      <div className="tw-flex tw-items-center tw-justify-end tw-border-t tw-px-3 tw-py-1.5">
-        <ToggleGroup
-          type="single"
-          value={navigationMode}
-          onValueChange={(value) => {
-            if (value === 'tree' || value === 'dropdown') {
-              onNavigationModeChange?.(value);
-            }
-          }}
-        >
-          <ToggleGroupItem
-            value="dropdown"
-            aria-label="Dropdown navigation"
-            className="tw-h-7 tw-w-7 tw-p-0"
-          >
-            <List className="tw-h-3.5 tw-w-3.5" />
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="tree"
-            aria-label="Tree navigation"
-            className="tw-h-7 tw-w-7 tw-p-0"
-          >
-            <FolderTree className="tw-h-3.5 tw-w-3.5" />
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
-      {/* Domain tree Drawer - scoped to this component's bounding box */}
+      {/* Domain tree Drawer - scoped to this component */}
       <Drawer direction="right" modal={false} open={treeOpen} onOpenChange={setTreeOpen}>
         <DrawerContent
           container={containerRef.current}

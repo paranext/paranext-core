@@ -106,10 +106,8 @@ export type ErDictionaryFilteredListProps<T extends IndexedListItem> = {
   allDomains: SemanticDomain[];
   /** Callback when a different domain is selected via breadcrumb navigation */
   onDomainChange: (level1: SemanticDomain, level2?: SemanticDomain) => void;
-  /** Navigation mode: 'tree' opens a drawer with full tree, 'dropdown' shows a dropdown on click */
-  navigationMode: 'tree' | 'dropdown';
-  /** Callback to change the navigation mode */
-  onNavigationModeChange?: (mode: 'tree' | 'dropdown') => void;
+  /** Callback for the back arrow button (left of breadcrumbs). When provided, renders a back arrow */
+  onBack?: () => void;
   /** Additional CSS class names */
   className?: string;
 };
