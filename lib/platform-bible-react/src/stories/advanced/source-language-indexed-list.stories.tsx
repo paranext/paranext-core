@@ -683,7 +683,7 @@ function InlineListDetail<T extends { id: string }>({
     const el = containerRef.current;
     if (!el) return undefined;
     const observer = new ResizeObserver(([entry]) => {
-      setNarrow((entry?.contentRect.width ?? 0) < 360);
+      setNarrow((entry?.contentRect.width ?? 0) < 500);
     });
     observer.observe(el);
     return () => observer.disconnect();
