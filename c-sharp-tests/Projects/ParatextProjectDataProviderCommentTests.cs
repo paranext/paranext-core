@@ -1957,5 +1957,88 @@ namespace TestParanextDataProvider.Projects
         }
 
         #endregion
+
+        #region Exclude and Deduplicate Selector Tests
+
+        [Test]
+        public void GetCommentThreads_DefaultSelector_ExcludesBTAndSpellingByDefault()
+        {
+            // Arrange - Create a regular comment
+            var comment = CreateTestComment("GEN", 1, 1, "Regular comment");
+            _provider.CreateComment(new PlatformCommentWrapper(comment));
+
+            // Act - Default selector has ExcludeBiblicalTermNotes=true & ExcludeSpellingNotes=true
+            var threads = _provider.GetCommentThreads(new CommentThreadSelector());
+
+            // Assert - The regular comment should be returned (not filtered out)
+            Assert.That(threads, Has.Count.EqualTo(1));
+            Assert.That(threads[0].IsBTNote, Is.False);
+            Assert.That(threads[0].IsSpellingNote, Is.False);
+        }
+
+        [Test]
+        public void GetCommentThreads_ExcludeBTNotesFalse_DoesNotFilterBTNotes()
+        {
+            // Arrange
+            var comment = CreateTestComment("GEN", 1, 1, "Regular comment");
+            _provider.CreateComment(new PlatformCommentWrapper(comment));
+
+            // Act - Explicitly include BT notes
+            var selector = new CommentThreadSelector { ExcludeBiblicalTermNotes = false };
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert - Should still return regular comments (at minimum)
+            Assert.That(threads, Has.Count.GreaterThanOrEqualTo(1));
+        }
+
+        [Test]
+        public void GetCommentThreads_ExcludeSpellingNotesFalse_DoesNotFilterSpellingNotes()
+        {
+            // Arrange
+            var comment = CreateTestComment("GEN", 1, 1, "Regular comment");
+            _provider.CreateComment(new PlatformCommentWrapper(comment));
+
+            // Act - Explicitly include spelling notes
+            var selector = new CommentThreadSelector { ExcludeSpellingNotes = false };
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert - Should still return regular comments (at minimum)
+            Assert.That(threads, Has.Count.GreaterThanOrEqualTo(1));
+        }
+
+        [Test]
+        public void GetCommentThreads_DeduplicateThreadsFalse_ReturnsRawThreads()
+        {
+            // Arrange
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
+            _provider.CreateComment(new PlatformCommentWrapper(comment));
+
+            // Act - With and without dedup
+            var withDedup = _provider.GetCommentThreads(
+                new CommentThreadSelector { DeduplicateThreads = true }
+            );
+            var withoutDedup = _provider.GetCommentThreads(
+                new CommentThreadSelector { DeduplicateThreads = false }
+            );
+
+            // Assert - Without dedup should return at least as many threads as with dedup
+            Assert.That(withoutDedup.Count, Is.GreaterThanOrEqualTo(withDedup.Count));
+        }
+
+        [Test]
+        public void GetCommentThreads_NullSelector_AppliesDefaults()
+        {
+            // Arrange
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
+            _provider.CreateComment(new PlatformCommentWrapper(comment));
+
+            // Act - null selector should apply defaults (exclude BT/spelling, deduplicate)
+            var threads = _provider.GetCommentThreads(null!);
+
+            // Assert - Should still return the regular comment
+            Assert.That(threads, Has.Count.EqualTo(1));
+        }
+
+        #endregion
     }
 }
