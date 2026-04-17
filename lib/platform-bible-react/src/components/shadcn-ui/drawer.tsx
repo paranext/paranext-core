@@ -61,15 +61,25 @@ interface DrawerContentProps
   extends React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> {
   /** Optionally hide the drawer handle */
   hideDrawerHandle?: boolean;
+  /**
+   * When provided, the drawer portals into this element and uses absolute positioning so it stays
+   * within the container's bounding box. The container element must have `position: relative` and
+   * `overflow: hidden`. When omitted the drawer portals to `document.body` with fixed positioning
+   * (the default full-page behaviour).
+   */
+  container?: HTMLElement | null;
 }
 
 /** @inheritdoc Drawer */
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
   DrawerContentProps
->(({ className, children, hideDrawerHandle = false, ...props }, ref) => {
+>(({ className, children, hideDrawerHandle = false, container, ...props }, ref) => {
   // CUSTOM: Use context to provide direction to child components
   const { direction = 'bottom' } = React.useContext(DrawerContext);
+
+  // CUSTOM: When container is set, use absolute positioning so the drawer stays inside its parent
+  const positionClass = container ? 'tw-absolute' : 'tw-fixed';
 
   // CUSTOM: Define positioning and styling based on direction
   const directionStyles = {
@@ -88,14 +98,15 @@ const DrawerContent = React.forwardRef<
   };
 
   return (
-    <DrawerPortal>
-      <DrawerOverlay />
+    <DrawerPortal container={container}>
+      <DrawerOverlay className={container ? 'tw-absolute' : undefined} />
       <DrawerPrimitive.Content
         ref={ref}
         className={cn(
           // CUSTOM: Change Tailwind CSS classes for styling
           // Removed tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-[10px] tw-flex-col
-          'pr-twp tw-fixed tw-z-50 tw-flex tw-h-auto tw-border tw-bg-background',
+          'pr-twp tw-z-50 tw-flex tw-h-auto tw-border tw-bg-background',
+          positionClass,
           direction === 'bottom' || direction === 'top' ? 'tw-flex-col' : 'tw-flex-row',
           directionStyles[direction],
           className,

@@ -6,6 +6,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/shadcn-ui/dialog';
+import { DrawerClose, DrawerTitle, DrawerDescription } from '@/components/shadcn-ui/drawer';
 import SourceLanguageIndexedList from '@/components/advanced/source-language-indexed-list/source-language-indexed-list.component';
 import ErDictionaryList from '@/components/advanced/source-language-indexed-list/er-dictionary-list.component';
 import ErDictionaryFilteredList from '@/components/advanced/source-language-indexed-list/er-dictionary-filtered-list.component';
@@ -334,7 +335,7 @@ const sampleLexicalEntries: LexicalDictionaryEntry[] = [
 // Shared detail content renderers (extracted from lexical dictionary pattern)
 // ---------------------------------------------------------------------------
 
-/** Renders detailed dictionary entry content inside the inline detail panel */
+/** Renders detailed dictionary entry content inside the scoped drawer */
 function DictionaryDetailContent({
   item,
   onClose,
@@ -346,16 +347,20 @@ function DictionaryDetailContent({
 }) {
   return (
     <>
-      <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
-        <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
-        Back to list
-      </Button>
+      <DrawerClose asChild>
+        <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
+          <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+          Back to list
+        </Button>
+      </DrawerClose>
 
       <div className="tw-mb-4">
         <div className="tw-flex tw-items-baseline tw-justify-between tw-gap-2">
           <span className="tw-flex tw-flex-row tw-items-baseline tw-gap-2">
-            <h2 className="tw-text-2xl tw-font-normal">{item.primaryText}</h2>
-            <span className="tw-text-lg tw-text-muted-foreground">{item.glosses}</span>
+            <DrawerTitle className="tw-text-2xl tw-font-normal">{item.primaryText}</DrawerTitle>
+            <DrawerDescription className="tw-text-lg tw-text-muted-foreground">
+              {item.glosses}
+            </DrawerDescription>
           </span>
           <ul className="tw-flex tw-flex-row tw-gap-1">
             {item.strongsCodes.map((code) => (
@@ -417,7 +422,7 @@ function DictionaryDetailContent({
   );
 }
 
-/** Renders detailed encyclopedia content inside the inline detail panel */
+/** Renders detailed encyclopedia content inside the scoped drawer */
 function EncyclopediaDetailContent({
   item,
   onClose,
@@ -427,17 +432,19 @@ function EncyclopediaDetailContent({
 }) {
   return (
     <>
-      <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
-        <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
-        Back to list
-      </Button>
+      <DrawerClose asChild>
+        <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
+          <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+          Back to list
+        </Button>
+      </DrawerClose>
 
-      <h2 className="tw-mb-1 tw-text-2xl tw-font-normal">{item.primaryText}</h2>
+      <DrawerTitle className="tw-mb-1 tw-text-2xl tw-font-normal">{item.primaryText}</DrawerTitle>
       {item.sourceLanguageText && (
-        <p className="tw-text-sm tw-text-muted-foreground">
+        <DrawerDescription className="tw-text-sm tw-text-muted-foreground">
           {item.sourceLanguageText}
           {item.transliteration && <span className="tw-ml-1">({item.transliteration})</span>}
-        </p>
+        </DrawerDescription>
       )}
 
       <Separator className="tw-my-3" />
@@ -449,19 +456,24 @@ function EncyclopediaDetailContent({
   );
 }
 
-/** Renders detailed media content inside the inline detail panel */
+/** Renders detailed media content inside the scoped drawer */
 function MediaDetailContent({ item, onClose }: { item: MediaItem; onClose: () => void }) {
   return (
     <>
-      <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
-        <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
-        Back to list
-      </Button>
+      <DrawerClose asChild>
+        <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
+          <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+          Back to list
+        </Button>
+      </DrawerClose>
 
       <div className="tw-mb-4 tw-flex tw-items-center tw-gap-2">
-        <h2 className="tw-text-xl tw-font-normal">{item.primaryText}</h2>
+        <DrawerTitle className="tw-text-xl tw-font-normal">{item.primaryText}</DrawerTitle>
         <Badge variant="outline">{item.mediaType}</Badge>
       </div>
+      <DrawerDescription className="tw-sr-only">
+        {item.caption ?? item.primaryText}
+      </DrawerDescription>
 
       {item.thumbnailUrl && (
         <img

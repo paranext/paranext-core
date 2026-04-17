@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button } from '@/components/shadcn-ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
@@ -8,13 +8,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { ChevronRight, ChevronDown, X, List, FolderTree } from 'lucide-react';
+import { Drawer, DrawerClose, DrawerContent, DrawerTitle } from '@/components/shadcn-ui/drawer';
+import { ChevronRight, ChevronDown, List, FolderTree } from 'lucide-react';
+import { Z_INDEX_MODAL } from '@/components/z-index';
 import SourceLanguageIndexedList from './source-language-indexed-list.component';
 import type {
   ErDictionaryFilteredListProps,
   IndexedListItem,
   SemanticDomain,
 } from './source-language-indexed-list.types';
+
+/** Z-index that sits above the Dialog modal layer so dropdowns/drawers are visible */
+const Z_ABOVE_MODAL = Z_INDEX_MODAL + 10;
 
 /**
  * ER Dictionary list filtered by semantic domain with 2-level breadcrumb navigation.
@@ -23,14 +28,14 @@ import type {
  *
  * 1. **Breadcrumbs**: Always shows exactly 2 levels (`Category > Domain`). Both breadcrumb segments
  *    are interactive. In **dropdown mode** each opens a dropdown with siblings at that level. In
- *    **tree mode** each opens an inline tree panel within the component. When switching a category,
- *    the first child domain is auto-selected.
+ *    **tree mode** each opens a Drawer scoped to this component's bounding box showing the full
+ *    domain tree. When switching a category the first child domain is auto-selected.
  * 2. **Dictionary list**: A `SourceLanguageIndexedList` showing entries filtered to the selected
- *    domain. Clicking an entry shows a detail panel inline within the list area.
+ *    domain. Clicking an entry opens a detail Drawer scoped to the list area.
  * 3. **Navigation mode toggle**: Switch between dropdown and tree navigation.
  *
- * All panels (detail, tree) render **inside this component's bounding box**, never as full-page
- * overlays. Dropdown menus use Radix portals so they correctly layer on top of a parent Dialog.
+ * All drawers render inside this component's bounding box via the Drawer `container` prop. Dropdown
+ * menus use a z-index above `Z_INDEX_MODAL` so they layer correctly on top of a parent Dialog.
  *
  * Domains are always exactly 2 levels deep.
  */
@@ -51,6 +56,9 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   className,
 }: ErDictionaryFilteredListProps<T>) {
   const [treeOpen, setTreeOpen] = useState(false);
+  // ref.current expects null not undefined for div ref
+  // eslint-disable-next-line no-null/no-null
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Ensure we always have a level-2 domain; fall back to first child
   const effectiveLevel2 = selectedLevel2Domain ?? selectedLevel1Domain.children?.[0];
@@ -71,7 +79,10 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   const level2Siblings = selectedLevel1Domain.children ?? [];
 
   return (
-    <div className={cn('tw-relative tw-flex tw-h-full tw-flex-col', className)}>
+    <div
+      ref={containerRef}
+      className={cn('tw-relative tw-flex tw-h-full tw-flex-col tw-overflow-hidden', className)}
+    >
       {/* Breadcrumbs - always 2 levels: Category > Domain */}
       <div className="tw-flex tw-items-center tw-gap-1 tw-border-b tw-px-3 tw-py-2">
         <nav
@@ -87,7 +98,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
                   <ChevronDown className="tw-h-3 tw-w-3" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="tw-z-[60]">
+              <DropdownMenuContent align="start" style={{ zIndex: Z_ABOVE_MODAL }}>
                 {allDomains.map((domain) => (
                   <DropdownMenuItem
                     key={domain.id}
@@ -122,7 +133,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
                   <ChevronDown className="tw-h-3 tw-w-3" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="tw-z-[60]">
+              <DropdownMenuContent align="start" style={{ zIndex: Z_ABOVE_MODAL }}>
                 {level2Siblings.map((domain) => (
                   <DropdownMenuItem
                     key={domain.id}
@@ -148,46 +159,20 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
         </nav>
       </div>
 
-      {/* Main content area: list OR tree panel (mutually exclusive, both inline) */}
-      <div className="tw-relative tw-flex-1 tw-overflow-hidden">
-        {treeOpen ? (
-          /* Inline tree panel - renders inside this container, not as a portal */
-          <div className="tw-absolute tw-inset-0 tw-z-10 tw-flex tw-flex-col tw-bg-background">
-            <div className="tw-flex tw-items-center tw-justify-between tw-border-b tw-px-3 tw-py-2">
-              <span className="tw-text-sm tw-font-semibold">Semantic Domains</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="tw-h-7 tw-w-7"
-                onClick={() => setTreeOpen(false)}
-              >
-                <X className="tw-h-4 tw-w-4" />
-              </Button>
-            </div>
-            <div className="tw-flex-1 tw-overflow-y-auto tw-p-2">
-              <DomainTreeView
-                domains={allDomains}
-                selectedLevel1Id={selectedLevel1Domain.id}
-                selectedLevel2Id={effectiveLevel2?.id}
-                onSelect={handleDomainSelectFromTree}
-              />
-            </div>
-          </div>
-        ) : (
-          /* Dictionary list with optional inline detail panel */
-          <SourceLanguageIndexedList
-            items={items}
-            renderItem={renderItem}
-            renderDetailContent={renderDetailContent}
-            onItemClick={onItemClick}
-            selectedItemId={selectedItemId}
-            emptyStateMessage={emptyStateMessage}
-            isLoading={isLoading}
-            showSourceLanguage
-            showTransliteration
-            className="tw-h-full"
-          />
-        )}
+      {/* Dictionary list with optional detail drawer (scoped to SourceLanguageIndexedList) */}
+      <div className="tw-flex-1 tw-overflow-hidden">
+        <SourceLanguageIndexedList
+          items={items}
+          renderItem={renderItem}
+          renderDetailContent={renderDetailContent}
+          onItemClick={onItemClick}
+          selectedItemId={selectedItemId}
+          emptyStateMessage={emptyStateMessage}
+          isLoading={isLoading}
+          showSourceLanguage
+          showTransliteration
+          className="tw-h-full"
+        />
       </div>
 
       {/* Navigation mode toggle at the bottom */}
@@ -217,11 +202,35 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
+
+      {/* Domain tree Drawer - scoped to this component's bounding box */}
+      <Drawer direction="right" modal={false} open={treeOpen} onOpenChange={setTreeOpen}>
+        <DrawerContent container={containerRef.current} hideDrawerHandle className="tw-max-w-full">
+          <div className="tw-flex tw-h-full tw-flex-col">
+            <div className="tw-flex tw-items-center tw-justify-between tw-border-b tw-px-3 tw-py-2">
+              <DrawerTitle className="tw-text-sm tw-font-semibold">Semantic Domains</DrawerTitle>
+              <DrawerClose asChild>
+                <Button variant="outline" size="sm">
+                  Close
+                </Button>
+              </DrawerClose>
+            </div>
+            <div className="tw-flex-1 tw-overflow-y-auto tw-p-2">
+              <DomainTreeView
+                domains={allDomains}
+                selectedLevel1Id={selectedLevel1Domain.id}
+                selectedLevel2Id={effectiveLevel2?.id}
+                onSelect={handleDomainSelectFromTree}
+              />
+            </div>
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
 
-/** Full 2-level domain tree rendered inline within the component */
+/** Full 2-level domain tree rendered inside the drawer */
 function DomainTreeView({
   domains,
   selectedLevel1Id,
