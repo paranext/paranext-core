@@ -1,8 +1,9 @@
-import { RefObject, useMemo } from 'react';
+import { RefObject, useMemo, useState } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { useListbox, type ListboxOption } from '@/hooks/listbox-keyboard-navigation.hook';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Skeleton } from '@/components/shadcn-ui/skeleton';
+import { Drawer, DrawerContent, DrawerTrigger } from '@/components/shadcn-ui/drawer';
 import type {
   IndexedListItem,
   SourceLanguageIndexedListProps,
@@ -10,8 +11,12 @@ import type {
 
 /**
  * A shared list component for displaying source-language indexed items. Supports two-column layout
- * (resource term + source language term), keyboard navigation, text and thumbnail variants, and
- * loading/empty states.
+ * (resource term + source language term), keyboard navigation, text and thumbnail variants,
+ * loading/empty states, and an optional right-side detail drawer.
+ *
+ * When `renderDetailContent` is provided, clicking an item opens a right-side drawer with the
+ * detail content (extracted from the lexical dictionary extension pattern). When not provided,
+ * clicking an item just fires `onItemClick`.
  *
  * Used by Enhanced Resources (dictionary, encyclopedia, media) and lexical tools (dictionary).
  *
@@ -24,14 +29,18 @@ import type {
  *   selectedItemId={selectedId}
  *   showSourceLanguage
  *   showTransliteration
+ *   renderDetailContent={(item, onClose) => (
+ *     <DictionaryEntryDetail entry={item} onBack={onClose} />
+ *   )}
  * />;
  * ```
  */
 export default function SourceLanguageIndexedList<T extends IndexedListItem>({
   items,
   renderItem,
+  renderDetailContent,
   onItemClick,
-  selectedItemId,
+  selectedItemId: controlledSelectedId,
   emptyStateMessage = 'No items found',
   isLoading = false,
   variant = 'text',
@@ -40,11 +49,32 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
   onCharacterPress,
   className,
 }: SourceLanguageIndexedListProps<T>) {
+  const [drawerItemId, setDrawerItemId] = useState<string | undefined>();
+
+  // Use controlled selection if provided, otherwise use internal drawer state
+  const effectiveSelectedId = controlledSelectedId ?? drawerItemId;
+
+  const drawerItem = useMemo(
+    () => (drawerItemId ? items.find((item) => item.id === drawerItemId) : undefined),
+    [drawerItemId, items],
+  );
+
   const options: ListboxOption[] = useMemo(() => items.map((item) => ({ id: item.id })), [items]);
+
+  const handleItemSelect = (item: T) => {
+    onItemClick?.(item);
+    if (renderDetailContent) {
+      setDrawerItemId(item.id === drawerItemId ? undefined : item.id);
+    }
+  };
 
   const handleOptionSelect = (option: ListboxOption) => {
     const clickedItem = items.find((item) => item.id === option.id);
-    if (clickedItem) onItemClick?.(clickedItem);
+    if (clickedItem) handleItemSelect(clickedItem);
+  };
+
+  const handleCloseDrawer = () => {
+    setDrawerItemId(undefined);
   };
 
   const { listboxRef, activeId, handleKeyDown } = useListbox({
@@ -83,7 +113,7 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
     );
   }
 
-  return (
+  const listContent = (
     <div className={cn('tw-overflow-y-auto', className)}>
       <ul
         role="listbox"
@@ -96,7 +126,7 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
         onKeyDown={handleKeyDown}
       >
         {items.map((item) => {
-          const isSelected = selectedItemId === item.id;
+          const isSelected = effectiveSelectedId === item.id;
           return (
             <li
               key={item.id}
@@ -104,11 +134,11 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
               role="option"
               aria-selected={isSelected}
               tabIndex={-1}
-              onClick={() => onItemClick?.(item)}
+              onClick={() => handleItemSelect(item)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  onItemClick?.(item);
+                  handleItemSelect(item);
                 }
               }}
               className={cn(
@@ -134,6 +164,27 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
         })}
       </ul>
     </div>
+  );
+
+  // If no detail content renderer, render just the list
+  if (!renderDetailContent) return listContent;
+
+  // With detail content: wrap in a Drawer that opens from the right
+  return (
+    <Drawer
+      direction="right"
+      open={drawerItem !== undefined}
+      onOpenChange={(open) => {
+        if (!open) handleCloseDrawer();
+      }}
+    >
+      <DrawerTrigger asChild>{listContent}</DrawerTrigger>
+      <DrawerContent hideDrawerHandle className="tw-max-w-xl">
+        <div className="tw-overflow-y-auto tw-p-4">
+          {drawerItem && renderDetailContent(drawerItem, handleCloseDrawer)}
+        </div>
+      </DrawerContent>
+    </Drawer>
   );
 }
 

@@ -17,13 +17,32 @@ export type IndexedListItem = {
   thumbnailAlt?: string;
 };
 
+/** A domain associated with a dictionary entry, displayed as a clickable link */
+export type EntryDomain = {
+  /** Unique identifier for the domain */
+  id: string;
+  /** Display label for the domain */
+  label: string;
+  /** The taxonomy this domain belongs to (e.g., 'SDBH-Lexical', 'SDBG-Contextual') */
+  taxonomy?: string;
+  /** Domain code (e.g., '1.2.3') */
+  code?: string;
+  /** Parent domain for 2-level hierarchy (undefined if this is a top-level domain) */
+  parentId?: string;
+};
+
 /** Props for the SourceLanguageIndexedList component */
 export type SourceLanguageIndexedListProps<T extends IndexedListItem> = {
   /** Array of items to display in the list */
   items: T[];
-  /** Custom render function for each item. If not provided, the default two-column layout is used */
+  /** Custom render function for each list item row. If not provided, the default layout is used */
   renderItem?: (item: T) => ReactNode;
-  /** Callback when an item is clicked */
+  /**
+   * Render function for the detail content shown in a right-side drawer when an item is selected.
+   * If not provided, no drawer is shown and `onItemClick` fires directly.
+   */
+  renderDetailContent?: (item: T, onClose: () => void) => ReactNode;
+  /** Callback when an item is clicked (fires in addition to opening the drawer if both exist) */
   onItemClick?: (item: T) => void;
   /** ID of the currently selected item */
   selectedItemId?: string;
@@ -53,32 +72,47 @@ export type ErDictionaryListProps<T extends IndexedListItem> = SourceLanguageInd
   getOccurrenceCount?: (item: T) => number;
 };
 
-/** A single semantic domain in the hierarchy */
+/** A semantic domain in a 2-level hierarchy */
 export type SemanticDomain = {
   /** Unique identifier for the domain */
   id: string;
   /** Display label for the domain */
   label: string;
-  /** Child domains */
+  /** Child domains (only top-level domains have children; domains are always 2 levels) */
   children?: SemanticDomain[];
 };
 
 /** Props for the ER Dictionary Filtered by Type component */
-export type ErDictionaryFilteredListProps<T extends IndexedListItem> =
-  SourceLanguageIndexedListProps<T> & {
-    /** Domain breadcrumb path from root to the current domain */
-    domainPath: SemanticDomain[];
-    /** Callback when a breadcrumb item is clicked */
-    onBreadcrumbClick?: (domain: SemanticDomain) => void;
-    /** Navigation mode: 'tree' shows full hierarchy, 'dropdown' shows siblings at each level */
-    navigationMode: 'tree' | 'dropdown';
-    /** Callback to change the navigation mode */
-    onNavigationModeChange?: (mode: 'tree' | 'dropdown') => void;
-    /** Children of the currently selected domain (used in tree/dropdown views) */
-    domainChildren?: SemanticDomain[];
-    /** Callback when a domain in the tree/dropdown is selected */
-    onDomainSelect?: (domain: SemanticDomain) => void;
-  };
+export type ErDictionaryFilteredListProps<T extends IndexedListItem> = {
+  /** Items filtered to the currently selected domain */
+  items: T[];
+  /** Custom render function for each list item row */
+  renderItem?: (item: T) => ReactNode;
+  /** Render function for the detail content shown in a drawer when an entry is clicked */
+  renderDetailContent?: (item: T, onClose: () => void) => ReactNode;
+  /** Callback when an item is clicked */
+  onItemClick?: (item: T) => void;
+  /** ID of the currently selected item */
+  selectedItemId?: string;
+  /** Message to display when items array is empty */
+  emptyStateMessage?: string;
+  /** Whether items are currently being loaded */
+  isLoading?: boolean;
+  /** The currently selected top-level domain (level 1) */
+  selectedLevel1Domain: SemanticDomain;
+  /** The currently selected child domain (level 2), or undefined if viewing all of level 1 */
+  selectedLevel2Domain?: SemanticDomain;
+  /** All top-level domains (for navigation) */
+  allDomains: SemanticDomain[];
+  /** Callback when a different domain is selected via breadcrumb navigation */
+  onDomainChange: (level1: SemanticDomain, level2?: SemanticDomain) => void;
+  /** Navigation mode: 'tree' opens a drawer with full tree, 'dropdown' shows a dropdown on click */
+  navigationMode: 'tree' | 'dropdown';
+  /** Callback to change the navigation mode */
+  onNavigationModeChange?: (mode: 'tree' | 'dropdown') => void;
+  /** Additional CSS class names */
+  className?: string;
+};
 
 /** An encyclopedia article teaser */
 export type EncyclopediaTeaser = IndexedListItem & {
@@ -145,6 +179,7 @@ export const SOURCE_LANGUAGE_INDEXED_LIST_STRING_KEYS: LocalizeKey[] = [
   '%sourceLanguageIndexedList_filterByDomain%',
   '%sourceLanguageIndexedList_navigationModeTree%',
   '%sourceLanguageIndexedList_navigationModeDropdown%',
+  '%sourceLanguageIndexedList_backToList%',
 ];
 
 /** Localized strings type for the indexed list components */

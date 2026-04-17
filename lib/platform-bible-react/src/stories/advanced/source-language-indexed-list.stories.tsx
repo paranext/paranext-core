@@ -1,6 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
+import { ArrowLeft, BookA } from 'lucide-react';
+import { Button } from '@/components/shadcn-ui/button';
+import { Separator } from '@/components/shadcn-ui/separator';
+import { Badge } from '@/components/shadcn-ui/badge';
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/shadcn-ui/dialog';
+import { DrawerClose, DrawerTitle, DrawerDescription } from '@/components/shadcn-ui/drawer';
 import SourceLanguageIndexedList from '@/components/advanced/source-language-indexed-list/source-language-indexed-list.component';
 import ErDictionaryList from '@/components/advanced/source-language-indexed-list/er-dictionary-list.component';
 import ErDictionaryFilteredList from '@/components/advanced/source-language-indexed-list/er-dictionary-filtered-list.component';
@@ -13,17 +19,69 @@ import type {
   MediaItem,
   LexicalDictionaryEntry,
   SemanticDomain,
+  EntryDomain,
 } from '@/components/advanced/source-language-indexed-list/source-language-indexed-list.types';
 
 // ---------------------------------------------------------------------------
-// Sample data
+// Sample domain data (always 2 levels)
 // ---------------------------------------------------------------------------
 
-const sampleDictionaryItems: (IndexedListItem & {
+const sampleAllDomains: SemanticDomain[] = [
+  {
+    id: 'natural-world',
+    label: 'Natural World',
+    children: [
+      { id: 'animals', label: 'Animals' },
+      { id: 'plants', label: 'Plants' },
+      { id: 'weather', label: 'Weather & Climate' },
+    ],
+  },
+  {
+    id: 'human-body',
+    label: 'Human Body',
+    children: [
+      { id: 'body-parts', label: 'Body Parts' },
+      { id: 'senses', label: 'Senses & Perception' },
+      { id: 'health', label: 'Health & Sickness' },
+    ],
+  },
+  {
+    id: 'social-relations',
+    label: 'Social Relations',
+    children: [
+      { id: 'family', label: 'Family' },
+      { id: 'authority', label: 'Authority & Leadership' },
+      { id: 'worship', label: 'Worship & Religion' },
+    ],
+  },
+  {
+    id: 'abstract-concepts',
+    label: 'Abstract Concepts',
+    children: [
+      { id: 'time', label: 'Time' },
+      { id: 'quantity', label: 'Quantity & Number' },
+      { id: 'quality', label: 'Quality & Attributes' },
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Dictionary entry type with domains for stories
+// ---------------------------------------------------------------------------
+
+type DictionaryEntryWithDomains = IndexedListItem & {
   glosses: string;
   strongsCodes: string[];
   occurrenceCount: number;
-})[] = [
+  domains: EntryDomain[];
+  definition?: string;
+};
+
+// ---------------------------------------------------------------------------
+// Sample dictionary items
+// ---------------------------------------------------------------------------
+
+const sampleDictionaryItems: DictionaryEntryWithDomains[] = [
   {
     id: 'entry-1',
     primaryText: 'grace',
@@ -32,6 +90,9 @@ const sampleDictionaryItems: (IndexedListItem & {
     glosses: 'grace, favor, kindness',
     strongsCodes: ['G5485'],
     occurrenceCount: 12,
+    domains: [{ id: 'abstract-concepts', label: 'Abstract Concepts', code: '1.1' }],
+    definition:
+      'Unmerited divine favor or assistance given to humans for regeneration or sanctification.',
   },
   {
     id: 'entry-2',
@@ -41,6 +102,10 @@ const sampleDictionaryItems: (IndexedListItem & {
     glosses: 'faith, belief, trust',
     strongsCodes: ['G4102'],
     occurrenceCount: 8,
+    domains: [
+      { id: 'worship', label: 'Worship & Religion', parentId: 'social-relations', code: '3.3' },
+    ],
+    definition: 'Complete trust or confidence in something or someone; firm belief.',
   },
   {
     id: 'entry-3',
@@ -50,6 +115,15 @@ const sampleDictionaryItems: (IndexedListItem & {
     glosses: 'love, affection, goodwill',
     strongsCodes: ['G26'],
     occurrenceCount: 15,
+    domains: [
+      {
+        id: 'social-relations',
+        label: 'Social Relations',
+        code: '3.0',
+      },
+    ],
+    definition:
+      'Unconditional love, especially the love of God for humanity and the love expected between believers.',
   },
   {
     id: 'entry-4',
@@ -59,6 +133,10 @@ const sampleDictionaryItems: (IndexedListItem & {
     glosses: 'righteousness, justice',
     strongsCodes: ['G1343'],
     occurrenceCount: 5,
+    domains: [
+      { id: 'quality', label: 'Quality & Attributes', parentId: 'abstract-concepts', code: '1.3' },
+    ],
+    definition: 'The quality of being morally right or justifiable; conformity to divine law.',
   },
   {
     id: 'entry-5',
@@ -68,6 +146,10 @@ const sampleDictionaryItems: (IndexedListItem & {
     glosses: 'salvation, deliverance, preservation',
     strongsCodes: ['G4991'],
     occurrenceCount: 3,
+    domains: [
+      { id: 'worship', label: 'Worship & Religion', parentId: 'social-relations', code: '3.3' },
+    ],
+    definition: 'Deliverance from sin and its consequences, brought about by faith in Christ.',
   },
   {
     id: 'entry-6',
@@ -77,8 +159,17 @@ const sampleDictionaryItems: (IndexedListItem & {
     glosses: 'glory, splendor, brightness',
     strongsCodes: ['G1391'],
     occurrenceCount: 7,
+    domains: [
+      { id: 'quality', label: 'Quality & Attributes', parentId: 'abstract-concepts', code: '1.3' },
+    ],
+    definition:
+      'Great beauty, magnificence, or splendor. Often refers to the manifest presence and power of God.',
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Sample encyclopedia items
+// ---------------------------------------------------------------------------
 
 const sampleEncyclopediaItems: EncyclopediaTeaser[] = [
   {
@@ -123,6 +214,10 @@ const sampleEncyclopediaItems: EncyclopediaTeaser[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Sample media items
+// ---------------------------------------------------------------------------
+
 const sampleMediaItems: MediaItem[] = [
   {
     id: 'media-1',
@@ -165,6 +260,10 @@ const sampleMediaItems: MediaItem[] = [
     caption: 'One of the Seven Wonders of the Ancient World',
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Sample lexical entries
+// ---------------------------------------------------------------------------
 
 const sampleLexicalEntries: LexicalDictionaryEntry[] = [
   {
@@ -232,67 +331,162 @@ const sampleLexicalEntries: LexicalDictionaryEntry[] = [
   },
 ];
 
-const sampleDomainPath: SemanticDomain[] = [
-  { id: 'root', label: 'All Domains' },
-  { id: 'natural-world', label: 'Natural World' },
-  { id: 'animals', label: 'Animals' },
-];
+// ---------------------------------------------------------------------------
+// Shared detail content renderers (extracted from lexical dictionary pattern)
+// ---------------------------------------------------------------------------
 
-const sampleDomainChildren: SemanticDomain[] = [
-  {
-    id: 'domestic',
-    label: 'Domestic Animals',
-    children: [
-      { id: 'cattle', label: 'Cattle' },
-      { id: 'sheep', label: 'Sheep & Goats' },
-      { id: 'donkeys', label: 'Donkeys' },
-    ],
-  },
-  {
-    id: 'wild',
-    label: 'Wild Animals',
-    children: [
-      { id: 'predators', label: 'Predators' },
-      { id: 'prey', label: 'Prey Animals' },
-    ],
-  },
-  { id: 'birds', label: 'Birds' },
-  { id: 'fish', label: 'Fish & Sea Creatures' },
-  { id: 'insects', label: 'Insects' },
-];
+/** Renders detailed dictionary entry content inside the drawer */
+function DictionaryDetailContent({
+  item,
+  onClose,
+  onDomainClick,
+}: {
+  item: DictionaryEntryWithDomains;
+  onClose: () => void;
+  onDomainClick?: (domain: EntryDomain) => void;
+}) {
+  return (
+    <>
+      <DrawerClose asChild>
+        <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
+          <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+          Back to list
+        </Button>
+      </DrawerClose>
 
-const sampleFilteredItems: IndexedListItem[] = [
-  {
-    id: 'filtered-1',
-    primaryText: 'lamb',
-    sourceLanguageText: '\u1F00\u03BC\u03BD\u03CC\u03C2',
-    transliteration: 'amnos',
-  },
-  {
-    id: 'filtered-2',
-    primaryText: 'sheep',
-    sourceLanguageText: '\u03C0\u03C1\u03CC\u03B2\u03B1\u03C4\u03BF\u03BD',
-    transliteration: 'probaton',
-  },
-  {
-    id: 'filtered-3',
-    primaryText: 'goat',
-    sourceLanguageText: '\u03B1\u1F34\u03BE',
-    transliteration: 'aix',
-  },
-  {
-    id: 'filtered-4',
-    primaryText: 'ox',
-    sourceLanguageText: '\u03B2\u03BF\u1FE6\u03C2',
-    transliteration: 'bous',
-  },
-  {
-    id: 'filtered-5',
-    primaryText: 'donkey',
-    sourceLanguageText: '\u1F44\u03BD\u03BF\u03C2',
-    transliteration: 'onos',
-  },
-];
+      <div className="tw-mb-4">
+        <div className="tw-flex tw-items-baseline tw-justify-between tw-gap-2">
+          <span className="tw-flex tw-flex-row tw-items-baseline tw-gap-2">
+            <DrawerTitle className="tw-text-2xl tw-font-normal">{item.primaryText}</DrawerTitle>
+            <DrawerDescription className="tw-text-lg tw-text-muted-foreground">
+              {item.glosses}
+            </DrawerDescription>
+          </span>
+          <ul className="tw-flex tw-flex-row tw-gap-1">
+            {item.strongsCodes.map((code) => (
+              <li
+                key={code}
+                className="tw-ml-auto tw-rounded tw-bg-accent tw-px-2 tw-py-0.5 tw-text-sm"
+              >
+                {code}
+              </li>
+            ))}
+          </ul>
+        </div>
+        {item.sourceLanguageText && (
+          <p className="tw-mt-1 tw-text-sm tw-text-muted-foreground">
+            {item.sourceLanguageText}
+            {item.transliteration && <span className="tw-ml-1">({item.transliteration})</span>}
+          </p>
+        )}
+      </div>
+
+      <Separator className="tw-my-3" />
+
+      {item.definition && (
+        <div className="tw-mb-4">
+          <h3 className="tw-mb-1 tw-font-semibold">Definition</h3>
+          <p className="tw-text-sm tw-text-muted-foreground">{item.definition}</p>
+        </div>
+      )}
+
+      {/* Domains as clickable links */}
+      {item.domains.length > 0 && (
+        <div className="tw-mb-4">
+          <h3 className="tw-mb-2 tw-font-semibold">Domains</h3>
+          <div className="tw-flex tw-flex-wrap tw-gap-2">
+            {item.domains.map((domain) => (
+              <Button
+                key={domain.id}
+                variant="outline"
+                className="tw-h-auto tw-gap-1 tw-px-2 tw-py-1 tw-text-xs"
+                onClick={() => onDomainClick?.(domain)}
+              >
+                <BookA className="tw-h-3 tw-w-3" />
+                {domain.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Separator className="tw-my-3" />
+
+      <div>
+        <h3 className="tw-mb-2 tw-font-semibold">Occurrences ({item.occurrenceCount})</h3>
+        <p className="tw-text-sm tw-text-muted-foreground">
+          Scripture references would appear here in the real application.
+        </p>
+      </div>
+    </>
+  );
+}
+
+/** Renders detailed encyclopedia content inside the drawer */
+function EncyclopediaDetailContent({
+  item,
+  onClose,
+}: {
+  item: EncyclopediaTeaser;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <DrawerClose asChild>
+        <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
+          <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+          Back to list
+        </Button>
+      </DrawerClose>
+
+      <DrawerTitle className="tw-mb-1 tw-text-2xl tw-font-normal">{item.primaryText}</DrawerTitle>
+      {item.sourceLanguageText && (
+        <DrawerDescription className="tw-text-sm tw-text-muted-foreground">
+          {item.sourceLanguageText}
+          {item.transliteration && <span className="tw-ml-1">({item.transliteration})</span>}
+        </DrawerDescription>
+      )}
+
+      <Separator className="tw-my-3" />
+
+      <p className="tw-text-sm">
+        {item.teaserText ?? 'Full article content would be displayed here in the real application.'}
+      </p>
+    </>
+  );
+}
+
+/** Renders detailed media content inside the drawer */
+function MediaDetailContent({ item, onClose }: { item: MediaItem; onClose: () => void }) {
+  return (
+    <>
+      <DrawerClose asChild>
+        <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
+          <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+          Back to list
+        </Button>
+      </DrawerClose>
+
+      <div className="tw-mb-4 tw-flex tw-items-center tw-gap-2">
+        <DrawerTitle className="tw-text-xl tw-font-normal">{item.primaryText}</DrawerTitle>
+        <Badge variant="outline">{item.mediaType}</Badge>
+      </div>
+      <DrawerDescription className="tw-sr-only">
+        {item.caption ?? item.primaryText}
+      </DrawerDescription>
+
+      {item.thumbnailUrl && (
+        <img
+          src={item.thumbnailUrl}
+          alt={item.thumbnailAlt ?? item.primaryText}
+          className="tw-mb-4 tw-w-full tw-rounded tw-object-contain"
+        />
+      )}
+
+      {item.caption && <p className="tw-text-sm tw-text-muted-foreground">{item.caption}</p>}
+    </>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Story meta
@@ -342,7 +536,7 @@ export const Default: Story = {
     docs: {
       description: {
         story:
-          'Base SourceLanguageIndexedList component showing the default two-column layout with resource terms and source language terms.',
+          'Base SourceLanguageIndexedList without a detail drawer. Clicking items toggles selection only.',
       },
     },
   },
@@ -384,137 +578,194 @@ export const EmptyState: Story = {
 };
 
 /**
- * ER Dictionary list showing both columns (resource term + source language), occurrence count
- * badges, formatted glosses, and Strong's code badges.
+ * ER Dictionary list with detail drawer. Clicking an entry opens a right-side drawer showing the
+ * full entry details (glosses, Strong's codes, definition, domains as clickable links). Clicking a
+ * domain link opens the "ER Dictionary Filtered by Type" dialog.
  */
 export const ErDictionary: Story = {
   render: () => {
-    const [selectedId, setSelectedId] = useState<string | undefined>();
+    const [filteredDialogOpen, setFilteredDialogOpen] = useState(false);
+    const [filteredDomainL1, setFilteredDomainL1] = useState(sampleAllDomains[0]);
+    const [filteredDomainL2, setFilteredDomainL2] = useState<SemanticDomain | undefined>();
+    const [navMode, setNavMode] = useState<'tree' | 'dropdown'>('dropdown');
+
+    const handleDomainClick = (domain: EntryDomain) => {
+      // Find the matching level-1 domain and optionally level-2
+      const l1 = sampleAllDomains.find(
+        (d) => d.id === domain.id || d.children?.some((c) => c.id === domain.id),
+      );
+      if (l1) {
+        setFilteredDomainL1(l1);
+        const l2 = l1.children?.find((c) => c.id === domain.id);
+        setFilteredDomainL2(l2);
+        setFilteredDialogOpen(true);
+      }
+    };
 
     return (
-      <div className="tw-h-[500px] tw-rounded tw-border">
-        <h3 className="tw-border-b tw-px-3 tw-py-2 tw-text-sm tw-font-semibold">Dictionary</h3>
-        <ErDictionaryList
-          items={sampleDictionaryItems}
-          onItemClick={(item) => setSelectedId(item.id === selectedId ? undefined : item.id)}
-          selectedItemId={selectedId}
-          getDescription={(item) => item.glosses}
-          getBadges={(item) => item.strongsCodes}
-          getOccurrenceCount={(item) => item.occurrenceCount}
-        />
-      </div>
+      <>
+        <div className="tw-h-[500px] tw-rounded tw-border">
+          <h3 className="tw-border-b tw-px-3 tw-py-2 tw-text-sm tw-font-semibold">Dictionary</h3>
+          <ErDictionaryList
+            items={sampleDictionaryItems}
+            showSourceLanguage
+            showTransliteration
+            getDescription={(item) => item.glosses}
+            getBadges={(item) => item.strongsCodes}
+            getOccurrenceCount={(item) => item.occurrenceCount}
+            renderDetailContent={(item, onClose) => (
+              <DictionaryDetailContent
+                item={item}
+                onClose={onClose}
+                onDomainClick={handleDomainClick}
+              />
+            )}
+          />
+        </div>
+
+        {/* Dialog that opens when clicking a domain link in the detail drawer */}
+        <Dialog open={filteredDialogOpen} onOpenChange={setFilteredDialogOpen}>
+          <DialogContent className="tw-flex tw-h-[500px] tw-max-w-lg tw-flex-col tw-p-0">
+            <DialogTitle className="tw-px-4 tw-pt-4 tw-text-base tw-font-semibold">
+              Dictionary by Domain
+            </DialogTitle>
+            <ErDictionaryFilteredList
+              items={sampleDictionaryItems.filter((entry) =>
+                entry.domains.some(
+                  (d) =>
+                    d.id === filteredDomainL1.id ||
+                    d.id === filteredDomainL2?.id ||
+                    d.parentId === filteredDomainL1.id,
+                ),
+              )}
+              selectedLevel1Domain={filteredDomainL1}
+              selectedLevel2Domain={filteredDomainL2}
+              allDomains={sampleAllDomains}
+              onDomainChange={(l1, l2) => {
+                setFilteredDomainL1(l1);
+                setFilteredDomainL2(l2);
+              }}
+              navigationMode={navMode}
+              onNavigationModeChange={setNavMode}
+              renderDetailContent={(item, onClose) => (
+                <DictionaryDetailContent item={item} onClose={onClose} />
+              )}
+              className="tw-min-h-0 tw-flex-1"
+            />
+          </DialogContent>
+        </Dialog>
+      </>
     );
   },
   parameters: {
     docs: {
       description: {
         story:
-          "ER Dictionary list showing both columns with occurrence counts, glosses, and Strong's codes. Used in the Dictionary tab of the Enhanced Resources research pane.",
+          'ER Dictionary list with a detail drawer. Clicking an entry opens a right-side drawer with full details. Domain names in the detail view are clickable links that open the "ER Dictionary Filtered by Type" dialog.',
       },
     },
   },
 };
 
 /**
- * ER Dictionary filtered by semantic domain, showing breadcrumb navigation and a toggle to switch
- * between tree view (Option A) and dropdown view (Option B) for domain navigation.
+ * ER Dictionary filtered by semantic domain, shown in a Dialog. Features 2-level breadcrumbs,
+ * dropdown/tree navigation toggle, and entry detail drawer.
  */
 export const ErDictionaryFilteredByType: Story = {
   render: () => {
-    const [selectedId, setSelectedId] = useState<string | undefined>();
-    const [navMode, setNavMode] = useState<'tree' | 'dropdown'>('tree');
-    const [domainPath, setDomainPath] = useState<SemanticDomain[]>(sampleDomainPath);
+    const [selectedL1, setSelectedL1] = useState(sampleAllDomains[0]);
+    const [selectedL2, setSelectedL2] = useState<SemanticDomain | undefined>(
+      sampleAllDomains[0].children?.[0],
+    );
+    const [navMode, setNavMode] = useState<'tree' | 'dropdown'>('dropdown');
 
-    const handleBreadcrumbClick = (domain: SemanticDomain) => {
-      const index = domainPath.findIndex((d) => d.id === domain.id);
-      if (index >= 0) {
-        setDomainPath(domainPath.slice(0, index + 1));
-      }
-    };
-
-    const handleDomainSelect = (domain: SemanticDomain) => {
-      setDomainPath([...domainPath, domain]);
-    };
+    const handleDomainChange = useCallback((l1: SemanticDomain, l2?: SemanticDomain) => {
+      setSelectedL1(l1);
+      setSelectedL2(l2);
+    }, []);
 
     return (
-      <div className="tw-h-[600px] tw-rounded tw-border">
-        <h3 className="tw-border-b tw-px-3 tw-py-2 tw-text-sm tw-font-semibold">
-          Dictionary &mdash; Filtered by Semantic Domain
-        </h3>
-        <ErDictionaryFilteredList
-          items={sampleFilteredItems}
-          onItemClick={(item) => setSelectedId(item.id === selectedId ? undefined : item.id)}
-          selectedItemId={selectedId}
-          domainPath={domainPath}
-          onBreadcrumbClick={handleBreadcrumbClick}
-          navigationMode={navMode}
-          onNavigationModeChange={setNavMode}
-          domainChildren={sampleDomainChildren}
-          onDomainSelect={handleDomainSelect}
-          className="tw-h-full"
-        />
-      </div>
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button variant="outline">Open Dictionary by Domain</Button>
+        </DialogTrigger>
+        <DialogContent className="tw-flex tw-h-[550px] tw-max-w-lg tw-flex-col tw-p-0">
+          <DialogTitle className="tw-px-4 tw-pt-4 tw-text-base tw-font-semibold">
+            Dictionary by Semantic Domain
+          </DialogTitle>
+          <ErDictionaryFilteredList
+            items={sampleDictionaryItems}
+            selectedLevel1Domain={selectedL1}
+            selectedLevel2Domain={selectedL2}
+            allDomains={sampleAllDomains}
+            onDomainChange={handleDomainChange}
+            navigationMode={navMode}
+            onNavigationModeChange={setNavMode}
+            renderDetailContent={(item, onClose) => (
+              <DictionaryDetailContent item={item} onClose={onClose} />
+            )}
+            className="tw-min-h-0 tw-flex-1"
+          />
+        </DialogContent>
+      </Dialog>
     );
   },
   parameters: {
     docs: {
       description: {
         story:
-          'Dictionary entries filtered by semantic domain. Shows breadcrumb trail for the domain hierarchy and a toggle to switch between tree view (Option A, showing nested hierarchy) and dropdown view (Option B, showing siblings at each level). Corresponds to Screen A from ui-alignment.md.',
+          'ER Dictionary filtered by semantic domain inside a Dialog. 2-level breadcrumbs at top; clicking them opens either a dropdown (dropdown mode) or a domain tree drawer (tree mode). Toggle between modes at the bottom. Clicking an entry opens a detail drawer.',
       },
     },
   },
 };
 
-/** ER Encyclopedia list showing article titles with teaser/summary text. */
+/** ER Encyclopedia list with detail drawer showing article titles and teaser text. */
 export const ErEncyclopedia: Story = {
-  render: () => {
-    const [selectedId, setSelectedId] = useState<string | undefined>();
-
-    return (
-      <div className="tw-h-[500px] tw-rounded tw-border">
-        <h3 className="tw-border-b tw-px-3 tw-py-2 tw-text-sm tw-font-semibold">Encyclopedia</h3>
-        <ErEncyclopediaList
-          items={sampleEncyclopediaItems}
-          onItemClick={(item) => setSelectedId(item.id === selectedId ? undefined : item.id)}
-          selectedItemId={selectedId}
-        />
-      </div>
-    );
-  },
+  render: () => (
+    <div className="tw-h-[500px] tw-rounded tw-border">
+      <h3 className="tw-border-b tw-px-3 tw-py-2 tw-text-sm tw-font-semibold">Encyclopedia</h3>
+      <ErEncyclopediaList
+        items={sampleEncyclopediaItems}
+        showSourceLanguage
+        showTransliteration
+        renderDetailContent={(item, onClose) => (
+          <EncyclopediaDetailContent item={item} onClose={onClose} />
+        )}
+      />
+    </div>
+  ),
   parameters: {
     docs: {
       description: {
         story:
-          'ER Encyclopedia list showing article titles with teaser/summary text and source language terms. Used in the Encyclopedia tab of the Enhanced Resources research pane.',
+          'ER Encyclopedia list with a detail drawer. Clicking an article opens the full article content in a right-side drawer.',
       },
     },
   },
 };
 
-/** ER Media list (images and maps) using the thumbnail variant with image previews. */
+/** ER Media list (images and maps) with detail drawer showing image preview. */
 export const ErMedia: Story = {
-  render: () => {
-    const [selectedId, setSelectedId] = useState<string | undefined>();
-
-    return (
-      <div className="tw-h-[500px] tw-rounded tw-border">
-        <h3 className="tw-border-b tw-px-3 tw-py-2 tw-text-sm tw-font-semibold">
-          Media (Images &amp; Maps)
-        </h3>
-        <ErMediaList
-          items={sampleMediaItems}
-          onItemClick={(item) => setSelectedId(item.id === selectedId ? undefined : item.id)}
-          selectedItemId={selectedId}
-        />
-      </div>
-    );
-  },
+  render: () => (
+    <div className="tw-h-[500px] tw-rounded tw-border">
+      <h3 className="tw-border-b tw-px-3 tw-py-2 tw-text-sm tw-font-semibold">
+        Media (Images &amp; Maps)
+      </h3>
+      <ErMediaList
+        items={sampleMediaItems}
+        showSourceLanguage
+        renderDetailContent={(item, onClose) => (
+          <MediaDetailContent item={item} onClose={onClose} />
+        )}
+      />
+    </div>
+  ),
   parameters: {
     docs: {
       description: {
         story:
-          'ER Media list showing images and maps with thumbnail previews, media type badges, and captions. Used in the Media and Maps tabs of the Enhanced Resources research pane.',
+          'ER Media list with a detail drawer. Clicking an image or map opens a preview in a right-side drawer with zoom/pan support.',
       },
     },
   },
@@ -522,8 +773,7 @@ export const ErMedia: Story = {
 
 /**
  * Lexical extension dictionary list extracted from platform-lexical-tools. Shows entries with lemma
- * text, occurrence count badges, formatted glosses, and Strong's code badges. Matches the existing
- * dictionary list pattern from the lexical tools extension.
+ * text, occurrence count badges, formatted glosses, and Strong's code badges.
  */
 export const LexicalDictionary: Story = {
   render: () => {
@@ -548,7 +798,7 @@ export const LexicalDictionary: Story = {
     docs: {
       description: {
         story:
-          "Lexical extension dictionary list extracted from platform-lexical-tools. Shows entries with source language lemma, occurrence count, glosses, and Strong's codes. This is the shared version of the existing dictionary list component.",
+          "Lexical extension dictionary list extracted from platform-lexical-tools. Shows entries with source language lemma, occurrence count, glosses, and Strong's codes.",
       },
     },
   },
@@ -560,67 +810,119 @@ export const AllErTabs: Story = {
     const [activeTab, setActiveTab] = useState<'dictionary' | 'encyclopedia' | 'media'>(
       'dictionary',
     );
-    const [selectedId, setSelectedId] = useState<string | undefined>();
+    const [filteredDialogOpen, setFilteredDialogOpen] = useState(false);
+    const [filteredDomainL1, setFilteredDomainL1] = useState(sampleAllDomains[0]);
+    const [filteredDomainL2, setFilteredDomainL2] = useState<SemanticDomain | undefined>();
+    const [navMode, setNavMode] = useState<'tree' | 'dropdown'>('dropdown');
 
-    const handleItemClick = (item: IndexedListItem) => {
-      setSelectedId(item.id === selectedId ? undefined : item.id);
+    const handleDomainClick = (domain: EntryDomain) => {
+      const l1 = sampleAllDomains.find(
+        (d) => d.id === domain.id || d.children?.some((c) => c.id === domain.id),
+      );
+      if (l1) {
+        setFilteredDomainL1(l1);
+        setFilteredDomainL2(l1.children?.find((c) => c.id === domain.id));
+        setFilteredDialogOpen(true);
+      }
     };
 
     return (
-      <div className="tw-flex tw-h-[500px] tw-flex-col tw-rounded tw-border">
-        <div className="tw-flex tw-border-b">
-          {(['dictionary', 'encyclopedia', 'media'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={`tw-px-4 tw-py-2 tw-text-sm tw-capitalize ${
-                activeTab === tab
-                  ? 'tw-border-b-2 tw-border-primary tw-font-medium'
-                  : 'tw-text-muted-foreground hover:tw-text-foreground'
-              }`}
-              onClick={() => {
-                setActiveTab(tab);
-                setSelectedId(undefined);
+      <>
+        <div className="tw-flex tw-h-[500px] tw-flex-col tw-rounded tw-border">
+          <div className="tw-flex tw-border-b">
+            {(['dictionary', 'encyclopedia', 'media'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={`tw-px-4 tw-py-2 tw-text-sm tw-capitalize ${
+                  activeTab === tab
+                    ? 'tw-border-b-2 tw-border-primary tw-font-medium'
+                    : 'tw-text-muted-foreground hover:tw-text-foreground'
+                }`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          <div className="tw-flex-1 tw-overflow-hidden">
+            {activeTab === 'dictionary' && (
+              <ErDictionaryList
+                items={sampleDictionaryItems}
+                showSourceLanguage
+                showTransliteration
+                getDescription={(item) => item.glosses}
+                getBadges={(item) => item.strongsCodes}
+                getOccurrenceCount={(item) => item.occurrenceCount}
+                renderDetailContent={(item, onClose) => (
+                  <DictionaryDetailContent
+                    item={item}
+                    onClose={onClose}
+                    onDomainClick={handleDomainClick}
+                  />
+                )}
+              />
+            )}
+            {activeTab === 'encyclopedia' && (
+              <ErEncyclopediaList
+                items={sampleEncyclopediaItems}
+                showSourceLanguage
+                showTransliteration
+                renderDetailContent={(item, onClose) => (
+                  <EncyclopediaDetailContent item={item} onClose={onClose} />
+                )}
+              />
+            )}
+            {activeTab === 'media' && (
+              <ErMediaList
+                items={sampleMediaItems}
+                showSourceLanguage
+                renderDetailContent={(item, onClose) => (
+                  <MediaDetailContent item={item} onClose={onClose} />
+                )}
+              />
+            )}
+          </div>
+        </div>
+
+        <Dialog open={filteredDialogOpen} onOpenChange={setFilteredDialogOpen}>
+          <DialogContent className="tw-flex tw-h-[500px] tw-max-w-lg tw-flex-col tw-p-0">
+            <DialogTitle className="tw-px-4 tw-pt-4 tw-text-base tw-font-semibold">
+              Dictionary by Domain
+            </DialogTitle>
+            <ErDictionaryFilteredList
+              items={sampleDictionaryItems.filter((entry) =>
+                entry.domains.some(
+                  (d) =>
+                    d.id === filteredDomainL1.id ||
+                    d.id === filteredDomainL2?.id ||
+                    d.parentId === filteredDomainL1.id,
+                ),
+              )}
+              selectedLevel1Domain={filteredDomainL1}
+              selectedLevel2Domain={filteredDomainL2}
+              allDomains={sampleAllDomains}
+              onDomainChange={(l1, l2) => {
+                setFilteredDomainL1(l1);
+                setFilteredDomainL2(l2);
               }}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-        <div className="tw-flex-1 tw-overflow-hidden">
-          {activeTab === 'dictionary' && (
-            <ErDictionaryList
-              items={sampleDictionaryItems}
-              onItemClick={handleItemClick}
-              selectedItemId={selectedId}
-              getDescription={(item) => item.glosses}
-              getBadges={(item) => item.strongsCodes}
-              getOccurrenceCount={(item) => item.occurrenceCount}
+              navigationMode={navMode}
+              onNavigationModeChange={setNavMode}
+              renderDetailContent={(item, onClose) => (
+                <DictionaryDetailContent item={item} onClose={onClose} />
+              )}
+              className="tw-min-h-0 tw-flex-1"
             />
-          )}
-          {activeTab === 'encyclopedia' && (
-            <ErEncyclopediaList
-              items={sampleEncyclopediaItems}
-              onItemClick={handleItemClick}
-              selectedItemId={selectedId}
-            />
-          )}
-          {activeTab === 'media' && (
-            <ErMediaList
-              items={sampleMediaItems}
-              onItemClick={handleItemClick}
-              selectedItemId={selectedId}
-            />
-          )}
-        </div>
-      </div>
+          </DialogContent>
+        </Dialog>
+      </>
     );
   },
   parameters: {
     docs: {
       description: {
         story:
-          'All ER research pane tabs combined to demonstrate how Dictionary, Encyclopedia, and Media lists work together in a tabbed layout, matching the Enhanced Resources research pane structure.',
+          'All ER tabs combined with detail drawers and domain-filtered dialog. Dictionary entries open a detail drawer with clickable domain links. Clicking a domain opens the filtered dictionary dialog.',
       },
     },
   },

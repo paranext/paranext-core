@@ -151,6 +151,7 @@ export {
 export { default as SourceLanguageIndexedList } from './components/advanced/source-language-indexed-list/source-language-indexed-list.component';
 export type {
   IndexedListItem,
+  EntryDomain,
   SourceLanguageIndexedListProps,
   ErDictionaryListProps,
   ErDictionaryFilteredListProps,
