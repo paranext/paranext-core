@@ -354,13 +354,13 @@ export function CommentThread({
         : undefined;
       // Only apply the auto-populated pending assignee for new comments, not for
       // status changes (resolve/reopen) where it would silently reassign the thread
-      const assignedUser = options.status
+      const resolvedAssignedUser = options.status
         ? options.assignedUser
         : (pendingCommentAssignedUser ?? options.assignedUser);
       const success = await handleAddCommentToThread({
         ...options,
         contents,
-        assignedUser,
+        assignedUser: resolvedAssignedUser,
       });
       if (success && contents) {
         clearEditor();
