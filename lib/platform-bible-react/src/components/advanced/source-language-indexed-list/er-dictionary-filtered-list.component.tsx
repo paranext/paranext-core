@@ -60,6 +60,13 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
     return () => observer.disconnect();
   }, []);
 
+  // Focus the list on mount so the user can arrow-navigate immediately when
+  // the drawer / dialog opens. :focus-visible stays off because the last user
+  // input was a click (domain link / tab), which is the desired behavior.
+  useEffect(() => {
+    listRef.current?.focus();
+  }, []);
+
   const handleDomainSelect = useCallback(
     (path: SemanticDomain[]) => {
       onDomainChange(path);
@@ -171,7 +178,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
                 ref={listRef}
                 role="listbox"
                 tabIndex={0}
-                className="tw-outline-none"
+                className="tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-inset focus-visible:tw-ring-ring"
                 onKeyDown={handleListKeyDown}
               >
                 {items.map((item, idx) => {

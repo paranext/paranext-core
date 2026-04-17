@@ -646,19 +646,32 @@ function InlineListDetail<T extends { id: string }>({
   onSelectItem,
   renderListItem,
   renderDetail,
+  listRef: externalListRef,
 }: {
   items: T[];
   selectedItem: T | undefined;
   onSelectItem: (item: T | undefined) => void;
   renderListItem: (item: T, compact: boolean) => React.ReactNode;
   renderDetail: (item: T, onClose: () => void) => React.ReactNode;
+  /** Optional ref to the listbox <ul> element so the caller can focus it. */
+  listRef?: React.MutableRefObject<HTMLUListElement | null>;
 }) {
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line no-null/no-null
-  const listRef = useRef<HTMLUListElement>(null);
+  const internalListRef = useRef<HTMLUListElement>(null);
+  const listRef = externalListRef ?? internalListRef;
   const [narrow, setNarrow] = useState(false);
   const [focusedIdx, setFocusedIdx] = useState(-1);
+
+  // Focus the list on mount so tab-switches and initial renders land on the
+  // list (enabling immediate keyboard navigation).
+  useEffect(() => {
+    listRef.current?.focus();
+    // Only run once on mount. listRef is either the stable internal ref or the
+    // caller's ref; in both cases we don't want to re-focus on re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -707,7 +720,7 @@ function InlineListDetail<T extends { id: string }>({
     if (focusedIdx < 0 || !listRef.current) return;
     const li = listRef.current.children[focusedIdx] as HTMLElement | undefined;
     li?.scrollIntoView({ block: 'nearest' });
-  }, [focusedIdx]);
+  }, [focusedIdx, listRef]);
 
   // On close, restore focus to the list starting from the last selected item.
   const handleCloseDetail = useCallback(() => {
@@ -720,7 +733,7 @@ function InlineListDetail<T extends { id: string }>({
         listRef.current?.focus();
       });
     }
-  }, [items, onSelectItem, selectedItem]);
+  }, [items, onSelectItem, selectedItem, listRef]);
 
   return (
     <div ref={containerRef} className="tw-relative tw-flex tw-h-full tw-overflow-hidden">
@@ -737,7 +750,7 @@ function InlineListDetail<T extends { id: string }>({
             ref={listRef}
             role="listbox"
             tabIndex={0}
-            className="tw-outline-none"
+            className="tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-inset focus-visible:tw-ring-ring"
             onKeyDown={handleListKeyDown}
           >
             {items.map((item, idx) => {
@@ -853,6 +866,15 @@ export const AllErTabs: Story = {
     const [domainPath, setDomainPath] = useState<SemanticDomain[] | undefined>();
     // eslint-disable-next-line no-null/no-null
     const tabContentRef = useRef<HTMLDivElement>(null);
+    // Refs to each tab's listbox so we can programmatically refocus on tab
+    // click (including clicks on the currently active tab where no remount
+    // would otherwise happen).
+    // eslint-disable-next-line no-null/no-null
+    const dictListRef = useRef<HTMLUListElement | null>(null);
+    // eslint-disable-next-line no-null/no-null
+    const encListRef = useRef<HTMLUListElement | null>(null);
+    // eslint-disable-next-line no-null/no-null
+    const mediaListRef = useRef<HTMLUListElement | null>(null);
 
     const resolveDomainPath = useCallback((pathIds: string[]): SemanticDomain[] => {
       return pathIds.reduce<SemanticDomain[]>((acc, id) => {
@@ -876,6 +898,22 @@ export const AllErTabs: Story = {
     // Domain click from inside the filtered detail view reuses the same handler
     const handleDomainClickInFiltered = handleDomainClick;
 
+    // Close the drawer on ESC. An open popover inside the drawer uses
+    // `e.nativeEvent.stopImmediatePropagation()` in its own ESC handler, which
+    // stops the native event from reaching this document-level listener — so
+    // ESC inside an open popover only closes the popover.
+    useEffect(() => {
+      if (domainPath === undefined) return undefined;
+      const handleEsc = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setDomainPath(undefined);
+        }
+      };
+      document.addEventListener('keydown', handleEsc);
+      return () => document.removeEventListener('keydown', handleEsc);
+    }, [domainPath]);
+
     return (
       <div className="tw-flex tw-h-[550px] tw-flex-col tw-rounded tw-border">
         <div className="tw-flex tw-border-b">
@@ -890,6 +928,14 @@ export const AllErTabs: Story = {
                 setSelectedEnc(undefined);
                 setSelectedMedia(undefined);
                 setDomainPath(undefined);
+                // Move focus to the active tab's list after the re-render.
+                // Works for both tab-switch (mount focus also handles this)
+                // and same-tab clicks (no remount, so we force focus here).
+                requestAnimationFrame(() => {
+                  if (tab === 'dictionary') dictListRef.current?.focus();
+                  else if (tab === 'encyclopedia') encListRef.current?.focus();
+                  else mediaListRef.current?.focus();
+                });
               }}
             >
               {tab}
@@ -902,6 +948,7 @@ export const AllErTabs: Story = {
               items={sampleDictionaryItems}
               selectedItem={selectedDict}
               onSelectItem={setSelectedDict}
+              listRef={dictListRef}
               renderListItem={(item, compact) => <ErDictListItem item={item} compact={compact} />}
               renderDetail={(item, onClose) => (
                 <ErDictionaryDetail
@@ -917,6 +964,7 @@ export const AllErTabs: Story = {
               items={sampleEncyclopediaItems}
               selectedItem={selectedEnc}
               onSelectItem={setSelectedEnc}
+              listRef={encListRef}
               renderListItem={(item) => (
                 <div className="tw-flex tw-flex-col tw-gap-0.5 tw-overflow-hidden">
                   <div className="tw-flex tw-items-baseline tw-gap-2 tw-overflow-hidden">
@@ -943,6 +991,7 @@ export const AllErTabs: Story = {
               items={sampleMediaItems}
               selectedItem={selectedMedia}
               onSelectItem={setSelectedMedia}
+              listRef={mediaListRef}
               renderListItem={(item) => (
                 <div className="tw-flex tw-items-center tw-gap-2 tw-overflow-hidden">
                   {item.thumbnailUrl && (
@@ -969,7 +1018,7 @@ export const AllErTabs: Story = {
           {/* Domain-filtered drawer — a custom absolute panel scoped to the tab
               content area, with a modal backdrop. Implemented directly (not via
               vaul) so tab switching above the drawer keeps working while open.
-              Clicking the visible backdrop strip (top-4) closes the drawer. */}
+              Clicking the visible backdrop strip closes the drawer. */}
           {activeTab === 'dictionary' && domainPath !== undefined && (
             <>
               {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
@@ -978,7 +1027,7 @@ export const AllErTabs: Story = {
                 onClick={() => setDomainPath(undefined)}
                 aria-hidden
               />
-              <div className="tw-absolute tw-inset-x-0 tw-bottom-0 tw-top-4 tw-z-50 tw-flex tw-flex-col tw-overflow-hidden tw-rounded-t-lg tw-border tw-bg-background tw-shadow-xl">
+              <div className="tw-absolute tw-bottom-0 tw-left-2 tw-right-2 tw-top-2 tw-z-50 tw-flex tw-flex-col tw-overflow-hidden tw-rounded-t-lg tw-border tw-bg-background tw-shadow-xl">
                 <DomainFilteredView
                   domainPath={domainPath}
                   onDomainChange={setDomainPath}
