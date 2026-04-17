@@ -80,15 +80,24 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
     if (clickedItem) handleItemSelect(clickedItem);
   };
 
-  const handleCloseDetail = () => {
-    setDrawerItemId(undefined);
-  };
-
-  const { listboxRef, activeId, handleKeyDown } = useListbox({
+  const { listboxRef, activeId, handleKeyDown, focusOption } = useListbox({
     options,
     onOptionSelect: handleOptionSelect,
     onCharacterPress,
   });
+
+  // On close, restore focus to the listbox so arrow keys navigate again
+  // starting from the previously-selected item.
+  const handleCloseDetail = () => {
+    const closingId = drawerItemId;
+    setDrawerItemId(undefined);
+    if (closingId) {
+      requestAnimationFrame(() => {
+        focusOption(closingId);
+        listboxRef.current?.focus();
+      });
+    }
+  };
 
   if (isLoading) {
     return (

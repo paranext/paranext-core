@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button } from '@/components/shadcn-ui/button';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Badge } from '@/components/shadcn-ui/badge';
-import ComboBox from '@/components/basics/combo-box.component';
 import { Drawer, DrawerContent } from '@/components/shadcn-ui/drawer';
+import { Dialog, DialogContent, DialogTitle } from '@/components/shadcn-ui/dialog';
 import {
   Tooltip,
   TooltipContent,
@@ -88,27 +88,6 @@ const sampleAllDomains: SemanticDomain[] = [
     ],
   },
 ];
-
-// ---------------------------------------------------------------------------
-// Flatten domains for combobox
-// ---------------------------------------------------------------------------
-
-type FlatDomain = { path: SemanticDomain[]; label: string };
-
-function flattenDomains(
-  domains: SemanticDomain[],
-  parentPath: SemanticDomain[] = [],
-): FlatDomain[] {
-  const result: FlatDomain[] = [];
-  for (const domain of domains) {
-    const path = [...parentPath, domain];
-    result.push({ path, label: path.map((d) => d.label).join(' > ') });
-    if (domain.children) {
-      result.push(...flattenDomains(domain.children, path));
-    }
-  }
-  return result;
-}
 
 // ---------------------------------------------------------------------------
 // Sense / entry types
@@ -673,7 +652,7 @@ function InlineListDetail<T extends { id: string }>({
   selectedItem: T | undefined;
   onSelectItem: (item: T | undefined) => void;
   renderListItem: (item: T, compact: boolean) => React.ReactNode;
-  renderDetail: (item: T) => React.ReactNode;
+  renderDetail: (item: T, onClose: () => void) => React.ReactNode;
 }) {
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
@@ -697,29 +676,23 @@ function InlineListDetail<T extends { id: string }>({
 
   // Keyboard navigation: arrows move focus, behavior depends on narrow/wide.
   // First keypress starts from the selected item (or first/last if none).
+  // At the boundaries the list stays put (no wrap, no reselect).
   const handleListKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (items.length === 0) return;
       const selectedIdx = selectedItem ? items.findIndex((i) => i.id === selectedItem.id) : -1;
+      const startIdx = focusedIdx >= 0 ? focusedIdx : selectedIdx;
 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        let next: number;
-        if (focusedIdx < 0) {
-          next = selectedIdx >= 0 ? Math.min(selectedIdx + 1, items.length - 1) : 0;
-        } else {
-          next = Math.min(focusedIdx + 1, items.length - 1);
-        }
+        const next = startIdx < 0 ? 0 : Math.min(startIdx + 1, items.length - 1);
+        if (next === focusedIdx) return;
         setFocusedIdx(next);
         if (!narrow) onSelectItem(items[next]);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        let prev: number;
-        if (focusedIdx < 0) {
-          prev = selectedIdx >= 0 ? Math.max(selectedIdx - 1, 0) : items.length - 1;
-        } else {
-          prev = Math.max(focusedIdx - 1, 0);
-        }
+        const prev = startIdx < 0 ? items.length - 1 : Math.max(startIdx - 1, 0);
+        if (prev === focusedIdx) return;
         setFocusedIdx(prev);
         if (!narrow) onSelectItem(items[prev]);
       } else if ((e.key === 'Enter' || e.key === ' ') && narrow && focusedIdx >= 0) {
@@ -736,6 +709,19 @@ function InlineListDetail<T extends { id: string }>({
     const li = listRef.current.children[focusedIdx] as HTMLElement | undefined;
     li?.scrollIntoView({ block: 'nearest' });
   }, [focusedIdx]);
+
+  // On close, restore focus to the list starting from the last selected item.
+  const handleCloseDetail = useCallback(() => {
+    const closingId = selectedItem?.id;
+    onSelectItem(undefined);
+    if (closingId) {
+      const idx = items.findIndex((i) => i.id === closingId);
+      if (idx >= 0) setFocusedIdx(idx);
+      requestAnimationFrame(() => {
+        listRef.current?.focus();
+      });
+    }
+  }, [items, onSelectItem, selectedItem]);
 
   return (
     <div ref={containerRef} className="tw-relative tw-flex tw-h-full tw-overflow-hidden">
@@ -787,7 +773,7 @@ function InlineListDetail<T extends { id: string }>({
             showFullDetail ? 'tw-w-full' : 'tw-w-2/3',
           )}
         >
-          {renderDetail(selectedItem)}
+          {renderDetail(selectedItem, handleCloseDetail)}
         </div>
       )}
     </div>
@@ -918,10 +904,10 @@ export const AllErTabs: Story = {
               selectedItem={selectedDict}
               onSelectItem={setSelectedDict}
               renderListItem={(item, compact) => <ErDictListItem item={item} compact={compact} />}
-              renderDetail={(item) => (
+              renderDetail={(item, onClose) => (
                 <ErDictionaryDetail
                   item={item}
-                  onClose={() => setSelectedDict(undefined)}
+                  onClose={onClose}
                   onDomainClick={handleDomainClick}
                 />
               )}
@@ -950,9 +936,7 @@ export const AllErTabs: Story = {
                   </span>
                 </div>
               )}
-              renderDetail={(item) => (
-                <EncyclopediaDetail item={item} onClose={() => setSelectedEnc(undefined)} />
-              )}
+              renderDetail={(item, onClose) => <EncyclopediaDetail item={item} onClose={onClose} />}
             />
           )}
           {activeTab === 'media' && (
@@ -979,17 +963,19 @@ export const AllErTabs: Story = {
                   </div>
                 </div>
               )}
-              renderDetail={(item) => (
-                <MediaDetail item={item} onClose={() => setSelectedMedia(undefined)} />
-              )}
+              renderDetail={(item, onClose) => <MediaDetail item={item} onClose={onClose} />}
             />
           )}
 
-          {/* Domain-filtered bottom Drawer (slides up, fills full tab height) */}
+          {/* Domain-filtered bottom Drawer (slides up, fills full tab height).
+              shouldScaleBackground={false} stops vaul from scaling the page
+              wrapper — otherwise the tab buttons above the drawer container
+              become uninteractive while the drawer is open. */}
           {activeTab === 'dictionary' && (
             <Drawer
               direction="bottom"
               modal={false}
+              shouldScaleBackground={false}
               open={domainPath !== undefined}
               onOpenChange={(open) => {
                 if (!open) setDomainPath(undefined);
@@ -998,7 +984,7 @@ export const AllErTabs: Story = {
               <DrawerContent
                 container={tabContentRef.current}
                 hideDrawerHandle
-                className="tw-top-[0.5rem] tw-mt-0 tw-h-full tw-max-h-full tw-rounded-t-lg"
+                className="tw-top-0.5 tw-mt-0 tw-h-full tw-max-h-full tw-rounded-t-lg"
               >
                 {domainPath && (
                   <DomainFilteredView
@@ -1032,9 +1018,7 @@ export const LexicalDictionary: Story = {
             selectedItem={selected}
             onSelectItem={setSelected}
             renderListItem={(item, compact) => <LexicalListItem item={item} compact={compact} />}
-            renderDetail={(item) => (
-              <LexicalDetail item={item} onClose={() => setSelected(undefined)} />
-            )}
+            renderDetail={(item, onClose) => <LexicalDetail item={item} onClose={onClose} />}
           />
         </div>
       </div>
@@ -1042,42 +1026,68 @@ export const LexicalDictionary: Story = {
   },
 };
 
-/** Alternative: domain selection via ComboBox (searchable) instead of Dialog tree. */
-export const DomainComboBoxAlternative: Story = {
+/**
+ * Alternative to AllErTabs: shows the domain-filtered view inside a centered modal Dialog instead
+ * of a bottom Drawer. Clicking a domain link inside an entry's detail opens the dialog.
+ */
+export const AllErTabsDialogVariant: Story = {
   render: () => {
-    const flatDomains = useMemo(() => flattenDomains(sampleAllDomains), []);
-    const [selectedFlat, setSelectedFlat] = useState<FlatDomain>(flatDomains[0]);
-    const [selectedItem, setSelectedItem] = useState<DictionaryEntryWithSenses | undefined>();
+    const [selectedDict, setSelectedDict] = useState<DictionaryEntryWithSenses | undefined>();
+    const [domainPath, setDomainPath] = useState<SemanticDomain[] | undefined>();
+
+    const resolveDomainPath = useCallback((pathIds: string[]): SemanticDomain[] => {
+      return pathIds.reduce<SemanticDomain[]>((acc, id) => {
+        const parent = acc.length === 0 ? sampleAllDomains : (acc[acc.length - 1].children ?? []);
+        const found = parent.find((d) => d.id === id);
+        if (found) acc.push(found);
+        return acc;
+      }, []);
+    }, []);
+
+    const handleDomainClick = useCallback(
+      (_domain: EntryDomain, pathIds?: string[]) => {
+        if (pathIds) {
+          const path = resolveDomainPath(pathIds);
+          if (path.length > 0) setDomainPath(path);
+        }
+      },
+      [resolveDomainPath],
+    );
 
     return (
       <div className="tw-flex tw-h-[550px] tw-flex-col tw-rounded tw-border">
-        <div className="tw-flex tw-items-center tw-gap-2 tw-border-b tw-px-3 tw-py-2">
-          <span className="tw-shrink-0 tw-text-sm tw-font-semibold">Domain:</span>
-          <ComboBox
-            options={flatDomains}
-            value={selectedFlat}
-            onChange={(v) => {
-              setSelectedFlat(v);
-              setSelectedItem(undefined);
-            }}
-            getOptionLabel={(o) => o.label}
-            textPlaceholder="Search domains..."
-            buttonPlaceholder="Select a domain"
-            buttonVariant="outline"
-            buttonClassName="tw-flex-1 tw-justify-start tw-text-sm"
-          />
-        </div>
+        <h3 className="tw-border-b tw-px-3 tw-py-2 tw-text-sm tw-font-semibold">
+          Dictionary (Dialog variant)
+        </h3>
         <div className="tw-flex-1 tw-overflow-hidden">
           <InlineListDetail
             items={sampleDictionaryItems}
-            selectedItem={selectedItem}
-            onSelectItem={setSelectedItem}
+            selectedItem={selectedDict}
+            onSelectItem={setSelectedDict}
             renderListItem={(item, compact) => <ErDictListItem item={item} compact={compact} />}
-            renderDetail={(item) => (
-              <ErDictionaryDetail item={item} onClose={() => setSelectedItem(undefined)} />
+            renderDetail={(item, onClose) => (
+              <ErDictionaryDetail item={item} onClose={onClose} onDomainClick={handleDomainClick} />
             )}
           />
         </div>
+        <Dialog
+          open={domainPath !== undefined}
+          onOpenChange={(open) => {
+            if (!open) setDomainPath(undefined);
+          }}
+        >
+          <DialogContent className="tw-flex tw-h-[80vh] tw-max-h-[600px] tw-w-[90vw] tw-max-w-3xl tw-flex-col tw-overflow-hidden tw-p-0">
+            <DialogTitle className="tw-sr-only">Filtered dictionary</DialogTitle>
+            {domainPath && (
+              <DomainFilteredView
+                domainPath={domainPath}
+                onDomainChange={setDomainPath}
+                onClose={() => setDomainPath(undefined)}
+                onDomainClick={handleDomainClick}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   },
@@ -1085,7 +1095,7 @@ export const DomainComboBoxAlternative: Story = {
     docs: {
       description: {
         story:
-          'Alternative domain selection using a searchable ComboBox instead of the tree dialog. Type to filter domains across all levels.',
+          'Alternative to the bottom Drawer: the domain-filtered view is presented in a centered modal Dialog.',
       },
     },
   },

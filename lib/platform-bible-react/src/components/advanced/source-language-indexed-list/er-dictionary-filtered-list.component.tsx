@@ -82,31 +82,23 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
 
   // List keyboard: arrow keys navigate, behavior depends on narrow/wide.
   // First keypress starts from the selected item (or first/last if none selected).
+  // At the boundaries the list stays put (no wrap, no reselect).
   const handleListKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (items.length === 0) return;
       const selectedIdx = selectedId ? items.findIndex((i) => i.id === selectedId) : -1;
+      const startIdx = focusedIndex >= 0 ? focusedIndex : selectedIdx;
 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        let next: number;
-        if (focusedIndex < 0) {
-          // First press: start at selected item, or first item
-          next = selectedIdx >= 0 ? Math.min(selectedIdx + 1, items.length - 1) : 0;
-        } else {
-          next = Math.min(focusedIndex + 1, items.length - 1);
-        }
+        const next = startIdx < 0 ? 0 : Math.min(startIdx + 1, items.length - 1);
+        if (next === focusedIndex) return;
         setFocusedIndex(next);
         if (!narrow) selectItem(items[next]);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        let prev: number;
-        if (focusedIndex < 0) {
-          // First press: start at selected item, or last item
-          prev = selectedIdx >= 0 ? Math.max(selectedIdx - 1, 0) : items.length - 1;
-        } else {
-          prev = Math.max(focusedIndex - 1, 0);
-        }
+        const prev = startIdx < 0 ? items.length - 1 : Math.max(startIdx - 1, 0);
+        if (prev === focusedIndex) return;
         setFocusedIndex(prev);
         if (!narrow) selectItem(items[prev]);
       } else if ((e.key === 'Enter' || e.key === ' ') && narrow && focusedIndex >= 0) {
@@ -116,6 +108,20 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
     },
     [items, focusedIndex, narrow, selectItem, selectedId],
   );
+
+  // On close, restore focus to the list and set the focused index to the
+  // previously-selected item so ArrowUp/Down pick up from there.
+  const handleCloseDetail = useCallback(() => {
+    const closingId = selectedId;
+    setSelectedId(undefined);
+    if (closingId) {
+      const idx = items.findIndex((i) => i.id === closingId);
+      if (idx >= 0) setFocusedIndex(idx);
+      requestAnimationFrame(() => {
+        listRef.current?.focus();
+      });
+    }
+  }, [items, selectedId]);
 
   // Scroll focused item into view
   useEffect(() => {
@@ -205,7 +211,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
               showFullDetail ? 'tw-w-full' : 'tw-w-2/3',
             )}
           >
-            {renderDetailContent(selectedItem, () => setSelectedId(undefined))}
+            {renderDetailContent(selectedItem, handleCloseDetail)}
           </div>
         )}
       </div>
@@ -469,13 +475,22 @@ function TreeKeyboardContainer({
   const scrollRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    requestAnimationFrame(() => {
-      // Focus and scroll to the expand target
+    const focusTarget = () => {
       if (scrollRef.current) {
         scrollRef.current.scrollIntoView({ block: 'center' });
         scrollRef.current.focus();
       }
-    });
+    };
+    // rAF to run after initial paint
+    const rafId = requestAnimationFrame(focusTarget);
+    // Fallback to override Radix's RovingFocusGroup, which re-focuses the first
+    // item asynchronously after our rAF when focus was previously on an element
+    // outside the dropdown (e.g. the detail panel's Back button).
+    const timeoutId = window.setTimeout(focusTarget, 50);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.clearTimeout(timeoutId);
+    };
   }, [expandToId]);
 
   const getFocusableButtons = (): HTMLButtonElement[] => {
