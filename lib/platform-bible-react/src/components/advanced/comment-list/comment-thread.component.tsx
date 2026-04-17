@@ -126,18 +126,6 @@ export function CommentThread({
     };
   }, [threadId, canUserResolveThreadCallback]);
 
-  // Pre-populate the pending assignee when the thread opens, using the last assignee from the parent.
-  // Clear it when the thread collapses so stale auto-populated values don't leak into future actions.
-  const prevIsSelectedRef = useRef(isSelected);
-  useEffect(() => {
-    if (!prevIsSelectedRef.current && isSelected && initialAssignedUser !== undefined) {
-      setPendingCommentAssignedUser(initialAssignedUser);
-    } else if (prevIsSelectedRef.current && !isSelected) {
-      setPendingCommentAssignedUser(undefined);
-    }
-    prevIsSelectedRef.current = isSelected;
-  }, [isSelected, initialAssignedUser]);
-
   // Check remaining async permissions when thread is selected
   useEffect(() => {
     let isPromiseCurrent = true;
@@ -162,6 +150,40 @@ export function CommentThread({
       isPromiseCurrent = false;
     };
   }, [isSelected, threadId, canUserAssignThreadCallback]);
+
+  // Pre-populate the pending assignee when the thread opens, using the last assignee from the
+  // parent. Gated on `canAssign` so users without assign permission on this thread don't see the
+  // "Assigning to" indicator or trigger an unauthorized assignment on submit — `canAssign` is
+  // resolved asynchronously so the pre-population waits for that check to succeed. Clears the
+  // value when the thread collapses, and also clears any auto-populated value if `canAssign`
+  // later flips back to false so stale pending assignments can't leak into submissions.
+  const prevIsSelectedRef = useRef(isSelected);
+  const pendingAssigneeIsAutoPopulatedRef = useRef(false);
+  useEffect(() => {
+    const justDeselected = prevIsSelectedRef.current && !isSelected;
+    prevIsSelectedRef.current = isSelected;
+
+    if (!isSelected) {
+      if (justDeselected) {
+        setPendingCommentAssignedUser(undefined);
+      }
+      pendingAssigneeIsAutoPopulatedRef.current = false;
+      return;
+    }
+
+    if (canAssign) {
+      if (!pendingAssigneeIsAutoPopulatedRef.current && initialAssignedUser !== undefined) {
+        setPendingCommentAssignedUser(initialAssignedUser);
+        pendingAssigneeIsAutoPopulatedRef.current = true;
+      }
+    } else if (pendingAssigneeIsAutoPopulatedRef.current) {
+      // Permission was granted long enough to pre-populate but has now been revoked (for example,
+      // the async check resolved to false, or the thread-specific permission changed). Clear the
+      // stale value so the submit handler doesn't send an unauthorized assignment.
+      setPendingCommentAssignedUser(undefined);
+      pendingAssigneeIsAutoPopulatedRef.current = false;
+    }
+  }, [isSelected, initialAssignedUser, canAssign]);
 
   const activeComments = useMemo(() => comments.filter((comment) => !comment.deleted), [comments]);
 
@@ -645,6 +667,9 @@ export function CommentThread({
                                     } else {
                                       setPendingCommentAssignedUser(undefined);
                                     }
+                                    // Manual selection supersedes the auto-populated value —
+                                    // don't treat it as stale if `canAssign` later flips.
+                                    pendingAssigneeIsAutoPopulatedRef.current = false;
                                     setIsAssignPopoverOpen(false);
                                   }}
                                   className="tw-flex tw-items-center"
