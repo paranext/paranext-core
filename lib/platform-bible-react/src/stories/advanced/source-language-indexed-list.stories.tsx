@@ -7,7 +7,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Badge } from '@/components/shadcn-ui/badge';
 import ComboBox from '@/components/basics/combo-box.component';
-// Dialog/DialogContent/DialogTitle/DialogTrigger available from shadcn but not used in current stories
+import { Drawer, DrawerContent } from '@/components/shadcn-ui/drawer';
 import {
   Tooltip,
   TooltipContent,
@@ -474,7 +474,13 @@ function ErDictionaryDetail({
             <p className="tw-text-sm">
               <span className="tw-mr-2 tw-font-bold tw-text-primary">{sense.number}</span>
               {sense.definition}{' '}
-              <span className="tw-text-muted-foreground">({sense.occurrenceCount})</span>
+              <button
+                type="button"
+                className="tw-cursor-pointer tw-text-muted-foreground tw-underline"
+                onClick={() => {}}
+              >
+                ({sense.occurrenceCount})
+              </button>
             </p>
             <p className="tw-mt-0.5 tw-pl-5 tw-text-sm tw-text-muted-foreground">
               Glosses: <span className="tw-italic">{sense.glosses}</span>
@@ -495,7 +501,13 @@ function ErDictionaryDetail({
       <Separator className="tw-my-3" />
       <p className="tw-text-sm">
         Occurrences in all books{' '}
-        <span className="tw-text-muted-foreground">({item.totalOccurrences})</span>
+        <button
+          type="button"
+          className="tw-cursor-pointer tw-text-muted-foreground tw-underline"
+          onClick={() => {}}
+        >
+          ({item.totalOccurrences})
+        </button>
       </p>
     </div>
   );
@@ -787,8 +799,9 @@ export const EmptyState: Story = {
 };
 
 /**
- * All ER tabs with inline panel + inline domain navigation. Domain links open a bottom drawer with
- * 5-level breadcrumb navigation.
+ * All ER tabs with inline panel detail views. Domain links open a bottom Drawer containing the
+ * domain-filtered list with breadcrumb navigation. Interaction works while details are shown:
+ * selecting entries, clicking close, breadcrumbs, and domain links all remain functional.
  */
 export const AllErTabs: Story = {
   render: () => {
@@ -799,21 +812,38 @@ export const AllErTabs: Story = {
     const [selectedEnc, setSelectedEnc] = useState<EncyclopediaTeaser | undefined>();
     const [selectedMedia, setSelectedMedia] = useState<MediaItem | undefined>();
     const [domainPath, setDomainPath] = useState<SemanticDomain[] | undefined>();
+    // eslint-disable-next-line no-null/no-null
+    const tabContentRef = useRef<HTMLDivElement>(null);
 
-    const handleDomainClick = useCallback((_domain: EntryDomain, pathIds?: string[]) => {
-      if (pathIds) {
-        const path = pathIds.reduce<SemanticDomain[]>((acc, id) => {
-          const parent = acc.length === 0 ? sampleAllDomains : (acc[acc.length - 1].children ?? []);
-          const found = parent.find((d) => d.id === id);
-          if (found) acc.push(found);
-          return acc;
-        }, []);
-        if (path.length > 0) {
-          setDomainPath(path);
-          setSelectedDict(undefined);
-        }
-      }
+    const resolveDomainPath = useCallback((pathIds: string[]): SemanticDomain[] => {
+      return pathIds.reduce<SemanticDomain[]>((acc, id) => {
+        const parent = acc.length === 0 ? sampleAllDomains : (acc[acc.length - 1].children ?? []);
+        const found = parent.find((d) => d.id === id);
+        if (found) acc.push(found);
+        return acc;
+      }, []);
     }, []);
+
+    const handleDomainClick = useCallback(
+      (_domain: EntryDomain, pathIds?: string[]) => {
+        if (pathIds) {
+          const path = resolveDomainPath(pathIds);
+          if (path.length > 0) setDomainPath(path);
+        }
+      },
+      [resolveDomainPath],
+    );
+
+    // Domain click from inside the filtered detail view: update the breadcrumb path and list
+    const handleDomainClickInFiltered = useCallback(
+      (_domain: EntryDomain, pathIds?: string[]) => {
+        if (pathIds) {
+          const path = resolveDomainPath(pathIds);
+          if (path.length > 0) setDomainPath(path);
+        }
+      },
+      [resolveDomainPath],
+    );
 
     return (
       <div className="tw-flex tw-h-[550px] tw-flex-col tw-rounded tw-border">
@@ -835,8 +865,8 @@ export const AllErTabs: Story = {
             </button>
           ))}
         </div>
-        <div className="tw-flex-1 tw-overflow-hidden">
-          {activeTab === 'dictionary' && !domainPath && (
+        <div ref={tabContentRef} className="tw-relative tw-flex-1 tw-overflow-hidden">
+          {activeTab === 'dictionary' && (
             <InlineListDetail
               items={sampleDictionaryItems}
               selectedItem={selectedDict}
@@ -849,20 +879,6 @@ export const AllErTabs: Story = {
                   onDomainClick={handleDomainClick}
                 />
               )}
-            />
-          )}
-          {activeTab === 'dictionary' && domainPath && (
-            <ErDictionaryFilteredList
-              items={sampleDictionaryItems}
-              domainPath={domainPath}
-              allDomains={sampleAllDomains}
-              onDomainChange={setDomainPath}
-              onBack={() => setDomainPath(undefined)}
-              renderItem={(item) => <ErDictListItem item={item} />}
-              renderDetailContent={(item, onClose) => (
-                <ErDictionaryDetail item={item} onClose={onClose} />
-              )}
-              className="tw-h-full"
             />
           )}
           {activeTab === 'encyclopedia' && (
@@ -921,6 +937,43 @@ export const AllErTabs: Story = {
                 <MediaDetail item={item} onClose={() => setSelectedMedia(undefined)} />
               )}
             />
+          )}
+
+          {/* Domain-filtered bottom Drawer (slides up, fills full tab height) */}
+          {activeTab === 'dictionary' && (
+            <Drawer
+              direction="bottom"
+              modal={false}
+              open={domainPath !== undefined}
+              onOpenChange={(open) => {
+                if (!open) setDomainPath(undefined);
+              }}
+            >
+              <DrawerContent
+                container={tabContentRef.current}
+                hideDrawerHandle
+                className="tw-mt-0 tw-h-full tw-max-h-full tw-rounded-none"
+              >
+                {domainPath && (
+                  <ErDictionaryFilteredList
+                    items={sampleDictionaryItems}
+                    domainPath={domainPath}
+                    allDomains={sampleAllDomains}
+                    onDomainChange={setDomainPath}
+                    onClose={() => setDomainPath(undefined)}
+                    renderItem={(item) => <ErDictListItem item={item} />}
+                    renderDetailContent={(item, onCloseDetail) => (
+                      <ErDictionaryDetail
+                        item={item}
+                        onClose={onCloseDetail}
+                        onDomainClick={handleDomainClickInFiltered}
+                      />
+                    )}
+                    className="tw-h-full"
+                  />
+                )}
+              </DrawerContent>
+            </Drawer>
           )}
         </div>
       </div>

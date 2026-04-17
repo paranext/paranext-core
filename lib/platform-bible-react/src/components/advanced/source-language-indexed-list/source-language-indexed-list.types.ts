@@ -104,8 +104,8 @@ export type ErDictionaryFilteredListProps<T extends IndexedListItem> = {
   allDomains: SemanticDomain[];
   /** Callback when a different domain is selected. Receives the new full path. */
   onDomainChange: (newPath: SemanticDomain[]) => void;
-  /** Callback for the back arrow button. When provided, renders a back button. */
-  onBack?: () => void;
+  /** Callback for the close (X) button. When provided, renders a close button on the right. */
+  onClose?: () => void;
   /** Additional CSS class names */
   className?: string;
 };
