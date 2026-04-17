@@ -683,7 +683,7 @@ function InlineListDetail<T extends { id: string }>({
     const el = containerRef.current;
     if (!el) return undefined;
     const observer = new ResizeObserver(([entry]) => {
-      setNarrow((entry?.contentRect.width ?? 0) < 500);
+      setNarrow((entry?.contentRect.width ?? 0) < 350);
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -1054,19 +1054,14 @@ function DomainFilteredView({
   onClose: () => void;
   onDomainClick: (domain: EntryDomain, pathIds?: string[]) => void;
 }) {
-  const [selectedItem, setSelectedItem] = useState<DictionaryEntryWithSenses | undefined>();
-
   return (
     <ErDictionaryFilteredList
       items={sampleDictionaryItems}
       domainPath={domainPath}
       allDomains={sampleAllDomains}
-      onDomainChange={(newPath) => {
-        onDomainChange(newPath);
-        setSelectedItem(undefined);
-      }}
+      onDomainChange={onDomainChange}
       onClose={onClose}
-      renderItem={(item) => <ErDictListItem item={item} compact={!!selectedItem} />}
+      renderItem={(item) => <ErDictListItem item={item} />}
       renderDetailContent={(item, onCloseDetail) => (
         <ErDictionaryDetail item={item} onClose={onCloseDetail} onDomainClick={onDomainClick} />
       )}
