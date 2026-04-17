@@ -366,7 +366,7 @@ export function CommentThread({
   );
 
   // If all comments have been deleted there is nothing to render
-  if (!firstComment) return undefined;
+  if (activeComments.length === 0) return undefined;
 
   return (
     <Card
