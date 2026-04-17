@@ -6,7 +6,6 @@ import { Button } from '@/components/shadcn-ui/button';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/shadcn-ui/dialog';
-import { DrawerClose, DrawerTitle, DrawerDescription } from '@/components/shadcn-ui/drawer';
 import SourceLanguageIndexedList from '@/components/advanced/source-language-indexed-list/source-language-indexed-list.component';
 import ErDictionaryList from '@/components/advanced/source-language-indexed-list/er-dictionary-list.component';
 import ErDictionaryFilteredList from '@/components/advanced/source-language-indexed-list/er-dictionary-filtered-list.component';
@@ -335,7 +334,7 @@ const sampleLexicalEntries: LexicalDictionaryEntry[] = [
 // Shared detail content renderers (extracted from lexical dictionary pattern)
 // ---------------------------------------------------------------------------
 
-/** Renders detailed dictionary entry content inside the drawer */
+/** Renders detailed dictionary entry content inside the inline detail panel */
 function DictionaryDetailContent({
   item,
   onClose,
@@ -347,20 +346,16 @@ function DictionaryDetailContent({
 }) {
   return (
     <>
-      <DrawerClose asChild>
-        <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
-          <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
-          Back to list
-        </Button>
-      </DrawerClose>
+      <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
+        <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+        Back to list
+      </Button>
 
       <div className="tw-mb-4">
         <div className="tw-flex tw-items-baseline tw-justify-between tw-gap-2">
           <span className="tw-flex tw-flex-row tw-items-baseline tw-gap-2">
-            <DrawerTitle className="tw-text-2xl tw-font-normal">{item.primaryText}</DrawerTitle>
-            <DrawerDescription className="tw-text-lg tw-text-muted-foreground">
-              {item.glosses}
-            </DrawerDescription>
+            <h2 className="tw-text-2xl tw-font-normal">{item.primaryText}</h2>
+            <span className="tw-text-lg tw-text-muted-foreground">{item.glosses}</span>
           </span>
           <ul className="tw-flex tw-flex-row tw-gap-1">
             {item.strongsCodes.map((code) => (
@@ -422,7 +417,7 @@ function DictionaryDetailContent({
   );
 }
 
-/** Renders detailed encyclopedia content inside the drawer */
+/** Renders detailed encyclopedia content inside the inline detail panel */
 function EncyclopediaDetailContent({
   item,
   onClose,
@@ -432,19 +427,17 @@ function EncyclopediaDetailContent({
 }) {
   return (
     <>
-      <DrawerClose asChild>
-        <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
-          <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
-          Back to list
-        </Button>
-      </DrawerClose>
+      <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
+        <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+        Back to list
+      </Button>
 
-      <DrawerTitle className="tw-mb-1 tw-text-2xl tw-font-normal">{item.primaryText}</DrawerTitle>
+      <h2 className="tw-mb-1 tw-text-2xl tw-font-normal">{item.primaryText}</h2>
       {item.sourceLanguageText && (
-        <DrawerDescription className="tw-text-sm tw-text-muted-foreground">
+        <p className="tw-text-sm tw-text-muted-foreground">
           {item.sourceLanguageText}
           {item.transliteration && <span className="tw-ml-1">({item.transliteration})</span>}
-        </DrawerDescription>
+        </p>
       )}
 
       <Separator className="tw-my-3" />
@@ -456,24 +449,19 @@ function EncyclopediaDetailContent({
   );
 }
 
-/** Renders detailed media content inside the drawer */
+/** Renders detailed media content inside the inline detail panel */
 function MediaDetailContent({ item, onClose }: { item: MediaItem; onClose: () => void }) {
   return (
     <>
-      <DrawerClose asChild>
-        <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
-          <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
-          Back to list
-        </Button>
-      </DrawerClose>
+      <Button onClick={onClose} className="tw-mb-4 tw-flex tw-items-center" variant="link">
+        <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+        Back to list
+      </Button>
 
       <div className="tw-mb-4 tw-flex tw-items-center tw-gap-2">
-        <DrawerTitle className="tw-text-xl tw-font-normal">{item.primaryText}</DrawerTitle>
+        <h2 className="tw-text-xl tw-font-normal">{item.primaryText}</h2>
         <Badge variant="outline">{item.mediaType}</Badge>
       </div>
-      <DrawerDescription className="tw-sr-only">
-        {item.caption ?? item.primaryText}
-      </DrawerDescription>
 
       {item.thumbnailUrl && (
         <img
@@ -536,7 +524,7 @@ export const Default: Story = {
     docs: {
       description: {
         story:
-          'Base SourceLanguageIndexedList without a detail drawer. Clicking items toggles selection only.',
+          'Base SourceLanguageIndexedList without a detail panel. Clicking items toggles selection only.',
       },
     },
   },
@@ -578,7 +566,7 @@ export const EmptyState: Story = {
 };
 
 /**
- * ER Dictionary list with detail drawer. Clicking an entry opens a right-side drawer showing the
+ * ER Dictionary list with detail panel. Clicking an entry opens a inline detail panel showing the
  * full entry details (glosses, Strong's codes, definition, domains as clickable links). Clicking a
  * domain link opens the "ER Dictionary Filtered by Type" dialog.
  */
@@ -623,7 +611,7 @@ export const ErDictionary: Story = {
           />
         </div>
 
-        {/* Dialog that opens when clicking a domain link in the detail drawer */}
+        {/* Dialog that opens when clicking a domain link in the detail panel */}
         <Dialog open={filteredDialogOpen} onOpenChange={setFilteredDialogOpen}>
           <DialogContent className="tw-flex tw-h-[500px] tw-max-w-lg tw-flex-col tw-p-0">
             <DialogTitle className="tw-px-4 tw-pt-4 tw-text-base tw-font-semibold">
@@ -661,7 +649,7 @@ export const ErDictionary: Story = {
     docs: {
       description: {
         story:
-          'ER Dictionary list with a detail drawer. Clicking an entry opens a right-side drawer with full details. Domain names in the detail view are clickable links that open the "ER Dictionary Filtered by Type" dialog.',
+          'ER Dictionary list with a detail panel. Clicking an entry opens a inline detail panel with full details. Domain names in the detail view are clickable links that open the "ER Dictionary Filtered by Type" dialog.',
       },
     },
   },
@@ -669,7 +657,7 @@ export const ErDictionary: Story = {
 
 /**
  * ER Dictionary filtered by semantic domain, shown in a Dialog. Features 2-level breadcrumbs,
- * dropdown/tree navigation toggle, and entry detail drawer.
+ * dropdown/tree navigation toggle, and entry detail panel.
  */
 export const ErDictionaryFilteredByType: Story = {
   render: () => {
@@ -714,13 +702,13 @@ export const ErDictionaryFilteredByType: Story = {
     docs: {
       description: {
         story:
-          'ER Dictionary filtered by semantic domain inside a Dialog. 2-level breadcrumbs at top; clicking them opens either a dropdown (dropdown mode) or a domain tree drawer (tree mode). Toggle between modes at the bottom. Clicking an entry opens a detail drawer.',
+          'ER Dictionary filtered by semantic domain inside a Dialog. 2-level breadcrumbs at top; clicking them opens either a dropdown (dropdown mode) or a domain tree drawer (tree mode). Toggle between modes at the bottom. Clicking an entry opens a detail panel.',
       },
     },
   },
 };
 
-/** ER Encyclopedia list with detail drawer showing article titles and teaser text. */
+/** ER Encyclopedia list with detail panel showing article titles and teaser text. */
 export const ErEncyclopedia: Story = {
   render: () => (
     <div className="tw-h-[500px] tw-rounded tw-border">
@@ -739,13 +727,13 @@ export const ErEncyclopedia: Story = {
     docs: {
       description: {
         story:
-          'ER Encyclopedia list with a detail drawer. Clicking an article opens the full article content in a right-side drawer.',
+          'ER Encyclopedia list with a detail panel. Clicking an article opens the full article content in a inline detail panel.',
       },
     },
   },
 };
 
-/** ER Media list (images and maps) with detail drawer showing image preview. */
+/** ER Media list (images and maps) with detail panel showing image preview. */
 export const ErMedia: Story = {
   render: () => (
     <div className="tw-h-[500px] tw-rounded tw-border">
@@ -765,7 +753,7 @@ export const ErMedia: Story = {
     docs: {
       description: {
         story:
-          'ER Media list with a detail drawer. Clicking an image or map opens a preview in a right-side drawer with zoom/pan support.',
+          'ER Media list with a detail panel. Clicking an image or map opens a preview in a inline detail panel with zoom/pan support.',
       },
     },
   },
@@ -922,7 +910,7 @@ export const AllErTabs: Story = {
     docs: {
       description: {
         story:
-          'All ER tabs combined with detail drawers and domain-filtered dialog. Dictionary entries open a detail drawer with clickable domain links. Clicking a domain opens the filtered dictionary dialog.',
+          'All ER tabs combined with detail panels and domain-filtered dialog. Dictionary entries open a detail panel with clickable domain links. Clicking a domain opens the filtered dictionary dialog.',
       },
     },
   },

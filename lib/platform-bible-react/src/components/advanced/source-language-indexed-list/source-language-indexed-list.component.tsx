@@ -1,9 +1,8 @@
-import { RefObject, useMemo, useState } from 'react';
+import { RefObject, useMemo, useRef, useState } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { useListbox, type ListboxOption } from '@/hooks/listbox-keyboard-navigation.hook';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Skeleton } from '@/components/shadcn-ui/skeleton';
-import { Drawer, DrawerContent, DrawerTrigger } from '@/components/shadcn-ui/drawer';
 import type {
   IndexedListItem,
   SourceLanguageIndexedListProps,
@@ -12,11 +11,11 @@ import type {
 /**
  * A shared list component for displaying source-language indexed items. Supports two-column layout
  * (resource term + source language term), keyboard navigation, text and thumbnail variants,
- * loading/empty states, and an optional right-side detail drawer.
+ * loading/empty states, and an optional inline detail panel.
  *
- * When `renderDetailContent` is provided, clicking an item opens a right-side drawer with the
- * detail content (extracted from the lexical dictionary extension pattern). When not provided,
- * clicking an item just fires `onItemClick`.
+ * When `renderDetailContent` is provided, clicking an item slides in a detail panel from the right
+ * **within the component's own bounding box** (not a full-page overlay). This pattern is extracted
+ * from the lexical dictionary extension's split-pane layout.
  *
  * Used by Enhanced Resources (dictionary, encyclopedia, media) and lexical tools (dictionary).
  *
@@ -50,8 +49,11 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
   className,
 }: SourceLanguageIndexedListProps<T>) {
   const [drawerItemId, setDrawerItemId] = useState<string | undefined>();
+  // ref.current expects null not undefined for div ref
+  // eslint-disable-next-line no-null/no-null
+  const detailRef = useRef<HTMLDivElement>(null);
 
-  // Use controlled selection if provided, otherwise use internal drawer state
+  // Use controlled selection if provided, otherwise use internal state
   const effectiveSelectedId = controlledSelectedId ?? drawerItemId;
 
   const drawerItem = useMemo(
@@ -64,7 +66,10 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
   const handleItemSelect = (item: T) => {
     onItemClick?.(item);
     if (renderDetailContent) {
-      setDrawerItemId(item.id === drawerItemId ? undefined : item.id);
+      const newId = item.id === drawerItemId ? undefined : item.id;
+      setDrawerItemId(newId);
+      // Scroll detail panel to top when opening a new entry
+      if (newId) detailRef.current?.scrollTo({ top: 0 });
     }
   };
 
@@ -73,7 +78,7 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
     if (clickedItem) handleItemSelect(clickedItem);
   };
 
-  const handleCloseDrawer = () => {
+  const handleCloseDetail = () => {
     setDrawerItemId(undefined);
   };
 
@@ -113,78 +118,77 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
     );
   }
 
-  const listContent = (
-    <div className={cn('tw-overflow-y-auto', className)}>
-      <ul
-        role="listbox"
-        tabIndex={0}
-        // useListbox returns a generic HTMLElement ref for flexibility across element types
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        ref={listboxRef as RefObject<HTMLUListElement>}
-        aria-activedescendant={activeId ?? undefined}
-        className="tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background"
-        onKeyDown={handleKeyDown}
-      >
-        {items.map((item) => {
-          const isSelected = effectiveSelectedId === item.id;
-          return (
-            <li
-              key={item.id}
-              id={item.id}
-              role="option"
-              aria-selected={isSelected}
-              tabIndex={-1}
-              onClick={() => handleItemSelect(item)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleItemSelect(item);
-                }
-              }}
-              className={cn(
-                'tw-flex tw-cursor-pointer tw-items-center tw-gap-3 tw-p-2 tw-outline-none',
-                {
-                  'tw-bg-muted': isSelected,
-                  'hover:tw-bg-muted': !isSelected,
-                },
-              )}
-            >
-              {renderItem ? (
-                renderItem(item)
-              ) : (
-                <DefaultListItemContent
-                  item={item}
-                  variant={variant}
-                  showSourceLanguage={showSourceLanguage}
-                  showTransliteration={showTransliteration}
-                />
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
+  const hasDetail = renderDetailContent && drawerItem;
 
-  // If no detail content renderer, render just the list
-  if (!renderDetailContent) return listContent;
-
-  // With detail content: wrap in a Drawer that opens from the right
   return (
-    <Drawer
-      direction="right"
-      open={drawerItem !== undefined}
-      onOpenChange={(open) => {
-        if (!open) handleCloseDrawer();
-      }}
-    >
-      <DrawerTrigger asChild>{listContent}</DrawerTrigger>
-      <DrawerContent hideDrawerHandle className="tw-max-w-xl">
-        <div className="tw-overflow-y-auto tw-p-4">
-          {drawerItem && renderDetailContent(drawerItem, handleCloseDrawer)}
+    <div className={cn('tw-relative tw-flex tw-h-full tw-overflow-hidden', className)}>
+      {/* List pane */}
+      <div
+        className={cn('tw-overflow-y-auto tw-transition-all tw-duration-200', {
+          'tw-w-full': !hasDetail,
+          'tw-w-0 tw-min-w-0 tw-overflow-hidden': hasDetail,
+        })}
+      >
+        <ul
+          role="listbox"
+          tabIndex={0}
+          // useListbox returns a generic HTMLElement ref for flexibility across element types
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          ref={listboxRef as RefObject<HTMLUListElement>}
+          aria-activedescendant={activeId ?? undefined}
+          className="tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background"
+          onKeyDown={handleKeyDown}
+        >
+          {items.map((item) => {
+            const isSelected = effectiveSelectedId === item.id;
+            return (
+              <li
+                key={item.id}
+                id={item.id}
+                role="option"
+                aria-selected={isSelected}
+                tabIndex={-1}
+                onClick={() => handleItemSelect(item)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleItemSelect(item);
+                  }
+                }}
+                className={cn(
+                  'tw-flex tw-cursor-pointer tw-items-center tw-gap-3 tw-p-2 tw-outline-none',
+                  {
+                    'tw-bg-muted': isSelected,
+                    'hover:tw-bg-muted': !isSelected,
+                  },
+                )}
+              >
+                {renderItem ? (
+                  renderItem(item)
+                ) : (
+                  <DefaultListItemContent
+                    item={item}
+                    variant={variant}
+                    showSourceLanguage={showSourceLanguage}
+                    showTransliteration={showTransliteration}
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {/* Inline detail panel - renders within the component's bounding box */}
+      {hasDetail && (
+        <div
+          ref={detailRef}
+          className="tw-w-full tw-overflow-y-auto tw-border-l tw-bg-background tw-p-4"
+        >
+          {renderDetailContent(drawerItem, handleCloseDetail)}
         </div>
-      </DrawerContent>
-    </Drawer>
+      )}
+    </div>
   );
 }
 
