@@ -138,6 +138,11 @@ export interface CommentThreadProps {
   currentUser: string;
   /** User assigned to the thread */
   assignedUser?: string;
+  /**
+   * User to pre-select in the reply "Assign to" dropdown when the thread is expanded. Used to
+   * persist the last chosen assignee across consecutive replies within a session.
+   */
+  initialAssignedUser?: string;
   /** Handler for selecting the thread */
   handleSelectThread: (threadId: string) => void;
   /** ID of the thread */
