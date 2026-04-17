@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button } from '@/components/shadcn-ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/shadcn-ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { ArrowUp, ChevronRight, MoreHorizontal } from 'lucide-react';
 import { Z_INDEX_MODAL } from '@/components/z-index';
 import type {
@@ -13,11 +23,11 @@ import type {
 /**
  * ER Dictionary list filtered by semantic domain with breadcrumb navigation.
  *
- * Header row: `[breadcrumb button] ......... [↑ Back]`
+ * Each breadcrumb segment is clickable and opens a DropdownMenu (modal) aligned to that segment,
+ * showing the expandable domain tree with that segment's level expanded and highlighted.
  *
- * Below the header: an inline list + detail layout (same pattern as the dictionary tab) where the
- * list and detail are side-by-side flex children. All interactive elements (list items,
- * breadcrumbs, back button, domain links) remain clickable while the detail panel is open.
+ * Breadcrumbs collapse from the 2nd-left inward. The final collapse state is `... > leaf` (root is
+ * hidden). The ellipsis has a tooltip showing the hidden path segments.
  */
 export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   items,
@@ -33,8 +43,6 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   onClose,
   className,
 }: ErDictionaryFilteredListProps<T>) {
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const [clickedSegmentId, setClickedSegmentId] = useState<string | undefined>();
   const [selectedId, setSelectedId] = useState<string | undefined>(selectedItemId);
 
   // eslint-disable-next-line no-null/no-null
@@ -54,21 +62,10 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   const handleDomainSelect = useCallback(
     (path: SemanticDomain[]) => {
       onDomainChange(path);
-      setPopoverOpen(false);
       setSelectedId(undefined);
     },
     [onDomainChange],
   );
-
-  const handleBreadcrumbClick = (segmentId: string) => {
-    if (popoverOpen) {
-      // Close on re-click
-      setPopoverOpen(false);
-    } else {
-      setClickedSegmentId(segmentId);
-      setPopoverOpen(true);
-    }
-  };
 
   const selectedItem = items.find((item) => item.id === selectedId);
   const handleItemClick = (item: T) => {
@@ -81,27 +78,15 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
 
   return (
     <div className={cn('tw-flex tw-h-full tw-flex-col tw-overflow-hidden', className)}>
-      {/* Header: breadcrumb + back */}
+      {/* Header: breadcrumbs + back */}
       <div className="tw-flex tw-items-center tw-gap-1 tw-border-b tw-px-2 tw-py-1.5">
-        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-          <PopoverTrigger asChild>
-            <div className="tw-min-w-0 tw-flex-1">
-              <BreadcrumbBar path={domainPath} onSegmentClick={handleBreadcrumbClick} />
-            </div>
-          </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            className="tw-w-full tw-max-w-[400px] tw-p-0"
-            style={{ zIndex: Z_INDEX_MODAL + 10 }}
-          >
-            <DomainTree
-              domains={allDomains}
-              currentPath={domainPath}
-              expandToId={clickedSegmentId}
-              onSelect={handleDomainSelect}
-            />
-          </PopoverContent>
-        </Popover>
+        <div className="tw-min-w-0 tw-flex-1">
+          <BreadcrumbBar
+            path={domainPath}
+            allDomains={allDomains}
+            onDomainSelect={handleDomainSelect}
+          />
+        </div>
 
         {onClose && (
           <Button variant="ghost" size="sm" className="tw-shrink-0 tw-gap-1" onClick={onClose}>
@@ -111,7 +96,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
         )}
       </div>
 
-      {/* Inline list + detail (same pattern as dictionary tab) */}
+      {/* Inline list + detail */}
       <div ref={containerRef} className="tw-relative tw-flex tw-flex-1 tw-overflow-hidden">
         {!showFullDetail && (
           <div
@@ -171,15 +156,17 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
 }
 
 // ---------------------------------------------------------------------------
-// BreadcrumbBar: flicker-free collapse, no hover underline
+// BreadcrumbBar: flicker-free collapse, ellipsis tooltip, per-segment dropdown
 // ---------------------------------------------------------------------------
 
 function BreadcrumbBar({
   path,
-  onSegmentClick,
+  allDomains,
+  onDomainSelect,
 }: {
   path: SemanticDomain[];
-  onSegmentClick: (domainId: string) => void;
+  allDomains: SemanticDomain[];
+  onDomainSelect: (path: SemanticDomain[]) => void;
 }) {
   // eslint-disable-next-line no-null/no-null
   const outerRef = useRef<HTMLDivElement>(null);
@@ -197,41 +184,36 @@ function BreadcrumbBar({
       const segEls = Array.from(full.children) as HTMLElement[];
       if (segEls.length === 0) return;
 
-      // Check if everything fits (include some padding buffer)
       const fullWidth = segEls.reduce((sum, el) => sum + el.offsetWidth, 0);
-      if (fullWidth <= available - 8) {
+      if (fullWidth <= available - 4) {
         setHideCount(0);
         return;
       }
 
       const widths = segEls.map((el) => el.offsetWidth);
       const totalSegments = path.length;
-      const ellipsisWidth = 44; // chevron + dots + gaps
+      const ellipsisWidth = 44;
 
       // Try hiding from index 1 inward. Always keep the last segment.
-      // When h < totalSegments - 1: show root + ellipsis + trailing (from h+1..end)
-      // When h >= totalSegments - 1: show ellipsis + last segment only
+      // h < totalSegments - 1: show root + ... + trailing
+      // h >= totalSegments - 1: show ... + last only
       for (let h = 1; h < totalSegments; h += 1) {
         let visibleWidth = ellipsisWidth;
 
         if (h < totalSegments - 1) {
-          // Root is still visible
           visibleWidth += widths[0] ?? 0;
-          for (let j = h + 1; j < totalSegments; j += 1) {
-            visibleWidth += widths[j] ?? 0;
-          }
+          for (let j = h + 1; j < totalSegments; j += 1) visibleWidth += widths[j] ?? 0;
         } else {
-          // Root hidden, only last segment + ellipsis
+          // Only ellipsis + last segment
           visibleWidth += widths[totalSegments - 1] ?? 0;
         }
 
-        if (visibleWidth <= available - 8) {
+        if (visibleWidth <= available - 4) {
           setHideCount(h);
           return;
         }
       }
 
-      // Cannot fit even ellipsis + last segment - show just last
       setHideCount(totalSegments - 1);
     };
 
@@ -243,6 +225,14 @@ function BreadcrumbBar({
 
   const showEllipsis = hideCount > 0;
   const hideRoot = hideCount >= path.length - 1;
+
+  // Hidden path segments for the ellipsis tooltip
+  const hiddenSegments = showEllipsis
+    ? hideRoot
+      ? path.slice(0, -1)
+      : path.slice(1, hideCount + 1)
+    : [];
+  const hiddenTooltip = hiddenSegments.map((d) => d.label).join(' > ');
 
   return (
     <div ref={outerRef} className="tw-overflow-hidden">
@@ -260,140 +250,139 @@ function BreadcrumbBar({
         ))}
       </div>
 
-      {/* Visible breadcrumbs (inline, hugs content) */}
-      <span className="tw-inline-flex tw-items-center tw-gap-0.5 tw-rounded tw-text-left">
-        {/* Root */}
+      {/* Visible breadcrumbs */}
+      <div className="tw-inline-flex tw-items-center tw-gap-0.5">
+        {/* Root segment (hidden when fully collapsed) */}
         {!hideRoot && path[0] && (
-          <BreadcrumbSegment domain={path[0]} isLast={path.length === 1} onClick={onSegmentClick} />
+          <BreadcrumbSegmentDropdown
+            domain={path[0]}
+            isLast={path.length === 1}
+            allDomains={allDomains}
+            currentPath={path}
+            expandToId={path[0].id}
+            onDomainSelect={onDomainSelect}
+          />
         )}
 
-        {/* Ellipsis */}
+        {/* Ellipsis with tooltip */}
         {showEllipsis && (
           <>
             {!hideRoot && (
               <ChevronRight className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
             )}
-            <MoreHorizontal className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="tw-flex tw-shrink-0 tw-cursor-default tw-items-center">
+                    <MoreHorizontal className="tw-h-3 tw-w-3 tw-text-muted-foreground" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="tw-text-xs">{hiddenTooltip}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </>
         )}
 
         {/* Trailing visible segments */}
         {path.map((domain, idx) => {
-          if (idx === 0) return undefined; // root handled above
-          if (idx <= hideCount) return undefined; // hidden
+          if (idx === 0) return undefined;
+          if (idx <= hideCount) return undefined;
           const isLast = idx === path.length - 1;
           return (
-            <BreadcrumbSegment
-              key={domain.id}
-              domain={domain}
-              isLast={isLast}
-              onClick={onSegmentClick}
-              showChevron
-            />
+            <span key={domain.id} className="tw-flex tw-shrink-0 tw-items-center tw-gap-0.5">
+              <ChevronRight className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
+              <BreadcrumbSegmentDropdown
+                domain={domain}
+                isLast={isLast}
+                allDomains={allDomains}
+                currentPath={path}
+                expandToId={domain.id}
+                onDomainSelect={onDomainSelect}
+              />
+            </span>
           );
         })}
-      </span>
+      </div>
     </div>
   );
 }
 
-function BreadcrumbSegment({
+/** A single breadcrumb segment that opens a DropdownMenu with the domain tree */
+function BreadcrumbSegmentDropdown({
   domain,
   isLast,
-  onClick,
-  showChevron = false,
+  allDomains,
+  currentPath,
+  expandToId,
+  onDomainSelect,
 }: {
   domain: SemanticDomain;
   isLast: boolean;
-  onClick: (id: string) => void;
-  showChevron?: boolean;
-}) {
-  return (
-    <span className="tw-flex tw-shrink-0 tw-items-center tw-gap-0.5">
-      {showChevron && (
-        <ChevronRight className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />
-      )}
-      <span
-        className={cn(
-          'tw-cursor-pointer tw-rounded tw-px-1.5 tw-py-1 tw-text-sm hover:tw-bg-muted',
-          isLast && 'tw-font-bold',
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick(domain.id);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.stopPropagation();
-            onClick(domain.id);
-          }
-        }}
-        role="button"
-        tabIndex={0}
-      >
-        {domain.label}
-      </span>
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Domain tree popover (no search, simple expandable tree)
-// ---------------------------------------------------------------------------
-
-function DomainTree({
-  domains,
-  currentPath,
-  expandToId,
-  onSelect,
-}: {
-  domains: SemanticDomain[];
+  allDomains: SemanticDomain[];
   currentPath: SemanticDomain[];
-  expandToId?: string;
-  onSelect: (path: SemanticDomain[]) => void;
+  expandToId: string;
+  onDomainSelect: (path: SemanticDomain[]) => void;
 }) {
-  // eslint-disable-next-line no-null/no-null
-  const scrollTargetRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      scrollTargetRef.current?.scrollIntoView({ block: 'center' });
-    });
-  }, [expandToId]);
+  const handleSelect = (newPath: SemanticDomain[]) => {
+    onDomainSelect(newPath);
+    setOpen(false);
+  };
 
   return (
-    <div className="tw-max-h-[500px] tw-overflow-y-auto tw-p-1">
-      <TreeNodeList
-        domains={domains}
-        currentPath={currentPath}
-        expandToId={expandToId}
-        onSelect={onSelect}
-        parentPath={[]}
-        scrollTargetRef={scrollTargetRef}
-      />
-    </div>
+    <DropdownMenu open={open} onOpenChange={setOpen} modal>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'tw-shrink-0 tw-cursor-pointer tw-rounded tw-px-1.5 tw-py-1 tw-text-sm hover:tw-bg-muted',
+            isLast && 'tw-font-bold',
+          )}
+        >
+          {domain.label}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="tw-max-h-[500px] tw-w-[300px] tw-overflow-y-auto tw-p-1"
+        style={{ zIndex: Z_INDEX_MODAL + 10 }}
+      >
+        <DomainTreeList
+          domains={allDomains}
+          currentPath={currentPath}
+          expandToId={expandToId}
+          onSelect={handleSelect}
+          parentPath={[]}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Domain tree (rendered inside DropdownMenu)
+// ---------------------------------------------------------------------------
 
 function isAncestorOf(domain: SemanticDomain, targetId: string): boolean {
   if (domain.id === targetId) return true;
   return domain.children?.some((child) => isAncestorOf(child, targetId)) ?? false;
 }
 
-function TreeNodeList({
+function DomainTreeList({
   domains,
   currentPath,
   expandToId,
   onSelect,
   parentPath,
-  scrollTargetRef,
 }: {
   domains: SemanticDomain[];
   currentPath: SemanticDomain[];
-  expandToId?: string;
+  expandToId: string;
   onSelect: (path: SemanticDomain[]) => void;
   parentPath: SemanticDomain[];
-  scrollTargetRef: React.RefObject<HTMLButtonElement>;
 }) {
   return (
     <ul className={cn('tw-space-y-0.5', { 'tw-ml-3': parentPath.length > 0 })}>
@@ -403,12 +392,11 @@ function TreeNodeList({
           currentPath.length > 0 && currentPath[currentPath.length - 1].id === domain.id;
         const hasChildren = domain.children && domain.children.length > 0;
         const isOnPath = currentPath.some((d) => d.id === domain.id);
-        const containsTarget = expandToId ? isAncestorOf(domain, expandToId) : false;
+        const containsTarget = isAncestorOf(domain, expandToId);
         const shouldExpand = isOnPath || containsTarget;
-        const isScrollTarget = domain.id === expandToId;
 
         return (
-          <TreeNode
+          <DomainTreeNode
             key={domain.id}
             domain={domain}
             thisPath={thisPath}
@@ -418,8 +406,6 @@ function TreeNodeList({
             currentPath={currentPath}
             expandToId={expandToId}
             onSelect={onSelect}
-            scrollTargetRef={scrollTargetRef}
-            isScrollTarget={isScrollTarget}
           />
         );
       })}
@@ -427,7 +413,7 @@ function TreeNodeList({
   );
 }
 
-function TreeNode({
+function DomainTreeNode({
   domain,
   thisPath,
   isSelected,
@@ -436,8 +422,6 @@ function TreeNode({
   currentPath,
   expandToId,
   onSelect,
-  scrollTargetRef,
-  isScrollTarget,
 }: {
   domain: SemanticDomain;
   thisPath: SemanticDomain[];
@@ -445,10 +429,8 @@ function TreeNode({
   hasChildren: boolean;
   defaultExpanded: boolean;
   currentPath: SemanticDomain[];
-  expandToId?: string;
+  expandToId: string;
   onSelect: (path: SemanticDomain[]) => void;
-  scrollTargetRef: React.RefObject<HTMLButtonElement>;
-  isScrollTarget: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -463,10 +445,15 @@ function TreeNode({
           <button
             type="button"
             className="tw-flex tw-h-5 tw-w-5 tw-shrink-0 tw-items-center tw-justify-center tw-rounded hover:tw-bg-muted"
-            onClick={() => setExpanded(!expanded)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded(!expanded);
+            }}
           >
             <ChevronRight
-              className={cn('tw-h-3 tw-w-3 tw-transition-transform', { 'tw-rotate-90': expanded })}
+              className={cn('tw-h-3 tw-w-3 tw-transition-transform', {
+                'tw-rotate-90': expanded,
+              })}
             />
           </button>
         ) : (
@@ -474,7 +461,6 @@ function TreeNode({
         )}
         <button
           type="button"
-          ref={isScrollTarget ? scrollTargetRef : undefined}
           className={cn(
             'tw-flex-1 tw-rounded tw-px-1.5 tw-py-0.5 tw-text-left tw-text-sm',
             isSelected ? 'tw-bg-accent tw-font-medium' : 'hover:tw-bg-muted',
@@ -485,13 +471,12 @@ function TreeNode({
         </button>
       </div>
       {expanded && hasChildren && (
-        <TreeNodeList
+        <DomainTreeList
           domains={domain.children!}
           currentPath={currentPath}
           expandToId={expandToId}
           onSelect={onSelect}
           parentPath={thisPath}
-          scrollTargetRef={scrollTargetRef}
         />
       )}
     </li>

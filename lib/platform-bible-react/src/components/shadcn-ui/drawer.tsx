@@ -81,12 +81,12 @@ const DrawerContent = React.forwardRef<
   // CUSTOM: When container is set, use absolute positioning so the drawer stays inside its parent
   const positionClass = container ? 'tw-absolute' : 'tw-fixed';
 
-  // CUSTOM: Define positioning and styling based on direction
+  // CUSTOM: Define positioning and styling based on direction (tw-rounded-lg = 8px)
   const directionStyles = {
-    bottom: 'tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-[10px]',
-    top: 'tw-inset-x-0 tw-top-0 tw-mb-24 tw-rounded-b-[10px]',
-    left: 'tw-inset-y-0 tw-left-0 tw-mr-24 tw-rounded-r-[10px] tw-w-auto tw-max-w-sm',
-    right: 'tw-inset-y-0 tw-right-0 tw-ml-24 tw-rounded-l-[10px] tw-w-auto tw-max-w-sm',
+    bottom: 'tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-lg',
+    top: 'tw-inset-x-0 tw-top-0 tw-mb-24 tw-rounded-b-lg',
+    left: 'tw-inset-y-0 tw-left-0 tw-mr-24 tw-rounded-r-lg tw-w-auto tw-max-w-sm',
+    right: 'tw-inset-y-0 tw-right-0 tw-ml-24 tw-rounded-l-lg tw-w-auto tw-max-w-sm',
   };
 
   // CUSTOM: Define handle styles for each direction
