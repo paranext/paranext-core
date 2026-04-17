@@ -1419,7 +1419,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
 
         pendingCommentAnnotationRange.current = undefined;
-        setLastAssignedUser(assignedUser);
+        if (assignedUser !== undefined) setLastAssignedUser(assignedUser);
         setShowCommentEditor(false);
       } catch (error) {
         logger.error(`Error creating comment: ${getErrorMessage(error)}`);

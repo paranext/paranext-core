@@ -37,8 +37,9 @@ interface CommentTestFixtures {
 
 export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
   // Worker-scoped: one Electron process for the entire worker (all tests in a file).
-  // eslint-disable-next-line no-empty-pattern
   commentAppContext: [
+    // Playwright worker-scoped fixtures use empty destructuring when they have no fixture dependencies
+    // eslint-disable-next-line no-empty-pattern
     async ({}, use) => {
       const ctx = await launchElectronApp({ envOverrides: { DEV_NOISY: 'false' } });
       await use(ctx);
@@ -52,7 +53,7 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
 
   commentElectronApp: [
     async ({ commentAppContext }, use) => {
-      await use(commentAppContext.electronApp as ElectronApplication);
+      await use(commentAppContext.electronApp);
     },
     { scope: 'worker' },
   ],
