@@ -25,6 +25,26 @@ public class CommentThreadSelector
     public List<ScriptureRange>? ScriptureRanges { get; set; }
 
     public bool? IsRead { get; set; }
+
+    /// <summary>
+    /// When true, threads flagged as Biblical Term notes are excluded from results.
+    /// Defaults to true because Biblical Term notes are typically managed by the Biblical Terms tool.
+    /// </summary>
+    public bool ExcludeBiblicalTermNotes { get; set; } = true;
+
+    /// <summary>
+    /// When true, threads flagged as spelling notes are excluded from results.
+    /// Defaults to true because spelling notes are typically managed by the Wordlist tool.
+    /// </summary>
+    public bool ExcludeSpellingNotes { get; set; } = true;
+
+    /// <summary>
+    /// When true, duplicate threads (same ID) are merged: unique comments are combined, and the
+    /// thread with the latest <c>ModifiedDate</c> is used as the metadata base. Threads where all
+    /// comments are deleted are dropped. Defaults to true.
+    /// </summary>
+    public bool DeduplicateThreads { get; set; } = true;
+
     public bool IsEmpty =>
         string.IsNullOrEmpty(ThreadId)
         && Status == Enum<NoteStatus>.Null
@@ -33,7 +53,10 @@ public class CommentThreadSelector
         && string.IsNullOrEmpty(AssignedTo)
         && DateFilter == null
         && (ScriptureRanges == null || ScriptureRanges.Count == 0)
-        && IsRead == null;
+        && IsRead == null
+        && ExcludeBiblicalTermNotes
+        && ExcludeSpellingNotes
+        && DeduplicateThreads;
 }
 
 public class DateFilter

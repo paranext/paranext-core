@@ -20,6 +20,9 @@ public class CommentThreadSelectorConverter : JsonConverter<CommentThreadSelecto
     private const string ASSIGNED_TO = "assignedTo";
     private const string SCRIPTURE_RANGES = "scriptureRanges";
     private const string IS_READ = "isRead";
+    private const string EXCLUDE_BIBLICAL_TERM_NOTES = "excludeBiblicalTermNotes";
+    private const string EXCLUDE_SPELLING_NOTES = "excludeSpellingNotes";
+    private const string DEDUPLICATE_THREADS = "deduplicateThreads";
 
     // DateFilter property names
     private const string EXACT = "exact";
@@ -53,6 +56,16 @@ public class CommentThreadSelectorConverter : JsonConverter<CommentThreadSelecto
 
         if (root.TryGetProperty(IS_READ, out JsonElement isReadEl))
             selector.IsRead = isReadEl.GetBoolean();
+
+        // These default to true in CommentThreadSelector, so only override when explicitly set
+        if (root.TryGetProperty(EXCLUDE_BIBLICAL_TERM_NOTES, out JsonElement excludeBtEl))
+            selector.ExcludeBiblicalTermNotes = excludeBtEl.GetBoolean();
+
+        if (root.TryGetProperty(EXCLUDE_SPELLING_NOTES, out JsonElement excludeSpellingEl))
+            selector.ExcludeSpellingNotes = excludeSpellingEl.GetBoolean();
+
+        if (root.TryGetProperty(DEDUPLICATE_THREADS, out JsonElement deduplicateEl))
+            selector.DeduplicateThreads = deduplicateEl.GetBoolean();
 
         // Convert frontend CommentStatus to internal NoteStatus
         if (
