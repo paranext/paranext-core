@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button } from '@/components/shadcn-ui/button';
 import {
@@ -6,6 +6,11 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '@/components/shadcn-ui/resizable';
 import {
   Tooltip,
   TooltipContent,
@@ -19,6 +24,11 @@ import type {
   IndexedListItem,
   SemanticDomain,
 } from './source-language-indexed-list.types';
+
+/** Minimum width in pixels for the list panel when shown side-by-side with details. */
+const LIST_MIN_PX = 100;
+/** Minimum width in pixels for the detail panel when shown side-by-side with the list. */
+const DETAIL_MIN_PX = 150;
 
 /**
  * ER Dictionary list filtered by semantic domain with breadcrumb navigation.
@@ -49,16 +59,24 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
   // eslint-disable-next-line no-null/no-null
   const listRef = useRef<HTMLUListElement>(null);
   const [narrow, setNarrow] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return undefined;
     const observer = new ResizeObserver(([entry]) => {
-      setNarrow((entry?.contentRect.width ?? 0) < 350);
+      const width = entry?.contentRect.width ?? 0;
+      setContainerWidth(width);
+      setNarrow(width < 350);
     });
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // react-resizable-panels only accepts percentages; convert the pixel minima
+  // to percentages based on the observed container width.
+  const listMinPct = containerWidth > 0 ? (LIST_MIN_PX / containerWidth) * 100 : 20;
+  const detailMinPct = containerWidth > 0 ? (DETAIL_MIN_PX / containerWidth) * 100 : 30;
 
   // Focus the list on mount so the user can arrow-navigate immediately when
   // the drawer / dialog opens. :focus-visible stays off because the last user
@@ -137,6 +155,64 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
     li?.scrollIntoView({ block: 'nearest' });
   }, [focusedIndex]);
 
+  // When detail opens in narrow (full-detail) mode the list is unmounted, so
+  // move focus to the Back button. In side-by-side mode focus stays on the
+  // list so repeated Up/Down arrows continue to work.
+  // eslint-disable-next-line no-null/no-null
+  const detailPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!narrow || !selectedId) return;
+    const back = detailPanelRef.current?.querySelector<HTMLButtonElement>('[data-back-to-list]');
+    back?.focus();
+  }, [narrow, selectedId]);
+
+  // Switching from list-only to side-by-side replaces the list's wrapper with
+  // a ResizablePanelGroup, which remounts the <ul> and drops keyboard focus.
+  // Re-focus it so repeated Up/Down after the first selection keep working.
+  const isSideBySide = !!showSideBySide;
+  useEffect(() => {
+    if (isSideBySide) listRef.current?.focus();
+  }, [isSideBySide]);
+
+  const listElement = isLoading ? (
+    <div className="tw-p-4 tw-text-sm tw-text-muted-foreground">Loading...</div>
+  ) : items.length === 0 ? (
+    <div className="tw-p-4 tw-text-sm tw-text-muted-foreground">
+      {emptyStateMessage ?? 'No items found'}
+    </div>
+  ) : (
+    <ul
+      ref={listRef}
+      role="listbox"
+      tabIndex={0}
+      className="tw-p-0.5 tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-inset focus-visible:tw-ring-ring"
+      onKeyDown={handleListKeyDown}
+    >
+      {items.map((item, idx) => {
+        const isSelected = selectedId === item.id;
+        const isFocused = focusedIndex === idx;
+        return (
+          <li
+            key={item.id}
+            role="option"
+            aria-selected={isSelected}
+            onClick={() => {
+              setFocusedIndex(-1);
+              selectItem(item);
+            }}
+            className={cn('tw-cursor-pointer tw-border-b tw-p-2', {
+              'tw-bg-muted': isSelected,
+              'hover:tw-bg-muted': !isSelected,
+              'tw-ring-1 tw-ring-inset tw-ring-ring': isFocused && !isSelected,
+            })}
+          >
+            {renderItem ? renderItem(item) : <span className="tw-text-sm">{item.primaryText}</span>}
+          </li>
+        );
+      })}
+    </ul>
+  );
+
   return (
     <div className={cn('tw-flex tw-h-full tw-flex-col tw-overflow-hidden', className)}>
       {/* Header: breadcrumbs + back */}
@@ -158,72 +234,71 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
 
       {/* Inline list + detail */}
       <div ref={containerRef} className="tw-relative tw-flex tw-flex-1 tw-overflow-hidden">
-        {!showFullDetail && (
-          <div
-            className={cn(
-              'tw-h-full',
-              showSideBySide
-                ? 'tw-w-1/3 tw-min-w-[120px] tw-overflow-hidden tw-border-r'
-                : 'tw-w-full tw-overflow-y-auto',
-            )}
-          >
-            {isLoading ? (
-              <div className="tw-p-4 tw-text-sm tw-text-muted-foreground">Loading...</div>
-            ) : items.length === 0 ? (
-              <div className="tw-p-4 tw-text-sm tw-text-muted-foreground">
-                {emptyStateMessage ?? 'No items found'}
-              </div>
-            ) : (
-              <ul
-                ref={listRef}
-                role="listbox"
-                tabIndex={0}
-                className="tw-p-0.5 tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-inset focus-visible:tw-ring-ring"
-                onKeyDown={handleListKeyDown}
-              >
-                {items.map((item, idx) => {
-                  const isSelected = selectedId === item.id;
-                  const isFocused = focusedIndex === idx;
-                  return (
-                    <li
-                      key={item.id}
-                      role="option"
-                      aria-selected={isSelected}
-                      onClick={() => {
-                        setFocusedIndex(-1);
-                        selectItem(item);
-                      }}
-                      className={cn('tw-cursor-pointer tw-border-b tw-p-2', {
-                        'tw-bg-muted': isSelected,
-                        'hover:tw-bg-muted': !isSelected,
-                        'tw-ring-1 tw-ring-inset tw-ring-ring': isFocused && !isSelected,
-                      })}
-                    >
-                      {renderItem ? (
-                        renderItem(item)
-                      ) : (
-                        <span className="tw-text-sm">{item.primaryText}</span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        )}
-        {selectedItem && renderDetailContent && (
-          <div
-            className={cn(
-              'tw-h-full tw-overflow-y-auto tw-bg-background tw-p-4',
-              showFullDetail ? 'tw-w-full' : 'tw-w-2/3',
-            )}
-          >
-            {renderDetailContent(selectedItem, handleCloseDetail)}
-          </div>
-        )}
+        {renderListAndDetail({
+          showSideBySide: !!showSideBySide,
+          showFullDetail: !!showFullDetail,
+          listElement,
+          detailElement:
+            selectedItem && renderDetailContent
+              ? renderDetailContent(selectedItem, handleCloseDetail)
+              : undefined,
+          listMinPct,
+          detailMinPct,
+          detailPanelRef,
+        })}
       </div>
     </div>
   );
+}
+
+/**
+ * Renders the list / detail area in one of three layouts (side-by-side with a draggable separator,
+ * full-detail in narrow mode, or list only). Extracted as a helper so the main component body
+ * avoids nested ternaries.
+ */
+function renderListAndDetail({
+  showSideBySide,
+  showFullDetail,
+  listElement,
+  detailElement,
+  listMinPct,
+  detailMinPct,
+  detailPanelRef,
+}: {
+  showSideBySide: boolean;
+  showFullDetail: boolean;
+  listElement: ReactNode;
+  detailElement: ReactNode;
+  listMinPct: number;
+  detailMinPct: number;
+  detailPanelRef: RefObject<HTMLDivElement>;
+}): ReactNode {
+  if (showSideBySide && detailElement !== undefined) {
+    return (
+      <ResizablePanelGroup direction="horizontal">
+        <ResizablePanel defaultSize={33.3333} minSize={listMinPct}>
+          <div className="tw-h-full tw-overflow-y-auto">{listElement}</div>
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel defaultSize={66.6667} minSize={detailMinPct}>
+          <div className="tw-h-full tw-overflow-y-auto tw-bg-background tw-p-4">
+            {detailElement}
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    );
+  }
+  if (showFullDetail && detailElement !== undefined) {
+    return (
+      <div
+        ref={detailPanelRef}
+        className="tw-h-full tw-w-full tw-overflow-y-auto tw-bg-background tw-p-4"
+      >
+        {detailElement}
+      </div>
+    );
+  }
+  return <div className="tw-h-full tw-w-full tw-overflow-y-auto">{listElement}</div>;
 }
 
 // ---------------------------------------------------------------------------

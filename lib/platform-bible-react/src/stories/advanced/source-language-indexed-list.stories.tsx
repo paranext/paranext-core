@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
@@ -7,6 +7,11 @@ import { Button } from '@/components/shadcn-ui/button';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Dialog, DialogContent, DialogTitle } from '@/components/shadcn-ui/dialog';
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '@/components/shadcn-ui/resizable';
 import {
   Tooltip,
   TooltipContent,
@@ -434,7 +439,7 @@ function ErDictionaryDetail({
 }) {
   return (
     <div>
-      <Button onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
+      <Button data-back-to-list onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
         <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
         Back to list
       </Button>
@@ -500,7 +505,7 @@ function LexicalDetail({ item, onClose }: { item: LexicalEntryFull; onClose: () 
 
   return (
     <div>
-      <Button onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
+      <Button data-back-to-list onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
         <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
         Back to list
       </Button>
@@ -596,7 +601,7 @@ function LexicalDetail({ item, onClose }: { item: LexicalEntryFull; onClose: () 
 function EncyclopediaDetail({ item, onClose }: { item: EncyclopediaTeaser; onClose: () => void }) {
   return (
     <div>
-      <Button onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
+      <Button data-back-to-list onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
         <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
         Back to list
       </Button>
@@ -616,7 +621,7 @@ function EncyclopediaDetail({ item, onClose }: { item: EncyclopediaTeaser; onClo
 function MediaDetail({ item, onClose }: { item: MediaItem; onClose: () => void }) {
   return (
     <div>
-      <Button onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
+      <Button data-back-to-list onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
         <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
         Back to list
       </Button>
@@ -673,11 +678,14 @@ function InlineListDetail<T extends { id: string }>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const [containerWidth, setContainerWidth] = useState(0);
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return undefined;
     const observer = new ResizeObserver(([entry]) => {
-      setNarrow((entry?.contentRect.width ?? 0) < 350);
+      const width = entry?.contentRect.width ?? 0;
+      setContainerWidth(width);
+      setNarrow(width < 350);
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -685,6 +693,11 @@ function InlineListDetail<T extends { id: string }>({
 
   const showSideBySide = selectedItem && !narrow;
   const showFullDetail = selectedItem && narrow;
+
+  // react-resizable-panels uses percentages; convert the pixel minima for the
+  // list (100px) and detail (150px) panels based on the observed container.
+  const listMinPct = containerWidth > 0 ? (100 / containerWidth) * 100 : 20;
+  const detailMinPct = containerWidth > 0 ? (150 / containerWidth) * 100 : 30;
 
   // Keyboard navigation: arrows move focus, behavior depends on narrow/wide.
   // First keypress starts from the selected item (or first/last if none).
@@ -735,59 +748,92 @@ function InlineListDetail<T extends { id: string }>({
     }
   }, [items, onSelectItem, selectedItem, listRef]);
 
+  // When detail opens in narrow (full-detail) mode the list is unmounted, so
+  // move focus to the Back button. In side-by-side mode focus stays on the
+  // list so repeated Up/Down arrows continue to work.
+  // eslint-disable-next-line no-null/no-null
+  const detailPanelRef = useRef<HTMLDivElement>(null);
+  const selectedItemId = selectedItem?.id;
+  useEffect(() => {
+    if (!narrow || !selectedItemId) return;
+    const back = detailPanelRef.current?.querySelector<HTMLButtonElement>('[data-back-to-list]');
+    back?.focus();
+  }, [narrow, selectedItemId]);
+
+  // Switching from list-only to side-by-side replaces the list's wrapper with
+  // a ResizablePanelGroup, which remounts the <ul> and drops keyboard focus.
+  // Re-focus it so repeated Up/Down after the first selection keep working.
+  const isSideBySide = !!showSideBySide;
+  useEffect(() => {
+    if (isSideBySide) listRef.current?.focus();
+  }, [isSideBySide, listRef]);
+
+  const listElement = (
+    <ul
+      ref={listRef}
+      role="listbox"
+      tabIndex={0}
+      className="tw-p-0.5 tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-inset focus-visible:tw-ring-ring"
+      onKeyDown={handleListKeyDown}
+    >
+      {items.map((item, idx) => {
+        const isSelected = selectedItem?.id === item.id;
+        const isFocused = focusedIdx === idx;
+        return (
+          <li
+            key={item.id}
+            role="option"
+            aria-selected={isSelected}
+            onClick={() => {
+              setFocusedIdx(-1);
+              onSelectItem(isSelected ? undefined : item);
+            }}
+            className={cn('tw-cursor-pointer tw-border-b tw-p-2', {
+              'tw-bg-muted': isSelected,
+              'hover:tw-bg-muted': !isSelected,
+              'tw-ring-1 tw-ring-inset tw-ring-ring': isFocused && !isSelected,
+            })}
+          >
+            {renderListItem(item, !!selectedItem)}
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  const detailElement = selectedItem ? renderDetail(selectedItem, handleCloseDetail) : undefined;
+
+  let body: ReactNode;
+  if (showSideBySide && detailElement !== undefined) {
+    body = (
+      <ResizablePanelGroup direction="horizontal">
+        <ResizablePanel defaultSize={33.3333} minSize={listMinPct}>
+          <div className="tw-h-full tw-overflow-y-auto">{listElement}</div>
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel defaultSize={66.6667} minSize={detailMinPct}>
+          <div className="tw-h-full tw-overflow-y-auto tw-bg-background tw-p-4">
+            {detailElement}
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    );
+  } else if (showFullDetail && detailElement !== undefined) {
+    body = (
+      <div
+        ref={detailPanelRef}
+        className="tw-h-full tw-w-full tw-overflow-y-auto tw-bg-background tw-p-4"
+      >
+        {detailElement}
+      </div>
+    );
+  } else {
+    body = <div className="tw-h-full tw-w-full tw-overflow-y-auto">{listElement}</div>;
+  }
+
   return (
     <div ref={containerRef} className="tw-relative tw-flex tw-h-full tw-overflow-hidden">
-      {!showFullDetail && (
-        <div
-          className={cn(
-            'tw-h-full',
-            showSideBySide
-              ? 'tw-w-1/3 tw-min-w-[120px] tw-overflow-hidden tw-border-r'
-              : 'tw-w-full tw-overflow-y-auto',
-          )}
-        >
-          <ul
-            ref={listRef}
-            role="listbox"
-            tabIndex={0}
-            className="tw-p-0.5 tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-inset focus-visible:tw-ring-ring"
-            onKeyDown={handleListKeyDown}
-          >
-            {items.map((item, idx) => {
-              const isSelected = selectedItem?.id === item.id;
-              const isFocused = focusedIdx === idx;
-              return (
-                <li
-                  key={item.id}
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={() => {
-                    setFocusedIdx(-1);
-                    onSelectItem(isSelected ? undefined : item);
-                  }}
-                  className={cn('tw-cursor-pointer tw-border-b tw-p-2', {
-                    'tw-bg-muted': isSelected,
-                    'hover:tw-bg-muted': !isSelected,
-                    'tw-ring-1 tw-ring-inset tw-ring-ring': isFocused && !isSelected,
-                  })}
-                >
-                  {renderListItem(item, !!selectedItem)}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-      {selectedItem && (
-        <div
-          className={cn(
-            'tw-overflow-y-auto tw-bg-background tw-p-4',
-            showFullDetail ? 'tw-w-full' : 'tw-w-2/3',
-          )}
-        >
-          {renderDetail(selectedItem, handleCloseDetail)}
-        </div>
-      )}
+      {body}
     </div>
   );
 }
