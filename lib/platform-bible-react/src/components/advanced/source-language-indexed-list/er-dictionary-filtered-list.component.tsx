@@ -178,7 +178,7 @@ export default function ErDictionaryFilteredList<T extends IndexedListItem>({
                 ref={listRef}
                 role="listbox"
                 tabIndex={0}
-                className="tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-inset focus-visible:tw-ring-ring"
+                className="tw-p-0.5 tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-inset focus-visible:tw-ring-ring"
                 onKeyDown={handleListKeyDown}
               >
                 {items.map((item, idx) => {
@@ -356,8 +356,10 @@ function BreadcrumbBar({
 
         {path.map((domain, idx) => {
           if (idx === 0) return undefined;
-          if (idx <= hideCount) return undefined;
           const isLast = idx === path.length - 1;
+          // Always keep the last segment visible — the most collapsed state is
+          // "ellipsis > last item", never just an ellipsis on its own.
+          if (idx <= hideCount && !isLast) return undefined;
           return (
             <span key={domain.id} className="tw-flex tw-shrink-0 tw-items-center tw-gap-0.5">
               <ChevronRight className="tw-h-3 tw-w-3 tw-shrink-0 tw-text-muted-foreground" />

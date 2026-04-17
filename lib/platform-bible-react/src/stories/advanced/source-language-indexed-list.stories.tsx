@@ -750,7 +750,7 @@ function InlineListDetail<T extends { id: string }>({
             ref={listRef}
             role="listbox"
             tabIndex={0}
-            className="tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-inset focus-visible:tw-ring-ring"
+            className="tw-p-0.5 tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-inset focus-visible:tw-ring-ring"
             onKeyDown={handleListKeyDown}
           >
             {items.map((item, idx) => {
