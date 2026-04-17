@@ -24,7 +24,6 @@ import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-
 import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
-import { prepareCommentThreads } from './comment-list.utils';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -228,7 +227,7 @@ global.webViewComponent = function CommentListWebView({
 
   const preparedThreads = useMemo<LegacyCommentThread[]>(() => {
     if (!commentThreads || isPlatformError(commentThreads)) return [];
-    return prepareCommentThreads(commentThreads);
+    return commentThreads;
   }, [commentThreads]);
 
   // Process any pending thread selection once data finishes loading

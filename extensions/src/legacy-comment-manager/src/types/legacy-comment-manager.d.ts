@@ -135,6 +135,28 @@ declare module 'legacy-comment-manager' {
     scriptureRanges?: CommentScriptureRange[];
     /** Filter by read status */
     isRead?: boolean;
+    /**
+     * When true, threads flagged as Biblical Term notes are excluded from results. Biblical Term
+     * notes are typically managed by the Biblical Terms tool.
+     *
+     * @default true
+     */
+    excludeBiblicalTermNotes?: boolean;
+    /**
+     * When true, threads flagged as spelling notes are excluded from results. Spelling notes are
+     * typically managed by the Wordlist tool.
+     *
+     * @default true
+     */
+    excludeSpellingNotes?: boolean;
+    /**
+     * When true, duplicate threads (same ID) are merged: unique comments are combined, and the
+     * thread with the latest `modifiedDate` is used as the metadata base. Threads where all
+     * comments are deleted are dropped.
+     *
+     * @default true
+     */
+    deduplicateThreads?: boolean;
   };
 
   // #endregion
