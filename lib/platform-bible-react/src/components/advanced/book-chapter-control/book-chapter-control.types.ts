@@ -23,7 +23,7 @@ export type BookChapterControlLocalizedStrings = {
 export type BookWithOptionalChapterAndVerse = Omit<SerializedVerseRef, 'chapterNum' | 'verseNum'> &
   Partial<Pick<SerializedVerseRef, 'chapterNum' | 'verseNum'>>;
 
-export type ViewMode = 'books' | 'chapters';
+export type ViewMode = 'books' | 'chapters' | 'verses';
 
 export type BookChapterControlProps = {
   /** The current scripture reference */
@@ -48,4 +48,11 @@ export type BookChapterControlProps = {
   onAddRecentSearch?: (scrRef: SerializedVerseRef) => void;
   /** Optional ID for the popover content for accessibility */
   id?: string;
+  /**
+   * Optional callback returning the number of verses for a given book and chapter. When provided,
+   * the control enables verse selection: clicking a chapter transitions to a verse selection
+   * sub-screen, and typing a reference with a chapter:verse separator shows a verse grid. When
+   * omitted, the control selects `verseNum: 1` after a chapter is chosen (current behavior).
+   */
+  getEndVerse?: (bookId: string, chapterNum: number) => number;
 };

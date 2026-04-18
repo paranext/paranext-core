@@ -19,6 +19,14 @@ export const SEARCH_QUERY_FORMATS = [
   SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE,
 ];
 
+/**
+ * Returns true if the query contains a chapter-verse separator (`:`) following a chapter number.
+ * Used to decide whether to switch to verse selection when the user is typing.
+ */
+export function hasChapterVerseSeparator(query: string): boolean {
+  return SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE.test(query.trim());
+}
+
 export function getKeyCharacterType(key: string) {
   const isLetter = /^[a-zA-Z]$/.test(key);
   const isDigit = /^[0-9]$/.test(key);

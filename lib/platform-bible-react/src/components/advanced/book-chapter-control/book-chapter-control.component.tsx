@@ -30,8 +30,10 @@ import {
   calculateTopMatch,
   fetchEndChapter,
   getKeyCharacterType,
+  hasChapterVerseSeparator,
 } from './book-chapter-control.utils';
 import { ChapterGrid } from './chapter-grid.component';
+import { VerseGrid } from './verse-grid.component';
 
 /**
  * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
@@ -51,6 +53,7 @@ export function BookChapterControl({
   recentSearches,
   onAddRecentSearch,
   id,
+  getEndVerse,
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
 
@@ -65,6 +68,13 @@ export function BookChapterControl({
   // The book currently selected for chapter view, if any
   const [selectedBookForChaptersView, setSelectedBookForChaptersView] = useState<
     string | undefined
+  >(undefined);
+  // The book/chapter currently selected for verse view, if any
+  const [selectedBookForVersesView, setSelectedBookForVersesView] = useState<string | undefined>(
+    undefined,
+  );
+  const [selectedChapterForVersesView, setSelectedChapterForVersesView] = useState<
+    number | undefined
   >(undefined);
   const [isCommandListHidden, setIsCommandListHidden] = useState(false);
 
@@ -82,6 +92,8 @@ export function BookChapterControl({
   const selectedBookItemRef = useRef<HTMLDivElement>(undefined!);
   // References to the chapters that are shown as CommandItems
   const chapterRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  // References to the verses that are shown as CommandItems
+  const verseRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   // Wrapper function to handle submit and add to recent searches
   const handleSubmitAndAddToRecent = useCallback(
@@ -159,6 +171,28 @@ export function BookChapterControl({
     }
   }, [handleSubmitAndAddToRecent, topMatch]);
 
+  const handleVerseSelect = useCallback(
+    (verseNumber: number) => {
+      const bookId = selectedBookForVersesView ?? topMatch?.book;
+      const chapterNum = selectedChapterForVersesView ?? topMatch?.chapterNum;
+      if (!bookId || !chapterNum) return;
+
+      handleSubmitAndAddToRecent({
+        book: bookId,
+        chapterNum,
+        verseNum: verseNumber,
+      });
+      setIsCommandOpen(false);
+      setViewMode('books');
+      setSelectedBookForChaptersView(undefined);
+      setSelectedBookForVersesView(undefined);
+      setSelectedChapterForVersesView(undefined);
+      setInputValue('');
+      setCommandValue('');
+    },
+    [handleSubmitAndAddToRecent, selectedBookForVersesView, selectedChapterForVersesView, topMatch],
+  );
+
   const handleBookSelect = useCallback(
     (bookId: string) => {
       // Check if book has chapters - if not, submit immediately
@@ -187,6 +221,18 @@ export function BookChapterControl({
       const bookId = viewMode === 'chapters' ? selectedBookForChaptersView : topMatch?.book;
       if (!bookId) return;
 
+      // If verse selection is enabled and the chapter has multiple verses, transition to verse view
+      if (getEndVerse) {
+        const endVerse = getEndVerse(bookId, chapterNumber);
+        if (endVerse > 1) {
+          setSelectedBookForVersesView(bookId);
+          setSelectedChapterForVersesView(chapterNumber);
+          setViewMode('verses');
+          setCommandValue('');
+          return;
+        }
+      }
+
       handleSubmitAndAddToRecent({
         book: bookId,
         chapterNum: chapterNumber,
@@ -197,7 +243,7 @@ export function BookChapterControl({
       setSelectedBookForChaptersView(undefined);
       setInputValue('');
     },
-    [handleSubmitAndAddToRecent, viewMode, selectedBookForChaptersView, topMatch],
+    [handleSubmitAndAddToRecent, viewMode, selectedBookForChaptersView, topMatch, getEndVerse],
   );
 
   const handleRecentItemSelect = useCallback(
@@ -219,6 +265,8 @@ export function BookChapterControl({
   const handleBackToBooks = useCallback(() => {
     setViewMode('books');
     setSelectedBookForChaptersView(undefined);
+    setSelectedBookForVersesView(undefined);
+    setSelectedChapterForVersesView(undefined);
 
     // Focus the search input when returning to book view
     setTimeout(() => {
@@ -228,9 +276,29 @@ export function BookChapterControl({
     }, 0);
   }, []);
 
+  const handleBackToChapters = useCallback(() => {
+    // Preserve selectedBookForChaptersView for the chapter view; reset verse state
+    const previouslySelectedBook = selectedBookForVersesView;
+    setSelectedBookForVersesView(undefined);
+    setSelectedChapterForVersesView(undefined);
+
+    if (previouslySelectedBook) {
+      setSelectedBookForChaptersView(previouslySelectedBook);
+      setViewMode('chapters');
+      setCommandValue('');
+    } else {
+      handleBackToBooks();
+    }
+  }, [selectedBookForVersesView, handleBackToBooks]);
+
   // Reset view state when popover opens
   const handleOpenChange = useCallback(
     (shouldCommandBeOpen: boolean) => {
+      // If we're closing from verse view, go back to chapter view instead
+      if (!shouldCommandBeOpen && viewMode === 'verses') {
+        handleBackToChapters();
+        return;
+      }
       // If we're closing from chapter view, don't close popover but go back to books view instead
       if (!shouldCommandBeOpen && viewMode === 'chapters') {
         handleBackToBooks();
@@ -243,10 +311,12 @@ export function BookChapterControl({
         // Reset Command state when opening
         setViewMode('books');
         setSelectedBookForChaptersView(undefined);
+        setSelectedBookForVersesView(undefined);
+        setSelectedChapterForVersesView(undefined);
         setInputValue('');
       }
     },
-    [viewMode, handleBackToBooks],
+    [viewMode, handleBackToBooks, handleBackToChapters],
   );
 
   // #endregion
@@ -289,6 +359,25 @@ export function BookChapterControl({
       chapterRefs.current[chapter] = element;
     };
   }, []);
+
+  const setVerseRef = useCallback((verse: number) => {
+    return (element: HTMLDivElement | null) => {
+      verseRefs.current[verse] = element;
+    };
+  }, []);
+
+  // Whether the current input contains a chapter-verse separator (colon)
+  const hasVerseSeparatorInInput = useMemo(
+    () => hasChapterVerseSeparator(inputValue),
+    [inputValue],
+  );
+
+  // Whether we should show a verse grid for the current top match
+  const shouldShowVerseGridForTopMatch = useMemo(() => {
+    if (!getEndVerse || !topMatch || !topMatch.chapterNum) return false;
+    if (!hasVerseSeparatorInInput) return false;
+    return getEndVerse(topMatch.book, topMatch.chapterNum) > 0;
+  }, [getEndVerse, topMatch, hasVerseSeparatorInInput]);
 
   // #endregion
 
@@ -343,11 +432,89 @@ export function BookChapterControl({
         }
       }
 
-      // Handle grid navigation for arrow keys in chapter views
-      if (
-        (viewMode === 'chapters' || (viewMode === 'books' && topMatch)) &&
-        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)
-      ) {
+      // Handle keypresses in verse viewmode
+      if (viewMode === 'verses') {
+        // Handle backspace for going back to chapters
+        if (event.key === 'Backspace') {
+          event.preventDefault();
+          event.stopPropagation();
+          handleBackToChapters();
+          return;
+        }
+
+        if (isLetter) {
+          event.preventDefault();
+          event.stopPropagation();
+          setViewMode('books');
+          setSelectedBookForChaptersView(undefined);
+          setSelectedBookForVersesView(undefined);
+          setSelectedChapterForVersesView(undefined);
+          setInputValue(event.key);
+          setTimeout(() => {
+            if (commandInputRef.current) {
+              commandInputRef.current.focus();
+            }
+          }, 0);
+          return;
+        }
+      }
+
+      // Handle grid navigation for arrow keys in chapter/verse views
+      const isGridNav = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key);
+
+      if (viewMode === 'verses' && isGridNav) {
+        const bookId = selectedBookForVersesView;
+        const chapterNum = selectedChapterForVersesView;
+        if (!bookId || !chapterNum || !getEndVerse) return;
+
+        const maxVerse = getEndVerse(bookId, chapterNum);
+        if (!maxVerse) return;
+
+        const currentVerse = (() => {
+          if (!commandValue) return 1;
+          const match = commandValue.match(/:(\d+)$/);
+          return match ? parseInt(match[1], 10) : 0;
+        })();
+
+        let targetVerse = currentVerse;
+        const GRID_COLS = 6;
+
+        switch (event.key) {
+          case 'ArrowLeft':
+            if (currentVerse !== 0) targetVerse = currentVerse > 1 ? currentVerse - 1 : maxVerse;
+            break;
+          case 'ArrowRight':
+            if (currentVerse !== 0) targetVerse = currentVerse < maxVerse ? currentVerse + 1 : 1;
+            break;
+          case 'ArrowUp':
+            targetVerse = currentVerse === 0 ? maxVerse : Math.max(1, currentVerse - GRID_COLS);
+            break;
+          case 'ArrowDown':
+            targetVerse = currentVerse === 0 ? 1 : Math.min(maxVerse, currentVerse + GRID_COLS);
+            break;
+          default:
+            return;
+        }
+
+        if (targetVerse !== currentVerse) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          setCommandValue(
+            `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ${chapterNum}:${targetVerse}`,
+          );
+
+          setTimeout(() => {
+            const targetElement = verseRefs.current[targetVerse];
+            if (targetElement) {
+              targetElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+          }, 0);
+        }
+        return;
+      }
+
+      if ((viewMode === 'chapters' || (viewMode === 'books' && topMatch)) && isGridNav) {
         // Extract current chapter from commandValue
         const currentBookId =
           viewMode === 'chapters' ? selectedBookForChaptersView : topMatch?.book;
@@ -409,7 +576,11 @@ export function BookChapterControl({
       viewMode,
       topMatch,
       handleBackToBooks,
+      handleBackToChapters,
       selectedBookForChaptersView,
+      selectedBookForVersesView,
+      selectedChapterForVersesView,
+      getEndVerse,
       commandValue,
       localizedBookNames,
     ],
@@ -496,6 +667,42 @@ export function BookChapterControl({
     }
   }, [viewMode, selectedBookForChaptersView, topMatch, scrRef.book, scrRef.chapterNum]);
 
+  // Auto-scroll to appropriate verse
+  useLayoutEffect(() => {
+    if (
+      viewMode === 'verses' &&
+      selectedBookForVersesView &&
+      selectedChapterForVersesView !== undefined
+    ) {
+      const isCurrentlySelectedChapter =
+        selectedBookForVersesView === scrRef.book &&
+        selectedChapterForVersesView === scrRef.chapterNum;
+
+      setTimeout(() => {
+        if (commandListRef.current) {
+          if (isCurrentlySelectedChapter) {
+            const targetElement = verseRefs.current[scrRef.verseNum];
+            if (targetElement) {
+              targetElement.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
+          } else {
+            commandListRef.current.scrollTo({ top: 0 });
+          }
+        }
+        if (commandRef.current) {
+          commandRef.current.focus();
+        }
+      }, 0);
+    }
+  }, [
+    viewMode,
+    selectedBookForVersesView,
+    selectedChapterForVersesView,
+    scrRef.book,
+    scrRef.chapterNum,
+    scrRef.verseNum,
+  ]);
+
   // #endregion
 
   return (
@@ -574,7 +781,7 @@ export function BookChapterControl({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleBackToBooks}
+                onClick={viewMode === 'verses' ? handleBackToChapters : handleBackToBooks}
                 className="tw-mr-2 tw-h-6 tw-w-6 tw-p-0"
                 tabIndex={-1}
               >
@@ -584,11 +791,18 @@ export function BookChapterControl({
                   <ArrowRight className="tw-h-4 tw-w-4" />
                 )}
               </Button>
-              {selectedBookForChaptersView && (
+              {viewMode === 'chapters' && selectedBookForChaptersView && (
                 <span tabIndex={-1} className="tw-text-sm tw-font-medium">
                   {getLocalizedBookName(selectedBookForChaptersView, localizedBookNames)}
                 </span>
               )}
+              {viewMode === 'verses' &&
+                selectedBookForVersesView &&
+                selectedChapterForVersesView !== undefined && (
+                  <span tabIndex={-1} className="tw-text-sm tw-font-medium">
+                    {`${getLocalizedBookName(selectedBookForVersesView, localizedBookNames)} ${selectedChapterForVersesView}`}
+                  </span>
+                )}
             </div>
           )}
 
@@ -649,22 +863,45 @@ export function BookChapterControl({
                     </CommandGroup>
                   )}
 
-                  {/* Chapter Selector - Show when we have a top match */}
-                  {topMatch && fetchEndChapter(topMatch.book) > 1 && (
-                    <>
-                      <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
-                        {getLocalizedBookName(topMatch.book, localizedBookNames)}
-                      </div>
-                      <ChapterGrid
-                        bookId={topMatch.book}
-                        scrRef={scrRef}
-                        onChapterSelect={handleChapterSelect}
-                        setChapterRef={setChapterRef}
-                        isChapterDimmed={doesChapterMatch}
-                        className="tw-px-4 tw-pb-4"
-                      />
-                    </>
-                  )}
+                  {/* Verse selector - when chapter-verse separator is present in the input */}
+                  {topMatch &&
+                    shouldShowVerseGridForTopMatch &&
+                    topMatch.chapterNum &&
+                    getEndVerse && (
+                      <>
+                        <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
+                          {`${getLocalizedBookName(topMatch.book, localizedBookNames)} ${topMatch.chapterNum}`}
+                        </div>
+                        <VerseGrid
+                          bookId={topMatch.book}
+                          chapterNum={topMatch.chapterNum}
+                          endVerse={getEndVerse(topMatch.book, topMatch.chapterNum)}
+                          scrRef={scrRef}
+                          onVerseSelect={handleVerseSelect}
+                          setVerseRef={setVerseRef}
+                          className="tw-px-4 tw-pb-4"
+                        />
+                      </>
+                    )}
+
+                  {/* Chapter Selector - Show when we have a top match without a verse separator */}
+                  {topMatch &&
+                    !shouldShowVerseGridForTopMatch &&
+                    fetchEndChapter(topMatch.book) > 1 && (
+                      <>
+                        <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
+                          {getLocalizedBookName(topMatch.book, localizedBookNames)}
+                        </div>
+                        <ChapterGrid
+                          bookId={topMatch.book}
+                          scrRef={scrRef}
+                          onChapterSelect={handleChapterSelect}
+                          setChapterRef={setChapterRef}
+                          isChapterDimmed={doesChapterMatch}
+                          className="tw-px-4 tw-pb-4"
+                        />
+                      </>
+                    )}
                 </>
               )}
 
@@ -678,6 +915,22 @@ export function BookChapterControl({
                   className="tw-p-4"
                 />
               )}
+
+              {/* Verse view mode */}
+              {viewMode === 'verses' &&
+                selectedBookForVersesView &&
+                selectedChapterForVersesView !== undefined &&
+                getEndVerse && (
+                  <VerseGrid
+                    bookId={selectedBookForVersesView}
+                    chapterNum={selectedChapterForVersesView}
+                    endVerse={getEndVerse(selectedBookForVersesView, selectedChapterForVersesView)}
+                    scrRef={scrRef}
+                    onVerseSelect={handleVerseSelect}
+                    setVerseRef={setVerseRef}
+                    className="tw-p-4"
+                  />
+                )}
             </CommandList>
           )}
         </Command>

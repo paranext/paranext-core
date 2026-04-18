@@ -1,8 +1,18 @@
 import { BookSelector } from '@/components/advanced/scope-selector/book-selector.component';
+import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import { BookChapterControlLocalizedStrings } from '@/components/advanced/book-chapter-control/book-chapter-control.types';
 import { Label } from '@/components/shadcn-ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/shadcn-ui/select';
 import { Scope } from '@/components/utils/scripture.util';
-import { LocalizedStringValue } from 'platform-bible-utils';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { defaultScrRef, LocalizedStringValue } from 'platform-bible-utils';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -17,6 +27,9 @@ export const SCOPE_SELECTOR_STRING_KEYS = Object.freeze([
   '%webView_scope_selector_choose_books%',
   '%webView_scope_selector_scope%',
   '%webView_scope_selector_select_books%',
+  '%webView_scope_selector_range%',
+  '%webView_scope_selector_range_start%',
+  '%webView_scope_selector_range_end%',
   '%webView_book_selector_books_selected%',
   '%webView_book_selector_select_books%',
   '%webView_book_selector_search_books%',
@@ -53,6 +66,9 @@ const localizeString = (
 ) => {
   return strings[key] ?? key;
 };
+
+/** Visual layout variant for the scope options. */
+export type ScopeSelectorVariant = 'radio' | 'dropdown';
 
 /** Props for configuring the ScopeSelector component */
 interface ScopeSelectorProps {
@@ -94,12 +110,45 @@ interface ScopeSelectorProps {
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
   /** Optional ID that is applied to the root element of this component */
   id?: string;
+
+  /**
+   * Controls how the scope options are presented. `'radio'` (default) renders a vertical list of
+   * radio buttons. `'dropdown'` renders a single Select trigger whose popover contains the
+   * options.
+   */
+  variant?: ScopeSelectorVariant;
+
+  /**
+   * The start of the verse range. Only used when `scope === 'range'`. Defaults to `defaultScrRef`
+   * if not provided.
+   */
+  rangeStart?: SerializedVerseRef;
+  /**
+   * The end of the verse range. Only used when `scope === 'range'`. Defaults to `defaultScrRef` if
+   * not provided.
+   */
+  rangeEnd?: SerializedVerseRef;
+  /** Callback when the range start reference changes. Required to make the range UI functional. */
+  onRangeStartChange?: (scrRef: SerializedVerseRef) => void;
+  /** Callback when the range end reference changes. Required to make the range UI functional. */
+  onRangeEndChange?: (scrRef: SerializedVerseRef) => void;
+  /**
+   * Optional localized strings passed to the range BCV controls. When omitted, the BCV controls
+   * will fall back to their internal defaults.
+   */
+  bookChapterControlLocalizedStrings?: BookChapterControlLocalizedStrings;
+  /**
+   * Optional callback returning the number of verses for a given book and chapter. When provided,
+   * the range BCV controls enable verse selection. See `BookChapterControlProps.getEndVerse`.
+   */
+  getEndVerse?: (bookId: string, chapterNum: number) => number;
 }
 
 /**
  * A component that allows users to select the scope of their search or operation. Available scopes
  * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a BookSelector
- * component is displayed to allow users to choose specific books.
+ * component is displayed to allow users to choose specific books. When 'range' is chosen, two
+ * BookChapterControl pickers are displayed for selecting the start and end verse of the range.
  */
 export function ScopeSelector({
   scope,
@@ -111,6 +160,13 @@ export function ScopeSelector({
   localizedStrings,
   localizedBookNames,
   id,
+  variant = 'radio',
+  rangeStart,
+  rangeEnd,
+  onRangeStartChange,
+  onRangeEndChange,
+  bookChapterControlLocalizedStrings,
+  getEndVerse,
 }: ScopeSelectorProps) {
   const selectedTextText = localizeString(
     localizedStrings,
@@ -128,6 +184,9 @@ export function ScopeSelector({
   const chooseBooksText = localizeString(localizedStrings, '%webView_scope_selector_choose_books%');
   const scopeText = localizeString(localizedStrings, '%webView_scope_selector_scope%');
   const selectBooksText = localizeString(localizedStrings, '%webView_scope_selector_select_books%');
+  const rangeText = localizeString(localizedStrings, '%webView_scope_selector_range%');
+  const rangeStartText = localizeString(localizedStrings, '%webView_scope_selector_range_start%');
+  const rangeEndText = localizeString(localizedStrings, '%webView_scope_selector_range_end%');
 
   const SCOPE_OPTIONS: Array<{ value: Scope; label: string; id: string }> = [
     { value: 'selectedText', label: selectedTextText, id: 'scope-selected-text' },
@@ -135,28 +194,55 @@ export function ScopeSelector({
     { value: 'chapter', label: currentChapterText, id: 'scope-chapter' },
     { value: 'book', label: currentBookText, id: 'scope-book' },
     { value: 'selectedBooks', label: chooseBooksText, id: 'scope-selected' },
+    { value: 'range', label: rangeText, id: 'scope-range' },
   ];
 
   const displayedScopes = availableScopes
     ? SCOPE_OPTIONS.filter((option) => availableScopes.includes(option.value))
     : SCOPE_OPTIONS;
 
+  const resolvedRangeStart = rangeStart ?? defaultScrRef;
+  const resolvedRangeEnd = rangeEnd ?? defaultScrRef;
+
+  const noopScrRefChange = () => {};
+
+  const handleDropdownScopeChange = (value: string) => {
+    // The Select only emits values sourced from displayedScopes, which are all Scope values.
+    const match = displayedScopes.find((option) => option.value === value);
+    if (match) onScopeChange(match.value);
+  };
+
   return (
     <div id={id} className="tw-grid tw-gap-4">
       <div className="tw-grid tw-gap-2">
         <Label>{scopeText}</Label>
-        <RadioGroup
-          value={scope}
-          onValueChange={onScopeChange}
-          className="tw-flex tw-flex-col tw-space-y-1"
-        >
-          {displayedScopes.map(({ value, label, id: scopeId }) => (
-            <div key={scopeId} className="tw-flex tw-items-center">
-              <RadioGroupItem className="tw-me-2" value={value} id={scopeId} />
-              <Label htmlFor={scopeId}>{label}</Label>
-            </div>
-          ))}
-        </RadioGroup>
+        {variant === 'dropdown' ? (
+          <Select value={scope} onValueChange={handleDropdownScopeChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {displayedScopes.map(({ value, label, id: scopeId }) => (
+                <SelectItem key={scopeId} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <RadioGroup
+            value={scope}
+            onValueChange={onScopeChange}
+            className="tw-flex tw-flex-col tw-space-y-1"
+          >
+            {displayedScopes.map(({ value, label, id: scopeId }) => (
+              <div key={scopeId} className="tw-flex tw-items-center">
+                <RadioGroupItem className="tw-me-2" value={value} id={scopeId} />
+                <Label htmlFor={scopeId}>{label}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+        )}
       </div>
 
       {scope === 'selectedBooks' && (
@@ -169,6 +255,33 @@ export function ScopeSelector({
             localizedStrings={localizedStrings}
             localizedBookNames={localizedBookNames}
           />
+        </div>
+      )}
+
+      {scope === 'range' && (
+        <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-4">
+          <div className="tw-grid tw-gap-2">
+            <Label htmlFor="scope-range-start">{rangeStartText}</Label>
+            <BookChapterControl
+              id="scope-range-start"
+              scrRef={resolvedRangeStart}
+              handleSubmit={onRangeStartChange ?? noopScrRefChange}
+              localizedBookNames={localizedBookNames}
+              localizedStrings={bookChapterControlLocalizedStrings}
+              getEndVerse={getEndVerse}
+            />
+          </div>
+          <div className="tw-grid tw-gap-2">
+            <Label htmlFor="scope-range-end">{rangeEndText}</Label>
+            <BookChapterControl
+              id="scope-range-end"
+              scrRef={resolvedRangeEnd}
+              handleSubmit={onRangeEndChange ?? noopScrRefChange}
+              localizedBookNames={localizedBookNames}
+              localizedStrings={bookChapterControlLocalizedStrings}
+              getEndVerse={getEndVerse}
+            />
+          </div>
         </div>
       )}
     </div>

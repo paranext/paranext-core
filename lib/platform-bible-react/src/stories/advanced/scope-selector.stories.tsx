@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { defaultScrRef } from 'platform-bible-utils';
 import { ScopeSelector } from '@/components/advanced/scope-selector/scope-selector.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { Scope } from '@/components/utils/scripture.util';
@@ -150,6 +152,134 @@ export const VerseScope: Story = {
     docs: {
       description: {
         story: 'Scope selector set to verse scope.',
+      },
+    },
+  },
+};
+
+const rangeLocalizedStrings = {
+  '%webView_scope_selector_current_book%': 'Current book',
+  '%webView_scope_selector_current_chapter%': 'Current chapter',
+  '%webView_scope_selector_current_verse%': 'Current verse',
+  '%webView_scope_selector_selected_text%': 'Selected text',
+  '%webView_scope_selector_scope%': 'Scope',
+  '%webView_scope_selector_choose_books%': 'Choose specific books',
+  '%webView_scope_selector_range%': 'Range',
+  '%webView_scope_selector_range_start%': 'From',
+  '%webView_scope_selector_range_end%': 'To',
+};
+
+// A small sample verse-count table so the range BCV pickers can show a verse grid.
+const SAMPLE_VERSE_COUNTS: Record<string, Record<number, number>> = {
+  GEN: { 1: 31, 2: 25, 3: 24 },
+  MAT: { 1: 25, 5: 48 },
+  JHN: { 3: 36 },
+  REV: { 22: 21 },
+};
+
+function sampleGetEndVerse(bookId: string, chapterNum: number): number {
+  return SAMPLE_VERSE_COUNTS[bookId]?.[chapterNum] ?? 30;
+}
+
+export const DropdownVariant: Story = {
+  render: () => {
+    const [scope, setScope] = useState<Scope>('chapter');
+    const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
+
+    return (
+      <ScopeSelector
+        variant="dropdown"
+        scope={scope}
+        availableBookInfo={mockAvailableBookInfo}
+        selectedBookIds={selectedBookIds}
+        onScopeChange={(newScope: Scope) => setScope(newScope)}
+        onSelectedBookIdsChange={(bookIds: string[]) => setSelectedBookIds(bookIds)}
+        localizedStrings={rangeLocalizedStrings}
+        localizedBookNames={mockLocalizedBookNames}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Scope selector rendered as a dropdown instead of radio buttons. Use `variant="dropdown"` when screen space is tight.',
+      },
+    },
+  },
+};
+
+export const RangeScope: Story = {
+  render: () => {
+    const [scope, setScope] = useState<Scope>('range');
+    const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
+    const [rangeStart, setRangeStart] = useState<SerializedVerseRef>(defaultScrRef);
+    const [rangeEnd, setRangeEnd] = useState<SerializedVerseRef>({
+      book: 'GEN',
+      chapterNum: 3,
+      verseNum: 24,
+    });
+
+    return (
+      <ScopeSelector
+        scope={scope}
+        availableBookInfo={mockAvailableBookInfo}
+        selectedBookIds={selectedBookIds}
+        onScopeChange={(newScope: Scope) => setScope(newScope)}
+        onSelectedBookIdsChange={(bookIds: string[]) => setSelectedBookIds(bookIds)}
+        localizedStrings={rangeLocalizedStrings}
+        localizedBookNames={mockLocalizedBookNames}
+        rangeStart={rangeStart}
+        rangeEnd={rangeEnd}
+        onRangeStartChange={setRangeStart}
+        onRangeEndChange={setRangeEnd}
+        getEndVerse={sampleGetEndVerse}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Range scope renders two BookChapterControl pickers so the user can pick the first and last verse. When `getEndVerse` is provided, the BCV controls also allow verse selection.',
+      },
+    },
+  },
+};
+
+export const DropdownVariantWithRange: Story = {
+  render: () => {
+    const [scope, setScope] = useState<Scope>('range');
+    const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
+    const [rangeStart, setRangeStart] = useState<SerializedVerseRef>(defaultScrRef);
+    const [rangeEnd, setRangeEnd] = useState<SerializedVerseRef>({
+      book: 'REV',
+      chapterNum: 22,
+      verseNum: 21,
+    });
+
+    return (
+      <ScopeSelector
+        variant="dropdown"
+        scope={scope}
+        availableBookInfo={mockAvailableBookInfo}
+        selectedBookIds={selectedBookIds}
+        onScopeChange={(newScope: Scope) => setScope(newScope)}
+        onSelectedBookIdsChange={(bookIds: string[]) => setSelectedBookIds(bookIds)}
+        localizedStrings={rangeLocalizedStrings}
+        localizedBookNames={mockLocalizedBookNames}
+        rangeStart={rangeStart}
+        rangeEnd={rangeEnd}
+        onRangeStartChange={setRangeStart}
+        onRangeEndChange={setRangeEnd}
+        getEndVerse={sampleGetEndVerse}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Combines the dropdown variant with the range scope.',
       },
     },
   },
