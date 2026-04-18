@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.ParatextUtils;
@@ -25,11 +26,20 @@ public static class Program
             // Ignore trace for every S/R-able project https://github.com/ubsicap/Paratext/blob/master/ParatextData/Repository/SharingLogic.cs#L450
             Filter = new TraceExclusionFilter("CreateSharedProject for {0} ({1})"),
         };
+        // PNX001 bans `System.Diagnostics.Trace` for app logging (use `Console.WriteLine`),
+        // but here we legitimately need to configure the Trace subsystem itself so that
+        // ParatextData.dll's internal Trace output is redirected to Console (the app's
+        // single logging sink). This is a bootstrap responsibility — the whole purpose
+        // of this block is to bridge Trace → Console — so rewriting these three lines to
+        // use Console.WriteLine would defeat the intent. Scope the suppression to just
+        // the bootstrap lines.
+#pragma warning disable PNX001
         // Clear the default listeners to stop Debug.Assert from crashing the app
         Trace.Listeners.Clear();
         // Log all trace messages to the console
         Trace.Listeners.Add(listener);
         Trace.AutoFlush = true;
+#pragma warning restore PNX001
 
         // Tell `ProgressUtils` to run "UI" code and "run later" code immediately as a simple
         // implementation so we don't miss `ParatextData` code that needs to run.
@@ -68,12 +78,14 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
+            var checklistNetworkObject = new ChecklistNetworkObject(papi, paratextProjects);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
                 dblResources.RegisterDataProviderAsync(),
-                paratextRegistrationService.InitializeAsync()
+                paratextRegistrationService.InitializeAsync(),
+                checklistNetworkObject.InitializeAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here
