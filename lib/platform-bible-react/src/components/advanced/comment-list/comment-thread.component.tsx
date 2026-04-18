@@ -91,12 +91,10 @@ export function CommentThread({
 }: CommentThreadProps) {
   const [pendingCommentEditorState, setPendingCommentEditorState] =
     useState<SerializedEditorState>(initialValue);
-  const [pendingCommentAssignedUser, setPendingCommentAssignedUser] = useState<string | undefined>(
-    undefined,
-  );
-  const [lastSubmittedAssignedUser, setLastSubmittedAssignedUser] = useState<string | undefined>(
-    undefined,
-  );
+  const [pendingCommentAssignedUser, setPendingCommentAssignedUser] = useState<
+    string | undefined
+  >();
+  const [lastSubmittedAssignedUser, setLastSubmittedAssignedUser] = useState<string | undefined>();
   const isVerseExpanded = isSelected;
   const [showAllReplies, setShowAllReplies] = useState<boolean>(false);
   const [isAnyCommentEditing, setIsAnyCommentEditing] = useState<boolean>(false);
@@ -185,7 +183,10 @@ export function CommentThread({
       if (
         !pendingAssigneeIsAutoPopulatedRef.current &&
         !userMadeManualSelectionRef.current &&
-        initialAssignedUser !== undefined
+        initialAssignedUser !== undefined &&
+        // Skip pre-population if the thread is already assigned to this user — doing so
+        // would show "Assigning to: Alice" and enable the submit button for a no-op call.
+        initialAssignedUser !== assignedUser
       ) {
         setPendingCommentAssignedUser(initialAssignedUser);
         pendingAssigneeIsAutoPopulatedRef.current = true;
@@ -198,7 +199,7 @@ export function CommentThread({
       pendingAssigneeIsAutoPopulatedRef.current = false;
       userMadeManualSelectionRef.current = false;
     }
-  }, [isSelected, initialAssignedUser, canAssign]);
+  }, [isSelected, initialAssignedUser, canAssign, assignedUser]);
 
   const activeComments = useMemo(() => comments.filter((comment) => !comment.deleted), [comments]);
 
@@ -405,8 +406,15 @@ export function CommentThread({
         contents,
         assignedUser: resolvedAssignedUser,
       });
-      if (success && contents) {
-        clearEditor();
+      if (success) {
+        if (resolvedAssignedUser !== undefined) {
+          // Mirror what handleSubmitComment does so the "Assigning to:" indicator hides and the
+          // submit button disables after a successful submission via this path (e.g. from CommentItem).
+          setLastSubmittedAssignedUser(resolvedAssignedUser);
+        }
+        if (contents) {
+          clearEditor();
+        }
       }
       // Don't clear pendingCommentAssignedUser here — the feature intentionally persists the
       // last assignee for subsequent replies, so the initialAssignedUser effect will re-populate
@@ -456,7 +464,11 @@ export function CommentThread({
                 toggleRead();
               }}
               className="tw-text-muted-foreground tw-transition hover:tw-text-foreground"
-              aria-label={isRead ? 'Mark as unread' : 'Mark as read'}
+              aria-label={
+                isRead
+                  ? (localizedStrings['%comment_aria_mark_as_unread%'] ?? 'Mark as unread')
+                  : (localizedStrings['%comment_aria_mark_as_read%'] ?? 'Mark as read')
+              }
             >
               {isRead ? <MailOpen /> : <Mail />}
             </Button>
@@ -476,7 +488,7 @@ export function CommentThread({
                     status: 'Resolved',
                   });
                 }}
-                aria-label="Resolve thread"
+                aria-label={localizedStrings['%comment_aria_resolve_thread%'] ?? 'Resolve thread'}
               >
                 <Check className="tw-h-4 tw-w-4" />
               </Button>

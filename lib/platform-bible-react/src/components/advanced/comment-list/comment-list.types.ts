@@ -41,6 +41,9 @@ export const COMMENT_LIST_STRING_KEYS: LocalizeKey[] = [
   '%comment_thread_single_reply%',
   '%comment_aria_assign_user%',
   '%comment_aria_submit_comment%',
+  '%comment_aria_mark_as_read%',
+  '%comment_aria_mark_as_unread%',
+  '%comment_aria_resolve_thread%',
 ];
 
 /** Type definition for the localized strings used in the CommentList component */
