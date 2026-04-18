@@ -20,7 +20,9 @@ export { expect } from '@playwright/test';
  * Use these fixtures when tests mutate application state in ways that would affect subsequent
  * tests, or when you need a guaranteed clean slate. For tests that can tolerate shared state,
  * consider a worker-scoped fixture instead — in that case all tests assigned to the same Playwright
- * worker (typically all tests in a single spec file) share one Electron instance.
+ * worker share one Electron instance. By default Playwright assigns one worker per spec file, so
+ * tests within a single file typically share an instance, but this is a side effect of Playwright's
+ * default parallelism settings, not a guarantee of the fixture itself.
  *
  * The renderer connects to a shared webpack dev server (`localhost:1212`), and ES module state
  * (initialization guards, dock layout singletons, etc.) persists across navigations within the same
