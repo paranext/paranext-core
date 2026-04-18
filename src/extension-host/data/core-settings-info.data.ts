@@ -1,9 +1,9 @@
 import { localization } from '@extension-host/services/papi-backend.service';
-import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
+import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
 import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { formatReplacementString, isString, SettingsContribution } from 'platform-bible-utils';
+import { isString, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
 export const platformSettings: SettingsContribution = [
@@ -37,10 +37,10 @@ export const platformSettings: SettingsContribution = [
         description: '%settings_platform_requestTimeout_description%',
         default: 30,
       },
-      'platform.zoomFactor': {
-        label: '%settings_platform_zoomFactor_label%',
-        description: '%settings_platform_zoomFactor_description%',
-        default: DEFAULT_ZOOM_FACTOR,
+      'platform.viewZooms': {
+        label: '%settings_platform_viewZooms_label%',
+        description: '%settings_platform_viewZooms_description%',
+        default: {},
       },
       'platform.interfaceMode': {
         label: '%settings_platform_interfaceMode_label%',
@@ -104,24 +104,13 @@ const requestTimeoutValidator: SettingValidator<'platform.requestTimeout'> = asy
 };
 
 /** Info about all settings built into core. Does not contain info for extensions' settings */
-const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
-  newValue: number,
+const viewZoomsValidator: SettingValidator<'platform.viewZooms'> = async (
+  newValue: Record<string, number>,
 ): Promise<boolean> => {
-  const errorMessage = formatReplacementString(
-    await localization.getLocalizedString({
-      localizeKey: '%settings_platform_zoomFactor_errorMessage%',
-    }),
-    {
-      lowerLimit: MIN_ZOOM_FACTOR,
-      upperLimit: MAX_ZOOM_FACTOR,
-    },
+  if (!newValue || typeof newValue !== 'object') return false;
+  return Object.values(newValue).every(
+    (v) => typeof v === 'number' && v >= MIN_ZOOM_FACTOR && v <= MAX_ZOOM_FACTOR,
   );
-
-  if (typeof newValue !== 'number') return false;
-  if (newValue < MIN_ZOOM_FACTOR || newValue > MAX_ZOOM_FACTOR) {
-    throw new Error(errorMessage);
-  }
-  return true;
 };
 
 const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async (
@@ -144,6 +133,6 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
   'platform.commentsEnabled': booleanValidator,
   'platform.requestTimeout': requestTimeoutValidator,
-  'platform.zoomFactor': zoomFactorValidator,
+  'platform.viewZooms': viewZoomsValidator,
   'platform.interfaceMode': interfaceModeValidator,
 };

@@ -1248,6 +1248,54 @@ async function openOrReloadWebView(
   window.fetch = papi.fetch;
   window.WebSocket = papi.WebSocket;
   window.XMLHttpRequest = papi.XMLHttpRequest;
+
+  // Forward Ctrl+/-/0 and Ctrl+wheel events to the parent so per-view zoom shortcuts work
+  // when keyboard focus or the mouse pointer is inside the iframe. Captures the parent
+  // reference before \`delete window.parent\` below so the listeners survive the obfuscation.
+  (() => {
+    const parentWindow = window.parent;
+    if (!parentWindow || parentWindow === window) return;
+    const webViewIdForZoom = '${webView.id}';
+    function postZoom(action, deltaSteps) {
+      try {
+        // targetOrigin '/' restricts delivery to the same-origin parent (HTML/React webviews
+        // are same-origin with the host). Avoids leaking the message to unrelated origins.
+        parentWindow.postMessage(
+          { type: 'view-zoom', action: action, deltaSteps: deltaSteps, webViewId: webViewIdForZoom },
+          '/',
+        );
+      } catch (e) {
+        // Parent may be cross-origin or torn down; nothing to do.
+      }
+    }
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (!e.ctrlKey && !e.metaKey) return;
+        if (e.key === '=' || e.key === '+') {
+          e.preventDefault();
+          postZoom('adjust', 1);
+        } else if (e.key === '-') {
+          e.preventDefault();
+          postZoom('adjust', -1);
+        } else if (e.key === '0') {
+          e.preventDefault();
+          postZoom('reset', 0);
+        }
+      },
+      true,
+    );
+    window.addEventListener(
+      'wheel',
+      (e) => {
+        if (!e.ctrlKey && !e.metaKey) return;
+        e.preventDefault();
+        postZoom('adjust', e.deltaY < 0 ? 1 : -1);
+      },
+      { capture: true, passive: false },
+    );
+  })();
+
   delete window.parent;
   delete window.top;
   delete window.frameElement;
