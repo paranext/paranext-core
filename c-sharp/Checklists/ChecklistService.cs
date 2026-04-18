@@ -85,8 +85,10 @@ internal static class ChecklistService
     //  10. Assemble ChecklistResult with parallel ColumnHeaders /
     //      ColumnProjectIds (INV-C15).
     //
-    // EditLinkItem is NOT emitted here — CAP-012 owns inline edit-link
-    // gating (see data-contracts.md §4.1 [Revised: 2026-04-14]).
+    // Inline EditLinkItem emission (CAP-012 / VAL-007 project-level subset)
+    // lives in ApplyEditLinkGating and is wired into ExtractColumnCells
+    // per cell. Chapter-level permission (VAL-007 cond 5) is DEFERRED per
+    // DEF-BE-001 — see deferred-functionality.md.
     /// <summary>
     /// End-to-end orchestrator for the Markers checklist pipeline. Resolves
     /// the active project and any comparative texts, extracts per-book marker
@@ -393,9 +395,92 @@ internal static class ChecklistService
             );
 
             foreach (ChecklistCell cell in cells)
-                columnCells.Add(ApplyPostProcessParagraph(cell, showVerseText));
+            {
+                ChecklistCell postProcessed = ApplyPostProcessParagraph(cell, showVerseText);
+                columnCells.Add(ApplyEditLinkGating(postProcessed, scrText));
+            }
         }
         return columnCells;
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/ChecklistsTool.cs SetCellEditability
+    //   (project-level portion only; chapter-level DEFERRED per DEF-BE-001).
+    // Maps to: EXT-016 (project-level portion) / BHV-114 (emission sub-behavior)
+    //   / VAL-007 (conds 1-4; cond 5 DEFERRED).
+    //
+    // EXPLANATION:
+    // PT9's SetCellEditability gated CLEditLink emission on five AND-conditions
+    // (business-rules.md §VAL-007):
+    //   (1) row has cells,
+    //   (2) first cell has non-default VerseRef,
+    //   (3) row.IncludeEditLink is true,
+    //   (4) scrText.Settings.Editable is true,
+    //   (5) scrText.Permissions.CanEdit(bookNum, chapterNum) returns true.
+    //
+    // PT10 mapping:
+    //   - (1)/(3) are structurally satisfied here: we iterate per cell post
+    //     row-building, so every cell we see already belongs to a row that
+    //     exists. PT10 folds the "IncludeEditLink" flag into the per-cell
+    //     iteration (every qualifying cell emits exactly one link).
+    //   - (2) maps to `!string.IsNullOrEmpty(cell.Reference)` — BuildCLCell
+    //     sets Reference to "" when `vref.IsDefault`, so an empty Reference
+    //     IS the PT10 signal that the cell has a default VerseRef.
+    //   - (4) maps directly to `scrText.Settings.Editable`.
+    //   - (5) is DEFERRED: paranext-core does not yet expose a chapter-level
+    //     CanEdit(bookNum, chapterNum) API. See DEF-BE-001. Revisit when the
+    //     trigger API becomes available.
+    //
+    // Paragraph placement: appends the EditLinkItem to the LAST paragraph's
+    // Items list. PT9's CLEditLink appeared at the end of a cell's rendered
+    // content; keeping the link inside an existing paragraph preserves the
+    // cell-shape (paragraph count) invariants that CAP-006 tests exercise.
+    /// <summary>
+    /// Emits an <see cref="EditLinkItem"/> for <paramref name="cell"/> when
+    /// VAL-007 project-level conditions hold: the cell has a non-default
+    /// reference (non-empty <see cref="ChecklistCell.Reference"/>) AND
+    /// <c>scrText.Settings.Editable == true</c>. The link carries the
+    /// cell's BookNum/ChapterNum/VerseNum parsed from
+    /// <see cref="ChecklistCell.Reference"/> using the scrText's own
+    /// versification. Chapter-level permission (<c>CanEdit(bookNum,
+    /// chapterNum)</c>) is intentionally NOT checked — deferred per
+    /// DEF-BE-001.
+    /// </summary>
+    private static ChecklistCell ApplyEditLinkGating(ChecklistCell cell, ScrText scrText)
+    {
+        // Gate (4): project-level editability.
+        if (!scrText.Settings.Editable)
+            return cell;
+
+        // Gate (2): non-default VerseRef. BuildCLCell leaves Reference empty
+        // for default refs.
+        if (string.IsNullOrEmpty(cell.Reference))
+            return cell;
+
+        // Defensive: if a cell somehow has zero paragraphs, there's no place
+        // to append the link. (Not expected in practice.)
+        if (cell.Paragraphs.Count == 0)
+            return cell;
+
+        // TODO: DEF-BE-001 — chapter-level permission (see deferred-functionality.md).
+        // PT9 also gated on scrText.Permissions.CanEdit(bookNum, chapterNum).
+        // paranext-core lacks that API today; revisit when it lands.
+
+        VerseRef vref = new(cell.Reference, scrText.Settings.Versification);
+        var editLink = new EditLinkItem(vref.BookNum, vref.ChapterNum, vref.VerseNum);
+
+        ChecklistParagraph lastParagraph = cell.Paragraphs[^1];
+        var updatedItems = new List<ChecklistContentItem>(lastParagraph.Items.Count + 1);
+        updatedItems.AddRange(lastParagraph.Items);
+        updatedItems.Add(editLink);
+
+        var updatedParagraphs = new List<ChecklistParagraph>(cell.Paragraphs);
+        updatedParagraphs[^1] = lastParagraph with { Items = updatedItems };
+
+        return cell with
+        {
+            Paragraphs = updatedParagraphs,
+        };
     }
 
     // === PORTED FROM PT9 ===
