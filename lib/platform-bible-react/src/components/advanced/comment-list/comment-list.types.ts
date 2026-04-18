@@ -39,6 +39,8 @@ export const COMMENT_LIST_STRING_KEYS: LocalizeKey[] = [
   '%comment_status_todo%',
   '%comment_thread_multiple_replies%',
   '%comment_thread_single_reply%',
+  '%comment_aria_assign_user%',
+  '%comment_aria_submit_comment%',
 ];
 
 /** Type definition for the localized strings used in the CommentList component */
@@ -55,9 +57,8 @@ export interface CommentListProps {
   /**
    * Comment threads to render. The component filters out threads where all comments are deleted,
    * but does not deduplicate threads. Callers are responsible for pre-filtering (e.g. excluding
-   * {@link LegacyCommentThread.isSpellingNote} and {@link LegacyCommentThread.isBTNote} threads,
-   * which belong in Wordlist and Biblical Terms respectively) and for deduplicating threads with
-   * repeated IDs before passing them in.
+   * `isSpellingNote` and `isBTNote` threads, which belong in Wordlist and Biblical Terms
+   * respectively) and for deduplicating threads with repeated IDs before passing them in.
    */
   threads: LegacyCommentThread[];
   /** Name of the current user, retrieved from the current user's Paratext Registry user information */
