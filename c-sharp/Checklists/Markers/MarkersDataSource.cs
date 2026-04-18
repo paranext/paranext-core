@@ -346,4 +346,43 @@ internal static class MarkersDataSource
         ScrStylesheet stylesheet,
         Func<ScrTag, bool> predicate
     ) => new(stylesheet.Tags.Where(predicate).Select(tag => tag.Marker));
+
+    // === RED-PHASE STUB (CAP-007) ===
+    // Source: PT9/Paratext/Checklists/MarkerSettingsForm.cs:28-49 (btnOk_Click)
+    // Method: ValidateMarkerSettings
+    // Maps to: EXT-019 / BHV-105 / BHV-312 / VAL-002
+    //
+    // This method intentionally throws to drive the RED signal for CAP-007.
+    // The GREEN implementer will port PT9's btnOk_Click validation logic:
+    //   1. null -> treat as empty (PT9 line 30: `?? ""`)
+    //   2. Trim + collapse spaces (PT9 line 31: Regex.Replace(" +", " "))
+    //   3. Empty -> Valid=true with empty ParsedPairs (PT9 line 32-45 skipped)
+    //   4. For each space-split token: split('/'); require exactly 2 parts
+    //      AND both sides non-empty after trim
+    //   5. On first invalid pair: Valid=false, ErrorMessage=PT9 literal
+    //      "Equivalent markers need to be entered in the form: p/q"
+    //   6. On success: Valid=true with one MarkerPair per token (source order)
+    //
+    // Structural invariant (data-contracts.md §3.13):
+    //   Valid=true  => ParsedPairs populated (non-null), ErrorMessage==null
+    //   Valid=false => ErrorMessage populated, ParsedPairs==null
+    //
+    // Test spec: c-sharp-tests/Checklists/Markers/MarkerSettingsValidationTests.cs
+    /// <summary>
+    /// Validates a user-entered equivalent-markers string ("marker1/marker2"
+    /// pairs separated by spaces). Returns a <see cref="MarkerSettingsValidationResult"/>
+    /// carrying either the parsed pairs (valid) or the PT9 error message
+    /// (invalid). See data-contracts.md §4.2 and EXT-019.
+    /// </summary>
+    public static MarkerSettingsValidationResult ValidateMarkerSettings(string equivalentMarkers)
+    {
+        // RED stub: CAP-007 GREEN implementer removes this and ports the
+        // PT9 MarkerSettingsForm.btnOk_Click validation loop (see banner above).
+        _ = equivalentMarkers;
+        throw new NotImplementedException(
+            "CAP-007: ValidateMarkerSettings is not yet implemented. "
+                + "Port PT9/Paratext/Checklists/MarkerSettingsForm.cs:28-49 (btnOk_Click). "
+                + "See c-sharp-tests/Checklists/Markers/MarkerSettingsValidationTests.cs."
+        );
+    }
 }
