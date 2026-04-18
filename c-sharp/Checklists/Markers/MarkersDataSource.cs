@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using Paratext.Data;
 
 namespace Paranext.DataProvider.Checklists.Markers;
@@ -24,7 +22,7 @@ namespace Paranext.DataProvider.Checklists.Markers;
 /// suite in <c>c-sharp-tests/Checklists/Markers/MarkersDataSourceTests.cs</c>
 /// for the behavioural specification that each method must satisfy.
 /// </summary>
-public static class MarkersDataSource
+internal static class MarkersDataSource
 {
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checklists/CLParagraphCellsDataSource.cs:208-214
@@ -38,17 +36,13 @@ public static class MarkersDataSource
     public static HashSet<string> ParagraphMarkers(
         ScrStylesheet stylesheet,
         HashSet<string> markerFilter
-    )
-    {
-        return new HashSet<string>(
-            stylesheet
-                .Tags.Where(tag =>
-                    tag.StyleType == ScrStyleType.scParagraphStyle
-                    && (markerFilter.Count == 0 || markerFilter.Contains(tag.Marker))
-                )
-                .Select(tag => tag.Marker)
+    ) =>
+        MarkersWhere(
+            stylesheet,
+            tag =>
+                tag.StyleType == ScrStyleType.scParagraphStyle
+                && (markerFilter.Count == 0 || markerFilter.Contains(tag.Marker))
         );
-    }
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checklists/CLParagraphCellsDataSource.cs:221-226
@@ -133,6 +127,13 @@ public static class MarkersDataSource
     // Method: CLMarkersDataSource.IsEquivalentMarker(string, string)
     // PT10 signature takes the mapping dictionary as a parameter (stateless);
     // PT9 read it from the instance field `markerMappings`.
+    /// <summary>
+    /// Returns true when <paramref name="marker1"/> and
+    /// <paramref name="marker2"/> are equal, or when the forward mapping
+    /// edge (marker1 -> marker2) is present in
+    /// <paramref name="markerMappings"/>. Bidirectionality (INV-005) is
+    /// guaranteed by the caller storing both edges at mapping-parse time.
+    /// </summary>
     private static bool IsEquivalentMarker(
         string marker1,
         string marker2,
@@ -171,50 +172,81 @@ public static class MarkersDataSource
     public static (
         Dictionary<string, List<string>> Mappings,
         HashSet<string> Filter
-    ) InitializeMarkerMappings(string equivalentMarkersInput, string markerFilterInput)
+    ) InitializeMarkerMappings(string equivalentMarkersInput, string markerFilterInput) =>
+        (
+            ParseEquivalentMarkerMappings(equivalentMarkersInput),
+            ParseMarkerFilter(markerFilterInput)
+        );
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/CLParagraphCellsDataSource.cs:185-195 (MarkerFilter
+    //   getter — strips backslashes) + :267-269 (splits on whitespace into the filter set).
+    /// <summary>
+    /// Parses the raw marker-filter setting. Strips backslashes (VAL-001),
+    /// splits on whitespace, and returns an empty set for empty /
+    /// whitespace-only input (VAL-006).
+    /// </summary>
+    private static HashSet<string> ParseMarkerFilter(string markerFilterInput)
+    {
+        var markerFilter = new HashSet<string>();
+        if (string.IsNullOrEmpty(markerFilterInput))
+            return markerFilter;
+
+        // VAL-001: strip backslashes before tokenising.
+        string filter = markerFilterInput.Replace(@"\", "");
+
+        // VAL-006: whitespace-only input yields no tokens (and therefore the empty set).
+        if (string.IsNullOrEmpty(filter.Trim()))
+            return markerFilter;
+
+        foreach (string token in filter.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+            markerFilter.Add(token);
+
+        return markerFilter;
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/CLParagraphCellsDataSource.cs:271-291.
+    /// <summary>
+    /// Parses the raw equivalent-markers setting into a bidirectional
+    /// mapping dictionary. For every well-formed <c>a/b</c> pair, stores
+    /// <b>both</b> <c>a -&gt; b</c> and <c>b -&gt; a</c> so downstream
+    /// equivalence lookups are symmetric (INV-005). Tokens without exactly
+    /// one slash are silently skipped (VAL-005).
+    /// </summary>
+    private static Dictionary<string, List<string>> ParseEquivalentMarkerMappings(
+        string equivalentMarkersInput
+    )
     {
         var markerMappings = new Dictionary<string, List<string>>();
-        var markerFilter = new HashSet<string>();
+        if (string.IsNullOrEmpty(equivalentMarkersInput))
+            return markerMappings;
 
-        // --- Filter parsing (PT9:185-195 MarkerFilter getter + PT9:267-269) ---
-        // VAL-001: strip backslashes. VAL-006: empty/whitespace => empty set.
-        if (!string.IsNullOrEmpty(markerFilterInput))
+        foreach (string mapping in equivalentMarkersInput.Split(' '))
         {
-            string filter = markerFilterInput.Replace(@"\", "");
-            if (!string.IsNullOrEmpty(filter.Trim()))
-            {
-                foreach (
-                    var token in filter.Split(
-                        new[] { ' ' },
-                        System.StringSplitOptions.RemoveEmptyEntries
-                    )
-                )
-                    markerFilter.Add(token);
-            }
+            string[] marks = mapping.Split('/');
+            if (marks.Length != 2)
+                continue; // VAL-005: silently skip invalid pairs.
+
+            // INV-005: record BOTH directions. TryGetValue + Add (rather than
+            // direct assignment) lets repeated left-hand or right-hand markers
+            // accumulate targets (e.g. "q/q1 q/q2" -> q -> [q1, q2]).
+            AddMapping(markerMappings, marks[0], marks[1]);
+            AddMapping(markerMappings, marks[1], marks[0]);
         }
 
-        // --- Mapping parsing (PT9:271-291) ---
-        // Split on space; for each token split on '/'; require exactly 2 parts;
-        // store BOTH directions to honour INV-005.
-        if (!string.IsNullOrEmpty(equivalentMarkersInput))
-        {
-            foreach (string mapping in equivalentMarkersInput.Split(' '))
-            {
-                string[] marks = mapping.Split('/');
-                if (marks.Length != 2)
-                    continue; // VAL-005: silently skip invalid pairs.
+        return markerMappings;
+    }
 
-                if (!markerMappings.TryGetValue(marks[0], out var valueList))
-                    markerMappings[marks[0]] = valueList = new List<string>();
-                valueList.Add(marks[1]);
-
-                if (!markerMappings.TryGetValue(marks[1], out valueList))
-                    markerMappings[marks[1]] = valueList = new List<string>();
-                valueList.Add(marks[0]);
-            }
-        }
-
-        return (markerMappings, markerFilter);
+    private static void AddMapping(
+        Dictionary<string, List<string>> mappings,
+        string from,
+        string to
+    )
+    {
+        if (!mappings.TryGetValue(from, out var targets))
+            mappings[from] = targets = new List<string>();
+        targets.Add(to);
     }
 
     // === PORTED FROM PT9 ===
@@ -279,17 +311,13 @@ public static class MarkersDataSource
     /// Returns heading paragraph markers from the stylesheet
     /// (TextType == scSection AND StyleType == scParagraphStyle). See BHV-120.
     /// </summary>
-    public static HashSet<string> HeadingMarkers(ScrStylesheet stylesheet)
-    {
-        return new HashSet<string>(
-            stylesheet
-                .Tags.Where(tag =>
-                    tag.TextType == ScrTextType.scSection
-                    && tag.StyleType == ScrStyleType.scParagraphStyle
-                )
-                .Select(tag => tag.Marker)
+    public static HashSet<string> HeadingMarkers(ScrStylesheet stylesheet) =>
+        MarkersWhere(
+            stylesheet,
+            tag =>
+                tag.TextType == ScrTextType.scSection
+                && tag.StyleType == ScrStyleType.scParagraphStyle
         );
-    }
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checklists/CLParagraphCellsDataSource.cs:38-43
@@ -299,15 +327,23 @@ public static class MarkersDataSource
     /// Returns non-heading paragraph markers from the stylesheet
     /// (TextType == scVerseText AND StyleType == scParagraphStyle). See BHV-120.
     /// </summary>
-    public static HashSet<string> NonHeadingParagraphMarkers(ScrStylesheet stylesheet)
-    {
-        return new HashSet<string>(
-            stylesheet
-                .Tags.Where(tag =>
-                    tag.TextType == ScrTextType.scVerseText
-                    && tag.StyleType == ScrStyleType.scParagraphStyle
-                )
-                .Select(tag => tag.Marker)
+    public static HashSet<string> NonHeadingParagraphMarkers(ScrStylesheet stylesheet) =>
+        MarkersWhere(
+            stylesheet,
+            tag =>
+                tag.TextType == ScrTextType.scVerseText
+                && tag.StyleType == ScrStyleType.scParagraphStyle
         );
-    }
+
+    /// <summary>
+    /// Projects the markers of every <see cref="ScrTag"/> in
+    /// <paramref name="stylesheet"/> matching <paramref name="predicate"/>
+    /// into a <see cref="HashSet{T}"/>. Shared helper for
+    /// <see cref="ParagraphMarkers"/>, <see cref="HeadingMarkers"/>, and
+    /// <see cref="NonHeadingParagraphMarkers"/>.
+    /// </summary>
+    private static HashSet<string> MarkersWhere(
+        ScrStylesheet stylesheet,
+        Func<ScrTag, bool> predicate
+    ) => new(stylesheet.Tags.Where(predicate).Select(tag => tag.Marker));
 }
