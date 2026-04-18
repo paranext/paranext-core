@@ -225,7 +225,7 @@ export default function CommentEditor({
                   <CommandItem
                     key={user || 'unassigned'}
                     onSelect={() => {
-                      setSelectedUser(user === '' ? undefined : user);
+                      setSelectedUser(user);
                       setIsAssignPopoverOpen(false);
                     }}
                     className="tw-flex tw-items-center"
