@@ -141,6 +141,12 @@ internal static class ChecklistRowBuilder
             Error = error;
         }
 
+        /// <summary>
+        /// Projects the current mutable state into an immutable
+        /// <see cref="ChecklistCell"/> record for row emission. The returned
+        /// cell's <c>Paragraphs</c> list is the same reference held by this
+        /// <see cref="MutableCell"/> — do not mutate after emission.
+        /// </summary>
         public ChecklistCell ToChecklistCell() =>
             new ChecklistCell(
                 Paragraphs: Paragraphs,
@@ -207,7 +213,12 @@ internal static class ChecklistRowBuilder
                         columnCellIndex
                     );
 
-                    if (cellsToGrab.Where(col => col != null).SelectMany(c => c).Any())
+                    if (
+                        cellsToGrab
+                            .Where(colList => colList != null)
+                            .SelectMany(colList => colList)
+                            .Any()
+                    )
                     {
                         ExpandGrabCountToAlignCells(currentCol, cellsToGrab, ref columnCellIndex);
                         MergeGrabbedCells(currentCol, cellsToGrab);
@@ -233,11 +244,9 @@ internal static class ChecklistRowBuilder
         // so Merge operations don't need to touch the immutable records.
         private void Initialize()
         {
-            // Default versification: English (CAP-006 pre-normalizes cells
-            // to a common versification before calling this builder).
-            versification = ScrVers.English;
-
-            // Build the MutableCell shadow per source cell.
+            // Build the MutableCell shadow per source cell. (Versification
+            // defaults to ScrVers.English at field declaration — see class-level
+            // EXPLANATION; orchestrator pre-normalizes cells before calling.)
             foreach (var column in columns)
             {
                 var mcol = new List<MutableCell>(column.Count);
@@ -395,11 +404,10 @@ internal static class ChecklistRowBuilder
             {
                 foundOne = false;
 
-                int colWithLargest;
                 VerseRef largestRef = GetLargestGrabbedVerseRef(
                     currentCol,
                     cellsToGrab,
-                    out colWithLargest
+                    out int colWithLargest
                 );
 
                 for (int col = currentCol; col < columns.Count; col++)
@@ -425,9 +433,8 @@ internal static class ChecklistRowBuilder
 
                     foreach (VerseRef vRef in GetRefsFromGrabbedCells(currentCol, cellsToGrab))
                     {
-                        int cellIndex;
                         if (
-                            referenceMap[col].TryGetValue(vRef, out cellIndex)
+                            referenceMap[col].TryGetValue(vRef, out int cellIndex)
                             && AddIfUnhandled(col, cellIndex, cellsToGrab)
                         )
                         {
@@ -531,11 +538,11 @@ internal static class ChecklistRowBuilder
                     int otherIndex = cellsToMerge[col][cellIdx];
                     var other = mutableCells[col][otherIndex];
                     lead.Paragraphs.AddRange(other.Paragraphs);
-                    if (!other.EndVerseRef.IsDefault)
-                    {
-                        if (mergedEnd.IsDefault || mergedEnd < other.EndVerseRef)
-                            mergedEnd = other.EndVerseRef;
-                    }
+                    if (
+                        !other.EndVerseRef.IsDefault
+                        && (mergedEnd.IsDefault || mergedEnd < other.EndVerseRef)
+                    )
+                        mergedEnd = other.EndVerseRef;
                 }
 
                 lead.EndVerseRef = mergedEnd;
@@ -595,9 +602,8 @@ internal static class ChecklistRowBuilder
                 {
                     foreach (VerseRef vRef in cellRefMap[currentCol][masterListCellIndex])
                     {
-                        int cellIndex;
                         if (
-                            referenceMap[col].TryGetValue(vRef, out cellIndex)
+                            referenceMap[col].TryGetValue(vRef, out int cellIndex)
                             && AddIfUnhandled(col, cellIndex, cellsToGrab)
                         )
                             break;
@@ -703,7 +709,7 @@ internal static class ChecklistRowBuilder
             );
 
             if (currentCol == 0 || rows.Count == 0)
-                rows.Insert(rows.Count, newRow);
+                rows.Add(newRow);
             else
             {
                 int insertIndex = FindInsertionIndex(newRow);
