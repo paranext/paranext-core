@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Paratext.Data;
 using SIL.Scripture;
 
@@ -169,6 +168,17 @@ internal static class ChecklistService
     // The PT9 code shadows the parameter `vrefIn` by making a local copy
     // `vref = new VerseRef(vrefIn)`; preserved to avoid mutating a shared
     // state object.
+    /// <summary>
+    /// Computes the <see cref="VerseRef"/> assigned to a paragraph start at
+    /// token index <paramref name="i"/>. Heading markers (per
+    /// <paramref name="headingMarkers"/>) forward-scan to the next non-heading
+    /// paragraph to inherit its verse reference (INV-009); the scan is
+    /// bounded by chapter (<c>\c</c>) markers (FB-35863). Non-heading
+    /// paragraphs fall through to the post-scan step which, if the very next
+    /// token is <c>\v</c>, copies that token's <see cref="UsfmToken.Data"/>
+    /// into the returned <see cref="VerseRef.Verse"/> component (handles
+    /// verse bridges like <c>"3-5"</c> verbatim).
+    /// </summary>
     private static VerseRef FindVerseRefForParagraph(
         HashSet<string> headingMarkers,
         HashSet<string> nonHeadingParagraphMarkers,
