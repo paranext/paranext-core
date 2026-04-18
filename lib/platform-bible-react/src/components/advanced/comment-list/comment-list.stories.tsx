@@ -248,3 +248,34 @@ export const RestrictedPermissions: Story = {
     />
   ),
 };
+
+/**
+ * Story demonstrating automatic assignee pre-selection.
+ *
+ * The comment list remembers the last user explicitly assigned when adding a comment. The next new
+ * comment in any thread will automatically pre-select that assignee in the dropdown.
+ *
+ * **To see this feature in action:**
+ *
+ * 1. Expand any thread and open the reply box
+ * 2. Use the assign dropdown to select a user (e.g. "Alice")
+ * 3. Submit the comment
+ * 4. Expand a **different** thread and open its reply box
+ * 5. The assign dropdown will already show "Alice" pre-selected
+ */
+export const AssigneePreselection: Story = {
+  render: () => (
+    <CommentListStory
+      initialThreads={sampleComments}
+      canUserAssignThreadCallback={async (threadId) => {
+        console.log(`Checking if user can assign thread ${threadId}`);
+        return true;
+      }}
+      canUserResolveThreadCallback={async (threadId) => {
+        console.log(`Checking if user can resolve thread ${threadId}`);
+        return true;
+      }}
+      canUserEditOrDeleteCommentCallback={async () => true}
+    />
+  ),
+};
