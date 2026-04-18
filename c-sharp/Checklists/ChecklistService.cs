@@ -10,25 +10,30 @@ using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checklists;
 
-// === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Checklists/CLParagraphCellsDataSource.cs:50-135
-// Extractions: EXT-008 (GetTokensForBook)
-// Behaviors: BHV-108 (token walking + filter)
-// Invariants: INV-009 (heading verse reference assignment)
-// Contract: data-contracts.md §4.1 (BuildChecklistData internal pipeline)
-// Companion type: ChecklistParagraphTokens (EXT-012) in
-//   ChecklistParagraphTokens.cs (same directory).
-
 /// <summary>
-/// Stateless checklist orchestration service. Hosts USFM token walking
-/// (<see cref="GetTokensForBook"/> — EXT-008), cell construction (EXT-011,
-/// added under CAP-004), and the top-level BuildChecklistData /
-/// ResolveComparativeTexts methods (added under CAP-006 / CAP-009). This
-/// file is the shared landing pad for those extractions; CAP-003 lands the
-/// token-extraction surface.
+/// Stateless checklist orchestration service. Hosts the top-level
+/// <see cref="BuildChecklistData"/> pipeline (CAP-006) together with the
+/// USFM token walker <see cref="GetTokensForBook"/> (CAP-003, EXT-008) and
+/// cell constructor <see cref="GetCellsForBook"/> (CAP-004, EXT-011) it
+/// drives. Companion type <c>ChecklistParagraphTokens</c> (EXT-012) lives
+/// alongside in <c>ChecklistParagraphTokens.cs</c>. Per-method provenance
+/// headers (<c>// === PORTED FROM PT9 ===</c>) carry the authoritative
+/// source references; contract: data-contracts.md §4.1.
 /// </summary>
 internal static class ChecklistService
 {
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/CLDataSource.cs:16 (reportCount=300
+    //   constant for a different capping concern) plus the PT10 strategic
+    //   addition from EXT-015 (GetChecklistData max-rows cap).
+    // Maps to: INV-012 / EXT-015
+    /// <summary>
+    /// Maximum row count emitted by <see cref="BuildChecklistData"/>
+    /// (INV-012). Rows produced beyond this cap are truncated and
+    /// <see cref="ChecklistResult.Truncated"/> is set to <c>true</c>.
+    /// </summary>
+    private const int MaxRows = 5000;
+
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checklists/CLDataSource.cs:97-185 (CLDataSource.BuildRows)
     //   plus :334-351 (GetCells start-ref adjustment / book loop) and
@@ -84,24 +89,28 @@ internal static class ChecklistService
     // gating (see data-contracts.md §4.1 [Revised: 2026-04-14]).
     /// <summary>
     /// End-to-end orchestrator for the Markers checklist pipeline. Resolves
-    /// the active project and any comparative texts via
-    /// <paramref name="projects"/>, extracts per-book marker paragraphs,
-    /// aligns them into rows, detects matches, optionally hides matching
-    /// rows, caps at <see cref="MaxRows"/> rows, and assembles a
+    /// the active project and any comparative texts, extracts per-book marker
+    /// paragraphs, aligns them into rows, detects matches, optionally hides
+    /// matching rows, caps at <see cref="MaxRows"/> rows, and assembles a
     /// <see cref="ChecklistResult"/>. See data-contracts.md §4.1 and
     /// strategic-plan-backend.md §CAP-006 for the full contract.
     /// </summary>
+    /// <param name="request">Checklist request (project, comparatives, verse range, marker settings).</param>
+    /// <param name="projects">
+    /// Accepted for DI-friendly CAP-011 wiring and test-double compatibility.
+    /// Project resolution itself delegates to the static
+    /// <see cref="LocalParatextProjects.GetParatextProject(string)"/> helper
+    /// (which reads from <c>ScrTextCollection</c>); test doubles such as
+    /// <c>DummyLocalParatextProjects.FakeAddProject</c> register into that
+    /// same shared collection, so the static call succeeds in tests.
+    /// </param>
+    /// <param name="ct">Cancellation token; checked at entry and per book iteration (TS-062).</param>
     public static ChecklistResult BuildChecklistData(
         ChecklistRequest request,
         LocalParatextProjects projects,
         CancellationToken ct
     )
     {
-        _ = projects; // Project resolution uses the static LocalParatextProjects.GetParatextProject
-        // (ScrTextCollection under the hood) — the instance is kept on the signature
-        // for DI-friendly CAP-011 wiring and test-double compatibility
-        // (DummyLocalParatextProjects.FakeAddProject registers into the same collection).
-
         // Step 0a: honour pre-cancellation immediately (TS-062).
         ct.ThrowIfCancellationRequested();
 
@@ -111,12 +120,10 @@ internal static class ChecklistService
         // future CAP-011 concern; CAP-006 tests accept either path as long
         // as the thrown exception is not NotImplementedException).
         ScrText mainScrText = LocalParatextProjects.GetParatextProject(request.ProjectId);
-        var comparativeScrTexts = new List<ScrText>(request.ComparativeTextIds.Count);
-        foreach (string id in request.ComparativeTextIds)
-            comparativeScrTexts.Add(LocalParatextProjects.GetParatextProject(id));
-
-        var allScrTexts = new List<ScrText>(1 + comparativeScrTexts.Count) { mainScrText };
-        allScrTexts.AddRange(comparativeScrTexts);
+        List<ScrText> comparativeScrTexts = request
+            .ComparativeTextIds.Select(LocalParatextProjects.GetParatextProject)
+            .ToList();
+        List<ScrText> allScrTexts = [mainScrText, .. comparativeScrTexts];
 
         // Step 1: compute effective [startRef, endRef] (BHV-118) + VAL-003 adjustment.
         (VerseRef startRef, VerseRef endRef) = ResolveVerseRange(mainScrText, request.VerseRange);
@@ -139,80 +146,30 @@ internal static class ChecklistService
 
         // Step 4: per-column, per-book cell extraction with
         // MarkersDataSource.PostProcessParagraph applied per paragraph.
-        var columnsList = new List<List<ChecklistCell>>(allScrTexts.Count);
-        foreach (ScrText scrText in allScrTexts)
-        {
-            var columnCells = new List<ChecklistCell>();
-            ScrStylesheet stylesheet = scrText.DefaultStylesheet;
-            HashSet<string> paragraphMarkers = MarkersDataSource.ParagraphMarkers(
-                stylesheet,
-                markerFilter
-            );
-            HashSet<string> headingMarkers = MarkersDataSource.HeadingMarkers(stylesheet);
-            HashSet<string> nonHeadingMarkers = MarkersDataSource.NonHeadingParagraphMarkers(
-                stylesheet
-            );
-
-            foreach (int bookNum in bookNumbers)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                List<ChecklistParagraphTokens> paragraphs = GetTokensForBook(
+        List<List<ChecklistCell>> columnsList = allScrTexts
+            .Select(scrText =>
+                ExtractColumnCells(
                     scrText,
-                    bookNum,
-                    paragraphMarkers,
-                    headingMarkers,
-                    nonHeadingMarkers
-                );
-
-                List<ChecklistCell> cells = GetCellsForBook(
-                    scrText,
-                    bookNum,
+                    bookNumbers,
+                    markerFilter,
                     startRef,
                     endRef,
-                    paragraphs,
-                    request.ShowVerseText
-                );
-
-                foreach (ChecklistCell cell in cells)
-                    columnCells.Add(ApplyPostProcessParagraph(cell, request.ShowVerseText));
-            }
-
-            columnsList.Add(columnCells);
-        }
+                    request.ShowVerseText,
+                    ct
+                )
+            )
+            .ToList();
 
         // Step 5: row alignment via CAP-005 (always merging mode — INV-011).
         List<ChecklistRow> rows = ChecklistRowBuilder.BuildRowsMergingCells(columnsList);
 
         // Step 6-7: match detection + hideMatches filter (INV-002, INV-010).
-        int excludedCount = 0;
-        if (allScrTexts.Count <= 1)
-        {
-            // INV-002: single-column has nothing to compare — force every
-            // row IsMatch=true. hideMatches is effectively a no-op here
-            // (PT9 CLDataSource.cs:156-162).
-            for (int i = 0; i < rows.Count; i++)
-                rows[i] = rows[i] with { IsMatch = true };
-        }
-        else
-        {
-            // Multi-column: compute IsMatch via HasSameValue; when
-            // hideMatches=true, drop matching rows (backwards iteration for
-            // index stability — PT9 CLDataSource.cs:134-153).
-            for (int i = rows.Count - 1; i >= 0; i--)
-            {
-                bool isMatch = MarkersDataSource.HasSameValue(rows[i], markerMappings);
-                if (isMatch && request.HideMatches)
-                {
-                    rows.RemoveAt(i);
-                    excludedCount++;
-                }
-                else
-                {
-                    rows[i] = rows[i] with { IsMatch = isMatch };
-                }
-            }
-        }
+        int excludedCount = ApplyMatchDetectionAndFilter(
+            rows,
+            markerMappings,
+            columnCount: allScrTexts.Count,
+            hideMatches: request.HideMatches
+        );
 
         // Step 8: max-rows cap (INV-012 / EXT-015). PT10 addition.
         bool truncated = rows.Count > MaxRows;
@@ -220,9 +177,7 @@ internal static class ChecklistService
             rows = rows.Take(MaxRows).ToList();
 
         // Step 9: empty-result message (BHV-106 / INV-008).
-        IReadOnlyList<string> searchedBookNames = bookNumbers
-            .Select(b => Canon.BookNumberToId(b))
-            .ToList();
+        IReadOnlyList<string> searchedBookNames = bookNumbers.Select(Canon.BookNumberToId).ToList();
         EmptyResultMessage? emptyResultMessage = MarkersDataSource.PostProcessRows(
             rows,
             markerFilter,
@@ -230,9 +185,7 @@ internal static class ChecklistService
         );
 
         // Step 10: parallel ColumnHeaders / ColumnProjectIds (INV-C15).
-        var columnHeaders = new List<string>(allScrTexts.Count);
-        foreach (ScrText scrText in allScrTexts)
-            columnHeaders.Add(scrText.Name);
+        List<string> columnHeaders = allScrTexts.Select(s => s.Name).ToList();
 
         var columnProjectIds = new List<string>(1 + request.ComparativeTextIds.Count)
         {
@@ -252,18 +205,6 @@ internal static class ChecklistService
     }
 
     // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Checklists/CLDataSource.cs:16 (reportCount=300
-    //   constant for a different capping concern) plus the PT10 strategic
-    //   addition from EXT-015 (GetChecklistData max-rows cap).
-    // Maps to: INV-012 / EXT-015
-    /// <summary>
-    /// Maximum row count emitted by <see cref="BuildChecklistData"/>
-    /// (INV-012). Rows produced beyond this cap are truncated and
-    /// <see cref="ChecklistResult.Truncated"/> is set to <c>true</c>.
-    /// </summary>
-    private const int MaxRows = 5000;
-
-    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checklists/ChecklistsExtensions.cs:8-21
     //   (FirstVerseRef / LastVerseRef on ScrText)
     // Maps to: BHV-118 / VAL-003
@@ -280,9 +221,16 @@ internal static class ChecklistService
         ScriptureRange? range
     )
     {
-        VerseRef firstDefault = new VerseRef("GEN 1:0", mainScrText.Settings.Versification);
-        VerseRef lastDefault = new VerseRef("GEN 1:1", mainScrText.Settings.Versification);
-        lastDefault.BookNum = Canon.LastBook;
+        ScrVers versification = mainScrText.Settings.Versification;
+
+        // FirstVerseRef: first book, chapter 1, verse 0 (intro position).
+        var firstDefault = new VerseRef(Canon.FirstBook, 1, 0, versification);
+
+        // LastVerseRef: last book's last chapter's last verse. LastChapter /
+        // LastVerse are versification-aware computed properties that depend
+        // on the book/chapter already being set, so we seed chapter=1 and
+        // step upward.
+        var lastDefault = new VerseRef(Canon.LastBook, 1, 1, versification);
         lastDefault.ChapterNum = lastDefault.LastChapter;
         lastDefault.VerseNum = lastDefault.LastVerse;
 
@@ -354,13 +302,11 @@ internal static class ChecklistService
         if (requestedBookNumbers != null)
             return requestedBookNumbers;
 
-        var result = new List<int>();
-        foreach (int bookNum in mainScrText.Settings.BooksPresentSet.SelectedBookNumbers)
-        {
-            if (bookNum >= startRef.BookNum && bookNum <= endRef.BookNum)
-                result.Add(bookNum);
-        }
-        return result;
+        return mainScrText
+            .Settings.BooksPresentSet.SelectedBookNumbers.Where(bookNum =>
+                bookNum >= startRef.BookNum && bookNum <= endRef.BookNum
+            )
+            .ToList();
     }
 
     // === NEW IN PT10 ===
@@ -384,6 +330,124 @@ internal static class ChecklistService
         foreach (ChecklistParagraph paragraph in cell.Paragraphs)
             newParagraphs.Add(MarkersDataSource.PostProcessParagraph(paragraph, showVerseText));
         return cell with { Paragraphs = newParagraphs };
+    }
+
+    // === NEW IN PT10 ===
+    // Maps to: BHV-100 / BHV-101 / BHV-118 — CAP-006 orchestration Step 4.
+    //
+    // EXPLANATION:
+    // Per-column slice of the BuildChecklistData pipeline: derive the
+    // stylesheet-scoped marker sets once per column, then iterate the
+    // selected books, extract paragraphs (CAP-003), construct cells
+    // (CAP-004), and apply MarkersDataSource.PostProcessParagraph per
+    // paragraph (BHV-103). Cancellation is checked per book so long-running
+    // multi-book iterations (INV-012 scenario) remain interruptible.
+    /// <summary>
+    /// Extracts the list of <see cref="ChecklistCell"/>s for a single
+    /// project/column across every book in <paramref name="bookNumbers"/>.
+    /// Paragraphs are post-processed through
+    /// <see cref="MarkersDataSource.PostProcessParagraph"/> to enforce the
+    /// backslash-marker TextItem prefix (INV-004) and the
+    /// <paramref name="showVerseText"/> gate on trailing items (BHV-103).
+    /// </summary>
+    private static List<ChecklistCell> ExtractColumnCells(
+        ScrText scrText,
+        IReadOnlyList<int> bookNumbers,
+        HashSet<string> markerFilter,
+        VerseRef startRef,
+        VerseRef endRef,
+        bool showVerseText,
+        CancellationToken ct
+    )
+    {
+        ScrStylesheet stylesheet = scrText.DefaultStylesheet;
+        HashSet<string> paragraphMarkers = MarkersDataSource.ParagraphMarkers(
+            stylesheet,
+            markerFilter
+        );
+        HashSet<string> headingMarkers = MarkersDataSource.HeadingMarkers(stylesheet);
+        HashSet<string> nonHeadingMarkers = MarkersDataSource.NonHeadingParagraphMarkers(
+            stylesheet
+        );
+
+        var columnCells = new List<ChecklistCell>();
+        foreach (int bookNum in bookNumbers)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            List<ChecklistParagraphTokens> paragraphs = GetTokensForBook(
+                scrText,
+                bookNum,
+                paragraphMarkers,
+                headingMarkers,
+                nonHeadingMarkers
+            );
+
+            List<ChecklistCell> cells = GetCellsForBook(
+                scrText,
+                bookNum,
+                startRef,
+                endRef,
+                paragraphs,
+                showVerseText
+            );
+
+            foreach (ChecklistCell cell in cells)
+                columnCells.Add(ApplyPostProcessParagraph(cell, showVerseText));
+        }
+        return columnCells;
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/CLDataSource.cs:134-153 (BuildRows
+    //   backwards-iteration hideMatches drop) + :156-162 (single-column
+    //   IsMatch=true force).
+    // Maps to: INV-002 / INV-010 / BHV-104
+    //
+    // EXPLANATION:
+    // Mutates <paramref name="rows"/> in place with two branches:
+    //
+    //   - Single-column (columnCount <= 1): nothing to compare against, so
+    //     force IsMatch=true on every row (INV-002). hideMatches is a
+    //     no-op in this branch — PT9 CLDataSource.cs:156-162.
+    //
+    //   - Multi-column: backwards-iterate (index stability under
+    //     RemoveAt) and compute HasSameValue for each row. When
+    //     hideMatches is true, drop matching rows and accumulate
+    //     excludedCount; otherwise annotate each row with its IsMatch
+    //     verdict. PT9 CLDataSource.cs:134-153.
+    //
+    // Returns the number of rows that were dropped (always 0 in the
+    // single-column branch).
+    private static int ApplyMatchDetectionAndFilter(
+        List<ChecklistRow> rows,
+        Dictionary<string, List<string>> markerMappings,
+        int columnCount,
+        bool hideMatches
+    )
+    {
+        if (columnCount <= 1)
+        {
+            for (int i = 0; i < rows.Count; i++)
+                rows[i] = rows[i] with { IsMatch = true };
+            return 0;
+        }
+
+        int excludedCount = 0;
+        for (int i = rows.Count - 1; i >= 0; i--)
+        {
+            bool isMatch = MarkersDataSource.HasSameValue(rows[i], markerMappings);
+            if (isMatch && hideMatches)
+            {
+                rows.RemoveAt(i);
+                excludedCount++;
+            }
+            else
+            {
+                rows[i] = rows[i] with { IsMatch = isMatch };
+            }
+        }
+        return excludedCount;
     }
 
     // === PORTED FROM PT9 ===
