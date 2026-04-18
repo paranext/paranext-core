@@ -83,7 +83,9 @@ public class PlatformCommentThreadWrapper
                 // Track the source thread for each merged comment so IsCommentRead can use the
                 // correct CommentThread object when evaluating read status.
                 _mergedCommentSourceThreads ??= new Dictionary<string, CommentThread>();
-                _mergedCommentSourceThreads[comment.Id] = other._thread;
+                _mergedCommentSourceThreads[comment.Id] =
+                    other._mergedCommentSourceThreads?.GetValueOrDefault(comment.Id)
+                    ?? other._thread;
             }
         }
     }
