@@ -72,6 +72,7 @@ export function installViewZoomInput(opts: InstallOptions): () => void {
   }
 
   function onKeyDown(e: KeyboardEvent) {
+    if (e.repeat) return;
     if (!isModifier(e)) return;
     if (e.key === '=' || e.key === '+') {
       const key = resolveFocusedKey();
