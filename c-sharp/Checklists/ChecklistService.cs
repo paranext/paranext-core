@@ -255,8 +255,6 @@ internal static class ChecklistService
     /// </summary>
     /// <param name="activeProjectId">
     /// Active project ID; used for self-reference exclusion (INV-014).
-    /// Throws <see cref="Paratext.Data.ProjectNotFoundException"/> when the
-    /// ID does not resolve (§4.5 PROJECT_NOT_FOUND).
     /// </param>
     /// <param name="requestedTexts">
     /// Per-entry GUID+Name pairs to resolve; order is preserved in the
@@ -267,6 +265,20 @@ internal static class ChecklistService
     /// I/O, but we honor pre-cancellation for plumbing symmetry with
     /// <see cref="BuildChecklistData"/>.
     /// </param>
+    /// <returns>
+    /// A <see cref="ResolvedComparativeTexts"/> whose <c>Texts</c> list
+    /// mirrors the order of <paramref name="requestedTexts"/> with any
+    /// self-reference entries (matching <paramref name="activeProjectId"/>)
+    /// omitted. Entries that fail both GUID and name lookup are retained
+    /// with <c>Available=false</c> (data-contracts.md §3.10/§3.11).
+    /// </returns>
+    /// <exception cref="Paratext.Data.ProjectNotFoundException">
+    /// Thrown when <paramref name="activeProjectId"/> is not registered in
+    /// <see cref="ScrTextCollection"/> (§4.5 PROJECT_NOT_FOUND).
+    /// </exception>
+    /// <exception cref="System.OperationCanceledException">
+    /// Thrown when <paramref name="ct"/> is already cancelled at method entry.
+    /// </exception>
     public static ResolvedComparativeTexts ResolveComparativeTexts(
         string activeProjectId,
         IReadOnlyList<ComparativeTextRef> requestedTexts,
@@ -280,64 +292,71 @@ internal static class ChecklistService
         // error as a loud failure (not a silent empty result).
         ScrText active = LocalParatextProjects.GetParatextProject(activeProjectId);
 
+        // Step 2: per-entry GUID-first / name-fallback / self-exclusion
+        // cascade. ResolveSingleComparativeRef returns null to signal
+        // "self-reference — skip this entry" (INV-014).
         var resolved = new List<ResolvedComparativeText>(requestedTexts.Count);
-
         foreach (ComparativeTextRef requested in requestedTexts)
         {
-            // Step 2(a): GUID-first lookup via ScrTextCollection.FindById.
-            // HexId.FromStrSafe returns null on malformed input, which lets
-            // TS-047 (invalid-GUID → name-fallback) flow through without
-            // throwing. When the GUID is well-formed but not registered,
-            // FindById itself returns null — same downstream fallback.
-            HexId? guid = HexId.FromStrSafe(requested.Id);
-            ScrText? found = guid != null ? ScrTextCollection.FindById(guid) : null;
-
-            // Step 2(b): name-fallback when GUID didn't resolve. PT9
-            // `ScrTextCollection.Find` tolerates null/empty name (returns
-            // null per line 374-378 of ScrTextCollection.cs), but we guard
-            // explicitly to keep intent clear.
-            if (found == null && !string.IsNullOrEmpty(requested.Name))
-                found = ScrTextCollection.Find(requested.Name);
-
-            // Step 2(c): self-exclusion (INV-014). PT9 pattern: `p != scrText`
-            // reference equality. Instances registered via
-            // DummyLocalParatextProjects.FakeAddProject (and the real
-            // ScrTextCollection) are shared references, so reference equality
-            // matches both the GUID-path and the name-fallback path.
-            if (found != null && ReferenceEquals(found, active))
-                continue;
-
-            // Step 2(d): emit resolved record. Id is always preserved verbatim
-            // from the input (data-contracts.md §3.10 validation rule: "Id
-            // preserves the originally-requested GUID even when resolution
-            // fell back to name"). When resolved, Name/FullName mirror the
-            // ScrText; when unresolved, Name is preserved and FullName is
-            // empty (no source of truth for a full name).
-            if (found != null)
-            {
-                resolved.Add(
-                    new ResolvedComparativeText(
-                        Id: requested.Id,
-                        Name: found.Name,
-                        FullName: found.FullName,
-                        Available: true
-                    )
-                );
-            }
-            else
-            {
-                resolved.Add(
-                    new ResolvedComparativeText(
-                        Id: requested.Id,
-                        Name: requested.Name,
-                        FullName: string.Empty,
-                        Available: false
-                    )
-                );
-            }
+            ResolvedComparativeText? entry = ResolveSingleComparativeRef(requested, active);
+            if (entry != null)
+                resolved.Add(entry);
         }
 
         return new ResolvedComparativeTexts(Texts: resolved);
+    }
+
+    // Helper for ResolveComparativeTexts — see that method's provenance
+    // header for the PT9 source and PT10 deviations. Encapsulates the
+    // per-entry cascade:
+    //   (a) GUID-first lookup via FindById,
+    //   (b) name-fallback via Find,
+    //   (c) self-exclusion (INV-014) — returns null to signal "skip",
+    //   (d) emit the ResolvedComparativeText record.
+    // Returning ResolvedComparativeText? keeps the caller's loop a simple
+    // "append non-null" shape; a throwing sentinel would be wrong for a
+    // normal flow-control path.
+    private static ResolvedComparativeText? ResolveSingleComparativeRef(
+        ComparativeTextRef requested,
+        ScrText active
+    )
+    {
+        // Step 2(a): GUID-first lookup via ScrTextCollection.FindById.
+        // HexId.FromStrSafe returns null on malformed input, which lets
+        // TS-047 (invalid-GUID → name-fallback) flow through without
+        // throwing. When the GUID is well-formed but not registered,
+        // FindById itself returns null — same downstream fallback.
+        ScrText? found = HexId.FromStrSafe(requested.Id) is { } guid
+            ? ScrTextCollection.FindById(guid)
+            : null;
+
+        // Step 2(b): name-fallback when GUID didn't resolve. PT9
+        // `ScrTextCollection.Find` tolerates null/empty name (returns null
+        // per line 374-378 of ScrTextCollection.cs), but we guard explicitly
+        // to keep intent clear.
+        if (found == null && !string.IsNullOrEmpty(requested.Name))
+            found = ScrTextCollection.Find(requested.Name);
+
+        // Step 2(c): self-exclusion (INV-014). PT9 pattern: `p != scrText`
+        // reference equality. Instances registered via
+        // DummyLocalParatextProjects.FakeAddProject (and the real
+        // ScrTextCollection) are shared references, so reference equality
+        // matches both the GUID-path and the name-fallback path.
+        if (found != null && ReferenceEquals(found, active))
+            return null;
+
+        // Step 2(d): emit resolved record. Id is always preserved verbatim
+        // from the input (data-contracts.md §3.10 validation rule: "Id
+        // preserves the originally-requested GUID even when resolution fell
+        // back to name"). When resolved, Name/FullName mirror the ScrText;
+        // when unresolved, Name is preserved and FullName is empty (no source
+        // of truth for a full name).
+        return new ResolvedComparativeText(
+            Id: requested.Id,
+            Name: found?.Name ?? requested.Name,
+            FullName: found?.FullName ?? string.Empty,
+            Available: found != null
+        );
     }
 
     // === PORTED FROM PT9 ===
