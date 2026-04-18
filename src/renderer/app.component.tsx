@@ -71,6 +71,7 @@ function Main() {
         `${name} is deprecated. Use Ctrl/Cmd+= or Ctrl/Cmd+- (or Ctrl+scroll) on the focused view instead. The command remains as a shim that adjusts the focused view's zoom.`,
       );
     }
+    let zoomCommandsCancelled = false;
     const zoomCommandUnsubs: Array<() => Promise<unknown>> = [];
     (async () => {
       try {
@@ -79,12 +80,20 @@ function Main() {
           const key = resolveFocusedKey();
           if (key) viewZoomService.adjustZoom(key, +1);
         });
+        if (zoomCommandsCancelled) {
+          unsubIn().catch(() => undefined);
+          return;
+        }
         zoomCommandUnsubs.push(unsubIn);
         const unsubOut = await registerCommand('platform.zoomOut', async () => {
           warnDeprecatedZoomCommand('platform.zoomOut');
           const key = resolveFocusedKey();
           if (key) viewZoomService.adjustZoom(key, -1);
         });
+        if (zoomCommandsCancelled) {
+          unsubOut().catch(() => undefined);
+          return;
+        }
         zoomCommandUnsubs.push(unsubOut);
       } catch {
         // Non-fatal; the commands just won't be available.
@@ -111,6 +120,7 @@ function Main() {
     window.addEventListener('beforeunload', onBeforeUnload);
 
     return () => {
+      zoomCommandsCancelled = true;
       window.removeEventListener('beforeunload', onBeforeUnload);
       uninstall();
       zoomCommandUnsubs.forEach((unsub) => {

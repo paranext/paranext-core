@@ -104,7 +104,9 @@ const requestTimeoutValidator: SettingValidator<'platform.requestTimeout'> = asy
   return typeof newValue === 'number' && newValue >= 0 && newValue <= 60 * 60 * 24;
 };
 
-/** Info about all settings built into core. Does not contain info for extensions' settings */
+// Returns false (rather than throwing a localized error) because platform.viewZooms is
+// machine-managed and never shown in the settings UI. If it becomes user-editable, replace
+// the false returns with thrown localized errors, matching the interfaceMode pattern below.
 const viewZoomsValidator: SettingValidator<'platform.viewZooms'> = async (
   newValue: Record<string, number>,
 ): Promise<boolean> => {

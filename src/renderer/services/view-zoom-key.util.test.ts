@@ -2,7 +2,6 @@ import {
   getZoomKeyForTab,
   getZoomKeyForDialog,
   getDefaultKeyForInstance,
-  PER_INSTANCE_VIEW_TYPES,
   isPerInstanceKey,
 } from './view-zoom-key.util';
 
@@ -22,14 +21,13 @@ describe('view-zoom-key.util', () => {
   });
 
   it('uses per-instance key for editor-like webviews', () => {
-    PER_INSTANCE_VIEW_TYPES.add('platformScriptureEditor.editor');
     expect(
       getZoomKeyForTab({
         id: 'wv1',
         tabType: 'webView',
-        data: { webViewType: 'platformScriptureEditor.editor' },
+        data: { webViewType: 'platformScriptureEditor.react' },
       }),
-    ).toBe('platformScriptureEditor.editor:wv1');
+    ).toBe('platformScriptureEditor.react:wv1');
   });
 
   it('derives dialog key from component name', () => {
