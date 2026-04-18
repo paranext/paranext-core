@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -38,7 +39,15 @@ namespace Paranext.DataProvider.Checklists;
 /// </summary>
 internal class ChecklistNetworkObject : NetworkObject
 {
+    // Wire contract — pinned here as a single source of truth so the tuple
+    // list passed to RegisterNetworkObjectAsync and the FunctionNames array
+    // inside NetworkObjectCreatedDetails cannot drift apart. Order is
+    // alphabetical to match data-contracts.md §7.1/§7.2 and the CAP-011
+    // acceptance test's ExpectedFunctionNames.
     private const string NetworkObjectName = "platformScripture.checklistService";
+    private const string BuildMethodName = "buildChecklistData";
+    private const string ResolveMethodName = "resolveComparativeTexts";
+    private const string ValidateMethodName = "validateMarkerSettings";
 
     private readonly LocalParatextProjects _paratextProjects;
 
@@ -61,14 +70,14 @@ internal class ChecklistNetworkObject : NetworkObject
             NetworkObjectName,
             [
                 (
-                    "buildChecklistData",
-                    new System.Func<ChecklistRequest, CancellationToken, ChecklistResult>(
+                    BuildMethodName,
+                    new Func<ChecklistRequest, CancellationToken, ChecklistResult>(
                         BuildChecklistData
                     )
                 ),
                 (
-                    "resolveComparativeTexts",
-                    new System.Func<
+                    ResolveMethodName,
+                    new Func<
                         string,
                         IReadOnlyList<ComparativeTextRef>,
                         CancellationToken,
@@ -76,29 +85,36 @@ internal class ChecklistNetworkObject : NetworkObject
                     >(ResolveComparativeTexts)
                 ),
                 (
-                    "validateMarkerSettings",
-                    new System.Func<string, MarkerSettingsValidationResult>(ValidateMarkerSettings)
+                    ValidateMethodName,
+                    new Func<string, MarkerSettingsValidationResult>(ValidateMarkerSettings)
                 ),
             ],
             new NetworkObjectCreatedDetails
             {
                 Id = NetworkObjectName,
                 ObjectType = NetworkObjectType.OBJECT,
-                FunctionNames =
-                [
-                    "buildChecklistData",
-                    "resolveComparativeTexts",
-                    "validateMarkerSettings",
-                ],
+                FunctionNames = [BuildMethodName, ResolveMethodName, ValidateMethodName],
             }
         );
     }
 
+    /// <summary>
+    /// PAPI delegate target for <c>buildChecklistData</c>. Routes to
+    /// <see cref="ChecklistService.BuildChecklistData"/>, threading the
+    /// constructor-injected <see cref="LocalParatextProjects"/> collaborator
+    /// (hence an instance method — the other two routers can stay static).
+    /// Behaviour lives in <c>ChecklistService</c>; this is a transport shim.
+    /// </summary>
     private ChecklistResult BuildChecklistData(ChecklistRequest request, CancellationToken ct)
     {
         return ChecklistService.BuildChecklistData(request, _paratextProjects, ct);
     }
 
+    /// <summary>
+    /// PAPI delegate target for <c>resolveComparativeTexts</c>. Routes to the
+    /// stateless <see cref="ChecklistService.ResolveComparativeTexts"/>.
+    /// Behaviour lives in <c>ChecklistService</c>; this is a transport shim.
+    /// </summary>
     private static ResolvedComparativeTexts ResolveComparativeTexts(
         string activeProjectId,
         IReadOnlyList<ComparativeTextRef> requestedTexts,
@@ -108,6 +124,11 @@ internal class ChecklistNetworkObject : NetworkObject
         return ChecklistService.ResolveComparativeTexts(activeProjectId, requestedTexts, ct);
     }
 
+    /// <summary>
+    /// PAPI delegate target for <c>validateMarkerSettings</c>. Routes to the
+    /// stateless <see cref="MarkersDataSource.ValidateMarkerSettings"/>.
+    /// Behaviour lives in <c>MarkersDataSource</c>; this is a transport shim.
+    /// </summary>
     private static MarkerSettingsValidationResult ValidateMarkerSettings(string equivalentMarkers)
     {
         return MarkersDataSource.ValidateMarkerSettings(equivalentMarkers);
