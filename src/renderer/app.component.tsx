@@ -101,8 +101,10 @@ function Main() {
       }
     })();
 
-    // Flush any debounced zoom changes synchronously before the window unloads so a quick
-    // zoom-then-quit doesn't lose the user's last adjustment.
+    // Flush any debounced zoom changes before the window unloads so a quick zoom-then-quit
+    // doesn't lose the user's last adjustment. Note: flush() is async and beforeunload is
+    // synchronous, so the settings write is fire-and-forget; Electron usually allows enough
+    // time for the IPC to complete before teardown.
     const onBeforeUnload = () => {
       viewZoomService.flush();
     };

@@ -182,8 +182,17 @@ export function createViewZoomService(
   }
 
   function resetZoom(key: string) {
-    if (!state.has(key)) return;
-    state.delete(key);
+    if (isPerInstanceKeyLocal(key)) {
+      // Store DEFAULT_ZOOM_FACTOR explicitly rather than deleting. If we deleted, resolveKeyForRead
+      // would fall back to the __default entry (e.g. 1.4), making getZoom() inconsistent with the
+      // 1.0 value just sent to subscribers. A remounting component's useState initializer would
+      // then snap back to the stale __default instead of staying at the reset value.
+      if (getZoom(key) === DEFAULT_ZOOM_FACTOR) return;
+      state.set(key, DEFAULT_ZOOM_FACTOR);
+    } else {
+      if (!state.has(key)) return;
+      state.delete(key);
+    }
     notify(key, DEFAULT_ZOOM_FACTOR);
     schedulePersist();
   }
