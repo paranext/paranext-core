@@ -401,6 +401,19 @@ internal static class MarkersDataSource
     // `gm-002` `"*** Comparative texts have identical markers. ***"` pattern.
     //
     // Test spec: c-sharp-tests/Checklists/Markers/MarkerSettingsValidationTests.cs (22 tests).
+
+    /// <summary>
+    /// Canonical PT9 error literal returned by
+    /// <see cref="ValidateMarkerSettings(string)"/> when any token in the
+    /// input fails the "exactly one slash with non-empty sides" rule. Copied
+    /// byte-for-byte from PT9 <c>MarkerSettingsForm.cs:39</c>. Localization
+    /// is a UI-layer concern (lookup key <c>MarkerSettingsForm_1</c>); the
+    /// backend returns the canonical English string so the UI can display
+    /// it directly or substitute a localized variant.
+    /// </summary>
+    private const string InvalidMarkerPairErrorMessage =
+        "Equivalent markers need to be entered in the form: p/q";
+
     /// <summary>
     /// Validates a user-entered equivalent-markers string ("marker1/marker2"
     /// pairs separated by spaces). Returns a <see cref="MarkerSettingsValidationResult"/>
@@ -433,7 +446,7 @@ internal static class MarkersDataSource
                 return new MarkerSettingsValidationResult(
                     false,
                     null,
-                    "Equivalent markers need to be entered in the form: p/q"
+                    InvalidMarkerPairErrorMessage
                 );
             }
             pairs.Add(new MarkerPair(items[0], items[1]));
