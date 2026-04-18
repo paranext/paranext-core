@@ -1,14 +1,18 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using Paranext.DataProvider.Checklists.Markers;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checklists;
 
+// === NEW IN PT10 ===
+// Reason: PT9 passes project/settings/range through WinForms form fields and direct
+// ScrText access. PT10 requires a structured DTO that crosses the PAPI boundary.
+// Maps to: data-contracts.md §2.1 (ChecklistRequest)
 /// <summary>
-/// RED-phase skeleton — minimum type surface to satisfy compilation.
-/// The implementer must add <c>[method: JsonConstructor]</c> on the primary
-/// constructor and any validation/default-range logic per data-contracts.md §2.1.
+/// Checklist request DTO. Frozen at the PAPI boundary. See data-contracts.md §2.1.
 /// </summary>
+[method: JsonConstructor]
 public record ChecklistRequest(
     string ProjectId,
     IReadOnlyList<string> ComparativeTextIds,
@@ -19,10 +23,16 @@ public record ChecklistRequest(
     IReadOnlyList<int>? BookNumbers
 );
 
+// === NEW IN PT10 ===
+// Reason: PT9's `VerseRangeChooserForm` holds start/end VerseRefs in form state; the
+// PT10 PAPI payload needs a serializable record.
+// Maps to: data-contracts.md §2.1 (VerseRange field)
 /// <summary>
-/// RED-phase skeleton verse-range record. The implementer may choose to consolidate
-/// with the existing <c>c-sharp/Projects/CommentThreadSelector.cs</c>
-/// <c>ScriptureRange</c> or keep this Checklists-local variant — data-contracts.md
-/// §2.1 calls it out as <c>ScriptureRange?</c> in the <c>VerseRange</c> field.
+/// Scripture verse-range record used by <see cref="ChecklistRequest.VerseRange"/>.
+/// Serializes via the repo-wide <c>VerseRefConverter</c>. May be merged with the
+/// existing <c>c-sharp/Projects/CommentThreadSelector.cs</c> variant in a future
+/// refactor — for now lives in the Checklists namespace to satisfy the
+/// data-contracts §2.1 contract.
 /// </summary>
+[method: JsonConstructor]
 public record ScriptureRange(VerseRef Start, VerseRef? End);

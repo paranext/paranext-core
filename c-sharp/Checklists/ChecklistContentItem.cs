@@ -1,23 +1,36 @@
+using System.Text.Json.Serialization;
+
 namespace Paranext.DataProvider.Checklists;
 
+// === PORTED FROM PT9 ===
+// Source: PT9/Paratext/Checklists (CLText/CLVerse/CLEditLink/CLLink/CLError/CLMessage
+// content-item hierarchy)
+// Method: ChecklistContentItem (base type only; concrete subtypes in sibling files)
+// Maps to: EXT-010 (data models)
+//
+// EXPLANATION:
+// Polymorphic hierarchy over the PAPI boundary. The TypeScript side (data-contracts.md
+// §3.5) models these as a discriminated union with a lowercase `type` field literal
+// per subtype (`'text'`, `'verse'`, `'editLink'`, `'link'`, `'error'`, `'message'`).
+// On the C# side we mirror that wire shape with [JsonPolymorphic] +
+// [JsonDerivedType(...)] so System.Text.Json emits a `type` discriminator property on
+// serialize and routes to the correct subtype on deserialize.
+//
+// The explicit BE-1 early-verification test lives in
+// c-sharp-tests/Checklists/ChecklistContentItemPolymorphismTests.cs. If that suite
+// ever regresses, fall back to an explicit JsonConverter<ChecklistContentItem> and
+// escalate before BE-2 starts (per strategic-plan risk RF-SP).
 /// <summary>
-/// RED-phase skeleton for the polymorphic checklist content-item hierarchy.
-///
-/// <para>
-/// The implementer MUST add <c>[JsonDerivedType]</c> attributes to this base record
-/// (one per subtype) with a type discriminator so the <c>SerializationOptions</c>
-/// pipeline preserves subtype identity on a <c>List&lt;ChecklistContentItem&gt;</c>.
-/// The BE-1 polymorphism test in
-/// <c>c-sharp-tests/Checklists/ChecklistContentItemPolymorphismTests.cs</c>
-/// fails until that wiring is in place — this is the explicit early-verification
-/// checkpoint called out by the CAP-001 strategic plan.
-/// </para>
-///
-/// <para>
-/// If <c>[JsonDerivedType]</c> on positional records does not round-trip cleanly
-/// under System.Text.Json 8, the fallback is an explicit type-discriminator DTO;
-/// escalate that choice before BE-2 starts so downstream capabilities plan against
-/// the right shape.
-/// </para>
+/// Abstract base type for polymorphic checklist content items. Each concrete subtype
+/// lives in its own file alongside this base (per PNX004 one-type-per-file rule,
+/// with the exception that the base + subtype file colocation is still isolated
+/// across files here).
 /// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(TextItem), "text")]
+[JsonDerivedType(typeof(VerseItem), "verse")]
+[JsonDerivedType(typeof(EditLinkItem), "editLink")]
+[JsonDerivedType(typeof(LinkItem), "link")]
+[JsonDerivedType(typeof(ErrorItem), "error")]
+[JsonDerivedType(typeof(MessageItem), "message")]
 public abstract record ChecklistContentItem;

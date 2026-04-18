@@ -1,12 +1,24 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Paranext.DataProvider.Checklists;
 
+// === PORTED FROM PT9 ===
+// Source: PT9/Paratext/Checklists/CLData.cs (top-level result; rows/cells/paragraphs
+// carried through CLRow/CLCell/CLParagraph)
+// Method: ChecklistResult (CLData), ChecklistRow (CLRow), ChecklistCell (CLCell),
+// ChecklistParagraph (CLParagraph)
+// Maps to: EXT-010 (data models)
+//
+// EXPLANATION:
+// The four result records colocate in this file per data-contracts.md §3.2 — they are
+// exclusively used via ChecklistResult (PNX004 one-type-per-file exception). Each
+// carries [method: JsonConstructor] so System.Text.Json uses the primary constructor
+// on deserialize (matching the c-sharp/AppInfo.cs precedent for positional records).
 /// <summary>
-/// RED-phase skeleton for the top-level checklist result payload.
-/// Implementer must add <c>[method: JsonConstructor]</c> and any downstream
-/// invariant enforcement per data-contracts.md §3.1.
+/// Top-level checklist result payload. See data-contracts.md §3.1.
 /// </summary>
+[method: JsonConstructor]
 public record ChecklistResult(
     IReadOnlyList<ChecklistRow> Rows,
     IReadOnlyList<string> ColumnHeaders,
@@ -18,10 +30,9 @@ public record ChecklistResult(
 );
 
 /// <summary>
-/// RED-phase skeleton row record. Per data-contracts.md §3.2 this file is allowed
-/// to colocate row/cell/paragraph records because they are exclusively used by
-/// <see cref="ChecklistResult"/> (PNX004 exception).
+/// Single row of the checklist result. See data-contracts.md §3.2.
 /// </summary>
+[method: JsonConstructor]
 public record ChecklistRow(
     IReadOnlyList<ChecklistCell> Cells,
     bool IsMatch,
@@ -31,8 +42,9 @@ public record ChecklistRow(
 );
 
 /// <summary>
-/// RED-phase skeleton cell record. See data-contracts.md §3.3.
+/// Per-project cell within a row. See data-contracts.md §3.3.
 /// </summary>
+[method: JsonConstructor]
 public record ChecklistCell(
     IReadOnlyList<ChecklistParagraph> Paragraphs,
     string Reference,
@@ -42,8 +54,9 @@ public record ChecklistCell(
 );
 
 /// <summary>
-/// RED-phase skeleton paragraph record. See data-contracts.md §3.4.
-/// Per INV-004 the <c>Marker</c> field stores the marker without the backslash
-/// prefix; the display layer prepends it.
+/// Paragraph container within a cell. The <c>Marker</c> field stores the marker name
+/// WITHOUT the backslash prefix per INV-004 (display layer prepends the backslash).
+/// See data-contracts.md §3.4.
 /// </summary>
+[method: JsonConstructor]
 public record ChecklistParagraph(string Marker, IReadOnlyList<ChecklistContentItem> Items);
