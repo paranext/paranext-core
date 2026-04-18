@@ -159,6 +159,11 @@ export function CommentThread({
   // later flips back to false so stale pending assignments can't leak into submissions.
   const prevIsSelectedRef = useRef(isSelected);
   const pendingAssigneeIsAutoPopulatedRef = useRef(false);
+  // Tracks whether the user has explicitly chosen an assignee from the popover. Once set, auto-
+  // population is suppressed so that a subsequent `initialAssignedUser` change (triggered by
+  // another thread's submission updating `lastAssignedUser`) does not overwrite the choice.
+  // Reset when the thread collapses or when `canAssign` is revoked.
+  const userMadeManualSelectionRef = useRef(false);
   useEffect(() => {
     const justDeselected = prevIsSelectedRef.current && !isSelected;
     prevIsSelectedRef.current = isSelected;
@@ -168,11 +173,16 @@ export function CommentThread({
         setPendingCommentAssignedUser(undefined);
       }
       pendingAssigneeIsAutoPopulatedRef.current = false;
+      userMadeManualSelectionRef.current = false;
       return;
     }
 
     if (canAssign) {
-      if (!pendingAssigneeIsAutoPopulatedRef.current && initialAssignedUser !== undefined) {
+      if (
+        !pendingAssigneeIsAutoPopulatedRef.current &&
+        !userMadeManualSelectionRef.current &&
+        initialAssignedUser !== undefined
+      ) {
         setPendingCommentAssignedUser(initialAssignedUser);
         pendingAssigneeIsAutoPopulatedRef.current = true;
       }
@@ -182,6 +192,7 @@ export function CommentThread({
       // stale value so the submit handler doesn't send an unauthorized assignment.
       setPendingCommentAssignedUser(undefined);
       pendingAssigneeIsAutoPopulatedRef.current = false;
+      userMadeManualSelectionRef.current = false;
     }
   }, [isSelected, initialAssignedUser, canAssign]);
 
@@ -674,8 +685,10 @@ export function CommentThread({
                                       setPendingCommentAssignedUser(undefined);
                                     }
                                     // Manual selection supersedes the auto-populated value —
-                                    // don't treat it as stale if `canAssign` later flips.
+                                    // don't treat it as stale if `canAssign` later flips, and
+                                    // don't overwrite it if `initialAssignedUser` later changes.
                                     pendingAssigneeIsAutoPopulatedRef.current = false;
+                                    userMadeManualSelectionRef.current = true;
                                     setIsAssignPopoverOpen(false);
                                   }}
                                   className="tw-flex tw-items-center"
