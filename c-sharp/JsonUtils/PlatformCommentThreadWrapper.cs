@@ -18,6 +18,11 @@ public class PlatformCommentThreadWrapper
     }
 
     public string Id => _thread.Id;
+
+    /// <summary>
+    /// Gets all comments in this thread, including any comments merged from duplicate threads
+    /// during deduplication. Use this instead of accessing the underlying thread's comments directly.
+    /// </summary>
     public IEnumerable<PlatformCommentWrapper> Comments =>
         AllComments.Select(c => new PlatformCommentWrapper(c, this));
     public PtxUtils.Enum<NoteStatus> Status => _thread.Status;

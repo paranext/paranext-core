@@ -225,7 +225,7 @@ global.webViewComponent = function CommentListWebView({
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
 
-  const preparedThreads = useMemo<LegacyCommentThread[]>(() => {
+  const safeCommentThreads = useMemo<LegacyCommentThread[]>(() => {
     if (!commentThreads || isPlatformError(commentThreads)) return [];
     return commentThreads;
   }, [commentThreads]);
@@ -434,7 +434,7 @@ global.webViewComponent = function CommentListWebView({
 
       {/* Comments list */}
       <div className="tw-flex-1 tw-overflow-auto">
-        {preparedThreads.length === 0 ? (
+        {safeCommentThreads.length === 0 ? (
           <div className="tw-m-4 tw-flex tw-justify-center">
             <Label>
               {commentFilter === UNFILTERED && scopeFilter === UNFILTERED
@@ -445,7 +445,7 @@ global.webViewComponent = function CommentListWebView({
         ) : (
           <CommentList
             classNameForVerseText="scripture-font"
-            threads={preparedThreads}
+            threads={safeCommentThreads}
             currentUser={currentUserName}
             localizedStrings={localizedStrings}
             handleAddCommentToThread={handleAddCommentToThread}

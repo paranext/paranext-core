@@ -1963,14 +1963,16 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void GetCommentThreads_DefaultSelector_ExcludesBTAndSpellingByDefault()
         {
-            // Arrange - Create a regular comment
-            var comment = CreateTestComment("GEN", 1, 1, "Regular comment");
-            _provider.CreateComment(new PlatformCommentWrapper(comment));
+            // Arrange - Create one regular comment, one BT note, and one spelling note
+            var regularComment = CreateTestComment("GEN", 1, 1, "Regular comment");
+            _provider.CreateComment(new PlatformCommentWrapper(regularComment));
+            CreateBtNoteThread("bt-note-default", "GEN 1:1", "BT note text");
+            CreateSpellingNoteThread("spelling-note-default", "GEN 1:1", "Spelling note text");
 
-            // Act - Default selector has ExcludeBiblicalTermNotes=true & ExcludeSpellingNotes=true
+            // Act - Default selector excludes BT and spelling notes
             var threads = _provider.GetCommentThreads(new CommentThreadSelector());
 
-            // Assert - The regular comment should be returned (not filtered out)
+            // Assert - Only the regular comment survives the default filter
             Assert.That(threads, Has.Count.EqualTo(1));
             Assert.That(threads[0].IsBTNote, Is.False);
             Assert.That(threads[0].IsSpellingNote, Is.False);
@@ -1979,31 +1981,64 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void GetCommentThreads_ExcludeBTNotesFalse_DoesNotFilterBTNotes()
         {
-            // Arrange
-            var comment = CreateTestComment("GEN", 1, 1, "Regular comment");
-            _provider.CreateComment(new PlatformCommentWrapper(comment));
+            // Arrange - Create only a BT note
+            CreateBtNoteThread("bt-note-include", "GEN 1:1", "BT note text");
 
             // Act - Explicitly include BT notes
             var selector = new CommentThreadSelector { ExcludeBiblicalTermNotes = false };
             var threads = _provider.GetCommentThreads(selector);
 
-            // Assert - Should still return regular comments (at minimum)
-            Assert.That(threads, Has.Count.GreaterThanOrEqualTo(1));
+            // Assert - The BT note is returned
+            Assert.That(threads, Has.Count.EqualTo(1));
+            Assert.That(threads[0].IsBTNote, Is.True);
         }
 
         [Test]
         public void GetCommentThreads_ExcludeSpellingNotesFalse_DoesNotFilterSpellingNotes()
         {
-            // Arrange
-            var comment = CreateTestComment("GEN", 1, 1, "Regular comment");
-            _provider.CreateComment(new PlatformCommentWrapper(comment));
+            // Arrange - Create only a spelling note
+            CreateSpellingNoteThread("spelling-note-include", "GEN 1:1", "Spelling note text");
 
             // Act - Explicitly include spelling notes
             var selector = new CommentThreadSelector { ExcludeSpellingNotes = false };
             var threads = _provider.GetCommentThreads(selector);
 
-            // Assert - Should still return regular comments (at minimum)
-            Assert.That(threads, Has.Count.GreaterThanOrEqualTo(1));
+            // Assert - The spelling note is returned
+            Assert.That(threads, Has.Count.EqualTo(1));
+            Assert.That(threads[0].IsSpellingNote, Is.True);
+        }
+
+        /// <summary>
+        /// Creates a Biblical Term note by adding the biblical term tag to a comment and inserting it
+        /// directly into the project's CommentManager. <see cref="CommentThread.IsBTNote"/> is
+        /// determined by <see cref="CommentTag.biblicalTermTagId"/> in <see cref="Comment.TagsAddedIds"/>.
+        /// </summary>
+        private void CreateBtNoteThread(string threadId, string verseRefStr, string text)
+        {
+            Comment comment = new Comment(_scrText.User);
+            comment.Thread = threadId;
+            comment.VerseRefStr = verseRefStr;
+            comment.TagsAddedIds = new[] { CommentTag.biblicalTermTagId };
+            comment.SetContentsFromHtml(text);
+            CommentManager commentManager = CommentManager.Get(_scrText);
+            commentManager.AddComment(comment);
+            commentManager.SaveUser(comment.User, false);
+        }
+
+        /// <summary>
+        /// Creates a spelling note by adding the spelling tag to a comment and inserting it
+        /// directly into the project's CommentManager.
+        /// </summary>
+        private void CreateSpellingNoteThread(string threadId, string verseRefStr, string text)
+        {
+            Comment comment = new Comment(_scrText.User);
+            comment.Thread = threadId;
+            comment.VerseRefStr = verseRefStr;
+            comment.TagsAddedIds = new[] { CommentTag.spellingTagId };
+            comment.SetContentsFromHtml(text);
+            CommentManager commentManager = CommentManager.Get(_scrText);
+            commentManager.AddComment(comment);
+            commentManager.SaveUser(comment.User, false);
         }
 
         [Test]

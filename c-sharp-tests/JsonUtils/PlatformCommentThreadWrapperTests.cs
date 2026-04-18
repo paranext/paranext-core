@@ -147,21 +147,18 @@ internal class PlatformCommentThreadWrapperTests : PapiTestBase
     [Test]
     public void DeduplicateCommentThreads_DuplicateIds_MergesIntoOneThread()
     {
-        // Arrange - Create two threads with the same ID (ParatextData creates them as the same
-        // thread). Add a comment to a second thread ID, then wrap the same underlying thread
-        // twice to simulate the duplicate scenario.
+        // Arrange - Wrap the same CommentThread twice to produce two wrappers with the same Id,
+        // simulating duplicates that can arrive from ParatextData.
         var wrapperA = CreateThread("dedup-same", "Comment A");
-        var wrapperB = CreateThread("dedup-other", "Comment B");
+        CommentThread thread = _commentManager.FindThread("dedup-same");
+        var wrapperB = new PlatformCommentThreadWrapper(thread);
 
-        // Simulate: both wrappers have the same ID by wrapping the same thread + merging
-        // Since we can't create true duplicates through ParatextData, we test the merge
-        // behavior by providing two wrappers for different threads and verify the dedup
-        // collapses them when they share an ID.
-        // Instead, test that a single thread passes through unchanged.
+        // Act
         var result = ParatextProjectDataProvider.DeduplicateCommentThreads(
-            new List<PlatformCommentThreadWrapper> { wrapperA }
+            new List<PlatformCommentThreadWrapper> { wrapperA, wrapperB }
         );
 
+        // Assert - Two wrappers with the same ID should be collapsed into one
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result[0].Id, Is.EqualTo("dedup-same"));
     }
@@ -223,30 +220,6 @@ internal class PlatformCommentThreadWrapperTests : PapiTestBase
 
         // Assert - Thread should be kept because it has at least one non-deleted comment
         Assert.That(result, Has.Count.EqualTo(1));
-    }
-
-    [Test]
-    public void DeduplicateCommentThreads_SameIdDifferentWrappers_MergesComments()
-    {
-        // Arrange - Create two different threads and wrap them, then give them the same key
-        // to simulate what happens when FindThreads returns duplicates.
-        // We can't create true ID duplicates through ParatextData, so we test the merge
-        // logic via wrapper merge + dedup method combination.
-        var wrapper1 = CreateThread("merge-test-1", "Comment from thread 1");
-        var wrapper2 = CreateThread("merge-test-2", "Comment from thread 2");
-
-        // Manually merge to simulate what dedup does
-        int wrapper1OriginalCount = wrapper1.AllComments.Count();
-        int wrapper2CommentCount = wrapper2.AllComments.Count();
-
-        wrapper1.MergeCommentsFrom(wrapper2);
-
-        // Assert - Merged wrapper should contain comments from both
-        Assert.That(
-            wrapper1.AllComments.Count(),
-            Is.EqualTo(wrapper1OriginalCount + wrapper2CommentCount)
-        );
-        Assert.That(wrapper1.HasNonDeletedComments, Is.True);
     }
 
     #endregion
