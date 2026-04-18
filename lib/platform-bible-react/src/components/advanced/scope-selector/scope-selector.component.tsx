@@ -16,6 +16,7 @@ import {
 import { Label } from '@/components/shadcn-ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { Scope } from '@/components/utils/scripture.util';
+import { readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Circle, ChevronDown } from 'lucide-react';
@@ -25,7 +26,7 @@ import {
   formatScrRefRange,
   LocalizedStringValue,
 } from 'platform-bible-utils';
-import { KeyboardEvent, PointerEvent, useCallback, useState } from 'react';
+import { KeyboardEvent, PointerEvent, useCallback, useRef, useState } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -443,26 +444,41 @@ export function ScopeSelector({
   }, []);
 
   const [openSub, setOpenSub] = useState<Scope | undefined>(undefined);
+  const subTriggerRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Click-driven open for the submenu. Radix's SubTrigger also fires onOpenChange on hover, but
-  // we ignore open=true from onOpenChange (only honor close) — so explicit click / Enter / Space
-  // handlers are the only way the submenu opens, matching the requested UX.
-  const openSubmenu = useCallback(
+  // The SubMenu close UX differs from Radix's defaults. We ignore Radix's onOpenChange entirely
+  // and drive submenu state only via explicit user intent: click / Enter / Space on the trigger
+  // (toggle), Escape or ArrowLeft inside the sub-content (close), click outside (outer menu
+  // closes, see the outer `onOpenChange` below), or selecting another radio item (same path — the
+  // outer menu auto-dismisses on radio select). Radix's hover-away auto-close is what this
+  // component deliberately opts out of.
+  const toggleSubmenu = useCallback(
     (targetScope: Scope) => {
       handleScopeChange(targetScope);
-      setOpenSub(targetScope);
+      setOpenSub((prev) => (prev === targetScope ? undefined : targetScope));
     },
     [handleScopeChange],
   );
+
+  const closeSubmenuAndReturnFocus = useCallback(() => {
+    setOpenSub((prev) => {
+      if (!prev) return prev;
+      // Defer the focus so it lands after React tears down the sub-content and returns control
+      // to the parent menu — otherwise focus ends up on document.body.
+      const triggerEl = subTriggerRefs.current[prev];
+      requestAnimationFrame(() => triggerEl?.focus());
+      return undefined;
+    });
+  }, []);
 
   const handleSubTriggerKeyDown = useCallback(
     (targetScope: Scope) => (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        openSubmenu(targetScope);
+        toggleSubmenu(targetScope);
       }
     },
-    [openSubmenu],
+    [toggleSubmenu],
   );
 
   // Radix SubTrigger opens the submenu on `pointermove` (hover). preventDefault here blocks that
@@ -470,6 +486,46 @@ export function ScopeSelector({
   const handleSubTriggerPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
   }, []);
+
+  const handleSubContentKeyDownWithClose = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      // ArrowLeft in an LTR layout (and ArrowRight in RTL) is the canonical "back out of the
+      // submenu" gesture in menus. Honor it by closing + returning focus to the trigger.
+      const dir = readDirection();
+      const backKey = dir === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
+      if (event.key === backKey) {
+        // Only treat it as "back" when focus is on a plain menu element — if the user is typing
+        // inside a descendant popover (e.g. the BCV input) ArrowLeft should move the caret, not
+        // close the menu.
+        const active =
+          document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+        const inPortaledChild = !!active && !event.currentTarget.contains(active);
+        if (!inPortaledChild) {
+          event.preventDefault();
+          event.stopPropagation();
+          closeSubmenuAndReturnFocus();
+          return;
+        }
+      }
+      handleSubContentKeyDown(event);
+    },
+    [closeSubmenuAndReturnFocus, handleSubContentKeyDown],
+  );
+
+  const handleSubEscape = useCallback(
+    (event: globalThis.KeyboardEvent) => {
+      event.preventDefault();
+      closeSubmenuAndReturnFocus();
+    },
+    [closeSubmenuAndReturnFocus],
+  );
+
+  const assignSubTriggerRef = useCallback(
+    (targetScope: Scope) => (node: HTMLDivElement | null) => {
+      subTriggerRefs.current[targetScope] = node;
+    },
+    [],
+  );
 
   const renderSubSelectionDot = (subScope: Scope) =>
     scope === subScope ? (
@@ -483,7 +539,14 @@ export function ScopeSelector({
       <div className="tw-grid tw-gap-2">
         <Label>{scopeText}</Label>
         {variant === 'dropdown' ? (
-          <DropdownMenu>
+          <DropdownMenu
+            onOpenChange={(open) => {
+              // When the outer menu closes (click outside, Escape from the root, selecting a
+              // non-sub radio item), clear the submenu state so we don't reopen it stale next
+              // time the dropdown is opened.
+              if (!open) setOpenSub(undefined);
+            }}
+          >
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
@@ -519,16 +582,17 @@ export function ScopeSelector({
               {selectedBooksScope && (
                 <DropdownMenuSub
                   open={openSub === 'selectedBooks'}
-                  onOpenChange={(open) => {
-                    // Only honor the close direction. Ignoring open=true suppresses Radix's hover
-                    // and arrow-right auto-open; the submenu opens solely through our explicit
-                    // click / keyboard handlers on the trigger.
-                    if (!open) setOpenSub(undefined);
+                  onOpenChange={() => {
+                    // Intentional no-op: Radix would otherwise close the submenu on
+                    // hover-away. Closing is driven entirely by our explicit handlers — trigger
+                    // toggle, Escape / ArrowLeft inside the sub-content, and the outer
+                    // DropdownMenu's onOpenChange when the whole menu dismisses.
                   }}
                 >
                   <DropdownMenuSubTrigger
+                    ref={assignSubTriggerRef('selectedBooks')}
                     className={cn('tw-relative tw-ps-8')}
-                    onClick={() => openSubmenu('selectedBooks')}
+                    onClick={() => toggleSubmenu('selectedBooks')}
                     onKeyDown={handleSubTriggerKeyDown('selectedBooks')}
                     onPointerMove={handleSubTriggerPointerMove}
                     data-selected={scope === 'selectedBooks' ? 'true' : undefined}
@@ -539,7 +603,8 @@ export function ScopeSelector({
                   <DropdownMenuSubContent
                     className="tw-p-2"
                     sideOffset={4}
-                    onKeyDown={handleSubContentKeyDown}
+                    onKeyDown={handleSubContentKeyDownWithClose}
+                    onEscapeKeyDown={handleSubEscape}
                   >
                     <div className="tw-grid tw-gap-2">
                       <Label>{selectBooksText}</Label>
@@ -551,13 +616,14 @@ export function ScopeSelector({
               {rangeScope && (
                 <DropdownMenuSub
                   open={openSub === 'range'}
-                  onOpenChange={(open) => {
-                    if (!open) setOpenSub(undefined);
+                  onOpenChange={() => {
+                    // See selectedBooks sub — intentional no-op.
                   }}
                 >
                   <DropdownMenuSubTrigger
+                    ref={assignSubTriggerRef('range')}
                     className={cn('tw-relative tw-ps-8')}
-                    onClick={() => openSubmenu('range')}
+                    onClick={() => toggleSubmenu('range')}
                     onKeyDown={handleSubTriggerKeyDown('range')}
                     onPointerMove={handleSubTriggerPointerMove}
                     data-selected={scope === 'range' ? 'true' : undefined}
@@ -568,7 +634,8 @@ export function ScopeSelector({
                   <DropdownMenuSubContent
                     className="tw-p-2"
                     sideOffset={4}
-                    onKeyDown={handleSubContentKeyDown}
+                    onKeyDown={handleSubContentKeyDownWithClose}
+                    onEscapeKeyDown={handleSubEscape}
                   >
                     {rangeBlock}
                   </DropdownMenuSubContent>
