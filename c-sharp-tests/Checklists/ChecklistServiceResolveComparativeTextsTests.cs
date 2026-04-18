@@ -582,15 +582,37 @@ internal class ChecklistServiceResolveComparativeTextsTests : PapiTestBase
         // the RED stub (which throws NIE) cannot satisfy this assertion —
         // same tightening applied to CAP-006's equivalent error-path test
         // (see git commit 90facbea0e false-green audit note).
+        //
+        // Pattern: catch-then-assert (matches CAP-006
+        // BuildChecklistData_ProjectIdNotRegistered_SurfacesResolutionError).
+        // An earlier revision used the fluent form
+        // `Throws.Exception.And.Not.InstanceOf<NIE>()` but that NUnit 4.x
+        // fluent composition throws "Stack empty" at constraint-resolve time
+        // when a non-NIE exception is actually thrown — so we fall back to
+        // the canonical try/catch + two Assert.That calls.
+        Exception? caught = null;
+        try
+        {
+            ChecklistService.ResolveComparativeTexts(
+                activeProjectId: unregisteredActiveProjectId,
+                requestedTexts: requestedTexts,
+                ct: CancellationToken.None
+            );
+        }
+        catch (Exception ex)
+        {
+            caught = ex;
+        }
+
         Assert.That(
-            () =>
-                ChecklistService.ResolveComparativeTexts(
-                    activeProjectId: unregisteredActiveProjectId,
-                    requestedTexts: requestedTexts,
-                    ct: CancellationToken.None
-                ),
-            Throws.Exception.And.Not.InstanceOf<NotImplementedException>(),
-            "§4.5 Error Conditions — missing active project must not silently succeed (and RED stub's NotImplementedException does not count)"
+            caught,
+            Is.Not.Null,
+            "§4.5 Error Conditions — missing active project must surface as an error"
+        );
+        Assert.That(
+            caught,
+            Is.Not.InstanceOf<NotImplementedException>(),
+            "§4.5 Error Conditions — NotImplementedException is a RED-stub artifact, not the expected resolution error"
         );
     }
 }

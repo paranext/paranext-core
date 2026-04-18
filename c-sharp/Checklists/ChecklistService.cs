@@ -206,7 +206,7 @@ internal static class ChecklistService
         );
     }
 
-    // === PORTED FROM PT9 (stub) ===
+    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checklists/ChecklistsTool.cs:132-148
     //   (Initialize — comparative-text resolution slice).
     // Maps to: CAP-009 / BHV-605 / BHV-310 (backend slice) / INV-014 /
@@ -214,32 +214,130 @@ internal static class ChecklistService
     // Contract: data-contracts.md §4.5 (ResolveComparativeTexts) +
     //   §3.10 (ResolvedComparativeText) + §3.11 (ResolvedComparativeTexts)
     //
-    // RED STUB — throws NotImplementedException so the test assembly
-    // compiles. The tdd-implementer agent (CAP-009 GREEN) replaces this
-    // body with the GUID-first / name-fallback / self-exclusion logic.
-    // Precedent: CAP-006 BuildChecklistData RED stub (see git history
-    // commit 90facbea0e). Test file:
-    // c-sharp-tests/Checklists/ChecklistServiceResolveComparativeTextsTests.cs.
+    // EXPLANATION:
+    // PT9's Initialize slice (lines 139-147) performed three reductions:
+    //
+    //   (1) GUID-first lookup:
+    //         memento.ComparativeTextIds.Select(id =>
+    //           ScrTextCollection.FindById(id))
+    //             .Where(p => p != null && p != scrText).ToList()
+    //
+    //   (2) Name fallback (only when the GUID list was empty — PT9 stored
+    //       GUIDs AND names in separate arrays in ChecklistsToolsMemento):
+    //         memento.ComparativeTextNames?.Select(name =>
+    //           ScrTextCollection.Find(name)) ...
+    //
+    //   (3) Self-exclusion via reference-equality: `p != scrText`.
+    //
+    // PT10 deviations vs PT9:
+    //   - The PT10 wire contract pairs GUID and Name on a SINGLE
+    //     `ComparativeTextRef` record (§2.4), so the two PT9 paths merge
+    //     into a per-entry "try GUID, then name" cascade. This is the
+    //     INV-014 "GUID-first, name-fallback" rule.
+    //   - PT9 silently dropped unresolvable entries. PT10's §3.11 validation
+    //     rule instead keeps them in the result list with `Available=false`
+    //     so the UI can render a missing-project marker.
+    //   - `HexId.FromStrSafe` replaces direct `HexId.FromStr` because
+    //     CAP-009 tests deliberately feed malformed-GUID strings to exercise
+    //     the name-fallback path (TS-047); `FromStr` would throw on such
+    //     input, `FromStrSafe` returns null and lets us fall through.
+    //   - Active-project resolution uses the same
+    //     `LocalParatextProjects.GetParatextProject` helper as
+    //     `BuildChecklistData` (above) — throws `ProjectNotFoundException`
+    //     when the active projectId is not registered, satisfying the
+    //     §4.5 Error Conditions "PROJECT_NOT_FOUND" contract without
+    //     bespoke error construction.
     /// <summary>
     /// Resolves comparative text references to actual project information.
     /// Implements the GUID-first, name-fallback resolution strategy
     /// (INV-014). Returns resolved texts with their display names and
     /// availability status. See data-contracts.md §4.5.
     /// </summary>
+    /// <param name="activeProjectId">
+    /// Active project ID; used for self-reference exclusion (INV-014).
+    /// Throws <see cref="Paratext.Data.ProjectNotFoundException"/> when the
+    /// ID does not resolve (§4.5 PROJECT_NOT_FOUND).
+    /// </param>
+    /// <param name="requestedTexts">
+    /// Per-entry GUID+Name pairs to resolve; order is preserved in the
+    /// output (minus any self-reference entries).
+    /// </param>
+    /// <param name="ct">
+    /// Cancellation token; the resolution is an in-memory lookup with no
+    /// I/O, but we honor pre-cancellation for plumbing symmetry with
+    /// <see cref="BuildChecklistData"/>.
+    /// </param>
     public static ResolvedComparativeTexts ResolveComparativeTexts(
         string activeProjectId,
         IReadOnlyList<ComparativeTextRef> requestedTexts,
         CancellationToken ct
     )
     {
-        _ = activeProjectId;
-        _ = requestedTexts;
-        _ = ct;
-        throw new NotImplementedException(
-            "CAP-009 ResolveComparativeTexts — RED stub. "
-                + "Implement per data-contracts.md §4.5 and INV-014 "
-                + "(PT9 source: Paratext/Checklists/ChecklistsTool.cs:132-148)."
-        );
+        ct.ThrowIfCancellationRequested();
+
+        // Step 1: resolve active ScrText. On miss, GetParatextProject throws
+        // ProjectNotFoundException — surfacing the §4.5 PROJECT_NOT_FOUND
+        // error as a loud failure (not a silent empty result).
+        ScrText active = LocalParatextProjects.GetParatextProject(activeProjectId);
+
+        var resolved = new List<ResolvedComparativeText>(requestedTexts.Count);
+
+        foreach (ComparativeTextRef requested in requestedTexts)
+        {
+            // Step 2(a): GUID-first lookup via ScrTextCollection.FindById.
+            // HexId.FromStrSafe returns null on malformed input, which lets
+            // TS-047 (invalid-GUID → name-fallback) flow through without
+            // throwing. When the GUID is well-formed but not registered,
+            // FindById itself returns null — same downstream fallback.
+            HexId? guid = HexId.FromStrSafe(requested.Id);
+            ScrText? found = guid != null ? ScrTextCollection.FindById(guid) : null;
+
+            // Step 2(b): name-fallback when GUID didn't resolve. PT9
+            // `ScrTextCollection.Find` tolerates null/empty name (returns
+            // null per line 374-378 of ScrTextCollection.cs), but we guard
+            // explicitly to keep intent clear.
+            if (found == null && !string.IsNullOrEmpty(requested.Name))
+                found = ScrTextCollection.Find(requested.Name);
+
+            // Step 2(c): self-exclusion (INV-014). PT9 pattern: `p != scrText`
+            // reference equality. Instances registered via
+            // DummyLocalParatextProjects.FakeAddProject (and the real
+            // ScrTextCollection) are shared references, so reference equality
+            // matches both the GUID-path and the name-fallback path.
+            if (found != null && ReferenceEquals(found, active))
+                continue;
+
+            // Step 2(d): emit resolved record. Id is always preserved verbatim
+            // from the input (data-contracts.md §3.10 validation rule: "Id
+            // preserves the originally-requested GUID even when resolution
+            // fell back to name"). When resolved, Name/FullName mirror the
+            // ScrText; when unresolved, Name is preserved and FullName is
+            // empty (no source of truth for a full name).
+            if (found != null)
+            {
+                resolved.Add(
+                    new ResolvedComparativeText(
+                        Id: requested.Id,
+                        Name: found.Name,
+                        FullName: found.FullName,
+                        Available: true
+                    )
+                );
+            }
+            else
+            {
+                resolved.Add(
+                    new ResolvedComparativeText(
+                        Id: requested.Id,
+                        Name: requested.Name,
+                        FullName: string.Empty,
+                        Available: false
+                    )
+                );
+            }
+        }
+
+        return new ResolvedComparativeTexts(Texts: resolved);
     }
 
     // === PORTED FROM PT9 ===
