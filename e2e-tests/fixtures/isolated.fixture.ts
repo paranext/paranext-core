@@ -10,25 +10,22 @@ import { launchElectronApp, teardownElectronApp } from './helpers';
 export { expect } from '@playwright/test';
 
 /**
- * Isolated test fixtures — each **test file** gets its own Electron instance.
+ * Isolated test fixtures — each **test** gets its own Electron instance.
  *
- * ## One instance per file, not per test
+ * ## One instance per test
  *
- * All `test()` blocks within a single spec file share the same Electron process. This is
- * intentional: spinning up a fresh Electron instance takes 30+ seconds, so launching one per
- * `test()` block would make suites painfully slow.
+ * Every `test()` block launches and tears down its own Electron process. This gives full isolation
+ * between tests at the cost of startup time (30+ seconds per test).
  *
- * - **Tests that can share state** → put them in the same file. Use `test.step()` inside a single
- *   `test()` if you want granular reporting without the overhead of a separate Electron instance.
- * - **Tests that need a truly fresh Electron instance** → put them in separate `.spec.ts` files.
- *   Playwright treats each file as an independent worker, so each file launches and tears down its
- *   own Electron process.
+ * Use these fixtures when tests mutate application state in ways that would affect subsequent
+ * tests, or when you need a guaranteed clean slate. For tests that can tolerate shared state,
+ * consider a worker-scoped fixture instead so that all tests in a file share one Electron
+ * instance.
  *
  * The renderer connects to a shared webpack dev server (`localhost:1212`), and ES module state
  * (initialization guards, dock layout singletons, etc.) persists across navigations within the same
  * renderer process. A second Electron instance launched against the same dev-server renderer will
- * inherit stale module state, which prevents dock tabs from rendering correctly. Separate files
- * avoid this because each file's Electron process gets its own renderer.
+ * inherit stale module state, which prevents dock tabs from rendering correctly.
  */
 export interface IsolatedFixtures {
   electronApp: ElectronApplication;
@@ -36,9 +33,7 @@ export interface IsolatedFixtures {
 }
 
 export const test = base.extend<IsolatedFixtures>({
-  // Test-scoped fixture: Playwright creates one instance per test() block, but
-  // since all test() blocks in a file run in the same worker, they share this
-  // Electron process. See the IsolatedFixtures JSDoc for why this is intentional.
+  // Test-scoped fixture: Playwright launches one Electron instance per test() block.
   // Playwright fixtures require destructured parameter even when no dependencies are needed
   // eslint-disable-next-line no-empty-pattern
   electronApp: async ({}, use) => {

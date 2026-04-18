@@ -162,20 +162,6 @@ internal class CommentThreadSelectorConverterTests
     }
 
     [Test]
-    public void Deserialize_EmptyObject_IsEmptyTrue()
-    {
-        string json = @"{}";
-
-        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
-            json,
-            _serializationOptions
-        );
-
-        Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.IsEmpty, Is.True);
-    }
-
-    [Test]
     public void Deserialize_ExcludeBiblicalTermNotesFalse_OverridesDefault()
     {
         string json = @"{ ""excludeBiblicalTermNotes"": false }";

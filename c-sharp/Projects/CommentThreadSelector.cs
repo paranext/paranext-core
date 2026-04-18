@@ -44,19 +44,6 @@ public class CommentThreadSelector
     /// comments are deleted are dropped. Defaults to true.
     /// </summary>
     public bool DeduplicateThreads { get; set; } = true;
-
-    public bool IsEmpty =>
-        string.IsNullOrEmpty(ThreadId)
-        && Status == Enum<NoteStatus>.Null
-        && Type == null
-        && string.IsNullOrEmpty(Author)
-        && string.IsNullOrEmpty(AssignedTo)
-        && DateFilter == null
-        && (ScriptureRanges == null || ScriptureRanges.Count == 0)
-        && IsRead == null
-        && ExcludeBiblicalTermNotes
-        && ExcludeSpellingNotes
-        && DeduplicateThreads;
 }
 
 public class DateFilter

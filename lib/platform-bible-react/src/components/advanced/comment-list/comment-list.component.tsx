@@ -30,11 +30,13 @@ export default function CommentList({
 }: CommentListProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const [lastInteractedThreadId, setLastInteractedThreadId] = useState<string | undefined>();
-  const [lastAssignedUser, setLastAssignedUser] = useState<string | undefined>(undefined);
+  const [lastAssignedUser, setLastAssignedUser] = useState<string | undefined>();
 
   const handleAddCommentToThreadWithTracking = useCallback(
     async (options: AddCommentToThreadOptions) => {
       const result = await handleAddCommentToThread(options);
+      // result === undefined means the submission failed or produced no output; only update the
+      // last assigned user when the submission succeeded and an explicit assignment was made.
       if (result !== undefined && options.assignedUser !== undefined) {
         setLastAssignedUser(options.assignedUser);
       }

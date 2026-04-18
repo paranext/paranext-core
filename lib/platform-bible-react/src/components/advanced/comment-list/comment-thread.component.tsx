@@ -641,7 +641,9 @@ export function CommentThread({
                               assignableUsers.length === 0 ||
                               !assignableUsers.includes(currentUser)
                             }
-                            aria-label="Assign user"
+                            aria-label={
+                              localizedStrings['%comment_aria_assign_user%'] ?? 'Assign user'
+                            }
                           >
                             <AtSign />
                           </Button>
@@ -689,7 +691,9 @@ export function CommentThread({
                           !hasEditorContent(pendingCommentEditorState) &&
                           pendingCommentAssignedUser === undefined
                         }
-                        aria-label="Submit comment"
+                        aria-label={
+                          localizedStrings['%comment_aria_submit_comment%'] ?? 'Submit comment'
+                        }
                       >
                         <ArrowUp />
                       </Button>
