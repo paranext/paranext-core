@@ -1,6 +1,7 @@
 import { BookSelector } from '@/components/advanced/scope-selector/book-selector.component';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { BookChapterControlLocalizedStrings } from '@/components/advanced/book-chapter-control/book-chapter-control.types';
+import { getLocalizedBookId } from '@/components/shared/book.utils';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   DropdownMenu,
@@ -16,9 +17,11 @@ import {
 import { Label } from '@/components/shadcn-ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { Scope } from '@/components/utils/scripture.util';
+import { cn } from '@/utils/shadcn-ui.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { ChevronDown } from 'lucide-react';
-import { defaultScrRef, LocalizedStringValue } from 'platform-bible-utils';
+import { Circle, ChevronDown } from 'lucide-react';
+import { defaultScrRef, formatScrRefRange, LocalizedStringValue } from 'platform-bible-utils';
+import { KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -126,18 +129,24 @@ interface ScopeSelectorProps {
 
   /**
    * The start of the verse range. Only used when `scope === 'range'`. Defaults to `defaultScrRef`
-   * if not provided.
+   * (GEN 1:1) if neither this nor `currentScrRef` is provided.
    */
   rangeStart?: SerializedVerseRef;
   /**
-   * The end of the verse range. Only used when `scope === 'range'`. Defaults to `defaultScrRef` if
-   * not provided.
+   * The end of the verse range. Only used when `scope === 'range'`. Until the user manually changes
+   * this reference, it will mirror `rangeStart`. Defaults to `defaultScrRef` (GEN 1:1) if neither
+   * this nor `currentScrRef` is provided.
    */
   rangeEnd?: SerializedVerseRef;
   /** Callback when the range start reference changes. Required to make the range UI functional. */
   onRangeStartChange?: (scrRef: SerializedVerseRef) => void;
   /** Callback when the range end reference changes. Required to make the range UI functional. */
   onRangeEndChange?: (scrRef: SerializedVerseRef) => void;
+  /**
+   * Optional current scripture reference. When provided and no explicit `rangeStart` or `rangeEnd`
+   * is supplied, it is used as the initial value for the range controls.
+   */
+  currentScrRef?: SerializedVerseRef;
   /**
    * Optional localized strings passed to the range BCV controls. When omitted, the BCV controls
    * will fall back to their internal defaults.
@@ -148,6 +157,38 @@ interface ScopeSelectorProps {
    * the range BCV controls enable verse selection. See `BookChapterControlProps.getEndVerse`.
    */
   getEndVerse?: (bookId: string, chapterNum: number) => number;
+}
+
+/**
+ * Returns the tabbable descendants of a container, in document order. Used to implement manual Tab
+ * / Shift+Tab focus cycling inside a dropdown submenu where Radix otherwise closes the menu.
+ */
+function getTabbableElements(container: HTMLElement): HTMLElement[] {
+  const candidates = container.querySelectorAll<HTMLElement>(
+    'a[href], area[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  );
+  return Array.from(candidates).filter(
+    (el) =>
+      !el.hasAttribute('disabled') &&
+      el.tabIndex !== -1 &&
+      // `offsetParent` returns null for elements that are hidden (display:none) or detached — the
+      // standard browser hook for "not currently rendered / focusable"; there is no undefined form.
+      // eslint-disable-next-line no-null/no-null
+      el.offsetParent !== null,
+  );
+}
+
+/**
+ * Returns the next focus index when cycling Tab / Shift+Tab through a bounded list, wrapping around
+ * at both ends. Extracted so the focus handler stays free of nested ternaries.
+ */
+function computeNextFocusIndex(currentIndex: number, lastIndex: number, reverse: boolean): number {
+  if (reverse) {
+    if (currentIndex <= 0) return lastIndex;
+    return currentIndex - 1;
+  }
+  if (currentIndex === -1 || currentIndex === lastIndex) return 0;
+  return currentIndex + 1;
 }
 
 /**
@@ -171,6 +212,7 @@ export function ScopeSelector({
   rangeEnd,
   onRangeStartChange,
   onRangeEndChange,
+  currentScrRef,
   bookChapterControlLocalizedStrings,
   getEndVerse,
 }: ScopeSelectorProps) {
@@ -207,13 +249,67 @@ export function ScopeSelector({
     ? SCOPE_OPTIONS.filter((option) => availableScopes.includes(option.value))
     : SCOPE_OPTIONS;
 
-  const resolvedRangeStart = rangeStart ?? defaultScrRef;
-  const resolvedRangeEnd = rangeEnd ?? defaultScrRef;
+  // Default the BCV range pickers to either the caller-supplied current scripture reference or
+  // GEN 1:1. `rangeStart` / `rangeEnd` always win when explicitly provided so the component stays
+  // controlled.
+  const fallbackScrRef = currentScrRef ?? defaultScrRef;
+  const resolvedRangeStart = rangeStart ?? fallbackScrRef;
+  const resolvedRangeEnd = rangeEnd ?? fallbackScrRef;
 
-  const noopScrRefChange = () => {};
+  // Track whether the user has manually changed the range end. Until they do, the end ref mirrors
+  // the start ref so picking a start also moves the end — a convenient default for a brand-new
+  // range selection.
+  const rangeEndManuallyChangedRef = useRef(rangeEnd !== undefined);
+
+  // If the consumer swaps in a different end value out of band (e.g. switching contexts), treat
+  // that as "the caller is driving this" and stop auto-syncing.
+  useEffect(() => {
+    if (rangeEnd !== undefined) rangeEndManuallyChangedRef.current = true;
+  }, [rangeEnd]);
+
+  const handleRangeStartChange = useCallback(
+    (newStart: SerializedVerseRef) => {
+      onRangeStartChange?.(newStart);
+      if (!rangeEndManuallyChangedRef.current) {
+        onRangeEndChange?.(newStart);
+      }
+    },
+    [onRangeStartChange, onRangeEndChange],
+  );
+
+  const handleRangeEndChange = useCallback(
+    (newEnd: SerializedVerseRef) => {
+      rangeEndManuallyChangedRef.current = true;
+      onRangeEndChange?.(newEnd);
+    },
+    [onRangeEndChange],
+  );
 
   const currentScopeLabel =
     displayedScopes.find((option) => option.value === scope)?.label ?? scope;
+
+  // Trigger text used by the dropdown variant. For selectedBooks / range we show a more useful
+  // summary of the active selection so the user doesn't have to reopen the menu to recall it.
+  const renderTriggerContent = () => {
+    if (scope === 'selectedBooks' && selectedBookIds.length > 0) {
+      const joined = selectedBookIds
+        .map((bookId) => getLocalizedBookId(bookId, localizedBookNames))
+        .join(', ');
+      return joined;
+    }
+    if (scope === 'range') {
+      return formatScrRefRange(resolvedRangeStart, resolvedRangeEnd, {
+        optionOrLocalizedBookName: localizedBookNames
+          ? getLocalizedBookId(resolvedRangeStart.book, localizedBookNames)
+          : 'id',
+        endRefOptionOrLocalizedBookName: localizedBookNames
+          ? getLocalizedBookId(resolvedRangeEnd.book, localizedBookNames)
+          : 'id',
+        repeatBookName: true,
+      });
+    }
+    return currentScopeLabel;
+  };
 
   const simpleScopes = displayedScopes.filter(
     (option) => option.value !== 'selectedBooks' && option.value !== 'range',
@@ -238,7 +334,7 @@ export function ScopeSelector({
         <BookChapterControl
           id="scope-range-start"
           scrRef={resolvedRangeStart}
-          handleSubmit={onRangeStartChange ?? noopScrRefChange}
+          handleSubmit={handleRangeStartChange}
           localizedBookNames={localizedBookNames}
           localizedStrings={bookChapterControlLocalizedStrings}
           getEndVerse={getEndVerse}
@@ -249,7 +345,7 @@ export function ScopeSelector({
         <BookChapterControl
           id="scope-range-end"
           scrRef={resolvedRangeEnd}
-          handleSubmit={onRangeEndChange ?? noopScrRefChange}
+          handleSubmit={handleRangeEndChange}
           localizedBookNames={localizedBookNames}
           localizedStrings={bookChapterControlLocalizedStrings}
           getEndVerse={getEndVerse}
@@ -258,6 +354,55 @@ export function ScopeSelector({
       </div>
     </div>
   );
+
+  // Keyboard activation on SubTriggers. Radix's SubTrigger opens the sub on Enter/Space but does
+  // not fire onClick, so without this the active scope wouldn't update for keyboard users even
+  // though mouse users saw it work.
+  const handleSubTriggerKeyDown = useCallback(
+    (targetScope: Scope) => (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        onScopeChange(targetScope);
+      }
+    },
+    [onScopeChange],
+  );
+
+  // Keep Tab / Shift+Tab inside the open submenu. Radix's DropdownMenu closes on Tab by design,
+  // which both drops the user out of the menu and (via focus-loss) closes any BCV popover the
+  // user had opened. preventDefault stops Radix's handler via composeEventHandlers'
+  // defaultPrevented check; then we either keep focus pinned inside a portal'd child popover or
+  // cycle focus through the submenu's own controls.
+  const handleSubContentKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab') return;
+
+    event.preventDefault();
+
+    const subContent = event.currentTarget;
+    const active =
+      document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+
+    // If focus lives inside a descendant popover (portal'd outside the sub-content DOM subtree),
+    // leave it alone — closing that popover on Tab is exactly the behavior we are avoiding.
+    if (active && !subContent.contains(active)) return;
+
+    const focusTargets = getTabbableElements(subContent);
+    if (focusTargets.length === 0) return;
+
+    const currentIndex = active ? focusTargets.indexOf(active) : -1;
+    const lastIndex = focusTargets.length - 1;
+    const nextIndex = computeNextFocusIndex(currentIndex, lastIndex, event.shiftKey);
+
+    focusTargets[nextIndex]?.focus();
+  }, []);
+
+  const [openSub, setOpenSub] = useState<Scope | undefined>(undefined);
+
+  const renderSubSelectionDot = (subScope: Scope) =>
+    scope === subScope ? (
+      <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
+        <Circle className="tw-h-2 tw-w-2 tw-fill-current" />
+      </span>
+    ) : undefined;
 
   return (
     <div id={id} className="tw-grid tw-gap-4">
@@ -271,7 +416,7 @@ export function ScopeSelector({
                 role="combobox"
                 className="tw-w-full tw-justify-between tw-font-normal"
               >
-                <span className="tw-truncate tw-text-start">{currentScopeLabel}</span>
+                <span className="tw-truncate tw-text-start">{renderTriggerContent()}</span>
                 <ChevronDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
               </Button>
             </DropdownMenuTrigger>
@@ -294,14 +439,24 @@ export function ScopeSelector({
               </DropdownMenuRadioGroup>
               {(selectedBooksScope || rangeScope) && <DropdownMenuSeparator />}
               {selectedBooksScope && (
-                <DropdownMenuSub>
+                <DropdownMenuSub
+                  open={openSub === 'selectedBooks' ? true : undefined}
+                  onOpenChange={(open) => setOpenSub(open ? 'selectedBooks' : undefined)}
+                >
                   <DropdownMenuSubTrigger
+                    className={cn('tw-relative tw-ps-8')}
                     onClick={() => onScopeChange('selectedBooks')}
+                    onKeyDown={handleSubTriggerKeyDown('selectedBooks')}
                     data-selected={scope === 'selectedBooks' ? 'true' : undefined}
                   >
+                    {renderSubSelectionDot('selectedBooks')}
                     {selectedBooksScope.label}
                   </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="tw-p-2" sideOffset={4}>
+                  <DropdownMenuSubContent
+                    className="tw-p-2"
+                    sideOffset={4}
+                    onKeyDown={handleSubContentKeyDown}
+                  >
                     <div className="tw-grid tw-gap-2">
                       <Label>{selectBooksText}</Label>
                       {bookSelectorBlock}
@@ -310,14 +465,24 @@ export function ScopeSelector({
                 </DropdownMenuSub>
               )}
               {rangeScope && (
-                <DropdownMenuSub>
+                <DropdownMenuSub
+                  open={openSub === 'range' ? true : undefined}
+                  onOpenChange={(open) => setOpenSub(open ? 'range' : undefined)}
+                >
                   <DropdownMenuSubTrigger
+                    className={cn('tw-relative tw-ps-8')}
                     onClick={() => onScopeChange('range')}
+                    onKeyDown={handleSubTriggerKeyDown('range')}
                     data-selected={scope === 'range' ? 'true' : undefined}
                   >
+                    {renderSubSelectionDot('range')}
                     {rangeScope.label}
                   </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="tw-p-2" sideOffset={4}>
+                  <DropdownMenuSubContent
+                    className="tw-p-2"
+                    sideOffset={4}
+                    onKeyDown={handleSubContentKeyDown}
+                  >
                     {rangeBlock}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
