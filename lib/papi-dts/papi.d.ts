@@ -3489,9 +3489,17 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
-    /** Increase the zoom level of the entire UI */
+    /**
+     * @deprecated Use `Ctrl`/`Cmd` + `=` (or `Ctrl`/`Cmd` + scroll wheel) on the focused view
+     *   instead. This command remains as a temporary shim that adjusts the focused view's zoom by
+     *   one step, but it has no way to target a specific view and may be removed in a future
+     *   release. Per-view zoom is managed via the `platform.viewZooms` setting.
+     */
     'platform.zoomIn': () => Promise<void>;
-    /** Decrease the zoom level of the entire UI */
+    /**
+     * @deprecated Use `Ctrl`/`Cmd` + `-` (or `Ctrl`/`Cmd` + scroll wheel) on the focused view
+     *   instead. See `platform.zoomIn` for details.
+     */
     'platform.zoomOut': () => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
@@ -3593,10 +3601,12 @@ declare module 'papi-shared-types' {
      */
     'platform.requestTimeout': number;
     /**
-     * The zoom factor that applies to the entire application. 1.0 is the default. Allowed range is
-     * 0.5 to 3.0.
+     * Per-view zoom factors keyed by view type (e.g. `'platformScriptureEditor.editor'`,
+     * `'settings-tab'`, `'alert-dialog'`) or by `${webViewType}:${tabId}` for editor-like views
+     * where each instance zooms independently. Values are in the range [MIN_ZOOM_FACTOR,
+     * MAX_ZOOM_FACTOR]. Keys absent from this object render at 1.0.
      */
-    'platform.zoomFactor': number;
+    'platform.viewZooms': Record<string, number>;
     /**
      * The interface mode for the application. `simple` provides a streamlined experience, while
      * `power` exposes advanced features.
