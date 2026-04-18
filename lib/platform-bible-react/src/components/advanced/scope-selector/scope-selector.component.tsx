@@ -26,7 +26,7 @@ import {
   formatScrRefRange,
   LocalizedStringValue,
 } from 'platform-bible-utils';
-import { KeyboardEvent, PointerEvent, useCallback, useRef, useState } from 'react';
+import { KeyboardEvent, useCallback, useRef, useState } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -481,12 +481,6 @@ export function ScopeSelector({
     [toggleSubmenu],
   );
 
-  // Radix SubTrigger opens the submenu on `pointermove` (hover). preventDefault here blocks that
-  // path while still allowing click / keyboard activation to reach our other handlers.
-  const handleSubTriggerPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-  }, []);
-
   const handleSubContentKeyDownWithClose = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       // ArrowLeft in an LTR layout (and ArrowRight in RTL) is the canonical "back out of the
@@ -591,10 +585,11 @@ export function ScopeSelector({
                 >
                   <DropdownMenuSubTrigger
                     ref={assignSubTriggerRef('selectedBooks')}
-                    className={cn('tw-relative tw-ps-8')}
+                    // `focus:tw-text-accent-foreground` mirrors the simple RadioItems so the
+                    // hover effect is visually identical across the whole list.
+                    className={cn('tw-relative tw-ps-8 focus:tw-text-accent-foreground')}
                     onClick={() => toggleSubmenu('selectedBooks')}
                     onKeyDown={handleSubTriggerKeyDown('selectedBooks')}
-                    onPointerMove={handleSubTriggerPointerMove}
                     data-selected={scope === 'selectedBooks' ? 'true' : undefined}
                   >
                     {renderSubSelectionDot('selectedBooks')}
@@ -622,10 +617,11 @@ export function ScopeSelector({
                 >
                   <DropdownMenuSubTrigger
                     ref={assignSubTriggerRef('range')}
-                    className={cn('tw-relative tw-ps-8')}
+                    // `focus:tw-text-accent-foreground` mirrors the simple RadioItems so the
+                    // hover effect is visually identical across the whole list.
+                    className={cn('tw-relative tw-ps-8 focus:tw-text-accent-foreground')}
                     onClick={() => toggleSubmenu('range')}
                     onKeyDown={handleSubTriggerKeyDown('range')}
-                    onPointerMove={handleSubTriggerPointerMove}
                     data-selected={scope === 'range' ? 'true' : undefined}
                   >
                     {renderSubSelectionDot('range')}
