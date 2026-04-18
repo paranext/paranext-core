@@ -94,6 +94,9 @@ export function CommentThread({
   const [pendingCommentAssignedUser, setPendingCommentAssignedUser] = useState<string | undefined>(
     undefined,
   );
+  const [lastSubmittedAssignedUser, setLastSubmittedAssignedUser] = useState<string | undefined>(
+    undefined,
+  );
   const isVerseExpanded = isSelected;
   const [showAllReplies, setShowAllReplies] = useState<boolean>(false);
   const [isAnyCommentEditing, setIsAnyCommentEditing] = useState<boolean>(false);
@@ -171,6 +174,7 @@ export function CommentThread({
     if (!isSelected) {
       if (justDeselected) {
         setPendingCommentAssignedUser(undefined);
+        setLastSubmittedAssignedUser(undefined);
       }
       pendingAssigneeIsAutoPopulatedRef.current = false;
       userMadeManualSelectionRef.current = false;
@@ -360,6 +364,9 @@ export function CommentThread({
           // last assignee for subsequent replies, so the initialAssignedUser effect will re-populate
           // it after setLastAssignedUser propagates. Clearing it here causes a brief flicker where
           // the "Assigning to:" indicator disappears then immediately reappears.
+          // Instead, track what was submitted so the button stays disabled until the user makes
+          // a new change (new content or a different assignee selection).
+          setLastSubmittedAssignedUser(pendingCommentAssignedUser);
           if (contents) {
             clearEditor();
           }
@@ -603,7 +610,8 @@ export function CommentThread({
                         e.stopPropagation();
                         if (
                           hasEditorContent(pendingCommentEditorState) ||
-                          pendingCommentAssignedUser !== undefined
+                          (pendingCommentAssignedUser !== undefined &&
+                            pendingCommentAssignedUser !== lastSubmittedAssignedUser)
                         ) {
                           handleSubmitComment();
                         }
@@ -630,20 +638,22 @@ export function CommentThread({
                       }}
                     />
                     <div className="tw-flex tw-flex-row tw-items-center tw-justify-end tw-gap-2">
-                      {pendingCommentAssignedUser !== undefined && (
-                        <span className="tw-flex-1 tw-text-sm tw-text-muted-foreground">
-                          {formatReplacementString(
-                            localizedStrings['%comment_assigning_to%'] ??
-                              'Assigning to: {assignedUser}',
-                            {
-                              assignedUser: getAssignedUserDisplayName(
-                                pendingCommentAssignedUser,
-                                localizedStrings,
-                              ),
-                            },
-                          )}
-                        </span>
-                      )}
+                      {pendingCommentAssignedUser !== undefined &&
+                        (hasEditorContent(pendingCommentEditorState) ||
+                          pendingCommentAssignedUser !== lastSubmittedAssignedUser) && (
+                          <span className="tw-flex-1 tw-text-sm tw-text-muted-foreground">
+                            {formatReplacementString(
+                              localizedStrings['%comment_assigning_to%'] ??
+                                'Assigning to: {assignedUser}',
+                              {
+                                assignedUser: getAssignedUserDisplayName(
+                                  pendingCommentAssignedUser,
+                                  localizedStrings,
+                                ),
+                              },
+                            )}
+                          </span>
+                        )}
                       <Popover open={isAssignPopoverOpen} onOpenChange={setIsAssignPopoverOpen}>
                         <PopoverTrigger asChild>
                           <Button
@@ -687,8 +697,11 @@ export function CommentThread({
                                     // Manual selection supersedes the auto-populated value —
                                     // don't treat it as stale if `canAssign` later flips, and
                                     // don't overwrite it if `initialAssignedUser` later changes.
+                                    // Also clear last-submitted tracking so a re-selection always
+                                    // re-enables the submit button.
                                     pendingAssigneeIsAutoPopulatedRef.current = false;
                                     userMadeManualSelectionRef.current = true;
+                                    setLastSubmittedAssignedUser(undefined);
                                     setIsAssignPopoverOpen(false);
                                   }}
                                   className="tw-flex tw-items-center"
@@ -706,7 +719,8 @@ export function CommentThread({
                         className="tw-flex tw-items-center tw-justify-center tw-rounded-md"
                         disabled={
                           !hasEditorContent(pendingCommentEditorState) &&
-                          pendingCommentAssignedUser === undefined
+                          (pendingCommentAssignedUser === undefined ||
+                            pendingCommentAssignedUser === lastSubmittedAssignedUser)
                         }
                         aria-label={
                           localizedStrings['%comment_aria_submit_comment%'] ?? 'Submit comment'
