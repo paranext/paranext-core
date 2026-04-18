@@ -152,7 +152,7 @@ describe('view-zoom.service', () => {
     });
   });
 
-  it('resetZoom on a per-instance key leaves the per-type __default in place', async () => {
+  it('resetZoom on a per-instance key stores DEFAULT_ZOOM_FACTOR and leaves __default in place', async () => {
     const settings = makeSettingsStub();
     const svc = createViewZoomService(settings, {
       persistDebounceMs: 10,
@@ -164,10 +164,12 @@ describe('view-zoom.service', () => {
     svc.resetZoom('platformScriptureEditor.editor:tab1');
     await vi.advanceTimersByTimeAsync(10);
 
-    // The instance's own zoom is reset...
-    expect(svc.getZoom('platformScriptureEditor.editor:tab1')).toBeCloseTo(1.4, 5);
-    // ...but the value that it returns now comes from the per-type __default fallback.
+    // The instance is reset to DEFAULT_ZOOM_FACTOR, not the __default fallback.
+    // getZoom() is consistent with the value sent to subscribers at reset time.
+    expect(svc.getZoom('platformScriptureEditor.editor:tab1')).toBeCloseTo(1, 5);
+    // The per-type __default is untouched so new instances still inherit the last-used value.
     expect(settings.peekValue()).toEqual({
+      'platformScriptureEditor.editor:tab1': 1,
       'platformScriptureEditor.editor:__default': 1.4,
     });
   });

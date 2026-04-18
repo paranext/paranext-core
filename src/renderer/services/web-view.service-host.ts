@@ -1258,11 +1258,12 @@ async function openOrReloadWebView(
     const webViewIdForZoom = '${webView.id}';
     function postZoom(action, deltaSteps) {
       try {
-        // targetOrigin '/' restricts delivery to the same-origin parent (HTML/React webviews
-        // are same-origin with the host). Avoids leaking the message to unrelated origins.
+        // Use window.location.origin as targetOrigin so the message is only delivered to the
+        // same-origin parent. '/' is not a valid targetOrigin per the postMessage spec and may
+        // silently fail to deliver on some Chromium versions.
         parentWindow.postMessage(
           { type: 'view-zoom', action: action, deltaSteps: deltaSteps, webViewId: webViewIdForZoom },
-          '/',
+          window.location.origin,
         );
       } catch (e) {
         // Parent may be cross-origin or torn down; nothing to do.

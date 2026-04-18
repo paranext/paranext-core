@@ -41,6 +41,7 @@ export const platformSettings: SettingsContribution = [
         label: '%settings_platform_viewZooms_label%',
         description: '%settings_platform_viewZooms_description%',
         default: {},
+        isHidden: true,
       },
       'platform.interfaceMode': {
         label: '%settings_platform_interfaceMode_label%',
@@ -107,7 +108,7 @@ const requestTimeoutValidator: SettingValidator<'platform.requestTimeout'> = asy
 const viewZoomsValidator: SettingValidator<'platform.viewZooms'> = async (
   newValue: Record<string, number>,
 ): Promise<boolean> => {
-  if (!newValue || typeof newValue !== 'object') return false;
+  if (!newValue || typeof newValue !== 'object' || Array.isArray(newValue)) return false;
   return Object.values(newValue).every(
     (v) => typeof v === 'number' && v >= MIN_ZOOM_FACTOR && v <= MAX_ZOOM_FACTOR,
   );
