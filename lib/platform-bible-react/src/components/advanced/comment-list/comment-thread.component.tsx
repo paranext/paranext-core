@@ -345,7 +345,10 @@ export function CommentThread({
           assignedUser: pendingCommentAssignedUser,
         });
         if (success) {
-          setPendingCommentAssignedUser(undefined);
+          // Don't clear pendingCommentAssignedUser here — the feature intentionally persists the
+          // last assignee for subsequent replies, so the initialAssignedUser effect will re-populate
+          // it after setLastAssignedUser propagates. Clearing it here causes a brief flicker where
+          // the "Assigning to:" indicator disappears then immediately reappears.
           if (contents) {
             clearEditor();
           }
@@ -387,9 +390,10 @@ export function CommentThread({
       if (success && contents) {
         clearEditor();
       }
-      if (success && pendingCommentAssignedUser !== undefined) {
-        setPendingCommentAssignedUser(undefined);
-      }
+      // Don't clear pendingCommentAssignedUser here — the feature intentionally persists the
+      // last assignee for subsequent replies, so the initialAssignedUser effect will re-populate
+      // it after setLastAssignedUser propagates. Clearing it here causes a brief flicker where
+      // the "Assigning to:" indicator disappears then immediately reappears.
       return success;
     },
     [clearEditor, pendingCommentEditorState, handleAddCommentToThread, pendingCommentAssignedUser],
