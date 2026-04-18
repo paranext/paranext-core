@@ -19,7 +19,12 @@ import { Scope } from '@/components/utils/scripture.util';
 import { cn } from '@/utils/shadcn-ui.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Circle, ChevronDown } from 'lucide-react';
-import { defaultScrRef, formatScrRefRange, LocalizedStringValue } from 'platform-bible-utils';
+import {
+  defaultScrRef,
+  formatScrRef,
+  formatScrRefRange,
+  LocalizedStringValue,
+} from 'platform-bible-utils';
 import { KeyboardEvent, PointerEvent, useCallback, useState } from 'react';
 
 /**
@@ -236,11 +241,37 @@ export function ScopeSelector({
   const rangeStartText = localizeString(localizedStrings, '%webView_scope_selector_range_start%');
   const rangeEndText = localizeString(localizedStrings, '%webView_scope_selector_range_end%');
 
+  // For the verse / chapter / book scopes we append the current scripture reference to the label
+  // (e.g. "Verse: GEN 1:1") so the user can see at a glance what "current verse" actually is. When
+  // no `currentScrRef` is provided we fall through to the bare label.
+  const decorateScopeLabel = (scopeValue: Scope, baseLabel: string): string => {
+    if (!currentScrRef) return baseLabel;
+    const upperBook = currentScrRef.book.toUpperCase();
+    switch (scopeValue) {
+      case 'verse':
+        return `${baseLabel}: ${formatScrRef(currentScrRef, 'id')}`;
+      case 'chapter':
+        return `${baseLabel}: ${upperBook} ${currentScrRef.chapterNum}`;
+      case 'book':
+        return `${baseLabel}: ${upperBook}`;
+      default:
+        return baseLabel;
+    }
+  };
+
   const SCOPE_OPTIONS: Array<{ value: Scope; label: string; id: string }> = [
     { value: 'selectedText', label: selectedTextText, id: 'scope-selected-text' },
-    { value: 'verse', label: currentVerseText, id: 'scope-verse' },
-    { value: 'chapter', label: currentChapterText, id: 'scope-chapter' },
-    { value: 'book', label: currentBookText, id: 'scope-book' },
+    {
+      value: 'verse',
+      label: decorateScopeLabel('verse', currentVerseText),
+      id: 'scope-verse',
+    },
+    {
+      value: 'chapter',
+      label: decorateScopeLabel('chapter', currentChapterText),
+      id: 'scope-chapter',
+    },
+    { value: 'book', label: decorateScopeLabel('book', currentBookText), id: 'scope-book' },
     { value: 'selectedBooks', label: chooseBooksText, id: 'scope-selected' },
     { value: 'range', label: rangeText, id: 'scope-range' },
   ];
@@ -345,32 +376,54 @@ export function ScopeSelector({
     </div>
   );
 
-  // Keep Tab / Shift+Tab inside the open submenu. Radix's DropdownMenu closes on Tab by design,
-  // which both drops the user out of the menu and (via focus-loss) closes any BCV popover the
-  // user had opened. preventDefault stops Radix's handler via composeEventHandlers'
-  // defaultPrevented check; then we either keep focus pinned inside a portal'd child popover or
-  // cycle focus through the submenu's own controls.
+  // Keyboard handling inside a submenu. Two concerns:
+  //
+  //  1. Tab / Shift+Tab — Radix's DropdownMenu closes on Tab by design, which drops the user out
+  //     of the menu and (via focus-loss) also closes any BCV popover they had opened. We
+  //     preventDefault to stop Radix's handler (via composeEventHandlers' defaultPrevented check)
+  //     and then either pin focus inside a portal'd descendant popover or cycle focus through the
+  //     submenu's own controls.
+  //
+  //  2. Arrow keys — when a BCV popover is open inside the submenu, Radix's menu-navigation
+  //     handler hijacks ArrowUp/Down/Left/Right for item-to-item navigation, which prevents the
+  //     BCV's chapter / verse grid from responding. Because the event has already bubbled up
+  //     from BCV (whose own onKeyDown ran first and did whatever grid navigation was needed), we
+  //     just need to suppress Radix here: preventDefault blocks the composed Radix handler on
+  //     this element, stopPropagation prevents further bubbling to the outer DropdownMenuContent.
   const handleSubContentKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Tab') return;
-
-    event.preventDefault();
-
     const subContent = event.currentTarget;
     const active =
       document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+    const focusInsidePortaledChild = !!active && !subContent.contains(active);
 
-    // If focus lives inside a descendant popover (portal'd outside the sub-content DOM subtree),
-    // leave it alone — closing that popover on Tab is exactly the behavior we are avoiding.
-    if (active && !subContent.contains(active)) return;
+    if (event.key === 'Tab') {
+      event.preventDefault();
 
-    const focusTargets = getTabbableElements(subContent);
-    if (focusTargets.length === 0) return;
+      // If focus lives inside a descendant popover (portal'd outside the sub-content DOM
+      // subtree), leave it alone — closing that popover on Tab is the behavior we are avoiding.
+      if (focusInsidePortaledChild) return;
 
-    const currentIndex = active ? focusTargets.indexOf(active) : -1;
-    const lastIndex = focusTargets.length - 1;
-    const nextIndex = computeNextFocusIndex(currentIndex, lastIndex, event.shiftKey);
+      const focusTargets = getTabbableElements(subContent);
+      if (focusTargets.length === 0) return;
 
-    focusTargets[nextIndex]?.focus();
+      const currentIndex = active ? focusTargets.indexOf(active) : -1;
+      const lastIndex = focusTargets.length - 1;
+      const nextIndex = computeNextFocusIndex(currentIndex, lastIndex, event.shiftKey);
+
+      focusTargets[nextIndex]?.focus();
+      return;
+    }
+
+    if (
+      focusInsidePortaledChild &&
+      (event.key === 'ArrowUp' ||
+        event.key === 'ArrowDown' ||
+        event.key === 'ArrowLeft' ||
+        event.key === 'ArrowRight')
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
   }, []);
 
   const [openSub, setOpenSub] = useState<Scope | undefined>(undefined);

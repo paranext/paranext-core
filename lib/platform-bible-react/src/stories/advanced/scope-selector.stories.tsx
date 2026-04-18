@@ -26,6 +26,13 @@ const meta: Meta<typeof ScopeSelector> = {
   title: 'Advanced/Scope Selector',
   component: ScopeSelector,
   tags: ['autodocs'],
+  argTypes: {
+    variant: {
+      control: { type: 'radio' },
+      options: ['radio', 'dropdown'],
+      description: 'Visual layout of the scope options.',
+    },
+  },
   decorators: [
     (Story) => (
       <ThemeProvider>
@@ -60,9 +67,9 @@ export const BookScope: Story = {
           setSelectedBookIds(bookIds);
         }}
         localizedStrings={{
-          '%webView_scope_selector_current_book%': 'Current book',
-          '%webView_scope_selector_current_chapter%': 'Current chapter',
-          '%webView_scope_selector_current_verse%': 'Current verse',
+          '%webView_scope_selector_current_book%': 'Book',
+          '%webView_scope_selector_current_chapter%': 'Chapter',
+          '%webView_scope_selector_current_verse%': 'Verse',
           '%webView_scope_selector_scope%': 'Scope',
           '%webView_scope_selector_choose_books%': 'Choose specific books',
           '%webView_book_selector_books_selected%': 'books selected',
@@ -100,9 +107,9 @@ export const ChapterScope: Story = {
           setSelectedBookIds(bookIds);
         }}
         localizedStrings={{
-          '%webView_scope_selector_current_book%': 'Current book',
-          '%webView_scope_selector_current_chapter%': 'Current chapter',
-          '%webView_scope_selector_current_verse%': 'Current verse',
+          '%webView_scope_selector_current_book%': 'Book',
+          '%webView_scope_selector_current_chapter%': 'Chapter',
+          '%webView_scope_selector_current_verse%': 'Verse',
           '%webView_scope_selector_scope%': 'Scope',
           '%webView_scope_selector_choose_books%': 'Choose specific books',
         }}
@@ -138,9 +145,9 @@ export const VerseScope: Story = {
           setSelectedBookIds(bookIds);
         }}
         localizedStrings={{
-          '%webView_scope_selector_current_book%': 'Current book',
-          '%webView_scope_selector_current_chapter%': 'Current chapter',
-          '%webView_scope_selector_current_verse%': 'Current verse',
+          '%webView_scope_selector_current_book%': 'Book',
+          '%webView_scope_selector_current_chapter%': 'Chapter',
+          '%webView_scope_selector_current_verse%': 'Verse',
           '%webView_scope_selector_scope%': 'Scope',
           '%webView_scope_selector_choose_books%': 'Choose specific books',
         }}
@@ -158,9 +165,9 @@ export const VerseScope: Story = {
 };
 
 const rangeLocalizedStrings = {
-  '%webView_scope_selector_current_book%': 'Current book',
-  '%webView_scope_selector_current_chapter%': 'Current chapter',
-  '%webView_scope_selector_current_verse%': 'Current verse',
+  '%webView_scope_selector_current_book%': 'Book',
+  '%webView_scope_selector_current_chapter%': 'Chapter',
+  '%webView_scope_selector_current_verse%': 'Verse',
   '%webView_scope_selector_selected_text%': 'Selected text',
   '%webView_scope_selector_scope%': 'Scope',
   '%webView_scope_selector_choose_books%': 'Choose specific books',
@@ -196,6 +203,8 @@ export const DropdownVariant: Story = {
         onSelectedBookIdsChange={(bookIds: string[]) => setSelectedBookIds(bookIds)}
         localizedStrings={rangeLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
+        currentScrRef={{ book: 'MAT', chapterNum: 5, verseNum: 3 }}
+        getEndVerse={sampleGetEndVerse}
       />
     );
   },
@@ -251,12 +260,8 @@ export const DropdownVariantWithRange: Story = {
   render: () => {
     const [scope, setScope] = useState<Scope>('range');
     const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
-    const [rangeStart, setRangeStart] = useState<SerializedVerseRef>(defaultScrRef);
-    const [rangeEnd, setRangeEnd] = useState<SerializedVerseRef>({
-      book: 'REV',
-      chapterNum: 22,
-      verseNum: 21,
-    });
+    const [rangeStart, setRangeStart] = useState<SerializedVerseRef | undefined>(undefined);
+    const [rangeEnd, setRangeEnd] = useState<SerializedVerseRef | undefined>(undefined);
 
     return (
       <ScopeSelector
@@ -268,6 +273,7 @@ export const DropdownVariantWithRange: Story = {
         onSelectedBookIdsChange={(bookIds: string[]) => setSelectedBookIds(bookIds)}
         localizedStrings={rangeLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
+        currentScrRef={{ book: 'MAT', chapterNum: 5, verseNum: 3 }}
         rangeStart={rangeStart}
         rangeEnd={rangeEnd}
         onRangeStartChange={setRangeStart}
@@ -304,9 +310,9 @@ export const SelectedBooksScope: Story = {
           setSelectedBookIds(bookIds);
         }}
         localizedStrings={{
-          '%webView_scope_selector_current_book%': 'Current book',
-          '%webView_scope_selector_current_chapter%': 'Current chapter',
-          '%webView_scope_selector_current_verse%': 'Current verse',
+          '%webView_scope_selector_current_book%': 'Book',
+          '%webView_scope_selector_current_chapter%': 'Chapter',
+          '%webView_scope_selector_current_verse%': 'Verse',
           '%webView_scope_selector_scope%': 'Scope',
           '%webView_scope_selector_choose_books%': 'Choose specific books',
           '%webView_book_selector_books_selected%': 'books selected',
