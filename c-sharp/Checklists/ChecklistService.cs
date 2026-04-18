@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
+using Paranext.DataProvider.Checklists.Markers;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using PtxUtils;
@@ -26,20 +29,67 @@ namespace Paranext.DataProvider.Checklists;
 /// </summary>
 internal static class ChecklistService
 {
-    // === RED STUB (CAP-006 — BuildChecklistData) ===
-    // Status: test-writer RED. The test file
-    // c-sharp-tests/Checklists/ChecklistServiceBuildChecklistDataTests.cs
-    // pins the expected end-to-end pipeline behavior. The GREEN
-    // implementer replaces this stub with the orchestration pipeline
-    // (create data source -> extract tokens per book -> build cells ->
-    // align rows -> compare for matches -> filter), per
-    // strategic-plan-backend.md §CAP-006.
-    // Contract: data-contracts.md §4.1.
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/CLDataSource.cs:97-185 (CLDataSource.BuildRows)
+    //   plus :334-351 (GetCells start-ref adjustment / book loop) and
+    //   :356-363 (SelectedBooks).
+    // Maps to: EXT-001 (factory — inlined), EXT-002 (BuildRows), EXT-015
+    //   (maxRows cap) / BHV-100 / BHV-101 / BHV-118 / BHV-121
+    // Invariants: INV-002 (single column IsMatch=true), INV-010 (hideMatches
+    //   + ExcludedCount), INV-012 (max 5000 rows), INV-C15 (ColumnProjectIds
+    //   parallel to ColumnHeaders), VAL-003 (GEN 1:1 -> 1:0 adjustment).
+    //
+    // EXPLANATION (pipeline composition):
+    //
+    //   0. Resolve main ScrText + comparative ScrTexts via projects.
+    //   1. Compute [startRef, endRef] (BHV-118): defaults are
+    //      mainScrText.FirstVerseRef() / LastVerseRef() when the request's
+    //      VerseRange is null or its bounds are default VerseRefs. VAL-003
+    //      adjustment: if start is (GEN 1:1), rewrite to (GEN 1:0) so
+    //      intro material (\ip at verse 0) is included (PT9 CLDataSource
+    //      GetCells lines 344-345).
+    //   2. Parse marker settings via
+    //      MarkersDataSource.InitializeMarkerMappings(equivalentMarkers,
+    //      markerFilter) — yields (mappings, markerFilter).
+    //   3. Compute the iteration book list: request.BookNumbers when
+    //      non-null (empty-array honored as "no books"), else
+    //      mainScrText.Settings.BooksPresentSet.SelectedBookNumbers
+    //      intersected with [startRef.BookNum..endRef.BookNum] (PT9
+    //      SelectedBooks lines 356-363).
+    //   4. For each column (active first, then comparatives) and each
+    //      book, extract paragraphs (CAP-003 GetTokensForBook), build
+    //      cells (CAP-004 GetCellsForBook), and transform each paragraph
+    //      via MarkersDataSource.PostProcessParagraph (BHV-103: prepend
+    //      backslash-marker TextItem; when showVerseText=false, drop the
+    //      rest of the items). CancellationToken is checked at method
+    //      entry AND per book iteration (TS-062; replaces PT9's
+    //      Progress.Mgr.EndProgressIfCancelled).
+    //   5. Row alignment via CAP-005 BuildRowsMergingCells — always
+    //      merging mode (INV-011 Markers).
+    //   6. Match detection: single-column rows get IsMatch=true forced
+    //      (INV-002); multi-column rows use MarkersDataSource.HasSameValue
+    //      with the parsed mappings (BHV-104 + INV-005 bidirectional).
+    //   7. hideMatches filter (INV-010): when hideMatches=true AND
+    //      columns > 1, drop matching rows (backwards iteration for
+    //      index stability — PT9 CLDataSource.cs:134) and track
+    //      ExcludedCount.
+    //   8. Truncate to 5000 rows (INV-012 / EXT-015). PT10 addition —
+    //      PT9 had no such cap.
+    //   9. PostProcessRows (BHV-106 / INV-008): produces the
+    //      EmptyResultMessage when the final row list is empty.
+    //  10. Assemble ChecklistResult with parallel ColumnHeaders /
+    //      ColumnProjectIds (INV-C15).
+    //
+    // EditLinkItem is NOT emitted here — CAP-012 owns inline edit-link
+    // gating (see data-contracts.md §4.1 [Revised: 2026-04-14]).
     /// <summary>
-    /// Stub for the CAP-006 end-to-end orchestrator. Throws
-    /// <see cref="NotImplementedException"/> so every CAP-006 RED test
-    /// fails at runtime with a precise message. GREEN replaces the body
-    /// with the full pipeline.
+    /// End-to-end orchestrator for the Markers checklist pipeline. Resolves
+    /// the active project and any comparative texts via
+    /// <paramref name="projects"/>, extracts per-book marker paragraphs,
+    /// aligns them into rows, detects matches, optionally hides matching
+    /// rows, caps at <see cref="MaxRows"/> rows, and assembles a
+    /// <see cref="ChecklistResult"/>. See data-contracts.md §4.1 and
+    /// strategic-plan-backend.md §CAP-006 for the full contract.
     /// </summary>
     public static ChecklistResult BuildChecklistData(
         ChecklistRequest request,
@@ -47,14 +97,293 @@ internal static class ChecklistService
         CancellationToken ct
     )
     {
-        _ = request;
-        _ = projects;
-        _ = ct;
-        throw new NotImplementedException(
-            "CAP-006 ChecklistService.BuildChecklistData: not yet implemented. "
-                + "See PT9 Paratext/Checklists/CLDataSource.cs:97-185 and "
-                + "strategic-plan-backend.md §CAP-006."
+        _ = projects; // Project resolution uses the static LocalParatextProjects.GetParatextProject
+        // (ScrTextCollection under the hood) — the instance is kept on the signature
+        // for DI-friendly CAP-011 wiring and test-double compatibility
+        // (DummyLocalParatextProjects.FakeAddProject registers into the same collection).
+
+        // Step 0a: honour pre-cancellation immediately (TS-062).
+        ct.ThrowIfCancellationRequested();
+
+        // Step 0b: resolve active ScrText + comparative ScrTexts. A missing
+        // projectId surfaces as the underlying ScrTextCollection exception
+        // (TS-070 — the PROJECT_NOT_FOUND structured-error wrapping is a
+        // future CAP-011 concern; CAP-006 tests accept either path as long
+        // as the thrown exception is not NotImplementedException).
+        ScrText mainScrText = LocalParatextProjects.GetParatextProject(request.ProjectId);
+        var comparativeScrTexts = new List<ScrText>(request.ComparativeTextIds.Count);
+        foreach (string id in request.ComparativeTextIds)
+            comparativeScrTexts.Add(LocalParatextProjects.GetParatextProject(id));
+
+        var allScrTexts = new List<ScrText>(1 + comparativeScrTexts.Count) { mainScrText };
+        allScrTexts.AddRange(comparativeScrTexts);
+
+        // Step 1: compute effective [startRef, endRef] (BHV-118) + VAL-003 adjustment.
+        (VerseRef startRef, VerseRef endRef) = ResolveVerseRange(mainScrText, request.VerseRange);
+        startRef = ApplyStartRefIntroAdjustment(startRef);
+
+        // Step 2: parse marker settings (BHV-105 / INV-005 / VAL-001/005/006).
+        (Dictionary<string, List<string>> markerMappings, HashSet<string> markerFilter) =
+            MarkersDataSource.InitializeMarkerMappings(
+                request.MarkerSettings.EquivalentMarkers,
+                request.MarkerSettings.MarkerFilter
+            );
+
+        // Step 3: compute the iteration book list.
+        IReadOnlyList<int> bookNumbers = ResolveBookNumbers(
+            request.BookNumbers,
+            mainScrText,
+            startRef,
+            endRef
         );
+
+        // Step 4: per-column, per-book cell extraction with
+        // MarkersDataSource.PostProcessParagraph applied per paragraph.
+        var columnsList = new List<List<ChecklistCell>>(allScrTexts.Count);
+        foreach (ScrText scrText in allScrTexts)
+        {
+            var columnCells = new List<ChecklistCell>();
+            ScrStylesheet stylesheet = scrText.DefaultStylesheet;
+            HashSet<string> paragraphMarkers = MarkersDataSource.ParagraphMarkers(
+                stylesheet,
+                markerFilter
+            );
+            HashSet<string> headingMarkers = MarkersDataSource.HeadingMarkers(stylesheet);
+            HashSet<string> nonHeadingMarkers = MarkersDataSource.NonHeadingParagraphMarkers(
+                stylesheet
+            );
+
+            foreach (int bookNum in bookNumbers)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                List<ChecklistParagraphTokens> paragraphs = GetTokensForBook(
+                    scrText,
+                    bookNum,
+                    paragraphMarkers,
+                    headingMarkers,
+                    nonHeadingMarkers
+                );
+
+                List<ChecklistCell> cells = GetCellsForBook(
+                    scrText,
+                    bookNum,
+                    startRef,
+                    endRef,
+                    paragraphs,
+                    request.ShowVerseText
+                );
+
+                foreach (ChecklistCell cell in cells)
+                    columnCells.Add(ApplyPostProcessParagraph(cell, request.ShowVerseText));
+            }
+
+            columnsList.Add(columnCells);
+        }
+
+        // Step 5: row alignment via CAP-005 (always merging mode — INV-011).
+        List<ChecklistRow> rows = ChecklistRowBuilder.BuildRowsMergingCells(columnsList);
+
+        // Step 6-7: match detection + hideMatches filter (INV-002, INV-010).
+        int excludedCount = 0;
+        if (allScrTexts.Count <= 1)
+        {
+            // INV-002: single-column has nothing to compare — force every
+            // row IsMatch=true. hideMatches is effectively a no-op here
+            // (PT9 CLDataSource.cs:156-162).
+            for (int i = 0; i < rows.Count; i++)
+                rows[i] = rows[i] with { IsMatch = true };
+        }
+        else
+        {
+            // Multi-column: compute IsMatch via HasSameValue; when
+            // hideMatches=true, drop matching rows (backwards iteration for
+            // index stability — PT9 CLDataSource.cs:134-153).
+            for (int i = rows.Count - 1; i >= 0; i--)
+            {
+                bool isMatch = MarkersDataSource.HasSameValue(rows[i], markerMappings);
+                if (isMatch && request.HideMatches)
+                {
+                    rows.RemoveAt(i);
+                    excludedCount++;
+                }
+                else
+                {
+                    rows[i] = rows[i] with { IsMatch = isMatch };
+                }
+            }
+        }
+
+        // Step 8: max-rows cap (INV-012 / EXT-015). PT10 addition.
+        bool truncated = rows.Count > MaxRows;
+        if (truncated)
+            rows = rows.Take(MaxRows).ToList();
+
+        // Step 9: empty-result message (BHV-106 / INV-008).
+        IReadOnlyList<string> searchedBookNames = bookNumbers
+            .Select(b => Canon.BookNumberToId(b))
+            .ToList();
+        EmptyResultMessage? emptyResultMessage = MarkersDataSource.PostProcessRows(
+            rows,
+            markerFilter,
+            searchedBookNames
+        );
+
+        // Step 10: parallel ColumnHeaders / ColumnProjectIds (INV-C15).
+        var columnHeaders = new List<string>(allScrTexts.Count);
+        foreach (ScrText scrText in allScrTexts)
+            columnHeaders.Add(scrText.Name);
+
+        var columnProjectIds = new List<string>(1 + request.ComparativeTextIds.Count)
+        {
+            request.ProjectId,
+        };
+        columnProjectIds.AddRange(request.ComparativeTextIds);
+
+        return new ChecklistResult(
+            Rows: rows,
+            ColumnHeaders: columnHeaders,
+            ColumnProjectIds: columnProjectIds,
+            ExcludedCount: excludedCount,
+            HelpText: null,
+            Truncated: truncated,
+            EmptyResultMessage: emptyResultMessage
+        );
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/CLDataSource.cs:16 (reportCount=300
+    //   constant for a different capping concern) plus the PT10 strategic
+    //   addition from EXT-015 (GetChecklistData max-rows cap).
+    // Maps to: INV-012 / EXT-015
+    /// <summary>
+    /// Maximum row count emitted by <see cref="BuildChecklistData"/>
+    /// (INV-012). Rows produced beyond this cap are truncated and
+    /// <see cref="ChecklistResult.Truncated"/> is set to <c>true</c>.
+    /// </summary>
+    private const int MaxRows = 5000;
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/ChecklistsExtensions.cs:8-21
+    //   (FirstVerseRef / LastVerseRef on ScrText)
+    // Maps to: BHV-118 / VAL-003
+    //
+    // EXPLANATION:
+    // Mirrors PT9's pre-flight that converts the optional ScriptureRange
+    // carried on the request into a concrete [startRef, endRef] pair,
+    // falling back to mainScrText.FirstVerseRef() / LastVerseRef() when
+    // the request's bounds are null or default. `FirstVerseRef` returns
+    // "GEN 1:0" (intro verse) and `LastVerseRef` returns the final verse
+    // of the final book of the versification.
+    private static (VerseRef start, VerseRef end) ResolveVerseRange(
+        ScrText mainScrText,
+        ScriptureRange? range
+    )
+    {
+        VerseRef firstDefault = new VerseRef("GEN 1:0", mainScrText.Settings.Versification);
+        VerseRef lastDefault = new VerseRef("GEN 1:1", mainScrText.Settings.Versification);
+        lastDefault.BookNum = Canon.LastBook;
+        lastDefault.ChapterNum = lastDefault.LastChapter;
+        lastDefault.VerseNum = lastDefault.LastVerse;
+
+        if (range == null)
+            return (firstDefault, lastDefault);
+
+        VerseRef start = range.Start.IsDefault ? firstDefault : range.Start;
+        VerseRef end =
+            range.End == null || range.End.Value.IsDefault ? lastDefault : range.End.Value;
+        return (start, end);
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/CLDataSource.cs:344-345
+    //   (GetCells): `if (startRefNonNull.ChapterNum == 1 &&
+    //   startRefNonNull.VerseNum == 1) startRefNonNull.VerseNum = 0;`
+    // Maps to: VAL-003
+    //
+    // EXPLANATION:
+    // When the user-supplied start is (GEN 1:1), silently shift the verse
+    // to 0 so any intro paragraphs (\ip at verse 0) fall inside
+    // [startRef, endRef] inclusive. PT9 made this adjustment on the
+    // working copy of the ref at the cell-extraction gate; we apply it at
+    // the orchestrator level before cell extraction so every column sees
+    // the same expanded range. The ChapterNum check means the adjustment
+    // is ONLY applied at the GEN 1:1 boundary — any other (1:1) such as
+    // MAT 1:1 does NOT shift (PT9 semantic: the UI only ever passes
+    // GEN 1:1 as the "book start" sentinel).
+    //
+    // NOTE: PT9's condition is strictly `ChapterNum == 1 && VerseNum == 1`
+    // (no BookNum check) — meaning ANY book's 1:1 shifts to 1:0. This is
+    // safe because non-Genesis 1:1 starts are legitimate user choices
+    // where intro material is irrelevant; the test Group C pins the GEN
+    // case explicitly with `\ip` content. We preserve PT9's semantic.
+    private static VerseRef ApplyStartRefIntroAdjustment(VerseRef start)
+    {
+        if (start.ChapterNum == 1 && start.VerseNum == 1)
+        {
+            var adjusted = new VerseRef(start);
+            adjusted.VerseNum = 0;
+            return adjusted;
+        }
+        return start;
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/CLDataSource.cs:356-363
+    //   (CLDataSource.SelectedBooks)
+    // Maps to: BHV-118
+    //
+    // EXPLANATION:
+    // PT9 enumerated `baseScrText.Settings.BooksPresentSet.SelectedBookNumbers`
+    // intersected with `[startRef.BookNum..endRef.BookNum]`. PT10 exposes an
+    // explicit `request.BookNumbers` override for callers that want to scope
+    // the iteration (e.g. the UI's "this book only" button).
+    //
+    // Null vs empty-array distinction (INV-008 edge):
+    //   - null  -> "no caller preference" -> use BooksPresentSet.
+    //   - empty -> "caller explicitly asked for zero books" -> honour it.
+    //
+    // PT9's range filter is inclusive on both sides.
+    private static IReadOnlyList<int> ResolveBookNumbers(
+        IReadOnlyList<int>? requestedBookNumbers,
+        ScrText mainScrText,
+        VerseRef startRef,
+        VerseRef endRef
+    )
+    {
+        if (requestedBookNumbers != null)
+            return requestedBookNumbers;
+
+        var result = new List<int>();
+        foreach (int bookNum in mainScrText.Settings.BooksPresentSet.SelectedBookNumbers)
+        {
+            if (bookNum >= startRef.BookNum && bookNum <= endRef.BookNum)
+                result.Add(bookNum);
+        }
+        return result;
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: PT9 mutated CLParagraph.Items in place via
+    // PostProcessParagraph (CLParagraphCellsDataSource.cs:221-226). PT10
+    // ChecklistCell / ChecklistParagraph are immutable records, so we
+    // project the cell by rebuilding its Paragraphs with the MarkersDataSource
+    // post-processor applied to each.
+    // Maps to: Infrastructure for BHV-103
+    /// <summary>
+    /// Rebuilds <paramref name="cell"/> with each paragraph passed through
+    /// <see cref="MarkersDataSource.PostProcessParagraph"/> (which prepends
+    /// the backslash-marker TextItem at position 0 per INV-004). When
+    /// <paramref name="showVerseText"/> is false, the remainder of each
+    /// paragraph's items is dropped; when true, they are preserved after
+    /// the marker item.
+    /// </summary>
+    private static ChecklistCell ApplyPostProcessParagraph(ChecklistCell cell, bool showVerseText)
+    {
+        var newParagraphs = new List<ChecklistParagraph>(cell.Paragraphs.Count);
+        foreach (ChecklistParagraph paragraph in cell.Paragraphs)
+            newParagraphs.Add(MarkersDataSource.PostProcessParagraph(paragraph, showVerseText));
+        return cell with { Paragraphs = newParagraphs };
     }
 
     // === PORTED FROM PT9 ===
