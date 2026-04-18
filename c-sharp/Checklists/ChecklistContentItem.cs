@@ -22,9 +22,10 @@ namespace Paranext.DataProvider.Checklists;
 // escalate before BE-2 starts (per strategic-plan risk RF-SP).
 /// <summary>
 /// Abstract base type for polymorphic checklist content items. Each concrete subtype
-/// lives in its own file alongside this base (per PNX004 one-type-per-file rule,
-/// with the exception that the base + subtype file colocation is still isolated
-/// across files here).
+/// lives in its own file alongside this base (one type per file, per PNX004).
+/// Serializes/deserializes via the <c>type</c> discriminator wired by the
+/// <c>[JsonPolymorphic]</c> / <c>[JsonDerivedType]</c> attributes below, matching
+/// the TypeScript discriminated union in data-contracts.md §3.5.
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(TextItem), "text")]
