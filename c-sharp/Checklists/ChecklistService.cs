@@ -419,13 +419,20 @@ internal static class ChecklistService
 
         // Step 4: PT9 :379-428 — walk tokens.
         var state = new ScrParserState(scrText, vref);
-        bool textDisplayed = false;
-        _ = textDisplayed; // PT9 passes to CLVerse ctor; CAP-004's VerseItem doesn't carry it.
 
-        for (int i = 0; i < paragraphTokens.Tokens.Count; ++i)
+        // ScrParserState.UpdateState requires a concrete List<UsfmToken> (PT9
+        // ScrParserState.cs:46). CAP-003's GetTokensForBook always constructs
+        // a List<UsfmToken>, so the `as` cast succeeds on the hot path with
+        // zero allocations; the `?? ToList()` fallback keeps us honest
+        // against the record's IReadOnlyList<UsfmToken> contract if any future
+        // caller supplies a different implementation.
+        List<UsfmToken> tokensList =
+            paragraphTokens.Tokens as List<UsfmToken> ?? paragraphTokens.Tokens.ToList();
+
+        for (int i = 0; i < tokensList.Count; ++i)
         {
-            UsfmToken token = paragraphTokens.Tokens[i];
-            state.UpdateState((List<UsfmToken>)paragraphTokens.Tokens, i);
+            UsfmToken token = tokensList[i];
+            state.UpdateState(tokensList, i);
 
             if (token.Type == UsfmTokenType.Paragraph)
             {
@@ -439,10 +446,12 @@ internal static class ChecklistService
             else if (token.Type == UsfmTokenType.Text)
             {
                 // PT9 :406-411 — RTL prefix + CharTag.Marker as character style.
+                // PT9 also set a `textDisplayed` flag here that was passed to
+                // CLVerse's ctor; PT10's VerseItem doesn't carry that flag, so
+                // the write was dead and is omitted.
                 string text = scrText.RightToLeft ? StringUtils.rtlMarker + token.Text : token.Text;
                 string? characterStyle = state.CharTag != null ? state.CharTag.Marker : null;
                 items.Add(new TextItem(text, characterStyle));
-                textDisplayed = true;
             }
             else if (token.Type == UsfmTokenType.Verse)
             {
