@@ -220,4 +220,48 @@ internal static class ChecklistService
 
         return vref;
     }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/CLDataSource.cs:191-433
+    //   (CLDataSource.GetCellsForBook + BuildCLCell)
+    // Maps to: EXT-011 / BHV-114
+    //
+    // STUB — Test Writer RED skeleton for CAP-004.
+    // This stub exists solely so that CAP-004's RED tests
+    // (c-sharp-tests/Checklists/ChecklistServiceCellConstructionTests.cs) can
+    // COMPILE. Every call throws NotImplementedException — the Layer-2 RED
+    // signal. The Implementer for CAP-004 (BE-3) replaces this body with the
+    // full port. Matches the CAP-003 / CAP-007 precedent.
+    /// <summary>
+    /// Iterates <paramref name="paragraphs"/> (emitted by
+    /// <see cref="GetTokensForBook"/>), filters by
+    /// <c>ChecklistParagraphTokens.ReferenceInRange(startRef, endRef)</c>, and
+    /// constructs a <see cref="ChecklistCell"/> list whose content items are
+    /// produced by walking each paragraph's USFM tokens:
+    /// <list type="bullet">
+    /// <item><see cref="UsfmTokenType.Text"/> → <see cref="TextItem"/> (RTL
+    /// prefix applied when <c>scrText.RightToLeft</c>);</item>
+    /// <item><see cref="UsfmTokenType.Verse"/> → <see cref="VerseItem"/>;</item>
+    /// <item>Paragraphs sharing a <c>VerseRef</c> merge into one cell
+    /// (PT9 <c>AddContentToCurrentCell</c>).</item>
+    /// </list>
+    /// CAP-004 does NOT emit <see cref="EditLinkItem"/>; CAP-012 owns inline
+    /// emission under VAL-007. See data-contracts.md §4.1 (BHV-114 within
+    /// BuildChecklistData), §3.3–§3.5.
+    /// </summary>
+    public static List<ChecklistCell> GetCellsForBook(
+        ScrText scrText,
+        int bookNum,
+        VerseRef startRef,
+        VerseRef endRef,
+        List<ChecklistParagraphTokens> paragraphs,
+        bool showVerseText
+    )
+    {
+        throw new NotImplementedException(
+            "CAP-004 GetCellsForBook: not yet implemented. "
+                + "See PT9 Paratext/Checklists/CLDataSource.cs:191-433 "
+                + "(GetCellsForBook + BuildCLCell)."
+        );
+    }
 }
