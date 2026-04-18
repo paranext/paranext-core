@@ -34,6 +34,9 @@ import { KeyboardEvent, PointerEvent, useCallback, useState } from 'react';
  */
 export const SCOPE_SELECTOR_STRING_KEYS = Object.freeze([
   '%webView_scope_selector_selected_text%',
+  '%webView_scope_selector_verse%',
+  '%webView_scope_selector_chapter%',
+  '%webView_scope_selector_book%',
   '%webView_scope_selector_current_verse%',
   '%webView_scope_selector_current_chapter%',
   '%webView_scope_selector_current_book%',
@@ -225,6 +228,9 @@ export function ScopeSelector({
     localizedStrings,
     '%webView_scope_selector_selected_text%',
   );
+  const verseText = localizeString(localizedStrings, '%webView_scope_selector_verse%');
+  const chapterText = localizeString(localizedStrings, '%webView_scope_selector_chapter%');
+  const bookText = localizeString(localizedStrings, '%webView_scope_selector_book%');
   const currentVerseText = localizeString(
     localizedStrings,
     '%webView_scope_selector_current_verse%',
@@ -259,19 +265,29 @@ export function ScopeSelector({
     }
   };
 
-  const SCOPE_OPTIONS: Array<{ value: Scope; label: string; id: string }> = [
+  // Each option can optionally carry a `tooltip`. For the verse / chapter / book scopes we use the
+  // "Current X" localized strings so the user can hover to confirm the meaning (e.g. "Current
+  // verse") of the short decorated label ("Verse: GEN 1:1").
+  const SCOPE_OPTIONS: Array<{ value: Scope; label: string; id: string; tooltip?: string }> = [
     { value: 'selectedText', label: selectedTextText, id: 'scope-selected-text' },
     {
       value: 'verse',
-      label: decorateScopeLabel('verse', currentVerseText),
+      label: decorateScopeLabel('verse', verseText),
       id: 'scope-verse',
+      tooltip: currentVerseText,
     },
     {
       value: 'chapter',
-      label: decorateScopeLabel('chapter', currentChapterText),
+      label: decorateScopeLabel('chapter', chapterText),
       id: 'scope-chapter',
+      tooltip: currentChapterText,
     },
-    { value: 'book', label: decorateScopeLabel('book', currentBookText), id: 'scope-book' },
+    {
+      value: 'book',
+      label: decorateScopeLabel('book', bookText),
+      id: 'scope-book',
+      tooltip: currentBookText,
+    },
     { value: 'selectedBooks', label: chooseBooksText, id: 'scope-selected' },
     { value: 'range', label: rangeText, id: 'scope-range' },
   ];
@@ -493,8 +509,8 @@ export function ScopeSelector({
                   if (match) handleScopeChange(match.value);
                 }}
               >
-                {simpleScopes.map(({ value, label, id: scopeId }) => (
-                  <DropdownMenuRadioItem key={scopeId} value={value}>
+                {simpleScopes.map(({ value, label, id: scopeId, tooltip }) => (
+                  <DropdownMenuRadioItem key={scopeId} value={value} title={tooltip}>
                     {label}
                   </DropdownMenuRadioItem>
                 ))}
@@ -566,8 +582,8 @@ export function ScopeSelector({
             onValueChange={handleScopeChange}
             className="tw-flex tw-flex-col tw-space-y-1"
           >
-            {displayedScopes.map(({ value, label, id: scopeId }) => (
-              <div key={scopeId} className="tw-flex tw-items-center">
+            {displayedScopes.map(({ value, label, id: scopeId, tooltip }) => (
+              <div key={scopeId} className="tw-flex tw-items-center" title={tooltip}>
                 <RadioGroupItem className="tw-me-2" value={value} id={scopeId} />
                 <Label htmlFor={scopeId}>{label}</Label>
               </div>
