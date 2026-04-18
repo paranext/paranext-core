@@ -1,3 +1,6 @@
+using System;
+using System.Threading;
+using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using PtxUtils;
 using SIL.Scripture;
@@ -23,6 +26,37 @@ namespace Paranext.DataProvider.Checklists;
 /// </summary>
 internal static class ChecklistService
 {
+    // === RED STUB (CAP-006 — BuildChecklistData) ===
+    // Status: test-writer RED. The test file
+    // c-sharp-tests/Checklists/ChecklistServiceBuildChecklistDataTests.cs
+    // pins the expected end-to-end pipeline behavior. The GREEN
+    // implementer replaces this stub with the orchestration pipeline
+    // (create data source -> extract tokens per book -> build cells ->
+    // align rows -> compare for matches -> filter), per
+    // strategic-plan-backend.md §CAP-006.
+    // Contract: data-contracts.md §4.1.
+    /// <summary>
+    /// Stub for the CAP-006 end-to-end orchestrator. Throws
+    /// <see cref="NotImplementedException"/> so every CAP-006 RED test
+    /// fails at runtime with a precise message. GREEN replaces the body
+    /// with the full pipeline.
+    /// </summary>
+    public static ChecklistResult BuildChecklistData(
+        ChecklistRequest request,
+        LocalParatextProjects projects,
+        CancellationToken ct
+    )
+    {
+        _ = request;
+        _ = projects;
+        _ = ct;
+        throw new NotImplementedException(
+            "CAP-006 ChecklistService.BuildChecklistData: not yet implemented. "
+                + "See PT9 Paratext/Checklists/CLDataSource.cs:97-185 and "
+                + "strategic-plan-backend.md §CAP-006."
+        );
+    }
+
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checklists/CLParagraphCellsDataSource.cs:50-91
     //   (CLParagraphCellsDataSource.GetTokensForBook)
