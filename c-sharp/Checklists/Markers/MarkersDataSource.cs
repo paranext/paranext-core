@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Paratext.Data;
 
 namespace Paranext.DataProvider.Checklists.Markers;
@@ -347,42 +348,98 @@ internal static class MarkersDataSource
         Func<ScrTag, bool> predicate
     ) => new(stylesheet.Tags.Where(predicate).Select(tag => tag.Marker));
 
-    // === RED-PHASE STUB (CAP-007) ===
-    // Source: PT9/Paratext/Checklists/MarkerSettingsForm.cs:28-49 (btnOk_Click)
-    // Method: ValidateMarkerSettings
-    // Maps to: EXT-019 / BHV-105 / BHV-312 / VAL-002
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Checklists/MarkerSettingsForm.cs:28-49
+    // Method: MarkerSettingsForm.btnOk_Click(object, EventArgs)
+    // Maps to: EXT-019 / BHV-105 / BHV-312 (backend branch) / VAL-002
     //
-    // This method intentionally throws to drive the RED signal for CAP-007.
-    // The GREEN implementer will port PT9's btnOk_Click validation logic:
-    //   1. null -> treat as empty (PT9 line 30: `?? ""`)
-    //   2. Trim + collapse spaces (PT9 line 31: Regex.Replace(" +", " "))
-    //   3. Empty -> Valid=true with empty ParsedPairs (PT9 line 32-45 skipped)
-    //   4. For each space-split token: split('/'); require exactly 2 parts
-    //      AND both sides non-empty after trim
-    //   5. On first invalid pair: Valid=false, ErrorMessage=PT9 literal
-    //      "Equivalent markers need to be entered in the form: p/q"
-    //   6. On success: Valid=true with one MarkerPair per token (source order)
+    // EXPLANATION:
+    // Ports PT9's Settings-dialog pre-commit validator as a pure function. The
+    // UI-layer concerns (Alert.Show, DialogResult.OK, control-read/write) are
+    // stripped; the pass/fail outcome is returned as a structured
+    // MarkerSettingsValidationResult so the UI-layer (CAP-UI-002) can either
+    // apply the setting or keep the dialog open and display the error.
     //
-    // Structural invariant (data-contracts.md §3.13):
-    //   Valid=true  => ParsedPairs populated (non-null), ErrorMessage==null
-    //   Valid=false => ErrorMessage populated, ParsedPairs==null
+    // Five-step algorithm (line numbers reference PT9 source):
+    //   1. PT9:30 — null coerces to empty via `?? ""`.
+    //   2. PT9:31 — `Regex.Replace(equivalents.Trim(), " +", " ")` trims outer
+    //      whitespace then collapses any run of spaces into a single space. The
+    //      regex pattern " +" is one-or-more literal ASCII spaces (no culture
+    //      sensitivity). This normalization matters both for `p/q   q1/q2` →
+    //      2-token Split (TS-VAL-002-06) and for `"   "` → `""` → empty-branch.
+    //   3. PT9:32 — an empty normalized string is VALID with zero pairs
+    //      (TS-VAL-002-07). §3.13 requires ParsedPairs be non-null when
+    //      Valid=true, so we return Array.Empty<MarkerPair>().
+    //   4. PT9:34-43 — for each space-split token: require exactly one slash
+    //      AND both sides non-empty after trim. On the FIRST failure, return
+    //      fail-fast with the PT9 error literal and ParsedPairs=null. This
+    //      matches PT9's bare `return;` statement at line 41.
+    //   5. PT9:44 — on a fully-validated input, return Valid=true with one
+    //      MarkerPair per token in source order.
     //
-    // Test spec: c-sharp-tests/Checklists/Markers/MarkerSettingsValidationTests.cs
+    // Contract divergence from CAP-002.InitializeMarkerMappings (VAL-005):
+    // That method silently SKIPS invalid tokens to preserve runtime robustness
+    // (e.g., a corrupted settings file should not crash the data provider).
+    // ValidateMarkerSettings is the user-facing pre-commit path (VAL-002) and
+    // REJECTS invalid input so the dialog stays open. The two entry points
+    // share neither helper nor state by design; a REFACTOR pass may choose to
+    // hoist a shared "split-one-pair" helper, but that is a Refactorer
+    // decision, not a GREEN decision (see plan Decision 5 in the Test Writer
+    // plan; REFACTOR stays minimal for CAP-007).
+    //
+    // Structural invariant (data-contracts.md §3.13) — strictly enforced:
+    //   Valid=true  => ParsedPairs is non-null; ErrorMessage is null.
+    //   Valid=false => ErrorMessage is non-null; ParsedPairs is null
+    //                  (NO partial-parse leakage — even pairs that parsed
+    //                  successfully before the failing token are discarded).
+    //
+    // PT9 error literal "Equivalent markers need to be entered in the form:
+    // p/q" (MarkerSettingsForm.cs:39) is returned verbatim. Localization
+    // (lookup key `MarkerSettingsForm_1`) is a UI-layer concern; the backend
+    // returns the canonical English string so the UI can either display it
+    // directly or swap in a localized variant. This matches CAP-002's
+    // `gm-002` `"*** Comparative texts have identical markers. ***"` pattern.
+    //
+    // Test spec: c-sharp-tests/Checklists/Markers/MarkerSettingsValidationTests.cs (22 tests).
     /// <summary>
     /// Validates a user-entered equivalent-markers string ("marker1/marker2"
     /// pairs separated by spaces). Returns a <see cref="MarkerSettingsValidationResult"/>
-    /// carrying either the parsed pairs (valid) or the PT9 error message
-    /// (invalid). See data-contracts.md §4.2 and EXT-019.
+    /// carrying either the parsed pairs (<c>Valid=true</c>) or the canonical
+    /// PT9 error message (<c>Valid=false</c>). Empty, null, and whitespace-only
+    /// inputs are treated as valid with an empty pair list. On the first
+    /// malformed token, validation fails fast without leaking partial results
+    /// (§3.13 mutex). See data-contracts.md §4.2 and EXT-019.
     /// </summary>
     public static MarkerSettingsValidationResult ValidateMarkerSettings(string equivalentMarkers)
     {
-        // RED stub: CAP-007 GREEN implementer removes this and ports the
-        // PT9 MarkerSettingsForm.btnOk_Click validation loop (see banner above).
-        _ = equivalentMarkers;
-        throw new NotImplementedException(
-            "CAP-007: ValidateMarkerSettings is not yet implemented. "
-                + "Port PT9/Paratext/Checklists/MarkerSettingsForm.cs:28-49 (btnOk_Click). "
-                + "See c-sharp-tests/Checklists/Markers/MarkerSettingsValidationTests.cs."
-        );
+        // Step 1+2: PT9 lines 30-31 — null coerces to empty, then trim + collapse spaces.
+        string equivalents = Regex.Replace((equivalentMarkers ?? string.Empty).Trim(), " +", " ");
+
+        // Step 3: PT9 line 32 — empty (including whitespace-only after normalization)
+        // is VALID with no pairs. Return Array.Empty so ParsedPairs is non-null per §3.13.
+        if (equivalents.Length == 0)
+            return new MarkerSettingsValidationResult(true, Array.Empty<MarkerPair>(), null);
+
+        // Step 4: PT9 lines 34-43 — tokenize and validate each pair, fail-fast on invalid.
+        var pairs = new List<MarkerPair>();
+        foreach (string pair in equivalents.Split(' '))
+        {
+            string[] items = pair.Split('/');
+            if (items.Length != 2 || items[0].Trim().Length == 0 || items[1].Trim().Length == 0)
+            {
+                // VAL-002 fail-fast: §3.13 requires ParsedPairs=null on failure
+                // (no partial-parse leak). Contrast with CAP-002's silent-skip
+                // VAL-005 path inside ParseEquivalentMarkerMappings.
+                return new MarkerSettingsValidationResult(
+                    false,
+                    null,
+                    "Equivalent markers need to be entered in the form: p/q"
+                );
+            }
+            pairs.Add(new MarkerPair(items[0], items[1]));
+        }
+
+        // Step 5: PT9 line 44 — all tokens valid; return pairs in source order.
+        return new MarkerSettingsValidationResult(true, pairs, null);
     }
 }
