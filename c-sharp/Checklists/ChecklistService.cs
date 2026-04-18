@@ -206,6 +206,42 @@ internal static class ChecklistService
         );
     }
 
+    // === PORTED FROM PT9 (stub) ===
+    // Source: PT9/Paratext/Checklists/ChecklistsTool.cs:132-148
+    //   (Initialize — comparative-text resolution slice).
+    // Maps to: CAP-009 / BHV-605 / BHV-310 (backend slice) / INV-014 /
+    //   TS-047 / TS-048 (PTX-23529)
+    // Contract: data-contracts.md §4.5 (ResolveComparativeTexts) +
+    //   §3.10 (ResolvedComparativeText) + §3.11 (ResolvedComparativeTexts)
+    //
+    // RED STUB — throws NotImplementedException so the test assembly
+    // compiles. The tdd-implementer agent (CAP-009 GREEN) replaces this
+    // body with the GUID-first / name-fallback / self-exclusion logic.
+    // Precedent: CAP-006 BuildChecklistData RED stub (see git history
+    // commit 90facbea0e). Test file:
+    // c-sharp-tests/Checklists/ChecklistServiceResolveComparativeTextsTests.cs.
+    /// <summary>
+    /// Resolves comparative text references to actual project information.
+    /// Implements the GUID-first, name-fallback resolution strategy
+    /// (INV-014). Returns resolved texts with their display names and
+    /// availability status. See data-contracts.md §4.5.
+    /// </summary>
+    public static ResolvedComparativeTexts ResolveComparativeTexts(
+        string activeProjectId,
+        IReadOnlyList<ComparativeTextRef> requestedTexts,
+        CancellationToken ct
+    )
+    {
+        _ = activeProjectId;
+        _ = requestedTexts;
+        _ = ct;
+        throw new NotImplementedException(
+            "CAP-009 ResolveComparativeTexts — RED stub. "
+                + "Implement per data-contracts.md §4.5 and INV-014 "
+                + "(PT9 source: Paratext/Checklists/ChecklistsTool.cs:132-148)."
+        );
+    }
+
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Checklists/ChecklistsExtensions.cs:8-21
     //   (FirstVerseRef / LastVerseRef on ScrText)
