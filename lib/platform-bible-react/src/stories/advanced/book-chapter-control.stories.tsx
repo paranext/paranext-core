@@ -1007,6 +1007,34 @@ function BookChapterControlWithRecentSearches({
   );
 }
 
+export const WithDisabledReferences: Story = {
+  args: {
+    scrRef: {
+      book: 'REV',
+      chapterNum: 22,
+      verseNum: 21,
+    },
+    getEndVerse: sampleGetEndVerse,
+    disableReferencesUpTo: {
+      book: 'MAT',
+      chapterNum: 5,
+      verseNum: 10,
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Disabled References** - When \`disableReferencesUpTo\` is provided, any reference that comes
+strictly before the given one is shown as disabled: books before MAT, chapters before MAT 5,
+and verses before MAT 5:10. Useful for range pickers where the "end" selector should not allow
+picking a reference before the "start".
+        `,
+      },
+    },
+  },
+};
+
 export const WithVerseSelection: Story = {
   args: {
     scrRef: {

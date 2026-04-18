@@ -1,17 +1,23 @@
 import { BookSelector } from '@/components/advanced/scope-selector/book-selector.component';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { BookChapterControlLocalizedStrings } from '@/components/advanced/book-chapter-control/book-chapter-control.types';
+import { Button } from '@/components/shadcn-ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/shadcn-ui/dropdown-menu';
 import { Label } from '@/components/shadcn-ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/shadcn-ui/select';
 import { Scope } from '@/components/utils/scripture.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
+import { ChevronDown } from 'lucide-react';
 import { defaultScrRef, LocalizedStringValue } from 'platform-bible-utils';
 
 /**
@@ -206,29 +212,118 @@ export function ScopeSelector({
 
   const noopScrRefChange = () => {};
 
-  const handleDropdownScopeChange = (value: string) => {
-    // The Select only emits values sourced from displayedScopes, which are all Scope values.
-    const match = displayedScopes.find((option) => option.value === value);
-    if (match) onScopeChange(match.value);
-  };
+  const currentScopeLabel =
+    displayedScopes.find((option) => option.value === scope)?.label ?? scope;
+
+  const simpleScopes = displayedScopes.filter(
+    (option) => option.value !== 'selectedBooks' && option.value !== 'range',
+  );
+  const selectedBooksScope = displayedScopes.find((option) => option.value === 'selectedBooks');
+  const rangeScope = displayedScopes.find((option) => option.value === 'range');
+
+  const bookSelectorBlock = (
+    <BookSelector
+      availableBookInfo={availableBookInfo}
+      selectedBookIds={selectedBookIds}
+      onChangeSelectedBookIds={onSelectedBookIdsChange}
+      localizedStrings={localizedStrings}
+      localizedBookNames={localizedBookNames}
+    />
+  );
+
+  const rangeBlock = (
+    <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-4">
+      <div className="tw-grid tw-gap-2">
+        <Label htmlFor="scope-range-start">{rangeStartText}</Label>
+        <BookChapterControl
+          id="scope-range-start"
+          scrRef={resolvedRangeStart}
+          handleSubmit={onRangeStartChange ?? noopScrRefChange}
+          localizedBookNames={localizedBookNames}
+          localizedStrings={bookChapterControlLocalizedStrings}
+          getEndVerse={getEndVerse}
+        />
+      </div>
+      <div className="tw-grid tw-gap-2">
+        <Label htmlFor="scope-range-end">{rangeEndText}</Label>
+        <BookChapterControl
+          id="scope-range-end"
+          scrRef={resolvedRangeEnd}
+          handleSubmit={onRangeEndChange ?? noopScrRefChange}
+          localizedBookNames={localizedBookNames}
+          localizedStrings={bookChapterControlLocalizedStrings}
+          getEndVerse={getEndVerse}
+          disableReferencesUpTo={resolvedRangeStart}
+        />
+      </div>
+    </div>
+  );
 
   return (
     <div id={id} className="tw-grid tw-gap-4">
       <div className="tw-grid tw-gap-2">
         <Label>{scopeText}</Label>
         {variant === 'dropdown' ? (
-          <Select value={scope} onValueChange={handleDropdownScopeChange}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {displayedScopes.map(({ value, label, id: scopeId }) => (
-                <SelectItem key={scopeId} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                className="tw-w-full tw-justify-between tw-font-normal"
+              >
+                <span className="tw-truncate tw-text-start">{currentScopeLabel}</span>
+                <ChevronDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              className="tw-w-[var(--radix-dropdown-menu-trigger-width)] tw-min-w-[12rem]"
+              align="start"
+            >
+              <DropdownMenuRadioGroup
+                value={scope}
+                onValueChange={(value) => {
+                  const match = displayedScopes.find((option) => option.value === value);
+                  if (match) onScopeChange(match.value);
+                }}
+              >
+                {simpleScopes.map(({ value, label, id: scopeId }) => (
+                  <DropdownMenuRadioItem key={scopeId} value={value}>
+                    {label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+              {(selectedBooksScope || rangeScope) && <DropdownMenuSeparator />}
+              {selectedBooksScope && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger
+                    onClick={() => onScopeChange('selectedBooks')}
+                    data-selected={scope === 'selectedBooks' ? 'true' : undefined}
+                  >
+                    {selectedBooksScope.label}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="tw-p-2" sideOffset={4}>
+                    <div className="tw-grid tw-gap-2">
+                      <Label>{selectBooksText}</Label>
+                      {bookSelectorBlock}
+                    </div>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+              {rangeScope && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger
+                    onClick={() => onScopeChange('range')}
+                    data-selected={scope === 'range' ? 'true' : undefined}
+                  >
+                    {rangeScope.label}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="tw-p-2" sideOffset={4}>
+                    {rangeBlock}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
           <RadioGroup
             value={scope}
@@ -245,45 +340,16 @@ export function ScopeSelector({
         )}
       </div>
 
-      {scope === 'selectedBooks' && (
+      {/* In the radio variant, render the picker inline below the scope chooser. In the dropdown
+          variant, the picker lives inside the flyout submenu. */}
+      {variant === 'radio' && scope === 'selectedBooks' && (
         <div className="tw-grid tw-gap-2">
           <Label>{selectBooksText}</Label>
-          <BookSelector
-            availableBookInfo={availableBookInfo}
-            selectedBookIds={selectedBookIds}
-            onChangeSelectedBookIds={onSelectedBookIdsChange}
-            localizedStrings={localizedStrings}
-            localizedBookNames={localizedBookNames}
-          />
+          {bookSelectorBlock}
         </div>
       )}
 
-      {scope === 'range' && (
-        <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-4">
-          <div className="tw-grid tw-gap-2">
-            <Label htmlFor="scope-range-start">{rangeStartText}</Label>
-            <BookChapterControl
-              id="scope-range-start"
-              scrRef={resolvedRangeStart}
-              handleSubmit={onRangeStartChange ?? noopScrRefChange}
-              localizedBookNames={localizedBookNames}
-              localizedStrings={bookChapterControlLocalizedStrings}
-              getEndVerse={getEndVerse}
-            />
-          </div>
-          <div className="tw-grid tw-gap-2">
-            <Label htmlFor="scope-range-end">{rangeEndText}</Label>
-            <BookChapterControl
-              id="scope-range-end"
-              scrRef={resolvedRangeEnd}
-              handleSubmit={onRangeEndChange ?? noopScrRefChange}
-              localizedBookNames={localizedBookNames}
-              localizedStrings={bookChapterControlLocalizedStrings}
-              getEndVerse={getEndVerse}
-            />
-          </div>
-        </div>
-      )}
+      {variant === 'radio' && scope === 'range' && rangeBlock}
     </div>
   );
 }

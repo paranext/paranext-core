@@ -14,6 +14,8 @@ export interface ChapterGridProps {
   setChapterRef: (chapter: number) => (element: HTMLDivElement | null) => void;
   /** Optional function to determine if a chapter should be dimmed */
   isChapterDimmed?: (chapter: number) => boolean;
+  /** Optional function to determine if a chapter should be disabled (not selectable). */
+  isChapterDisabled?: (chapter: number) => boolean;
   /** Optional additional class name for styling */
   className?: string;
 }
@@ -28,6 +30,7 @@ export function ChapterGrid({
   onChapterSelect,
   setChapterRef,
   isChapterDimmed,
+  isChapterDisabled,
   className,
 }: ChapterGridProps) {
   if (!bookId) return undefined;
@@ -35,26 +38,36 @@ export function ChapterGrid({
   return (
     <CommandGroup>
       <div className={cn('tw-grid tw-grid-cols-6 tw-gap-1', className)}>
-        {Array.from({ length: fetchEndChapter(bookId) }, (_, i) => i + 1).map((chapter) => (
-          <CommandItem
-            key={chapter}
-            value={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ${chapter}`}
-            onSelect={() => onChapterSelect(chapter)}
-            ref={setChapterRef(chapter)}
-            className={cn(
-              'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
-              {
-                'tw-bg-primary tw-text-primary-foreground':
-                  bookId === scrRef.book && chapter === scrRef.chapterNum,
-              },
-              {
-                'tw-bg-muted/50 tw-text-muted-foreground/50': isChapterDimmed?.(chapter) ?? false,
-              },
-            )}
-          >
-            {chapter}
-          </CommandItem>
-        ))}
+        {Array.from({ length: fetchEndChapter(bookId) }, (_, i) => i + 1).map((chapter) => {
+          const disabled = isChapterDisabled?.(chapter) ?? false;
+          return (
+            <CommandItem
+              key={chapter}
+              value={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ${chapter}`}
+              onSelect={() => {
+                if (disabled) return;
+                onChapterSelect(chapter);
+              }}
+              ref={setChapterRef(chapter)}
+              disabled={disabled}
+              aria-disabled={disabled || undefined}
+              className={cn(
+                'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
+                {
+                  'tw-bg-primary tw-text-primary-foreground':
+                    bookId === scrRef.book && chapter === scrRef.chapterNum,
+                },
+                {
+                  'tw-bg-muted/50 tw-text-muted-foreground/50':
+                    (isChapterDimmed?.(chapter) ?? false) && !disabled,
+                },
+                disabled && 'tw-cursor-not-allowed tw-opacity-40',
+              )}
+            >
+              {chapter}
+            </CommandItem>
+          );
+        })}
       </div>
     </CommandGroup>
   );

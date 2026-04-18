@@ -1,4 +1,4 @@
-import { Canon } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { getChaptersForBook } from 'platform-bible-utils';
 import { ALL_ENGLISH_BOOK_NAMES, doesBookMatchQuery } from '@/components/shared/book.utils';
 import { BookWithOptionalChapterAndVerse } from './book-chapter-control.types';
@@ -25,6 +25,44 @@ export const SEARCH_QUERY_FORMATS = [
  */
 export function hasChapterVerseSeparator(query: string): boolean {
   return SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE.test(query.trim());
+}
+
+/** Returns true if `bookId` appears strictly before `lowerBound.book` in canon order. */
+export function isBookBefore(bookId: string, lowerBound: SerializedVerseRef): boolean {
+  return Canon.bookIdToNumber(bookId) < Canon.bookIdToNumber(lowerBound.book);
+}
+
+/**
+ * Returns true if the chapter in `bookId` is strictly before `lowerBound`. Chapters in books
+ * earlier than `lowerBound.book` are treated as before. Chapters in later books are never before.
+ */
+export function isChapterBefore(
+  bookId: string,
+  chapterNum: number,
+  lowerBound: SerializedVerseRef,
+): boolean {
+  const bookCmp = Canon.bookIdToNumber(bookId) - Canon.bookIdToNumber(lowerBound.book);
+  if (bookCmp < 0) return true;
+  if (bookCmp > 0) return false;
+  return chapterNum < lowerBound.chapterNum;
+}
+
+/**
+ * Returns true if the verse in `bookId` / `chapterNum` is strictly before `lowerBound`. Verses in
+ * earlier books or earlier chapters of the same book are treated as before.
+ */
+export function isVerseBefore(
+  bookId: string,
+  chapterNum: number,
+  verseNum: number,
+  lowerBound: SerializedVerseRef,
+): boolean {
+  const bookCmp = Canon.bookIdToNumber(bookId) - Canon.bookIdToNumber(lowerBound.book);
+  if (bookCmp < 0) return true;
+  if (bookCmp > 0) return false;
+  if (chapterNum < lowerBound.chapterNum) return true;
+  if (chapterNum > lowerBound.chapterNum) return false;
+  return verseNum < lowerBound.verseNum;
 }
 
 export function getKeyCharacterType(key: string) {

@@ -13,6 +13,8 @@ export const BOOK_CHAPTER_CONTROL_STRING_KEYS = Object.freeze([
   '%scripture_section_extra_long%',
   '%history_recent%',
   '%history_recentSearches_ariaLabel%',
+  '%webView_bookChapterControl_selectChapter%',
+  '%webView_bookChapterControl_selectVerse%',
 ] as const);
 
 /** Type definition for the localized strings used in the BookChapterControl component */
@@ -55,4 +57,10 @@ export type BookChapterControlProps = {
    * omitted, the control selects `verseNum: 1` after a chapter is chosen (current behavior).
    */
   getEndVerse?: (bookId: string, chapterNum: number) => number;
+  /**
+   * Optional lower bound. When provided, any reference that comes strictly before this one in canon
+   * order is disabled in the UI (books, chapters, and verses). Used to prevent selecting an "end"
+   * reference that precedes a "start" reference (e.g., in a range picker).
+   */
+  disableReferencesUpTo?: SerializedVerseRef;
 };

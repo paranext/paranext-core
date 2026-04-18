@@ -31,6 +31,9 @@ import {
   fetchEndChapter,
   getKeyCharacterType,
   hasChapterVerseSeparator,
+  isBookBefore,
+  isChapterBefore,
+  isVerseBefore,
 } from './book-chapter-control.utils';
 import { ChapterGrid } from './chapter-grid.component';
 import { VerseGrid } from './verse-grid.component';
@@ -54,6 +57,7 @@ export function BookChapterControl({
   onAddRecentSearch,
   id,
   getEndVerse,
+  disableReferencesUpTo,
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
 
@@ -160,16 +164,24 @@ export function BookChapterControl({
   const handleTopMatchSelect = useCallback(() => {
     // If we have a top match (smart parsed or single book filter), use its specific chapter/verse
     if (topMatch) {
+      const effectiveChapter = topMatch.chapterNum ?? 1;
+      const effectiveVerse = topMatch.verseNum ?? 1;
+      if (
+        disableReferencesUpTo &&
+        isVerseBefore(topMatch.book, effectiveChapter, effectiveVerse, disableReferencesUpTo)
+      ) {
+        return;
+      }
       handleSubmitAndAddToRecent({
         book: topMatch.book,
-        chapterNum: topMatch.chapterNum ?? 1,
-        verseNum: topMatch.verseNum ?? 1,
+        chapterNum: effectiveChapter,
+        verseNum: effectiveVerse,
       });
       setIsCommandOpen(false);
       setInputValue('');
       setCommandValue(''); // Reset command value
     }
-  }, [handleSubmitAndAddToRecent, topMatch]);
+  }, [handleSubmitAndAddToRecent, topMatch, disableReferencesUpTo]);
 
   const handleVerseSelect = useCallback(
     (verseNumber: number) => {
@@ -195,6 +207,7 @@ export function BookChapterControl({
 
   const handleBookSelect = useCallback(
     (bookId: string) => {
+      if (disableReferencesUpTo && isBookBefore(bookId, disableReferencesUpTo)) return;
       // Check if book has chapters - if not, submit immediately
       const endChapter = fetchEndChapter(bookId);
       if (endChapter <= 1) {
@@ -212,7 +225,7 @@ export function BookChapterControl({
       setSelectedBookForChaptersView(bookId);
       setViewMode('chapters');
     },
-    [handleSubmitAndAddToRecent],
+    [handleSubmitAndAddToRecent, disableReferencesUpTo],
   );
 
   const handleChapterSelect = useCallback(
@@ -378,6 +391,31 @@ export function BookChapterControl({
     if (!hasVerseSeparatorInInput) return false;
     return getEndVerse(topMatch.book, topMatch.chapterNum) > 0;
   }, [getEndVerse, topMatch, hasVerseSeparatorInInput]);
+
+  const isBookDisabled = useCallback(
+    (bookId: string) =>
+      disableReferencesUpTo ? isBookBefore(bookId, disableReferencesUpTo) : false,
+    [disableReferencesUpTo],
+  );
+
+  const makeIsChapterDisabled = useCallback(
+    (bookId: string) => (chapter: number) =>
+      disableReferencesUpTo ? isChapterBefore(bookId, chapter, disableReferencesUpTo) : false,
+    [disableReferencesUpTo],
+  );
+
+  const makeIsVerseDisabled = useCallback(
+    (bookId: string, chapterNum: number) => (verse: number) =>
+      disableReferencesUpTo
+        ? isVerseBefore(bookId, chapterNum, verse, disableReferencesUpTo)
+        : false,
+    [disableReferencesUpTo],
+  );
+
+  const selectChapterTitle =
+    localizedStrings?.['%webView_bookChapterControl_selectChapter%'] ?? 'Select Chapter';
+  const selectVerseTitle =
+    localizedStrings?.['%webView_bookChapterControl_selectVerse%'] ?? 'Select Verse';
 
   // #endregion
 
@@ -803,6 +841,12 @@ export function BookChapterControl({
                     {`${getLocalizedBookName(selectedBookForVersesView, localizedBookNames)} ${selectedChapterForVersesView}`}
                   </span>
                 )}
+              <span
+                tabIndex={-1}
+                className="tw-ms-auto tw-text-sm tw-font-medium tw-text-muted-foreground"
+              >
+                {viewMode === 'verses' ? selectVerseTitle : selectChapterTitle}
+              </span>
             </div>
           )}
 
@@ -832,6 +876,7 @@ export function BookChapterControl({
                               commandValue={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
                               ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
                               localizedBookNames={localizedBookNames}
+                              disabled={isBookDisabled(bookId)}
                             />
                           ))}
                         </CommandGroup>
@@ -847,6 +892,15 @@ export function BookChapterControl({
                           topMatch.chapterNum || ''
                         }:${topMatch.verseNum || ''})}`}
                         onSelect={handleTopMatchSelect}
+                        disabled={
+                          !!disableReferencesUpTo &&
+                          isVerseBefore(
+                            topMatch.book,
+                            topMatch.chapterNum ?? 1,
+                            topMatch.verseNum ?? 1,
+                            disableReferencesUpTo,
+                          )
+                        }
                         className="tw-font-semibold tw-text-primary"
                       >
                         {formatScrRef(
@@ -869,8 +923,11 @@ export function BookChapterControl({
                     topMatch.chapterNum &&
                     getEndVerse && (
                       <>
-                        <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
-                          {`${getLocalizedBookName(topMatch.book, localizedBookNames)} ${topMatch.chapterNum}`}
+                        <div className="tw-mb-2 tw-flex tw-items-center tw-justify-between tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
+                          <span>
+                            {`${getLocalizedBookName(topMatch.book, localizedBookNames)} ${topMatch.chapterNum}`}
+                          </span>
+                          <span>{selectVerseTitle}</span>
                         </div>
                         <VerseGrid
                           bookId={topMatch.book}
@@ -879,6 +936,7 @@ export function BookChapterControl({
                           scrRef={scrRef}
                           onVerseSelect={handleVerseSelect}
                           setVerseRef={setVerseRef}
+                          isVerseDisabled={makeIsVerseDisabled(topMatch.book, topMatch.chapterNum)}
                           className="tw-px-4 tw-pb-4"
                         />
                       </>
@@ -889,8 +947,9 @@ export function BookChapterControl({
                     !shouldShowVerseGridForTopMatch &&
                     fetchEndChapter(topMatch.book) > 1 && (
                       <>
-                        <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
-                          {getLocalizedBookName(topMatch.book, localizedBookNames)}
+                        <div className="tw-mb-2 tw-flex tw-items-center tw-justify-between tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
+                          <span>{getLocalizedBookName(topMatch.book, localizedBookNames)}</span>
+                          <span>{selectChapterTitle}</span>
                         </div>
                         <ChapterGrid
                           bookId={topMatch.book}
@@ -898,6 +957,7 @@ export function BookChapterControl({
                           onChapterSelect={handleChapterSelect}
                           setChapterRef={setChapterRef}
                           isChapterDimmed={doesChapterMatch}
+                          isChapterDisabled={makeIsChapterDisabled(topMatch.book)}
                           className="tw-px-4 tw-pb-4"
                         />
                       </>
@@ -912,6 +972,7 @@ export function BookChapterControl({
                   scrRef={scrRef}
                   onChapterSelect={handleChapterSelect}
                   setChapterRef={setChapterRef}
+                  isChapterDisabled={makeIsChapterDisabled(selectedBookForChaptersView)}
                   className="tw-p-4"
                 />
               )}
@@ -928,6 +989,10 @@ export function BookChapterControl({
                     scrRef={scrRef}
                     onVerseSelect={handleVerseSelect}
                     setVerseRef={setVerseRef}
+                    isVerseDisabled={makeIsVerseDisabled(
+                      selectedBookForVersesView,
+                      selectedChapterForVersesView,
+                    )}
                     className="tw-p-4"
                   />
                 )}

@@ -17,6 +17,8 @@ export interface VerseGridProps {
   setVerseRef: (verse: number) => (element: HTMLDivElement | null) => void;
   /** Optional function to determine if a verse should be dimmed */
   isVerseDimmed?: (verse: number) => boolean;
+  /** Optional function to determine if a verse should be disabled (not selectable). */
+  isVerseDisabled?: (verse: number) => boolean;
   /** Optional additional class name for styling */
   className?: string;
 }
@@ -33,6 +35,7 @@ export function VerseGrid({
   onVerseSelect,
   setVerseRef,
   isVerseDimmed,
+  isVerseDisabled,
   className,
 }: VerseGridProps) {
   if (!bookId || endVerse <= 0) return undefined;
@@ -40,28 +43,38 @@ export function VerseGrid({
   return (
     <CommandGroup>
       <div className={cn('tw-grid tw-grid-cols-6 tw-gap-1', className)}>
-        {Array.from({ length: endVerse }, (_, i) => i + 1).map((verse) => (
-          <CommandItem
-            key={verse}
-            value={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ${chapterNum}:${verse}`}
-            onSelect={() => onVerseSelect(verse)}
-            ref={setVerseRef(verse)}
-            className={cn(
-              'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
-              {
-                'tw-bg-primary tw-text-primary-foreground':
-                  bookId === scrRef.book &&
-                  chapterNum === scrRef.chapterNum &&
-                  verse === scrRef.verseNum,
-              },
-              {
-                'tw-bg-muted/50 tw-text-muted-foreground/50': isVerseDimmed?.(verse) ?? false,
-              },
-            )}
-          >
-            {verse}
-          </CommandItem>
-        ))}
+        {Array.from({ length: endVerse }, (_, i) => i + 1).map((verse) => {
+          const disabled = isVerseDisabled?.(verse) ?? false;
+          return (
+            <CommandItem
+              key={verse}
+              value={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ${chapterNum}:${verse}`}
+              onSelect={() => {
+                if (disabled) return;
+                onVerseSelect(verse);
+              }}
+              ref={setVerseRef(verse)}
+              disabled={disabled}
+              aria-disabled={disabled || undefined}
+              className={cn(
+                'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
+                {
+                  'tw-bg-primary tw-text-primary-foreground':
+                    bookId === scrRef.book &&
+                    chapterNum === scrRef.chapterNum &&
+                    verse === scrRef.verseNum,
+                },
+                {
+                  'tw-bg-muted/50 tw-text-muted-foreground/50':
+                    (isVerseDimmed?.(verse) ?? false) && !disabled,
+                },
+                disabled && 'tw-cursor-not-allowed tw-opacity-40',
+              )}
+            >
+              {verse}
+            </CommandItem>
+          );
+        })}
       </div>
     </CommandGroup>
   );
