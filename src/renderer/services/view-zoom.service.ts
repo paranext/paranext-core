@@ -81,6 +81,9 @@ export function createViewZoomService(
   const subscribers = new Map<string, Set<(v: number) => void>>();
   let persistTimer: ReturnType<typeof setTimeout> | undefined;
 
+  // NOTE: We intentionally do not call settings.subscribe() here. This service is the sole
+  // writer of platform.viewZooms, so external mutations are not expected. If the setting is
+  // ever exposed in the settings UI, add a subscription to keep in-memory state in sync.
   const ready = (async () => {
     try {
       const initial = await settings.get(SETTING_KEY);
