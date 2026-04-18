@@ -5,10 +5,12 @@
  */
 
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { ZoomContainer } from '@renderer/components/zoom-container.component';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
+import { getZoomKeyForDialog } from '@renderer/services/view-zoom-key.util';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from 'platform-bible-react';
-import { createElement, useCallback, useRef } from 'react';
+import { ComponentType, createElement, useCallback, useRef } from 'react';
 import './overlay-modal-dialog.component.scss';
 
 type OverlayModalShellProps = {
@@ -69,9 +71,22 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
         </VisuallyHidden>
         {/* Flex-1 + min-h-0 + overflow-hidden fills the modal shell; each dialog body scrolls its
             own region. An outer overflow-y here scrolls the whole body and can push action buttons
-            off-screen for tall dialogs (e.g. select books), breaking hit-testing in E2E. */}
+            off-screen for tall dialogs (e.g. select books), breaking hit-testing in E2E.
+            ZoomContainer wraps the inner dialog body so per-dialog-type zoom is applied to the
+            content but not the modal chrome. */}
         <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
-          {createElement(overlay.Component, overlay.props)}
+          <ZoomContainer
+            zoomKey={getZoomKeyForDialog(
+              // `overlay.Component` is a ComponentType parameterized by the specific dialog's
+              // props; `getZoomKeyForDialog` only reads the component's displayName/name so the
+              // prop type is irrelevant to its behavior. Cast to `ComponentType<unknown>` to
+              // avoid propagating the per-dialog prop generic through the overlay shell.
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              overlay.Component as ComponentType<unknown>,
+            )}
+          >
+            {createElement(overlay.Component, overlay.props)}
+          </ZoomContainer>
         </div>
       </DialogContent>
     </Dialog>
