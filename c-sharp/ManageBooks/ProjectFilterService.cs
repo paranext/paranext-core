@@ -45,29 +45,14 @@ public static class ProjectFilterService
         {
             case ProjectFilterPurpose.AllScripture:
             case ProjectFilterPurpose.ModelProject:
-                return new ProjectListResult(
-                    EnumerateScriptureProjects().Select(ToSummary).ToList()
-                );
+                return BuildScriptureProjectList();
 
             case ProjectFilterPurpose.EditableTexts:
             case ProjectFilterPurpose.DeleteSource:
-                return new ProjectListResult(
-                    EnumerateScriptureProjects()
-                        .Where(scrText => scrText.Settings.IsEditableText)
-                        .Select(ToSummary)
-                        .ToList()
-                );
+                return BuildEditableScriptureProjectList();
 
             case ProjectFilterPurpose.CopyDestination:
-                if (string.IsNullOrEmpty(input.SourceProjectType))
-                    throw PlatformErrorCodes.WithCode(
-                        PlatformErrorCodes.InvalidArgument,
-                        "SourceProjectType is required when purpose is CopyDestination"
-                    );
-                // TODO (CAP-008, BE-3): delegate to GetToProjectFilter for
-                // BHV-603/606 source-type-aware destination filtering. Until
-                // then, return an empty placeholder so dispatch tests pass.
-                return new ProjectListResult(new List<ProjectSummary>());
+                return BuildCopyDestinationProjectList(input.SourceProjectType);
 
             default:
                 throw PlatformErrorCodes.WithCode(
@@ -78,10 +63,62 @@ public static class ProjectFilterService
     }
 
     /// <summary>
+    /// Builds the project list for <see cref="ProjectFilterPurpose.AllScripture"/> and
+    /// <see cref="ProjectFilterPurpose.ModelProject"/> — every scripture project, with no
+    /// editability filter. ModelProject uses the same predicate because read-only access
+    /// is sufficient when picking a model.
+    /// </summary>
+    private static ProjectListResult BuildScriptureProjectList() =>
+        ToProjectListResult(EnumerateScriptureProjects());
+
+    /// <summary>
+    /// Builds the project list for <see cref="ProjectFilterPurpose.EditableTexts"/> and
+    /// <see cref="ProjectFilterPurpose.DeleteSource"/> — scripture projects further
+    /// restricted to <c>Settings.IsEditableText</c>. DeleteSource uses the same
+    /// predicate; the admin-on-shared-project check is enforced separately at the
+    /// wire-layer call site (see CAP-005).
+    /// </summary>
+    private static ProjectListResult BuildEditableScriptureProjectList() =>
+        ToProjectListResult(
+            EnumerateScriptureProjects().Where(scrText => scrText.Settings.IsEditableText)
+        );
+
+    /// <summary>
+    /// Delegation seam for <see cref="ProjectFilterPurpose.CopyDestination"/>. Validates
+    /// that a source project type was supplied, then returns an empty placeholder list.
+    /// TODO (CAP-008, BE-3): replace the placeholder with a call into
+    /// <c>GetToProjectFilter</c> to enforce BHV-603/606 source-type-aware destination
+    /// filtering.
+    /// </summary>
+    private static ProjectListResult BuildCopyDestinationProjectList(string? sourceProjectType)
+    {
+        if (string.IsNullOrEmpty(sourceProjectType))
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.InvalidArgument,
+                "SourceProjectType is required when purpose is CopyDestination"
+            );
+        return new ProjectListResult(new List<ProjectSummary>());
+    }
+
+    /// <summary>
+    /// Materialises a <see cref="ScrText"/> sequence into a <see cref="ProjectListResult"/>
+    /// by mapping each entry through <see cref="ToSummary"/>. Shared by the scripture
+    /// and editable-scripture build paths so the mapping shape is expressed once.
+    /// </summary>
+    private static ProjectListResult ToProjectListResult(IEnumerable<ScrText> scrTexts) =>
+        new(scrTexts.Select(ToSummary).ToList());
+
+    /// <summary>
     /// Enumerates all scripture-type projects from <see cref="ScrTextCollection"/>.
     /// Matches PT9 <c>ScrTextComboBox.LoadAllScripture()</c>:
     /// <c>scrText.Settings.TranslationInfo.Type.IsScripture()</c>.
     /// </summary>
+    /// <remarks>
+    /// TODO(future): candidate for unification with
+    /// <c>LocalParatextProjects.GetScrTexts</c> once a shared scripture-project
+    /// enumeration helper exists. Kept local here to avoid cross-service coupling
+    /// during the initial CAP-011 port.
+    /// </remarks>
     private static IEnumerable<ScrText> EnumerateScriptureProjects() =>
         ScrTextCollection
             .ScrTexts(IncludeProjects.ScriptureOnly)
