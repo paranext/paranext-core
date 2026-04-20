@@ -158,6 +158,29 @@ export function CommentThread({
   // resolved asynchronously so the pre-population waits for that check to succeed. Clears the
   // value when the thread collapses, and also clears any auto-populated value if `canAssign`
   // later flips back to false so stale pending assignments can't leak into submissions.
+  //
+  // The three refs below implement a small state machine with four states:
+  //
+  //   IDLE (thread collapsed):
+  //     prevIsSelectedRef = false, pendingAssigneeIsAutoPopulatedRef = false,
+  //     userMadeManualSelectionRef = false
+  //     → PENDING when isSelected becomes true
+  //
+  //   PENDING (thread open, canAssign not yet resolved or conditions not yet met):
+  //     prevIsSelectedRef = true, pendingAssigneeIsAutoPopulatedRef = false,
+  //     userMadeManualSelectionRef = false
+  //     → AUTO_POPULATED when canAssign=true and initialAssignedUser is set and ≠ assignedUser
+  //     → IDLE on deselect
+  //
+  //   AUTO_POPULATED (pre-filled from parent's lastAssignedUser, not yet overridden):
+  //     pendingAssigneeIsAutoPopulatedRef = true, userMadeManualSelectionRef = false
+  //     → USER_SELECTED when user picks from popover (onSelect sets userMadeManualSelectionRef)
+  //     → IDLE on deselect or if canAssign is revoked (stale pre-population is cleared)
+  //
+  //   USER_SELECTED (user explicitly chose an assignee from the popover):
+  //     pendingAssigneeIsAutoPopulatedRef = false, userMadeManualSelectionRef = true
+  //     → IDLE on deselect
+  //     (further initialAssignedUser changes are ignored in this state)
   const prevIsSelectedRef = useRef(isSelected);
   const pendingAssigneeIsAutoPopulatedRef = useRef(false);
   // Tracks whether the user has explicitly chosen an assignee from the popover. Once set, auto-
