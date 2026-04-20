@@ -38,7 +38,7 @@ internal class ParatextProjectSendReceiveService(
     protected Boolean CommitChanges(String projectId, String comment, Boolean forceCommit = false)
     {
         throw new Exception(
-            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            "ERROR_UNIMPLEMENTED: This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
     }
 
@@ -48,7 +48,7 @@ internal class ParatextProjectSendReceiveService(
     protected void CommitDaily(String projectId)
     {
         throw new Exception(
-            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            "ERROR_UNIMPLEMENTED: This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
     }
 

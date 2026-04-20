@@ -929,9 +929,14 @@ global.webViewComponent = function FindWebView({
               true,
             );
         } catch (err: unknown) {
-          logger.error(
-            `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
-          );
+          const errMessage = getErrorMessage(err);
+          if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+            logger.info(errMessage);
+          } else {
+            logger.error(
+              `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
+            );
+          }
         }
         await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
 
@@ -947,9 +952,14 @@ global.webViewComponent = function FindWebView({
               false,
             );
         } catch (err: unknown) {
-          logger.error(
-            `Error committing changes to version history after replacing: ${getErrorMessage(err)}`,
-          );
+          const errMessage = getErrorMessage(err);
+          if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+            logger.info(errMessage);
+          } else {
+            logger.error(
+              `Error committing changes to version history after replacing: ${getErrorMessage(err)}`,
+            );
+          }
         }
 
         // Mark the replaced result with visual feedback before re-running the search
@@ -1076,9 +1086,14 @@ global.webViewComponent = function FindWebView({
             true,
           );
       } catch (err: unknown) {
-        logger.error(
-          `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
-        );
+        const errMessage = getErrorMessage(err);
+        if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+          logger.info(errMessage);
+        } else {
+          logger.error(
+            `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
+          );
+        }
       }
 
       // Group results by book and call replace() once per book (API requires all ranges in same book).
@@ -1125,9 +1140,14 @@ global.webViewComponent = function FindWebView({
             false,
           );
       } catch (err: unknown) {
-        logger.error(
-          `Error committing changes to version history after replacing: ${getErrorMessage(err)}`,
-        );
+        const errMessage = getErrorMessage(err);
+        if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+          logger.info(errMessage);
+        } else {
+          logger.error(
+            `Error committing changes to version history after replacing: ${getErrorMessage(err)}`,
+          );
+        }
       }
 
       // Mark all visible results as replaced for visual feedback (red background + progress bar)

@@ -696,9 +696,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 true,
               );
           } catch (err: unknown) {
-            logger.error(
-              `Error committing changes to version history before inserting footnote: ${getErrorMessage(err)}`,
-            );
+            const errMessage = getErrorMessage(err);
+            if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+              logger.info(errMessage);
+            } else {
+              logger.error(
+                `Error committing changes to version history before inserting footnote: ${getErrorMessage(err)}`,
+              );
+            }
           }
 
           editorRef.current?.insertMarker('f');
@@ -717,9 +722,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 true,
               );
           } catch (err: unknown) {
-            logger.error(
-              `Error committing changes to version history before inserting cross-reference: ${getErrorMessage(err)}`,
-            );
+            const errMessage = getErrorMessage(err);
+            if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+              logger.info(errMessage);
+            } else {
+              logger.error(
+                `Error committing changes to version history before inserting cross-reference: ${getErrorMessage(err)}`,
+              );
+            }
           }
 
           editorRef.current?.insertMarker('x');
@@ -1184,9 +1194,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               await papi.commands.sendCommand('paratextBibleSendReceive.commitDaily', projectId);
             }
           } catch (err: unknown) {
-            logger.error(
-              `Error committing version history after saving USJ to PDP: ${getErrorMessage(err)}`,
-            );
+            const errMessage = getErrorMessage(err);
+            if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+              logger.info(errMessage);
+            } else {
+              logger.error(
+                `Error committing version history after saving USJ to PDP: ${getErrorMessage(err)}`,
+              );
+            }
           }
         } else if (!saveResult && currentlyWritingUsjToPdp.current) {
           currentlyWritingUsjToPdp.current = false;
@@ -1236,7 +1251,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [usjFromPdp, projectName, localizedStrings, projectId]);
+  }, [usjFromPdp, projectName, localizedStrings, projectId, resetInsertingNoteStatusRefs]);
 
   /**
    * Close the footnote editor, optionally deleting the note from the main editor first. Pass
