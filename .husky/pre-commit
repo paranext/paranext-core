@@ -1,6 +1,39 @@
 #!/usr/bin/env sh
 
 # ============================================
+# Secret scanning (ALL branches)
+# ============================================
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo ""
+  echo "=========================================="
+  echo "ERROR: gitleaks is not installed"
+  echo "=========================================="
+  echo "gitleaks is required to prevent committing secrets to this public repository."
+  echo ""
+  echo "Install it:"
+  echo "  macOS:   brew install gitleaks"
+  echo "  Windows: winget install Gitleaks.Gitleaks"
+  echo "  Linux:   https://github.com/gitleaks/gitleaks/releases"
+  echo ""
+  echo "Then retry your commit."
+  echo "=========================================="
+  exit 1
+fi
+
+echo "Scanning for secrets..."
+if ! gitleaks git --pre-commit --staged --no-banner; then
+  echo ""
+  echo "=========================================="
+  echo "SECRET DETECTED — commit blocked"
+  echo "=========================================="
+  echo "Remove the secret from your staged files before committing."
+  echo "See above for the file and line number."
+  echo "=========================================="
+  exit 1
+fi
+echo "No secrets found"
+
+# ============================================
 # Standard hooks (ALL branches)
 # ============================================
 # Block commits when package-lock.json contains yalc-linked entries (staged or unstaged)
