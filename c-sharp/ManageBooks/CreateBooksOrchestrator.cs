@@ -29,6 +29,11 @@ namespace Paranext.DataProvider.ManageBooks;
 /// </summary>
 public static class CreateBooksOrchestrator
 {
+    // VAL-009 user-facing message for the "FromTemplate without model"
+    // precondition. Shared with ManageBooksService.CreateBooksAsync so the
+    // validator layer and the wire guard cannot drift.
+    internal const string SelectModelTextMessage = "Please select model text";
+
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/ToolsMenu/CreateBooksForm.cs:152, 169-183
     // Method: CreateBooksForm.cmdOK_Click — the per-book create loop.
@@ -190,17 +195,15 @@ public static class CreateBooksOrchestrator
         var missing = selected.Where(bookNum => !modelScrText.BookPresent(bookNum)).ToList();
 
         if (missing.Count == 0)
-            return new ValidationResult(ValidationSeverity.Ok, null, null);
+            return ValidationResult.Ok();
 
         if (missing.Count == selected.Count)
-            return new ValidationResult(
-                ValidationSeverity.Error,
+            return ValidationResult.Error(
                 $"Unable to create book(s) because these book(s) are not in the model project {modelScrText.Name}.",
                 [.. missing]
             );
 
-        return new ValidationResult(
-            ValidationSeverity.Warning,
+        return ValidationResult.Warning(
             $"The model project {modelScrText.Name} does not have {missing.Count} of the selected book(s).",
             [.. missing]
         );
@@ -230,14 +233,12 @@ public static class CreateBooksOrchestrator
     public static ValidationResult CheckVersification(ScrText projectScrText, ScrText modelScrText)
     {
         if (projectScrText.Settings.Versification.Name != modelScrText.Settings.Versification.Name)
-            return new ValidationResult(
-                ValidationSeverity.Warning,
+            return ValidationResult.Warning(
                 $"{projectScrText.Name} uses {projectScrText.Settings.Versification.Name} versification. "
-                    + $"Model {modelScrText.Name} uses {modelScrText.Settings.Versification.Name} versification.",
-                null
+                    + $"Model {modelScrText.Name} uses {modelScrText.Settings.Versification.Name} versification."
             );
 
-        return new ValidationResult(ValidationSeverity.Ok, null, null);
+        return ValidationResult.Ok();
     }
 
     // === PORTED FROM PT9 ===
@@ -272,10 +273,10 @@ public static class CreateBooksOrchestrator
     )
     {
         if (creationMethod != CreationMethod.FromTemplate)
-            return new ValidationResult(ValidationSeverity.Ok, null, null);
+            return ValidationResult.Ok();
 
         if (modelScrText == null)
-            return new ValidationResult(ValidationSeverity.Error, "Please select model text", null);
+            return ValidationResult.Error(SelectModelTextMessage);
 
         ValidationResult modelCheck = CheckModelBooks(selectedBooks, modelScrText);
         if (modelCheck.Severity != ValidationSeverity.Ok)
