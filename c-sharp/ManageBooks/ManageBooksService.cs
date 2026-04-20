@@ -1,6 +1,7 @@
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
+using PtxUtils;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.ManageBooks;
@@ -76,6 +77,10 @@ internal sealed class ManageBooksService : NetworkObject
             (
                 "getBookComparison",
                 new Func<BookComparisonInput, Task<BookComparisonResult>>(GetBookComparisonAsync)
+            ),
+            (
+                "getToProjectFilter",
+                new Func<ProjectFilterInput, Task<ProjectListResult>>(GetToProjectFilterAsync)
             ),
         ];
 
@@ -458,5 +463,44 @@ internal sealed class ManageBooksService : NetworkObject
                 PlatformErrorCodes.InvalidArgument,
                 "Source and destination projects must be different"
             );
+    }
+
+    // =====================================================================
+    // CAP-008: CopyProjectFiltering
+    //
+    // Wire entry for the Copy Books dialog's To-project combobox population.
+    // Read-only — no SendFullProjectUpdateEvent.
+    //
+    // Precondition (Section 4.9):
+    //   1. SourceProjectType must be non-empty → INVALID_ARGUMENT (contract
+    //      error code MISSING_SOURCE_TYPE mapped to PlatformErrorCode
+    //      INVALID_ARGUMENT per Theme 7).
+    // =====================================================================
+
+    // === NEW IN PT10 ===
+    // Reason: PAPI wire facade for EXT-009 (CopyBooksForm.LoadToComboboxOptions).
+    //   PT9 invoked LoadToComboboxOptions inside the WinForms dialog; PT10
+    //   exposes the decision tree as a standalone wire method so the Copy
+    //   Books dialog can populate its To-project combobox before the user
+    //   commits to a copy operation. Delegates to
+    //   CopyBooksOrchestrator.GetToProjectFilterProjects (CAP-008).
+    // Maps to: M-009 (data-contracts.md Section 4.9); BHV-603, BHV-606
+    /// <summary>
+    /// Wire entry point for the To-project filter. Maps to data-contracts.md
+    /// Section 4.9. Read-only; no event emitted.
+    ///
+    /// Precondition: <c>input.SourceProjectType</c> must be non-null and
+    /// non-empty; violation → INVALID_ARGUMENT.
+    /// </summary>
+    public Task<ProjectListResult> GetToProjectFilterAsync(ProjectFilterInput input)
+    {
+        if (string.IsNullOrEmpty(input.SourceProjectType))
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.InvalidArgument,
+                "Source project type is required for copy destination filtering"
+            );
+
+        var fromType = new Enum<ProjectType>(input.SourceProjectType);
+        return Task.FromResult(CopyBooksOrchestrator.GetToProjectFilterProjects(fromType));
     }
 }

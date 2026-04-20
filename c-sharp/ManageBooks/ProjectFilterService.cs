@@ -1,4 +1,5 @@
 using Paratext.Data;
+using PtxUtils;
 
 namespace Paranext.DataProvider.ManageBooks;
 
@@ -85,10 +86,11 @@ public static class ProjectFilterService
 
     /// <summary>
     /// Delegation seam for <see cref="ProjectFilterPurpose.CopyDestination"/>. Validates
-    /// that a source project type was supplied, then returns an empty placeholder list.
-    /// TODO (CAP-008, BE-3): replace the placeholder with a call into
-    /// <c>GetToProjectFilter</c> to enforce BHV-603/606 source-type-aware destination
-    /// filtering.
+    /// that a source project type was supplied, then delegates into CAP-008's
+    /// <see cref="CopyBooksOrchestrator.GetToProjectFilterProjects"/> so the BHV-603/606
+    /// decision tree has exactly one production implementation. The incoming wire string
+    /// is wrapped in <see cref="Enum{ProjectType}"/> (PT9-compatible) and dispatched by
+    /// <c>InternalValue</c> equality.
     /// </summary>
     private static ProjectListResult BuildCopyDestinationProjectList(string? sourceProjectType)
     {
@@ -97,7 +99,8 @@ public static class ProjectFilterService
                 PlatformErrorCodes.InvalidArgument,
                 "SourceProjectType is required when purpose is CopyDestination"
             );
-        return new ProjectListResult(new List<ProjectSummary>());
+        var fromType = new Enum<ProjectType>(sourceProjectType);
+        return CopyBooksOrchestrator.GetToProjectFilterProjects(fromType);
     }
 
     /// <summary>
