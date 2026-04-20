@@ -81,12 +81,8 @@ public sealed class AlertCapture : Alert
         if (IsEnglishLanguageDefinitionProbe(text))
             return AlertResult.Positive;
 
-        AlertScope? scope = _currentScope.Value;
-        if (scope != null)
-        {
-            scope.Entries.Add(new AlertEntry(text, caption, alertLevel));
+        if (TryCaptureToScope(text, caption, alertLevel))
             return AlertResult.Positive;
-        }
 
         // No scope active — mirror AlertStub behavior: log and return Negative.
         Console.WriteLine($"[Alert.Show] {caption}: {text}");
@@ -103,14 +99,23 @@ public sealed class AlertCapture : Alert
         if (IsEnglishLanguageDefinitionProbe(text))
             return;
 
-        AlertScope? scope = _currentScope.Value;
-        if (scope != null)
-        {
-            scope.Entries.Add(new AlertEntry(text, caption, alertLevel));
+        if (TryCaptureToScope(text, caption, alertLevel))
             return;
-        }
 
         Console.WriteLine($"[Alert.ShowLater] {caption}: {text}");
+    }
+
+    // Appends an <see cref="AlertEntry"/> to the ambient <see cref="AlertScope"/>
+    // if one is active on the current async flow. Returns true when the entry
+    // was captured; false when no scope is installed (the caller is expected
+    // to fall back to Console.WriteLine and the override-specific return).
+    private static bool TryCaptureToScope(string text, string caption, AlertLevel level)
+    {
+        AlertScope? scope = _currentScope.Value;
+        if (scope == null)
+            return false;
+        scope.Entries.Add(new AlertEntry(text, caption, level));
+        return true;
     }
 
     private static bool IsEnglishLanguageDefinitionProbe(string text) =>
