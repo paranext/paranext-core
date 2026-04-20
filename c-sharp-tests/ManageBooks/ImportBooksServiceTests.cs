@@ -2,6 +2,8 @@ using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider;
 using Paranext.DataProvider.ManageBooks;
 using Paranext.DataProvider.Projects;
+using Paratext.Data;
+using Paratext.Data.Users;
 
 namespace TestParanextDataProvider.ManageBooks
 {
@@ -260,5 +262,452 @@ namespace TestParanextDataProvider.ManageBooks
                 "pure-validation method should not emit any events"
             );
         }
+
+        // =====================================================================
+        // CAP-010: ImportBooksAsync wire-level tests (Theme 8 AlertCapture +
+        // Theme 6 SendFullProjectUpdateEvent + Theme 7 PlatformError codes)
+        //
+        // These are the OUTER acceptance tests for CAP-010's wire method —
+        // they exercise the full chain from ImportBooksInput arrival through
+        // project lookup, orchestrator invocation (with AlertCapture wrap),
+        // SendFullProjectUpdateEvent emission on success, and the
+        // ImportBooksResult wire shape. Inner orchestrator contract is
+        // covered above in ImportBooksOrchestratorTests.ImportBooks_* tests.
+        //
+        // Integration (Theme 6): After successful import the service MUST
+        // call _pdpFactory.GetExistingProjectDataProvider(projectId)?
+        // .SendFullProjectUpdateEvent() so
+        // useProjectSetting('platformScripture.booksPresent') subscribers
+        // re-fetch.
+        //
+        // Error codes (Theme 7, FN-002): All error paths throw via
+        // PlatformErrorCodes.WithCode(code, message).
+        //
+        // | Precondition failure               | PlatformErrorCode    |
+        // |------------------------------------|----------------------|
+        // | Unknown ProjectId                  | NOT_FOUND            |
+        // | Non-editable project               | FAILED_PRECONDITION  |
+        // | Non-admin on shared project        | PERMISSION_DENIED    |
+        // | Overlapping files in included set  | FAILED_PRECONDITION  |
+        // | WriteLock unavailable              | UNAVAILABLE          |
+        //
+        // UI-layer deferrals (TS-083/084/085/086 for BHV-318 ImportBooksForm)
+        // are covered by the UI phase — the server-side execution exposed
+        // here assumes a valid ImportBooksInput has arrived from the UI.
+        // =====================================================================
+
+        // -------------------------------------------------------------------
+        // ACCEPTANCE: ImportBooksAsync happy-path OUTER
+        // -------------------------------------------------------------------
+
+        [Test]
+        [Category("Acceptance")]
+        [Category("Critical")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-014")]
+        [Property("BehaviorId", "BHV-105")]
+        [Property("SpecId", "spec-003")]
+        [Description(
+            "OUTER acceptance: valid ImportBooksInput with one USFM file → "
+                + "service resolves the project, guards pass, orchestrator "
+                + "runs, and the wire returns an ImportBooksResult with "
+                + "Success=true and ImportedCount=1. This proves the full wire "
+                + "path works end-to-end for CAP-010."
+        )]
+        public async Task ImportBooksAsync_ValidInput_ReturnsSuccessResult()
+        {
+            var request = new ImportBooksInput(
+                ProjectId: _projectId,
+                Files: new[]
+                {
+                    new ImportFileEntry(
+                        FileName: "gen.sfm",
+                        Content: "\\id GEN\n\\c 1\n\\v 1 text",
+                        Included: true
+                    ),
+                },
+                ReplaceEntireBook: true
+            );
+
+            ImportBooksResult result = await _service.ImportBooksAsync(request);
+
+            Assert.That(result.Success, Is.True, "OUTER acceptance: Success=true");
+            Assert.That(result.ImportedCount, Is.EqualTo(1));
+            Assert.That(result.Errors, Is.Empty);
+            Assert.That(
+                _scrText.BooksPresentSet.IsSelected(1),
+                Is.True,
+                "INV-C08: GEN should be present after OUTER acceptance path"
+            );
+        }
+
+        // -------------------------------------------------------------------
+        // THEME 6: SendFullProjectUpdateEvent fires on success, NOT on failure
+        // -------------------------------------------------------------------
+
+        [Test]
+        [Category("Integration")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-105")]
+        [Description(
+            "Theme 6: after a successful import, the service calls "
+                + "SendFullProjectUpdateEvent on the target project's PDP so "
+                + "useProjectSetting('platformScripture.booksPresent') "
+                + "subscribers re-fetch. Mirrors CAP-005/CAP-007/CAP-004 Theme 6 "
+                + "pattern (at least one event fires after a mutation)."
+        )]
+        public async Task ImportBooksAsync_Success_CallsSendFullProjectUpdateEventOnPdp()
+        {
+            // Arrange: create a PDP so GetExistingProjectDataProvider returns non-null.
+            _pdpFactory.GetProjectDataProviderID(_projectId);
+            int eventsBefore = Client.SentEventCount;
+
+            await _service.ImportBooksAsync(
+                new ImportBooksInput(
+                    ProjectId: _projectId,
+                    Files: new[]
+                    {
+                        new ImportFileEntry(
+                            FileName: "gen.sfm",
+                            Content: "\\id GEN\n\\c 1\n\\v 1 text",
+                            Included: true
+                        ),
+                    },
+                    ReplaceEntireBook: true
+                )
+            );
+
+            Assert.That(
+                Client.SentEventCount,
+                Is.GreaterThan(eventsBefore),
+                "SendFullProjectUpdateEvent must fire on target PDP after success"
+            );
+        }
+
+        [Test]
+        [Category("Integration")]
+        [Property("CapabilityId", "CAP-010")]
+        [Description(
+            "Theme 6 negative: a failing ImportBooksAsync (unknown project → "
+                + "NOT_FOUND) does NOT fire SendFullProjectUpdateEvent. "
+                + "Mirrors CAP-005/CAP-007 negative-path Theme 6 test."
+        )]
+        public void ImportBooksAsync_Failure_DoesNotCallSendFullProjectUpdateEvent()
+        {
+            _pdpFactory.GetProjectDataProviderID(_projectId);
+            int eventsBefore = Client.SentEventCount;
+
+            Exception? caught = null;
+            try
+            {
+                _service
+                    .ImportBooksAsync(
+                        new ImportBooksInput(
+                            ProjectId: "0123456789ABCDEF0123456789ABCDEF01234567",
+                            Files: new[]
+                            {
+                                new ImportFileEntry(
+                                    FileName: "gen.sfm",
+                                    Content: "\\id GEN\n\\c 1\n\\v 1 text",
+                                    Included: true
+                                ),
+                            },
+                            ReplaceEntireBook: true
+                        )
+                    )
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+
+            Assert.That(caught, Is.Not.Null, "unknown projectId must throw");
+            Assert.That(
+                Client.SentEventCount,
+                Is.EqualTo(eventsBefore),
+                "No additional event should fire on a failed import"
+            );
+        }
+
+        // -------------------------------------------------------------------
+        // THEME 7 (FN-002): PlatformError code mapping
+        // -------------------------------------------------------------------
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ForwardNote", "FN-002")]
+        [Description(
+            "Theme 7: Unknown ProjectId → NOT_FOUND (mirrors "
+                + "ParseImportFilesAsync_UnknownProjectId_ThrowsNotFound and "
+                + "the generic project-resolution guard pattern across "
+                + "CAP-005/007)."
+        )]
+        public void ImportBooksAsync_UnknownProjectId_ThrowsNotFound()
+        {
+            var request = new ImportBooksInput(
+                ProjectId: "0123456789ABCDEF0123456789ABCDEF01234567",
+                Files: new[]
+                {
+                    new ImportFileEntry(
+                        FileName: "gen.sfm",
+                        Content: "\\id GEN\n\\c 1\n\\v 1 text",
+                        Included: true
+                    ),
+                },
+                ReplaceEntireBook: true
+            );
+
+            Exception? caught = null;
+            try
+            {
+                _service.ImportBooksAsync(request).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+
+            Assert.That(caught, Is.Not.Null);
+            Assert.That(caught!.Data["platformErrorCode"], Is.EqualTo(PlatformErrorCodes.NotFound));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Category("Critical")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-015")]
+        [Property("BehaviorId", "BHV-405")]
+        [Property("InvariantId", "INV-004")]
+        [Description(
+            "TS-075 / BHV-405 / VAL-013: non-admin on a shared project → "
+                + "PERMISSION_DENIED. Mirrors the CAP-005/CAP-007 "
+                + "IsSharedProjectWithoutAdmin guard; ensures the wire method "
+                + "enforces the PT9 CanCreateOrImportBooks gate before "
+                + "delegating to the orchestrator."
+        )]
+        public void ImportBooksAsync_NonAdminOnSharedProject_ThrowsPermissionDenied()
+        {
+            var nonAdminShared = new NonAdminSharedScrText();
+            ProjectDetails details = CreateProjectDetails(nonAdminShared);
+            ParatextProjects.FakeAddProject(details, nonAdminShared);
+
+            var request = new ImportBooksInput(
+                ProjectId: details.Metadata.Id,
+                Files: new[]
+                {
+                    new ImportFileEntry(
+                        FileName: "gen.sfm",
+                        Content: "\\id GEN\n\\c 1\n\\v 1 text",
+                        Included: true
+                    ),
+                },
+                ReplaceEntireBook: true
+            );
+
+            Exception? caught = null;
+            try
+            {
+                _service.ImportBooksAsync(request).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+
+            Assert.That(caught, Is.Not.Null);
+            Assert.That(
+                caught!.Data["platformErrorCode"],
+                Is.EqualTo(PlatformErrorCodes.PermissionDenied),
+                "non-admin on shared project must map to PERMISSION_DENIED (Theme 7)."
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("InvariantId", "INV-003")]
+        [Description(
+            "INV-003 / Theme 7: a non-editable project rejects import with "
+                + "FAILED_PRECONDITION (mirrors CreateBooksAsync's "
+                + "EnsureProjectEditable guard)."
+        )]
+        public void ImportBooksAsync_NonEditableProject_ThrowsFailedPrecondition()
+        {
+            var readOnlyScrText = new DummyScrText();
+            readOnlyScrText.Settings.Editable = false;
+            ProjectDetails details = CreateProjectDetails(readOnlyScrText);
+            ParatextProjects.FakeAddProject(details, readOnlyScrText);
+
+            var request = new ImportBooksInput(
+                ProjectId: details.Metadata.Id,
+                Files: new[]
+                {
+                    new ImportFileEntry(
+                        FileName: "gen.sfm",
+                        Content: "\\id GEN\n\\c 1\n\\v 1 text",
+                        Included: true
+                    ),
+                },
+                ReplaceEntireBook: true
+            );
+
+            Exception? caught = null;
+            try
+            {
+                _service.ImportBooksAsync(request).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+
+            Assert.That(caught, Is.Not.Null);
+            Assert.That(
+                caught!.Data["platformErrorCode"],
+                Is.EqualTo(PlatformErrorCodes.FailedPrecondition),
+                "INV-003: non-editable project must map to FAILED_PRECONDITION"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("InvariantId", "INV-002")]
+        [Property("InvariantId", "INV-C01")]
+        [Property("ScenarioId", "TS-015")]
+        [Description(
+            "TS-015 / INV-002 / INV-C01 / Theme 7: when the orchestrator "
+                + "surfaces a WriteLock failure (simulated via the "
+                + "LockNotObtainedScrText marker), the service maps it to "
+                + "platformErrorCode=UNAVAILABLE (mirrors the CAP-005/CAP-007 "
+                + "LockNotObtainedException catch-and-remap pattern)."
+        )]
+        public void ImportBooksAsync_WriteLockUnavailable_ThrowsUnavailable()
+        {
+            var lockedScrText = new LockNotObtainedScrText();
+            ProjectDetails details = CreateProjectDetails(lockedScrText);
+            ParatextProjects.FakeAddProject(details, lockedScrText);
+
+            var request = new ImportBooksInput(
+                ProjectId: details.Metadata.Id,
+                Files: new[]
+                {
+                    new ImportFileEntry(
+                        FileName: "gen.sfm",
+                        Content: "\\id GEN\n\\c 1\n\\v 1 text",
+                        Included: true
+                    ),
+                },
+                ReplaceEntireBook: true
+            );
+
+            Exception? caught = null;
+            try
+            {
+                _service.ImportBooksAsync(request).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+
+            Assert.That(caught, Is.Not.Null);
+            Assert.That(
+                caught!.Data["platformErrorCode"],
+                Is.EqualTo(PlatformErrorCodes.Unavailable),
+                "LockNotObtainedException must map to UNAVAILABLE per Theme 7"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("ScenarioId", "TS-085")]
+        [Property("ValidationId", "VAL-012")]
+        [Description(
+            "VAL-012 / Theme 7: overlapping book numbers in the included "
+                + "file set → FAILED_PRECONDITION. The wire method MUST "
+                + "detect and reject overlapping files before delegating to "
+                + "the orchestrator, because the UI may have passed an invalid "
+                + "selection. Uses the same overlap-detection logic exposed "
+                + "by CAP-009's CheckOverlappingFiles."
+        )]
+        public void ImportBooksAsync_OverlappingFilesIncluded_ThrowsFailedPrecondition()
+        {
+            var request = new ImportBooksInput(
+                ProjectId: _projectId,
+                Files: new[]
+                {
+                    new ImportFileEntry(
+                        FileName: "gen-v1.sfm",
+                        Content: "\\id GEN\n\\c 1\n\\v 1 first",
+                        Included: true
+                    ),
+                    new ImportFileEntry(
+                        FileName: "gen-v2.sfm",
+                        Content: "\\id GEN\n\\c 1\n\\v 1 second",
+                        Included: true
+                    ),
+                },
+                ReplaceEntireBook: true
+            );
+
+            Exception? caught = null;
+            try
+            {
+                _service.ImportBooksAsync(request).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+
+            Assert.That(caught, Is.Not.Null);
+            Assert.That(
+                caught!.Data["platformErrorCode"],
+                Is.EqualTo(PlatformErrorCodes.FailedPrecondition),
+                "VAL-012: overlapping included files must map to FAILED_PRECONDITION"
+            );
+        }
+
+        // -------------------------------------------------------------------
+        // Support: ScrText subclasses for failure scenarios. Mirrors
+        // CopyBooksServiceTests / DeleteBooksServiceTests seams.
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Shared-project destination where the current user is not an admin.
+        /// Uses the natural ScrText seam (overrides <see cref="ScrText.Permissions"/>)
+        /// so the service's <c>IsProjectShared &amp;&amp; !AmAdministrator</c>
+        /// check fires. Mirrors <c>CopyBooksServiceTests.NonAdminSharedScrText</c>.
+        /// </summary>
+        private sealed class NonAdminSharedScrText : DummyScrText
+        {
+            private readonly NonAdminPermissionManager _permissions = new();
+
+            public override PermissionManager Permissions => _permissions;
+
+            private sealed class NonAdminPermissionManager : PermissionManager
+            {
+                // Non-null Data makes HasPermissionsDefined = true, which
+                // makes ScrText.IsProjectShared = true.
+                protected override InternalProjectUserAccessData Data { get; set; } =
+                    new InternalProjectUserAccessData();
+
+                public override bool AmAdministrator => false;
+            }
+        }
+
+        /// <summary>
+        /// Marker ScrText that triggers the orchestrator's WriteLock failure
+        /// path (either by throwing <c>LockNotObtainedException</c> or by
+        /// returning <c>Success=false</c> — implementer's choice). The
+        /// service maps either outcome to <c>UNAVAILABLE</c> per Theme 7.
+        /// Parallels CAP-007 <c>LockNotObtainedScrText</c>.
+        /// </summary>
+        private sealed class LockNotObtainedScrText : DummyScrText { }
     }
 }

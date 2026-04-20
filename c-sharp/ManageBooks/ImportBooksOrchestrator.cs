@@ -551,4 +551,74 @@ public static class ImportBooksOrchestrator
             return DateTime.MinValue;
         }
     }
+
+    // =====================================================================
+    // CAP-010: ImportBooks execution (Theme 8 AlertCapture wrapping)
+    //
+    // Delegates to PT9's ImportSfmText.ImportBooks (ParatextData/ImportSfmText.cs:159-218).
+    // The orchestrator is responsible for:
+    //   1. Routing each ImportFileEntry through ParseImportFiles (already
+    //      covered by CAP-009 — reused here) to build the
+    //      SourceAndDestFileInfo list that ImportSfmText expects.
+    //   2. Acquiring/releasing an AlertCapture scope around the entire
+    //      import so ParatextData's 11 Alert.Show sites are translated to
+    //      AlertEntry records on the result.
+    //   3. Translating ImportSfmText's bool return + captured alerts into
+    //      the structured ImportBooksResult wire shape (Theme 8).
+    //
+    // The service layer (ManageBooksService.ImportBooksAsync) owns the
+    // precondition guards (editable, shared-admin, overlap) and the
+    // SendFullProjectUpdateEvent emission — this method assumes the
+    // precondition has already passed.
+    //
+    // WriteLock handling: ImportSfmText.ImportBooks acquires the
+    // EntireProject WriteLock internally. If the lock cannot be obtained,
+    // PT9 returns false without processing any files (BHV-105 revised —
+    // write-lock failure blocks the entire import). The orchestrator
+    // surfaces this as Success=false with an Errors entry so the service
+    // layer can choose to map it to UNAVAILABLE if desired; the CAP-005
+    // LockNotObtainedScrText marker seam is the canonical test simulation.
+    //
+    // Scenarios: TS-014, TS-015, TS-028, TS-029, TS-030, TS-031, TS-091,
+    //   TS-095, TS-096, TS-097.
+    // Invariants: INV-002, INV-003, INV-006, INV-013, INV-C01, INV-C03,
+    //   INV-C08, INV-C12.
+    // =====================================================================
+
+    /// <summary>
+    /// Executes a full import against <paramref name="scrText"/> using PT9's
+    /// <c>ImportSfmText.ImportBooks</c> pipeline wrapped in an
+    /// <see cref="AlertCapture"/> scope. Returns a structured
+    /// <see cref="ImportBooksResult"/> containing per-alert warnings/errors
+    /// captured during the operation plus the number of books successfully
+    /// imported.
+    ///
+    /// <para>Delegates to <c>ImportSfmText.ImportBooks</c> for the actual
+    /// write loop (BHV-105: GrantBookPermissions → WriteLock → per-file
+    /// PutText/WriteChaptersToBook → Save → ReleaseAndNotify).
+    /// <c>replaceEntireBook=true</c> routes whole-book replacement;
+    /// <c>replaceEntireBook=false</c> routes chapter-level merge via
+    /// <c>WriteChaptersToBook</c> (BHV-110 — skipped when the book is
+    /// neither writable nor creatable).</para>
+    /// </summary>
+    /// <param name="scrText">Destination project. Must be editable and
+    ///   (for shared projects) user must be administrator per the service
+    ///   layer's preconditions.</param>
+    /// <param name="files">Files to import; only entries with
+    ///   <see cref="ImportFileEntry.Included"/>=<c>true</c> are written
+    ///   (the rest are user-deselected).</param>
+    /// <param name="replaceEntireBook">When <c>true</c>, each included file
+    ///   replaces the destination book entirely. When <c>false</c>,
+    ///   chapters from the file are merged into the destination book per
+    ///   BHV-110.</param>
+    /// <returns>Structured result with Success flag, ImportedCount, and
+    ///   captured <see cref="AlertEntry"/> lists for warnings/errors.</returns>
+    public static ImportBooksResult ImportBooks(
+        ScrText scrText,
+        ImportFileEntry[] files,
+        bool replaceEntireBook
+    )
+    {
+        throw new NotImplementedException("RED — CAP-010");
+    }
 }
