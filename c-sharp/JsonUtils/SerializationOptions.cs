@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Unicode;
 using SIL.Extensions;
 using StreamJsonRpc;
@@ -21,6 +22,13 @@ internal static class SerializationOptions
                 WriteIndented = false, // No need to waste bytes with nice formatting
                 IgnoreReadOnlyProperties = false, // Need types to be serialized
             };
+        // Match the PropertyNamingPolicy: TypeScript string-union types on the wire (e.g.
+        // 'chapterVerse', 'copyDestination') correspond to C# enum values (ChapterVerse,
+        // CopyDestination). Without this converter, System.Text.Json only accepts integer
+        // enum values, which breaks any NetworkObject whose request record contains an enum
+        // field (e.g. ManageBooks CreateBooksRequest.CreationMethod, ProjectFilterInput.Purpose).
+        // Confirmed at runtime via e2e-tests/tests/manage-books/manage-books-commands.spec.ts.
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new CommentThreadSelectorConverter());
         options.Converters.Add(new PlatformCommentConverter());
         options.Converters.Add(new PlatformCommentThreadConverter());
