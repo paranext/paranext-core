@@ -73,6 +73,10 @@ internal sealed class ManageBooksService : NetworkObject
                     ValidateCreateBooksAsync
                 )
             ),
+            (
+                "getBookComparison",
+                new Func<BookComparisonInput, Task<BookComparisonResult>>(GetBookComparisonAsync)
+            ),
         ];
 
         return RegisterNetworkObjectAsync(
@@ -391,4 +395,34 @@ internal sealed class ManageBooksService : NetworkObject
             PlatformErrorCodes.FailedPrecondition,
             $"Model project not found: {modelProjectId}"
         );
+
+    // =====================================================================
+    // CAP-006: BookComparison
+    //
+    // Read-only wire entry for the Copy Books dialog's file-list population.
+    // Preconditions (Section 4.7):
+    //   1. FromProjectId + ToProjectId must resolve    → NOT_FOUND
+    //      (maps INVALID_PROJECT from the contract to the platform code)
+    //   2. FromProjectId != ToProjectId                → INVALID_ARGUMENT
+    //      (maps SAME_PROJECT from the contract; Theme 7 forbids a custom
+    //       SAME_PROJECT code so INVALID_ARGUMENT is the closest fit)
+    //
+    // No mutation; no SendFullProjectUpdateEvent.
+    // =====================================================================
+
+    // === NEW IN PT10 ===
+    // Reason: PAPI wire facade for EXT-007/EXT-008 (Book comparison). PT9 did
+    //   this inside CopyBooksForm.LoadBooks; PT10 exposes it as a standalone
+    //   service call so the Copy Books dialog can populate its file list
+    //   before the user commits to copy.
+    /// <summary>
+    /// Wire entry point for the book comparison query. Maps to
+    /// data-contracts.md Section 4.7. Read-only; no event emitted.
+    /// </summary>
+    public Task<BookComparisonResult> GetBookComparisonAsync(BookComparisonInput input)
+    {
+        throw new NotImplementedException(
+            "CAP-006: GetBookComparisonAsync — implementer to fill in (RED stub)"
+        );
+    }
 }
