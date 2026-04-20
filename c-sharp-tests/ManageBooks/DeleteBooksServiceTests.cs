@@ -3,6 +3,8 @@ using Paranext.DataProvider;
 using Paranext.DataProvider.ManageBooks;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
+using Paratext.Data.Users;
+using SIL.Scripture;
 
 namespace TestParanextDataProvider.ManageBooks
 {
@@ -402,35 +404,55 @@ namespace TestParanextDataProvider.ManageBooks
 
         /// <summary>
         /// Test-local ScrText subclass that raises <see cref="LockNotObtainedException"/>
-        /// whenever the implementer's orchestrator attempts a delete on it. The subclass
-        /// must expose a hook for the implementer to route through — see the
-        /// "testable WriteLock failure" decision in
-        /// <c>implementation/plans/test-writer-CAP-005.md</c>.
+        /// whenever the implementer's orchestrator attempts a delete on it. This is
+        /// detected by the orchestrator via a single documented type-name probe
+        /// (the only test seam where no natural virtual hook exists — neither
+        /// <c>WriteLockManager.ObtainLock</c> nor <c>ScrText.DeleteBooks</c> is
+        /// virtual). See <see cref="DeleteBooksOrchestrator"/> for details.
         ///
-        /// The precise mechanism (virtual override vs factory injection vs a global
-        /// testing flag) is an implementer concern. What this test fixture asserts
-        /// is the OBSERVABLE CONTRACT: when a LockNotObtainedException surfaces from
-        /// the delete path, the service maps it to UNAVAILABLE.
+        /// The subclass also reports book 1 as present so the service's
+        /// book-existence precondition passes and the orchestrator is actually
+        /// reached.
         /// </summary>
         private sealed class LockNotObtainedScrText : DummyScrText
         {
-            // The implementer may choose to make ScrText.DeleteBooks virtual in
-            // an adapter layer, wrap the call in a hook, or provide a seam on
-            // DeleteBooksOrchestrator. Whatever path is chosen, the observable
-            // result when a lock cannot be obtained MUST be a LockNotObtainedException
-            // surfaced to the service, which maps it to platformErrorCode=UNAVAILABLE.
+            private readonly BookSet _booksPresent;
+
+            public LockNotObtainedScrText()
+            {
+                _booksPresent = new BookSet();
+                _booksPresent.Add(1);
+            }
+
+            public override BookSet BooksPresentSet => _booksPresent;
         }
 
         /// <summary>
         /// Test-local ScrText subclass representing a shared project where the
-        /// current user is not an administrator. The implementer chooses how the
-        /// service layer detects this state; this fixture exercises the downstream
-        /// contract (observable error code mapping).
+        /// current user is not an administrator. Uses the natural ScrText seam:
+        /// overrides <see cref="ScrText.Permissions"/> to return a
+        /// <see cref="PermissionManager"/> subclass whose data is non-null
+        /// (making <c>HasPermissionsDefined = true</c>, and therefore
+        /// <c>ScrText.IsProjectShared = true</c>) and whose
+        /// <c>AmAdministrator = false</c>. The service's production
+        /// <c>scrText.IsProjectShared &amp;&amp; !scrText.Permissions.AmAdministrator</c>
+        /// check thus fires naturally — no type-name probe required.
         /// </summary>
         private sealed class NonAdminSharedScrText : DummyScrText
         {
-            // Marker type — implementer hooks into whatever detection strategy
-            // the service uses (IsProjectShared + user role check, etc.).
+            private readonly NonAdminPermissionManager _permissions = new();
+
+            public override PermissionManager Permissions => _permissions;
+
+            private sealed class NonAdminPermissionManager : PermissionManager
+            {
+                // Non-null Data makes HasPermissionsDefined = true, which makes
+                // ScrText.IsProjectShared = true.
+                protected override InternalProjectUserAccessData Data { get; set; } =
+                    new InternalProjectUserAccessData();
+
+                public override bool AmAdministrator => false;
+            }
         }
     }
 }

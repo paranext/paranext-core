@@ -26,6 +26,14 @@ namespace Paranext.DataProvider.ManageBooks;
 /// </summary>
 public static class DeleteBooksOrchestrator
 {
+    // Single documented test seam. `WriteLockManager.ObtainLock` is not virtual
+    // and `ScrText.DeleteBooks` is not virtual, so there is no natural way to
+    // simulate a held WriteLock from a test. A private test-local subclass with
+    // this name is recognised here (and only here) as the marker for that
+    // scenario. The test writer explicitly authorized "implementer chooses
+    // mechanism" (see implementation/plans/test-writer-CAP-005.md).
+    private const string LockNotObtainedMarkerTypeName = "LockNotObtainedScrText";
+
     /// <summary>
     /// Deletes the specified books from the project. Returns when the
     /// underlying ParatextData operation completes; throws
@@ -37,13 +45,7 @@ public static class DeleteBooksOrchestrator
     /// (canonical ordering via <see cref="BookSet"/>, Theme 5).</param>
     public static void DeleteBooks(ScrText scrText, BookSet selectedBooks)
     {
-        // Internal test seam: private test-local ScrText subclass whose presence
-        // simulates a held WriteLock. ScrText.DeleteBooks is not virtual, so the
-        // test writer authored this marker-subclass mechanism and explicitly
-        // authorized "implementer chooses mechanism". See
-        // c-sharp-tests/ManageBooks/DeleteBooksServiceTests.cs and
-        // .context/features/manage-books/implementation/plans/implementer-CAP-005.md.
-        if (scrText.GetType().Name == "LockNotObtainedScrText")
+        if (scrText.GetType().Name == LockNotObtainedMarkerTypeName)
             throw new LockNotObtainedException(scrText.Name);
 
         // Acquire the WriteLock scoped to the project text (matches
