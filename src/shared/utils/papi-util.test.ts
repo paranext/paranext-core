@@ -44,6 +44,7 @@ describe('PAPI Util Functions: serializeRequestType and deserializeRequestType',
   it('will throw on deserialize with no separator in request types', () => {
     const CATEGORY = 'myCategory';
 
+    // Casting a plain string to `SerializedRequestType` to test the runtime guard against unseparated values.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     expect(() => deserializeRequestType(CATEGORY as SerializedRequestType)).toThrow();
   });
@@ -51,8 +52,10 @@ describe('PAPI Util Functions: serializeRequestType and deserializeRequestType',
   it('will throw on serialize if either input is undefined or empty for request types', () => {
     const CATEGORY = 'myCategory';
     const DIRECTIVE = 'myDirective';
+    // Casting `undefined`/`null` to `string` to verify runtime guards reject them despite TypeScript's narrowing.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const undefStr = undefined as unknown as string;
+    // Casting `null` to `string` to verify runtime guards reject it despite TypeScript's narrowing.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const nullStr = null as unknown as string;
 

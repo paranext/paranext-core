@@ -37,7 +37,8 @@ class ThemeDataDataProviderEngine
     return this.allThemeFamiliesById;
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
+  // setAllThemes doesn't use instance state but cannot be static because it implements the
+  // IDataProviderEngine<ThemeDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setAllThemes(): Promise<DataProviderUpdateInstructions<ThemeDataDataTypes>> {
     throw new Error('Cannot set all themes. Extensions can provide themes in contributions');

@@ -18,14 +18,20 @@ export function renderEditorialWithToolbar(
   },
   initialScrRef: SerializedVerseRef,
 ) {
+  // This is a Storybook render function, not a React component; hooks are valid here but ESLint
+  // cannot detect that, so rules-of-hooks must be disabled for each hook call
   // eslint-disable-next-line no-null/no-null, react-hooks/rules-of-hooks
   const editorRef = useRef<EditorRef | null>(null);
+  // Render function (not a component) - hooks are valid but ESLint cannot detect it
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const [scrRef, setScrRef] = useState(initialScrRef);
+  // Render function (not a component) - hooks are valid but ESLint cannot detect it
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const [canUndo, setCanUndo] = useState(false);
+  // Render function (not a component) - hooks are valid but ESLint cannot detect it
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const [canRedo, setCanRedo] = useState(false);
+  // Render function (not a component) - hooks are valid but ESLint cannot detect it
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const [blockMarker, setBlockMarker] = useState<string | undefined>();
 

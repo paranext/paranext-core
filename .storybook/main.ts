@@ -8,11 +8,9 @@ const config: StorybookConfig = {
     '../src/**/*.mdx',
     '../src/**/*.stories.@(js|jsx|ts|tsx)',
     '../extensions/src/**/*.stories.@(js|jsx|ts|tsx)', // Collect stories from bundled extensions - at lease until https://paratextstudio.atlassian.net/browse/PT-3307 is implemented
-    '../lib/platform-bible-react/src/stories/**/*.stories.@(js|jsx|ts|tsx)', // Include only stories directory from platform-bible-react library
   ],
   staticDirs: [
     '../src/stories/assets', // static asset folder
-    '../lib/platform-bible-react/src', // platform-bible-react static assets
     '../extensions/src/platform-scripture-editor/assets', // Scripture editor assets
   ],
   addons: [
@@ -42,18 +40,89 @@ const config: StorybookConfig = {
 
   // Merge StorybookWebpackConfig with our WebpackRendererConfig
   // See the current webpack configuration using npm run storybook -- --debug-webpack
-  // TODO: Make this work in production mode
   webpackFinal: async (webpackConfig, { configType }) => {
     const rendererConfig =
       configType === 'PRODUCTION'
-        ? // Storybook is a build tool so this will not affect anything
+        ? // Webpack configs must be loaded dynamically based on configType (PRODUCTION vs DEVELOPMENT)
           // eslint-disable-next-line global-require
           require('../.erb/configs/webpack.config.renderer.prod').default
-        : // eslint-disable-next-line global-require
+        : // Storybook is a build tool so this will not affect anything
+          // eslint-disable-next-line global-require
           require('../.erb/configs/webpack.config.renderer.dev').default;
-    // Remove configs that break stuff (https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config)
+    // Strip Electron-specific configs that conflict with Storybook's own webpack setup.
+    // devServer/entry/output are Electron-only; optimization/cache are managed by Storybook.
+    // See https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { devServer, entry, output, ...rendererConfigSanitized } = rendererConfig;
+    const { devServer, entry, output, optimization, cache, ...rendererConfigSanitized } =
+      rendererConfig;
+
+    // Filter out plugins that conflict with Storybook's own plugins.
+    // HtmlWebpackPlugin causes Storybook 9's WebpackInjectMockerRuntimePlugin to
+    // emit mocker-runtime-injected.js twice (one per HtmlWebpackPlugin instance).
+    const conflictingPlugins = ['HtmlWebpackPlugin', 'BundleAnalyzerPlugin'];
+    rendererConfigSanitized.plugins = (rendererConfigSanitized.plugins || []).filter(
+      (plugin: { constructor?: { name?: string } }) =>
+        !conflictingPlugins.includes(plugin?.constructor?.name ?? ''),
+    );
+
+    // Inject postcss-loader into the renderer's CSS rules for Storybook only.
+    // postcss-loader is intentionally omitted from the shared renderer webpack configs so that
+    // Tailwind CSS is not processed in the Electron app build — only in Storybook.
+    if (rendererConfigSanitized.module?.rules) {
+      const rendererRules: RuleSetRule[] = rendererConfigSanitized.module.rules;
+      rendererConfigSanitized.module.rules = rendererRules.map((rule) => {
+        if (!rule || typeof rule !== 'object' || !Array.isArray(rule.use)) return rule;
+        const useArr = rule.use;
+        const cssIdx = useArr.findIndex(
+          (u) =>
+            u === 'css-loader' ||
+            (!!u &&
+              typeof u === 'object' &&
+              typeof u !== 'function' &&
+              'loader' in u &&
+              u.loader === 'css-loader'),
+        );
+        if (cssIdx < 0) return rule;
+        // Bump importLoaders by 1 so postcss-loader processes CSS @imports.
+        // Handles both the plain string form ('css-loader') and the object form ({ loader: 'css-loader', options: {...} }).
+        const newUse = useArr.map((u, i) => {
+          if (i !== cssIdx) return u;
+          // Plain string form: convert to object with importLoaders: 1
+          if (u === 'css-loader') {
+            return { loader: 'css-loader', options: { importLoaders: 1 } };
+          }
+          // Object form: bump existing importLoaders count
+          if (
+            !!u &&
+            typeof u === 'object' &&
+            typeof u !== 'function' &&
+            'options' in u &&
+            typeof u.options === 'object' &&
+            !!u.options &&
+            'importLoaders' in u.options &&
+            typeof u.options.importLoaders === 'number'
+          ) {
+            return { ...u, options: { ...u.options, importLoaders: u.options.importLoaders + 1 } };
+          }
+          // Object form without importLoaders: add importLoaders: 1
+          if (
+            !!u &&
+            typeof u === 'object' &&
+            typeof u !== 'function' &&
+            'loader' in u &&
+            u.loader === 'css-loader' &&
+            (!('options' in u) || typeof u.options !== 'function')
+          ) {
+            const existingOptions =
+              'options' in u && typeof u.options === 'object' ? (u.options ?? {}) : {};
+            return { ...u, options: { ...existingOptions, importLoaders: 1 } };
+          }
+          return u;
+        });
+        newUse.splice(cssIdx + 1, 0, 'postcss-loader');
+        return { ...rule, use: newUse };
+      });
+    }
 
     // Add path mapping for platform-bible-react's @/ alias and resolve the package from source
     if (webpackConfig.resolve) {

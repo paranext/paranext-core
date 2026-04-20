@@ -4,39 +4,116 @@ import path from 'path';
 
 export const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
+// #region Types — keep in sync with dev-packages.schema.json (both must be updated together)
+
+/** A package within a dev repo that can be published locally via yalc and linked into this repo. */
 export type DevPackage = {
+  /** The nx project name passed to `nx devpub <target>` to publish this package. */
   devpubTarget: string;
+  /**
+   * The npm script prefix in this repo used to link/unlink the package, e.g. `editor` maps to
+   * `editor:link` and `editor:unlink`.
+   */
   repoLinkScript: string;
-  folder: string;
 };
 
-// Driving data: list of development packages that can be published in the
-// local scripture-editors checkout, and the corresponding npm script names in
-// this repo used to link/unlink them.
-export const DEV_PACKAGES: DevPackage[] = [
-  { devpubTarget: 'platform-editor', repoLinkScript: 'editor', folder: 'scripture-editors' },
-  { devpubTarget: 'utilities', repoLinkScript: 'utils', folder: 'scripture-editors' },
-];
+/**
+ * A development repository containing one or more packages that can be linked into this repo via
+ * yalc.
+ */
+export type DevRepo = {
+  /**
+   * The directory name of the repo, used as both the clone destination under `dev-packages/` and
+   * the sibling-directory fallback name.
+   */
+  folder: string;
+  /** The git clone URL for the repo, used when the repo is not already present locally. */
+  cloneUrl: string;
+  /** The git revision (branch name, tag, or commit hash) to check out before building. */
+  revision: string;
+  /** The packages within this repo to publish and link. */
+  devPackages: DevPackage[];
+};
 
-// Resolve a dev-package folder path. Prefer `dev-packages/<folder>` inside the
-// repository workspace (used by CI), but fall back to a sibling directory
-// `../<folder>` for developer checkouts where scripture-editors lives next to
-// this repo.
-export function getDevPackagePath(folder: string): string {
+// #endregion
+
+/** List of development repos loaded from `dev-packages.json` at the repository root. */
+export const DEV_REPOS: DevRepo[] = JSON.parse(
+  fs.readFileSync(path.resolve(REPO_ROOT, 'dev-packages.json'), 'utf8'),
+).repos;
+
+/**
+ * Resolve a dev-package folder path. Prefers `dev-packages/<folder>` inside the repository
+ * workspace (used by CI), but falls back to a sibling directory `../<folder>` for developer
+ * checkouts where the repo lives next to this repo.
+ */
+function getDevPackagePath(folder: string): string {
   const inRepo = path.resolve(REPO_ROOT, 'dev-packages', folder);
   if (fs.existsSync(inRepo)) return inRepo;
   return path.resolve(REPO_ROOT, '..', folder);
 }
 
-export function devPackageExists(folder: string): boolean {
+/** Returns whether a dev package folder exists at the resolved path for the given folder name. */
+function devPackageExists(folder: string): boolean {
   return fs.existsSync(getDevPackagePath(folder));
 }
 
-export function isAnyDevPackagePresent(): boolean {
-  return DEV_PACKAGES.some((p) => devPackageExists(p.folder));
+/**
+ * Clones the given dev repo into `dev-packages/<folder>` if it does not already exist locally. Does
+ * nothing if the repo is already present.
+ */
+export function cloneRepoIfNeeded(repo: DevRepo): void {
+  if (devPackageExists(repo.folder)) return;
+
+  const devPackagesDir = path.resolve(REPO_ROOT, 'dev-packages');
+  if (!fs.existsSync(devPackagesDir)) {
+    fs.mkdirSync(devPackagesDir, { recursive: true });
+  }
+  const clonePath = path.resolve(devPackagesDir, repo.folder);
+  console.log(`Cloning ${repo.cloneUrl} into ${clonePath}...`);
+  execSync(`git clone "${repo.cloneUrl}" "${clonePath}"`, { stdio: 'inherit' });
 }
 
-export function execInDevPackage(folder: string, cmd: string): void {
+/**
+ * Checks out the given revision in the dev package repo at `folder`. Fetches from origin first,
+ * then pulls if the repo is on a branch. Throws if the repo has uncommitted working changes.
+ */
+export function checkoutRevision(folder: string, revision: string): void {
+  const repoPath = getDevPackagePath(folder);
+
+  const status = execSync('git status --porcelain', { cwd: repoPath, encoding: 'utf8' });
+  if (status.trim().length > 0) {
+    throw new Error(
+      `The ${folder} repo has working changes:\n${status}\nWe don't want to accidentally overwrite any changes. Please go handle your changes and try again when there are no more working changes.`,
+    );
+  }
+
+  console.log(`Fetching latest in ${folder}...`);
+  execSync('git fetch origin', { stdio: 'inherit', cwd: repoPath });
+  console.log(`Checking out ${revision} in ${folder}...`);
+  execSync(`git checkout "${revision}"`, { stdio: 'inherit', cwd: repoPath });
+  // Pull to get the latest commits if we're on a branch. Skip for detached HEADs (tags or commit hashes).
+  let isOnBranch: boolean;
+  try {
+    execSync('git symbolic-ref --quiet HEAD', { stdio: 'pipe', cwd: repoPath });
+    isOnBranch = true;
+  } catch {
+    isOnBranch = false;
+  }
+  if (isOnBranch) {
+    execSync('git pull', { stdio: 'inherit', cwd: repoPath });
+  } else {
+    console.log(
+      `Detached HEAD in ${folder} (tag or commit hash). Skipping pull, using checked-out revision.`,
+    );
+  }
+}
+
+/**
+ * Executes a shell command in the dev package directory resolved from `folder`, with environment
+ * variables configured for Volta pnpm support and Nx Cloud disabled.
+ */
+function execInDevPackage(folder: string, cmd: string): void {
   const pathToUse = getDevPackagePath(folder);
   const env = {
     ...process.env,
@@ -50,6 +127,7 @@ export function execInDevPackage(folder: string, cmd: string): void {
   execSync(cmd, { stdio: 'inherit', cwd: pathToUse, env });
 }
 
+/** Executes a shell command in the repository root directory. */
 export function execInRepo(cmd: string): void {
   execSync(cmd, { stdio: 'inherit', cwd: REPO_ROOT });
 }

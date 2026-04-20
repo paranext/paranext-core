@@ -179,6 +179,7 @@ export function getErrorMessage(error: unknown) {
 
 /** Asynchronously waits for the specified number of milliseconds. (wraps setTimeout in a promise) */
 export function wait(ms: number) {
+  // setTimeout returns a value but the Promise executor must not; returning it directly is the cleanest form
   // eslint-disable-next-line no-promise-executor-return
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }

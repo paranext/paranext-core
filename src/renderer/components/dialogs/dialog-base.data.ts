@@ -1,6 +1,7 @@
 import { FloatSize, TabLoader, TabSaver } from '@shared/models/docking-framework.model';
 import { DialogData } from '@shared/models/dialog-options.model';
 import { logger } from '@shared/services/logger.service';
+import { Dialog } from 'platform-bible-react';
 import { ReactElement, createElement } from 'react';
 import { serialize } from 'platform-bible-utils';
 
@@ -28,6 +29,15 @@ export type DialogDefinitionBase = Readonly<{
   minWidth?: number;
   /** The minimum height to which the dialog can be set in CSS `px` units */
   minHeight?: number;
+  /**
+   * The ARIA role to use when this dialog is rendered as a modal overlay.
+   *
+   * - `'alertdialog'` for dialogs that interrupt the user and require acknowledgment (alert, confirm)
+   * - `'dialog'` for general-purpose dialogs (selection, about, etc.)
+   *
+   * Defaults to `'dialog'`
+   */
+  dialogRole?: 'dialog' | 'alertdialog';
   /**
    * The function used to load the dialog into the dock layout. Default uses the `Component` field
    * and passes in the `DialogProps`
@@ -170,15 +180,22 @@ export const DIALOG_BASE: DialogDefinitionBase = {
       tabTitle: tabData?.title || this.defaultTitle || this.tabType || 'Dialog Title Error',
       minWidth: this.minWidth,
       minHeight: this.minHeight,
-      // dialogs must define their own Component. It will then be used in this default
-      // implementation of `loadDialog`
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      content: createElement(this.Component!, {
-        ...tabData,
-        submitDialog: (data) => resolveDialogRequest(savedTabInfo.id, data),
-        cancelDialog: () => resolveDialogRequest(savedTabInfo.id, undefined),
-        rejectDialog: (errorMessage) => rejectDialogRequest(savedTabInfo.id, errorMessage),
-      }),
+      // Wrap in a non-modal Dialog context so Radix primitives (DialogTitle, DialogDescription)
+      // used inside dialog components have the required Radix context provider. The modal overlay
+      // path provides its own Dialog wrapper; this covers the dock-tab (non-modal) path.
+      content: createElement(
+        Dialog,
+        { open: true, modal: false },
+        // dialogs must define their own Component. It will then be used in this default
+        // implementation of `loadDialog`
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        createElement(this.Component!, {
+          ...tabData,
+          submitDialog: (data) => resolveDialogRequest(savedTabInfo.id, data),
+          cancelDialog: () => resolveDialogRequest(savedTabInfo.id, undefined),
+          rejectDialog: (errorMessage) => rejectDialogRequest(savedTabInfo.id, errorMessage),
+        }),
+      ),
     };
   },
   saveDialog() {

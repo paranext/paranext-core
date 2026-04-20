@@ -1,6 +1,8 @@
-import { ABOUT_DIALOG } from '@renderer/components/dialogs/about-dialog.component';
-import { SELECT_MULTIPLE_PROJECTS_DIALOG } from '@renderer/components/dialogs/select-multiple-projects.dialog';
-import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-project.dialog';
+import { ABOUT_DIALOG } from './about-dialog.component';
+import { ALERT_DIALOG } from './alert-dialog.component';
+import { CONFIRM_DIALOG } from './confirm-dialog.component';
+import { SELECT_MULTIPLE_PROJECTS_DIALOG } from './select-multiple-projects.dialog';
+import { SELECT_PROJECT_DIALOG } from './select-project.dialog';
 import { DialogDefinition, DialogTabTypes } from './dialog-definition.model';
 import { SELECT_BOOKS_DIALOG } from './select-books-dialog.component';
 
@@ -11,6 +13,8 @@ import { SELECT_BOOKS_DIALOG } from './select-books-dialog.component';
  */
 export const DIALOGS: { [DialogTabType in DialogTabTypes]: DialogDefinition<DialogTabType> } = {
   [ABOUT_DIALOG.tabType]: ABOUT_DIALOG,
+  [ALERT_DIALOG.tabType]: ALERT_DIALOG,
+  [CONFIRM_DIALOG.tabType]: CONFIRM_DIALOG,
   [SELECT_PROJECT_DIALOG.tabType]: SELECT_PROJECT_DIALOG,
   [SELECT_MULTIPLE_PROJECTS_DIALOG.tabType]: SELECT_MULTIPLE_PROJECTS_DIALOG,
   [SELECT_BOOKS_DIALOG.tabType]: SELECT_BOOKS_DIALOG,

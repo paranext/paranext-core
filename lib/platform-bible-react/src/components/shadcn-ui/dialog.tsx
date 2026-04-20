@@ -2,46 +2,79 @@ import React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
+import { Z_INDEX_MODAL, Z_INDEX_MODAL_BACKDROP } from '@/components/z-index';
 import { cn } from '@/utils/shadcn-ui.util';
 import { readDirection } from '@/utils/dir-helper.util';
 
+// CUSTOM JSDoc comments added to all components for documentation
+/**
+ * The Dialog component displays a modal dialog window. Built on Radix UI's Dialog component and
+ * styled by Shadcn UI.
+ *
+ * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/dialog See Radix UI
+ * Documentation https://www.radix-ui.com/docs/primitives/components/dialog
+ */
 const Dialog = DialogPrimitive.Root;
 
+/** Button or element that opens the dialog when clicked. */
 const DialogTrigger = DialogPrimitive.Trigger;
 
+/** Portals the dialog content into `document.body` to avoid z-index and overflow issues. */
 const DialogPortal = DialogPrimitive.Portal;
 
+/** Button or element that closes the dialog when clicked. */
 const DialogClose = DialogPrimitive.Close;
 
+/** Semi-transparent backdrop rendered behind the dialog content. Animates on open/close. */
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
+>(({ className, style, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'tw-fixed tw-inset-0 tw-z-50 tw-bg-black/80 data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0',
+      // CUSTOM: Remove tw-z-50 and replace with shared Z_INDEX_MODAL_BACKDROP constant
+      'tw-fixed tw-inset-0 tw-bg-black/80 data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0',
       className,
     )}
+    // CUSTOM: shared z-index scale so modals stack above rc-dock and overlay layers (replaces tw-z-50)
+    style={{ zIndex: Z_INDEX_MODAL_BACKDROP, ...style }}
     {...props}
   />
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+// CUSTOM: Extend DialogContentProps with overlayClassName prop
+export type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+  /**
+   * Additional CSS classes for the backdrop (`DialogOverlay`). Use when one dialog needs different
+   * overlay styling than the default.
+   */
+  overlayClassName?: string;
+};
+
+/**
+ * Main container for dialog content. Renders inside a portal with an overlay backdrop, centered on
+ * screen. Includes a close button in the top corner.
+ */
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+  DialogContentProps
+>(({ className, children, overlayClassName, style, ...props }, ref) => {
   const dir = readDirection();
   return (
     <DialogPortal>
-      <DialogOverlay />
+      {/* CUSTOM: Pass overlayClassName to DialogOverlay for per-call backdrop styling */}
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          'pr-twp tw-fixed tw-left-[50%] tw-top-[50%] tw-z-50 tw-grid tw-w-full tw-max-w-lg tw-translate-x-[-50%] tw-translate-y-[-50%] tw-gap-4 tw-border tw-bg-background tw-p-6 tw-shadow-lg tw-duration-200 data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[state=closed]:tw-slide-out-to-left-1/2 data-[state=closed]:tw-slide-out-to-top-[48%] data-[state=open]:tw-slide-in-from-left-1/2 data-[state=open]:tw-slide-in-from-top-[48%] sm:tw-rounded-lg',
+          // CUSTOM: Remove tw-z-50 and replace with shared Z_INDEX_MODAL constant
+          'pr-twp tw-fixed tw-left-[50%] tw-top-[50%] tw-grid tw-w-full tw-max-w-lg tw-translate-x-[-50%] tw-translate-y-[-50%] tw-gap-4 tw-border tw-bg-background tw-p-6 tw-shadow-lg tw-duration-200 data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[state=closed]:tw-slide-out-to-left-1/2 data-[state=closed]:tw-slide-out-to-top-[48%] data-[state=open]:tw-slide-in-from-left-1/2 data-[state=open]:tw-slide-in-from-top-[48%] sm:tw-rounded-lg',
           className,
         )}
+        // CUSTOM: use shared Z_INDEX_MODAL constant
+        style={{ zIndex: Z_INDEX_MODAL, ...style }}
         {...props}
         dir={dir}
       >
@@ -61,6 +94,8 @@ const DialogContent = React.forwardRef<
   );
 });
 DialogContent.displayName = DialogPrimitive.Content.displayName;
+
+/** Container for the dialog's header area. Stacks title and description vertically. */
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
@@ -74,6 +109,7 @@ function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 }
 DialogHeader.displayName = 'DialogHeader';
 
+/** Container for the dialog's footer area. Lays out action buttons in a row on larger screens. */
 function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
@@ -87,6 +123,7 @@ function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 }
 DialogFooter.displayName = 'DialogFooter';
 
+/** Renders the dialog's title as a styled heading. Used inside DialogHeader. */
 const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
@@ -99,6 +136,7 @@ const DialogTitle = React.forwardRef<
 ));
 DialogTitle.displayName = DialogPrimitive.Title.displayName;
 
+/** Renders the dialog's description text in a muted style. Used inside DialogHeader. */
 const DialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>

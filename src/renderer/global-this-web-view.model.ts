@@ -60,6 +60,7 @@ type WebViewCleanup = {
   unmountRoot: () => void;
 };
 
+// `declare global` augmentation requires `var` declarations; they cannot be `const`/`let`.
 /* eslint-disable vars-on-top, no-var */
 declare global {
   var papi: Papi;

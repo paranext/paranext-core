@@ -129,6 +129,8 @@ class SettingDataProviderEngine
     );
   }
 
+  // getLocalizedSettingsContributionInfo doesn't use instance state but cannot be static because
+  // the @dataProviderService.decorators.ignore decorator targets instance methods
   /* eslint-disable @typescript-eslint/class-methods-use-this */
   @dataProviderService.decorators.ignore
   async getLocalizedSettingsContributionInfo(): Promise<
@@ -167,6 +169,8 @@ class SettingDataProviderEngine
     return true;
   }
 
+  // validateSetting doesn't use instance state but cannot be static because it implements the
+  // ISettingsService interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async validateSetting<SettingName extends SettingNames>(
     key: SettingName,

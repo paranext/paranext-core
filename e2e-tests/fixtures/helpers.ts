@@ -5,7 +5,29 @@ import path from 'path';
 import WebSocket from 'ws';
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
+
+/**
+ * Same serialized request type as `registerCommand('platform.about', ...)` in command.service
+ * (`command` + `:` + `platform.about`).
+ */
+const PLATFORM_ABOUT_COMMAND = 'command:platform.about';
+
+const RPC_DISCOVER_POLL_INTERVAL_MS = 250;
 export const PROCESS_READY_TIMEOUT = 120_000;
+
+/**
+ * Keep in sync with GET_METHODS from @shared/data/rpc.model Get all methods that are currently
+ * registered on the network. Required to be 'rpc.discover' by the OpenRPC specification.
+ */
+const GET_METHODS = 'rpc.discover';
+
+/**
+ * Subset of the OpenRPC `rpc.discover` result shape used by E2E helpers (see
+ * `src/shared/models/openrpc.model` for the full type).
+ */
+type RpcDiscoverResult = {
+  methods?: Array<{ name: string }>;
+};
 
 /** Return value from {@link launchElectronApp}. */
 export interface ElectronAppContext {
@@ -59,12 +81,18 @@ export async function launchElectronApp(): Promise<ElectronAppContext> {
   console.log(`Launching Electron app from project root: ${rootDir}`);
 
   // VSCode/Claude Code set ELECTRON_RUN_AS_NODE=1 which forces the Electron
-  // binary to run as plain Node.js. We must remove it.
+  // binary to run as plain Node.js. We must omit it (do not set it to undefined:
+  // Playwright's env type is Record<string, string>).
   // NODE_ENV=development so the renderer loads from the webpack dev server.
+  // Omit ELECTRON_RUN_AS_NODE so the Electron child does not inherit it.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { ELECTRON_RUN_AS_NODE, ...restEnv } = process.env;
   const env = {
-    ...process.env,
+    ...restEnv,
     NODE_ENV: 'development',
-    ELECTRON_RUN_AS_NODE: undefined,
+    // Enable noisy dev mode so test extensions (helloRock3, helloSomeone, etc.) are loaded.
+    // Only set if not already defined, so other E2E suites can override.
+    DEV_NOISY: process.env.DEV_NOISY ?? 'true',
   };
 
   // Use an isolated user-data directory so the singleton instance lock does not
@@ -192,32 +220,37 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
 }
 
 /**
- * @deprecated For CI smoke tests / app.fixture teardown only. Per-feature E2E tests must navigate
- *   through visible UI using cdp.fixture, not PAPI commands.
+ * One JSON-RPC 2.0 request over WebSocket: open, send, wait for response id `1`, close. Ignores
+ * unrelated messages until the matching response arrives.
  *
- *   Send a JSON-RPC request over WebSocket to the PAPI server. Opens a connection, sends the request,
- *   waits for response, then closes.
+ * @param timeoutErrorMessage — optional; defaults to a `PAPI request "…" timed out …` message.
  */
-export async function sendPapiCommand<T = unknown>(
-  command: string,
-  args: unknown[] = [],
+async function sendPapiJsonRpcOnce<T>(
+  method: string,
+  timeoutErrorMessage?: string,
+  params: unknown[] = [],
   port: number = DEFAULT_WEBSOCKET_PORT,
+  perRequestTimeoutMs = 10_000,
 ): Promise<T> {
+  const timeoutMessage =
+    timeoutErrorMessage ?? `PAPI request "${method}" timed out after ${perRequestTimeoutMs}ms`;
+
   return new Promise<T>((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:${port}`);
     const timeout = setTimeout(() => {
       ws.close();
-      reject(new Error(`PAPI command "${command}" timed out after 10s`));
-    }, 10_000);
+      reject(new Error(timeoutMessage));
+    }, perRequestTimeoutMs);
 
     ws.on('open', () => {
-      const request = {
-        jsonrpc: '2.0',
-        id: 1,
-        method: `command:${command}`,
-        params: args,
-      };
-      ws.send(JSON.stringify(request));
+      ws.send(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method,
+          params,
+        }),
+      );
     });
 
     ws.on('message', (data) => {
@@ -230,15 +263,14 @@ export async function sendPapiCommand<T = unknown>(
         reject(err);
         return;
       }
-      // Ignore unsolicited messages (notifications, events) that don't
-      // match our request id — only resolve on the actual response.
+      // Ignore unsolicited messages (notifications, events) that don't match our request id.
       if (parsed.id !== 1) return;
       clearTimeout(timeout);
       ws.close();
       if (parsed.error) {
         reject(new Error(`PAPI error: ${JSON.stringify(parsed.error)}`));
       } else {
-        // WebSocket JSON-RPC response `result` is untyped; caller provides T
+        // JSON-RPC `result` is untyped; caller supplies T (e.g. RpcDiscoverResult for rpc.discover).
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         resolve(parsed.result as T);
       }
@@ -252,13 +284,122 @@ export async function sendPapiCommand<T = unknown>(
 }
 
 /**
+ * @deprecated For CI smoke tests / app.fixture teardown only. Per-feature E2E tests must navigate
+ *   through visible UI using cdp.fixture, not PAPI commands.
+ *
+ *   Send a PAPI command over WebSocket (`method` = `command:` + `command`). Opens a connection, sends
+ *   the request, waits for the response, then closes.
+ */
+export async function sendPapiCommand<T = unknown>(
+  command: string,
+  args: unknown[] = [],
+  port: number = DEFAULT_WEBSOCKET_PORT,
+): Promise<T> {
+  return sendPapiJsonRpcOnce<T>(
+    `command:${command}`,
+    `PAPI command "${command}" timed out after 10s`,
+    args,
+    port,
+    10_000,
+  );
+}
+
+/**
+ * Send a single JSON-RPC request where `method` is a PAPI request type (e.g. `rpc.discover`). Opens
+ * a connection, sends one request, waits for the matching response id, then closes.
+ */
+async function sendPapiRequestOnce<T>(
+  method: string,
+  params: unknown[] = [],
+  port: number = DEFAULT_WEBSOCKET_PORT,
+  perRequestTimeoutMs = 10_000,
+): Promise<T> {
+  return sendPapiJsonRpcOnce<T>(method, undefined, params, port, perRequestTimeoutMs);
+}
+
+/**
+ * Poll `rpc.discover` until `methodName` appears in `result.methods` or `timeoutMs` elapses. Uses
+ * the same registration map as the live PAPI server (renderer-registered commands included).
+ */
+export async function waitForPapiMethodRegistered(
+  methodName: string,
+  port: number = DEFAULT_WEBSOCKET_PORT,
+  timeoutMs = 60_000,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const remaining = timeoutMs - (Date.now() - start);
+    try {
+      const result = await sendPapiRequestOnce<RpcDiscoverResult>(
+        GET_METHODS,
+        [],
+        port,
+        Math.min(10_000, Math.max(1000, remaining)),
+      );
+      if (result.methods?.some((m) => m.name === methodName)) return;
+    } catch {
+      /* next poll */
+    }
+    const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
+    if (sleepMs <= 0) break;
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, sleepMs);
+    });
+  }
+  throw new Error(`PAPI method "${methodName}" not listed in rpc.discover within ${timeoutMs}ms`);
+}
+
+/**
+ * Serialized PAPI request for `ProjectLookupService.getMetadataForAllProjects` (see
+ * `network-object.service.ts` `getNetworkObjectRequestType`).
+ */
+const PROJECT_LOOKUP_GET_ALL_PROJECTS_METHOD =
+  'object:ProjectLookupService.getMetadataForAllProjects';
+
+/**
+ * Poll until project lookup returns at least one project. PDP factories can register after the dock
+ * is visible; select-project dialogs need metadata before they render `.project-list` buttons.
+ */
+export async function waitForAtLeastOneProjectMetadata(
+  port: number = DEFAULT_WEBSOCKET_PORT,
+  timeoutMs = 60_000,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const remaining = timeoutMs - (Date.now() - start);
+    try {
+      const result = await sendPapiRequestOnce<unknown[]>(
+        PROJECT_LOOKUP_GET_ALL_PROJECTS_METHOD,
+        [],
+        port,
+        Math.min(10_000, Math.max(1000, remaining)),
+      );
+      if (Array.isArray(result) && result.length > 0) return;
+    } catch {
+      /* PDP factories or network object not ready yet */
+    }
+    const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
+    if (sleepMs <= 0) break;
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, sleepMs);
+    });
+  }
+  throw new Error(
+    `Project lookup returned no projects within ${timeoutMs}ms (PDP factories may not be registered).`,
+  );
+}
+
+/**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
- * platform-dock layout to appear, indicating extensions have loaded.
+ * platform-dock layout to appear, then for the dialog service to finish registering menu commands
+ * like `platform.about` (the dock can render before that async work completes).
  */
 export async function waitForAppReady(page: Page, timeout = 60_000): Promise<void> {
-  // Wait for the dock layout which indicates the full UI has rendered
+  const start = Date.now();
   await page.waitForSelector('div[class*="dock-layout"]', {
     state: 'attached',
     timeout,
   });
+  const remaining = Math.max(0, timeout - (Date.now() - start));
+  await waitForPapiMethodRegistered(PLATFORM_ABOUT_COMMAND, DEFAULT_WEBSOCKET_PORT, remaining);
 }

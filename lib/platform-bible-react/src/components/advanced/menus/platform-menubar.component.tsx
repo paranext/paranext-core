@@ -24,6 +24,7 @@ import {
 } from 'platform-bible-utils';
 import { RefObject, useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
+import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
 import MenuItemIcon from './menu-icon.component';
 
@@ -136,15 +137,19 @@ export function PlatformMenubar({
   onOpenChange,
   variant,
 }: PlatformMenubarProps) {
-  // These refs will always be defined
+  // These refs will always be defined — using undefined! avoids a null check on every use
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menubarRef = useRef<HTMLDivElement>(undefined!);
+  // Ref is always defined before use; the non-null assertion avoids redundant null checks
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const projectMenuRef = useRef<HTMLButtonElement>(undefined!);
+  // Ref is always defined before use; the non-null assertion avoids redundant null checks
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const windowMenuRef = useRef<HTMLButtonElement>(undefined!);
+  // Ref is always defined before use; the non-null assertion avoids redundant null checks
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const layoutMenuRef = useRef<HTMLButtonElement>(undefined!);
+  // Ref is always defined before use; the non-null assertion avoids redundant null checks
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const helpMenuRef = useRef<HTMLButtonElement>(undefined!);
 
@@ -238,7 +243,7 @@ export function PlatformMenubar({
               {typeof column === 'object' && 'label' in column && column.label}
             </MenubarTrigger>
             <MenubarContent
-              className="tw-z-[250]" // Need to get over the floating web view z-index 200
+              style={{ zIndex: Z_INDEX_ABOVE_DOCK }} // Need to get over the floating web view z-index 200
             >
               <TooltipProvider>
                 {getMenubarContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}

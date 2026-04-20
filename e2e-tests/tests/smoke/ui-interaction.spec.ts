@@ -42,12 +42,11 @@ test.describe('UI Interaction', () => {
     // Trigger the about dialog via PAPI
     await papiClient.sendCommand('platform.about');
 
-    // The about panel is labeled with the about menu localization key
-    const aboutPane = mainPage.getByLabel('%mainMenu_about%');
-    await expect(aboutPane).toBeVisible({ timeout: 10_000 });
+    // The about dialog opens as a floating dock tab (same as Help menu path).
+    const aboutTab = mainPage.locator('.dock-tab', { hasText: /About/i });
+    await expect(aboutTab).toBeVisible({ timeout: 10_000 });
 
     // Close the About tab via dispatchEvent (see comment in first test).
-    const aboutTab = mainPage.locator('.dock-tab', { hasText: /About/i });
     const closeButton = aboutTab.locator('.dock-tab-close-btn');
     await closeButton.dispatchEvent('click');
     await expect(aboutTab).not.toBeVisible({ timeout: 10_000 });
@@ -55,6 +54,8 @@ test.describe('UI Interaction', () => {
 
   test('should toggle theme via toolbar button', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
+
+    await expect(mainPage.locator('#theme-styles')).toHaveCount(1, { timeout: 10_000 });
 
     // The theme style element carries the current theme id
     const getThemeId = () =>
@@ -65,10 +66,10 @@ test.describe('UI Interaction', () => {
     const initialThemeId = await getThemeId();
     expect(initialThemeId).toBeTruthy();
 
-    // Find and click the theme toggle button (Sun or Moon icon) in the toolbar
-    const themeButton = mainPage.locator('button:has(svg.lucide-sun), button:has(svg.lucide-moon)');
-    await expect(themeButton).toBeVisible({ timeout: 5_000 });
-    await expect(themeButton).toBeEnabled({ timeout: 5_000 });
+    const themeButton = mainPage.getByTestId('theme-toggle');
+    await expect(themeButton).toBeVisible({ timeout: 10_000 });
+    await expect(themeButton).toBeEnabled({ timeout: 10_000 });
+    await themeButton.scrollIntoViewIfNeeded();
     await themeButton.click();
 
     // Wait for theme data provider to update the stylesheet

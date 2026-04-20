@@ -43,9 +43,7 @@ export default function CommentList({
     thread.comments.some((comment) => !comment.deleted),
   );
 
-  const options: ListboxOption[] = activeThreads.map((thread) => ({
-    id: thread.id,
-  }));
+  const options: ListboxOption[] = activeThreads.map((thread) => ({ id: thread.id }));
 
   const handleKeyboardSelectThread = useCallback(
     (option: ListboxOption) => {
@@ -121,7 +119,6 @@ export default function CommentList({
       {activeThreads.map((thread) => (
         <div
           key={thread.id}
-          id={thread.id}
           className={cn({
             'tw-opacity-60': thread.status === 'Resolved',
           })}
