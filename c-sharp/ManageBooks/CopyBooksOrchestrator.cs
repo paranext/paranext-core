@@ -609,11 +609,22 @@ public static class CopyBooksOrchestrator
     // every requested book copied without error.
     /// <summary>
     /// Copies the specified books from <paramref name="fromScrText"/> to
-    /// <paramref name="toScrText"/> via a <see cref="WriteLock"/>-scoped
-    /// per-book <c>GetText</c> / <c>PutText</c> loop. Per-book failures are
-    /// caught, recorded in <see cref="CopyBooksResult.Errors"/>, and do not
-    /// abort the loop (partial-success contract per Section 4.8).
-    /// After the loop, <c>custom.vrs</c> is copied if present (BHV-168).
+    /// <paramref name="toScrText"/> via a per-book <c>GetText</c> /
+    /// <c>PutText</c> loop. Method layout:
+    /// <list type="number">
+    /// <item><b>Lock seam.</b> If the destination is the
+    /// <c>LockNotObtainedScrText</c> marker type, throws
+    /// <see cref="LockNotObtainedException"/> eagerly (service maps to
+    /// UNAVAILABLE, INV-C01).</item>
+    /// <item><b>Per-book copy loop.</b> Each book is attempted via
+    /// <see cref="TryCopyOneBook"/>. The optional <c>EncodingConversionFailingScrText</c>
+    /// marker (TS-092 seam) fails the first book to simulate an encoding
+    /// conversion failure. Per-book failures accumulate into
+    /// <see cref="CopyBooksResult.Errors"/> and do NOT abort the loop
+    /// (partial-success contract per Section 4.8).</item>
+    /// <item><b>Versification copy.</b> <c>custom.vrs</c> is copied if the
+    /// source has one (BHV-168), best-effort.</item>
+    /// </list>
     /// </summary>
     /// <param name="fromScrText">Source project (read-only).</param>
     /// <param name="toScrText">Destination project (written under WriteLock).</param>
@@ -647,31 +658,22 @@ public static class CopyBooksOrchestrator
 
         foreach (int bookNum in selectedBooks.SelectedBookNumbers)
         {
-            try
+            // TS-092 simulation: the first requested book under the marker
+            // type fails with a recorded error; subsequent books copy normally.
+            if (isEncodingFailureMarker && !encodingFailureAlreadyFired)
             {
-                if (isEncodingFailureMarker && !encodingFailureAlreadyFired)
-                {
-                    encodingFailureAlreadyFired = true;
-                    throw new InvalidOperationException(
-                        $"Encoding conversion failed for book {Canon.BookNumberToId(bookNum)}"
-                    );
-                }
+                encodingFailureAlreadyFired = true;
+                errors.Add(
+                    $"Failed to copy book {Canon.BookNumberToId(bookNum)}: "
+                        + "Encoding conversion failed"
+                );
+                continue;
+            }
 
-                // Per-book GetText / PutText — matches PT9 CopyBooksForm.cs:144.
-                // ScrText.PutText obtains its own narrow per-(book,chapter)
-                // WriteLock internally and releases it before returning, so no
-                // outer lock is required here; the INV-C01 contract ("lock
-                // released after copy") is satisfied by PutText's own lifetime
-                // management.
-                string sourceUsfm = fromScrText.GetText(bookNum);
-                toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
-
+            if (TryCopyOneBook(fromScrText, toScrText, bookNum, errors))
+            {
                 copiedCount++;
                 lastCopiedBookNum = bookNum;
-            }
-            catch (Exception ex)
-            {
-                errors.Add($"Failed to copy book {Canon.BookNumberToId(bookNum)}: {ex.Message}");
             }
         }
 
@@ -688,6 +690,42 @@ public static class CopyBooksOrchestrator
             Errors: errors,
             CopiedCount: copiedCount
         );
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:144 (inner Get/Put pair)
+    // Maps to: EXT-006 (BHV-101, BHV-102)
+    /// <summary>
+    /// Real per-book copy primitive: reads the USFM from
+    /// <paramref name="fromScrText"/> and writes it to
+    /// <paramref name="toScrText"/>. Returns <c>true</c> on success; on any
+    /// exception appends a descriptive entry to <paramref name="errors"/> and
+    /// returns <c>false</c> (partial-success contract per Section 4.8).
+    ///
+    /// <para><c>ScrText.PutText</c> obtains its own narrow per-(book,chapter)
+    /// <see cref="WriteLock"/> internally and releases it before returning, so
+    /// no outer lock is required here; the INV-C01 contract ("lock released
+    /// after copy") is satisfied by <c>PutText</c>'s own lifetime
+    /// management.</para>
+    /// </summary>
+    private static bool TryCopyOneBook(
+        ScrText fromScrText,
+        ScrText toScrText,
+        int bookNum,
+        List<string> errors
+    )
+    {
+        try
+        {
+            string sourceUsfm = fromScrText.GetText(bookNum);
+            toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Failed to copy book {Canon.BookNumberToId(bookNum)}: {ex.Message}");
+            return false;
+        }
     }
 
     // === PORTED FROM PT9 ===
@@ -719,10 +757,16 @@ public static class CopyBooksOrchestrator
 
     /// <summary>
     /// Defensive wrapper around
-    /// <see cref="ProjectSettings.CopyCustomVersification"/> so CopyBooks can
-    /// invoke it inline (BHV-168) without risking an unhandled exception if
-    /// the source has no custom.vrs or the underlying file manager cannot
-    /// resolve a disk path (e.g., DummyScrText).
+    /// <see cref="ProjectSettings.CopyCustomVersification"/>. Single owner of
+    /// the swallow-all-exceptions policy required by both callers:
+    /// <list type="bullet">
+    /// <item><see cref="CopyBooks"/> invokes it inline as the BHV-168
+    /// best-effort step after a per-book copy loop — a missing
+    /// <c>custom.vrs</c> must not abort the surrounding copy.</item>
+    /// <item><see cref="CopyCustomVersification"/> (public M-014 entry)
+    /// delegates here so the orchestrator-level "completes without throwing"
+    /// contract (TS-048) is authored once.</item>
+    /// </list>
     /// </summary>
     private static void TryCopyCustomVersification(ScrText fromScrText, ScrText toScrText)
     {
