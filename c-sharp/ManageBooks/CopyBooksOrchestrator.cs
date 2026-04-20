@@ -169,79 +169,114 @@ public static class CopyBooksOrchestrator
     {
         // 1. Identical texts (and dest is non-empty) → FilesAreSame.
         if (!string.IsNullOrEmpty(destText) && sourceText == destText)
-        {
-            return new BookComparisonEntry(
-                bookNum,
-                bookName,
-                ComparisonState.FilesAreSame,
-                DefaultIncluded: false,
-                Selectable: true,
-                TooltipInfo: FilesAreSameTooltip
-            );
-        }
+            return FilesAreSameEntry(bookNum, bookName);
 
         // 2. Source missing → SourceDoesNotExist (Selectable=false). Also
         // covers the both-empty case (LoadBooks_BothProjectsEmpty).
         if (string.IsNullOrEmpty(sourceText))
-        {
-            return new BookComparisonEntry(
-                bookNum,
-                bookName,
-                ComparisonState.SourceDoesNotExist,
-                DefaultIncluded: false,
-                Selectable: false,
-                TooltipInfo: SourceDoesNotExistTooltip
-            );
-        }
+            return SourceDoesNotExistEntry(bookNum, bookName);
 
         // 3. Dest missing → DestDoesNotExist (include=true per INV-C07).
         if (string.IsNullOrEmpty(destText))
-        {
-            return new BookComparisonEntry(
-                bookNum,
-                bookName,
-                ComparisonState.DestDoesNotExist,
-                DefaultIncluded: true,
-                Selectable: true,
-                TooltipInfo: DestDoesNotExistTooltip
-            );
-        }
+            return DestDoesNotExistEntry(bookNum, bookName);
 
         // 4. Both texts present and different → compare modification times.
         if (sourceModified > destModified)
-        {
-            return new BookComparisonEntry(
-                bookNum,
-                bookName,
-                ComparisonState.SourceIsNewer,
-                DefaultIncluded: true,
-                Selectable: true,
-                TooltipInfo: SourceIsNewerTooltip
-            );
-        }
+            return SourceIsNewerEntry(bookNum, bookName);
 
         if (sourceModified < destModified)
-        {
-            return new BookComparisonEntry(
-                bookNum,
-                bookName,
-                ComparisonState.SourceIsOlder,
-                DefaultIncluded: false,
-                Selectable: true,
-                TooltipInfo: SourceIsOlderTooltip
-            );
-        }
+            return SourceIsOlderEntry(bookNum, bookName);
 
         // 5. Same timestamp, different text → Undetermined (TS-027).
-        return new BookComparisonEntry(
+        return UndeterminedEntry(bookNum, bookName);
+    }
+
+    // -----------------------------------------------------------------------
+    // Per-state entry factories.
+    //
+    // Each factory pins the (DefaultIncluded, Selectable, TooltipInfo) triple
+    // required by data-contracts.md Section 3.5 to a single location. The
+    // SetDefaultEligibility decision tree above dispatches to exactly one of
+    // these per call so each contract fact (INV-C06 / INV-C07 for the include
+    // flags; the Selectable=false outlier for SourceDoesNotExist) lives in
+    // one place instead of being re-asserted across six branches.
+    // -----------------------------------------------------------------------
+
+    /// <summary>INV-C06: FilesAreSame → pre-select=false, selectable=true.</summary>
+    private static BookComparisonEntry FilesAreSameEntry(int bookNum, string bookName) =>
+        BuildEntry(
+            bookNum,
+            bookName,
+            ComparisonState.FilesAreSame,
+            defaultIncluded: false,
+            selectable: true,
+            tooltip: FilesAreSameTooltip
+        );
+
+    /// <summary>SourceDoesNotExist is the only state with Selectable=false (TS-090).</summary>
+    private static BookComparisonEntry SourceDoesNotExistEntry(int bookNum, string bookName) =>
+        BuildEntry(
+            bookNum,
+            bookName,
+            ComparisonState.SourceDoesNotExist,
+            defaultIncluded: false,
+            selectable: false,
+            tooltip: SourceDoesNotExistTooltip
+        );
+
+    /// <summary>INV-C07: DestDoesNotExist → pre-select=true (corrects PT9 FB 29809).</summary>
+    private static BookComparisonEntry DestDoesNotExistEntry(int bookNum, string bookName) =>
+        BuildEntry(
+            bookNum,
+            bookName,
+            ComparisonState.DestDoesNotExist,
+            defaultIncluded: true,
+            selectable: true,
+            tooltip: DestDoesNotExistTooltip
+        );
+
+    /// <summary>SourceIsNewer → pre-select=true (corrects PT9 FB 29809; TS-025).</summary>
+    private static BookComparisonEntry SourceIsNewerEntry(int bookNum, string bookName) =>
+        BuildEntry(
+            bookNum,
+            bookName,
+            ComparisonState.SourceIsNewer,
+            defaultIncluded: true,
+            selectable: true,
+            tooltip: SourceIsNewerTooltip
+        );
+
+    /// <summary>SourceIsOlder → pre-select=false (TS-026).</summary>
+    private static BookComparisonEntry SourceIsOlderEntry(int bookNum, string bookName) =>
+        BuildEntry(
+            bookNum,
+            bookName,
+            ComparisonState.SourceIsOlder,
+            defaultIncluded: false,
+            selectable: true,
+            tooltip: SourceIsOlderTooltip
+        );
+
+    /// <summary>Undetermined (same timestamp, different text) → pre-select=false, empty tooltip (TS-027).</summary>
+    private static BookComparisonEntry UndeterminedEntry(int bookNum, string bookName) =>
+        BuildEntry(
             bookNum,
             bookName,
             ComparisonState.Undetermined,
-            DefaultIncluded: false,
-            Selectable: true,
-            TooltipInfo: UndeterminedTooltip
+            defaultIncluded: false,
+            selectable: true,
+            tooltip: UndeterminedTooltip
         );
-    }
+
+    /// <summary>Positional-to-record adapter so each per-state factory above is a one-liner.</summary>
+    private static BookComparisonEntry BuildEntry(
+        int bookNum,
+        string bookName,
+        ComparisonState state,
+        bool defaultIncluded,
+        bool selectable,
+        string tooltip
+    ) => new(bookNum, bookName, state, defaultIncluded, selectable, tooltip);
 
     // === NEW IN PT10 ===
     // Reason: PT9 read text via PtwFileInfo, which gracefully handles missing
@@ -249,6 +284,20 @@ public static class CopyBooksOrchestrator
     //   local short-circuit: if the book is not in BooksPresentSet, treat as
     //   missing (empty string). This avoids surfacing a FileNotFoundException
     //   from GetTextOfBookAndChapters when a book is absent.
+    //
+    // Paired with SafeGetBookModified below — both methods share the
+    // `BooksPresentSet.IsSelected(bookNum)` short-circuit + try/catch pattern,
+    // but the inner calls and the exception filters differ (narrow
+    // FileNotFoundException for text vs broad filesystem errors for
+    // timestamps), so they are kept as two intention-revealing helpers rather
+    // than behind a generic adapter.
+    /// <summary>
+    /// Reads the book text tolerantly: returns <see cref="string.Empty"/> when
+    /// the book is absent from <paramref name="scrText"/>'s BooksPresentSet or
+    /// when <see cref="ScrText.GetText(int)"/> raises
+    /// <see cref="FileNotFoundException"/>. Bridges the PT9 PtwFileInfo
+    /// tolerance semantics onto ScrText.
+    /// </summary>
     private static string SafeGetBookText(ScrText scrText, int bookNum)
     {
         if (!scrText.Settings.BooksPresentSet.IsSelected(bookNum))
@@ -270,6 +319,15 @@ public static class CopyBooksOrchestrator
     //   absent — the SetDefaultEligibility decision tree never inspects
     //   timestamps when one text is empty, so the value is irrelevant in that
     //   case but explicit.
+    /// <summary>
+    /// Reads the book-file last-write timestamp tolerantly: returns
+    /// <see cref="DateTime.MinValue"/> when the book is absent from
+    /// <paramref name="scrText"/>'s BooksPresentSet or when the file manager
+    /// cannot read the stamp. The
+    /// <see cref="SetDefaultEligibility"/> decision tree short-circuits on
+    /// empty text before inspecting timestamps, so the sentinel value is only
+    /// reachable via the defensive catch below and is never compared.
+    /// </summary>
     private static DateTime SafeGetBookModified(ScrText scrText, int bookNum)
     {
         if (!scrText.Settings.BooksPresentSet.IsSelected(bookNum))

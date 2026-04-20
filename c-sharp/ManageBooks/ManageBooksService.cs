@@ -427,17 +427,7 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<BookComparisonResult> GetBookComparisonAsync(BookComparisonInput input)
     {
-        if (
-            string.Equals(
-                input.FromProjectId,
-                input.ToProjectId,
-                StringComparison.OrdinalIgnoreCase
-            )
-        )
-            throw PlatformErrorCodes.WithCode(
-                PlatformErrorCodes.InvalidArgument,
-                "Source and destination projects must be different"
-            );
+        EnsureDifferentProjects(input.FromProjectId, input.ToProjectId);
 
         ScrText fromScrText = ResolveProjectOrThrow(
             input.FromProjectId,
@@ -452,5 +442,21 @@ internal sealed class ManageBooksService : NetworkObject
 
         List<BookComparisonEntry> entries = CopyBooksOrchestrator.LoadBooks(fromScrText, toScrText);
         return Task.FromResult(new BookComparisonResult(entries));
+    }
+
+    /// <summary>
+    /// Precondition: the two project IDs must differ (case-insensitive). A
+    /// SAME_PROJECT violation maps to INVALID_ARGUMENT per Theme 7 — the
+    /// contract forbids a dedicated SAME_PROJECT code. Matches the
+    /// <see cref="EnsureBookNumbersNonEmpty"/> / <see cref="EnsureProjectEditable"/>
+    /// guard-naming convention used elsewhere in this service.
+    /// </summary>
+    private static void EnsureDifferentProjects(string fromProjectId, string toProjectId)
+    {
+        if (string.Equals(fromProjectId, toProjectId, StringComparison.OrdinalIgnoreCase))
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.InvalidArgument,
+                "Source and destination projects must be different"
+            );
     }
 }
