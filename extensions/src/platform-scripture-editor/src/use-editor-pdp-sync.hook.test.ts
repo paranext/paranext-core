@@ -23,8 +23,7 @@ import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 
 // Empty USJ — returned by useProjectData while loading or when a book doesn't exist
-// eslint-disable-next-line no-type-assertion/no-type-assertion
-const emptyUsj = { type: 'USJ', version: '3.0', content: [] } as unknown as Usj;
+const emptyUsj: Usj = { type: 'USJ', version: '3.1', content: [] };
 
 // LEV chapter 14 with minimal content
 // eslint-disable-next-line no-type-assertion/no-type-assertion

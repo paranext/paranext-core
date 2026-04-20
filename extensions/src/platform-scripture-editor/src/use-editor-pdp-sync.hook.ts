@@ -34,7 +34,7 @@ export function useEditorPdpSync({
   useEffect(() => {
     if (!usjFromPdp) return;
     if (!editorRef.current) {
-      // Editor unmounted — reset so it re-initializes when it remounts (see JSDoc)
+      // Editor unmounted — reset so it re-initializes when it remounts (see TSDoc)
       usjSentToPdp.current = undefined;
       return;
     }
