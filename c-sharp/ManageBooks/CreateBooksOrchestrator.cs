@@ -32,7 +32,19 @@ public static class CreateBooksOrchestrator
     // VAL-009 user-facing message for the "FromTemplate without model"
     // precondition. Shared with ManageBooksService.CreateBooksAsync so the
     // validator layer and the wire guard cannot drift.
-    internal const string SelectModelTextMessage = "Please select model text";
+    //
+    // Localize key + English fallback pattern (see
+    // patterns.errorHandling.backendLocalization in the decision registry).
+    // Fallback preserves the PT9 Localizer.Str default at
+    // Paratext/ToolsMenu/CreateBooksForm.cs:121 byte-for-byte so
+    // DummyPapiClient-based integration tests keep passing. Translations
+    // live in extensions/src/platform-scripture/contributions/localizedStrings.json.
+
+    /// <summary>Localize key for the "please select model text" validation error. Maps to PT9 <c>CreateBooksForm_3</c>.</summary>
+    public const string SelectModelTextKey = "%manageBooks_create_errorSelectModelText%";
+
+    /// <summary>English fallback for <see cref="SelectModelTextKey"/>.</summary>
+    public const string SelectModelTextFallback = "Please select model text";
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/ToolsMenu/CreateBooksForm.cs:152, 169-183
@@ -276,7 +288,7 @@ public static class CreateBooksOrchestrator
             return ValidationResult.Ok();
 
         if (modelScrText == null)
-            return ValidationResult.Error(SelectModelTextMessage);
+            return ValidationResult.Error(SelectModelTextKey);
 
         ValidationResult modelCheck = CheckModelBooks(selectedBooks, modelScrText);
         if (modelCheck.Severity != ValidationSeverity.Ok)

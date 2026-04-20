@@ -411,8 +411,8 @@ namespace TestParanextDataProvider.ManageBooks
             Assert.That(entry.Selectable, Is.True);
             Assert.That(
                 entry.TooltipInfo,
-                Is.EqualTo(CopyBooksOrchestrator.DestDoesNotExistTooltip),
-                "tooltip should match CAP-006's canonical wording"
+                Is.EqualTo(CopyBooksOrchestrator.DestDoesNotExistTooltipKey),
+                "tooltip should match CAP-006's canonical localize key"
             );
         }
 
@@ -580,10 +580,14 @@ namespace TestParanextDataProvider.ManageBooks
             ValidationResult result = ImportBooksOrchestrator.CheckOverlappingFiles(entries);
 
             Assert.That(result.Severity, Is.EqualTo(ValidationSeverity.Error));
+            // Orchestrator-level test: the orchestrator returns the localize
+            // KEY (resolved to English at the wire boundary by
+            // ManageBooksService). See OverlappingFilesAlertFallback for the
+            // PT9 gm-012 byte-for-byte wording check.
             Assert.That(
                 result.Message,
-                Is.EqualTo(ImportBooksOrchestrator.OverlappingFilesAlertMessage),
-                "gm-012: message must match PT9 Localizer fallback verbatim"
+                Is.EqualTo(ImportBooksOrchestrator.OverlappingFilesAlertKey),
+                "gm-012: orchestrator returns the localize key"
             );
         }
 
@@ -669,8 +673,11 @@ namespace TestParanextDataProvider.ManageBooks
         )]
         public void OverlappingFilesAlertMessage_ExposesCanonicalWording()
         {
+            // Post-localization: the orchestrator exposes a KEY and a
+            // FALLBACK; the canonical PT9 wording lives in the fallback
+            // (verbatim) so gm-012's English assertion stays intact.
             Assert.That(
-                ImportBooksOrchestrator.OverlappingFilesAlertMessage,
+                ImportBooksOrchestrator.OverlappingFilesAlertFallback,
                 Is.EqualTo(
                     "Two files contain information for the same book. "
                         + "They can not both be selected."

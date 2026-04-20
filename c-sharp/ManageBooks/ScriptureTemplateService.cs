@@ -37,6 +37,21 @@ namespace Paranext.DataProvider.ManageBooks;
 /// </summary>
 public static partial class ScriptureTemplateService
 {
+    // Localize key + English fallback for the ESG-with-CV UNIMPLEMENTED guard
+    // (see patterns.errorHandling.backendLocalization in the decision
+    // registry). New in PT10 — no PT9 Localizer equivalent because PT9
+    // handles the ESG case via the CreateESGForm WinForms dialog.
+    // Translations live in
+    // extensions/src/platform-scripture/contributions/localizedStrings.json.
+
+    /// <summary>Localize key for the ESG-requires-UI UNIMPLEMENTED error.</summary>
+    public const string GreekEstherRequiresUiKey =
+        "%manageBooks_create_errorGreekEstherRequiresUi%";
+
+    /// <summary>English fallback for <see cref="GreekEstherRequiresUiKey"/>.</summary>
+    public const string GreekEstherRequiresUiFallback =
+        "Greek Esther (ESG) with chapter/verse creation requires the CreateESGForm UI flow; dispatched to CAP-UI-007.";
+
     // Source-generated regex for \f..\f* (footnotes). Used by PreVerseText.
     [GeneratedRegex(@"\\f .*?\\f\*")]
     private static partial Regex FootnoteRegex();
@@ -84,7 +99,7 @@ public static partial class ScriptureTemplateService
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.Unimplemented,
-                "Greek Esther (ESG) with chapter/verse creation requires the CreateESGForm UI flow; dispatched to CAP-UI-007."
+                GreekEstherRequiresUiKey
             );
         }
 

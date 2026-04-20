@@ -36,6 +36,26 @@ namespace Paranext.DataProvider.ManageBooks;
 /// </summary>
 public static class ProjectFilterService
 {
+    // Localize key + English fallback for the missing-source-type validation
+    // error (see patterns.errorHandling.backendLocalization in the decision
+    // registry). Wire boundary (ManageBooksService.FilterProjectsAsync)
+    // catches PlatformErrorCodes and does not re-resolve the message — the
+    // key is resolved inline here via LocalizationService when surfaced to
+    // the wire (currently only via FilterProjectsAsync, which throws
+    // directly; resolution happens at the caller). For simplicity in this
+    // retrofit the service keeps the English literal as its message,
+    // preserving the existing contract; the KEY form is reserved for the
+    // CopyDestination path where the wire method ManageBooksService
+    // resolves it explicitly.
+
+    /// <summary>Localize key for the missing-source-type error (CopyDestination filter). Used when no PT9 Localizer.Str source existed — new in PT10.</summary>
+    public const string MissingSourceProjectTypeKey =
+        "%manageBooks_error_missingSourceProjectType%";
+
+    /// <summary>English fallback for <see cref="MissingSourceProjectTypeKey"/>.</summary>
+    public const string MissingSourceProjectTypeFallback =
+        "SourceProjectType is required when purpose is CopyDestination";
+
     /// <summary>
     /// Returns the projects matching the filter described by
     /// <paramref name="input"/>.
@@ -97,7 +117,7 @@ public static class ProjectFilterService
         if (string.IsNullOrEmpty(sourceProjectType))
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.InvalidArgument,
-                "SourceProjectType is required when purpose is CopyDestination"
+                MissingSourceProjectTypeKey
             );
         var fromType = new Enum<ProjectType>(sourceProjectType);
         return CopyBooksOrchestrator.GetToProjectFilterProjects(fromType);

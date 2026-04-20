@@ -43,26 +43,50 @@ namespace Paranext.DataProvider.ManageBooks;
 public static class CopyBooksOrchestrator
 {
     // ---- Section 3.5 tooltip strings ---------------------------------------
-    // Exposed as public constants so tests can assert against the canonical
-    // wording without string duplication.  Values match PT9 Localizer.Str
-    // fallbacks at Paratext/ToolsMenu/CopyBooksForm.cs:324,333,341,349,357.
+    // Exposed as public constants — localize keys for runtime resolution by
+    // the wrapping NetworkObject (see
+    // patterns.errorHandling.backendLocalization in the decision registry).
+    // Fallbacks are the PT9 Localizer.Str defaults at
+    // Paratext/ToolsMenu/CopyBooksForm.cs:324,333,341,349,357 — preserved
+    // byte-for-byte so DummyPapiClient-based integration tests keep passing.
+    // Translations live in
+    // extensions/src/platform-scripture/contributions/localizedStrings.json.
 
-    /// <summary>Tooltip for <see cref="ComparisonState.FilesAreSame"/>.</summary>
-    public const string FilesAreSameTooltip = "\"From\" and \"To\" books are identical";
+    /// <summary>Localize key for <see cref="ComparisonState.FilesAreSame"/> tooltip. Maps to PT9 <c>CopyBooksForm_8</c>.</summary>
+    public const string FilesAreSameTooltipKey = "%manageBooks_copy_tooltip_filesAreSame%";
 
-    /// <summary>Tooltip for <see cref="ComparisonState.SourceDoesNotExist"/>.</summary>
-    public const string SourceDoesNotExistTooltip = "Book does not exist in the \"From\" project";
+    /// <summary>English fallback for <see cref="FilesAreSameTooltipKey"/>.</summary>
+    public const string FilesAreSameTooltipFallback = "\"From\" and \"To\" books are identical";
 
-    /// <summary>Tooltip for <see cref="ComparisonState.DestDoesNotExist"/>.</summary>
-    public const string DestDoesNotExistTooltip = "The book does not exist in the \"To\" project";
+    /// <summary>Localize key for <see cref="ComparisonState.SourceDoesNotExist"/> tooltip. Maps to PT9 <c>CopyBooksForm_9</c>.</summary>
+    public const string SourceDoesNotExistTooltipKey =
+        "%manageBooks_copy_tooltip_sourceDoesNotExist%";
 
-    /// <summary>Tooltip for <see cref="ComparisonState.SourceIsNewer"/>.</summary>
-    public const string SourceIsNewerTooltip = "The book in the \"From\" project is newer";
+    /// <summary>English fallback for <see cref="SourceDoesNotExistTooltipKey"/>.</summary>
+    public const string SourceDoesNotExistTooltipFallback =
+        "Book does not exist in the \"From\" project";
 
-    /// <summary>Tooltip for <see cref="ComparisonState.SourceIsOlder"/>.</summary>
-    public const string SourceIsOlderTooltip = "The book in the \"From\" project is older!!!";
+    /// <summary>Localize key for <see cref="ComparisonState.DestDoesNotExist"/> tooltip. Maps to PT9 <c>CopyBooksForm_10</c>.</summary>
+    public const string DestDoesNotExistTooltipKey = "%manageBooks_copy_tooltip_destDoesNotExist%";
 
-    /// <summary>Tooltip for <see cref="ComparisonState.Undetermined"/>.</summary>
+    /// <summary>English fallback for <see cref="DestDoesNotExistTooltipKey"/>.</summary>
+    public const string DestDoesNotExistTooltipFallback =
+        "The book does not exist in the \"To\" project";
+
+    /// <summary>Localize key for <see cref="ComparisonState.SourceIsNewer"/> tooltip. Maps to PT9 <c>CopyBooksForm_11</c>.</summary>
+    public const string SourceIsNewerTooltipKey = "%manageBooks_copy_tooltip_sourceIsNewer%";
+
+    /// <summary>English fallback for <see cref="SourceIsNewerTooltipKey"/>.</summary>
+    public const string SourceIsNewerTooltipFallback = "The book in the \"From\" project is newer";
+
+    /// <summary>Localize key for <see cref="ComparisonState.SourceIsOlder"/> tooltip. Maps to PT9 <c>CopyBooksForm_12</c>.</summary>
+    public const string SourceIsOlderTooltipKey = "%manageBooks_copy_tooltip_sourceIsOlder%";
+
+    /// <summary>English fallback for <see cref="SourceIsOlderTooltipKey"/>.</summary>
+    public const string SourceIsOlderTooltipFallback =
+        "The book in the \"From\" project is older!!!";
+
+    /// <summary>Tooltip for <see cref="ComparisonState.Undetermined"/> — intentionally empty (no translation needed).</summary>
     public const string UndeterminedTooltip = "";
 
     // === PORTED FROM PT9 ===
@@ -212,7 +236,7 @@ public static class CopyBooksOrchestrator
             ComparisonState.FilesAreSame,
             defaultIncluded: false,
             selectable: true,
-            tooltip: FilesAreSameTooltip
+            tooltip: FilesAreSameTooltipKey
         );
 
     /// <summary>SourceDoesNotExist is the only state with Selectable=false (TS-090).</summary>
@@ -223,7 +247,7 @@ public static class CopyBooksOrchestrator
             ComparisonState.SourceDoesNotExist,
             defaultIncluded: false,
             selectable: false,
-            tooltip: SourceDoesNotExistTooltip
+            tooltip: SourceDoesNotExistTooltipKey
         );
 
     /// <summary>INV-C07: DestDoesNotExist → pre-select=true (corrects PT9 FB 29809).</summary>
@@ -234,7 +258,7 @@ public static class CopyBooksOrchestrator
             ComparisonState.DestDoesNotExist,
             defaultIncluded: true,
             selectable: true,
-            tooltip: DestDoesNotExistTooltip
+            tooltip: DestDoesNotExistTooltipKey
         );
 
     /// <summary>SourceIsNewer → pre-select=true (corrects PT9 FB 29809; TS-025).</summary>
@@ -245,7 +269,7 @@ public static class CopyBooksOrchestrator
             ComparisonState.SourceIsNewer,
             defaultIncluded: true,
             selectable: true,
-            tooltip: SourceIsNewerTooltip
+            tooltip: SourceIsNewerTooltipKey
         );
 
     /// <summary>SourceIsOlder → pre-select=false (TS-026).</summary>
@@ -256,7 +280,7 @@ public static class CopyBooksOrchestrator
             ComparisonState.SourceIsOlder,
             defaultIncluded: false,
             selectable: true,
-            tooltip: SourceIsOlderTooltip
+            tooltip: SourceIsOlderTooltipKey
         );
 
     /// <summary>Undetermined (same timestamp, different text) → pre-select=false, empty tooltip (TS-027).</summary>

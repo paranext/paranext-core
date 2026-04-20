@@ -212,9 +212,13 @@ namespace TestParanextDataProvider.ManageBooks
             ValidationResult result = await _service.CheckOverlappingFilesAsync(entries);
 
             Assert.That(result.Severity, Is.EqualTo(ValidationSeverity.Error));
+            // Service-layer (wire) test: DummyPapiClient is unregistered so
+            // LocalizationService.GetLocalizedString returns the English
+            // fallback verbatim. Asserts on the resolved English wording —
+            // not the key — because the wire boundary resolves before return.
             Assert.That(
                 result.Message,
-                Is.EqualTo(ImportBooksOrchestrator.OverlappingFilesAlertMessage)
+                Is.EqualTo(ImportBooksOrchestrator.OverlappingFilesAlertFallback)
             );
         }
 
