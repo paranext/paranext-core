@@ -27,16 +27,12 @@ public class CommentThreadSelector
     public bool? IsRead { get; set; }
 
     /// <summary>
-    /// When true, threads flagged as Biblical Term notes are excluded from results.
-    /// Defaults to true because Biblical Term notes are typically managed by the Biblical Terms tool.
+    /// When true, threads flagged as Biblical Term notes or spelling notes are excluded from
+    /// results. These note types are managed by dedicated tools (Biblical Terms and Wordlist),
+    /// so most callers do not want them mixed into general comment results.
+    /// Defaults to true.
     /// </summary>
-    public bool ExcludeBiblicalTermNotes { get; set; } = true;
-
-    /// <summary>
-    /// When true, threads flagged as spelling notes are excluded from results.
-    /// Defaults to true because spelling notes are typically managed by the Wordlist tool.
-    /// </summary>
-    public bool ExcludeSpellingNotes { get; set; } = true;
+    public bool ExcludeSpellingAndBTNotes { get; set; } = true;
 
     /// <summary>
     /// When true, duplicate threads (same ID) are merged: unique comments are combined, and the

@@ -1979,33 +1979,20 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void GetCommentThreads_ExcludeBTNotesFalse_DoesNotFilterBTNotes()
+        public void GetCommentThreads_ExcludeSpellingAndBTNotesFalse_DoesNotFilterSpecialNotes()
         {
-            // Arrange - Create only a BT note
+            // Arrange - Create one BT note and one spelling note
             CreateBtNoteThread("bt-note-include", "GEN 1:1", "BT note text");
-
-            // Act - Explicitly include BT notes
-            var selector = new CommentThreadSelector { ExcludeBiblicalTermNotes = false };
-            var threads = _provider.GetCommentThreads(selector);
-
-            // Assert - The BT note is returned
-            Assert.That(threads, Has.Count.EqualTo(1));
-            Assert.That(threads[0].IsBTNote, Is.True);
-        }
-
-        [Test]
-        public void GetCommentThreads_ExcludeSpellingNotesFalse_DoesNotFilterSpellingNotes()
-        {
-            // Arrange - Create only a spelling note
             CreateSpellingNoteThread("spelling-note-include", "GEN 1:1", "Spelling note text");
 
-            // Act - Explicitly include spelling notes
-            var selector = new CommentThreadSelector { ExcludeSpellingNotes = false };
+            // Act - Explicitly include spelling and biblical terms notes
+            var selector = new CommentThreadSelector { ExcludeSpellingAndBTNotes = false };
             var threads = _provider.GetCommentThreads(selector);
 
-            // Assert - The spelling note is returned
-            Assert.That(threads, Has.Count.EqualTo(1));
-            Assert.That(threads[0].IsSpellingNote, Is.True);
+            // Assert - Both spelling and biblical terms notes are returned
+            Assert.That(threads, Has.Count.EqualTo(2));
+            Assert.That(threads.Any(t => t.IsBTNote), Is.True);
+            Assert.That(threads.Any(t => t.IsSpellingNote), Is.True);
         }
 
         /// <summary>

@@ -202,11 +202,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Note-type filtering is applied BEFORE deduplication so that flags from excluded
         // threads cannot bleed into the merged metadata of a surviving thread with the same ID.
-        if (selector.ExcludeBiblicalTermNotes)
-            filteredThreads = filteredThreads.Where(t => !t.IsBTNote);
-
-        if (selector.ExcludeSpellingNotes)
-            filteredThreads = filteredThreads.Where(t => !t.IsSpellingNote);
+        if (selector.ExcludeSpellingAndBTNotes)
+            filteredThreads = filteredThreads.Where(t => !t.IsBTNote && !t.IsSpellingNote);
 
         // Filter by thread ID (exact match)
         if (!string.IsNullOrEmpty(selector.ThreadId))

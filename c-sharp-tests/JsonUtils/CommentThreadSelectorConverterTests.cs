@@ -162,9 +162,9 @@ internal class CommentThreadSelectorConverterTests
     }
 
     [Test]
-    public void Deserialize_ExcludeBiblicalTermNotesFalse_OverridesDefault()
+    public void Deserialize_ExcludeSpellingAndBTNotesFalse_OverridesDefault()
     {
-        string json = @"{ ""excludeBiblicalTermNotes"": false }";
+        string json = @"{ ""excludeSpellingAndBTNotes"": false }";
 
         var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
             json,
@@ -172,21 +172,7 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.ExcludeBiblicalTermNotes, Is.False);
-    }
-
-    [Test]
-    public void Deserialize_ExcludeSpellingNotesFalse_OverridesDefault()
-    {
-        string json = @"{ ""excludeSpellingNotes"": false }";
-
-        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
-            json,
-            _serializationOptions
-        );
-
-        Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.ExcludeSpellingNotes, Is.False);
+        Assert.That(selector!.ExcludeSpellingAndBTNotes, Is.False);
     }
 
     [Test]
@@ -214,8 +200,7 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.ExcludeBiblicalTermNotes, Is.True);
-        Assert.That(selector.ExcludeSpellingNotes, Is.True);
+        Assert.That(selector!.ExcludeSpellingAndBTNotes, Is.True);
         Assert.That(selector.DeduplicateThreads, Is.True);
     }
 }
