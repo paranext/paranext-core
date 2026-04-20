@@ -200,10 +200,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         IEnumerable<CommentThread> filteredThreads = allThreads;
 
-        // Note-type filtering is applied BEFORE deduplication so that flags from excluded
+        // Note-category filtering is applied BEFORE deduplication so that flags from excluded
         // threads cannot bleed into the merged metadata of a surviving thread with the same ID.
-        if (selector.ExcludeSpellingAndBTNotes)
-            filteredThreads = filteredThreads.Where(t => !t.IsBTNote && !t.IsSpellingNote);
+        filteredThreads = selector.NoteCategory switch
+        {
+            NoteCategory.BtNotes => filteredThreads.Where(t => t.IsBTNote),
+            NoteCategory.SpellingNotes => filteredThreads.Where(t => t.IsSpellingNote),
+            _ => filteredThreads.Where(t => !t.IsBTNote && !t.IsSpellingNote), // NoteCategory.General (default)
+        };
 
         // Filter by thread ID (exact match)
         if (!string.IsNullOrEmpty(selector.ThreadId))

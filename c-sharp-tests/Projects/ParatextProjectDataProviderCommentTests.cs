@@ -1958,10 +1958,10 @@ namespace TestParanextDataProvider.Projects
 
         #endregion
 
-        #region Exclude and Deduplicate Selector Tests
+        #region NoteCategory and Deduplicate Selector Tests
 
         [Test]
-        public void GetCommentThreads_DefaultSelector_ExcludesBTAndSpellingByDefault()
+        public void GetCommentThreads_DefaultSelector_ReturnsOnlyGeneralNotes()
         {
             // Arrange - Create one regular comment, one BT note, and one spelling note
             var regularComment = CreateTestComment("GEN", 1, 1, "Regular comment");
@@ -1969,7 +1969,7 @@ namespace TestParanextDataProvider.Projects
             CreateBtNoteThread("bt-note-default", "GEN 1:1", "BT note text");
             CreateSpellingNoteThread("spelling-note-default", "GEN 1:1", "Spelling note text");
 
-            // Act - Default selector excludes BT and spelling notes
+            // Act - Default selector returns only general notes
             var threads = _provider.GetCommentThreads(new CommentThreadSelector());
 
             // Assert - Only the regular comment survives the default filter
@@ -1979,20 +1979,39 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void GetCommentThreads_ExcludeSpellingAndBTNotesFalse_DoesNotFilterSpecialNotes()
+        public void GetCommentThreads_NoteCategoryBtNotes_ReturnsOnlyBtNotes()
         {
-            // Arrange - Create one BT note and one spelling note
-            CreateBtNoteThread("bt-note-include", "GEN 1:1", "BT note text");
-            CreateSpellingNoteThread("spelling-note-include", "GEN 1:1", "Spelling note text");
+            // Arrange - Create one regular comment, one BT note, and one spelling note
+            var regularComment = CreateTestComment("GEN", 1, 1, "Regular comment");
+            _provider.CreateComment(new PlatformCommentWrapper(regularComment));
+            CreateBtNoteThread("bt-note-only", "GEN 1:1", "BT note text");
+            CreateSpellingNoteThread("spelling-note-bt-test", "GEN 1:1", "Spelling note text");
 
-            // Act - Explicitly include spelling and biblical terms notes
-            var selector = new CommentThreadSelector { ExcludeSpellingAndBTNotes = false };
-            var threads = _provider.GetCommentThreads(selector);
+            // Act - BtNotes category returns only biblical term notes
+            CommentThreadSelector selector = new() { NoteCategory = NoteCategory.BtNotes };
+            List<PlatformCommentThreadWrapper> threads = _provider.GetCommentThreads(selector);
 
-            // Assert - Both spelling and biblical terms notes are returned
-            Assert.That(threads, Has.Count.EqualTo(2));
-            Assert.That(threads.Any(t => t.IsBTNote), Is.True);
-            Assert.That(threads.Any(t => t.IsSpellingNote), Is.True);
+            // Assert - Only the BT note is returned
+            Assert.That(threads, Has.Count.EqualTo(1));
+            Assert.That(threads[0].IsBTNote, Is.True);
+        }
+
+        [Test]
+        public void GetCommentThreads_NoteCategorySpellingNotes_ReturnsOnlySpellingNotes()
+        {
+            // Arrange - Create one regular comment, one BT note, and one spelling note
+            var regularComment = CreateTestComment("GEN", 1, 1, "Regular comment");
+            _provider.CreateComment(new PlatformCommentWrapper(regularComment));
+            CreateBtNoteThread("bt-note-spelling-test", "GEN 1:1", "BT note text");
+            CreateSpellingNoteThread("spelling-note-only", "GEN 1:1", "Spelling note text");
+
+            // Act - SpellingNotes category returns only spelling notes
+            CommentThreadSelector selector = new() { NoteCategory = NoteCategory.SpellingNotes };
+            List<PlatformCommentThreadWrapper> threads = _provider.GetCommentThreads(selector);
+
+            // Assert - Only the spelling note is returned
+            Assert.That(threads, Has.Count.EqualTo(1));
+            Assert.That(threads[0].IsSpellingNote, Is.True);
         }
 
         /// <summary>
@@ -2029,6 +2048,37 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetCommentThreads_BiblicalTermsNotesAndSpellingNotes_AreReturnedSeparately()
+        {
+            // Arrange - Create only a BT note and a spelling note (no general note)
+            CreateBtNoteThread("bt-note-separate", "GEN 1:1", "BT note text");
+            CreateSpellingNoteThread("spelling-note-separate", "GEN 1:1", "Spelling note text");
+
+            // Act
+            var btThreads = _provider.GetCommentThreads(
+                new CommentThreadSelector { NoteCategory = NoteCategory.BtNotes }
+            );
+            var spellingThreads = _provider.GetCommentThreads(
+                new CommentThreadSelector { NoteCategory = NoteCategory.SpellingNotes }
+            );
+
+            // Assert - Each filter returns only its own type and excludes the other
+            Assert.That(btThreads, Has.Count.EqualTo(1));
+            Assert.Multiple(() =>
+            {
+                Assert.That(btThreads[0].IsBTNote, Is.True);
+                Assert.That(btThreads[0].IsSpellingNote, Is.False, "BT notes filter should not return spelling notes");
+            });
+
+            Assert.That(spellingThreads, Has.Count.EqualTo(1));
+            Assert.Multiple(() =>
+            {
+                Assert.That(spellingThreads[0].IsSpellingNote, Is.True);
+                Assert.That(spellingThreads[0].IsBTNote, Is.False, "Spelling notes filter should not return BT notes");
+            });
+        }
+
+        [Test]
         public void GetCommentThreads_DeduplicateThreadsFalse_ReturnsRawThreads()
         {
             // Arrange
@@ -2054,7 +2104,7 @@ namespace TestParanextDataProvider.Projects
             var comment = CreateTestComment("GEN", 1, 1, "Test comment");
             _provider.CreateComment(new PlatformCommentWrapper(comment));
 
-            // Act - null selector should apply defaults (exclude BT/spelling, deduplicate)
+            // Act - null selector should apply defaults (general notes only, deduplicate)
             var threads = _provider.GetCommentThreads(null!);
 
             // Assert - Should still return the regular comment

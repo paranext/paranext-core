@@ -4,6 +4,28 @@ using SIL.Scripture;
 
 namespace Paranext.DataProvider.Projects;
 
+/// <summary>
+/// Specifies which category of note threads to include in results.
+/// </summary>
+public enum NoteCategory
+{
+    /// <summary>
+    /// Regular user-created notes. Excludes Biblical Term notes and spelling notes, which are
+    /// managed by dedicated tools.
+    /// </summary>
+    General,
+
+    /// <summary>
+    /// Biblical Term notes only (threads tagged with <see cref="CommentTag.biblicalTermTagId"/>).
+    /// </summary>
+    BtNotes,
+
+    /// <summary>
+    /// Spelling suggestion notes only (threads tagged with <see cref="CommentTag.spellingTagId"/>).
+    /// </summary>
+    SpellingNotes,
+}
+
 public class CommentThreadSelector
 {
     /// <summary>
@@ -27,12 +49,13 @@ public class CommentThreadSelector
     public bool? IsRead { get; set; }
 
     /// <summary>
-    /// When true, threads flagged as Biblical Term notes or spelling notes are excluded from
-    /// results. These note types are managed by dedicated tools (Biblical Terms and Wordlist),
-    /// so most callers do not want them mixed into general comment results.
-    /// Defaults to true.
+    /// Specifies which category of note threads to include in results.
+    /// Defaults to <see cref="NoteCategory.General"/>, which returns only regular user-created
+    /// notes and excludes Biblical Term notes and spelling notes. Use
+    /// <see cref="NoteCategory.BtNotes"/> or <see cref="NoteCategory.SpellingNotes"/> to retrieve
+    /// those specific note types individually.
     /// </summary>
-    public bool ExcludeSpellingAndBTNotes { get; set; } = true;
+    public NoteCategory NoteCategory { get; set; } = NoteCategory.General;
 
     /// <summary>
     /// When true, duplicate threads (same ID) are merged: unique comments are combined, and the

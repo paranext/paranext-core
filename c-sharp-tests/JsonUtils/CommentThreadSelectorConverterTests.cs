@@ -162,9 +162,9 @@ internal class CommentThreadSelectorConverterTests
     }
 
     [Test]
-    public void Deserialize_ExcludeSpellingAndBTNotesFalse_OverridesDefault()
+    public void Deserialize_NoteCategoryBtNotes_OverridesDefault()
     {
-        string json = @"{ ""excludeSpellingAndBTNotes"": false }";
+        string json = @"{ ""noteCategory"": ""btNotes"" }";
 
         var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
             json,
@@ -172,7 +172,35 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.ExcludeSpellingAndBTNotes, Is.False);
+        Assert.That(selector!.NoteCategory, Is.EqualTo(NoteCategory.BtNotes));
+    }
+
+    [Test]
+    public void Deserialize_NoteCategorySpellingNotes_OverridesDefault()
+    {
+        string json = @"{ ""noteCategory"": ""spellingNotes"" }";
+
+        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
+            json,
+            _serializationOptions
+        );
+
+        Assert.That(selector, Is.Not.Null);
+        Assert.That(selector!.NoteCategory, Is.EqualTo(NoteCategory.SpellingNotes));
+    }
+
+    [Test]
+    public void Deserialize_NoteCategoryGeneral_ExplicitlySetToGeneral()
+    {
+        string json = @"{ ""noteCategory"": ""general"" }";
+
+        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
+            json,
+            _serializationOptions
+        );
+
+        Assert.That(selector, Is.Not.Null);
+        Assert.That(selector!.NoteCategory, Is.EqualTo(NoteCategory.General));
     }
 
     [Test]
@@ -190,7 +218,7 @@ internal class CommentThreadSelectorConverterTests
     }
 
     [Test]
-    public void Deserialize_DefaultValues_ExcludeFieldsAreTrue()
+    public void Deserialize_DefaultValues_NoteCategoryIsGeneralAndDeduplicateIsTrue()
     {
         string json = @"{}";
 
@@ -200,7 +228,7 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.ExcludeSpellingAndBTNotes, Is.True);
+        Assert.That(selector!.NoteCategory, Is.EqualTo(NoteCategory.General));
         Assert.That(selector.DeduplicateThreads, Is.True);
     }
 }

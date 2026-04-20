@@ -20,7 +20,7 @@ public class CommentThreadSelectorConverter : JsonConverter<CommentThreadSelecto
     private const string ASSIGNED_TO = "assignedTo";
     private const string SCRIPTURE_RANGES = "scriptureRanges";
     private const string IS_READ = "isRead";
-    private const string EXCLUDE_SPELLING_AND_BT_NOTES = "excludeSpellingAndBTNotes";
+    private const string NOTE_CATEGORY = "noteCategory";
     private const string DEDUPLICATE_THREADS = "deduplicateThreads";
 
     // DateFilter property names
@@ -56,9 +56,19 @@ public class CommentThreadSelectorConverter : JsonConverter<CommentThreadSelecto
         if (root.TryGetProperty(IS_READ, out JsonElement isReadEl))
             selector.IsRead = isReadEl.GetBoolean();
 
-        // Defaults to true in CommentThreadSelector, so only override when explicitly set
-        if (root.TryGetProperty(EXCLUDE_SPELLING_AND_BT_NOTES, out JsonElement excludeSpecialEl))
-            selector.ExcludeSpellingAndBTNotes = excludeSpecialEl.GetBoolean();
+        // Defaults to NoteCategory.General in CommentThreadSelector, so only override when explicitly set
+        if (
+            root.TryGetProperty(NOTE_CATEGORY, out JsonElement noteCategoryEl)
+            && noteCategoryEl.GetString() is string noteCategoryValue
+        )
+        {
+            selector.NoteCategory = noteCategoryValue switch
+            {
+                "btNotes" => NoteCategory.BtNotes,
+                "spellingNotes" => NoteCategory.SpellingNotes,
+                _ => NoteCategory.General,
+            };
+        }
 
         if (root.TryGetProperty(DEDUPLICATE_THREADS, out JsonElement deduplicateEl))
             selector.DeduplicateThreads = deduplicateEl.GetBoolean();

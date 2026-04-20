@@ -136,15 +136,16 @@ declare module 'legacy-comment-manager' {
     /** Filter by read status */
     isRead?: boolean;
     /**
-     * When true, threads flagged as Biblical Term notes or spelling notes are excluded from
-     * results. These note types are managed by dedicated tools (Biblical Terms and Wordlist).
+     * Specifies which category of note threads to include in results.
      *
-     * Defaults to `true` intentionally — most callers do not want these notes mixed into general
-     * comment results.
+     * - `'general'` _(default)_: Regular user-created notes only. Excludes Biblical Term notes and
+     *   spelling notes, which are managed by dedicated tools (Biblical Terms and Wordlist).
+     * - `'btNotes'`: Biblical Term notes only.
+     * - `'spellingNotes'`: Spelling suggestion notes only.
      *
-     * @default true
+     * @default 'general'
      */
-    excludeSpellingAndBTNotes?: boolean;
+    noteCategory?: 'general' | 'btNotes' | 'spellingNotes';
     /**
      * When true, duplicate threads (same ID) are merged: unique comments are combined, and the
      * thread with the latest `modifiedDate` is used as the metadata base. Threads where all
