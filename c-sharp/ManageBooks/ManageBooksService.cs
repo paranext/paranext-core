@@ -1,5 +1,6 @@
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Services;
 using Paratext.Data;
 using PtxUtils;
 using SIL.Scripture;
@@ -29,6 +30,56 @@ namespace Paranext.DataProvider.ManageBooks;
 internal sealed class ManageBooksService : NetworkObject
 {
     internal const string NetworkObjectName = "platformScripture.manageBooks";
+
+    // ---- Non-parameterized user-facing error keys ---------------------------
+    // Localize keys + English fallbacks for the service-layer guards. Follows
+    // the wire-boundary localization pattern (see
+    // patterns.errorHandling.backendLocalization in the decision registry) —
+    // the guards throw PlatformErrorCodes.WithCode using the resolved English
+    // text (via the Loc helper below) so wire consumers see a human-readable
+    // message even if the localization service is unavailable.
+    //
+    // Translations live in
+    // extensions/src/platform-scripture/contributions/localizedStrings.json.
+    //
+    // Admin-required guard: one unified key covers all three admin-on-shared
+    // guards (delete, copy, import). The English fallback matches the PT9
+    // PermissionManager.WarnIfNotAdministrator wording (Paratext/ParatextData/
+    // Users/PermissionManager.cs:792) rather than the per-action phrasings
+    // previously used — the generic message is appropriate because the UI
+    // already has the per-operation context from which the error originated.
+
+    internal const string AdminRequiredKey = "%manageBooks_error_adminRequired%";
+    internal const string AdminRequiredFallback = "This is only available to administrators.";
+
+    // Write-lock guard: one unified key covers all write-lock obtain failures
+    // (delete, copy, import). The earlier per-action wording ("destination
+    // project" vs "project") collapsed into one because callers already know
+    // which project they were acting on; the shorter "project" form is the
+    // more idiomatic translation.
+
+    internal const string WriteLockUnavailableKey = "%manageBooks_error_writeLockUnavailable%";
+    internal const string WriteLockUnavailableFallback =
+        "Could not obtain write lock for the project";
+
+    // Delete-guard: non-empty BookNumbers precondition.
+    internal const string EmptyBookNumbersKey = "%manageBooks_error_emptyBookNumbers%";
+    internal const string EmptyBookNumbersFallback = "BookNumbers must be non-empty";
+
+    // Copy/BookComparison guard: From and To must differ.
+    internal const string SameSourceAndDestKey = "%manageBooks_error_sameSourceAndDest%";
+    internal const string SameSourceAndDestFallback =
+        "Source and destination projects must be different";
+
+    // GetToProjectFilter guard: distinct from ProjectFilterService's
+    // MissingSourceProjectTypeKey (that one is for the FilterProjects
+    // CopyDestination path; this one is the standalone GetToProjectFilter
+    // wire method). Kept as a separate key so translators can differentiate
+    // the two phrasings; consolidation is deferred to a future pass.
+    internal const string MissingSourceProjectTypeForFilterKey =
+        "%manageBooks_error_missingSourceProjectTypeForFilter%";
+    internal const string MissingSourceProjectTypeForFilterFallback =
+        "Source project type is required for copy destination filtering";
 
     private readonly LocalParatextProjects _paratextProjects;
     private readonly ParatextProjectDataProviderFactory _pdpFactory;
@@ -137,7 +188,7 @@ internal sealed class ManageBooksService : NetworkObject
         if (IsSharedProjectWithoutAdmin(scrText))
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.PermissionDenied,
-                "You need to be an administrator to delete books from a shared project"
+                Loc(AdminRequiredKey, AdminRequiredFallback)
             );
 
         EnsureAllBooksPresent(scrText, request.BookNumbers, request.ProjectId);
@@ -150,7 +201,7 @@ internal sealed class ManageBooksService : NetworkObject
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.Unavailable,
-                "Could not obtain write lock for the project"
+                Loc(WriteLockUnavailableKey, WriteLockUnavailableFallback)
             );
         }
 
@@ -171,14 +222,15 @@ internal sealed class ManageBooksService : NetworkObject
 
     /// <summary>
     /// Precondition: BookNumbers must be non-empty. Violation → INVALID_ARGUMENT
-    /// (data-contracts.md Section 4.6).
+    /// (data-contracts.md Section 4.6). Instance method (rather than static)
+    /// so the error message can be localized via <see cref="Loc"/>.
     /// </summary>
-    private static void EnsureBookNumbersNonEmpty(int[] bookNumbers)
+    private void EnsureBookNumbersNonEmpty(int[] bookNumbers)
     {
         if (bookNumbers == null || bookNumbers.Length == 0)
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.InvalidArgument,
-                "BookNumbers must be non-empty"
+                Loc(EmptyBookNumbersKey, EmptyBookNumbersFallback)
             );
     }
 
@@ -271,8 +323,31 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     /// <param name="input">Filter purpose + optional SourceProjectType for CopyDestination.</param>
     /// <returns>Matching projects in <see cref="ScrTextCollection"/> order.</returns>
-    public Task<ProjectListResult> FilterProjectsAsync(ProjectFilterInput input) =>
-        Task.FromResult(ProjectFilterService.FilterProjects(input));
+    public Task<ProjectListResult> FilterProjectsAsync(ProjectFilterInput input)
+    {
+        try
+        {
+            return Task.FromResult(ProjectFilterService.FilterProjects(input));
+        }
+        catch (Exception ex)
+            when (ex.Data["platformErrorCode"] as string == PlatformErrorCodes.InvalidArgument
+                && IsLocalizeKey(ex.Message)
+            )
+        {
+            // Wire-boundary resolution for the MissingSourceProjectTypeKey
+            // thrown by ProjectFilterService.BuildCopyDestinationProjectList
+            // (the only localize-keyed throw in that service). The other
+            // throw path ("Unknown project filter purpose: ...") is
+            // parameterized and passes through unchanged.
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.InvalidArgument,
+                Loc(
+                    ProjectFilterService.MissingSourceProjectTypeKey,
+                    ProjectFilterService.MissingSourceProjectTypeFallback
+                )
+            );
+        }
+    }
 
     // =====================================================================
     // CAP-004: CreateBooksOrchestration
@@ -324,7 +399,10 @@ internal sealed class ManageBooksService : NetworkObject
             if (request.ModelProjectId == null)
                 throw PlatformErrorCodes.WithCode(
                     PlatformErrorCodes.InvalidArgument,
-                    CreateBooksOrchestrator.SelectModelTextMessage
+                    Loc(
+                        CreateBooksOrchestrator.SelectModelTextKey,
+                        CreateBooksOrchestrator.SelectModelTextFallback
+                    )
                 );
 
             modelScrText = GetModelProjectOrThrowFailedPrecondition(request.ModelProjectId);
@@ -387,6 +465,20 @@ internal sealed class ManageBooksService : NetworkObject
             request.CreationMethod,
             modelScrText
         );
+
+        // Wire-boundary resolution: the orchestrator returns the VAL-009
+        // SelectModelTextKey; resolve it to localized English before serializing.
+        // Parameterized messages (CheckModelBooks, CheckVersification) pass
+        // through unchanged — they are not keys and will be localized in a
+        // later structured-fields refactor (see FN-005 forward-note).
+        if (IsLocalizeKey(result.Message))
+            result = result with
+            {
+                Message = Loc(
+                    CreateBooksOrchestrator.SelectModelTextKey,
+                    CreateBooksOrchestrator.SelectModelTextFallback
+                ),
+            };
 
         return Task.FromResult(result);
     }
@@ -470,7 +562,10 @@ internal sealed class ManageBooksService : NetworkObject
         );
 
         List<BookComparisonEntry> entries = CopyBooksOrchestrator.LoadBooks(fromScrText, toScrText);
-        return Task.FromResult(new BookComparisonResult(entries));
+        // Wire-boundary resolution: TooltipInfo carries localize keys; resolve
+        // them via LocalizationService before sending over PAPI.
+        List<BookComparisonEntry> resolved = ResolveTooltipEntries(entries);
+        return Task.FromResult(new BookComparisonResult(resolved));
     }
 
     /// <summary>
@@ -478,14 +573,16 @@ internal sealed class ManageBooksService : NetworkObject
     /// SAME_PROJECT violation maps to INVALID_ARGUMENT per Theme 7 — the
     /// contract forbids a dedicated SAME_PROJECT code. Matches the
     /// <see cref="EnsureBookNumbersNonEmpty"/> / <see cref="EnsureProjectEditable"/>
-    /// guard-naming convention used elsewhere in this service.
+    /// guard-naming convention used elsewhere in this service. Instance
+    /// method (rather than static) so the error message can be localized via
+    /// <see cref="Loc"/>.
     /// </summary>
-    private static void EnsureDifferentProjects(string fromProjectId, string toProjectId)
+    private void EnsureDifferentProjects(string fromProjectId, string toProjectId)
     {
         if (string.Equals(fromProjectId, toProjectId, StringComparison.OrdinalIgnoreCase))
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.InvalidArgument,
-                "Source and destination projects must be different"
+                Loc(SameSourceAndDestKey, SameSourceAndDestFallback)
             );
     }
 
@@ -521,7 +618,7 @@ internal sealed class ManageBooksService : NetworkObject
         if (string.IsNullOrEmpty(input.SourceProjectType))
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.InvalidArgument,
-                "Source project type is required for copy destination filtering"
+                Loc(MissingSourceProjectTypeForFilterKey, MissingSourceProjectTypeForFilterFallback)
             );
 
         var fromType = new Enum<ProjectType>(input.SourceProjectType);
@@ -603,7 +700,7 @@ internal sealed class ManageBooksService : NetworkObject
         if (IsSharedProjectWithoutAdmin(toScrText))
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.PermissionDenied,
-                "You need to be an administrator to copy books to a shared project"
+                Loc(AdminRequiredKey, AdminRequiredFallback)
             );
 
         CopyBooksResult result;
@@ -619,7 +716,7 @@ internal sealed class ManageBooksService : NetworkObject
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.Unavailable,
-                "Could not obtain write lock for the destination project"
+                Loc(WriteLockUnavailableKey, WriteLockUnavailableFallback)
             );
         }
 
@@ -715,7 +812,10 @@ internal sealed class ManageBooksService : NetworkObject
             scrText,
             request.Files
         );
-        return Task.FromResult(result);
+        // Wire-boundary resolution: ParseImportFiles reuses CopyBooksOrchestrator
+        // .SetDefaultEligibility (CAP-006), so the Entries carry TooltipInfo
+        // localize keys that must be resolved before serializing.
+        return Task.FromResult(new BookComparisonResult(ResolveTooltipEntries(result.Entries)));
     }
 
     // === NEW IN PT10 ===
@@ -731,8 +831,21 @@ internal sealed class ManageBooksService : NetworkObject
     /// Precondition: <paramref name="entries"/> is non-null. An empty array
     /// is valid (returns <see cref="ValidationSeverity.Ok"/>).
     /// </summary>
-    public Task<ValidationResult> CheckOverlappingFilesAsync(OverlapCheckEntry[] entries) =>
-        Task.FromResult(ImportBooksOrchestrator.CheckOverlappingFiles(entries));
+    public Task<ValidationResult> CheckOverlappingFilesAsync(OverlapCheckEntry[] entries)
+    {
+        ValidationResult result = ImportBooksOrchestrator.CheckOverlappingFiles(entries);
+        // Wire-boundary resolution: the orchestrator returns the
+        // OverlappingFilesAlertKey; resolve it before serializing.
+        if (IsLocalizeKey(result.Message))
+            result = result with
+            {
+                Message = Loc(
+                    ImportBooksOrchestrator.OverlappingFilesAlertKey,
+                    ImportBooksOrchestrator.OverlappingFilesAlertFallback
+                ),
+            };
+        return Task.FromResult(result);
+    }
 
     // =====================================================================
     // CAP-010: ImportBooks execution (BE-4 RED stub)
@@ -798,7 +911,7 @@ internal sealed class ManageBooksService : NetworkObject
         if (IsSharedProjectWithoutAdmin(scrText))
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.PermissionDenied,
-                "You need to be an administrator to import books into a shared project"
+                Loc(AdminRequiredKey, AdminRequiredFallback)
             );
 
         // Guard 4: no overlapping book numbers in the included set
@@ -826,7 +939,7 @@ internal sealed class ManageBooksService : NetworkObject
         if (scrText.GetType().Name == ImportBooksOrchestrator.LockNotObtainedMarkerTypeName)
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.Unavailable,
-                "Could not obtain write lock for the project"
+                Loc(WriteLockUnavailableKey, WriteLockUnavailableFallback)
             );
 
         ImportBooksResult result;
@@ -842,7 +955,7 @@ internal sealed class ManageBooksService : NetworkObject
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.Unavailable,
-                "Could not obtain write lock for the project"
+                Loc(WriteLockUnavailableKey, WriteLockUnavailableFallback)
             );
         }
 
@@ -854,5 +967,96 @@ internal sealed class ManageBooksService : NetworkObject
             ?.SendFullProjectUpdateEvent();
 
         return Task.FromResult(result);
+    }
+
+    // =====================================================================
+    // Wire-boundary localization helpers.
+    //
+    // Orchestrator / service methods may carry localize keys ("%...%") in
+    // record fields or throw helper messages. These helpers centralize the
+    // "resolve key to localized text" at the wire boundary so the rest of
+    // this service can treat keys as normal strings. Pattern:
+    // patterns.errorHandling.backendLocalization in the decision registry.
+    // =====================================================================
+
+    /// <summary>
+    /// Lightweight test for "looks like a localize key" — wrapped in
+    /// <c>%</c> sentinels per paranext-core convention. Idempotence guard
+    /// ensures calling the resolver twice on the same record does not
+    /// re-resolve an already-resolved value.
+    /// </summary>
+    private static bool IsLocalizeKey(string? s) =>
+        s != null && s.Length >= 2 && s[0] == '%' && s[^1] == '%';
+
+    /// <summary>
+    /// Resolves <paramref name="value"/> if it looks like a localize key;
+    /// otherwise returns it verbatim (or <paramref name="fallback"/> when
+    /// null). Routes through <see cref="LocalizationService.GetLocalizedString"/>
+    /// with the supplied <paramref name="fallback"/> so unregistered services
+    /// (e.g. unit-test <c>DummyPapiClient</c>) return the fallback English
+    /// text.
+    /// </summary>
+    private string ResolveIfKey(string? value, string fallback) =>
+        IsLocalizeKey(value)
+            ? LocalizationService.GetLocalizedString(PapiClient, value!, fallback)
+            : (value ?? fallback);
+
+    /// <summary>
+    /// Convenience wrapper: given a key/fallback pair, resolves via the
+    /// localization service, returning the fallback when the service is
+    /// unavailable or the key is unregistered.
+    /// </summary>
+    private string Loc(string key, string fallback) => ResolveIfKey(key, fallback);
+
+    /// <summary>
+    /// Tooltip key → fallback map for resolving the localize keys carried in
+    /// <see cref="BookComparisonEntry.TooltipInfo"/>. The orchestrator
+    /// produces the keys; this service's wire methods resolve them via
+    /// <see cref="ResolveTooltipEntries"/> before serialization.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> TooltipFallbacks = new Dictionary<
+        string,
+        string
+    >
+    {
+        [CopyBooksOrchestrator.FilesAreSameTooltipKey] =
+            CopyBooksOrchestrator.FilesAreSameTooltipFallback,
+        [CopyBooksOrchestrator.SourceDoesNotExistTooltipKey] =
+            CopyBooksOrchestrator.SourceDoesNotExistTooltipFallback,
+        [CopyBooksOrchestrator.DestDoesNotExistTooltipKey] =
+            CopyBooksOrchestrator.DestDoesNotExistTooltipFallback,
+        [CopyBooksOrchestrator.SourceIsNewerTooltipKey] =
+            CopyBooksOrchestrator.SourceIsNewerTooltipFallback,
+        [CopyBooksOrchestrator.SourceIsOlderTooltipKey] =
+            CopyBooksOrchestrator.SourceIsOlderTooltipFallback,
+    };
+
+    /// <summary>
+    /// Walks <paramref name="entries"/> and resolves any
+    /// <see cref="BookComparisonEntry.TooltipInfo"/> that is a localize key
+    /// into its localized English (or selected-language) form. Returns a new
+    /// list with resolved entries so the immutable-record contract is kept.
+    /// </summary>
+    private List<BookComparisonEntry> ResolveTooltipEntries(List<BookComparisonEntry> entries)
+    {
+        var result = new List<BookComparisonEntry>(entries.Count);
+        foreach (BookComparisonEntry entry in entries)
+        {
+            if (!IsLocalizeKey(entry.TooltipInfo))
+            {
+                result.Add(entry);
+                continue;
+            }
+            string fallback = TooltipFallbacks.TryGetValue(entry.TooltipInfo, out string? f)
+                ? f
+                : entry.TooltipInfo;
+            string resolved = LocalizationService.GetLocalizedString(
+                PapiClient,
+                entry.TooltipInfo,
+                fallback
+            );
+            result.Add(entry with { TooltipInfo = resolved });
+        }
+        return result;
     }
 }

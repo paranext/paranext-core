@@ -59,22 +59,25 @@ namespace Paranext.DataProvider.ManageBooks;
 public static class ImportBooksOrchestrator
 {
     // ---- gm-012 alert message ----------------------------------------------
-    // Exposed as a public constant so tests can assert against the canonical
-    // PT9 Localizer fallback without duplicating the string. Value matches
-    // gm-012/expected-output.json exactly: PT9 Localizer key
-    // "ImportBooksForm_7" with fallback "Two files contain information for the
-    // same book. They can not both be selected." (note the PT9-era phrasing
-    // "can not" rather than the modernized "cannot" in the TypeScript
+    // Localize key + English fallback pattern (see
+    // patterns.errorHandling.backendLocalization in the decision registry).
+    // Fallback preserves the PT9 Localizer.Str default at
+    // Paratext/FileMenu/ImportBooksForm.cs:261 byte-for-byte (note the PT9-era
+    // phrasing "can not" rather than the modernized "cannot" in the TypeScript
     // contract — gm-012 is the canonical wire message for this capability).
+    // Translations live in
+    // extensions/src/platform-scripture/contributions/localizedStrings.json.
+
+    /// <summary>Localize key for the overlapping-files validation error. Maps to PT9 <c>ImportBooksForm_7</c>.</summary>
+    public const string OverlappingFilesAlertKey = "%manageBooks_import_errorOverlappingFiles%";
 
     /// <summary>
-    /// Alert message returned by <see cref="CheckOverlappingFiles"/> when two
-    /// or more included import files share the same book number. Matches
+    /// English fallback for <see cref="OverlappingFilesAlertKey"/>. Matches
     /// gm-012/expected-output.json verbatim (PT9 Localizer fallback wording
     /// "can not" — not the modernized "cannot" seen in some contract
     /// renderings).
     /// </summary>
-    public const string OverlappingFilesAlertMessage =
+    public const string OverlappingFilesAlertFallback =
         "Two files contain information for the same book. They can not both be selected.";
 
     // Single XPath stop expression — matches PT9 UsxImporter.stopExpression
@@ -211,10 +214,12 @@ public static class ImportBooksOrchestrator
     /// Detects duplicate book numbers among
     /// <paramref name="entries"/> where <see cref="OverlapCheckEntry.Included"/>
     /// is <c>true</c>. Returns <see cref="ValidationSeverity.Error"/> with the
-    /// canonical PT9 message (see <see cref="OverlappingFilesAlertMessage"/>)
-    /// when an overlap is found, <see cref="ValidationSeverity.Ok"/>
-    /// otherwise. Ignores entries with <c>Included=false</c> — the user has
-    /// already deselected them.
+    /// localize key <see cref="OverlappingFilesAlertKey"/> when an overlap is
+    /// found, <see cref="ValidationSeverity.Ok"/> otherwise. Ignores entries
+    /// with <c>Included=false</c> — the user has already deselected them.
+    /// Wire boundary (<c>ManageBooksService.CheckOverlappingFilesAsync</c>)
+    /// resolves the key via <c>LocalizationService.GetLocalizedString</c>
+    /// before sending the result over PAPI.
     /// </summary>
     /// <param name="entries">Parsed file entries with book numbers and
     ///   inclusion flags. May be empty (returns <see cref="ValidationSeverity.Ok"/>).</param>
@@ -226,7 +231,7 @@ public static class ImportBooksOrchestrator
             if (!entry.Included)
                 continue;
             if (!seen.Add(entry.BookNum))
-                return ValidationResult.Error(OverlappingFilesAlertMessage);
+                return ValidationResult.Error(OverlappingFilesAlertKey);
         }
         return ValidationResult.Ok();
     }

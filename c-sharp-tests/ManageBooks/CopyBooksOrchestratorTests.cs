@@ -112,7 +112,10 @@ namespace TestParanextDataProvider.ManageBooks
                 "INV-011 / INV-C06: identical files excluded"
             );
             Assert.That(entry.Selectable, Is.True);
-            Assert.That(entry.TooltipInfo, Is.EqualTo(CopyBooksOrchestrator.FilesAreSameTooltip));
+            Assert.That(
+                entry.TooltipInfo,
+                Is.EqualTo(CopyBooksOrchestrator.FilesAreSameTooltipKey)
+            );
         }
 
         [Test]
@@ -146,7 +149,7 @@ namespace TestParanextDataProvider.ManageBooks
             Assert.That(entry.Selectable, Is.True);
             Assert.That(
                 entry.TooltipInfo,
-                Is.EqualTo(CopyBooksOrchestrator.DestDoesNotExistTooltip)
+                Is.EqualTo(CopyBooksOrchestrator.DestDoesNotExistTooltipKey)
             );
         }
 
@@ -173,7 +176,10 @@ namespace TestParanextDataProvider.ManageBooks
             Assert.That(entry.ComparisonState, Is.EqualTo(ComparisonState.SourceIsNewer));
             Assert.That(entry.DefaultIncluded, Is.True);
             Assert.That(entry.Selectable, Is.True);
-            Assert.That(entry.TooltipInfo, Is.EqualTo(CopyBooksOrchestrator.SourceIsNewerTooltip));
+            Assert.That(
+                entry.TooltipInfo,
+                Is.EqualTo(CopyBooksOrchestrator.SourceIsNewerTooltipKey)
+            );
         }
 
         [Test]
@@ -199,7 +205,10 @@ namespace TestParanextDataProvider.ManageBooks
             Assert.That(entry.ComparisonState, Is.EqualTo(ComparisonState.SourceIsOlder));
             Assert.That(entry.DefaultIncluded, Is.False);
             Assert.That(entry.Selectable, Is.True);
-            Assert.That(entry.TooltipInfo, Is.EqualTo(CopyBooksOrchestrator.SourceIsOlderTooltip));
+            Assert.That(
+                entry.TooltipInfo,
+                Is.EqualTo(CopyBooksOrchestrator.SourceIsOlderTooltipKey)
+            );
         }
 
         [Test]
@@ -265,7 +274,7 @@ namespace TestParanextDataProvider.ManageBooks
             );
             Assert.That(
                 entry.TooltipInfo,
-                Is.EqualTo(CopyBooksOrchestrator.SourceDoesNotExistTooltip)
+                Is.EqualTo(CopyBooksOrchestrator.SourceDoesNotExistTooltipKey)
             );
         }
 
