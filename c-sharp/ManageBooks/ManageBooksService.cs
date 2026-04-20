@@ -71,93 +71,43 @@ internal sealed class ManageBooksService : NetworkObject
 
     /// <summary>
     /// Wire entry point for book deletion. Maps to data-contracts.md Section 4.6.
+    /// Preconditions (checked in order): BookNumbers non-empty → INVALID_ARGUMENT;
+    /// projectId resolves → NOT_FOUND; admin-on-shared-project → PERMISSION_DENIED;
+    /// every requested book present → NOT_FOUND; WriteLock obtainable → UNAVAILABLE.
     /// </summary>
     /// <param name="request">Project ID + book numbers to delete.</param>
     /// <returns>Result with success flag, deleted count, warnings, errors.</returns>
     public Task<DeleteBooksResult> DeleteBooksAsync(DeleteBooksRequest request)
     {
-        // -- 1. Precondition: non-empty BookNumbers (data-contracts.md 4.6) --
-        if (request.BookNumbers == null || request.BookNumbers.Length == 0)
-            throw PlatformErrorCodes.WithCode(
-                PlatformErrorCodes.InvalidArgument,
-                "BookNumbers must be non-empty"
-            );
+        EnsureBookNumbersNonEmpty(request.BookNumbers);
 
-        // -- 2. Project lookup (unknown projectId → NOT_FOUND) --
-        ScrText scrText;
-        try
-        {
-            scrText = LocalParatextProjects.GetParatextProject(request.ProjectId);
-        }
-        catch (Exception)
-        {
-            // ScrTextCollection.GetById throws ProjectNotFoundException when the
-            // project id is unknown; HexId.FromStr throws for malformed ids.
-            // Both map to NOT_FOUND per Theme 7.
-            throw PlatformErrorCodes.WithCode(
-                PlatformErrorCodes.NotFound,
-                $"Project not found: {request.ProjectId}"
-            );
-        }
+        ScrText scrText = GetProjectOrThrowNotFound(request.ProjectId);
 
-        // -- 3. Admin check for shared projects (INV-001, INV-C02, VAL-011). --
-        //    Order matches PT9 DeleteBooksForm.cmdOK_Click
-        //    (PT9/Paratext/ToolsMenu/DeleteBooksForm.cs:145-147): permission is
-        //    checked before any book-specific validation.
         if (IsSharedProjectWithoutAdmin(scrText))
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.PermissionDenied,
                 "You need to be an administrator to delete books from a shared project"
             );
 
-        // -- 4. Lock availability. Reported before book-existence so that a
-        //    transient lock conflict does not look like NOT_FOUND to the
-        //    caller. In tests, the LockNotObtainedScrText marker subclass
-        //    triggers the UNAVAILABLE mapping; in production, the real
-        //    WriteLock failure inside the orchestrator is caught below.
-        if (scrText.GetType().Name == "LockNotObtainedScrText")
-            throw PlatformErrorCodes.WithCode(
-                PlatformErrorCodes.Unavailable,
-                "Could not obtain write lock for the project"
-            );
-
-        // -- 5. All requested books must exist in the project (precondition) --
-        BookSet booksPresent = scrText.BooksPresentSet;
-        foreach (int bookNum in request.BookNumbers)
-        {
-            if (!booksPresent.IsSelected(bookNum))
-                throw PlatformErrorCodes.WithCode(
-                    PlatformErrorCodes.NotFound,
-                    $"Book {bookNum} is not present in project {request.ProjectId}"
-                );
-        }
-
-        // -- 6. Convert int[] → BookSet and invoke the orchestrator --
-        var bookSet = new BookSet();
-        foreach (int bookNum in request.BookNumbers)
-            bookSet.Add(bookNum);
+        EnsureAllBooksPresent(scrText, request.BookNumbers, request.ProjectId);
 
         try
         {
-            DeleteBooksOrchestrator.DeleteBooks(scrText, bookSet);
+            DeleteBooksOrchestrator.DeleteBooks(scrText, ToBookSet(request.BookNumbers));
         }
         catch (LockNotObtainedException)
         {
-            // Defense in depth: lock state can change between the pre-check
-            // above and the orchestrator call. Theme 7: LOCK_NOT_OBTAINED →
-            // UNAVAILABLE.
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.Unavailable,
                 "Could not obtain write lock for the project"
             );
         }
 
-        // -- 6. Notify subscribers via the existing PDP event pattern (Theme 6) --
+        // Theme 6: notify any live PDP so booksPresent subscribers re-fetch.
         _pdpFactory
             .GetExistingProjectDataProvider(request.ProjectId)
             ?.SendFullProjectUpdateEvent();
 
-        // -- 7. Success result --
         return Task.FromResult(
             new DeleteBooksResult(
                 Success: true,
@@ -169,18 +119,81 @@ internal sealed class ManageBooksService : NetworkObject
     }
 
     /// <summary>
-    /// Detects the "non-admin on a shared project" condition. In production this
-    /// reads directly from ParatextData via <c>scrText.IsProjectShared</c> and
-    /// <c>scrText.Permissions.AmAdministrator</c>. A type-name check for the
-    /// test-local <c>NonAdminSharedScrText</c> marker subclass is included so
-    /// the service contract can be exercised without constructing a real
-    /// PermissionManager in unit tests (explicitly authorized by the test
-    /// writer — see implementation/plans/implementer-CAP-005.md).
+    /// Precondition: BookNumbers must be non-empty. Violation → INVALID_ARGUMENT
+    /// (data-contracts.md Section 4.6).
     /// </summary>
-    private static bool IsSharedProjectWithoutAdmin(ScrText scrText)
+    private static void EnsureBookNumbersNonEmpty(int[] bookNumbers)
     {
-        if (scrText.GetType().Name == "NonAdminSharedScrText")
-            return true;
-        return scrText.IsProjectShared && !scrText.Permissions.AmAdministrator;
+        if (bookNumbers == null || bookNumbers.Length == 0)
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.InvalidArgument,
+                "BookNumbers must be non-empty"
+            );
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="projectId"/> to a <see cref="ScrText"/>, mapping
+    /// any lookup failure (unknown id, malformed HexId, etc.) to NOT_FOUND per
+    /// Theme 7.
+    /// </summary>
+    private static ScrText GetProjectOrThrowNotFound(string projectId)
+    {
+        try
+        {
+            return LocalParatextProjects.GetParatextProject(projectId);
+        }
+        catch (Exception)
+        {
+            // ScrTextCollection.GetById throws ProjectNotFoundException when the
+            // project id is unknown; HexId.FromStr throws for malformed ids.
+            // Both map to NOT_FOUND per Theme 7.
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.NotFound,
+                $"Project not found: {projectId}"
+            );
+        }
+    }
+
+    /// <summary>
+    /// Detects the "non-admin on a shared project" condition by reading the
+    /// natural ParatextData virtual API:
+    /// <c>scrText.IsProjectShared &amp;&amp; !scrText.Permissions.AmAdministrator</c>.
+    /// Tests exercise this path by overriding <see cref="ScrText.Permissions"/>
+    /// (both the getter and the inner <c>PermissionManager.AmAdministrator</c>
+    /// are <c>virtual</c>), so no type-name probe is required.
+    /// Precondition for shared projects per INV-001, INV-C02, VAL-011; order
+    /// matches PT9 DeleteBooksForm.cmdOK_Click:145-147.
+    /// </summary>
+    private static bool IsSharedProjectWithoutAdmin(ScrText scrText) =>
+        scrText.IsProjectShared && !scrText.Permissions.AmAdministrator;
+
+    /// <summary>
+    /// Precondition: every requested book must already exist in the project's
+    /// <see cref="ScrText.BooksPresentSet"/>. Violation → NOT_FOUND.
+    /// </summary>
+    private static void EnsureAllBooksPresent(ScrText scrText, int[] bookNumbers, string projectId)
+    {
+        BookSet booksPresent = scrText.BooksPresentSet;
+        foreach (int bookNum in bookNumbers)
+        {
+            if (!booksPresent.IsSelected(bookNum))
+                throw PlatformErrorCodes.WithCode(
+                    PlatformErrorCodes.NotFound,
+                    $"Book {bookNum} is not present in project {projectId}"
+                );
+        }
+    }
+
+    /// <summary>
+    /// Converts an <c>int[]</c> of book numbers to a <see cref="BookSet"/>
+    /// (Theme 5: BookSet is the canonical collection at orchestrator
+    /// boundaries).
+    /// </summary>
+    private static BookSet ToBookSet(int[] bookNumbers)
+    {
+        var bookSet = new BookSet();
+        foreach (int bookNum in bookNumbers)
+            bookSet.Add(bookNum);
+        return bookSet;
     }
 }
