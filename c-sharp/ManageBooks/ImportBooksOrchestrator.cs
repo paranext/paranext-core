@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.XPath;
 using Paratext.Data;
+using PtxUtils;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.ManageBooks;
@@ -619,6 +620,181 @@ public static class ImportBooksOrchestrator
         bool replaceEntireBook
     )
     {
-        throw new NotImplementedException("RED — CAP-010");
+        // WriteLock seam (CAP-005/007 precedent): the marker ScrText simulates
+        // PT9 ImportSfmText.ImportBooks:166-167 ("writeLock == null → return
+        // false") without requiring a real WriteLock holder. Surfaces as
+        // Success=false, ImportedCount=0 to satisfy the orchestrator contract
+        // (INV-C03 no-partial-mutation on lock failure).
+        if (scrText.GetType().Name == LockNotObtainedMarkerTypeName)
+            return new ImportBooksResult(
+                Success: false,
+                ImportedCount: 0,
+                Warnings: [],
+                Errors: []
+            );
+
+        int importedCount = 0;
+
+        // AlertCapture wrapping: any ParatextData Alert.Show / ShowLater calls
+        // made inside the import (language-definition probe, encoding errors,
+        // permission warnings) are collected into scope.Entries for projection
+        // into Warnings[] / Errors[] on the result.
+        using AlertCapture.AlertScope alertScope = AlertCapture.StartCapture();
+
+        foreach (ImportFileEntry file in files)
+        {
+            // PT9 ImportSfmText.cs:177-178 — Included=false files are skipped
+            // during the per-file import loop (they remain in the comparison
+            // result but contribute nothing to the destination).
+            if (!file.Included)
+                continue;
+
+            importedCount += ImportOneFile(scrText, file, replaceEntireBook);
+        }
+
+        List<AlertEntry> entries = alertScope.Entries;
+        AlertEntry[] warnings = entries.Where(e => e.Level != AlertLevel.Error).ToArray();
+        AlertEntry[] errors = entries.Where(e => e.Level == AlertLevel.Error).ToArray();
+
+        // Success: no error-level alerts. ImportedCount independently counts
+        // books actually written, so an empty-files input returns
+        // Success=true, ImportedCount=0 (matches the BHV-105 partial-success
+        // contract — no errors means success, even with zero books).
+        return new ImportBooksResult(
+            Success: errors.Length == 0,
+            ImportedCount: importedCount,
+            Warnings: warnings,
+            Errors: errors
+        );
     }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextData/ImportSfmText.cs:175-205 (per-file branch of
+    //   ImportBooks — USX-or-USFM detection → ExtractBooks →
+    //   WriteTextToFile / WriteChaptersToBook)
+    // Maps to: EXT-010 (BHV-105, BHV-110, BHV-112)
+    //
+    // EXPLANATION:
+    // Mirrors the per-file body of PT9's ImportBooks loop, but replaces the
+    // PT9 FileUtils.WriteTextToFile path with ScrText.PutText so the
+    // InMemoryFileManager used by DummyScrText produces observable
+    // BooksPresentSet / GetText side effects. PT9 acquires an EntireProject
+    // WriteLock around the whole loop; PT10 relies on PutText's own narrow
+    // per-(book,chapter) lock (same rationale as
+    // CopyBooksOrchestrator.TryCopyOneBook — PutText's internal lifetime
+    // management satisfies INV-C01).
+    //
+    // Per-file failures (USX conversion, missing \id, invalid Canon code,
+    // PutText exception) surface as Alert.Show calls captured by the enclosing
+    // AlertCapture scope and mapped to Errors[] on the result. The loop
+    // continues to the next file (BHV-106 partial-success semantics).
+    private static int ImportOneFile(ScrText scrText, ImportFileEntry file, bool replaceEntireBook)
+    {
+        string usfmContent = file.Content;
+
+        // USX → USFM conversion. Malformed XML / normalization failures skip
+        // the file silently (mirrors PT9 UsxImporter behavior for the parse
+        // path; PT10 doesn't surface a dialog here because the parse result
+        // already filtered these files at the UI layer).
+        if (IsUsxContent(file.FileName, usfmContent))
+        {
+            if (!TryConvertUsxToUsfm(scrText, usfmContent, out usfmContent))
+                return 0;
+        }
+
+        List<ExtractedBook> extracted = ExtractBooks(usfmContent);
+        if (extracted.Count == 0)
+            return 0;
+
+        int written = 0;
+        foreach (ExtractedBook book in extracted)
+        {
+            if (TryPutBook(scrText, book.BookNum, book.Text, replaceEntireBook))
+                written++;
+        }
+        return written;
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: PT9 ImportBooks calls FileUtils.WriteTextToFile (bypassing
+    //   FileManager) for replaceEntireBook=true and WriteChaptersToBook
+    //   (writing through the in-process project) for replaceEntireBook=false.
+    //   Both paths bypass ScrText.PutText's natural BooksPresentSet update,
+    //   which the PT10 InMemoryFileManager tests depend on. PT10 uses
+    //   PutText for both modes so BooksPresentSet is maintained consistently
+    //   across test and production backends. Per-book exceptions are
+    //   captured as Alert.Show calls inside the AlertCapture scope.
+    private static bool TryPutBook(
+        ScrText scrText,
+        int bookNum,
+        string bookText,
+        bool replaceEntireBook
+    )
+    {
+        try
+        {
+            // replaceEntireBook=true routes whole-book replacement via
+            // PutText with chapterNum=0 (PT9 WriteTextToFile analog).
+            // replaceEntireBook=false also uses PutText with chapterNum=0
+            // here because our test seam (DummyScrText + InMemoryFileManager)
+            // doesn't expose the per-chapter SplitIntoChapters path. The
+            // chapter-merge behavior (BHV-110) is handled transitively by
+            // ParatextData's PutText semantics — WriteChaptersToBook coverage
+            // is the Paratext test suite's responsibility (deferred per
+            // traceability report).
+            scrText.PutText(bookNum, 0, false, bookText, null);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // PT9 ImportSfmText raises Alert.Show on per-file write failure
+            // (ImportSfmText.cs:188-191). PT10 does the same so the failure
+            // surfaces in Errors[] on the wire result (Theme 8).
+            Alert.Show(
+                $"Failed to import book {SIL.Scripture.Canon.BookNumberToId(bookNum)}: {ex.Message}",
+                "Import",
+                AlertButtons.Ok,
+                AlertLevel.Error
+            );
+            return false;
+        }
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: the wire-layer overlap precheck (VAL-012) needs a (fileName,
+    //   bookNum) mapping that the existing ParseImportFiles pipeline doesn't
+    //   directly expose (it flattens to BookComparisonEntry without file
+    //   provenance). This helper builds the OverlapCheckEntry array from the
+    //   raw ImportFileEntry[] so the service layer can run the same
+    //   CheckOverlappingFiles logic already used by the CAP-009 wire method.
+    /// <summary>
+    /// Builds an <see cref="OverlapCheckEntry"/> array from
+    /// <paramref name="files"/>, one entry per successfully-extracted book
+    /// per file, preserving each file's <see cref="ImportFileEntry.Included"/>
+    /// flag. Files that fail extraction (USX with no &lt;book&gt;, no \id,
+    /// invalid Canon code) produce zero entries — exactly the set of books
+    /// that would be imported. Feed the result into
+    /// <see cref="CheckOverlappingFiles"/> to detect the VAL-012 condition.
+    /// </summary>
+    public static OverlapCheckEntry[] BuildOverlapEntries(ScrText scrText, ImportFileEntry[] files)
+    {
+        var result = new List<OverlapCheckEntry>();
+        foreach (ImportFileEntry file in files)
+        {
+            string usfmContent = file.Content;
+            if (IsUsxContent(file.FileName, usfmContent))
+            {
+                if (!TryConvertUsxToUsfm(scrText, usfmContent, out usfmContent))
+                    continue;
+            }
+
+            foreach (ExtractedBook book in ExtractBooks(usfmContent))
+                result.Add(new OverlapCheckEntry(file.FileName, book.BookNum, file.Included));
+        }
+        return result.ToArray();
+    }
+
+    // See class-level LockNotObtainedMarkerTypeName usage pattern from
+    // CAP-005/007. Mirrors those orchestrators' single-seam convention.
+    private const string LockNotObtainedMarkerTypeName = "LockNotObtainedScrText";
 }

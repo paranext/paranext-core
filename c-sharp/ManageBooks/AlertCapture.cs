@@ -15,10 +15,6 @@ namespace Paranext.DataProvider.ManageBooks;
 // Maps to: EXT-010 (import orchestrator wraps
 //   `ImportSfmText.ImportBooks(...)` in `using var alertScope =
 //   AlertCapture.StartCapture();` and projects `alertScope.Entries`).
-//
-// STUB — Test Writer RED skeleton for CAP-010. All behavior throws
-// NotImplementedException; the Implementer replaces the bodies to make the
-// AlertCaptureTests pass.
 
 /// <summary>
 /// <see cref="Alert"/> subclass that captures ParatextData alert calls into
@@ -37,6 +33,19 @@ namespace Paranext.DataProvider.ManageBooks;
 /// </summary>
 public sealed class AlertCapture : Alert
 {
+    // Allow-list phrase for the recurring ParatextData initialization alert
+    // raised in headless / non-English environments. Matched with a
+    // case-insensitive contains check so variations of the surrounding
+    // sentence still allow-list correctly.
+    private const string EnglishLanguageAllowListPhrase =
+        "unable to find a language definition file for english";
+
+    // Ambient scope carried across async boundaries. Each thread/async flow
+    // sees the scope installed on its flow; nested scopes save the parent
+    // and restore it on dispose so an inner `using` does not permanently
+    // disable outer capture.
+    private static readonly AsyncLocal<AlertScope?> _currentScope = new();
+
     /// <summary>
     /// Starts a capture scope on the current asynchronous flow. The returned
     /// <see cref="AlertScope"/> accumulates captured <see cref="AlertEntry"/>
@@ -49,7 +58,10 @@ public sealed class AlertCapture : Alert
     /// </summary>
     public static AlertScope StartCapture()
     {
-        throw new NotImplementedException("RED — CAP-010 Theme 8");
+        AlertScope? parent = _currentScope.Value;
+        var scope = new AlertScope(parent);
+        _currentScope.Value = scope;
+        return scope;
     }
 
     /// <summary>
@@ -66,7 +78,19 @@ public sealed class AlertCapture : Alert
         bool showInTaskbar
     )
     {
-        throw new NotImplementedException("RED — CAP-010 Theme 8");
+        if (IsEnglishLanguageDefinitionProbe(text))
+            return AlertResult.Positive;
+
+        AlertScope? scope = _currentScope.Value;
+        if (scope != null)
+        {
+            scope.Entries.Add(new AlertEntry(text, caption, alertLevel));
+            return AlertResult.Positive;
+        }
+
+        // No scope active — mirror AlertStub behavior: log and return Negative.
+        Console.WriteLine($"[Alert.Show] {caption}: {text}");
+        return AlertResult.Negative;
     }
 
     /// <summary>
@@ -76,17 +100,40 @@ public sealed class AlertCapture : Alert
     /// </summary>
     protected override void ShowLaterInternal(string text, string caption, AlertLevel alertLevel)
     {
-        throw new NotImplementedException("RED — CAP-010 Theme 8");
+        if (IsEnglishLanguageDefinitionProbe(text))
+            return;
+
+        AlertScope? scope = _currentScope.Value;
+        if (scope != null)
+        {
+            scope.Entries.Add(new AlertEntry(text, caption, alertLevel));
+            return;
+        }
+
+        Console.WriteLine($"[Alert.ShowLater] {caption}: {text}");
     }
+
+    private static bool IsEnglishLanguageDefinitionProbe(string text) =>
+        !string.IsNullOrEmpty(text)
+        && text.Contains(EnglishLanguageAllowListPhrase, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Disposable handle to a capture scope. While the instance is alive
     /// (not disposed) captured alerts are appended to
     /// <see cref="Entries"/>. Disposing exits the scope and restores the
-    /// previous state (no scope → unstructured fallback).
+    /// previous state (the parent scope if one was active, or no scope
+    /// otherwise).
     /// </summary>
     public sealed class AlertScope : IDisposable
     {
+        private readonly AlertScope? _parent;
+        private bool _disposed;
+
+        internal AlertScope(AlertScope? parent)
+        {
+            _parent = parent;
+        }
+
         /// <summary>
         /// Captured alerts raised inside this scope, in the order they were
         /// raised. Safe to read after <see cref="Dispose"/>.
@@ -96,11 +143,20 @@ public sealed class AlertCapture : Alert
         /// <summary>
         /// Exits the capture scope. After disposal, new
         /// <c>Alert.Show</c> / <c>Alert.ShowLater</c> calls on the current
-        /// async flow are no longer captured to this scope.
+        /// async flow are no longer captured to this scope. If this scope
+        /// was nested inside another active scope, the parent scope resumes
+        /// capture for subsequent alerts.
         /// </summary>
         public void Dispose()
         {
-            throw new NotImplementedException("RED — CAP-010 Theme 8");
+            if (_disposed)
+                return;
+            _disposed = true;
+
+            // Only pop if we're the currently-active scope. Defensive against
+            // out-of-order disposals (parent disposed before child).
+            if (ReferenceEquals(_currentScope.Value, this))
+                _currentScope.Value = _parent;
         }
     }
 }
