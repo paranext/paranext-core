@@ -248,50 +248,75 @@ export function ScopeSelector({
   const rangeStartText = localizeString(localizedStrings, '%webView_scope_selector_range_start%');
   const rangeEndText = localizeString(localizedStrings, '%webView_scope_selector_range_end%');
 
-  // For the verse / chapter / book scopes we append the current scripture reference to the label
-  // (e.g. "Verse: GEN 1:1") so the user can see at a glance what "current verse" actually is. When
-  // no `currentScrRef` is provided we fall through to the bare label.
-  const decorateScopeLabel = (scopeValue: Scope, baseLabel: string): string => {
-    if (!currentScrRef) return baseLabel;
+  // For the verse / chapter / book scopes we surface the current scripture reference alongside the
+  // base label (e.g. "Verse: GEN 1:1"). The suffix is kept separate from the base label so the
+  // rendering can style it differently (muted foreground). When no `currentScrRef` is provided we
+  // fall through to just the bare label.
+  const getScrRefSuffix = (scopeValue: Scope): string | undefined => {
+    if (!currentScrRef) return undefined;
     const upperBook = currentScrRef.book.toUpperCase();
     switch (scopeValue) {
       case 'verse':
-        return `${baseLabel}: ${formatScrRef(currentScrRef, 'id')}`;
+        return formatScrRef(currentScrRef, 'id');
       case 'chapter':
-        return `${baseLabel}: ${upperBook} ${currentScrRef.chapterNum}`;
+        return `${upperBook} ${currentScrRef.chapterNum}`;
       case 'book':
-        return `${baseLabel}: ${upperBook}`;
+        return upperBook;
       default:
-        return baseLabel;
+        return undefined;
     }
   };
 
   // Each option can optionally carry a `tooltip`. For the verse / chapter / book scopes we use the
   // "Current X" localized strings so the user can hover to confirm the meaning (e.g. "Current
-  // verse") of the short decorated label ("Verse: GEN 1:1").
-  const SCOPE_OPTIONS: Array<{ value: Scope; label: string; id: string; tooltip?: string }> = [
+  // verse") of the short label + ScrRef suffix ("Verse: GEN 1:1").
+  const SCOPE_OPTIONS: Array<{
+    value: Scope;
+    label: string;
+    scrRefSuffix?: string;
+    id: string;
+    tooltip?: string;
+  }> = [
     { value: 'selectedText', label: selectedTextText, id: 'scope-selected-text' },
     {
       value: 'verse',
-      label: decorateScopeLabel('verse', verseText),
+      label: verseText,
+      scrRefSuffix: getScrRefSuffix('verse'),
       id: 'scope-verse',
       tooltip: currentVerseText,
     },
     {
       value: 'chapter',
-      label: decorateScopeLabel('chapter', chapterText),
+      label: chapterText,
+      scrRefSuffix: getScrRefSuffix('chapter'),
       id: 'scope-chapter',
       tooltip: currentChapterText,
     },
     {
       value: 'book',
-      label: decorateScopeLabel('book', bookText),
+      label: bookText,
+      scrRefSuffix: getScrRefSuffix('book'),
       id: 'scope-book',
       tooltip: currentBookText,
     },
     { value: 'selectedBooks', label: chooseBooksText, id: 'scope-selected' },
     { value: 'range', label: rangeText, id: 'scope-range' },
   ];
+
+  // Renders a scope option label with its optional ScrRef suffix styled in muted foreground. Kept
+  // inline so every render site (dropdown items, radio labels, trigger content) is visually
+  // consistent.
+  const renderScopeLabel = (
+    label: string,
+    scrRefSuffix: string | undefined,
+  ) => (
+    <>
+      {label}
+      {scrRefSuffix && (
+        <span className="tw-text-muted-foreground">: {scrRefSuffix}</span>
+      )}
+    </>
+  );
 
   const displayedScopes = availableScopes
     ? SCOPE_OPTIONS.filter((option) => availableScopes.includes(option.value))
@@ -329,8 +354,7 @@ export function ScopeSelector({
     [onScopeChange, selectedBookIds, currentScrRef, onSelectedBookIdsChange],
   );
 
-  const currentScopeLabel =
-    displayedScopes.find((option) => option.value === scope)?.label ?? scope;
+  const currentScopeOption = displayedScopes.find((option) => option.value === scope);
 
   // Trigger text used by the dropdown variant. For selectedBooks / range we show a short summary
   // of the active selection. Book IDs are always the uppercase 3-letter English codes (GEN, EXO,
@@ -346,7 +370,10 @@ export function ScopeSelector({
         repeatBookName: true,
       });
     }
-    return currentScopeLabel;
+    if (currentScopeOption) {
+      return renderScopeLabel(currentScopeOption.label, currentScopeOption.scrRefSuffix);
+    }
+    return scope;
   };
 
   const simpleScopes = displayedScopes.filter(
@@ -566,9 +593,9 @@ export function ScopeSelector({
                   if (match) handleScopeChange(match.value);
                 }}
               >
-                {simpleScopes.map(({ value, label, id: scopeId, tooltip }) => (
+                {simpleScopes.map(({ value, label, scrRefSuffix, id: scopeId, tooltip }) => (
                   <DropdownMenuRadioItem key={scopeId} value={value} title={tooltip}>
-                    {label}
+                    {renderScopeLabel(label, scrRefSuffix)}
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
@@ -645,10 +672,10 @@ export function ScopeSelector({
             onValueChange={handleScopeChange}
             className="tw-flex tw-flex-col tw-space-y-1"
           >
-            {displayedScopes.map(({ value, label, id: scopeId, tooltip }) => (
+            {displayedScopes.map(({ value, label, scrRefSuffix, id: scopeId, tooltip }) => (
               <div key={scopeId} className="tw-flex tw-items-center" title={tooltip}>
                 <RadioGroupItem className="tw-me-2" value={value} id={scopeId} />
-                <Label htmlFor={scopeId}>{label}</Label>
+                <Label htmlFor={scopeId}>{renderScopeLabel(label, scrRefSuffix)}</Label>
               </div>
             ))}
           </RadioGroup>
