@@ -88,6 +88,17 @@ internal sealed class ManageBooksService : NetworkObject
                 "copyCustomVersification",
                 new Func<CopyCustomVersificationRequest, Task>(CopyCustomVersificationAsync)
             ),
+            // CAP-009 (BE-4): ImportParsing — read-only parse + overlap check.
+            // CAP-010 (BE-4) appends importBooks alongside these; CAP-012 finalizes
+            // the TS-side extension wiring for all three.
+            (
+                "parseImportFiles",
+                new Func<ImportBooksInput, Task<BookComparisonResult>>(ParseImportFilesAsync)
+            ),
+            (
+                "checkOverlappingFiles",
+                new Func<OverlapCheckEntry[], Task<ValidationResult>>(CheckOverlappingFilesAsync)
+            ),
         ];
 
         return RegisterNetworkObjectAsync(
@@ -645,5 +656,73 @@ internal sealed class ManageBooksService : NetworkObject
 
         CopyBooksOrchestrator.CopyCustomVersification(fromScrText, toScrText);
         return Task.CompletedTask;
+    }
+
+    // =====================================================================
+    // CAP-009: ImportParsing (BE-4 RED stubs)
+    //
+    // Read-only wire entries for the Import Books dialog's pre-flight:
+    // parseImportFiles populates the file list, checkOverlappingFiles
+    // validates the selection before commit. Neither method mutates the
+    // project, so neither fires SendFullProjectUpdateEvent (Theme 6 is a
+    // mutation-only concern).
+    //
+    // Contract: data-contracts.md Sections 2.5 / 3.5 / 4.10 / 4.12.
+    // Extraction: EXT-011 (OverlappingFilesFound — full port here).
+    // Behaviors: BHV-106, BHV-107, BHV-108, BHV-109 (reused), BHV-112, BHV-125, BHV-318.
+    // Golden Master: gm-012 (overlap detection).
+    // Scenarios: TS-016..022, TS-023..027 (SetDefaultEligibility reuse), TS-031,
+    //   TS-085, TS-095, TS-096.
+    //
+    // Guard order (to be asserted by ImportBooksServiceTests):
+    //   1. Unknown ProjectId → NOT_FOUND
+    //   2. Empty Files array (ParseImportFilesAsync) → INVALID_ARGUMENT
+    //
+    // CAP-010 (BE-4 next) appends ImportBooksAsync alongside these methods.
+    // CAP-012 (BE-4 last) wires these onto the TypeScript extension.
+    // =====================================================================
+
+    // === NEW IN PT10 ===
+    // Reason: PAPI wire facade for EXT-010 parse-side. PT9 did the parse
+    //   inline inside ImportBooksForm.BrowseAndAddFiles / ImportSfmText
+    //   ReadAndParseFilesIntoBooks; PT10 exposes it as a standalone read-only
+    //   method so the Import Books web dialog can preview per-file book
+    //   assignments before the user commits.
+    // Maps to: M-010 (data-contracts.md Section 4.10); BHV-106, BHV-107, BHV-108
+    /// <summary>
+    /// Wire entry point for import-file parsing. Maps to data-contracts.md
+    /// Section 4.10. Read-only; no event emitted.
+    ///
+    /// Precondition: <see cref="ImportBooksInput.ProjectId"/> resolves —
+    /// violation → NOT_FOUND.
+    /// </summary>
+    public Task<BookComparisonResult> ParseImportFilesAsync(ImportBooksInput request)
+    {
+        throw new NotImplementedException(
+            "CAP-009 RED — ParseImportFilesAsync will resolve the project and "
+                + "delegate to ImportBooksOrchestrator.ParseImportFiles."
+        );
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: PAPI wire facade for EXT-011 (ImportBooksForm.OverlappingFilesFound).
+    //   PT9 called this inline from the dialog's OK handler; PT10 exposes it
+    //   as a standalone read-only method so the UI can toggle file selection
+    //   and re-run the check without re-uploading file contents.
+    // Maps to: M-012 (data-contracts.md Section 4.12); BHV-318, gm-012
+    /// <summary>
+    /// Wire entry point for overlapping-file detection. Maps to
+    /// data-contracts.md Section 4.12. Read-only; no event emitted.
+    ///
+    /// Precondition: <paramref name="entries"/> is non-null. An empty array
+    /// is valid (returns <see cref="ValidationSeverity.Ok"/>).
+    /// </summary>
+    public Task<ValidationResult> CheckOverlappingFilesAsync(OverlapCheckEntry[] entries)
+    {
+        throw new NotImplementedException(
+            "CAP-009 RED — CheckOverlappingFilesAsync will delegate to "
+                + "ImportBooksOrchestrator.CheckOverlappingFiles and return a "
+                + "ValidationResult matching gm-012."
+        );
     }
 }
