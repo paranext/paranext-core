@@ -1,4 +1,9 @@
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.XPath;
 using Paratext.Data;
+using SIL.Scripture;
 
 namespace Paranext.DataProvider.ManageBooks;
 
@@ -71,10 +76,37 @@ public static class ImportBooksOrchestrator
     public const string OverlappingFilesAlertMessage =
         "Two files contain information for the same book. They can not both be selected.";
 
+    // Single XPath stop expression — matches PT9 UsxImporter.stopExpression
+    // (UsxImporter.cs:17). Compile once, reuse across USX files.
+    private static readonly XPathExpression UsxStopExpression = XPathExpression.Compile(
+        "*[false()]"
+    );
+
     // === PORTED FROM PT9 ===
     // Source: PT9/ParatextData/ImportSfmText.cs:76-151 (read + extract),
     //         PT9/ParatextData/UsxImporter.cs:33-80 (USX→USFM routing)
     // Maps to: EXT-010 parse-side (BHV-106, BHV-107, BHV-112, BHV-125)
+    //
+    // EXPLANATION:
+    // PT10 parsing differs from PT9 at the boundary:
+    //   - PT9 reads bytes from disk via FileUtils.ReadFileWithExceptions
+    //     inside ReadAndParseFilesIntoBooks. Encoding errors skip the file.
+    //   - PT10 receives already-decoded strings from the UI layer in
+    //     ImportFileEntry.Content, so the encoding-error path is triggered by
+    //     downstream parse failures (missing \id, invalid book code) instead.
+    //
+    // The orchestrator routes each file through:
+    //   1. USX detection (extension or content sniffing) → UsxFragmenter-based
+    //      conversion to USFM via the PT10-canonical pattern (matches
+    //      ParatextProjectDataProvider.ConvertUsxToUsfm).
+    //   2. ExtractBooks (ported from PT9) splits the USFM at \id markers and
+    //      validates each book code against the Canon.
+    //   3. For each successfully-extracted book, SetDefaultEligibility
+    //      (CAP-006 reuse) computes the comparison state relative to the
+    //      destination project.
+    //
+    // Per-file failures (unparseable content, malformed XML, etc.) skip the
+    // file and continue processing remaining files — BHV-106 partial-success.
     /// <summary>
     /// Parses import file content strings into individual books, compares them
     /// against the destination project, and returns a
@@ -113,11 +145,33 @@ public static class ImportBooksOrchestrator
     /// <returns>Comparison entries — one per successfully-extracted book.</returns>
     public static BookComparisonResult ParseImportFiles(ScrText scrText, ImportFileEntry[] files)
     {
-        throw new NotImplementedException(
-            "CAP-009 RED — ParseImportFiles will parse USFM/USX content, "
-                + "extract books, and populate BookComparisonResult via "
-                + "CopyBooksOrchestrator.SetDefaultEligibility."
-        );
+        var entries = new List<BookComparisonEntry>();
+
+        foreach (ImportFileEntry file in files)
+        {
+            string usfmContent = file.Content;
+
+            // USX → USFM conversion. Malformed XML or normalization failures
+            // skip the file (BHV-106 partial-success at the parse layer;
+            // PT9's UsxImporterException is a CAP-010 concern).
+            if (IsUsxContent(file.FileName, usfmContent))
+            {
+                if (!TryConvertUsxToUsfm(scrText, usfmContent, out usfmContent))
+                    continue;
+            }
+
+            // Extract books from (normalized) USFM. Any failure inside the
+            // extraction (no \id, invalid book code, etc.) aborts this file
+            // only — other files still contribute entries.
+            List<ExtractedBook> extracted = ExtractBooks(usfmContent);
+
+            foreach (ExtractedBook book in extracted)
+            {
+                entries.Add(BuildComparisonEntry(scrText, book.BookNum, book.Text));
+            }
+        }
+
+        return new BookComparisonResult(entries);
     }
 
     // === PORTED FROM PT9 ===
@@ -136,9 +190,301 @@ public static class ImportBooksOrchestrator
     ///   inclusion flags. May be empty (returns <see cref="ValidationSeverity.Ok"/>).</param>
     public static ValidationResult CheckOverlappingFiles(OverlapCheckEntry[] entries)
     {
-        throw new NotImplementedException(
-            "CAP-009 RED — CheckOverlappingFiles will detect duplicate bookNums "
-                + "among Included entries and return a ValidationResult matching gm-012."
+        var seen = new HashSet<int>();
+        foreach (OverlapCheckEntry entry in entries)
+        {
+            if (!entry.Included)
+                continue;
+            if (!seen.Add(entry.BookNum))
+                return ValidationResult.Error(OverlappingFilesAlertMessage);
+        }
+        return ValidationResult.Ok();
+    }
+
+    // -----------------------------------------------------------------------
+    // Private helpers
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Pair of (bookNum, bookText) returned by <see cref="ExtractBooks"/> —
+    /// one per successful book extracted from a single file's content.
+    /// </summary>
+    private readonly record struct ExtractedBook(int BookNum, string Text);
+
+    // === NEW IN PT10 ===
+    // Reason: PT9 routed USX through UsxImporter based on file extension at
+    //   the UI layer. PT10 accepts both USFM and USX at the same wire method
+    //   so we detect USX by extension OR content sniffing (defensive — a
+    //   misnamed .sfm file containing USX is still parseable).
+    /// <summary>
+    /// Heuristic USX detection: filename ends with <c>.usx</c> (case-insensitive),
+    /// OR content (trimmed of leading whitespace) begins with <c>&lt;?xml</c>
+    /// or <c>&lt;usx</c>. Mirrors the UI-layer dispatch that PT9 did by
+    /// extension only.
+    /// </summary>
+    private static bool IsUsxContent(string fileName, string content)
+    {
+        if (fileName.EndsWith(".usx", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        string trimmed = content.TrimStart();
+        return trimmed.StartsWith("<?xml", StringComparison.Ordinal)
+            || trimmed.StartsWith("<usx", StringComparison.Ordinal);
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextData/UsxImporter.cs:39-56 (ImportText — XML load,
+    //   fragmentation, normalization)
+    // Maps to: EXT-010 parse-side (BHV-112)
+    //
+    // EXPLANATION:
+    // Mirrors ParatextProjectDataProvider.ConvertUsxToUsfm (lines 1515-1533)
+    // except we use the book-number-agnostic 5-arg NormalizeUsfm overload
+    // because the book number is unknown until ExtractBooks runs. This
+    // matches PT9 UsxImporter.ImportText:56 verbatim. Any XML / fragmenter /
+    // normalization exception returns false (file skipped).
+    /// <summary>
+    /// Converts USX content to USFM via <c>UsxFragmenter.FindFragments</c> +
+    /// <c>UsfmToken.NormalizeUsfm</c>. Returns <c>true</c> when conversion
+    /// succeeds; returns <c>false</c> when any exception is raised (malformed
+    /// XML, missing stylesheet tags, etc.) so the caller can skip this file.
+    /// </summary>
+    private static bool TryConvertUsxToUsfm(ScrText scrText, string usxContent, out string usfm)
+    {
+        usfm = string.Empty;
+        try
+        {
+            var doc = new XmlDocument { PreserveWhitespace = true };
+            doc.LoadXml(usxContent);
+
+            UsxFragmenter.FindFragments(
+                scrText.DefaultStylesheet,
+                doc.CreateNavigator(),
+                UsxStopExpression,
+                out string rawUsfm,
+                scrText.Settings.AllowInvisibleChars
+            );
+
+            usfm = UsfmToken.NormalizeUsfm(
+                scrText.DefaultStylesheet,
+                rawUsfm,
+                false,
+                scrText.RightToLeft,
+                scrText
+            );
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextData/ImportSfmText.cs:106-151 (ExtractBooks)
+    // Maps to: EXT-010 parse-side (BHV-107, BHV-125, INV-009, INV-010,
+    //   VAL-006, VAL-007)
+    //
+    // EXPLANATION:
+    // Pure string-in/list-out port of PT9 ImportSfmText.ExtractBooks. Steps:
+    //   1. ConvertNonStandardWhitespace normalizes NBSP/tab into spaces inside
+    //      marker tokens so Regex.Split(@"\\id ") works (BHV-125).
+    //   2. Regex.Split separates the file content at every "\id " marker.
+    //      bookIds[0] is the preamble (before the first \id) — discarded.
+    //      If bookIds.Length <= 1 there was no \id → file is rejected
+    //      (VAL-006, INV-009).
+    //   3. For each bookIds[i>=1] parse the book code from the first \w+ run,
+    //      uppercase it (INV-010), and look up Canon.BookIdToNumber.
+    //      Canon.BookIdToNumber==0 → invalid code, abort this file (VAL-007).
+    //   4. On success, emit (bookNum, "\id " + text) pairs so downstream can
+    //      feed the text back through ScrText.PutText during CAP-010 import.
+    //
+    // Notes on PT9 alerts:
+    //   - PT9's Alert.Show for "text before first \id", "no \id line",
+    //     "invalid book name", and "\id without following book name" are NOT
+    //     ported — CAP-009 is a wire service, so we silently skip
+    //     non-extractable content. The UI surfaces per-file results via the
+    //     BookComparisonResult.Entries list (one entry per successful book).
+    //   - PT9's ExtractBooks returns early (the whole file is abandoned) on
+    //     both "\id without book name" and "invalid book code". We match
+    //     that behavior — the foreach-loop below returns the partial list
+    //     but does NOT abort the outer per-file loop in ParseImportFiles.
+    /// <summary>
+    /// Splits <paramref name="fileText"/> at <c>\id</c> markers and returns
+    /// one <see cref="ExtractedBook"/> per successfully-identified book.
+    /// Returns an empty list when the file contains no <c>\id</c> marker
+    /// (VAL-006) or the first <c>\id</c> has no following book code.
+    ///
+    /// <para>The first invalid book code aborts processing of the file per
+    /// PT9 semantics — <see cref="Paratext.Data.ImportSfmText.ExtractBooks"/>
+    /// uses <c>return</c>, not <c>continue</c>, when a book code fails
+    /// <see cref="Canon.BookIdToNumber"/>. Any books successfully extracted
+    /// before that point are preserved.</para>
+    /// </summary>
+    private static List<ExtractedBook> ExtractBooks(string fileText)
+    {
+        var books = new List<ExtractedBook>();
+
+        string normalized = ConvertNonStandardWhitespace(fileText);
+        string[] bookIds = Regex.Split(normalized, @"\\id ");
+
+        // bookIds[0] is the content before the first "\id " (PT9 "text before
+        // first \id ignored" warning). If the split produced only one
+        // element there was no \id marker — VAL-006 / INV-009.
+        if (bookIds.Length <= 1)
+            return books;
+
+        for (int i = 1; i < bookIds.Length; i++)
+        {
+            string text = bookIds[i];
+
+            // First \w+ run after the \id marker is the book code. PT9 aborts
+            // the entire file on a missing book name (ImportSfmText.cs:130-131).
+            Match match = Regex.Match(text, @"\s*\w+");
+            if (!match.Success)
+                return books;
+
+            // INV-010: uppercase for Canon lookup.
+            string bookId = match.Value.Trim().ToUpperInvariant();
+            int bookNum = Canon.BookIdToNumber(bookId);
+
+            // VAL-007: Canon.BookIdToNumber returns 0 for unknown codes.
+            // PT9 aborts the whole file (ImportSfmText.cs:140) so we mirror
+            // that behavior — any books extracted so far are kept.
+            if (bookNum == 0)
+                return books;
+
+            // Re-attach the "\id " prefix stripped by Regex.Split so the
+            // book text is round-trippable through ScrText.PutText.
+            books.Add(new ExtractedBook(bookNum, "\\id " + text));
+        }
+
+        return books;
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextData/ImportSfmText.cs:335-359 (ConvertNonStandardWhitespace)
+    // Maps to: EXT-010 parse-side (BHV-125)
+    //
+    // EXPLANATION:
+    // Char-by-char pass that collapses non-standard whitespace (NBSP U+00A0,
+    // tabs, etc.) into regular spaces — but ONLY when inside a backslash
+    // marker (between \ and the next whitespace). This preserves verse-body
+    // whitespace while ensuring Regex.Split(@"\\id ") separates the marker
+    // from the book code even if the source file used NBSP as the separator
+    // (TS-022). CR/LF are always preserved because they terminate the marker.
+    /// <summary>
+    /// Normalizes non-standard whitespace (NBSP, tab, etc.) to regular spaces
+    /// inside backslash markers so the <c>\id</c> regex split works for
+    /// files that used NBSP between the marker and the book code
+    /// (TS-022 / BHV-125). Whitespace outside markers is preserved; CR/LF
+    /// are never rewritten because they terminate the marker.
+    /// </summary>
+    private static string ConvertNonStandardWhitespace(string fileText)
+    {
+        var bldr = new StringBuilder(fileText.Length);
+        bool inMarker = false;
+        foreach (char c in fileText)
+        {
+            if (char.IsWhiteSpace(c))
+            {
+                if (inMarker && c != '\r' && c != '\n')
+                    bldr.Append(' ');
+                else
+                    bldr.Append(c);
+                inMarker = false;
+            }
+            else
+            {
+                bldr.Append(c);
+                if (c == '\\')
+                    inMarker = true;
+                else if (c == '*')
+                    inMarker = false; // end-marker terminator — preserve trailing whitespace
+            }
+        }
+        return bldr.ToString();
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: the PT9 equivalent (ImportSfmText.GetMatchingDestFiles +
+    //   SetDefaultEligibility) built a PtwFileInfo pair from disk. PT10's
+    //   destination read path uses ScrText.GetText + ScrText.FileManager
+    //   (matching CopyBooksOrchestrator.SafeGetBookText/SafeGetBookModified)
+    //   so parse remains filesystem-independent in tests.
+    /// <summary>
+    /// Builds a <see cref="BookComparisonEntry"/> for an extracted source
+    /// book by reading the corresponding destination book from
+    /// <paramref name="scrText"/> and delegating to
+    /// <c>CopyBooksOrchestrator.SetDefaultEligibility</c>. Missing destination
+    /// books surface as <see cref="ComparisonState.DestDoesNotExist"/>
+    /// (INV-C07, pre-selected=true) — the CAP-006 decision tree is unchanged.
+    /// </summary>
+    private static BookComparisonEntry BuildComparisonEntry(
+        ScrText scrText,
+        int bookNum,
+        string sourceText
+    )
+    {
+        string destText = SafeGetBookText(scrText, bookNum);
+        DateTime destModified = SafeGetBookModified(scrText, bookNum);
+        string bookName = Canon.BookNumberToEnglishName(bookNum);
+
+        // Source modification time has no meaningful value in the parse path —
+        // the file content came from the UI, not from disk. The
+        // SetDefaultEligibility decision tree only inspects the source
+        // timestamp when both texts are non-empty and differ; in the import
+        // pre-flight the destination's timestamp determines ordering. Use
+        // DateTime.UtcNow so the source wins any "newer than dest" comparison
+        // (matches PT9 ImportSfmText semantics where the import file is
+        // treated as the authoritative newer version).
+        DateTime sourceModified = DateTime.UtcNow;
+
+        return CopyBooksOrchestrator.SetDefaultEligibility(
+            bookNum,
+            bookName,
+            sourceText,
+            destText,
+            sourceModified,
+            destModified
         );
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: mirrors CopyBooksOrchestrator.SafeGetBookText — tolerant read
+    //   of the destination book text when the parse path compares against
+    //   the project. BooksPresentSet short-circuit avoids FileNotFoundException
+    //   for absent books (DummyScrText starts empty).
+    private static string SafeGetBookText(ScrText scrText, int bookNum)
+    {
+        if (!scrText.Settings.BooksPresentSet.IsSelected(bookNum))
+            return string.Empty;
+        try
+        {
+            return scrText.GetText(bookNum) ?? string.Empty;
+        }
+        catch (FileNotFoundException)
+        {
+            return string.Empty;
+        }
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: mirrors CopyBooksOrchestrator.SafeGetBookModified — tolerant
+    //   read of destination last-modified so missing books / in-memory
+    //   file managers don't abort the parse.
+    private static DateTime SafeGetBookModified(ScrText scrText, int bookNum)
+    {
+        if (!scrText.Settings.BooksPresentSet.IsSelected(bookNum))
+            return DateTime.MinValue;
+        try
+        {
+            string bookFileName = scrText.Settings.BookFileName(bookNum, true);
+            return scrText.FileManager.GetLastWriteTime(bookFileName);
+        }
+        catch (Exception)
+        {
+            return DateTime.MinValue;
+        }
     }
 }

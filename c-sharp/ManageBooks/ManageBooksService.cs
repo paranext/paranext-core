@@ -698,10 +698,17 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<BookComparisonResult> ParseImportFilesAsync(ImportBooksInput request)
     {
-        throw new NotImplementedException(
-            "CAP-009 RED — ParseImportFilesAsync will resolve the project and "
-                + "delegate to ImportBooksOrchestrator.ParseImportFiles."
+        ScrText scrText = ResolveProjectOrThrow(
+            request.ProjectId,
+            PlatformErrorCodes.NotFound,
+            $"Project not found: {request.ProjectId}"
         );
+
+        BookComparisonResult result = ImportBooksOrchestrator.ParseImportFiles(
+            scrText,
+            request.Files
+        );
+        return Task.FromResult(result);
     }
 
     // === NEW IN PT10 ===
@@ -717,12 +724,6 @@ internal sealed class ManageBooksService : NetworkObject
     /// Precondition: <paramref name="entries"/> is non-null. An empty array
     /// is valid (returns <see cref="ValidationSeverity.Ok"/>).
     /// </summary>
-    public Task<ValidationResult> CheckOverlappingFilesAsync(OverlapCheckEntry[] entries)
-    {
-        throw new NotImplementedException(
-            "CAP-009 RED — CheckOverlappingFilesAsync will delegate to "
-                + "ImportBooksOrchestrator.CheckOverlappingFiles and return a "
-                + "ValidationResult matching gm-012."
-        );
-    }
+    public Task<ValidationResult> CheckOverlappingFilesAsync(OverlapCheckEntry[] entries) =>
+        Task.FromResult(ImportBooksOrchestrator.CheckOverlappingFiles(entries));
 }
