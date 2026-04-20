@@ -25,11 +25,11 @@ import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 // Empty USJ — returned by useProjectData while loading or when a book doesn't exist
 const emptyUsj: Usj = { type: 'USJ', version: '3.1', content: [] };
 
-// LEV chapter 14 with minimal content
+// LEV chapter 14 with minimal content; casting from a minimal stub is intentional in tests
 // eslint-disable-next-line no-type-assertion/no-type-assertion
 const levUsj = {
   type: 'USJ',
-  version: '3.0',
+  version: '3.1',
   content: [
     { type: 'book', marker: 'id', code: 'LEV' },
     { type: 'chapter', marker: 'c', number: '14' },
