@@ -55,6 +55,10 @@ internal sealed class ManageBooksService : NetworkObject
                 "deleteBooks",
                 new Func<DeleteBooksRequest, Task<DeleteBooksResult>>(DeleteBooksAsync)
             ),
+            (
+                "filterProjects",
+                new Func<ProjectFilterInput, Task<ProjectListResult>>(FilterProjectsAsync)
+            ),
         ];
 
         return RegisterNetworkObjectAsync(
@@ -195,5 +199,20 @@ internal sealed class ManageBooksService : NetworkObject
         foreach (int bookNum in bookNumbers)
             bookSet.Add(bookNum);
         return bookSet;
+    }
+
+    /// <summary>
+    /// Wire entry point for project filtering (CAP-011, M-013). Maps to
+    /// data-contracts.md Section 4.13. Delegates to
+    /// <see cref="ProjectFilterService.FilterProjects"/>.
+    ///
+    /// <para>STUB — Test Writer RED skeleton. Throws
+    /// <see cref="NotImplementedException"/> until CAP-011 is GREEN.</para>
+    /// </summary>
+    public Task<ProjectListResult> FilterProjectsAsync(ProjectFilterInput input)
+    {
+        throw new NotImplementedException(
+            "CAP-011 ManageBooksService.FilterProjectsAsync is a RED stub — to be implemented in BE-1."
+        );
     }
 }
