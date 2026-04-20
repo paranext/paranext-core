@@ -1,4 +1,5 @@
 using Paratext.Data;
+using SIL.Scripture;
 
 namespace Paranext.DataProvider.ManageBooks;
 
@@ -12,33 +13,21 @@ namespace Paranext.DataProvider.ManageBooks;
 // Invariants: INV-011, INV-012, INV-C06, INV-C07
 // Golden Master: gm-006
 //
-// STUB — Test Writer RED skeleton for CAP-006.
-// The two public static methods below are placeholders that throw
-// NotImplementedException so the CAP-006 tests start RED. The TDD implementer
-// will fill in the bodies during GREEN. Signatures are fixed only at the public
-// boundary declared in data-contracts.md; internal helper signatures are at
-// the implementer's discretion.
-//
-// gm-006 RECONCILIATION (documented here so the implementer does not follow
-// the PT9 bug):
-//
-//   gm-006/expected-output.json captures PT9 CopyBooksForm's behavior with the
-//   FB 29809 bug active — every state is recorded as IncludeThisFile=false
-//   because CopyBooksForm.cs:311 sets that flag BEFORE the comparison switch
-//   runs. PT10 restores the parallel ImportSfmText rules per the strategic
-//   plan success criteria: "default include/exclude decisions match INV-011
-//   /INV-012". The canonical decision table is data-contracts.md Section 3.5
-//   "Business Logic" and TS-090 expectedOutput:
+// gm-006 RECONCILIATION: gm-006/expected-output.json captures PT9's FB 29809
+// bug (IncludeThisFile=false for every state because CopyBooksForm.cs:311
+// pre-sets the flag before the switch runs). PT10 restores the parallel
+// ImportSfmText rules per data-contracts.md Section 3.5 "Business Logic" and
+// strategic-plan-backend.md success criteria ("default include/exclude
+// decisions match INV-011/INV-012"):
 //
 //     FilesAreSame        -> DefaultIncluded = false (INV-C06, TS-024)
-//     DestDoesNotExist    -> DefaultIncluded = true  (INV-C07, TS-023)
-//     SourceIsNewer       -> DefaultIncluded = true  (TS-025)
+//     DestDoesNotExist    -> DefaultIncluded = true  (INV-C07, TS-023)  <- corrected vs gm-006
+//     SourceIsNewer       -> DefaultIncluded = true  (TS-025)           <- corrected vs gm-006
 //     SourceIsOlder       -> DefaultIncluded = false (TS-026)
 //     Undetermined        -> DefaultIncluded = false (TS-027)
 //     SourceDoesNotExist  -> DefaultIncluded = false, Selectable = false (TS-090)
 //
-// Tooltip strings MUST match Section 3.5 / gm-006 exactly (they are the same
-// strings in both — only the include/selectable columns are corrected).
+// Tooltip strings match Section 3.5 / gm-006 exactly.
 
 /// <summary>
 /// Orchestrates book comparison (CAP-006) and copy (CAP-007 — later in BE-3)
@@ -74,6 +63,9 @@ public static class CopyBooksOrchestrator
     /// <summary>Tooltip for <see cref="ComparisonState.Undetermined"/>.</summary>
     public const string UndeterminedTooltip = "";
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:279-306 (LoadBooks)
+    // Maps to: EXT-007 (BHV-313, BHV-103)
     /// <summary>
     /// Iterates <see cref="SIL.Scripture.Canon.AllBooks"/>, filters by
     /// destination-project permission (per BHV-313 / BHV-103), and produces a
@@ -86,9 +78,61 @@ public static class CopyBooksOrchestrator
     /// <returns>Comparison entries in canonical book order.</returns>
     public static List<BookComparisonEntry> LoadBooks(ScrText fromScrText, ScrText toScrText)
     {
-        throw new NotImplementedException("CAP-006: LoadBooks — implementer to fill in (RED stub)");
+        var entries = new List<BookComparisonEntry>();
+        BookSet allBooks = Canon.AllBooks;
+        BookSet destBooksPresent = toScrText.Settings.BooksPresentSet;
+
+        foreach (int bookNum in allBooks.SelectedBookNumbers)
+        {
+            // BHV-313: include books the user can edit, OR (admin-only) books
+            // that are missing from the destination project. Mirrors PT9
+            // CopyBooksForm.cs:291-294.
+            bool canEdit = toScrText.Permissions.CanEdit(bookNum);
+            bool adminCanCreate =
+                !destBooksPresent.IsSelected(bookNum) && toScrText.Permissions.AmAdministrator;
+            if (!canEdit && !adminCanCreate)
+                continue;
+
+            string sourceText = SafeGetBookText(fromScrText, bookNum);
+            string destText = SafeGetBookText(toScrText, bookNum);
+            DateTime sourceModified = SafeGetBookModified(fromScrText, bookNum);
+            DateTime destModified = SafeGetBookModified(toScrText, bookNum);
+            string bookName = Canon.BookNumberToEnglishName(bookNum);
+
+            entries.Add(
+                SetDefaultEligibility(
+                    bookNum,
+                    bookName,
+                    sourceText,
+                    destText,
+                    sourceModified,
+                    destModified
+                )
+            );
+        }
+
+        return entries;
     }
 
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:308-363 (SetDefaultEligibility)
+    // Maps to: EXT-008 (BHV-109)
+    //
+    // EXPLANATION:
+    // Per data-contracts.md Section 3.5 the decision tree is evaluated in a
+    // strict order. Two intentional differences from PT9:
+    //
+    //   1. PT9 (FB 29809) pre-sets IncludeThisFile=false at line 311 so every
+    //      branch effectively returns include=false. PT10 returns the
+    //      include flag determined per-state (true for DestDoesNotExist /
+    //      SourceIsNewer, matching the parallel ImportSfmText rules).
+    //   2. PT9 short-circuits to FilesAreSame when source==dest AND
+    //      destText is non-empty. We preserve that ordering: same texts
+    //      where both are non-empty -> FilesAreSame; both empty falls
+    //      through to SourceDoesNotExist (Selectable=false).
+    //
+    // Strict inequality on timestamps (>, <) is required so a same-timestamp
+    // / different-text pair returns Undetermined per TS-027.
     /// <summary>
     /// Computes <see cref="BookComparisonEntry.ComparisonState"/>,
     /// <see cref="BookComparisonEntry.DefaultIncluded"/>,
@@ -99,10 +143,9 @@ public static class CopyBooksOrchestrator
     ///
     /// <para>Decision tree (from data-contracts.md Section 3.5):
     /// <list type="number">
-    /// <item>Both texts empty → <see cref="ComparisonState.SourceDoesNotExist"/>
-    ///   (matches PT9 CopyBooksForm.cs:328-335; Selectable=false).</item>
     /// <item>Texts identical and dest non-empty → <see cref="ComparisonState.FilesAreSame"/>.</item>
-    /// <item>Source empty → <see cref="ComparisonState.SourceDoesNotExist"/>.</item>
+    /// <item>Source empty → <see cref="ComparisonState.SourceDoesNotExist"/>
+    ///   (Selectable=false; covers both "source missing only" and "both empty").</item>
     /// <item>Dest empty → <see cref="ComparisonState.DestDoesNotExist"/> (include).</item>
     /// <item>Source newer than dest → <see cref="ComparisonState.SourceIsNewer"/> (include).</item>
     /// <item>Source older than dest → <see cref="ComparisonState.SourceIsOlder"/>.</item>
@@ -124,8 +167,121 @@ public static class CopyBooksOrchestrator
         DateTime destModified
     )
     {
-        throw new NotImplementedException(
-            "CAP-006: SetDefaultEligibility — implementer to fill in (RED stub)"
+        // 1. Identical texts (and dest is non-empty) → FilesAreSame.
+        if (!string.IsNullOrEmpty(destText) && sourceText == destText)
+        {
+            return new BookComparisonEntry(
+                bookNum,
+                bookName,
+                ComparisonState.FilesAreSame,
+                DefaultIncluded: false,
+                Selectable: true,
+                TooltipInfo: FilesAreSameTooltip
+            );
+        }
+
+        // 2. Source missing → SourceDoesNotExist (Selectable=false). Also
+        // covers the both-empty case (LoadBooks_BothProjectsEmpty).
+        if (string.IsNullOrEmpty(sourceText))
+        {
+            return new BookComparisonEntry(
+                bookNum,
+                bookName,
+                ComparisonState.SourceDoesNotExist,
+                DefaultIncluded: false,
+                Selectable: false,
+                TooltipInfo: SourceDoesNotExistTooltip
+            );
+        }
+
+        // 3. Dest missing → DestDoesNotExist (include=true per INV-C07).
+        if (string.IsNullOrEmpty(destText))
+        {
+            return new BookComparisonEntry(
+                bookNum,
+                bookName,
+                ComparisonState.DestDoesNotExist,
+                DefaultIncluded: true,
+                Selectable: true,
+                TooltipInfo: DestDoesNotExistTooltip
+            );
+        }
+
+        // 4. Both texts present and different → compare modification times.
+        if (sourceModified > destModified)
+        {
+            return new BookComparisonEntry(
+                bookNum,
+                bookName,
+                ComparisonState.SourceIsNewer,
+                DefaultIncluded: true,
+                Selectable: true,
+                TooltipInfo: SourceIsNewerTooltip
+            );
+        }
+
+        if (sourceModified < destModified)
+        {
+            return new BookComparisonEntry(
+                bookNum,
+                bookName,
+                ComparisonState.SourceIsOlder,
+                DefaultIncluded: false,
+                Selectable: true,
+                TooltipInfo: SourceIsOlderTooltip
+            );
+        }
+
+        // 5. Same timestamp, different text → Undetermined (TS-027).
+        return new BookComparisonEntry(
+            bookNum,
+            bookName,
+            ComparisonState.Undetermined,
+            DefaultIncluded: false,
+            Selectable: true,
+            TooltipInfo: UndeterminedTooltip
         );
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: PT9 read text via PtwFileInfo, which gracefully handles missing
+    //   books. PT10's LoadBooks calls ScrText.GetText directly so we need a
+    //   local short-circuit: if the book is not in BooksPresentSet, treat as
+    //   missing (empty string). This avoids surfacing a FileNotFoundException
+    //   from GetTextOfBookAndChapters when a book is absent.
+    private static string SafeGetBookText(ScrText scrText, int bookNum)
+    {
+        if (!scrText.Settings.BooksPresentSet.IsSelected(bookNum))
+            return string.Empty;
+        try
+        {
+            return scrText.GetText(bookNum) ?? string.Empty;
+        }
+        catch (FileNotFoundException)
+        {
+            return string.Empty;
+        }
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: PT9 used PtwFileInfo.ModificationDateTime; PT10 reads via the
+    //   ProjectFileManager.GetLastWriteTime so DummyScrText / InMemoryFileManager
+    //   tests work uniformly. Returns DateTime.MinValue when the book file is
+    //   absent — the SetDefaultEligibility decision tree never inspects
+    //   timestamps when one text is empty, so the value is irrelevant in that
+    //   case but explicit.
+    private static DateTime SafeGetBookModified(ScrText scrText, int bookNum)
+    {
+        if (!scrText.Settings.BooksPresentSet.IsSelected(bookNum))
+            return DateTime.MinValue;
+        try
+        {
+            string bookFileName = scrText.Settings.BookFileName(bookNum, true);
+            return scrText.FileManager.GetLastWriteTime(bookFileName);
+        }
+        catch (Exception)
+        {
+            return DateTime.MinValue;
+        }
     }
 }
