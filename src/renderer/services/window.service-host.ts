@@ -100,7 +100,7 @@ class WindowDataProviderEngine
     // Update the tracked focus in this service based on what is actually focused
     if (newSetFocusSpecifier === 'detect') {
       // Need to debounce because it takes a sec for the focus to change in the DOM
-      return this.#setDetectFocusInternalDebounced();
+      return (await this.#setDetectFocusInternalDebounced()) ?? false;
     }
 
     // Figure out what we should be focusing

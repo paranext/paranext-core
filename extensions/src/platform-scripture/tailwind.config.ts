@@ -8,6 +8,9 @@ import tailwindCssAnimate from 'tailwindcss-animate';
 
 const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx}'],
+  // Use selector-based dark mode so `dark:` variants activate when the `.dark` class is on <html>,
+  // matching how Paranext toggles the theme at runtime.
+  darkMode: 'selector',
   // Prefix on all tailwind classes so they don't clash with built-in classes
   // short for tailwind - we hope to have the same prefix as users of this library so the cn
   // function that uses tailwind-merge can properly overwrite related tailwind classes

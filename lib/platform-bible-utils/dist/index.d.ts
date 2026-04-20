@@ -931,6 +931,18 @@ export declare function isString(o: unknown): o is string;
  */
 export declare function deepClone<T>(obj: T): T;
 /**
+ * A debounced function with a `cancel` method to abandon any pending invocation.
+ *
+ * @template TFunc - The type of the function being debounced.
+ */
+export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((...args: Parameters<TFunc>) => Promise<ReturnType<TFunc> | undefined>) & {
+	/**
+	 * Cancel any pending debounced invocation. The promise returned by the most recent call resolves
+	 * to `undefined`.
+	 */
+	cancel: () => void;
+};
+/**
  * Get a function that reduces calls to the function passed in
  *
  * @template TFunc - A function type that takes any arguments and returns void. This is the type of
@@ -938,9 +950,10 @@ export declare function deepClone<T>(obj: T): T;
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
- * @returns Function that, when called, only calls the function passed in at maximum every delay ms
+ * @returns Function that, when called, only calls the function passed in at maximum every delay ms.
+ *   The returned function also has a `cancel` method to abandon any pending invocation.
  */
-export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): (...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>>;
+export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): DebouncedFunction<TFunc>;
 /**
  * Groups each item in the array of items into a map according to the keySelector
  *

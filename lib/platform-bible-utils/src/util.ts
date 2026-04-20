@@ -34,6 +34,23 @@ export function deepClone<T>(obj: T): T {
 }
 
 /**
+ * A debounced function with a `cancel` method to abandon any pending invocation.
+ *
+ * @template TFunc - The type of the function being debounced.
+ */
+// We don't know the parameter types since this function can be anything and can return anything
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((
+  ...args: Parameters<TFunc>
+) => Promise<ReturnType<TFunc> | undefined>) & {
+  /**
+   * Cancel any pending debounced invocation. The promise returned by the most recent call resolves
+   * to `undefined`.
+   */
+  cancel: () => void;
+};
+
+/**
  * Get a function that reduces calls to the function passed in
  *
  * @template TFunc - A function type that takes any arguments and returns void. This is the type of
@@ -41,20 +58,23 @@ export function deepClone<T>(obj: T): T {
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
- * @returns Function that, when called, only calls the function passed in at maximum every delay ms
+ * @returns Function that, when called, only calls the function passed in at maximum every delay ms.
+ *   The returned function also has a `cancel` method to abandon any pending invocation.
  */
 // We don't know the parameter types since this function can be anything and can return anything
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function debounce<TFunc extends (...args: any[]) => any>(
   fn: TFunc,
   delay = 300,
-): (...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>> {
+): DebouncedFunction<TFunc> {
   let timeout: ReturnType<typeof setTimeout>;
-  let promise: Promise<ReturnType<TFunc>> | undefined;
-  let promiseResolve: (value: ReturnType<TFunc> | PromiseLike<ReturnType<TFunc>>) => void;
+  let promise: Promise<ReturnType<TFunc> | undefined> | undefined;
+  let promiseResolve: (
+    value: ReturnType<TFunc> | PromiseLike<ReturnType<TFunc>> | undefined,
+  ) => void;
   let promiseReject: (reason?: unknown) => void;
 
-  return (...args) => {
+  const debouncedFn = (...args: Parameters<TFunc>): Promise<ReturnType<TFunc> | undefined> => {
     clearTimeout(timeout);
     if (!promise)
       promise = new Promise((resolve, reject) => {
@@ -74,6 +94,18 @@ export function debounce<TFunc extends (...args: any[]) => any>(
 
     return promise;
   };
+
+  debouncedFn.cancel = () => {
+    clearTimeout(timeout);
+    if (promise) {
+      promiseResolve(undefined);
+      promise = undefined;
+    }
+  };
+
+  // Type assertion is necessary to cast the internal implementation type to the public API type
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return debouncedFn as DebouncedFunction<TFunc>;
 }
 
 /**

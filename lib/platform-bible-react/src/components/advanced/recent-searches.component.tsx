@@ -1,5 +1,5 @@
 import { Clock } from 'lucide-react';
-import { Button } from '@/components/shadcn-ui/button';
+import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { useState } from 'react';
@@ -29,7 +29,11 @@ export interface RecentSearchesProps<T> {
    */
   buttonClassName?: string;
   /** Variant for the trigger button. Defaults to `"ghost"` */
-  buttonVariant?: 'ghost' | 'outline' | 'default' | 'destructive' | 'secondary' | 'link';
+  buttonVariant?: ButtonProps['variant'];
+  /** Controlled open state of the popover. If provided, the component becomes controlled. */
+  open?: boolean;
+  /** Called when the open state changes. Required when `open` is provided. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -47,8 +51,16 @@ export default function RecentSearches<T>({
   classNameForItems,
   buttonClassName = 'tw-absolute tw-right-0 tw-top-0 tw-h-full tw-px-3 tw-py-2',
   buttonVariant = 'ghost',
+  open: openProp,
+  onOpenChange,
 }: RecentSearchesProps<T>) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpenInternal, setIsOpenInternal] = useState(false);
+  const isControlled = openProp !== undefined;
+  const isOpen = isControlled ? openProp : isOpenInternal;
+  const setIsOpen = (value: boolean) => {
+    if (!isControlled) setIsOpenInternal(value);
+    onOpenChange?.(value);
+  };
 
   if (recentSearches.length === 0) {
     return undefined;

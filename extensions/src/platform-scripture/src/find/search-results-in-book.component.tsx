@@ -11,8 +11,10 @@ import { logger } from '@papi/frontend';
 import { LocalizedBookData } from './find-types';
 import SearchResult, {
   HidableFindResult,
+  ReplaceConfig,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './search-result.component';
+import { PreviewOptions } from './replace-preview-types';
 
 type SearchResultsInBookProps = {
   /** The ID of the project being searched */
@@ -22,21 +24,34 @@ type SearchResultsInBookProps = {
   /** The list of search results in this book */
   results: HidableFindResult[];
   /** Map of book IDs to their localized display names */
-  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId'>>;
+  localizedBookData: Map<string, Pick<LocalizedBookData, 'localizedId' | 'localizedName'>>;
   /** The index of the currently focused/selected result in this list */
   focusedResultIndex: number | undefined;
   /** Callback function called when the user clicks on a search result */
   onResultClick: (searchResult: HidableFindResult, index: number) => void;
+  /** Callback function called when a search result card receives focus (e.g. Tab navigation) */
+  onResultFocus?: (searchResult: HidableFindResult, index: number) => void;
+  /** Callback function called when the user double-clicks a search result (focus shifts to editor) */
+  onResultDoubleClick?: (searchResult: HidableFindResult, index: number) => void;
+  /**
+   * Callback function called when the user clicks the scripture reference in a result (focus shifts
+   * to editor)
+   */
+  onResultReferenceClick?: (searchResult: HidableFindResult, index: number) => void;
   /** Callback function called when the user chooses to hide/dismiss a result */
   onHideResult: (index: number) => void;
   /** Callback function called when the user clicks Replace on a result */
   onReplace: (index: number) => void;
-  /** Callback to cancel/revert the pending replace */
-  onCancelReplace?: () => void;
   /** Whether the find WebView is currently in replace mode */
   isReplaceMode: boolean;
+  /** Configuration for replacement preview (used in replace mode) */
+  replaceConfig?: ReplaceConfig;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
+  /** Options controlling how the replace preview is displayed */
+  previewOptions?: PreviewOptions;
+  /** Whether the project has AllowInvisibleChars enabled. Forwarded to each SearchResult. */
+  allowInvisibleCharacters?: boolean;
   localizedStrings: {
     [localizedInventoryKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
@@ -50,12 +65,17 @@ export function SearchResultsInBook({
   localizedBookData,
   focusedResultIndex,
   onResultClick,
+  onResultFocus,
+  onResultDoubleClick,
+  onResultReferenceClick,
   onHideResult,
   onReplace,
-  onCancelReplace,
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  replaceConfig,
+  previewOptions,
+  allowInvisibleCharacters,
 }: SearchResultsInBookProps) {
   const verseRefForBook = useMemo(() => {
     return {
@@ -92,7 +112,18 @@ export function SearchResultsInBook({
     }
   }, [usjBook, bookId]);
 
-  const firstReplacedIndex = results.findIndex((r) => r.isReplaced);
+  // Cache the USFM string once per book so individual result cards don't each serialize the book
+  const cachedUsfm = useMemo(() => {
+    if (!usjReaderWriter) return undefined;
+    try {
+      return usjReaderWriter.toUsfm();
+    } catch (error) {
+      logger.warn(
+        `Error serializing USFM for book ${bookId} in search results: ${getErrorMessage(error)}`,
+      );
+      return undefined;
+    }
+  }, [usjReaderWriter, bookId]);
 
   return (
     <>
@@ -103,14 +134,20 @@ export function SearchResultsInBook({
           globalResultsIndex={index}
           isSelected={index === focusedResultIndex}
           usjReaderWriter={usjReaderWriter}
+          cachedUsfm={cachedUsfm}
           localizedBookData={localizedBookData}
           onResultClick={onResultClick}
+          onResultFocus={onResultFocus}
+          onResultDoubleClick={onResultDoubleClick}
+          onResultReferenceClick={onResultReferenceClick}
           onHideResult={onHideResult}
           onReplace={onReplace}
-          onCancelReplace={index === firstReplacedIndex ? onCancelReplace : undefined}
           localizedStrings={localizedStrings}
           isReplaceMode={isReplaceMode}
           isReplacing={isReplacing}
+          replaceConfig={replaceConfig}
+          previewOptions={previewOptions}
+          allowInvisibleCharacters={allowInvisibleCharacters}
         />
       ))}
     </>

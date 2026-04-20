@@ -75,7 +75,20 @@ async function waitForWebSocketReady(port: number, timeout: number): Promise<voi
  * Launch a fresh Electron instance with an isolated user-data directory. Returns the app handle,
  * the temp directory path, and a promise that resolves when the app closes.
  */
-export async function launchElectronApp(): Promise<ElectronAppContext> {
+/**
+ * Options for {@link launchElectronApp}.
+ *
+ * @property devNoisy - Override the `DEV_NOISY` environment variable. Pass `'false'` to suppress
+ *   test extensions (helloRock3, helloSomeone, etc.) — useful for tests that need a clean layout
+ *   without extra webviews. Defaults to `process.env.DEV_NOISY ?? 'true'`.
+ */
+export interface LaunchElectronAppOptions {
+  devNoisy?: string;
+}
+
+export async function launchElectronApp(
+  options?: LaunchElectronAppOptions,
+): Promise<ElectronAppContext> {
   const rootDir = path.resolve(__dirname, '../..');
 
   console.log(`Launching Electron app from project root: ${rootDir}`);
@@ -91,8 +104,8 @@ export async function launchElectronApp(): Promise<ElectronAppContext> {
     ...restEnv,
     NODE_ENV: 'development',
     // Enable noisy dev mode so test extensions (helloRock3, helloSomeone, etc.) are loaded.
-    // Only set if not already defined, so other E2E suites can override.
-    DEV_NOISY: process.env.DEV_NOISY ?? 'true',
+    // Callers can pass devNoisy: 'false' to suppress test extensions for a clean layout.
+    DEV_NOISY: options?.devNoisy ?? process.env.DEV_NOISY ?? 'true',
   };
 
   // Use an isolated user-data directory so the singleton instance lock does not

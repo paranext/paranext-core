@@ -12,7 +12,9 @@ export default defineConfig({
   // Smoke tests use app.fixture/papi.fixture (launch their own Electron instance).
   // CDP tests connect to an already-running app. They cannot mix.
   // _example/ contains reference templates, not runnable tests.
-  testIgnore: ['**/smoke/**', '**/_example/**'],
+  // Smoke tests launch their own Electron — incompatible with CDP-connected tests.
+  // Find tests were migrated to use app.fixture and run via playwright.config.ts instead.
+  testIgnore: ['**/smoke/**', '**/_example/**', '**/find/**'],
   fullyParallel: false,
   workers: 1,
   reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],

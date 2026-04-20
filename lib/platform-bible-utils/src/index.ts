@@ -132,7 +132,14 @@ export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
 export { MODIFIER_KEYS } from './keyboard-util';
 
 // Types
-export type { DeepPartial, KebabCase, Prettify, ReplaceType, UnionToIntersection } from './util';
+export type {
+  DebouncedFunction,
+  DeepPartial,
+  KebabCase,
+  Prettify,
+  ReplaceType,
+  UnionToIntersection,
+} from './util';
 export type {
   Dispose,
   OnDidDispose,

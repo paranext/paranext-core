@@ -144,6 +144,7 @@ export function ScopeSelector({
   return (
     <div id={id} className="tw-grid tw-gap-4">
       <div className="tw-grid tw-gap-2">
+        {/* Will likely be replaced with RadioGroupFieldSet and legend when we upgrade shadcn */}
         <Label>{scopeText}</Label>
         <RadioGroup
           value={scope}

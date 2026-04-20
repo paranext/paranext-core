@@ -1,5 +1,6 @@
 import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
+
 import { CheckResultsInvalidated } from 'platform-scripture';
 import {
   ChecksSidePanelWebViewOptions,
@@ -67,6 +68,9 @@ const markersValidator: ProjectSettingValidator<
 const punctuationValidator: ProjectSettingValidator<
   'platformScripture.validPunctuation' | 'platformScripture.invalidPunctuation'
 > = async (newValue) => typeof newValue === 'string';
+
+const FIND_HISTORY_STORAGE_KEY = 'findRecentSearches';
+const FIND_LAST_SEARCH_TERM_STORAGE_KEY = 'findLastSearchTerm';
 
 // #endregion
 
@@ -152,7 +156,10 @@ async function openChecksSidePanel(
   return sidePanelWebViewId;
 }
 
-async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
+async function openFind(
+  editorWebViewId: string | undefined,
+  selectedText?: string,
+): Promise<string | undefined> {
   let projectId: FindWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
   let editorScrollGroupId: FindWebViewOptions['editorScrollGroupId'];
@@ -176,6 +183,7 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
     editorScrollGroupId,
     bringToFront: true,
     editorWebViewId,
+    initialSearchText: selectedText || undefined,
   };
 
   // First tries to open an existing find web view
@@ -185,12 +193,16 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
     { ...options, existingId: '?', createNewIfNotFound: false },
   );
 
-  // If found an existing web view, then reloads it only if the project definition is different
+  // If found an existing web view, then reloads it if the project is different or if there is
+  // selected text to pre-fill that differs from the current search term (so the find panel picks
+  // up the new search term without unnecessary reloads)
   if (findWebViewId) {
     const existingFindWebViewDefinition =
       await papi.webViews.getOpenWebViewDefinition(findWebViewId);
-    // If the existing web view has a project id different to the current one, then prompts a reload
-    if (existingFindWebViewDefinition?.projectId !== projectId) {
+    const existingSearchTerm = existingFindWebViewDefinition?.state?.findSearchTerm;
+    const searchTermChanged =
+      options.initialSearchText && options.initialSearchText !== existingSearchTerm;
+    if (existingFindWebViewDefinition?.projectId !== projectId || searchTermChanged) {
       await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
     }
   } else {
@@ -360,6 +372,52 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.invalidPunctuation',
     punctuationValidator,
   );
+  const getFindHistoryPromise = papi.commands.registerCommand(
+    'platformScripture.getFindHistory',
+    async (projectId?: string): Promise<string[]> => {
+      const key = FIND_HISTORY_STORAGE_KEY + (projectId ? `_${projectId}` : '');
+      try {
+        const stored = await papi.storage.readUserData(context.executionToken, key);
+        if (!stored) return [];
+        const parsed: unknown = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string'))
+          return parsed;
+      } catch {
+        // Return empty array on any error
+      }
+      return [];
+    },
+  );
+  const setFindHistoryPromise = papi.commands.registerCommand(
+    'platformScripture.setFindHistory',
+    async (history: string[], projectId?: string): Promise<void> => {
+      const key = FIND_HISTORY_STORAGE_KEY + (projectId ? `_${projectId}` : '');
+      try {
+        await papi.storage.writeUserData(context.executionToken, key, JSON.stringify(history));
+      } catch {
+        // Ignore storage write errors (e.g. concurrent access when panel closes and reopens)
+      }
+    },
+  );
+  const getFindLastSearchTermPromise = papi.commands.registerCommand(
+    'platformScripture.getFindLastSearchTerm',
+    async (projectId?: string): Promise<string> => {
+      const key = FIND_LAST_SEARCH_TERM_STORAGE_KEY + (projectId ? `_${projectId}` : '');
+      try {
+        const stored = await papi.storage.readUserData(context.executionToken, key);
+        return stored ?? '';
+      } catch {
+        return '';
+      }
+    },
+  );
+  const setFindLastSearchTermPromise = papi.commands.registerCommand(
+    'platformScripture.setFindLastSearchTerm',
+    async (term: string, projectId?: string): Promise<void> => {
+      const key = FIND_LAST_SEARCH_TERM_STORAGE_KEY + (projectId ? `_${projectId}` : '');
+      await papi.storage.writeUserData(context.executionToken, key, term);
+    },
+  );
   const openPunctuationInventoryPromise = papi.commands.registerCommand(
     'platformScripture.openPunctuationInventory',
     openPlatformPunctuationInventory,
@@ -403,6 +461,12 @@ export async function activate(context: ExecutionActivationContext) {
           name: 'webViewId',
           required: false,
           summary: 'The ID of the web view tied to the project that we are searching in',
+          schema: { type: 'string' },
+        },
+        {
+          name: 'selectedText',
+          required: false,
+          summary: 'Text to pre-fill in the search field and immediately search for',
           schema: { type: 'string' },
         },
       ],
@@ -467,6 +531,10 @@ export async function activate(context: ExecutionActivationContext) {
     await markersInventoryWebViewProviderPromise,
     await validPunctuationPromise,
     await invalidPunctuationPromise,
+    await getFindHistoryPromise,
+    await setFindHistoryPromise,
+    await getFindLastSearchTermPromise,
+    await setFindLastSearchTermPromise,
     await openPunctuationInventoryPromise,
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,

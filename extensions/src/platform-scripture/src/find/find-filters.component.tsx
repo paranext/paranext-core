@@ -44,6 +44,8 @@ type FindFiltersProps = {
   isRegexAllowed: boolean;
   setIsRegexAllowed: (value: boolean) => void;
   localizedStrings: FindFiltersStrings;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export function FindFilters({
@@ -57,9 +59,11 @@ export function FindFilters({
   isRegexAllowed,
   setIsRegexAllowed,
   localizedStrings,
+  open,
+  onOpenChange,
 }: FindFiltersProps) {
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -79,8 +83,10 @@ export function FindFilters({
       </TooltipProvider>
       <DropdownMenuContent align="end" className="tw-w-72 tw-p-3">
         {/* 1. Match content in */}
-        <div className="tw-mb-3">
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.matchContentIn}</p>
+        <fieldset className="tw-mb-3">
+          <legend className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
+            {localizedStrings.matchContentIn}
+          </legend>
           <RadioGroup
             value={searchTextType}
             // RadioGroup onValueChange provides a plain string, but we know it will always be one
@@ -118,11 +124,13 @@ export function FindFilters({
               </div>
             ))}
           </RadioGroup>
-        </div>
+        </fieldset>
 
         {/* 2. Match boundaries */}
-        <div className="tw-mb-3">
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.restrictions}</p>
+        <fieldset className="tw-mb-3">
+          <legend className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
+            {localizedStrings.restrictions}
+          </legend>
           <RadioGroup
             value={wordRestriction}
             // RadioGroup onValueChange provides a plain string, but we know it will always be one
@@ -150,11 +158,13 @@ export function FindFilters({
               </div>
             ))}
           </RadioGroup>
-        </div>
+        </fieldset>
 
         {/* 3. Capitalization */}
-        <div className="tw-mb-3">
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.capitalization}</p>
+        <fieldset className="tw-mb-3">
+          <legend className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
+            {localizedStrings.capitalization}
+          </legend>
           <div className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
             <Checkbox
               id="matchCase"
@@ -165,11 +175,13 @@ export function FindFilters({
               {localizedStrings.matchCase}
             </Label>
           </div>
-        </div>
+        </fieldset>
 
         {/* 4. Pattern */}
-        <div>
-          <p className="tw-mb-1.5 tw-text-sm tw-font-semibold">{localizedStrings.pattern}</p>
+        <fieldset>
+          <legend className="tw-px-2 tw-py-1.5 tw-text-sm tw-font-semibold">
+            {localizedStrings.pattern}
+          </legend>
           <div className="tw-flex tw-min-h-9 tw-items-center tw-gap-2">
             <Checkbox
               id="allowRegex"
@@ -180,7 +192,7 @@ export function FindFilters({
               {localizedStrings.allowRegex}
             </Label>
           </div>
-        </div>
+        </fieldset>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,4 +1,5 @@
 import { Frame, Page } from '@playwright/test';
+import { waitForPapiMethodRegistered } from '../../../fixtures/helpers';
 
 /**
  * Find the Hello Rock3 WebView frame by activating its dock tab and searching child frames for
@@ -9,9 +10,14 @@ import { Frame, Page } from '@playwright/test';
  * @returns The Frame object for the hello-rock3 iframe, usable for interactions inside the WebView.
  */
 export async function findHelloRock3Frame(page: Page): Promise<Frame> {
+  // Wait for helloRock3 to finish activating before looking for its tab.
+  // helloRock3.openProject is registered near the end of activate(), just before openWebView
+  // calls. Waiting for it ensures the extension has started opening webviews.
+  await waitForPapiMethodRegistered('command:helloRock3.openProject', 8876, 60_000);
+
   // Wait for the Hello Rock3 tab to appear in the dock layout and activate it
   const tab = page.locator('.dock-tab', { hasText: /Hello Rock3/i });
-  await tab.first().waitFor({ state: 'visible', timeout: 60_000 });
+  await tab.first().waitFor({ state: 'visible', timeout: 30_000 });
   await tab.first().click();
 
   // Poll child frames until we find one with hello-rock3 content.

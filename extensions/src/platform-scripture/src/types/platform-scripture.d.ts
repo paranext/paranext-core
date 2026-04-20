@@ -1673,7 +1673,19 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
-    'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+    'platformScripture.openFind': (
+      editorWebViewId?: string | undefined,
+      selectedText?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /** Retrieves the user's recent find search history from user storage. */
+    'platformScripture.getFindHistory': (projectId?: string) => Promise<string[]>;
+    /** Persists the user's recent find search history to user storage. */
+    'platformScripture.setFindHistory': (history: string[], projectId?: string) => Promise<void>;
+    /** Retrieves the last find search term from user storage. */
+    'platformScripture.getFindLastSearchTerm': (projectId?: string) => Promise<string>;
+    /** Persists the last find search term to user storage. */
+    'platformScripture.setFindLastSearchTerm': (term: string, projectId?: string) => Promise<void>;
   }
 
   export interface ProjectSettingTypes {
