@@ -1128,6 +1128,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editorRef.current?.selectNote(index);
   }, []);
 
+  const resetInsertingNoteStatusRefs = useCallback(() => {
+    // Resets the status refs for inserting a footnote or cross-reference
+    if (isInsertingFootnote.current) isInsertingFootnote.current = false;
+    if (isInsertingCrossReference.current) isInsertingCrossReference.current = false;
+  }, []);
+
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
     function saveUsjToPdpIfUpdatedInternal(usjFromEditor = editorRef.current?.getUsj()) {
@@ -1191,8 +1197,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           let editorUsj = editorRef.current?.getUsj();
           if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
           if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
+          else {
+            resetInsertingNoteStatusRefs();
+          }
+        } else if (!saveResult || !projectId) {
+          resetInsertingNoteStatusRefs();
         }
       } catch (e) {
+        resetInsertingNoteStatusRefs();
         const errorMessage = getErrorMessage(e);
         logger.error(`Error saving USJ to PDP: ${errorMessage}`);
         currentlyWritingUsjToPdp.current = false;
@@ -1220,10 +1232,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             )}`,
           );
         }
-      } finally {
-        // Resets the status refs for inserting a footnote or cross-reference
-        if (isInsertingFootnote.current) isInsertingFootnote.current = false;
-        if (isInsertingCrossReference.current) isInsertingCrossReference.current = false;
       }
     }
 
