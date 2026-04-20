@@ -83,6 +83,16 @@ public static class ImportBooksOrchestrator
         "*[false()]"
     );
 
+    // WriteLock test seam — mirrors CAP-005 DeleteBooksOrchestrator and
+    // CAP-007 CopyBooksOrchestrator. `WriteLockManager.ObtainLock` and the
+    // PT9 import-write path are not mockable, so a private test-local
+    // subclass with this exact type name is the documented substitute for
+    // "WriteLock failed to obtain". `internal` so ManageBooksService can
+    // reference the same constant in its CAP-010 guard (single source of
+    // truth within CAP-010; CAP-005/007 keep their own private copies —
+    // cross-capability consolidation is deferred per CAP-008 precedent).
+    internal const string LockNotObtainedMarkerTypeName = "LockNotObtainedScrText";
+
     // === PORTED FROM PT9 ===
     // Source: PT9/ParatextData/ImportSfmText.cs:76-151 (read + extract),
     //         PT9/ParatextData/UsxImporter.cs:33-80 (USX→USFM routing)
@@ -652,9 +662,16 @@ public static class ImportBooksOrchestrator
             importedCount += ImportOneFile(scrText, file, replaceEntireBook);
         }
 
-        List<AlertEntry> entries = alertScope.Entries;
-        AlertEntry[] warnings = entries.Where(e => e.Level != AlertLevel.Error).ToArray();
-        AlertEntry[] errors = entries.Where(e => e.Level == AlertLevel.Error).ToArray();
+        // Single-pass split of captured alerts by severity. Error-level
+        // entries surface on Errors[]; Information/Warning/Question entries
+        // surface on Warnings[] (Theme 8 projection — see
+        // backend-alignment.md "Alert Handling — AlertCapture"). Imperative
+        // loop matches the partition style used in CopyBooksOrchestrator.
+        PartitionAlertsByLevel(
+            alertScope.Entries,
+            out AlertEntry[] warnings,
+            out AlertEntry[] errors
+        );
 
         // Success: no error-level alerts. ImportedCount independently counts
         // books actually written, so an empty-files input returns
@@ -666,6 +683,37 @@ public static class ImportBooksOrchestrator
             Warnings: warnings,
             Errors: errors
         );
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: Theme 8 projection — captured alerts split into Warnings[] and
+    //   Errors[] on the wire result. Single-pass partition: one iteration
+    //   produces both arrays, avoiding the two-pass Where(...).ToArray()
+    //   idiom. Matches the imperative-loop style used elsewhere in this
+    //   capability (CopyBooksOrchestrator.CopyBooks).
+    /// <summary>
+    /// Splits <paramref name="captured"/> into warnings (Information,
+    /// Warning, Question) and errors (Error) using a single pass. The
+    /// projection matches the Theme-8 wire contract documented in
+    /// backend-alignment.md ("Alert Handling — AlertCapture").
+    /// </summary>
+    private static void PartitionAlertsByLevel(
+        List<AlertEntry> captured,
+        out AlertEntry[] warnings,
+        out AlertEntry[] errors
+    )
+    {
+        var warningList = new List<AlertEntry>(captured.Count);
+        var errorList = new List<AlertEntry>();
+        foreach (AlertEntry entry in captured)
+        {
+            if (entry.Level == AlertLevel.Error)
+                errorList.Add(entry);
+            else
+                warningList.Add(entry);
+        }
+        warnings = warningList.ToArray();
+        errors = errorList.ToArray();
     }
 
     // === PORTED FROM PT9 ===
@@ -793,8 +841,4 @@ public static class ImportBooksOrchestrator
         }
         return result.ToArray();
     }
-
-    // See class-level LockNotObtainedMarkerTypeName usage pattern from
-    // CAP-005/007. Mirrors those orchestrators' single-seam convention.
-    private const string LockNotObtainedMarkerTypeName = "LockNotObtainedScrText";
 }

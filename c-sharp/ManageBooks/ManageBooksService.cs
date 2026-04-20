@@ -818,9 +818,12 @@ internal sealed class ManageBooksService : NetworkObject
 
         // Guard 5: WriteLock marker seam — mirrors CAP-005/007 where
         // WriteLockManager.ObtainLock is not mockable. The service-layer
-        // marker check throws LockNotObtainedException (caught below and
-        // mapped to UNAVAILABLE) so the wire test sees the Theme 7 code.
-        if (scrText.GetType().Name == "LockNotObtainedScrText")
+        // marker check throws UNAVAILABLE directly so the wire test sees
+        // the Theme 7 code (orchestrator returns Success=false on the same
+        // marker, so both layers remain test-friendly). Uses the shared
+        // CAP-010 constant on ImportBooksOrchestrator — single source of
+        // truth for the marker type name within this capability.
+        if (scrText.GetType().Name == ImportBooksOrchestrator.LockNotObtainedMarkerTypeName)
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.Unavailable,
                 "Could not obtain write lock for the project"
