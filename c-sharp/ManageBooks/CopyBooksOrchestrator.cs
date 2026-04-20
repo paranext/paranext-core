@@ -357,6 +357,33 @@ public static class CopyBooksOrchestrator
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:533-571 (LoadToComboboxOptions)
     // Maps to: EXT-009 (BHV-603, BHV-606)
+    //
+    // EXPLANATION:
+    // The PT9 decision tree (CopyBooksForm.cs:539-553) branches in three ways
+    // depending on the "From" project type:
+    //
+    //   1. NULL source (no "From" selected yet, PT9 line 539-542):
+    //        accept scrText iff
+    //          scrText.IsNonProtectedText()
+    //          && scrText.Settings.TranslationInfo.Type != TransliterationWithEncoder
+    //          && !scrText.Settings.IsStudyBiblePublication
+    //
+    //   2. SAME-TYPE branch (PT9 line 547-551): when the "From" type is
+    //      StudyBibleAdditions, StudyBible, or ConsultantNotes, copy is
+    //      restricted to destinations of the SAME type. This is the narrow
+    //      branch — PT9 does not allow, e.g., StudyBible → Standard.
+    //
+    //   3. PARAMETERIZED-SET branch (PT9 line 553-559): everything else
+    //      (Standard / Auxiliary / BackTranslation / Daughter /
+    //      TransliterationManual / TransliterationWithEncoder / unknown)
+    //      falls through to the "else" clause and accepts the six-element
+    //      destination set { Standard, Auxiliary, BackTranslation, Daughter,
+    //      StudyBible, TransliterationManual }. Notably: a
+    //      TransliterationWithEncoder SOURCE still lands here (PT9 else
+    //      clause has no explicit check), but TransliterationWithEncoder is
+    //      NOT in the destination set, so it's excluded as a target. Also
+    //      note that SBA (StudyBibleAdditions) is excluded as a destination
+    //      in this branch — matches gm-007 expected output.
     /// <summary>
     /// Returns the <see cref="Predicate{ScrText}"/> that decides whether a
     /// candidate destination project is a valid "To" choice given
@@ -385,12 +412,67 @@ public static class CopyBooksOrchestrator
     /// </list></para>
     /// </summary>
     /// <param name="fromProjectType">Source project type; may be <c>null</c>.</param>
-    public static Predicate<ScrText> GetToProjectFilter(Enum<ProjectType>? fromProjectType) =>
-        throw new NotImplementedException();
+    public static Predicate<ScrText> GetToProjectFilter(Enum<ProjectType>? fromProjectType)
+    {
+        // Branch 1: null source — PT9 CopyBooksForm.cs:539-542.
+        // PT9's IsNonProtectedText() extension (ParatextBase) expands to
+        // !scrText.IsProtectedText && scrText.Settings.TranslationInfo.Type.IsScripture();
+        // inlined here because ParatextBase lives in a WinForms assembly not
+        // referenced by the PT10 data provider.
+        if (fromProjectType is null)
+            return scrText =>
+                !scrText.IsProtectedText
+                && scrText.Settings.TranslationInfo.Type.IsScripture()
+                && scrText.Settings.TranslationInfo.Type != ProjectType.TransliterationWithEncoder
+                && !scrText.Settings.IsStudyBiblePublication;
+
+        // Branch 2: same-type short-circuit for StudyBible / SBA / ConsultantNotes.
+        // PT9 CopyBooksForm.cs:547-551.
+        if (
+            fromProjectType == ProjectType.StudyBibleAdditions
+            || fromProjectType == ProjectType.StudyBible
+            || fromProjectType == ProjectType.ConsultantNotes
+        )
+            return scrText => scrText.Settings.TranslationInfo.Type == fromProjectType;
+
+        // Branch 3: parameterized-set fall-through.
+        // PT9 CopyBooksForm.cs:553-559.
+        return scrText => IsInParameterizedDestinationSet(scrText.Settings.TranslationInfo.Type);
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:554-559 (inline predicate)
+    // Maps to: EXT-009 (BHV-606 parameterized destination set)
+    /// <summary>
+    /// Membership test for the six-element "parameterized destination set"
+    /// used whenever the "From" project is Standard / Auxiliary /
+    /// BackTranslation / Daughter / TransliterationManual /
+    /// TransliterationWithEncoder (the PT9 else branch at
+    /// CopyBooksForm.cs:553-559). Extracted into a named helper so both the
+    /// predicate branch and any future reuse (e.g. CAP-007 pre-flight
+    /// validation) share one definition.
+    /// </summary>
+    private static bool IsInParameterizedDestinationSet(Enum<ProjectType> type) =>
+        type == ProjectType.Standard
+        || type == ProjectType.Auxiliary
+        || type == ProjectType.BackTranslation
+        || type == ProjectType.Daughter
+        || type == ProjectType.StudyBible
+        || type == ProjectType.TransliterationManual;
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:533-571 (LoadToComboboxOptions)
     // Maps to: EXT-009 (BHV-603, BHV-606)
+    //
+    // EXPLANATION:
+    // Composes the pure predicate from GetToProjectFilter with a
+    // ScrTextCollection enumeration. We use IncludeProjects.AllAccessible
+    // (PT9 LoadToCombobox default) rather than the narrower ScriptureOnly
+    // used by ProjectFilterService so that the same-type short-circuit for
+    // ConsultantNotes (a non-scripture note type) can surface ConsultantNotes
+    // destinations. Each matching ScrText is mapped to the minimal
+    // ProjectSummary shape defined in data-contracts.md Section 3.8:
+    // (ProjectId, Name, ProjectType=InternalValue, IsEditable).
     /// <summary>
     /// Returns the list of projects accepted by
     /// <see cref="GetToProjectFilter(Enum{ProjectType})"/> across the current
@@ -401,7 +483,30 @@ public static class CopyBooksOrchestrator
     /// production implementation.
     /// </summary>
     /// <param name="fromProjectType">Source project type; may be <c>null</c>.</param>
-    public static ProjectListResult GetToProjectFilterProjects(
-        Enum<ProjectType>? fromProjectType
-    ) => throw new NotImplementedException();
+    public static ProjectListResult GetToProjectFilterProjects(Enum<ProjectType>? fromProjectType)
+    {
+        Predicate<ScrText> predicate = GetToProjectFilter(fromProjectType);
+
+        List<ProjectSummary> summaries = ScrTextCollection
+            .ScrTexts(IncludeProjects.AllAccessible)
+            .Where(scrText => predicate(scrText))
+            .Select(ToSummary)
+            .ToList();
+
+        return new ProjectListResult(summaries);
+    }
+
+    /// <summary>
+    /// Maps a <see cref="ScrText"/> to the minimal <see cref="ProjectSummary"/>
+    /// contract shape (data-contracts.md Section 3.8). Mirrors the private
+    /// <c>ProjectFilterService.ToSummary</c> projection so CAP-008 and CAP-011
+    /// produce identical summaries for the same underlying project.
+    /// </summary>
+    private static ProjectSummary ToSummary(ScrText scrText) =>
+        new(
+            ProjectId: scrText.Guid.ToString(),
+            Name: scrText.Name,
+            ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
+            IsEditable: scrText.Settings.IsEditableText
+        );
 }
