@@ -203,16 +203,12 @@ internal sealed class ManageBooksService : NetworkObject
 
     /// <summary>
     /// Wire entry point for project filtering (CAP-011, M-013). Maps to
-    /// data-contracts.md Section 4.13. Delegates to
-    /// <see cref="ProjectFilterService.FilterProjects"/>.
-    ///
-    /// <para>STUB — Test Writer RED skeleton. Throws
-    /// <see cref="NotImplementedException"/> until CAP-011 is GREEN.</para>
+    /// data-contracts.md Section 4.13. Pure delegation to
+    /// <see cref="ProjectFilterService.FilterProjects"/> — CAP-011 is read-only,
+    /// so no <c>SendFullProjectUpdateEvent</c> is emitted on this path.
     /// </summary>
-    public Task<ProjectListResult> FilterProjectsAsync(ProjectFilterInput input)
-    {
-        throw new NotImplementedException(
-            "CAP-011 ManageBooksService.FilterProjectsAsync is a RED stub — to be implemented in BE-1."
-        );
-    }
+    /// <param name="input">Filter purpose + optional SourceProjectType for CopyDestination.</param>
+    /// <returns>Matching projects in <see cref="ScrTextCollection"/> order.</returns>
+    public Task<ProjectListResult> FilterProjectsAsync(ProjectFilterInput input) =>
+        Task.FromResult(ProjectFilterService.FilterProjects(input));
 }
