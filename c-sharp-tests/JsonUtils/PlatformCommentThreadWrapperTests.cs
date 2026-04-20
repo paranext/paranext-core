@@ -167,7 +167,7 @@ internal class PlatformCommentThreadWrapperTests : PapiTestBase
     }
 
     [Test]
-    public void DeduplicateCommentThreads_AllDeletedComments_DropsThread()
+    public void DeduplicateCommentThreads_AllDeletedComments_PassesThroughThread()
     {
         // Arrange - Create a thread, then delete all its comments
         Comment comment = CommentTestHelper.CreateBasicComment();
@@ -189,8 +189,10 @@ internal class PlatformCommentThreadWrapperTests : PapiTestBase
             new List<PlatformCommentThreadWrapper> { wrapper }
         );
 
-        // Assert - Thread with all deleted comments should be dropped
-        Assert.That(result, Is.Empty);
+        // Assert - DeduplicateCommentThreads passes the thread through unchanged;
+        // filtering all-deleted threads is the caller's responsibility.
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].HasNonDeletedComments, Is.False);
     }
 
     [Test]
