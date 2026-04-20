@@ -8,11 +8,9 @@ const config: StorybookConfig = {
     '../src/**/*.mdx',
     '../src/**/*.stories.@(js|jsx|ts|tsx)',
     '../extensions/src/**/*.stories.@(js|jsx|ts|tsx)', // Collect stories from bundled extensions - at lease until https://paratextstudio.atlassian.net/browse/PT-3307 is implemented
-    '../lib/platform-bible-react/src/stories/**/*.stories.@(js|jsx|ts|tsx)', // Include only stories directory from platform-bible-react library
   ],
   staticDirs: [
     '../src/stories/assets', // static asset folder
-    '../lib/platform-bible-react/src', // platform-bible-react static assets
     '../extensions/src/platform-scripture-editor/assets', // Scripture editor assets
   ],
   addons: [
@@ -42,19 +40,30 @@ const config: StorybookConfig = {
 
   // Merge StorybookWebpackConfig with our WebpackRendererConfig
   // See the current webpack configuration using npm run storybook -- --debug-webpack
-  // TODO: Make this work in production mode
   webpackFinal: async (webpackConfig, { configType }) => {
     const rendererConfig =
       configType === 'PRODUCTION'
-        ? // Storybook is a build tool so this will not affect anything
+        ? // Webpack configs must be loaded dynamically based on configType (PRODUCTION vs DEVELOPMENT)
           // eslint-disable-next-line global-require
           require('../.erb/configs/webpack.config.renderer.prod').default
         : // Storybook is a build tool so this will not affect anything
           // eslint-disable-next-line global-require
           require('../.erb/configs/webpack.config.renderer.dev').default;
-    // Remove configs that break stuff (https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config)
+    // Strip Electron-specific configs that conflict with Storybook's own webpack setup.
+    // devServer/entry/output are Electron-only; optimization/cache are managed by Storybook.
+    // See https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { devServer, entry, output, ...rendererConfigSanitized } = rendererConfig;
+    const { devServer, entry, output, optimization, cache, ...rendererConfigSanitized } =
+      rendererConfig;
+
+    // Filter out plugins that conflict with Storybook's own plugins.
+    // HtmlWebpackPlugin causes Storybook 9's WebpackInjectMockerRuntimePlugin to
+    // emit mocker-runtime-injected.js twice (one per HtmlWebpackPlugin instance).
+    const conflictingPlugins = ['HtmlWebpackPlugin', 'BundleAnalyzerPlugin'];
+    rendererConfigSanitized.plugins = (rendererConfigSanitized.plugins || []).filter(
+      (plugin: { constructor?: { name?: string } }) =>
+        !conflictingPlugins.includes(plugin?.constructor?.name ?? ''),
+    );
 
     // Inject postcss-loader into the renderer's CSS rules for Storybook only.
     // postcss-loader is intentionally omitted from the shared renderer webpack configs so that
