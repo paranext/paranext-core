@@ -135,6 +135,27 @@ declare module 'legacy-comment-manager' {
     scriptureRanges?: CommentScriptureRange[];
     /** Filter by read status */
     isRead?: boolean;
+    /**
+     * When true, threads flagged as Biblical Term notes or spelling notes are excluded from
+     * results. These note types are managed by dedicated tools (Biblical Terms and Wordlist).
+     *
+     * Defaults to `true` intentionally — most callers do not want these notes mixed into general
+     * comment results.
+     *
+     * @default true
+     */
+    excludeSpellingAndBTNotes?: boolean;
+    /**
+     * When true, duplicate threads (same ID) are merged: unique comments are combined, and the
+     * thread with the latest `modifiedDate` is used as the metadata base. Threads where all
+     * comments are deleted are dropped.
+     *
+     * Defaults to `true` intentionally — callers almost always want a single canonical thread per
+     * ID. If you need raw unmerged threads (e.g., for diagnostics), pass `false` explicitly.
+     *
+     * @default true
+     */
+    deduplicateThreads?: boolean;
   };
 
   // #endregion

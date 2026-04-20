@@ -73,8 +73,13 @@ export const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
   },
   {
     label: '%mainMenu_view%',
-    role: 'viewMenu',
     id: 'macosMenubar.viewMenu',
+    submenu: [
+      { role: 'reload' },
+      { role: 'forceReload' },
+      { role: 'toggleDevTools' },
+      { role: 'togglefullscreen' },
+    ],
   },
   {
     label: '%mainMenu_tab%',

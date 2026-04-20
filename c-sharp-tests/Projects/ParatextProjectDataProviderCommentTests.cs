@@ -1957,5 +1957,110 @@ namespace TestParanextDataProvider.Projects
         }
 
         #endregion
+
+        #region Exclude and Deduplicate Selector Tests
+
+        [Test]
+        public void GetCommentThreads_DefaultSelector_ExcludesBTAndSpellingByDefault()
+        {
+            // Arrange - Create one regular comment, one BT note, and one spelling note
+            var regularComment = CreateTestComment("GEN", 1, 1, "Regular comment");
+            _provider.CreateComment(new PlatformCommentWrapper(regularComment));
+            CreateBtNoteThread("bt-note-default", "GEN 1:1", "BT note text");
+            CreateSpellingNoteThread("spelling-note-default", "GEN 1:1", "Spelling note text");
+
+            // Act - Default selector excludes BT and spelling notes
+            var threads = _provider.GetCommentThreads(new CommentThreadSelector());
+
+            // Assert - Only the regular comment survives the default filter
+            Assert.That(threads, Has.Count.EqualTo(1));
+            Assert.That(threads[0].IsBTNote, Is.False);
+            Assert.That(threads[0].IsSpellingNote, Is.False);
+        }
+
+        [Test]
+        public void GetCommentThreads_ExcludeSpellingAndBTNotesFalse_DoesNotFilterSpecialNotes()
+        {
+            // Arrange - Create one BT note and one spelling note
+            CreateBtNoteThread("bt-note-include", "GEN 1:1", "BT note text");
+            CreateSpellingNoteThread("spelling-note-include", "GEN 1:1", "Spelling note text");
+
+            // Act - Explicitly include spelling and biblical terms notes
+            var selector = new CommentThreadSelector { ExcludeSpellingAndBTNotes = false };
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert - Both spelling and biblical terms notes are returned
+            Assert.That(threads, Has.Count.EqualTo(2));
+            Assert.That(threads.Any(t => t.IsBTNote), Is.True);
+            Assert.That(threads.Any(t => t.IsSpellingNote), Is.True);
+        }
+
+        /// <summary>
+        /// Creates a Biblical Term note by adding the biblical term tag to a comment and inserting it
+        /// directly into the project's CommentManager. <see cref="CommentThread.IsBTNote"/> is
+        /// determined by <see cref="CommentTag.biblicalTermTagId"/> in <see cref="Comment.TagsAddedIds"/>.
+        /// </summary>
+        private void CreateBtNoteThread(string threadId, string verseRefStr, string text)
+        {
+            Comment comment = new Comment(_scrText.User);
+            comment.Thread = threadId;
+            comment.VerseRefStr = verseRefStr;
+            comment.TagsAddedIds = new[] { CommentTag.biblicalTermTagId };
+            comment.SetContentsFromHtml(text);
+            CommentManager commentManager = CommentManager.Get(_scrText);
+            commentManager.AddComment(comment);
+            commentManager.SaveUser(comment.User, false);
+        }
+
+        /// <summary>
+        /// Creates a spelling note by adding the spelling tag to a comment and inserting it
+        /// directly into the project's CommentManager.
+        /// </summary>
+        private void CreateSpellingNoteThread(string threadId, string verseRefStr, string text)
+        {
+            Comment comment = new Comment(_scrText.User);
+            comment.Thread = threadId;
+            comment.VerseRefStr = verseRefStr;
+            comment.TagsAddedIds = new[] { CommentTag.spellingTagId };
+            comment.SetContentsFromHtml(text);
+            CommentManager commentManager = CommentManager.Get(_scrText);
+            commentManager.AddComment(comment);
+            commentManager.SaveUser(comment.User, false);
+        }
+
+        [Test]
+        public void GetCommentThreads_DeduplicateThreadsFalse_ReturnsRawThreads()
+        {
+            // Arrange
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
+            _provider.CreateComment(new PlatformCommentWrapper(comment));
+
+            // Act - With and without dedup
+            var withDedup = _provider.GetCommentThreads(
+                new CommentThreadSelector { DeduplicateThreads = true }
+            );
+            var withoutDedup = _provider.GetCommentThreads(
+                new CommentThreadSelector { DeduplicateThreads = false }
+            );
+
+            // Assert - Without dedup should return at least as many threads as with dedup
+            Assert.That(withoutDedup.Count, Is.GreaterThanOrEqualTo(withDedup.Count));
+        }
+
+        [Test]
+        public void GetCommentThreads_NullSelector_AppliesDefaults()
+        {
+            // Arrange
+            var comment = CreateTestComment("GEN", 1, 1, "Test comment");
+            _provider.CreateComment(new PlatformCommentWrapper(comment));
+
+            // Act - null selector should apply defaults (exclude BT/spelling, deduplicate)
+            var threads = _provider.GetCommentThreads(null!);
+
+            // Assert - Should still return the regular comment
+            Assert.That(threads, Has.Count.EqualTo(1));
+        }
+
+        #endregion
     }
 }

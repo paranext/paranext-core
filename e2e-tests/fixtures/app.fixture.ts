@@ -62,8 +62,10 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
 
     await page.waitForLoadState('domcontentloaded');
 
-    // Wait for React to mount
-    await page.waitForSelector('#root', { state: 'attached', timeout: PROCESS_READY_TIMEOUT });
+    // Wait for React to mount and render content. #root exists immediately but stays empty
+    // until viewZoomService.ready resolves, so wait for a child element rather than just
+    // the container.
+    await page.waitForSelector('#root > *', { state: 'attached', timeout: PROCESS_READY_TIMEOUT });
 
     await use(page);
 

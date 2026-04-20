@@ -162,7 +162,35 @@ internal class CommentThreadSelectorConverterTests
     }
 
     [Test]
-    public void Deserialize_EmptyObject_IsEmptyTrue()
+    public void Deserialize_ExcludeSpellingAndBTNotesFalse_OverridesDefault()
+    {
+        string json = @"{ ""excludeSpellingAndBTNotes"": false }";
+
+        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
+            json,
+            _serializationOptions
+        );
+
+        Assert.That(selector, Is.Not.Null);
+        Assert.That(selector!.ExcludeSpellingAndBTNotes, Is.False);
+    }
+
+    [Test]
+    public void Deserialize_DeduplicateThreadsFalse_OverridesDefault()
+    {
+        string json = @"{ ""deduplicateThreads"": false }";
+
+        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
+            json,
+            _serializationOptions
+        );
+
+        Assert.That(selector, Is.Not.Null);
+        Assert.That(selector!.DeduplicateThreads, Is.False);
+    }
+
+    [Test]
+    public void Deserialize_DefaultValues_ExcludeFieldsAreTrue()
     {
         string json = @"{}";
 
@@ -172,6 +200,7 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.IsEmpty, Is.True);
+        Assert.That(selector!.ExcludeSpellingAndBTNotes, Is.True);
+        Assert.That(selector.DeduplicateThreads, Is.True);
     }
 }
