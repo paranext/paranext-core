@@ -415,30 +415,55 @@ public static class CopyBooksOrchestrator
     public static Predicate<ScrText> GetToProjectFilter(Enum<ProjectType>? fromProjectType)
     {
         // Branch 1: null source — PT9 CopyBooksForm.cs:539-542.
-        // PT9's IsNonProtectedText() extension (ParatextBase) expands to
-        // !scrText.IsProtectedText && scrText.Settings.TranslationInfo.Type.IsScripture();
-        // inlined here because ParatextBase lives in a WinForms assembly not
-        // referenced by the PT10 data provider.
         if (fromProjectType is null)
-            return scrText =>
-                !scrText.IsProtectedText
-                && scrText.Settings.TranslationInfo.Type.IsScripture()
-                && scrText.Settings.TranslationInfo.Type != ProjectType.TransliterationWithEncoder
-                && !scrText.Settings.IsStudyBiblePublication;
+            return IsEligibleWhenNoSourceSelected;
 
         // Branch 2: same-type short-circuit for StudyBible / SBA / ConsultantNotes.
         // PT9 CopyBooksForm.cs:547-551.
-        if (
-            fromProjectType == ProjectType.StudyBibleAdditions
-            || fromProjectType == ProjectType.StudyBible
-            || fromProjectType == ProjectType.ConsultantNotes
-        )
+        if (IsSameTypeRestrictedSource(fromProjectType))
             return scrText => scrText.Settings.TranslationInfo.Type == fromProjectType;
 
         // Branch 3: parameterized-set fall-through.
         // PT9 CopyBooksForm.cs:553-559.
         return scrText => IsInParameterizedDestinationSet(scrText.Settings.TranslationInfo.Type);
     }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:539-542 (null-source branch)
+    // Maps to: EXT-009 (BHV-603 null-source eligibility)
+    /// <summary>
+    /// Null-source ("From" not yet selected) destination predicate.
+    /// PT9's <c>IsNonProtectedText()</c> extension (ParatextBase) expands to
+    /// <c>!scrText.IsProtectedText &amp;&amp; scrText.Settings.TranslationInfo.Type.IsScripture()</c>;
+    /// inlined here because ParatextBase lives in a WinForms assembly not
+    /// referenced by the PT10 data provider. Extracted as a named helper so
+    /// Branch 1 of <see cref="GetToProjectFilter"/> matches the shape of
+    /// Branches 2 and 3, and so CAP-007 pre-flight validation can reuse the
+    /// predicate without reconstructing the four-conjunct chain.
+    /// </summary>
+    private static bool IsEligibleWhenNoSourceSelected(ScrText scrText) =>
+        !scrText.IsProtectedText
+        && scrText.Settings.TranslationInfo.Type.IsScripture()
+        && scrText.Settings.TranslationInfo.Type != ProjectType.TransliterationWithEncoder
+        && !scrText.Settings.IsStudyBiblePublication;
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:547-551 (same-type branch discriminator)
+    // Maps to: EXT-009 (BHV-603 same-type-restricted sources)
+    /// <summary>
+    /// True iff <paramref name="fromProjectType"/> is one of the three PT9
+    /// same-type-restricted source types (<see cref="ProjectType.StudyBibleAdditions"/>,
+    /// <see cref="ProjectType.StudyBible"/>, <see cref="ProjectType.ConsultantNotes"/>)
+    /// — the sources for which copy destinations are restricted to projects of
+    /// the same type. Returns <c>false</c> for a <c>null</c> input so callers
+    /// don't need to null-check first. Extracted so the three branches of
+    /// <see cref="GetToProjectFilter"/> each read as a single dispatch line and
+    /// so CAP-007 pre-flight validation can share the classifier.
+    /// </summary>
+    private static bool IsSameTypeRestrictedSource(Enum<ProjectType>? fromProjectType) =>
+        fromProjectType == ProjectType.StudyBibleAdditions
+        || fromProjectType == ProjectType.StudyBible
+        || fromProjectType == ProjectType.ConsultantNotes;
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:554-559 (inline predicate)
@@ -498,9 +523,20 @@ public static class CopyBooksOrchestrator
 
     /// <summary>
     /// Maps a <see cref="ScrText"/> to the minimal <see cref="ProjectSummary"/>
-    /// contract shape (data-contracts.md Section 3.8). Mirrors the private
-    /// <c>ProjectFilterService.ToSummary</c> projection so CAP-008 and CAP-011
-    /// produce identical summaries for the same underlying project.
+    /// contract shape (data-contracts.md Section 3.8).
+    ///
+    /// <para><b>Intentional duplication.</b> A byte-identical projection lives
+    /// in <c>ProjectFilterService.ToSummary</c> (CAP-011). Both capabilities
+    /// project <c>ScrText</c> to the same wire shape because Section 3.8 is
+    /// the single source of truth, and the CAP-011 delegation path runs
+    /// through <see cref="GetToProjectFilterProjects"/> so the two capabilities
+    /// always produce identical results. The duplication is retained
+    /// deliberately:
+    /// unifying the helper would require placing it in a file owned by
+    /// CAP-011 (<c>ProjectFilterService.cs</c>) or adding a static factory to
+    /// <c>ProjectSummary</c>, both of which cross capability-isolation
+    /// boundaries. Any future consolidation should happen in a dedicated
+    /// refactor pass that owns both capabilities' scopes at once.</para>
     /// </summary>
     private static ProjectSummary ToSummary(ScrText scrText) =>
         new(
