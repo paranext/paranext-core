@@ -99,6 +99,13 @@ internal sealed class ManageBooksService : NetworkObject
                 "checkOverlappingFiles",
                 new Func<OverlapCheckEntry[], Task<ValidationResult>>(CheckOverlappingFilesAsync)
             ),
+            // CAP-010 (BE-4): ImportBooks — import-execution mutation.
+            // Wire method dispatches to the orchestrator wrapped in
+            // AlertCapture; CAP-012 finalizes TS-side extension wiring.
+            (
+                "importBooks",
+                new Func<ImportBooksInput, Task<ImportBooksResult>>(ImportBooksAsync)
+            ),
         ];
 
         return RegisterNetworkObjectAsync(
@@ -726,4 +733,60 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<ValidationResult> CheckOverlappingFilesAsync(OverlapCheckEntry[] entries) =>
         Task.FromResult(ImportBooksOrchestrator.CheckOverlappingFiles(entries));
+
+    // =====================================================================
+    // CAP-010: ImportBooks execution (BE-4 RED stub)
+    //
+    // Wire entry for the Import Books dialog's OK button. Mirrors the CAP-005
+    // DeleteBooksAsync / CAP-007 CopyBooksAsync patterns: precondition guards
+    // → orchestrator delegation wrapped in AlertCapture → Theme-6
+    // SendFullProjectUpdateEvent on the destination PDP after success.
+    //
+    // Guard order (to be asserted by ImportBooksServiceTests; mirrors the
+    // §4.11 error table):
+    //   1. Unknown ProjectId                      → NOT_FOUND
+    //   2. Non-editable project (INV-003)         → FAILED_PRECONDITION
+    //   3. Non-admin on shared project (INV-004,
+    //      VAL-013, BHV-405)                      → PERMISSION_DENIED
+    //   4. Overlapping files in included set
+    //      (VAL-012)                              → FAILED_PRECONDITION
+    //   5. Orchestrator throws
+    //      LockNotObtainedException (INV-002/
+    //      INV-C01)                               → UNAVAILABLE
+    //   6. Invalid USX payload (TS-095)           → INVALID_ARGUMENT
+    //      (surfaced as AlertEntry errors; success=false on the result)
+    //
+    // On success fires SendFullProjectUpdateEvent on the target PDP
+    // (Theme 6) so `useProjectSetting('platformScripture.booksPresent')`
+    // subscribers re-fetch.
+    //
+    // Contracts: data-contracts.md Sections 2.5 / 3.9 / 4.11.
+    // Behaviors: BHV-105, BHV-106, BHV-107, BHV-110, BHV-111, BHV-112,
+    //   BHV-121, BHV-123, BHV-405.
+    // Extraction: EXT-010.
+    // =====================================================================
+
+    // === NEW IN PT10 ===
+    // Reason: PAPI wire facade for EXT-010 (CAP-010 import execution). PT9
+    //   invoked ImportSfmText.ImportBooks inline inside ImportBooksForm;
+    //   PT10 exposes it as a standalone wire method wrapped in AlertCapture
+    //   so the Import Books web dialog can commit the selected files while
+    //   still surfacing ParatextData's Alert.Show messages to the user.
+    // Maps to: EXT-010 (wire layer)
+    /// <summary>
+    /// Wire entry point for book import. Maps to data-contracts.md Section 4.11.
+    /// Preconditions (checked in order): projectId resolves → NOT_FOUND;
+    /// project editable → FAILED_PRECONDITION; admin-on-shared-project →
+    /// PERMISSION_DENIED; no overlapping included files → FAILED_PRECONDITION;
+    /// orchestrator WriteLock obtainable → UNAVAILABLE.
+    ///
+    /// After a successful import, calls
+    /// <c>_pdpFactory.GetExistingProjectDataProvider(projectId)?.SendFullProjectUpdateEvent()</c>
+    /// so <c>useProjectSetting('platformScripture.booksPresent')</c>
+    /// subscribers re-fetch (Theme 6).
+    /// </summary>
+    public Task<ImportBooksResult> ImportBooksAsync(ImportBooksInput request)
+    {
+        throw new NotImplementedException("RED — CAP-010");
+    }
 }
