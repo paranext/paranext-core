@@ -568,6 +568,40 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
     expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(true);
   });
 
+  it('should return true for trailing space on last plain text in a para (no char at end)', () => {
+    const usj1: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' },
+            'In the beginning God created the heavens and the earth.',
+          ],
+        },
+      ],
+    };
+    const usj2: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' },
+            // Trailing space added by Paratext normalization
+            'In the beginning God created the heavens and the earth. ',
+          ],
+        },
+      ],
+    };
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(true);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(true);
+  });
+
   it('should return false for space difference at the end of last in-line marker in the block', () => {
     const usj1: Usj = {
       type: 'USJ',
