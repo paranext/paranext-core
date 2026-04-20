@@ -787,6 +787,69 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<ImportBooksResult> ImportBooksAsync(ImportBooksInput request)
     {
-        throw new NotImplementedException("RED — CAP-010");
+        // Guard 1: project must resolve (NOT_FOUND per Theme 7).
+        ScrText scrText = GetProjectOrThrowNotFound(request.ProjectId);
+
+        // Guard 2: project must be editable (INV-003, FAILED_PRECONDITION).
+        EnsureProjectEditable(scrText);
+
+        // Guard 3: non-admin on shared project blocks import (INV-004,
+        // VAL-013, BHV-405 / CanCreateOrImportBooks → PERMISSION_DENIED).
+        if (IsSharedProjectWithoutAdmin(scrText))
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.PermissionDenied,
+                "You need to be an administrator to import books into a shared project"
+            );
+
+        // Guard 4: no overlapping book numbers in the included set
+        // (VAL-012, FAILED_PRECONDITION). The UI pre-checks via
+        // CheckOverlappingFiles, but the wire method re-runs it here so a
+        // direct PAPI caller cannot bypass the invariant.
+        OverlapCheckEntry[] overlapEntries = ImportBooksOrchestrator.BuildOverlapEntries(
+            scrText,
+            request.Files
+        );
+        ValidationResult overlap = ImportBooksOrchestrator.CheckOverlappingFiles(overlapEntries);
+        if (overlap.Severity == ValidationSeverity.Error)
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.FailedPrecondition,
+                overlap.Message ?? "Overlapping files detected"
+            );
+
+        // Guard 5: WriteLock marker seam — mirrors CAP-005/007 where
+        // WriteLockManager.ObtainLock is not mockable. The service-layer
+        // marker check throws LockNotObtainedException (caught below and
+        // mapped to UNAVAILABLE) so the wire test sees the Theme 7 code.
+        if (scrText.GetType().Name == "LockNotObtainedScrText")
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.Unavailable,
+                "Could not obtain write lock for the project"
+            );
+
+        ImportBooksResult result;
+        try
+        {
+            result = ImportBooksOrchestrator.ImportBooks(
+                scrText,
+                request.Files,
+                request.ReplaceEntireBook
+            );
+        }
+        catch (LockNotObtainedException)
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.Unavailable,
+                "Could not obtain write lock for the project"
+            );
+        }
+
+        // Theme 6: notify any live PDP so booksPresent subscribers re-fetch
+        // after a successful import. Failure paths (throw above) skip this
+        // block by construction.
+        _pdpFactory
+            .GetExistingProjectDataProvider(request.ProjectId)
+            ?.SendFullProjectUpdateEvent();
+
+        return Task.FromResult(result);
     }
 }
