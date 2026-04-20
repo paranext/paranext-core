@@ -75,19 +75,19 @@ export function installViewZoomInput(opts: InstallOptions): () => void {
     if (e.repeat) return;
     if (!isModifier(e)) return;
     if (e.key === '=' || e.key === '+') {
+      e.preventDefault();
       const key = resolveFocusedKey();
       if (!key) return;
-      e.preventDefault();
       service.adjustZoom(key, +1);
     } else if (e.key === '-') {
+      e.preventDefault();
       const key = resolveFocusedKey();
       if (!key) return;
-      e.preventDefault();
       service.adjustZoom(key, -1);
     } else if (e.key === '0') {
+      e.preventDefault();
       const key = resolveFocusedKey();
       if (!key) return;
-      e.preventDefault();
       service.resetZoom(key);
     }
   }

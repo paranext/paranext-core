@@ -42,14 +42,14 @@ describe('view-zoom-key.util', () => {
   });
 
   it('computes the default-key for a per-instance webviewType', () => {
-    expect(getDefaultKeyForInstance('platformScriptureEditor.editor')).toBe(
-      'platformScriptureEditor.editor:__default',
+    expect(getDefaultKeyForInstance('platformScriptureEditor.react')).toBe(
+      'platformScriptureEditor.react:__default',
     );
   });
 
   it('isPerInstanceKey detects the shape', () => {
-    expect(isPerInstanceKey('platformScriptureEditor.editor:wv1')).toBe(true);
-    expect(isPerInstanceKey('platformScriptureEditor.editor:__default')).toBe(true);
+    expect(isPerInstanceKey('platformScriptureEditor.react:wv1')).toBe(true);
+    expect(isPerInstanceKey('platformScriptureEditor.react:__default')).toBe(true);
     expect(isPerInstanceKey('settings-tab')).toBe(false);
   });
 });
