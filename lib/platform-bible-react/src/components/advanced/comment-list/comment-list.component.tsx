@@ -39,7 +39,11 @@ export default function CommentList({
       // last assigned user when the submission succeeded and an explicit non-empty assignment was
       // made. Exclude '' (Unassigned) so that selecting "Unassigned" doesn't become sticky and
       // silently clear the assignee on other threads via auto-population.
-      if (result !== undefined && options.assignedUser !== undefined && options.assignedUser !== '') {
+      if (
+        result !== undefined &&
+        options.assignedUser !== undefined &&
+        options.assignedUser !== ''
+      ) {
         setLastAssignedUser(options.assignedUser);
       }
       return result;
