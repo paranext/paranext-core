@@ -148,30 +148,49 @@ public static class ImportBooksOrchestrator
         var entries = new List<BookComparisonEntry>();
 
         foreach (ImportFileEntry file in files)
-        {
-            string usfmContent = file.Content;
-
-            // USX → USFM conversion. Malformed XML or normalization failures
-            // skip the file (BHV-106 partial-success at the parse layer;
-            // PT9's UsxImporterException is a CAP-010 concern).
-            if (IsUsxContent(file.FileName, usfmContent))
-            {
-                if (!TryConvertUsxToUsfm(scrText, usfmContent, out usfmContent))
-                    continue;
-            }
-
-            // Extract books from (normalized) USFM. Any failure inside the
-            // extraction (no \id, invalid book code, etc.) aborts this file
-            // only — other files still contribute entries.
-            List<ExtractedBook> extracted = ExtractBooks(usfmContent);
-
-            foreach (ExtractedBook book in extracted)
-            {
-                entries.Add(BuildComparisonEntry(scrText, book.BookNum, book.Text));
-            }
-        }
+            ProcessFile(scrText, file, entries);
 
         return new BookComparisonResult(entries);
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: per-file routing extracted from ParseImportFiles so each file's
+    //   USX-detection → conversion → extraction → eligibility pipeline is
+    //   visible as one helper. Per-file failure (USX conversion throws, no
+    //   \id marker, invalid book code, etc.) returns early so the outer loop
+    //   keeps processing remaining files (BHV-106 partial-success).
+    /// <summary>
+    /// Routes a single <see cref="ImportFileEntry"/> through USX detection →
+    /// optional USX-to-USFM conversion → <see cref="ExtractBooks"/> → per-book
+    /// comparison-entry construction. Appends results directly to
+    /// <paramref name="entries"/>. Any per-file failure (USX conversion error,
+    /// missing <c>\id</c>, invalid book code) results in zero or fewer entries
+    /// appended for this file; the caller's loop continues with the next file.
+    /// </summary>
+    private static void ProcessFile(
+        ScrText scrText,
+        ImportFileEntry file,
+        List<BookComparisonEntry> entries
+    )
+    {
+        string usfmContent = file.Content;
+
+        // USX → USFM conversion. Malformed XML or normalization failures
+        // skip the file (BHV-106 partial-success at the parse layer;
+        // PT9's UsxImporterException is a CAP-010 concern).
+        if (IsUsxContent(file.FileName, usfmContent))
+        {
+            if (!TryConvertUsxToUsfm(scrText, usfmContent, out usfmContent))
+                return;
+        }
+
+        // Extract books from (normalized) USFM. Any failure inside the
+        // extraction (no \id, invalid book code, etc.) aborts this file
+        // only — other files still contribute entries via the outer loop.
+        List<ExtractedBook> extracted = ExtractBooks(usfmContent);
+
+        foreach (ExtractedBook book in extracted)
+            entries.Add(BuildComparisonEntry(scrText, book.BookNum, book.Text));
     }
 
     // === PORTED FROM PT9 ===
@@ -338,20 +357,11 @@ public static class ImportBooksOrchestrator
         {
             string text = bookIds[i];
 
-            // First \w+ run after the \id marker is the book code. PT9 aborts
-            // the entire file on a missing book name (ImportSfmText.cs:130-131).
-            Match match = Regex.Match(text, @"\s*\w+");
-            if (!match.Success)
-                return books;
-
-            // INV-010: uppercase for Canon lookup.
-            string bookId = match.Value.Trim().ToUpperInvariant();
-            int bookNum = Canon.BookIdToNumber(bookId);
-
-            // VAL-007: Canon.BookIdToNumber returns 0 for unknown codes.
-            // PT9 aborts the whole file (ImportSfmText.cs:140) so we mirror
-            // that behavior — any books extracted so far are kept.
-            if (bookNum == 0)
+            // PT9 aborts the entire file on either a missing book name
+            // (ImportSfmText.cs:130-131) or an unrecognised Canon code
+            // (ImportSfmText.cs:140). Mirror that behavior — any books
+            // extracted so far are kept; remaining segments are discarded.
+            if (!TryExtractBookCode(text, out int bookNum))
                 return books;
 
             // Re-attach the "\id " prefix stripped by Regex.Split so the
@@ -360,6 +370,43 @@ public static class ImportBooksOrchestrator
         }
 
         return books;
+    }
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/ParatextData/ImportSfmText.cs:128-140 (book-code validation
+    //   inside ExtractBooks)
+    // Maps to: EXT-010 parse-side (INV-010, VAL-007)
+    //
+    // EXPLANATION:
+    // Book-code validation isolated from the split loop. Two failure modes
+    // collapse to "return false":
+    //   - no \w+ run after the marker (missing book name)
+    //   - Canon.BookIdToNumber returned 0 (unknown Canon code)
+    // Both correspond to PT9's Alert.Show + return-early paths. The caller
+    // owns the "abort this file, keep books extracted so far" decision.
+    /// <summary>
+    /// Attempts to read the first <c>\w+</c> token from <paramref name="splitSegment"/>
+    /// (the content after a <c>\id </c> split boundary), uppercase it
+    /// (INV-010), and resolve it via <see cref="Canon.BookIdToNumber"/>.
+    /// Returns <c>true</c> with a valid <paramref name="bookNum"/> on success,
+    /// <c>false</c> (with <paramref name="bookNum"/>=0) when the segment has
+    /// no identifier or the identifier is not a Canon code (VAL-007).
+    /// </summary>
+    private static bool TryExtractBookCode(string splitSegment, out int bookNum)
+    {
+        bookNum = 0;
+
+        // First \w+ run after the \id marker is the book code.
+        Match match = Regex.Match(splitSegment, @"\s*\w+");
+        if (!match.Success)
+            return false;
+
+        // INV-010: uppercase for Canon lookup.
+        string bookId = match.Value.Trim().ToUpperInvariant();
+
+        // VAL-007: Canon.BookIdToNumber returns 0 for unknown codes.
+        bookNum = Canon.BookIdToNumber(bookId);
+        return bookNum != 0;
     }
 
     // === PORTED FROM PT9 ===
@@ -383,6 +430,14 @@ public static class ImportBooksOrchestrator
     private static string ConvertNonStandardWhitespace(string fileText)
     {
         var bldr = new StringBuilder(fileText.Length);
+
+        // State machine over the character stream:
+        //   `\` enters marker-body mode (next whitespace becomes ' ').
+        //   Any whitespace exits marker-body mode (the marker ended).
+        //   `*` exits marker-body mode early (end-of-marker token, e.g. \nd*),
+        //       so whitespace after `*` is verse-body whitespace, not padding.
+        //   CR/LF in marker-body mode is preserved verbatim because those
+        //       characters terminate the marker line in USFM.
         bool inMarker = false;
         foreach (char c in fileText)
         {
@@ -400,7 +455,7 @@ public static class ImportBooksOrchestrator
                 if (c == '\\')
                     inMarker = true;
                 else if (c == '*')
-                    inMarker = false; // end-marker terminator — preserve trailing whitespace
+                    inMarker = false;
             }
         }
         return bldr.ToString();
@@ -430,22 +485,18 @@ public static class ImportBooksOrchestrator
         DateTime destModified = SafeGetBookModified(scrText, bookNum);
         string bookName = Canon.BookNumberToEnglishName(bookNum);
 
-        // Source modification time has no meaningful value in the parse path —
-        // the file content came from the UI, not from disk. The
-        // SetDefaultEligibility decision tree only inspects the source
-        // timestamp when both texts are non-empty and differ; in the import
-        // pre-flight the destination's timestamp determines ordering. Use
-        // DateTime.UtcNow so the source wins any "newer than dest" comparison
-        // (matches PT9 ImportSfmText semantics where the import file is
-        // treated as the authoritative newer version).
-        DateTime sourceModified = DateTime.UtcNow;
+        // Import files have no filesystem timestamp (content came from the UI),
+        // and PT9 ImportSfmText semantics treat the imported file as the
+        // authoritative newer version. UtcNow ensures the source wins any
+        // "newer-than-dest" comparison inside SetDefaultEligibility.
+        DateTime preflightSourceTimestamp = DateTime.UtcNow;
 
         return CopyBooksOrchestrator.SetDefaultEligibility(
             bookNum,
             bookName,
             sourceText,
             destText,
-            sourceModified,
+            preflightSourceTimestamp,
             destModified
         );
     }
@@ -455,6 +506,14 @@ public static class ImportBooksOrchestrator
     //   of the destination book text when the parse path compares against
     //   the project. BooksPresentSet short-circuit avoids FileNotFoundException
     //   for absent books (DummyScrText starts empty).
+    //
+    // Note on duplication with CopyBooksOrchestrator.SafeGetBookText (CAP-006):
+    //   The two methods are intentionally byte-identical. Unifying them would
+    //   require a refactor pass that owns both CAP-006 and CAP-009's scopes
+    //   (capability isolation prevents cross-capability edits in this pass).
+    //   A future pass can consolidate both into a shared helper on a
+    //   ScrText-extension or a common orchestrator base — mirroring the
+    //   CAP-008 `ToSummary` duplication-documentation precedent.
     private static string SafeGetBookText(ScrText scrText, int bookNum)
     {
         if (!scrText.Settings.BooksPresentSet.IsSelected(bookNum))
@@ -473,6 +532,11 @@ public static class ImportBooksOrchestrator
     // Reason: mirrors CopyBooksOrchestrator.SafeGetBookModified — tolerant
     //   read of destination last-modified so missing books / in-memory
     //   file managers don't abort the parse.
+    //
+    // Note on duplication with CopyBooksOrchestrator.SafeGetBookModified
+    //   (CAP-006): the two methods are intentionally byte-identical. See the
+    //   SafeGetBookText note above for the consolidation rationale (deferred
+    //   to a future cross-capability refactor pass).
     private static DateTime SafeGetBookModified(ScrText scrText, int bookNum)
     {
         if (!scrText.Settings.BooksPresentSet.IsSelected(bookNum))
