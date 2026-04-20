@@ -542,5 +542,293 @@ namespace TestParanextDataProvider.ManageBooks
                 );
             }
         }
+
+        // =====================================================================
+        // CAP-007: CopyBooks (Test Writer RED)
+        //
+        // Contract: data-contracts.md Sections 2.4 / 3.4 / 4.8 / 4.14.
+        // Extraction: EXT-006 (CopyBooksForm.CopyBooks, PT9 116-196).
+        // Behaviors:  BHV-403, BHV-313, BHV-600, BHV-601, BHV-168, BHV-101,
+        //             BHV-102, BHV-111.
+        // Invariants: INV-001, INV-002, INV-006, INV-C01, INV-C02, INV-C08,
+        //             INV-C12, INV-C13.
+        // Golden masters: gm-009 (mapin.cct), gm-010 (TECkit).
+        //
+        // gm-009 / gm-010 reconciliation: the ParatextData encoding converters
+        // (mapin.cct / TECkit .map) are Windows-only (see gm metadata
+        // captureInstructions). These orchestrator tests therefore assert the
+        // observable contract — source.GetText → dest.PutText preserves text
+        // round-trip — and reference gm-009/gm-010 for traceability. Encoding
+        // conversion itself is ParatextData's responsibility and is covered by
+        // the PT9 CopyBooksFormTests.T01_CopyFiles_ApplyMapin /
+        // T02_CopyFiles_ApplyTeckit tests cited in the golden-master
+        // derivation notes.
+        //
+        // TS-092 encoding failure → partial success: simulated by the
+        // PutTextThrowingScrText marker pattern below (parallels the
+        // LockNotObtainedScrText marker used by CAP-005 / CopyBooks WriteLock
+        // failure).
+        // =====================================================================
+
+        [Test]
+        [Category("Contract")]
+        [Category("Acceptance")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-063")]
+        [Property("BehaviorId", "BHV-101")]
+        [Property("InvariantId", "INV-C08")]
+        [Property("SpecId", "spec-002")]
+        [Description(
+            "Happy path: single book copied from source → destination via "
+                + "GetText/PutText. BooksPresentSet on destination gains the book "
+                + "(INV-C08). Result reports Success=true, CopiedCount=1, "
+                + "LastCopiedBookNum=bookNum."
+        )]
+        public void CopyBooks_SingleBook_WritesToDestination()
+        {
+            // Arrange: source has GEN (1), dest is empty
+            _fromScrText.PutText(1, 0, false, "\\id GEN Source content\n\\c 1\n\\v 1 a", null);
+            Assert.That(
+                _fromScrText.BooksPresentSet.IsSelected(1),
+                Is.True,
+                "precondition: GEN present in source"
+            );
+            Assert.That(
+                _toScrText.BooksPresentSet.IsSelected(1),
+                Is.False,
+                "precondition: GEN absent in dest"
+            );
+            var selected = new BookSet();
+            selected.Add(1);
+
+            // Act
+            CopyBooksResult result = CopyBooksOrchestrator.CopyBooks(
+                _fromScrText,
+                _toScrText,
+                selected
+            );
+
+            // Assert — result contract (Section 3.4)
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.CopiedCount, Is.EqualTo(1));
+            Assert.That(result.LastCopiedBookNum, Is.EqualTo(1));
+            Assert.That(result.Errors, Is.Empty);
+
+            // Assert — observable side effect: GEN in dest BooksPresentSet (INV-C08)
+            Assert.That(
+                _toScrText.BooksPresentSet.IsSelected(1),
+                Is.True,
+                "GEN should be copied to destination"
+            );
+
+            // Assert — text round-trip (encoding contract per gm-009/gm-010)
+            Assert.That(
+                _toScrText.GetText(1),
+                Does.Contain("GEN"),
+                "Destination book content must carry the source id line"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-063")]
+        [Property("BehaviorId", "BHV-101")]
+        [Property("InvariantId", "INV-C13")]
+        [Description(
+            "INV-C13 / Section 3.4: copying multiple books returns "
+                + "LastCopiedBookNum = max(copied book numbers) — the canonical "
+                + "final iteration value — and CopiedCount equals the request size."
+        )]
+        public void CopyBooks_MultipleBooks_LastCopiedBookNumIsMax()
+        {
+            // Arrange: source has GEN (1), EXO (2), MAT (40)
+            _fromScrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 a", null);
+            _fromScrText.PutText(2, 0, false, "\\id EXO\n\\c 1\n\\v 1 a", null);
+            _fromScrText.PutText(40, 0, false, "\\id MAT\n\\c 1\n\\v 1 a", null);
+            var selected = new BookSet();
+            selected.Add(1);
+            selected.Add(2);
+            selected.Add(40);
+
+            // Act
+            CopyBooksResult result = CopyBooksOrchestrator.CopyBooks(
+                _fromScrText,
+                _toScrText,
+                selected
+            );
+
+            // Assert
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.CopiedCount, Is.EqualTo(3));
+            Assert.That(
+                result.LastCopiedBookNum,
+                Is.EqualTo(40),
+                "LastCopiedBookNum must be the max canonical book number copied"
+            );
+            Assert.That(_toScrText.BooksPresentSet.IsSelected(1), Is.True);
+            Assert.That(_toScrText.BooksPresentSet.IsSelected(2), Is.True);
+            Assert.That(_toScrText.BooksPresentSet.IsSelected(40), Is.True);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Category("Invariant")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("BehaviorId", "BHV-101")]
+        [Property("InvariantId", "INV-C01")]
+        [Description(
+            "INV-C01: After a successful copy, the WriteLock on the "
+                + "destination is released so subsequent mutations succeed."
+        )]
+        public void CopyBooks_AfterSuccess_WriteLockReleased()
+        {
+            // Arrange: source has GEN
+            _fromScrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 a", null);
+            var selected = new BookSet();
+            selected.Add(1);
+
+            // Act: copy, then attempt a follow-up mutation on the destination
+            CopyBooksOrchestrator.CopyBooks(_fromScrText, _toScrText, selected);
+
+            // Assert: a subsequent PutText on the destination must NOT throw
+            // LockNotObtainedException — proves the copy released the lock.
+            Assert.DoesNotThrow(
+                () => _toScrText.PutText(40, 0, false, "\\id MAT follow-up\n\\c 1\n\\v 1 a", null),
+                "WriteLock should be released; subsequent PutText must succeed"
+            );
+            Assert.That(
+                _toScrText.BooksPresentSet.IsSelected(40),
+                Is.True,
+                "MAT should be added after copy released the lock"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Category("ErrorPath")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-092")]
+        [Property("BehaviorId", "BHV-600")]
+        [Description(
+            "TS-092 / Section 4.8 Encoding Conversion Error Handling: when a "
+                + "per-book write fails (simulating encoding conversion "
+                + "failure), the orchestrator catches the error, records it in "
+                + "CopyBooksResult.Errors, continues with remaining books, "
+                + "sets Success=false, and CopiedCount reflects only the books "
+                + "that succeeded. The failed book is NOT written to destination.\n\n"
+                + "Mechanism: the destination is an EncodingConversionFailingScrText "
+                + "marker subclass. The orchestrator recognises this marker by "
+                + "type-name (parallels the LockNotObtainedScrText marker CAP-005 "
+                + "uses for INV-C01) and simulates a per-file encoding failure on "
+                + "the first requested book while processing the rest normally. "
+                + "This is the documented test seam for TS-092 since "
+                + "ScrText.PutText is not virtual."
+        )]
+        public void CopyBooks_EncodingConversionFailure_SkipsFileAndContinuesWithPartialSuccess()
+        {
+            // Arrange: source has GEN, EXO. The destination is the TS-092
+            // marker subclass that signals the orchestrator to simulate a
+            // conversion failure on the first book and write the rest.
+            _fromScrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 a", null);
+            _fromScrText.PutText(2, 0, false, "\\id EXO\n\\c 1\n\\v 1 a", null);
+
+            using var failingDest = new EncodingConversionFailingScrText();
+            var selected = new BookSet();
+            selected.Add(1);
+            selected.Add(2);
+
+            // Act
+            CopyBooksResult result = CopyBooksOrchestrator.CopyBooks(
+                _fromScrText,
+                failingDest,
+                selected
+            );
+
+            // Assert — partial-success contract (Section 4.8)
+            Assert.That(
+                result.Success,
+                Is.False,
+                "Any per-book failure must flip Success to false (Section 4.8)"
+            );
+            Assert.That(
+                result.CopiedCount,
+                Is.EqualTo(1),
+                "CopiedCount reflects only successfully-copied books"
+            );
+            Assert.That(
+                result.Errors,
+                Is.Not.Empty,
+                "The failed book must produce at least one Errors entry"
+            );
+            Assert.That(
+                failingDest.BooksPresentSet.IsSelected(1),
+                Is.False,
+                "Failed book must NOT be written to destination"
+            );
+            Assert.That(
+                failingDest.BooksPresentSet.IsSelected(2),
+                Is.True,
+                "Subsequent books must still be copied (loop continues past the failure)"
+            );
+        }
+
+        // ---- BHV-168 / TS-048: CopyCustomVersification (M-014 absorbed) -----
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("ScenarioId", "TS-048")]
+        [Property("BehaviorId", "BHV-168")]
+        [Description(
+            "BHV-168 / TS-048: CopyCustomVersification copies the source "
+                + "project's custom.vrs file into the destination. The method "
+                + "completes without throwing when the source has no custom "
+                + "versification (per Section 4.14 — the error code only "
+                + "applies to wire-layer precondition validation in the "
+                + "service). At the orchestrator layer the method is a "
+                + "delegation to ParatextData's ProjectSettings.CopyCustomVersification."
+        )]
+        public void CopyCustomVersification_CompletesWithoutThrowing()
+        {
+            // Arrange: two dummy projects (neither has a real custom.vrs; we
+            // assert the orchestrator completes without throwing, which is
+            // the weakest correctness signal we can exercise on a DummyScrText
+            // that does not maintain a disk-backed versification file).
+            //
+            // The stronger side-effect assertion (destination custom.vrs
+            // exists after call) is deferred to an integration test that
+            // uses a disk-backed ScrText; this orchestrator-level test
+            // guards against the NotImplementedException while still
+            // carrying the TS-048 / BHV-168 traceability.
+            Assert.DoesNotThrow(
+                () => CopyBooksOrchestrator.CopyCustomVersification(_fromScrText, _toScrText),
+                "CopyCustomVersification must delegate to ParatextData without "
+                    + "throwing NotImplementedException once implemented."
+            );
+        }
+
+        // -----------------------------------------------------------------
+        // Support: marker subclass for TS-092 (encoding conversion failure).
+        //
+        // ScrText.PutText is NOT virtual, so we cannot inject failure by
+        // overriding PutText. Instead we mirror the documented CAP-005 test
+        // seam (LockNotObtainedScrText at DeleteBooksServiceTests.cs:417): the
+        // orchestrator recognises the marker type name and simulates a
+        // per-file encoding conversion failure on the first requested book,
+        // writing the remainder normally. This is the single documented seam
+        // for TS-092 — see CopyBooksOrchestrator.cs for the probe.
+        //
+        // Encoding conversion itself is Windows-only ParatextData behaviour
+        // (per gm-009 / gm-010 capture metadata); the orchestrator's
+        // responsibility is the partial-success contract (Section 4.8), not
+        // the mapin.cct / TECkit table application, so the marker lets us
+        // exercise the error-path contract cross-platform.
+        // -----------------------------------------------------------------
+        private sealed class EncodingConversionFailingScrText : DummyScrText
+        {
+            // No additional state required — the orchestrator identifies this
+            // class by name (parallel to LockNotObtainedScrText).
+        }
     }
 }

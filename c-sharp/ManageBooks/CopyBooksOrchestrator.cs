@@ -545,4 +545,53 @@ public static class CopyBooksOrchestrator
             ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
             IsEditable: scrText.Settings.IsEditableText
         );
+
+    // =====================================================================
+    // CAP-007: CopyBooks (BE-3 — Test Writer RED stubs)
+    //
+    // Contract: data-contracts.md Sections 2.4 / 3.4 / 4.8 / 4.14.
+    // Extraction: EXT-006 (CopyBooksForm.CopyBooks, PT9 lines 116-196).
+    // Behaviors: BHV-403, BHV-313, BHV-600, BHV-601, BHV-168, BHV-101,
+    //   BHV-102, BHV-111.
+    // Invariants: INV-001, INV-002, INV-006, INV-C01, INV-C02, INV-C08,
+    //   INV-C12, INV-C13.
+    // Golden masters: gm-009 (mapin.cct), gm-010 (TECkit).
+    // Scenarios: TS-063, TS-064, TS-092, TS-073, TS-048,
+    //   TS-006..012 (related — transitive PutText coverage).
+    //
+    // These stubs throw NotImplementedException so CopyBooksOrchestratorTests
+    // and CopyBooksServiceTests are RED until the Implementer agent fills in
+    // the GetText → PutText loop, WriteLock handling (INV-C01), encoding
+    // conversion failure handling (TS-092 partial-success), admin permission
+    // auto-grant (INV-C12), and auxiliary-file copying (BHV-168).
+    // =====================================================================
+
+    /// <summary>
+    /// Copies the specified books from <paramref name="fromScrText"/> to
+    /// <paramref name="toScrText"/>.
+    /// See data-contracts.md Section 4.8 for the full contract (preconditions,
+    /// postconditions, error conditions). RED stub — throws
+    /// <see cref="NotImplementedException"/>.
+    /// </summary>
+    public static CopyBooksResult CopyBooks(
+        ScrText fromScrText,
+        ScrText toScrText,
+        BookSet selectedBooks
+    )
+    {
+        throw new NotImplementedException("CAP-007: CopyBooks orchestrator (RED state)");
+    }
+
+    /// <summary>
+    /// Copies <c>custom.vrs</c> from <paramref name="fromScrText"/> to
+    /// <paramref name="toScrText"/> and reloads versification tables
+    /// globally. Maps to BHV-168 / TS-048. RED stub — throws
+    /// <see cref="NotImplementedException"/>.
+    /// </summary>
+    public static void CopyCustomVersification(ScrText fromScrText, ScrText toScrText)
+    {
+        throw new NotImplementedException(
+            "CAP-007 / M-014: CopyCustomVersification orchestrator (RED state)"
+        );
+    }
 }
