@@ -77,9 +77,21 @@ Set up pre-requisites, build, and run:
    # 8.0.412 (or similar 8.* version)
    ```
 
-3. Prerequisites for macOS or Linux (below).
+3. Install [`gitleaks`](https://github.com/gitleaks/gitleaks). The pre-commit hook runs `gitleaks` on staged files to block accidental secret commits — without it, every `git commit` fails.
 
-4. Clone, install, build, and run (below).
+   - **macOS**: `brew install gitleaks`
+   - **Windows**: `winget install Gitleaks.Gitleaks`
+   - **Linux**: download a prebuilt binary from the [releases page](https://github.com/gitleaks/gitleaks/releases) and place it on your `PATH` (e.g., `~/.local/bin/gitleaks`), or `sudo apt install gitleaks` on Ubuntu 24.04+.
+
+   To verify:
+
+   ```bash
+   gitleaks version
+   ```
+
+4. Prerequisites for macOS or Linux (below).
+
+5. Clone, install, build, and run (below).
 
 ### Linux Development Pre-requisites
 
