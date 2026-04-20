@@ -35,8 +35,16 @@ namespace Paranext.DataProvider.ManageBooks;
 /// <para>See <c>data-contracts.md</c> Section 4.4 and
 /// <c>implementation/extraction-plan.md</c> EXT-001 for the formal contract.</para>
 /// </summary>
-public static class ScriptureTemplateService
+public static partial class ScriptureTemplateService
 {
+    // Source-generated regex for \f..\f* (footnotes). Used by PreVerseText.
+    [GeneratedRegex(@"\\f .*?\\f\*")]
+    private static partial Regex FootnoteRegex();
+
+    // Source-generated regex for \x..\x* (cross-references). Used by PreVerseText.
+    [GeneratedRegex(@"\\x .*?\\x\*")]
+    private static partial Regex CrossRefRegex();
+
     /// <summary>
     /// Creates a single book in <paramref name="scrText"/> using one of three methods:
     /// <list type="number">
@@ -346,14 +354,11 @@ public static class ScriptureTemplateService
             return "";
 
         string text = parts[i - 1];
-        text = Regex.Replace(text, @"\\f .*?\\f\*", "");
-        text = Regex.Replace(text, @"\\x .*?\\x\*", "");
+        text = FootnoteRegex().Replace(text, "");
+        text = CrossRefRegex().Replace(text, "");
         text = text.Trim();
 
-        if (text != "")
-            return " ... ";
-
-        return "";
+        return text != "" ? " ... " : "";
     }
 
     // === PORTED FROM PT9 ===
@@ -365,10 +370,8 @@ public static class ScriptureTemplateService
     // function for ESG with createCV=true.
     private static bool CreateCV(ScrText scrText, string idLine, int bookNum, WriteLock textLock)
     {
-        string cvText = "";
-        bool result = GetCVs(scrText, bookNum, out cvText);
-
-        if (!result)
+        string? cvText = GetCVs(scrText, bookNum);
+        if (cvText == null)
             return false;
 
         scrText.PutText(bookNum, 0, false, idLine + cvText, textLock);
@@ -385,9 +388,12 @@ public static class ScriptureTemplateService
     // verse (excluding verse 0 which is the chapter heading placeholder),
     // emit "\v N ". The trailing space is preserved exactly as PT9
     // emits it (AppendLine "\c 1 " produces "\c 1 \r\n").
-    private static bool GetCVs(ScrText scrText, int bookNum, out string cvText)
+    //
+    // Returns the C/V skeleton on success, or null if versification
+    // iteration threw (PT9 used Alert.Show here; PT10 lets the caller
+    // decide how to surface the failure — CreateCV returns false).
+    private static string? GetCVs(ScrText scrText, int bookNum)
     {
-        cvText = "";
         try
         {
             StringBuilder sb = new StringBuilder();
@@ -409,15 +415,11 @@ public static class ScriptureTemplateService
                 sb.AppendLine("\\v " + vRef.Verse + " ");
             }
 
-            cvText = sb.ToString();
-            return true;
+            return sb.ToString();
         }
         catch (Exception)
         {
-            // PT9 shows an Alert.Show here; in PT10 we let the caller
-            // surface the problem. Return false so CreateOneBook returns
-            // false cleanly.
-            return false;
+            return null;
         }
     }
 
