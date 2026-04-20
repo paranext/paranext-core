@@ -1,4 +1,5 @@
 using Paratext.Data;
+using PtxUtils;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.ManageBooks;
@@ -342,4 +343,65 @@ public static class CopyBooksOrchestrator
             return DateTime.MinValue;
         }
     }
+
+    // =====================================================================
+    // CAP-008: CopyProjectFiltering
+    //
+    // RED stubs. Contract: data-contracts.md Section 2.8 / 3.8 / 4.9.
+    // Extraction: EXT-009 (CopyBooksForm.LoadToComboboxOptions, PT9 line 533-571).
+    // Behaviors: BHV-603 (Standard/null source), BHV-606 (Parameterized types).
+    // Golden masters: gm-007, gm-008.
+    // Scenarios: TS-065, TS-066.
+    // =====================================================================
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:533-571 (LoadToComboboxOptions)
+    // Maps to: EXT-009 (BHV-603, BHV-606)
+    /// <summary>
+    /// Returns the <see cref="Predicate{ScrText}"/> that decides whether a
+    /// candidate destination project is a valid "To" choice given
+    /// <paramref name="fromProjectType"/> ("From"-project type).
+    /// Pure function so the decision tree is unit-testable without a live
+    /// <see cref="ScrTextCollection"/>.
+    ///
+    /// <para>Decision tree (from data-contracts.md §4.9 Business Logic +
+    /// PT9 CopyBooksForm.cs:539-553):
+    /// <list type="bullet">
+    /// <item><c>null</c> source (caller has no "From" selection yet) —
+    /// all non-protected texts that are not StudyBible publications and
+    /// not <see cref="ProjectType.TransliterationWithEncoder"/>.</item>
+    /// <item><see cref="ProjectType.StudyBibleAdditions"/> /
+    /// <see cref="ProjectType.StudyBible"/> /
+    /// <see cref="ProjectType.ConsultantNotes"/> — same-type only
+    /// (copy restricted to projects of the same type).</item>
+    /// <item>Anything else (Standard / Auxiliary / BackTranslation / Daughter
+    /// / Transliteration / TransliterationWithEncoder) — the parameterized
+    /// set: <see cref="ProjectType.Standard"/>,
+    /// <see cref="ProjectType.Auxiliary"/>,
+    /// <see cref="ProjectType.BackTranslation"/>,
+    /// <see cref="ProjectType.Daughter"/>,
+    /// <see cref="ProjectType.StudyBible"/>,
+    /// <see cref="ProjectType.TransliterationManual"/>.</item>
+    /// </list></para>
+    /// </summary>
+    /// <param name="fromProjectType">Source project type; may be <c>null</c>.</param>
+    public static Predicate<ScrText> GetToProjectFilter(Enum<ProjectType>? fromProjectType) =>
+        throw new NotImplementedException();
+
+    // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/ToolsMenu/CopyBooksForm.cs:533-571 (LoadToComboboxOptions)
+    // Maps to: EXT-009 (BHV-603, BHV-606)
+    /// <summary>
+    /// Returns the list of projects accepted by
+    /// <see cref="GetToProjectFilter(Enum{ProjectType})"/> across the current
+    /// <see cref="ScrTextCollection"/>. Wire-layer callers
+    /// (<c>ManageBooksService.GetToProjectFilterAsync</c>,
+    /// <c>ProjectFilterService.BuildCopyDestinationProjectList</c>) funnel
+    /// through this method so CAP-008's decision tree has exactly one
+    /// production implementation.
+    /// </summary>
+    /// <param name="fromProjectType">Source project type; may be <c>null</c>.</param>
+    public static ProjectListResult GetToProjectFilterProjects(
+        Enum<ProjectType>? fromProjectType
+    ) => throw new NotImplementedException();
 }
