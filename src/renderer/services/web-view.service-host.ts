@@ -1272,6 +1272,7 @@ async function openOrReloadWebView(
     window.addEventListener(
       'keydown',
       (e) => {
+        if (e.repeat) return;
         if (!e.ctrlKey && !e.metaKey) return;
         if (e.key === '=' || e.key === '+') {
           e.preventDefault();
