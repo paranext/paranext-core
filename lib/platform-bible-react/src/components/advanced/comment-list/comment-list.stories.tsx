@@ -128,21 +128,23 @@ function CommentListStory({
 
     let commentFound = false;
 
-    // Find the comment and mark it as deleted
+    // Find the comment and mark it as deleted, then remove threads where all comments are deleted
     setThreads((prevThreads) =>
-      prevThreads.map((thread) => ({
-        ...thread,
-        comments: thread.comments.map((comment) => {
-          if (comment.id === commentId) {
-            commentFound = true;
-            return {
-              ...comment,
-              deleted: true,
-            };
-          }
-          return comment;
-        }),
-      })),
+      prevThreads
+        .map((thread) => ({
+          ...thread,
+          comments: thread.comments.map((comment) => {
+            if (comment.id === commentId) {
+              commentFound = true;
+              return {
+                ...comment,
+                deleted: true,
+              };
+            }
+            return comment;
+          }),
+        }))
+        .filter((thread) => thread.comments.some((comment) => !comment.deleted)),
     );
 
     return commentFound;
@@ -195,7 +197,7 @@ function CommentListStory({
 const meta: Meta<typeof CommentList> = {
   title: 'Advanced/CommentList',
   component: CommentList,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
   argTypes: {
     threads: { control: 'object' },
     className: { control: 'text' },
