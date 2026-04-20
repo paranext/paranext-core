@@ -225,7 +225,10 @@ export default function CommentEditor({
                   <CommandItem
                     key={user || 'unassigned'}
                     onSelect={() => {
-                      setSelectedUser(user);
+                      // Normalize '' (Unassigned) to undefined so onSave receives undefined
+                      // rather than '', keeping "Unassigned" as a no-op assignment action that
+                      // won't propagate to setLastAssignedUser in the parent.
+                      setSelectedUser(user || undefined);
                       setIsAssignPopoverOpen(false);
                     }}
                     className="tw-flex tw-items-center"
