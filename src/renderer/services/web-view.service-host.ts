@@ -1258,12 +1258,13 @@ async function openOrReloadWebView(
     const webViewIdForZoom = '${webView.id}';
     function postZoom(action, deltaSteps) {
       try {
-        // Use window.location.origin as targetOrigin so the message is only delivered to the
-        // same-origin parent. '/' is not a valid targetOrigin per the postMessage spec and may
-        // silently fail to deliver on some Chromium versions.
+        // Use '*' as targetOrigin. These are same-origin sandboxed iframes that already
+        // have direct access to window.parent objects, so postMessage origin checks add no
+        // security value. window.location.origin returns "null" for srcdoc iframes, which
+        // silently drops all messages.
         parentWindow.postMessage(
           { type: 'view-zoom', action: action, deltaSteps: deltaSteps, webViewId: webViewIdForZoom },
-          window.location.origin,
+          '*',
         );
       } catch (e) {
         // Parent may be cross-origin or torn down; nothing to do.
