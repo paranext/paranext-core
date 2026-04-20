@@ -25,9 +25,8 @@ import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 // Empty USJ — returned by useProjectData while loading or when a book doesn't exist
 const emptyUsj: Usj = { type: 'USJ', version: '3.1', content: [] };
 
-// LEV chapter 14 with minimal content; casting from a minimal stub is intentional in tests
-// eslint-disable-next-line no-type-assertion/no-type-assertion
-const levUsj = {
+// LEV chapter 14 with minimal content
+const levUsj: Usj = {
   type: 'USJ',
   version: '3.1',
   content: [
@@ -39,7 +38,7 @@ const levUsj = {
       content: [{ type: 'verse', marker: 'v', number: '2' }, 'This is the law of the leper.'],
     },
   ],
-} as unknown as Usj;
+};
 
 describe('useEditorPdpSync', () => {
   it('calls setEditorUsj when PDP data first arrives', () => {
