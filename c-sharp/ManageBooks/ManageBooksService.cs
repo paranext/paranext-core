@@ -418,11 +418,39 @@ internal sealed class ManageBooksService : NetworkObject
     /// <summary>
     /// Wire entry point for the book comparison query. Maps to
     /// data-contracts.md Section 4.7. Read-only; no event emitted.
+    ///
+    /// Precondition order:
+    ///   1. FromProjectId == ToProjectId   → INVALID_ARGUMENT (SAME_PROJECT,
+    ///      mapped per Theme 7).
+    ///   2. FromProjectId resolves         → NOT_FOUND (INVALID_PROJECT).
+    ///   3. ToProjectId resolves           → NOT_FOUND (INVALID_PROJECT).
     /// </summary>
     public Task<BookComparisonResult> GetBookComparisonAsync(BookComparisonInput input)
     {
-        throw new NotImplementedException(
-            "CAP-006: GetBookComparisonAsync — implementer to fill in (RED stub)"
+        if (
+            string.Equals(
+                input.FromProjectId,
+                input.ToProjectId,
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.InvalidArgument,
+                "Source and destination projects must be different"
+            );
+
+        ScrText fromScrText = ResolveProjectOrThrow(
+            input.FromProjectId,
+            PlatformErrorCodes.NotFound,
+            $"Source project not found: {input.FromProjectId}"
         );
+        ScrText toScrText = ResolveProjectOrThrow(
+            input.ToProjectId,
+            PlatformErrorCodes.NotFound,
+            $"Destination project not found: {input.ToProjectId}"
+        );
+
+        List<BookComparisonEntry> entries = CopyBooksOrchestrator.LoadBooks(fromScrText, toScrText);
+        return Task.FromResult(new BookComparisonResult(entries));
     }
 }
