@@ -46,10 +46,74 @@ validate_branch_name() {
   fi
 }
 
+# Determine which npm workspaces need typechecking based on staged TS files.
+#
+# Rules (B1 hybrid — see .claude/rules/* or commit history for rationale):
+#   1. Staged files in lib/*, extensions/, extensions/src/* → include their workspace
+#   2. If ANY lib/* workspace is included → also include ALL extensions/* workspaces
+#      (extensions depend on lib, so lib changes can break extension consumers)
+#   3. Staged TS files outside any npm workspace (e.g., e2e-tests/, scripts/) are
+#      covered by `npm run typecheck:core`; they add no workspace to the list.
+#
+# Prints space-separated list of `--workspace=<path>` flags, or empty if nothing applies.
+compute_affected_workspaces() {
+  local files changed_workspaces lib_changed=0
+  files=$(get_staged_files | grep -E '\.(ts|tsx)$' || true)
+  if [ -z "$files" ]; then
+    return 0
+  fi
+
+  # Collect workspaces that contain staged TS files.
+  changed_workspaces=$(
+    echo "$files" | awk -F/ '
+      /^lib\// { print "lib/" $2; next }
+      /^extensions\/src\// { print "extensions/src/" $3; next }
+      /^extensions\// && NF >= 2 { print "extensions"; next }
+    ' | sort -u
+  )
+
+  if echo "$changed_workspaces" | grep -q '^lib/'; then
+    lib_changed=1
+  fi
+
+  # If any lib/* workspace changed, expand to include all extensions/* workspaces
+  # (extensions consume lib via workspace symlinks — consumer types can break).
+  if [ "$lib_changed" = "1" ]; then
+    local all_extensions
+    all_extensions=$(ls -d extensions/src/*/ 2>/dev/null | sed 's|/$||')
+    changed_workspaces=$(printf '%s\n%s\n' "$changed_workspaces" "$all_extensions" | sort -u)
+  fi
+
+  # Emit as --workspace=<path> flags.
+  echo "$changed_workspaces" | while IFS= read -r ws; do
+    [ -n "$ws" ] && printf -- '--workspace=%s ' "$ws"
+  done
+}
+
 run_typecheck() {
   echo "Running TypeScript type checking..."
-  if ! npm run typecheck 2>&1; then
-    error_msg "AI-001" "TypeScript type checking failed" "Run 'npm run typecheck' to see errors"
+
+  # Always run root typecheck (covers src/main, src/renderer, src/extension-host,
+  # src/shared, and any non-workspace TS like e2e-tests/).
+  if ! npm run typecheck:core 2>&1; then
+    error_msg "AI-001" "TypeScript type checking failed (root)" "Run 'npm run typecheck:core' to see errors"
+    return $AI_EXIT_TYPECHECK
+  fi
+
+  # Scope workspace typecheck to workspaces affected by staged files (B1 hybrid).
+  local ws_flags
+  ws_flags=$(compute_affected_workspaces)
+
+  if [ -z "$ws_flags" ]; then
+    echo "No workspace TS files staged, skipping workspace typecheck"
+    echo "TypeScript type checking passed"
+    return 0
+  fi
+
+  echo "Typechecking affected workspaces: $ws_flags"
+  # shellcheck disable=SC2086  # Intentional word-splitting on ws_flags
+  if ! npm run typecheck $ws_flags --if-present 2>&1; then
+    error_msg "AI-001" "TypeScript type checking failed (workspace)" "Run 'npm run typecheck' to see errors"
     return $AI_EXIT_TYPECHECK
   fi
   echo "TypeScript type checking passed"
