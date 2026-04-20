@@ -59,6 +59,20 @@ internal sealed class ManageBooksService : NetworkObject
                 "filterProjects",
                 new Func<ProjectFilterInput, Task<ProjectListResult>>(FilterProjectsAsync)
             ),
+            (
+                "createBooks",
+                new Func<CreateBooksRequest, Task<CreateBooksResult>>(CreateBooksAsync)
+            ),
+            (
+                "getAvailableBooksForCreation",
+                new Func<string, Task<int[]>>(GetAvailableBooksForCreationAsync)
+            ),
+            (
+                "validateCreateBooks",
+                new Func<ValidateCreateBooksRequest, Task<ValidationResult>>(
+                    ValidateCreateBooksAsync
+                )
+            ),
         ];
 
         return RegisterNetworkObjectAsync(
@@ -211,4 +225,58 @@ internal sealed class ManageBooksService : NetworkObject
     /// <returns>Matching projects in <see cref="ScrTextCollection"/> order.</returns>
     public Task<ProjectListResult> FilterProjectsAsync(ProjectFilterInput input) =>
         Task.FromResult(ProjectFilterService.FilterProjects(input));
+
+    // =====================================================================
+    // CAP-004: CreateBooksOrchestration — RED STUBS
+    //
+    // The Test Writer provides these stubs so the compile-time contract is
+    // established (method signature, registration, wire name). The bodies
+    // throw NotImplementedException so every CAP-004 test fails until the
+    // TDD Implementer fills them in.
+    // =====================================================================
+
+    /// <summary>
+    /// Wire entry point for book creation. Maps to data-contracts.md Section 4.4.
+    /// Preconditions (checked in order): BookNumbers non-empty → INVALID_ARGUMENT;
+    /// projectId resolves → NOT_FOUND; project editable → FAILED_PRECONDITION;
+    /// model project (if FromTemplate) resolves → FAILED_PRECONDITION; model
+    /// required for FromTemplate → INVALID_ARGUMENT; permission per-book →
+    /// PERMISSION_DENIED.
+    ///
+    /// After a successful create, calls
+    /// <c>_pdpFactory.GetExistingProjectDataProvider(projectId)?.SendFullProjectUpdateEvent()</c>
+    /// so <c>useProjectSetting('platformScripture.booksPresent')</c>
+    /// subscribers re-fetch (Theme 6).
+    /// </summary>
+    public Task<CreateBooksResult> CreateBooksAsync(CreateBooksRequest request)
+    {
+        throw new NotImplementedException(
+            "ManageBooksService.CreateBooksAsync — RED stub pending CAP-004 implementer"
+        );
+    }
+
+    /// <summary>
+    /// Wire entry point that returns the books available for creation in
+    /// the given project (all versification-defined books minus books
+    /// already present). Maps to data-contracts.md Section 4.3. Read-only;
+    /// no event emitted.
+    /// </summary>
+    public Task<int[]> GetAvailableBooksForCreationAsync(string projectId)
+    {
+        throw new NotImplementedException(
+            "ManageBooksService.GetAvailableBooksForCreationAsync — RED stub pending CAP-004 implementer"
+        );
+    }
+
+    /// <summary>
+    /// Wire entry point for pre-flight validation (CheckModelBooks +
+    /// CheckVersification). Maps to data-contracts.md Section 4.5.
+    /// Read-only; no event emitted.
+    /// </summary>
+    public Task<ValidationResult> ValidateCreateBooksAsync(ValidateCreateBooksRequest request)
+    {
+        throw new NotImplementedException(
+            "ManageBooksService.ValidateCreateBooksAsync — RED stub pending CAP-004 implementer"
+        );
+    }
 }
