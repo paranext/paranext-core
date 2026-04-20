@@ -532,27 +532,118 @@ internal sealed class ManageBooksService : NetworkObject
     // (Theme 6) so booksPresent subscribers re-fetch.
     // =====================================================================
 
+    // === NEW IN PT10 ===
+    // Reason: PAPI wire facade for EXT-006 (CopyBooksForm.CopyBooks). PT9
+    //   invoked CopyBooks from a WinForms dialog's OK button; PT10 exposes
+    //   it as a standalone service method so the Copy Books web dialog can
+    //   commit the selected book set. The business logic (WriteLock,
+    //   per-book GetText/PutText loop, partial-success on encoding failure,
+    //   custom.vrs copy) is ported from PT9 — see CopyBooksOrchestrator.
+    // Maps to: EXT-006 (wire layer)
+    //
+    // Guard order (asserted by CopyBooksServiceTests):
+    //   1. Empty BookNumbers                → INVALID_ARGUMENT
+    //   2. fromProjectId == toProjectId     → INVALID_ARGUMENT (BHV-313)
+    //   3. Unknown fromProjectId            → NOT_FOUND
+    //   4. Unknown toProjectId              → NOT_FOUND
+    //   5. Non-admin on shared destination  → PERMISSION_DENIED
+    //                                         (INV-001, INV-C02)
+    //   6. Orchestrator throws
+    //      LockNotObtainedException         → UNAVAILABLE (INV-C01)
+    //
+    // On success fires SendFullProjectUpdateEvent on the DESTINATION PDP
+    // (Theme 6) so booksPresent subscribers re-fetch. The source PDP is NOT
+    // notified — copy is read-only on the source.
     /// <summary>
     /// Wire entry point for book copy. Maps to data-contracts.md Section 4.8.
-    /// RED stub — throws <see cref="NotImplementedException"/> until the
-    /// Implementer agent wires up the precondition guards, orchestrator
-    /// delegation, and Theme-6 destination-PDP event emission.
+    /// Preconditions (checked in order): BookNumbers non-empty →
+    /// INVALID_ARGUMENT; From and To project IDs differ → INVALID_ARGUMENT;
+    /// both projects resolve → NOT_FOUND; destination not a non-admin
+    /// shared project → PERMISSION_DENIED; orchestrator WriteLock obtainable
+    /// → UNAVAILABLE.
+    ///
+    /// After a successful copy, calls
+    /// <c>_pdpFactory.GetExistingProjectDataProvider(toProjectId)?.SendFullProjectUpdateEvent()</c>
+    /// on the DESTINATION PDP (Theme 6).
     /// </summary>
     public Task<CopyBooksResult> CopyBooksAsync(CopyBooksRequest request)
     {
-        throw new NotImplementedException("CAP-007: CopyBooksAsync wire (RED state)");
+        EnsureBookNumbersNonEmpty(request.BookNumbers);
+        EnsureDifferentProjects(request.FromProjectId, request.ToProjectId);
+
+        ScrText fromScrText = ResolveProjectOrThrow(
+            request.FromProjectId,
+            PlatformErrorCodes.NotFound,
+            $"Source project not found: {request.FromProjectId}"
+        );
+        ScrText toScrText = ResolveProjectOrThrow(
+            request.ToProjectId,
+            PlatformErrorCodes.NotFound,
+            $"Destination project not found: {request.ToProjectId}"
+        );
+
+        if (IsSharedProjectWithoutAdmin(toScrText))
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.PermissionDenied,
+                "You need to be an administrator to copy books to a shared project"
+            );
+
+        CopyBooksResult result;
+        try
+        {
+            result = CopyBooksOrchestrator.CopyBooks(
+                fromScrText,
+                toScrText,
+                ToBookSet(request.BookNumbers)
+            );
+        }
+        catch (LockNotObtainedException)
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.Unavailable,
+                "Could not obtain write lock for the destination project"
+            );
+        }
+
+        // Theme 6: notify the DESTINATION PDP only — the source is read-only.
+        _pdpFactory
+            .GetExistingProjectDataProvider(request.ToProjectId)
+            ?.SendFullProjectUpdateEvent();
+
+        return Task.FromResult(result);
     }
 
+    // === NEW IN PT10 ===
+    // Reason: PAPI wire facade for M-014 (CopyCustomVersification). PT9
+    //   invoked ProjectSettings.CopyCustomVersification inline inside
+    //   CopyBooksForm.CopyBooks (line 184); PT10 exposes it as a standalone
+    //   wire method so the UI (or a future migration tool) can copy a
+    //   custom versification without also copying books. The orchestrator
+    //   is a thin delegation to the same PT9 helper.
+    // Maps to: BHV-168 (M-014)
     /// <summary>
     /// Wire entry point for the CopyCustomVersification operation (M-014).
-    /// Maps to data-contracts.md Section 4.14. RED stub — throws
-    /// <see cref="NotImplementedException"/> until the Implementer agent
-    /// wires up the precondition guards and orchestrator delegation.
+    /// Maps to data-contracts.md Section 4.14. Preconditions: both projects
+    /// resolve → NOT_FOUND on miss. Read-only side-effect contract: the
+    /// destination's custom.vrs and versification table are mutated, but no
+    /// book data changes, so no <c>SendFullProjectUpdateEvent</c> is emitted
+    /// here — the Copy Books dialog triggers this alongside a CopyBooks call
+    /// that provides its own event notification.
     /// </summary>
     public Task CopyCustomVersificationAsync(CopyCustomVersificationRequest request)
     {
-        throw new NotImplementedException(
-            "CAP-007 / M-014: CopyCustomVersificationAsync wire (RED state)"
+        ScrText fromScrText = ResolveProjectOrThrow(
+            request.FromProjectId,
+            PlatformErrorCodes.NotFound,
+            $"Source project not found: {request.FromProjectId}"
         );
+        ScrText toScrText = ResolveProjectOrThrow(
+            request.ToProjectId,
+            PlatformErrorCodes.NotFound,
+            $"Destination project not found: {request.ToProjectId}"
+        );
+
+        CopyBooksOrchestrator.CopyCustomVersification(fromScrText, toScrText);
+        return Task.CompletedTask;
     }
 }
