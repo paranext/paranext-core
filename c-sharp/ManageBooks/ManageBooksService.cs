@@ -82,6 +82,12 @@ internal sealed class ManageBooksService : NetworkObject
                 "getToProjectFilter",
                 new Func<ProjectFilterInput, Task<ProjectListResult>>(GetToProjectFilterAsync)
             ),
+            // CAP-007 (BE-3): CopyBooks wire entry + M-014 CopyCustomVersification
+            ("copyBooks", new Func<CopyBooksRequest, Task<CopyBooksResult>>(CopyBooksAsync)),
+            (
+                "copyCustomVersification",
+                new Func<CopyCustomVersificationRequest, Task>(CopyCustomVersificationAsync)
+            ),
         ];
 
         return RegisterNetworkObjectAsync(
@@ -502,5 +508,51 @@ internal sealed class ManageBooksService : NetworkObject
 
         var fromType = new Enum<ProjectType>(input.SourceProjectType);
         return Task.FromResult(CopyBooksOrchestrator.GetToProjectFilterProjects(fromType));
+    }
+
+    // =====================================================================
+    // CAP-007: CopyBooks + M-014 CopyCustomVersification (BE-3 RED stubs)
+    //
+    // Wire entry for the Copy Books dialog's OK button. Mirrors the CAP-005
+    // DeleteBooksAsync pattern: precondition guards → orchestrator
+    // delegation → Theme-6 SendFullProjectUpdateEvent on the DESTINATION
+    // PDP (not source — Theme 6 calls out destination-only for Copy).
+    //
+    // Guard order (asserted by CopyBooksServiceTests):
+    //   1. Empty BookNumbers                  → INVALID_ARGUMENT
+    //   2. fromProjectId == toProjectId       → INVALID_ARGUMENT (BHV-313)
+    //   3. Unknown fromProjectId              → NOT_FOUND
+    //   4. Unknown toProjectId                → NOT_FOUND
+    //   5. Non-admin on shared destination    → PERMISSION_DENIED
+    //                                           (INV-001, INV-C02)
+    //   6. Orchestrator throws
+    //      LockNotObtainedException           → UNAVAILABLE (INV-C01)
+    //
+    // On success: fires SendFullProjectUpdateEvent on the DESTINATION PDP
+    // (Theme 6) so booksPresent subscribers re-fetch.
+    // =====================================================================
+
+    /// <summary>
+    /// Wire entry point for book copy. Maps to data-contracts.md Section 4.8.
+    /// RED stub — throws <see cref="NotImplementedException"/> until the
+    /// Implementer agent wires up the precondition guards, orchestrator
+    /// delegation, and Theme-6 destination-PDP event emission.
+    /// </summary>
+    public Task<CopyBooksResult> CopyBooksAsync(CopyBooksRequest request)
+    {
+        throw new NotImplementedException("CAP-007: CopyBooksAsync wire (RED state)");
+    }
+
+    /// <summary>
+    /// Wire entry point for the CopyCustomVersification operation (M-014).
+    /// Maps to data-contracts.md Section 4.14. RED stub — throws
+    /// <see cref="NotImplementedException"/> until the Implementer agent
+    /// wires up the precondition guards and orchestrator delegation.
+    /// </summary>
+    public Task CopyCustomVersificationAsync(CopyCustomVersificationRequest request)
+    {
+        throw new NotImplementedException(
+            "CAP-007 / M-014: CopyCustomVersificationAsync wire (RED state)"
+        );
     }
 }
