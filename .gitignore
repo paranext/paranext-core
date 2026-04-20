@@ -68,3 +68,16 @@ CLAUDE.md
 CLAUDE.md.backup
 
 .review
+
+# Secrets & credentials
+.env
+.env.*
+.env.local
+.env.*.local
+secrets/
+*.pem
+*.key
+*.pfx
+*.p12
+credentials.json
+service-account.json
