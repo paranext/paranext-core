@@ -227,21 +227,35 @@ internal sealed class ManageBooksService : NetworkObject
         Task.FromResult(ProjectFilterService.FilterProjects(input));
 
     // =====================================================================
-    // CAP-004: CreateBooksOrchestration — RED STUBS
+    // CAP-004: CreateBooksOrchestration
     //
-    // The Test Writer provides these stubs so the compile-time contract is
-    // established (method signature, registration, wire name). The bodies
-    // throw NotImplementedException so every CAP-004 test fails until the
-    // TDD Implementer fills them in.
+    // Wire methods mirror the CAP-005 DeleteBooksAsync pattern: precondition
+    // guards → orchestrator delegation → Theme-6 SendFullProjectUpdateEvent.
+    // Guard order is asserted by CreateBooksServiceTests — see Theme 7
+    // mapping table at the top of that file.
     // =====================================================================
 
+    // === NEW IN PT10 ===
+    // Reason: PAPI wire facade; PT9 had no equivalent — CreateBooksForm was a
+    //   WinForms dialog invoked from a menu handler. The business logic this
+    //   service delegates to is ported from PT9 (see CreateBooksOrchestrator).
+    // Maps to: EXT-002 (wire layer)
+    //
+    // Guard order (asserted by CreateBooksServiceTests):
+    //   1. Empty BookNumbers          → INVALID_ARGUMENT         (VAL-010)
+    //   2. Unknown target projectId   → NOT_FOUND                (Theme 7)
+    //   3. Non-editable project       → FAILED_PRECONDITION      (INV-003)
+    //   4. FromTemplate + null model  → INVALID_ARGUMENT         (VAL-009)
+    //   5. FromTemplate + unknown
+    //      model projectId            → FAILED_PRECONDITION      (Theme 7)
+    //
+    // On success fires SendFullProjectUpdateEvent on the target PDP (Theme 6).
     /// <summary>
     /// Wire entry point for book creation. Maps to data-contracts.md Section 4.4.
     /// Preconditions (checked in order): BookNumbers non-empty → INVALID_ARGUMENT;
     /// projectId resolves → NOT_FOUND; project editable → FAILED_PRECONDITION;
-    /// model project (if FromTemplate) resolves → FAILED_PRECONDITION; model
-    /// required for FromTemplate → INVALID_ARGUMENT; permission per-book →
-    /// PERMISSION_DENIED.
+    /// FromTemplate without model → INVALID_ARGUMENT;
+    /// FromTemplate with unknown model projectId → FAILED_PRECONDITION.
     ///
     /// After a successful create, calls
     /// <c>_pdpFactory.GetExistingProjectDataProvider(projectId)?.SendFullProjectUpdateEvent()</c>
@@ -250,11 +264,43 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<CreateBooksResult> CreateBooksAsync(CreateBooksRequest request)
     {
-        throw new NotImplementedException(
-            "ManageBooksService.CreateBooksAsync — RED stub pending CAP-004 implementer"
+        EnsureBookNumbersNonEmpty(request.BookNumbers);
+
+        ScrText scrText = GetProjectOrThrowNotFound(request.ProjectId);
+
+        EnsureProjectEditable(scrText);
+
+        ScrText? modelScrText = null;
+        if (request.CreationMethod == CreationMethod.FromTemplate)
+        {
+            if (request.ModelProjectId == null)
+                throw PlatformErrorCodes.WithCode(
+                    PlatformErrorCodes.InvalidArgument,
+                    "Please select model text"
+                );
+
+            modelScrText = GetModelProjectOrThrowFailedPrecondition(request.ModelProjectId);
+        }
+
+        CreateBooksResult result = CreateBooksOrchestrator.CreateBooks(
+            scrText,
+            ToBookSet(request.BookNumbers),
+            request.CreationMethod,
+            modelScrText
         );
+
+        // Theme 6: notify any live PDP so booksPresent subscribers re-fetch.
+        _pdpFactory
+            .GetExistingProjectDataProvider(request.ProjectId)
+            ?.SendFullProjectUpdateEvent();
+
+        return Task.FromResult(result);
     }
 
+    // === NEW IN PT10 ===
+    // Reason: PAPI wire facade for EXT-004 (available-book-set). PT9 used
+    //   this only as in-process state (CreateBooksForm.availableBooks). The
+    //   PT10 UI needs a wire entry point for the Create Books dialog.
     /// <summary>
     /// Wire entry point that returns the books available for creation in
     /// the given project (all versification-defined books minus books
@@ -263,11 +309,15 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<int[]> GetAvailableBooksForCreationAsync(string projectId)
     {
-        throw new NotImplementedException(
-            "ManageBooksService.GetAvailableBooksForCreationAsync — RED stub pending CAP-004 implementer"
-        );
+        ScrText scrText = GetProjectOrThrowNotFound(projectId);
+        return Task.FromResult(CreateBooksOrchestrator.GetAvailableBooksForCreation(scrText));
     }
 
+    // === NEW IN PT10 ===
+    // Reason: PAPI wire facade for EXT-003 (pre-flight validation). PT9
+    //   called CheckModelBooks / CheckVersification inline from cmdOK_Click;
+    //   PT10 exposes them as a pre-flight step so the UI can warn users
+    //   before they commit to CreateBooks.
     /// <summary>
     /// Wire entry point for pre-flight validation (CheckModelBooks +
     /// CheckVersification). Maps to data-contracts.md Section 4.5.
@@ -275,8 +325,63 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<ValidationResult> ValidateCreateBooksAsync(ValidateCreateBooksRequest request)
     {
-        throw new NotImplementedException(
-            "ManageBooksService.ValidateCreateBooksAsync — RED stub pending CAP-004 implementer"
+        ScrText scrText = GetProjectOrThrowNotFound(request.ProjectId);
+
+        ScrText? modelScrText = null;
+        if (request.CreationMethod == CreationMethod.FromTemplate && request.ModelProjectId != null)
+        {
+            modelScrText = GetModelProjectOrThrowFailedPrecondition(request.ModelProjectId);
+        }
+
+        ValidationResult result = CreateBooksOrchestrator.ValidateCreateBooks(
+            scrText,
+            ToBookSet(request.BookNumbers),
+            request.CreationMethod,
+            modelScrText
         );
+
+        return Task.FromResult(result);
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: INV-003 guard — a non-editable project cannot receive new books.
+    //   Mapped to FAILED_PRECONDITION per Theme 7 (PROJECT_READ_ONLY).
+    /// <summary>
+    /// Precondition: the project must be editable
+    /// (<c>scrText.Settings.Editable</c>). Violation → FAILED_PRECONDITION
+    /// (INV-003, Theme 7).
+    /// </summary>
+    private static void EnsureProjectEditable(ScrText scrText)
+    {
+        if (!scrText.Settings.Editable)
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.FailedPrecondition,
+                $"Project {scrText.Name} is not editable"
+            );
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: distinguishes target-project resolution (NOT_FOUND) from
+    //   model-project resolution (FAILED_PRECONDITION) per strategic plan:
+    //   "missing model project → FAILED_PRECONDITION". A malformed or
+    //   unregistered model id signals a configuration precondition failure,
+    //   not a first-class resource miss.
+    /// <summary>
+    /// Resolves the model projectId used for <c>CreationMethod.FromTemplate</c>.
+    /// Any lookup failure maps to FAILED_PRECONDITION.
+    /// </summary>
+    private static ScrText GetModelProjectOrThrowFailedPrecondition(string modelProjectId)
+    {
+        try
+        {
+            return LocalParatextProjects.GetParatextProject(modelProjectId);
+        }
+        catch (Exception)
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.FailedPrecondition,
+                $"Model project not found: {modelProjectId}"
+            );
+        }
     }
 }
