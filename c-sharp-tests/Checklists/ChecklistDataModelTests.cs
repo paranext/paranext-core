@@ -461,7 +461,7 @@ internal class ChecklistDataModelTests
     {
         var msg = new EmptyResultMessage(
             Variant: "identical",
-            Message: "*** Comparative texts have identical markers. ***",
+            Message: "Comparative texts have identical markers.",
             SearchedMarkers: null,
             SearchedBooks: null
         );

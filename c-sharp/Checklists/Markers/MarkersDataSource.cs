@@ -283,11 +283,15 @@ internal static class MarkersDataSource
 
         if (markerFilter.Count == 0)
         {
-            // gm-002 canonical literal — PT9 Localizer.Str("CLParagraphCellsDataSource_1",
-            // "Comparative texts have identical markers.") wrapped in "*** ... ***".
+            // gm-002 localized message. We return the paranext-core localize key —
+            // the wrapping NetworkObject resolves it via LocalizationService.GetLocalizedString
+            // before sending over the wire (see patterns.errorHandling.backendLocalization).
+            // Maps to PT9 CLParagraphCellsDataSource_1. PT9 displayed this wrapped in "*** ... ***"
+            // as a UI decoration added outside the localized string (CLParagraphCellsDataSource.cs:313);
+            // we deliberately drop that wrapping so the UI can decorate as it sees fit.
             return new EmptyResultMessage(
                 Variant: "identical",
-                Message: "*** Comparative texts have identical markers. ***",
+                Message: IdenticalMarkersMessageKey,
                 SearchedMarkers: null,
                 SearchedBooks: null
             );
@@ -403,16 +407,48 @@ internal static class MarkersDataSource
     // Test spec: c-sharp-tests/Checklists/Markers/MarkerSettingsValidationTests.cs (22 tests).
 
     /// <summary>
-    /// Canonical PT9 error literal returned by
-    /// <see cref="ValidateMarkerSettings(string)"/> when any token in the
-    /// input fails the "exactly one slash with non-empty sides" rule. Copied
-    /// byte-for-byte from PT9 <c>MarkerSettingsForm.cs:39</c>. Localization
-    /// is a UI-layer concern (lookup key <c>MarkerSettingsForm_1</c>); the
-    /// backend returns the canonical English string so the UI can display
-    /// it directly or substitute a localized variant.
+    /// Localize key returned in the <c>ErrorMessage</c> field of a failed
+    /// <see cref="ValidateMarkerSettings(string)"/> result. Resolution happens
+    /// at the PAPI wire boundary (see
+    /// <see cref="Paranext.DataProvider.Checklists.ChecklistNetworkObject"/>)
+    /// — per the <c>patterns.errorHandling.backendLocalization</c> registry
+    /// entry, stateless services return the key and the wrapping
+    /// NetworkObject resolves it via <c>LocalizationService.GetLocalizedString</c>.
+    /// Maps to PT9 <c>MarkerSettingsForm_1</c>. Translations live in
+    /// <c>extensions/src/platform-scripture/contributions/localizedStrings.json</c>.
     /// </summary>
-    private const string InvalidMarkerPairErrorMessage =
+    public const string InvalidMarkerPairErrorKey = "%markersChecklist_errorInvalidMarkerPair%";
+
+    /// <summary>
+    /// English fallback text for <see cref="InvalidMarkerPairErrorKey"/>,
+    /// used by the NetworkObject layer when the localization service is
+    /// unavailable (e.g. in unit tests). Byte-for-byte matches the PT9
+    /// <c>Localizer.Str</c> default at <c>MarkerSettingsForm.cs:39</c>.
+    /// </summary>
+    public const string InvalidMarkerPairErrorFallback =
         "Equivalent markers need to be entered in the form: p/q";
+
+    /// <summary>
+    /// Localize key placed in <see cref="EmptyResultMessage.Message"/> when
+    /// the "identical" empty-result variant is returned by
+    /// <see cref="PostProcessRows"/>. Resolution happens at the PAPI wire
+    /// boundary (see
+    /// <see cref="Paranext.DataProvider.Checklists.ChecklistNetworkObject"/>).
+    /// Maps to PT9 <c>CLParagraphCellsDataSource_1</c>. Translations live in
+    /// <c>extensions/src/platform-scripture/contributions/localizedStrings.json</c>.
+    /// </summary>
+    public const string IdenticalMarkersMessageKey =
+        "%markersChecklist_emptyResult_identicalMarkers%";
+
+    /// <summary>
+    /// English fallback text for <see cref="IdenticalMarkersMessageKey"/>,
+    /// used by the NetworkObject layer when the localization service is
+    /// unavailable. Matches the PT9 <c>Localizer.Str</c> default at
+    /// <c>CLParagraphCellsDataSource.cs:304</c> (bare — PT9's "*** ... ***"
+    /// decoration is a UI concern, not part of the localized string).
+    /// </summary>
+    public const string IdenticalMarkersMessageFallback =
+        "Comparative texts have identical markers.";
 
     /// <summary>
     /// Validates a user-entered equivalent-markers string ("marker1/marker2"
@@ -443,11 +479,7 @@ internal static class MarkersDataSource
                 // VAL-002 fail-fast: §3.13 requires ParsedPairs=null on failure
                 // (no partial-parse leak). Contrast with CAP-002's silent-skip
                 // VAL-005 path inside ParseEquivalentMarkerMappings.
-                return new MarkerSettingsValidationResult(
-                    false,
-                    null,
-                    InvalidMarkerPairErrorMessage
-                );
+                return new MarkerSettingsValidationResult(false, null, InvalidMarkerPairErrorKey);
             }
             pairs.Add(new MarkerPair(items[0], items[1]));
         }

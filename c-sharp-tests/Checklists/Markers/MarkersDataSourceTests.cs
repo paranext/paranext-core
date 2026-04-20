@@ -654,7 +654,11 @@ internal class MarkersDataSourceTests
     {
         // TS-021 / INV-008: with no rows and no filter active, the service
         // returns an EmptyResultMessage with variant="identical" and the
-        // canonical PT9 message text (asserted by gm-002 golden master).
+        // paranext-core localize key for the PT9 message. Per the
+        // patterns.errorHandling.backendLocalization registry entry, the
+        // static service returns the KEY; the wrapping ChecklistNetworkObject
+        // resolves it via LocalizationService.GetLocalizedString before the
+        // wire response is serialized. Maps to PT9 CLParagraphCellsDataSource_1.
         var emptyRows = new List<ChecklistRow>();
         var emptyFilter = new HashSet<string>();
         var books = new List<string> { "GEN" };
@@ -663,10 +667,15 @@ internal class MarkersDataSourceTests
 
         Assert.That(result, Is.Not.Null, "empty results must always produce a message (INV-008)");
         Assert.That(result!.Variant, Is.EqualTo("identical"));
-        // The PT9 canonical literal (captured in gm-002/expected-output.json).
         Assert.That(
             result.Message,
-            Is.EqualTo("*** Comparative texts have identical markers. ***")
+            Is.EqualTo(MarkersDataSource.IdenticalMarkersMessageKey),
+            "static service returns the localize key (resolution at the wire boundary)"
+        );
+        Assert.That(
+            MarkersDataSource.IdenticalMarkersMessageFallback,
+            Is.EqualTo("Comparative texts have identical markers."),
+            "English fallback matches PT9 Localizer.Str default at CLParagraphCellsDataSource.cs:304 (bare — '*** ... ***' wrapping was PT9 UI decoration, now a UI concern)"
         );
     }
 

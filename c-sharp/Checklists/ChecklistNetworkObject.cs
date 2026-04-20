@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Paranext.DataProvider.Checklists.Markers;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Services;
 
 namespace Paranext.DataProvider.Checklists;
 
@@ -102,20 +103,29 @@ internal class ChecklistNetworkObject : NetworkObject
     /// PAPI delegate target for <c>buildChecklistData</c>. Routes to
     /// <see cref="ChecklistService.BuildChecklistData"/>, threading the
     /// constructor-injected <see cref="LocalParatextProjects"/> collaborator
-    /// (hence an instance method — the other two routers can stay static).
+    /// (hence an instance method — the other two routers can stay static
+    /// at the service-method level; both still need <see cref="PapiClient"/>
+    /// to resolve localize keys at the wire boundary).
     /// Behaviour lives in <c>ChecklistService</c>; this is a transport shim.
+    /// Localize keys carried in the result (e.g. <see cref="EmptyResultMessage.Message"/>
+    /// for the "identical" variant) are resolved here before the wire
+    /// response leaves the backend, per the
+    /// <c>patterns.errorHandling.backendLocalization</c> registry entry.
     /// </summary>
     private ChecklistResult BuildChecklistData(ChecklistRequest request, CancellationToken ct)
     {
-        return ChecklistService.BuildChecklistData(request, _paratextProjects, ct);
+        var result = ChecklistService.BuildChecklistData(request, _paratextProjects, ct);
+        return ResolveLocalizeKeys(result);
     }
 
     /// <summary>
     /// PAPI delegate target for <c>resolveComparativeTexts</c>. Routes to the
     /// stateless <see cref="ChecklistService.ResolveComparativeTexts"/>.
-    /// Behaviour lives in <c>ChecklistService</c>; this is a transport shim.
+    /// Instance method (rather than static) so it can access
+    /// <see cref="PapiClient"/> if this method ever needs to surface localized
+    /// strings — today none are emitted, so the call is a direct pass-through.
     /// </summary>
-    private static ResolvedComparativeTexts ResolveComparativeTexts(
+    private ResolvedComparativeTexts ResolveComparativeTexts(
         string activeProjectId,
         IReadOnlyList<ComparativeTextRef> requestedTexts,
         CancellationToken ct
@@ -126,11 +136,54 @@ internal class ChecklistNetworkObject : NetworkObject
 
     /// <summary>
     /// PAPI delegate target for <c>validateMarkerSettings</c>. Routes to the
-    /// stateless <see cref="MarkersDataSource.ValidateMarkerSettings"/>.
-    /// Behaviour lives in <c>MarkersDataSource</c>; this is a transport shim.
+    /// stateless <see cref="MarkersDataSource.ValidateMarkerSettings"/>. The
+    /// service returns a localize key in <see cref="MarkerSettingsValidationResult.ErrorMessage"/>
+    /// on failure; we resolve it here before the wire response leaves the
+    /// backend, per the <c>patterns.errorHandling.backendLocalization</c>
+    /// registry entry.
     /// </summary>
-    private static MarkerSettingsValidationResult ValidateMarkerSettings(string equivalentMarkers)
+    private MarkerSettingsValidationResult ValidateMarkerSettings(string equivalentMarkers)
     {
-        return MarkersDataSource.ValidateMarkerSettings(equivalentMarkers);
+        var result = MarkersDataSource.ValidateMarkerSettings(equivalentMarkers);
+        if (result.ErrorMessage is not { } key || !IsLocalizeKey(key))
+            return result;
+        var resolved = LocalizationService.GetLocalizedString(
+            PapiClient,
+            key,
+            MarkersDataSource.InvalidMarkerPairErrorFallback
+        );
+        return result with { ErrorMessage = resolved };
     }
+
+    /// <summary>
+    /// Resolves any localize keys carried inside a <see cref="ChecklistResult"/>
+    /// before it is serialized over the wire. Today the only such key lives
+    /// in <see cref="EmptyResultMessage.Message"/> when <c>Variant</c> is
+    /// <c>"identical"</c>. Returns the same result instance (or a new one with
+    /// the <c>Message</c> field resolved) to keep the immutable-record
+    /// contract.
+    /// </summary>
+    private ChecklistResult ResolveLocalizeKeys(ChecklistResult result)
+    {
+        if (result.EmptyResultMessage is not { } empty)
+            return result;
+        if (!IsLocalizeKey(empty.Message))
+            return result;
+
+        var resolved = LocalizationService.GetLocalizedString(
+            PapiClient,
+            empty.Message,
+            MarkersDataSource.IdenticalMarkersMessageFallback
+        );
+        return result with { EmptyResultMessage = empty with { Message = resolved } };
+    }
+
+    /// <summary>
+    /// Lightweight test for "looks like a localize key" — i.e. wrapped in
+    /// <c>%</c> sentinels per paranext-core convention. Avoids double-resolve
+    /// when a NetworkObject method is invoked multiple times on the same
+    /// record (e.g. in test assertions that round-trip).
+    /// </summary>
+    private static bool IsLocalizeKey(string? s) =>
+        s != null && s.Length >= 2 && s[0] == '%' && s[^1] == '%';
 }

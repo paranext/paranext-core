@@ -218,9 +218,7 @@ internal class ChecklistContentItemPolymorphismTests
     [Property("Contract", "ChecklistContentItem.MessageItem")]
     public void MessageItem_SerializedAsBase_RoundTripsPreservingSubtypeAndFields()
     {
-        ChecklistContentItem item = new MessageItem(
-            "*** Comparative texts have identical markers. ***"
-        );
+        ChecklistContentItem item = new MessageItem("Comparative texts have identical markers.");
 
         var json = JsonSerializer.Serialize(item, _options);
         var actual = JsonSerializer.Deserialize<ChecklistContentItem>(json, _options);

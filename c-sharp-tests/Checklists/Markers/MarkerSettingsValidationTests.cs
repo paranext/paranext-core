@@ -50,13 +50,25 @@ namespace TestParanextDataProvider.Checklists.Markers;
 internal class MarkerSettingsValidationTests
 {
     /// <summary>
-    /// PT9's localized user-facing error. Source:
-    /// <c>Paratext/Checklists/MarkerSettingsForm.cs:39</c>, localization key
-    /// <c>MarkerSettingsForm_1</c>. Captured as a byte-exact literal per VAL-002 and
-    /// plan Decision 4 (localization is a UI-layer concern; the validator returns the
-    /// English source string so the UI can localize via the message key).
+    /// Localize key placed in <see cref="MarkerSettingsValidationResult.ErrorMessage"/>
+    /// when validation fails. Per the <c>patterns.errorHandling.backendLocalization</c>
+    /// registry entry, the static service returns the key; the wrapping
+    /// <see cref="Paranext.DataProvider.Checklists.ChecklistNetworkObject"/>
+    /// resolves it via <c>LocalizationService.GetLocalizedString</c> before the
+    /// wire response is serialized. Integration tests that go through the
+    /// NetworkObject assert on the resolved English fallback value instead —
+    /// see <see cref="Pt9ErrorEnglishFallback"/>. Maps to PT9 <c>MarkerSettingsForm_1</c>.
     /// </summary>
-    private const string Pt9ErrorMessage = "Equivalent markers need to be entered in the form: p/q";
+    private const string Pt9ErrorMessageKey = "%markersChecklist_errorInvalidMarkerPair%";
+
+    /// <summary>
+    /// English fallback for <see cref="Pt9ErrorMessageKey"/>. Used by
+    /// integration tests going through the NetworkObject where the localization
+    /// service is not wired up in the test harness; matches the PT9 byte-exact
+    /// literal from <c>MarkerSettingsForm.cs:39</c>.
+    /// </summary>
+    private const string Pt9ErrorEnglishFallback =
+        "Equivalent markers need to be entered in the form: p/q";
 
     // =====================================================================
     // Happy-path scenarios — valid input returns Valid=true with parsed pairs
@@ -219,7 +231,7 @@ internal class MarkerSettingsValidationTests
         var result = MarkersDataSource.ValidateMarkerSettings("p");
 
         Assert.That(result.Valid, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessage));
+        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessageKey));
     }
 
     [Test]
@@ -235,7 +247,7 @@ internal class MarkerSettingsValidationTests
         var result = MarkersDataSource.ValidateMarkerSettings("p/q/r");
 
         Assert.That(result.Valid, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessage));
+        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessageKey));
     }
 
     [Test]
@@ -251,7 +263,7 @@ internal class MarkerSettingsValidationTests
         var result = MarkersDataSource.ValidateMarkerSettings("/q");
 
         Assert.That(result.Valid, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessage));
+        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessageKey));
     }
 
     [Test]
@@ -267,7 +279,7 @@ internal class MarkerSettingsValidationTests
         var result = MarkersDataSource.ValidateMarkerSettings("p/");
 
         Assert.That(result.Valid, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessage));
+        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessageKey));
     }
 
     [Test]
@@ -282,7 +294,7 @@ internal class MarkerSettingsValidationTests
         var result = MarkersDataSource.ValidateMarkerSettings("/");
 
         Assert.That(result.Valid, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessage));
+        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessageKey));
     }
 
     [Test]
@@ -303,7 +315,7 @@ internal class MarkerSettingsValidationTests
         //                                                 empty-after-trim right side
 
         Assert.That(result.Valid, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessage));
+        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessageKey));
     }
 
     [Test]
@@ -322,7 +334,7 @@ internal class MarkerSettingsValidationTests
         var result = MarkersDataSource.ValidateMarkerSettings("p/q invalid good/bad");
 
         Assert.That(result.Valid, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessage));
+        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessageKey));
     }
 
     [Test]
@@ -332,17 +344,25 @@ internal class MarkerSettingsValidationTests
     [Property("ScenarioId", "TS-VAL-002-03")]
     [Property("BehaviorId", "BHV-105")]
     [Property("ValidationRule", "VAL-002")]
-    public void ValidateMarkerSettings_Invalid_ErrorMessageMatchesPT9Exactly()
+    public void ValidateMarkerSettings_Invalid_ErrorMessageIsLocalizeKey()
     {
-        // VAL-002 / Plan Decision 4: byte-exact PT9 English literal. Any whitespace,
-        // punctuation, or wording drift would break UI display and localization lookup
-        // (the message key MarkerSettingsForm_1 is the localizer lookup key).
+        // VAL-002: static service returns the paranext-core localize key.
+        // The wrapping ChecklistNetworkObject resolves it to the PT9-exact
+        // English literal (%markersChecklist_errorInvalidMarkerPair% →
+        // "Equivalent markers need to be entered in the form: p/q") via
+        // LocalizationService.GetLocalizedString before serializing the wire
+        // response. See patterns.errorHandling.backendLocalization.
         var result = MarkersDataSource.ValidateMarkerSettings("p");
 
         Assert.That(
             result.ErrorMessage,
+            Is.EqualTo(Pt9ErrorMessageKey),
+            "VAL-002: static service returns the localize key (resolution at the wire boundary)"
+        );
+        Assert.That(
+            MarkersDataSource.InvalidMarkerPairErrorFallback,
             Is.EqualTo("Equivalent markers need to be entered in the form: p/q"),
-            "VAL-002: PT9 MarkerSettingsForm_1 literal must match byte-for-byte"
+            "PT9 English fallback constant must match byte-for-byte (used by NetworkObject when localization service is unavailable)"
         );
     }
 
@@ -500,7 +520,7 @@ internal class MarkerSettingsValidationTests
         var result = MarkersDataSource.ValidateMarkerSettings(input);
 
         Assert.That(result.Valid, Is.False, "VAL-002 rejects 'invalid' (zero slashes)");
-        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessage));
+        Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessageKey));
     }
 
     // NOTE on scope: TS-019 and TS-072 concern the separate **markerFilter** input
