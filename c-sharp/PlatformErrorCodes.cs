@@ -1,15 +1,11 @@
 namespace Paranext.DataProvider;
 
-// === PORTED FROM PT10 DESIGN (Theme 7, FN-002) ===
+// === NEW IN PT10 ===
+// Reason: PT10 adopts the PlatformError taxonomy; PT9 had ad-hoc exception types.
+// Maps to: FN-002 (Theme 7 — Error Handling)
 // Source: .context/features/manage-books/implementation/backend-alignment.md
 //   → "Error Handling — PlatformError Codes"
 // Mirrors: lib/platform-bible-utils/src/platform-error.ts PlatformErrorCode union
-//
-// STUB — Test Writer RED skeleton for CAP-005 / BE-1 Group-0 infra.
-// The constants are declared (required so `[TestCase(PlatformErrorCodes.X)]`
-// attributes in PlatformErrorCodesTests.cs compile), but the `WithCode` helper
-// throws NotImplementedException — the Layer-2 RED signal.
-// The Implementer for CAP-005 replaces the WithCode body in GREEN.
 
 /// <summary>
 /// Helper that throws exceptions carrying a PlatformError code in
@@ -40,14 +36,14 @@ public static class PlatformErrorCodes
     public const string Unknown = "UNKNOWN";
 
     /// <summary>
-    /// Throws an exception carrying a PlatformError code in
-    /// <c>Exception.Data["platformErrorCode"]</c>.
+    /// Builds an exception carrying a PlatformError code in
+    /// <c>Exception.Data["platformErrorCode"]</c>. The network layer extracts the
+    /// code and forwards it to <c>newPlatformError()</c> on the TS side.
     /// </summary>
     public static Exception WithCode(string code, string message)
     {
-        throw new NotImplementedException(
-            "CAP-005 (BE-1 Group-0 infra): PlatformErrorCodes.WithCode not yet implemented. "
-                + "See .context/features/manage-books/implementation/backend-alignment.md → 'Error Handling'."
-        );
+        var ex = new Exception(message);
+        ex.Data["platformErrorCode"] = code;
+        return ex;
     }
 }

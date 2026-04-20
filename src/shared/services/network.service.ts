@@ -19,6 +19,7 @@ import {
   Mutex,
   newPlatformError,
   PlatformError,
+  PlatformErrorCode,
   PlatformEvent,
   PlatformEventEmitter,
   stringLength,
@@ -209,8 +210,15 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
     response = getErrorMessage(e);
   }
 
+  // When the backend service throws `PlatformErrorCodes.WithCode(code, message)`
+  // (see c-sharp/PlatformErrorCodes.cs), the code is serialized into
+  // `error.data.data.platformErrorCode`. Extract it here so it survives the
+  // rethrow as a PlatformError with a machine-readable `code` property.
+  // FN-002, Theme 7 — manage-books feature.
+  let platformErrorCode: PlatformErrorCode | undefined;
   if (isJsonRpcResponse(response)) {
     if (!response.error) return response.result;
+    platformErrorCode = response.error.data?.data?.platformErrorCode;
     response = `JSON-RPC Request error (${response.error.code}): ${response.error.message}`;
   } else if (isPlatformError(response)) {
     logger.debug(response.message);
@@ -221,7 +229,7 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
       : `Invalid JSON-RPC Response: ${response}`;
   }
   logger.debug(response);
-  throw newPlatformError(response);
+  throw newPlatformError(response, platformErrorCode);
 };
 
 /**
