@@ -154,7 +154,28 @@ internal sealed class ManageBooksService : NetworkObject
     /// any lookup failure (unknown id, malformed HexId, etc.) to NOT_FOUND per
     /// Theme 7.
     /// </summary>
-    private static ScrText GetProjectOrThrowNotFound(string projectId)
+    private static ScrText GetProjectOrThrowNotFound(string projectId) =>
+        // ScrTextCollection.GetById throws ProjectNotFoundException when the
+        // project id is unknown; HexId.FromStr throws for malformed ids.
+        // Both map to NOT_FOUND per Theme 7.
+        ResolveProjectOrThrow(
+            projectId,
+            PlatformErrorCodes.NotFound,
+            $"Project not found: {projectId}"
+        );
+
+    /// <summary>
+    /// Shared project-resolution helper. Wraps
+    /// <see cref="LocalParatextProjects.GetParatextProject"/> so callers can
+    /// map any lookup failure to the appropriate <see cref="PlatformErrorCodes"/>.
+    /// Target vs model lookups differ only in the error code they throw
+    /// (NOT_FOUND for target, FAILED_PRECONDITION for model per Theme 7).
+    /// </summary>
+    private static ScrText ResolveProjectOrThrow(
+        string projectId,
+        string platformErrorCode,
+        string errorMessage
+    )
     {
         try
         {
@@ -162,13 +183,7 @@ internal sealed class ManageBooksService : NetworkObject
         }
         catch (Exception)
         {
-            // ScrTextCollection.GetById throws ProjectNotFoundException when the
-            // project id is unknown; HexId.FromStr throws for malformed ids.
-            // Both map to NOT_FOUND per Theme 7.
-            throw PlatformErrorCodes.WithCode(
-                PlatformErrorCodes.NotFound,
-                $"Project not found: {projectId}"
-            );
+            throw PlatformErrorCodes.WithCode(platformErrorCode, errorMessage);
         }
     }
 
@@ -276,7 +291,7 @@ internal sealed class ManageBooksService : NetworkObject
             if (request.ModelProjectId == null)
                 throw PlatformErrorCodes.WithCode(
                     PlatformErrorCodes.InvalidArgument,
-                    "Please select model text"
+                    CreateBooksOrchestrator.SelectModelTextMessage
                 );
 
             modelScrText = GetModelProjectOrThrowFailedPrecondition(request.ModelProjectId);
@@ -370,18 +385,10 @@ internal sealed class ManageBooksService : NetworkObject
     /// Resolves the model projectId used for <c>CreationMethod.FromTemplate</c>.
     /// Any lookup failure maps to FAILED_PRECONDITION.
     /// </summary>
-    private static ScrText GetModelProjectOrThrowFailedPrecondition(string modelProjectId)
-    {
-        try
-        {
-            return LocalParatextProjects.GetParatextProject(modelProjectId);
-        }
-        catch (Exception)
-        {
-            throw PlatformErrorCodes.WithCode(
-                PlatformErrorCodes.FailedPrecondition,
-                $"Model project not found: {modelProjectId}"
-            );
-        }
-    }
+    private static ScrText GetModelProjectOrThrowFailedPrecondition(string modelProjectId) =>
+        ResolveProjectOrThrow(
+            modelProjectId,
+            PlatformErrorCodes.FailedPrecondition,
+            $"Model project not found: {modelProjectId}"
+        );
 }
