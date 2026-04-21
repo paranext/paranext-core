@@ -9,11 +9,11 @@ import {
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
-  ComboBox,
-  ComboBoxGroup,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
   Progress,
+  ProjectSelector,
+  ProjectSelectorProject,
   Select,
   SelectContent,
   SelectItem,
@@ -677,41 +677,18 @@ global.webViewComponent = function ChecksSidePanelWebView({
     setSelectedCheckTypeIds(updatedCheckIds);
   };
 
-  type ProjectEntry = {
-    id: string;
-    fullName: string;
-    shortName: string;
-    label: string;
-    secondaryLabel?: string;
-  };
-
-  const projectOptionsGrouped = useMemo<ComboBoxGroup<ProjectEntry>[]>(() => {
-    const allProjects = Object.entries(projectIdsAndNames)
-      .sort(([, a], [, b]) =>
-        a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
-      )
-      .map(([id, project]) => ({
-        id,
-        fullName: project.fullName,
-        shortName: project.shortName,
-        label: project.shortName,
-        secondaryLabel: project.fullName,
-      }));
-    return [
-      {
-        groupHeading:
-          localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
-        options: allProjects,
-      },
-    ];
-  }, [projectIdsAndNames, localizedStrings]);
-
-  const selectedProjectOption = useMemo(
+  const sortedProjects = useMemo<ProjectSelectorProject[]>(
     () =>
-      projectOptionsGrouped
-        .flatMap((group) => group.options)
-        .find((option) => option.id === projectId),
-    [projectOptionsGrouped, projectId],
+      Object.entries(projectIdsAndNames)
+        .sort(([, a], [, b]) =>
+          a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
+        )
+        .map(([id, project]) => ({
+          id,
+          shortName: project.shortName,
+          fullName: project.fullName,
+        })),
+    [projectIdsAndNames],
   );
 
   const getScopeLabel = useCallback(
@@ -770,11 +747,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
       {/* Check configuration */}
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
         {/* Project Filter */}
-        <ComboBox<ProjectEntry>
-          options={projectOptionsGrouped}
-          value={selectedProjectOption}
-          onChange={(newProject) => handleSelectProject(newProject.id)}
-          getButtonLabel={(project) => project.shortName}
+        <ProjectSelector
+          projects={sortedProjects}
+          selectedProjectId={projectId}
+          onChangeProject={handleSelectProject}
+          groupHeading={
+            localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
+          }
           buttonPlaceholder={
             localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
           }
@@ -784,10 +763,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
           ariaLabel={
             localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
           }
-          buttonVariant="outline"
           buttonClassName="tw-flex-1 tw-min-w-32 tw-font-normal"
           popoverContentClassName="tw-w-[300px]"
-          alignDropDown="start"
         />
 
         {/* Scope Filter */}

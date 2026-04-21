@@ -254,7 +254,12 @@ export interface CommentListProps {
 	className?: string;
 	/** Class name to apply to the display of the verse text for the first comment in the thread */
 	classNameForVerseText?: string;
-	/** Comment threads to render */
+	/**
+	 * Comment threads to render. The component filters out threads where all comments are deleted,
+	 * but does not deduplicate threads. Callers are responsible for pre-filtering (e.g. excluding
+	 * `isSpellingNote` and `isBTNote` threads, which belong in Wordlist and Biblical Terms
+	 * respectively) and for deduplicating threads with repeated IDs before passing them in.
+	 */
 	threads: LegacyCommentThread[];
 	/** Name of the current user, retrieved from the current user's Paratext Registry user information */
 	currentUser: string;
@@ -1017,6 +1022,51 @@ export interface MarkerMenuProps {
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
 export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
+/** A single project entry rendered in the {@link ProjectSelector}. */
+export type ProjectSelectorProject = {
+	/** Unique project identifier. */
+	id: string;
+	/** Short project name, shown as the primary label on the trigger and in the list. */
+	shortName: string;
+	/** Full project name, shown as a secondary label next to the short name. */
+	fullName: string;
+};
+export type ProjectSelectorProps = {
+	/** Projects to choose from. Rendered in the order provided. */
+	projects: readonly ProjectSelectorProject[];
+	/** The id of the currently selected project, if any. */
+	selectedProjectId?: string;
+	/** Called with the newly selected project's id. */
+	onChangeProject: (projectId: string) => void;
+	/** If provided, the options are rendered under a group with this heading. */
+	groupHeading?: string;
+	/** Text shown on the trigger when no project is selected. */
+	buttonPlaceholder?: string;
+	/** Message shown when the user's search yields no matching projects. */
+	commandEmptyMessage?: string;
+	/** Accessible label for the trigger button. */
+	ariaLabel?: string;
+	/** Variant of the trigger button. Defaults to `outline`. */
+	buttonVariant?: ButtonProps["variant"];
+	/** Additional css classes for the trigger button. */
+	buttonClassName?: string;
+	/** Additional css classes for the popover content. */
+	popoverContentClassName?: string;
+	/** Inline styles for the popover content (useful for z-index overrides). */
+	popoverContentStyle?: React$1.CSSProperties;
+	/** Popover alignment. Defaults to `start`. */
+	alignDropDown?: "start" | "center" | "end";
+	/** If true, the trigger is disabled. */
+	isDisabled?: boolean;
+};
+/**
+ * A combo-box project picker. Displays each project as `shortName · fullName` and calls
+ * `onChangeProject` with the selected project's id.
+ *
+ * Thin wrapper around {@link ComboBox} — use it directly when you need a grouped or flat list of
+ * `{ id, shortName, fullName }` projects.
+ */
+export declare function ProjectSelector({ projects, selectedProjectId, onChangeProject, groupHeading, buttonPlaceholder, commandEmptyMessage, ariaLabel, buttonVariant, buttonClassName, popoverContentClassName, popoverContentStyle, alignDropDown, isDisabled, }: ProjectSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
@@ -2366,7 +2416,7 @@ export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<Sel
  */
 export declare function ResizablePanelGroup({ className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelGroup>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ResizablePanelGroup */
-export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLImageElement | HTMLElement | HTMLVideoElement | HTMLCanvasElement | HTMLAnchorElement | HTMLScriptElement | HTMLEmbedElement | HTMLFormElement | HTMLHeadElement | HTMLAreaElement | HTMLObjectElement | HTMLLinkElement | HTMLMapElement | HTMLInputElement | HTMLBaseElement | HTMLDataElement | HTMLTimeElement | HTMLSourceElement | HTMLProgressElement | HTMLTrackElement | HTMLButtonElement | HTMLAudioElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLTableCaptionElement | HTMLTableColElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDivElement | HTMLDListElement | HTMLFieldSetElement | HTMLHeadingElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLabelElement | HTMLLegendElement | HTMLLIElement | HTMLMenuElement | HTMLMetaElement | HTMLMeterElement | HTMLOListElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLParagraphElement | HTMLPictureElement | HTMLPreElement | HTMLSelectElement | HTMLSlotElement | HTMLSpanElement | HTMLStyleElement | HTMLTableElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTemplateElement | HTMLTextAreaElement | HTMLTitleElement | HTMLTableRowElement | HTMLUListElement>, "id" | "onResize"> & {
+export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLElement | HTMLCanvasElement | HTMLImageElement | HTMLVideoElement | HTMLAnchorElement | HTMLScriptElement | HTMLEmbedElement | HTMLFormElement | HTMLHeadElement | HTMLAreaElement | HTMLObjectElement | HTMLLinkElement | HTMLMapElement | HTMLInputElement | HTMLBaseElement | HTMLTimeElement | HTMLDataElement | HTMLProgressElement | HTMLTrackElement | HTMLSourceElement | HTMLButtonElement | HTMLAudioElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLTableCaptionElement | HTMLTableColElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDivElement | HTMLDListElement | HTMLFieldSetElement | HTMLHeadingElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLabelElement | HTMLLegendElement | HTMLLIElement | HTMLMenuElement | HTMLMetaElement | HTMLMeterElement | HTMLOListElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLParagraphElement | HTMLPictureElement | HTMLPreElement | HTMLSelectElement | HTMLSlotElement | HTMLSpanElement | HTMLStyleElement | HTMLTableElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTemplateElement | HTMLTextAreaElement | HTMLTitleElement | HTMLTableRowElement | HTMLUListElement>, "id" | "onResize"> & {
 	className?: string;
 	collapsedSize?: number | undefined;
 	collapsible?: boolean | undefined;
