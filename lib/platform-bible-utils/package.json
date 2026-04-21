@@ -48,12 +48,11 @@
   "dependencies": {
     "@eten-tech-foundation/scripture-utilities": "~0.1.6",
     "async-mutex": "^0.5.0",
-    "dompurify": "^3.3.2",
+    "dompurify": "^3.4.0",
     "jsonpath-plus": "^10.3.0",
     "stringz": "^2.1.0"
   },
   "devDependencies": {
-    "@types/dompurify": "^3.0.5",
     "@types/jest": "^29.5.14",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",

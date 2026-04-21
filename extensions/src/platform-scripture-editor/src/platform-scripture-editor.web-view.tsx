@@ -87,6 +87,7 @@ import {
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
+import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
   availableScrollGroupIds,
@@ -1258,26 +1259,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [scrRef, webViewId],
   );
 
-  // Update the editor if a change comes in from the PDP
-  // Note: this will run every time we get data from the PDP whether or not it is different than it
-  // was previously. We need to know when data comes in so we can set
-  // `currentlyWritingUsjToPdp.current` to `false` appropriately
-  useEffect(() => {
-    if (!usjFromPdp || !editorRef.current) return;
-
-    // The PDP informed us of updates, so writing to it must be complete (if we were writing)
-    currentlyWritingUsjToPdp.current = false;
-
-    // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
-    // has the best data. This could happen if the selected chapter changed or something other than
-    // the editor wrote to the PDP.
-    if (!areUsjContentsEqualExceptWhitespace(usjFromPdp, usjSentToPdp.current)) {
-      usjSentToPdp.current = usjFromPdp;
-      setEditorUsj.current(usjFromPdp);
-    }
-    // If the editor has updates that the PDP hasn't recorded, save them to the PDP
-    else saveUsjToPdpIfUpdated();
-  }, [saveUsjToPdpIfUpdated, usjFromPdp]);
+  // Sync editor content with PDP data and track write completion
+  useEditorPdpSync({
+    usjFromPdp,
+    editorRef,
+    usjSentToPdp,
+    setEditorUsj,
+    currentlyWritingUsjToPdp,
+    saveUsjToPdpIfUpdated,
+  });
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {
