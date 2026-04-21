@@ -43,6 +43,12 @@ export const platformSettings: SettingsContribution = [
         default: {},
         isHidden: true,
       },
+      'platform.appZoom': {
+        label: '%settings_platform_appZoom_label%',
+        description: '%settings_platform_appZoom_description%',
+        default: 1.0,
+        isHidden: true,
+      },
       'platform.interfaceMode': {
         label: '%settings_platform_interfaceMode_label%',
         description: '%settings_platform_interfaceMode_description%',
@@ -116,6 +122,14 @@ const viewZoomsValidator: SettingValidator<'platform.viewZooms'> = async (
   );
 };
 
+// Returns false (rather than throwing) because platform.appZoom is machine-managed and
+// never shown in the settings UI. If it becomes user-editable, match the interfaceMode pattern.
+const appZoomValidator: SettingValidator<'platform.appZoom'> = async (
+  newValue: number,
+): Promise<boolean> => {
+  return typeof newValue === 'number' && newValue >= MIN_ZOOM_FACTOR && newValue <= MAX_ZOOM_FACTOR;
+};
+
 const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async (
   newValue: string,
 ): Promise<boolean> => {
@@ -137,5 +151,6 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.commentsEnabled': booleanValidator,
   'platform.requestTimeout': requestTimeoutValidator,
   'platform.viewZooms': viewZoomsValidator,
+  'platform.appZoom': appZoomValidator,
   'platform.interfaceMode': interfaceModeValidator,
 };

@@ -195,6 +195,11 @@ declare module 'papi-shared-types' {
      */
     'platform.viewZooms': Record<string, number>;
     /**
+     * Global application zoom factor. Values are in the range [MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR].
+     * Default is 1.0 (no zoom).
+     */
+    'platform.appZoom': number;
+    /**
      * The interface mode for the application. `simple` provides a streamlined experience, while
      * `power` exposes advanced features.
      *

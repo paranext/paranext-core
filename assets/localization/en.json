@@ -332,6 +332,8 @@
   "%settings_errorMessages_invalidNumber%": "Invalid number",
   "%settings_errorMessages_invalidValue%": "Invalid value",
   "%settings_errorMessages_viewError%": "View error",
+  "%settings_platform_appZoom_description%": "Global application zoom level. Affects the entire user interface.",
+  "%settings_platform_appZoom_label%": "Application Zoom",
   "%settings_platform_comments_enabled_description%": "Whether reading and writing comments in projects is enabled. This is an experimental feature.",
   "%settings_platform_comments_enabled_label%": "Comments enabled (experimental)",
   "%settings_platform_group1_description%": "Settings pertaining to the software overall",
