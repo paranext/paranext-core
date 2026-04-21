@@ -195,12 +195,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Get all threads (activeOnly=false to include threads with deleted comments)
         List<CommentThread> allThreads = _commentManager.FindThreads(activeOnly: false);
 
-        // If no selector provided or all properties are null/default, return all thread IDs
-        if (selector == null || selector.IsEmpty)
-            return allThreads.Select(t => new PlatformCommentThreadWrapper(t)).ToList();
+        // If no selector provided, apply defaults (exclude BT/spelling, deduplicate)
+        selector ??= new CommentThreadSelector();
 
-        // Apply filters
         IEnumerable<CommentThread> filteredThreads = allThreads;
+
+        // Note-category filtering is applied BEFORE deduplication so that flags from excluded
+        // threads cannot bleed into the merged metadata of a surviving thread with the same ID.
+        filteredThreads = selector.NoteCategory switch
+        {
+            NoteCategory.BtNotes => filteredThreads.Where(t => t.IsBTNote),
+            NoteCategory.SpellingNotes => filteredThreads.Where(t => t.IsSpellingNote),
+            _ => filteredThreads.Where(t => !t.IsBTNote && !t.IsSpellingNote), // NoteCategory.General (default)
+        };
 
         // Filter by thread ID (exact match)
         if (!string.IsNullOrEmpty(selector.ThreadId))
@@ -240,7 +247,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (selector.IsRead is bool isRead)
             filteredThreads = filteredThreads.Where(t => ThreadStatus.IsThreadRead(t) == isRead);
 
-        return filteredThreads.Select(t => new PlatformCommentThreadWrapper(t)).ToList();
+        List<PlatformCommentThreadWrapper> results = filteredThreads
+            .Select(t => new PlatformCommentThreadWrapper(t))
+            .ToList();
+
+        // Deduplicate threads with the same ID: combine unique comments, use the thread
+        // with the latest ModifiedDate as the metadata base, and drop all-deleted threads.
+        // Done after wrapping to avoid mutating ParatextData's internal CommentThread objects.
+        if (selector.DeduplicateThreads)
+            results = DeduplicateCommentThreads(results);
+
+        return results;
     }
 
     public bool DeleteComment(string commentId)
@@ -853,6 +870,44 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
 
         return (null, null);
+    }
+
+    /// <summary>
+    /// Merges threads with duplicate IDs: combines unique comments and uses the thread with the
+    /// latest <see cref="PlatformCommentThreadWrapper.ModifiedDate"/> as the metadata base.
+    /// Drops threads where all comments are deleted.
+    /// Works on wrappers to avoid mutating ParatextData's internal CommentThread objects.
+    /// </summary>
+    internal static List<PlatformCommentThreadWrapper> DeduplicateCommentThreads(
+        List<PlatformCommentThreadWrapper> wrappers
+    )
+    {
+        var threadMap = new Dictionary<string, PlatformCommentThreadWrapper>();
+
+        foreach (PlatformCommentThreadWrapper wrapper in wrappers)
+        {
+            if (!threadMap.TryGetValue(wrapper.Id, out PlatformCommentThreadWrapper? existing))
+            {
+                threadMap[wrapper.Id] = wrapper;
+                continue;
+            }
+
+            // Use the thread with the later ModifiedDate as the metadata base
+            if (wrapper.ModifiedDate > existing.ModifiedDate)
+            {
+                // New thread is newer — it becomes the base, merge existing's comments into it
+                wrapper.MergeCommentsFrom(existing);
+                threadMap[wrapper.Id] = wrapper;
+            }
+            else
+            {
+                // Existing thread is newer or same — merge the new thread's comments into it
+                existing.MergeCommentsFrom(wrapper);
+            }
+        }
+
+        // Drop threads where all comments are deleted
+        return threadMap.Values.Where(t => t.HasNonDeletedComments).ToList();
     }
 
     private static IEnumerable<CommentThread> FilterByDate(
