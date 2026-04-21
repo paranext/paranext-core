@@ -162,7 +162,63 @@ internal class CommentThreadSelectorConverterTests
     }
 
     [Test]
-    public void Deserialize_EmptyObject_IsEmptyTrue()
+    public void Deserialize_NoteCategoryBtNotes_OverridesDefault()
+    {
+        string json = @"{ ""noteCategory"": ""btNotes"" }";
+
+        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
+            json,
+            _serializationOptions
+        );
+
+        Assert.That(selector, Is.Not.Null);
+        Assert.That(selector!.NoteCategory, Is.EqualTo(NoteCategory.BtNotes));
+    }
+
+    [Test]
+    public void Deserialize_NoteCategorySpellingNotes_OverridesDefault()
+    {
+        string json = @"{ ""noteCategory"": ""spellingNotes"" }";
+
+        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
+            json,
+            _serializationOptions
+        );
+
+        Assert.That(selector, Is.Not.Null);
+        Assert.That(selector!.NoteCategory, Is.EqualTo(NoteCategory.SpellingNotes));
+    }
+
+    [Test]
+    public void Deserialize_NoteCategoryGeneral_ExplicitlySetToGeneral()
+    {
+        string json = @"{ ""noteCategory"": ""general"" }";
+
+        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
+            json,
+            _serializationOptions
+        );
+
+        Assert.That(selector, Is.Not.Null);
+        Assert.That(selector!.NoteCategory, Is.EqualTo(NoteCategory.General));
+    }
+
+    [Test]
+    public void Deserialize_DeduplicateThreadsFalse_OverridesDefault()
+    {
+        string json = @"{ ""deduplicateThreads"": false }";
+
+        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
+            json,
+            _serializationOptions
+        );
+
+        Assert.That(selector, Is.Not.Null);
+        Assert.That(selector!.DeduplicateThreads, Is.False);
+    }
+
+    [Test]
+    public void Deserialize_DefaultValues_NoteCategoryIsGeneralAndDeduplicateIsTrue()
     {
         string json = @"{}";
 
@@ -172,6 +228,7 @@ internal class CommentThreadSelectorConverterTests
         );
 
         Assert.That(selector, Is.Not.Null);
-        Assert.That(selector!.IsEmpty, Is.True);
+        Assert.That(selector!.NoteCategory, Is.EqualTo(NoteCategory.General));
+        Assert.That(selector.DeduplicateThreads, Is.True);
     }
 }
