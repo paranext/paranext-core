@@ -688,24 +688,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'insertFootnoteAtSelection': {
           // Commits a snapshot of the project to the version history
-          try {
-            if (projectId)
-              await papi.commands.sendCommand(
+          if (projectId)
+            papi.commands
+              .sendCommand(
                 'paratextBibleSendReceive.commitChanges',
                 projectId,
                 localizedStrings['%versionHistoryCommit_beforeInsertFootnote%'],
                 true,
-              );
-          } catch (err: unknown) {
-            const errMessage = getErrorMessage(err);
-            if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
-              logger.info(errMessage);
-            } else {
-              logger.error(
-                `Error committing changes to version history before inserting footnote: ${getErrorMessage(err)}`,
-              );
-            }
-          }
+              )
+              .catch((err: unknown) => {
+                const errMessage = getErrorMessage(err);
+                if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+                  logger.info(errMessage);
+                } else {
+                  logger.error(
+                    `Error committing changes to version history before inserting footnote: ${getErrorMessage(err)}`,
+                  );
+                }
+              });
 
           editorRef.current?.insertMarker('f');
           // Updates ref to indicate that the next PDP save is for inserting a footnote
@@ -714,24 +714,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'insertCrossReferenceAtSelection': {
           // Commits a snapshot of the project to the version history
-          try {
-            if (projectId)
-              await papi.commands.sendCommand(
+
+          if (projectId)
+            papi.commands
+              .sendCommand(
                 'paratextBibleSendReceive.commitChanges',
                 projectId,
                 localizedStrings['%versionHistoryCommit_beforeInsertCrossReference%'],
                 true,
-              );
-          } catch (err: unknown) {
-            const errMessage = getErrorMessage(err);
-            if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
-              logger.info(errMessage);
-            } else {
-              logger.error(
-                `Error committing changes to version history before inserting cross-reference: ${getErrorMessage(err)}`,
-              );
-            }
-          }
+              )
+              .catch((err: unknown) => {
+                const errMessage = getErrorMessage(err);
+                if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+                  logger.info(errMessage);
+                } else {
+                  logger.error(
+                    `Error committing changes to version history before inserting cross-reference: ${getErrorMessage(err)}`,
+                  );
+                }
+              });
 
           editorRef.current?.insertMarker('x');
           // Updates ref to indicate that the next PDP save is for inserting a cross-reference
