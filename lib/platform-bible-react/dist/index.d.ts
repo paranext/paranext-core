@@ -254,7 +254,12 @@ export interface CommentListProps {
 	className?: string;
 	/** Class name to apply to the display of the verse text for the first comment in the thread */
 	classNameForVerseText?: string;
-	/** Comment threads to render */
+	/**
+	 * Comment threads to render. The component filters out threads where all comments are deleted,
+	 * but does not deduplicate threads. Callers are responsible for pre-filtering (e.g. excluding
+	 * `isSpellingNote` and `isBTNote` threads, which belong in Wordlist and Biblical Terms
+	 * respectively) and for deduplicating threads with repeated IDs before passing them in.
+	 */
 	threads: LegacyCommentThread[];
 	/** Name of the current user, retrieved from the current user's Paratext Registry user information */
 	currentUser: string;
