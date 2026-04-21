@@ -22,13 +22,6 @@ internal static class SerializationOptions
                 WriteIndented = false, // No need to waste bytes with nice formatting
                 IgnoreReadOnlyProperties = false, // Need types to be serialized
             };
-        // Match the PropertyNamingPolicy: TypeScript string-union types on the wire (e.g.
-        // 'chapterVerse', 'copyDestination') correspond to C# enum values (ChapterVerse,
-        // CopyDestination). Without this converter, System.Text.Json only accepts integer
-        // enum values, which breaks any NetworkObject whose request record contains an enum
-        // field (e.g. ManageBooks CreateBooksRequest.CreationMethod, ProjectFilterInput.Purpose).
-        // Confirmed at runtime via e2e-tests/tests/manage-books/manage-books-commands.spec.ts.
-        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new CommentThreadSelectorConverter());
         options.Converters.Add(new PlatformCommentConverter());
         options.Converters.Add(new PlatformCommentThreadConverter());
@@ -38,6 +31,16 @@ internal static class SerializationOptions
         options.Converters.Add(new InventoryTextTypeConverter());
         options.Converters.Add(new RegistrationDataConverter());
         options.Converters.Add(new VerseRefConverter());
+        // Match the PropertyNamingPolicy: TypeScript string-union types on the wire (e.g.
+        // 'chapterVerse', 'copyDestination') correspond to C# enum values (ChapterVerse,
+        // CopyDestination). Without this converter, System.Text.Json only accepts integer
+        // enum values, which breaks any NetworkObject whose request record contains an enum
+        // field (e.g. ManageBooks CreateBooksRequest.CreationMethod, ProjectFilterInput.Purpose).
+        // Registered LAST so any future per-type enum JsonConverter<T> takes precedence —
+        // System.Text.Json resolves Converters in insertion order (first match wins on
+        // CanConvert), and JsonStringEnumConverter.CanConvert returns true for any enum.
+        // Confirmed at runtime via e2e-tests/tests/manage-books/manage-books-commands.spec.ts.
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         return options;
     }
 
