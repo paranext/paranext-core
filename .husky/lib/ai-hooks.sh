@@ -64,10 +64,14 @@ compute_affected_workspaces() {
   fi
 
   # Collect workspaces that contain staged TS files.
+  # NF guards ensure the path has at least one segment under the parent
+  # directory (e.g. lib/foo/bar.ts → "lib/foo", but lib/foo.ts at the
+  # top level — which isn't a valid workspace — falls through to the
+  # `extensions` fallback or is skipped).
   changed_workspaces=$(
     echo "$files" | awk -F/ '
-      /^lib\// { print "lib/" $2; next }
-      /^extensions\/src\// { print "extensions/src/" $3; next }
+      /^lib\// && NF >= 3 { print "lib/" $2; next }
+      /^extensions\/src\// && NF >= 4 { print "extensions/src/" $3; next }
       /^extensions\// && NF >= 2 { print "extensions"; next }
     ' | sort -u
   )
