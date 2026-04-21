@@ -176,6 +176,7 @@ export default function FootnoteEditor({
   const [callerType, setCallerType] = useState<FootnoteCallerType>('generated');
   const [originalCallerType, setOriginalCallerType] = useState<FootnoteCallerType>('generated');
   const [customCaller, setCustomCaller] = useState<string>('*');
+  const [originalCustomCaller, setOriginalCustomCaller] = useState<string>('*');
 
   const [noteType, setNoteType] = useState<string>('f');
 
@@ -245,6 +246,7 @@ export default function FootnoteEditor({
         parsedCallerType = 'hidden';
       } else if (rawCaller) {
         setCustomCaller(rawCaller);
+        setOriginalCustomCaller(rawCaller);
       }
       setCallerType(parsedCallerType);
       setOriginalCallerType(parsedCallerType);
@@ -501,6 +503,8 @@ export default function FootnoteEditor({
     };
   }, [showMarkersMenu, showInlineMarkersMenu, defaultMarkerMenuTrigger]);
 
+  const copyButtonTooltip = localizedStrings['%footnoteEditor_copyButton_tooltip%'];
+
   return (
     <>
       <div ref={containerRef} className="footnote-editor tw-grid tw-gap-[12px]">
@@ -531,7 +535,11 @@ export default function FootnoteEditor({
             <CancelAcceptButtons
               onCancelClick={onClose}
               onAcceptClick={closeAndSave}
-              canAccept={!isAtInitialState || originalCallerType !== callerType}
+              canAccept={
+                !isAtInitialState ||
+                originalCallerType !== callerType ||
+                (callerType === 'custom' && customCaller !== originalCustomCaller)
+              }
               localizedStrings={localizedStrings}
             />
           </div>
@@ -562,6 +570,7 @@ export default function FootnoteEditor({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    aria-label={copyButtonTooltip}
                     onClick={handleCopy}
                     className="tw-h-6 tw-w-6"
                     variant="ghost"
@@ -571,7 +580,7 @@ export default function FootnoteEditor({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{localizedStrings['%footnoteEditor_copyButton_tooltip%']}</p>
+                  <p>{copyButtonTooltip}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
