@@ -1,4 +1,5 @@
 import { Button } from '@/components/shadcn-ui/button';
+import { ButtonGroup } from '@/components/shadcn-ui/button-group';
 import { CancelAcceptButtons } from '@/components/basics/cancel-accept-buttons.component';
 import {
   DeltaOp,
@@ -524,24 +525,26 @@ export default function FootnoteEditor({
               localizedStrings={localizedStrings}
             />
           </div>
-          <div className="tw-flex tw-w-full tw-justify-end tw-gap-4">
-            <UndoRedoButtons
-              onUndoClick={() => editorRef.current?.undo()}
-              onRedoClick={() => editorRef.current?.redo()}
-              canUndo={!isAtInitialState}
-              canRedo={canRedo}
-              localizedStrings={localizedStrings}
-            />
-            <CancelAcceptButtons
-              onCancelClick={onClose}
-              onAcceptClick={closeAndSave}
-              canAccept={
-                !isAtInitialState ||
-                originalCallerType !== callerType ||
-                (callerType === 'custom' && customCaller !== originalCustomCaller)
-              }
-              localizedStrings={localizedStrings}
-            />
+          <div className="tw-flex tw-w-full tw-justify-end">
+            <ButtonGroup>
+              <UndoRedoButtons
+                onUndoClick={() => editorRef.current?.undo()}
+                onRedoClick={() => editorRef.current?.redo()}
+                canUndo={!isAtInitialState}
+                canRedo={canRedo}
+                localizedStrings={localizedStrings}
+              />
+              <CancelAcceptButtons
+                onCancelClick={onClose}
+                onAcceptClick={closeAndSave}
+                canAccept={
+                  !isAtInitialState ||
+                  originalCallerType !== callerType ||
+                  (callerType === 'custom' && customCaller !== originalCustomCaller)
+                }
+                localizedStrings={localizedStrings}
+              />
+            </ButtonGroup>
           </div>
         </div>
         <div
