@@ -45,16 +45,6 @@ namespace TestParanextDataProvider
             foreach (ScrText project in projects)
                 ScrTextCollection.Remove(project, false);
 
-            // Defensive full reset: ScrTextCollection.Remove does not fully
-            // clear ParatextData's path-indexed internal lookups. If a test
-            // added ScrTexts whose paths collide or otherwise confuse
-            // RefreshScrTextsInternal, subsequent calls to
-            // ParatextData.Initialize in unrelated tests can throw
-            // "Sequence contains more than one matching element". Re-initialize
-            // against FixtureSetup.TestFolderPath (which has no real project
-            // folders) to guarantee a clean state for the next test.
-            ParatextData.Initialize(FixtureSetup.TestFolderPath, false);
-
             _client?.Dispose();
         }
         #endregion
