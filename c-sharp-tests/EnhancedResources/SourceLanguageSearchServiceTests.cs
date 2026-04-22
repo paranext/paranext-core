@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.EnhancedResources;
 using SIL.Scripture;
+using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
@@ -49,15 +50,15 @@ internal class SourceLanguageSearchServiceTests
     [SetUp]
     public void SetUp()
     {
-        // Ensure marble data is available for most tests (built-in lexicon data)
-        SourceLanguageSearchService.SetHaveMarbleData(true);
+        // N3 policy: fixture data lives in c-sharp-tests. Populate the production
+        // service's lexicon override and marble-data flag before every test.
+        SourceLanguageSearchFixtures.ApplyDefaults();
     }
 
     [TearDown]
     public void TearDown()
     {
-        // Reset service state after each test
-        SourceLanguageSearchService.ResetForTesting();
+        SourceLanguageSearchFixtures.Clear();
     }
 
     #endregion

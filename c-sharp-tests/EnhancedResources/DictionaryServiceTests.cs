@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.EnhancedResources;
 using SIL.Scripture;
+using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
@@ -26,6 +27,20 @@ namespace TestParanextDataProvider.EnhancedResources;
 [ExcludeFromCodeCoverage]
 internal class DictionaryServiceTests
 {
+    [SetUp]
+    public void SetUp()
+    {
+        // N3 policy: fixture data lives in c-sharp-tests. Populate the production
+        // service's test-override seams from DictionaryFixtures before every test.
+        DictionaryFixtures.ApplyDefaults();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        DictionaryFixtures.Clear();
+    }
+
     #region Acceptance Tests
 
     // =========================================================================
@@ -949,72 +964,62 @@ internal class DictionaryServiceTests
     )]
     public void GetRelatedLexemes_SharedDomain_MatchesGoldenMaster()
     {
-        // Arrange: Build in-memory lexicon matching gm-024 input
+        // Arrange: Build in-memory lexicon matching gm-024 input.
         // Same as gm-023 but with euangelion added:
         //   euangelion: senses [{glosses: [{en, "gospel"}], domains: ["Communication", "Sacred Texts"]}]
-        DictionaryService.SetTestLexiconEntry(
-            "euangelion",
+        // [TearDown] will restore the default lexicon via DictionaryFixtures.Clear().
+        DictionaryService.LexiconOverride!["euangelion"] = (
             ["gospel"],
             ["Communication", "Sacred Texts"]
         );
 
-        try
-        {
-            var relatedLexemes = DictionaryService.FindRelatedLexemes(
-                sourceLexeme: "logos",
-                glossLanguage: "en"
-            );
+        var relatedLexemes = DictionaryService.FindRelatedLexemes(
+            sourceLexeme: "logos",
+            glossLanguage: "en"
+        );
 
-            // Assert: gm-024 expected output - 5 related lexemes
-            Assert.That(
-                relatedLexemes.Count,
-                Is.EqualTo(5),
-                "gm-024: Expected 5 related lexemes for logos"
-            );
+        // Assert: gm-024 expected output - 5 related lexemes
+        Assert.That(
+            relatedLexemes.Count,
+            Is.EqualTo(5),
+            "gm-024: Expected 5 related lexemes for logos"
+        );
 
-            // All from gm-023 should still be present
-            Assert.That(
-                relatedLexemes.Any(r => r.Lemma == "rhema" && r.RelationType == "Gloss"),
-                Is.True,
-                "gm-024: rhema still related via Gloss"
-            );
-            Assert.That(
-                relatedLexemes.Any(r => r.Lemma == "rhema" && r.RelationType == "SemanticDomain"),
-                Is.True,
-                "gm-024: rhema still related via SemanticDomain"
-            );
-            Assert.That(
-                relatedLexemes.Any(r => r.Lemma == "aggelia" && r.RelationType == "Gloss"),
-                Is.True,
-                "gm-024: aggelia still related via Gloss"
-            );
-            Assert.That(
-                relatedLexemes.Any(r => r.Lemma == "aggelia" && r.RelationType == "SemanticDomain"),
-                Is.True,
-                "gm-024: aggelia still related via SemanticDomain"
-            );
+        // All from gm-023 should still be present
+        Assert.That(
+            relatedLexemes.Any(r => r.Lemma == "rhema" && r.RelationType == "Gloss"),
+            Is.True,
+            "gm-024: rhema still related via Gloss"
+        );
+        Assert.That(
+            relatedLexemes.Any(r => r.Lemma == "rhema" && r.RelationType == "SemanticDomain"),
+            Is.True,
+            "gm-024: rhema still related via SemanticDomain"
+        );
+        Assert.That(
+            relatedLexemes.Any(r => r.Lemma == "aggelia" && r.RelationType == "Gloss"),
+            Is.True,
+            "gm-024: aggelia still related via Gloss"
+        );
+        Assert.That(
+            relatedLexemes.Any(r => r.Lemma == "aggelia" && r.RelationType == "SemanticDomain"),
+            Is.True,
+            "gm-024: aggelia still related via SemanticDomain"
+        );
 
-            // New: euangelion via SemanticDomain ("Communication")
-            Assert.That(
-                relatedLexemes.Any(r =>
-                    r.Lemma == "euangelion" && r.RelationType == "SemanticDomain"
-                ),
-                Is.True,
-                "gm-024: euangelion should be related via SemanticDomain 'Communication'"
-            );
+        // New: euangelion via SemanticDomain ("Communication")
+        Assert.That(
+            relatedLexemes.Any(r => r.Lemma == "euangelion" && r.RelationType == "SemanticDomain"),
+            Is.True,
+            "gm-024: euangelion should be related via SemanticDomain 'Communication'"
+        );
 
-            // Self-exclusion still holds
-            Assert.That(
-                relatedLexemes.Any(r => r.Lemma == "logos"),
-                Is.False,
-                "gm-024/INV-C07: logos must not appear in its own related lexemes"
-            );
-        }
-        finally
-        {
-            // Restore default lexicon so other tests are not affected
-            DictionaryService.ResetTestLexicon();
-        }
+        // Self-exclusion still holds
+        Assert.That(
+            relatedLexemes.Any(r => r.Lemma == "logos"),
+            Is.False,
+            "gm-024/INV-C07: logos must not appear in its own related lexemes"
+        );
     }
 
     #endregion

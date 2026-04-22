@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.EnhancedResources;
+using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
@@ -25,6 +26,12 @@ namespace TestParanextDataProvider.EnhancedResources;
 [ExcludeFromCodeCoverage]
 internal class GetArticleTests
 {
+    [SetUp]
+    public void SetUp() => EncyclopediaFixtures.ApplyDefaults();
+
+    [TearDown]
+    public void TearDown() => EncyclopediaFixtures.Clear();
+
     #region Acceptance Tests
 
     // =========================================================================

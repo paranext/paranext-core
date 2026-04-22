@@ -16,8 +16,6 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal class MarbleDataAccessService
 {
-    private static MarbleDataAccessService? s_default;
-
     private bool _initialized;
     private bool _haveMarbleData;
     private readonly List<string> _availableGlossLanguages = [];
@@ -28,11 +26,6 @@ internal class MarbleDataAccessService
 
     // Chinese variant mapping: zh-Hant -> zh-Hans (or whichever variant is available)
     private readonly Dictionary<string, string> _languageMapping = new();
-
-    /// <summary>
-    /// Singleton access. Only one instance across application lifetime (INV-C11).
-    /// </summary>
-    public static MarbleDataAccessService Default => s_default ??= new MarbleDataAccessService();
 
     /// <summary>
     /// Whether marble package data has been discovered and loaded.
@@ -125,14 +118,6 @@ internal class MarbleDataAccessService
         if (bibles != null)
             _availableBibles.AddRange(bibles);
         _initialized = true;
-    }
-
-    /// <summary>
-    /// Reset singleton for testing purposes.
-    /// </summary>
-    internal static void ResetForTesting()
-    {
-        s_default = null;
     }
 
     private void DiscoverPackages()

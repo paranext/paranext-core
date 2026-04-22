@@ -15,112 +15,33 @@ internal static partial class EncyclopediaService
     // Method: EncyclopediaTab.LoadResources (~200 lines)
     // Maps to: EXT-057, BHV-604
 
-    // Known resource IDs for test scaffolding
-    private static readonly HashSet<string> s_knownResources =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            "test-fauna-resource",
-            "test-fauna-resource-v2",
-            "test-empty-resource",
-        };
+    // Test-fixture injection seams (N3: patterns.csharp.testScaffoldingLocation).
+    // Production code treats null overrides as "no data". Tests populate these in [SetUp]
+    // from EncyclopediaFixtures and clear them in [TearDown].
+    internal static IReadOnlyCollection<string>? KnownResourcesOverride { get; set; }
+    internal static IReadOnlyDictionary<string, string>? AbbreviationsOverride { get; set; }
+    internal static string? V1XmlOverride { get; set; }
+    internal static string? V2XmlOverride { get; set; }
+    internal static IReadOnlyDictionary<
+        string,
+        TestArticleContent
+    >? TestArticlesOverride { get; set; }
 
-    // V1 format test data (matching test XML constants in EncyclopediaServiceTests)
-    private static readonly string s_v1Xml =
-        @"<?xml version=""1.0""?>
-<Thematic_Lexicon xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"">
-  <ThemLex_Entry Key=""0"">
-    <Title>Contents and Introduction</Title>
-    <Intro />
-    <Index>
-      <IndexItem Number=""0.1"" Description=""Introduction"" Target=""FAUNA:0.1"" />
-      <IndexItem Number=""1"" Description=""Animals, General"" Target=""FAUNA:1"" />
-      <IndexItem Number=""2"" Description=""Mammals"" Target=""FAUNA:2"" />
-    </Index>
-    <Sections />
-  </ThemLex_Entry>
-  <ThemLex_Entry Key=""2.8"">
-    <Title>Camel, dromedary</Title>
-    <Intro />
-    <Index />
-    <Sections>
-      <Section Type=""entry"" Content=""references"">
-        <Heading>References:</Heading>
-        <SubHeading />
-        <LanguageSets>
-          <LanguageSet Language=""Hebrew"">
-            <Lemma>gamal</Lemma>
-            <Transliteration>gamal</Transliteration>
-            <References>
-              <Reference>00101201600000</Reference>
-            </References>
-          </LanguageSet>
-        </LanguageSets>
-        <Paragraphs />
-      </Section>
-      <Section Type=""entry"" Content=""discussion"">
-        <Heading>Discussion:</Heading>
-        <SubHeading />
-        <LanguageSets />
-        <Paragraphs>
-          <Paragraph>|f&lt;img width=250 src=""2Mammals/Dromedary.jpg"" title=""Dromedary""&gt;|f* While there is no doubt about the identity of the animal.</Paragraph>
-        </Paragraphs>
-      </Section>
-    </Sections>
-  </ThemLex_Entry>
-</Thematic_Lexicon>";
+    private static IReadOnlyCollection<string> KnownResources =>
+        KnownResourcesOverride ?? s_emptyStringSet;
 
-    // V2 format test data
-    private static readonly string s_v2Xml =
-        @"<?xml version=""1.0""?>
-<Thematic_Lexicon xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"">
-  <ThemLex_Entry Key=""0"">
-    <Title>Contents and Introduction</Title>
-    <Intro />
-    <Index>
-      <IndexItem Number=""0.1"" Description=""Introduction"" Target=""FAUNA:0.1"" />
-    </Index>
-    <Sections />
-  </ThemLex_Entry>
-  <ThemLex_Entry Key=""2.8"">
-    <Title>Camel, dromedary</Title>
-    <Intro />
-    <Index />
-    <Sections>
-      <Section Type=""entry"" Content=""references"">
-        <Heading>References:</Heading>
-        <LanguageSets>
-          <LanguageSet Language=""Hebrew"">
-            <Lemma>gamal</Lemma>
-            <Transliteration>gamal</Transliteration>
-            <References>
-              <Reference>00101201600044</Reference>
-            </References>
-          </LanguageSet>
-        </LanguageSets>
-        <Paragraphs />
-      </Section>
-      <Section Type=""entry"" Content=""discussion"">
-        <Heading>Discussion:</Heading>
-        <SubHeading />
-        <LanguageSets />
-        <Paragraphs>
-          <Paragraph><image Id=""Dromedary""/>While there is no doubt about the identity of the animal.</Paragraph>
-        </Paragraphs>
-        <BibleImages>
-          <BibleImage Type=""ILL"" Id=""Dromedary"">
-            <Collection />
-            <Path>FFR\FAUNA</Path>
-            <FileName>Dromedary.jpg</FileName>
-            <Copyright>Pixabay</Copyright>
-            <Definition Id="""" LanguageCode=""en""></Definition>
-            <Caption>Dromedary</Caption>
-            <Description />
-          </BibleImage>
-        </BibleImages>
-      </Section>
-    </Sections>
-  </ThemLex_Entry>
-</Thematic_Lexicon>";
+    private static IReadOnlyDictionary<string, string> Abbreviations =>
+        AbbreviationsOverride ?? s_emptyStringMap;
+
+    private static IReadOnlyDictionary<string, TestArticleContent> TestArticles =>
+        TestArticlesOverride ?? s_emptyArticleMap;
+
+    private static readonly HashSet<string> s_emptyStringSet =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> s_emptyStringMap =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, TestArticleContent> s_emptyArticleMap =
+        new(StringComparer.OrdinalIgnoreCase);
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:LoadResources
@@ -133,7 +54,7 @@ internal static partial class EncyclopediaService
     public static EncyclopediaLoadResult LoadResources(EncyclopediaLoadInput input)
     {
         // Validate resource existence
-        if (!s_knownResources.Contains(input.ResourceId))
+        if (!KnownResources.Contains(input.ResourceId))
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.NotFound,
@@ -158,7 +79,7 @@ internal static partial class EncyclopediaService
 
         // Determine format version based on resource
         bool isV2 = input.ResourceId.Contains("v2", StringComparison.OrdinalIgnoreCase);
-        string xmlData = isV2 ? s_v2Xml : s_v1Xml;
+        string xmlData = (isV2 ? V2XmlOverride : V1XmlOverride) ?? string.Empty;
 
         // Parse entries and build display items (skip key=0 contents entry)
         var items = MarbleEncyclopediaEntry
@@ -250,190 +171,6 @@ internal static partial class EncyclopediaService
     [GeneratedRegex(@"<image\s+Id=""([^""]+)""\s*/>")]
     private static partial Regex ImagePattern();
 
-    // Known abbreviation data for test scaffolding (BHV-608)
-    private static readonly Dictionary<string, string> s_abbreviations =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            { "NIV", "New International Version" },
-            { "NRSV", "New Revised Standard Version" },
-            { "ESV", "English Standard Version" },
-        };
-
-    // Test article data: maps ArticleId to (title, paragraphs, imageIds, isV2)
-    private static readonly Dictionary<string, TestArticleContent> s_testArticles =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            {
-                "REALIA:1.1.8.3",
-                new TestArticleContent(
-                    "Winnowing fork",
-                    [
-                        "The winnowing fork was used for threshing grain.",
-                        "see this article: <l target=\"REALIA:2.8\">2.8 Camel</l>",
-                        "<image Id=\"WinnowingFork\"/>See image of winnowing fork.",
-                    ],
-                    ["WinnowingFork"],
-                    true
-                )
-            },
-            {
-                "test-article-with-verses",
-                new TestArticleContent(
-                    "Article with verses",
-                    ["see verse: <s>G04300301600000</s>"],
-                    [],
-                    false
-                )
-            },
-            {
-                "test-plain-text",
-                new TestArticleContent("Plain text article", ["plain text"], [], false)
-            },
-            {
-                "test-crossref-article",
-                new TestArticleContent(
-                    "Cross-reference article",
-                    ["see this article: <l target=\"REALIA:1.1.8.3\">1.1.8.3 Winnowing fork</l>"],
-                    [],
-                    false
-                )
-            },
-            {
-                "test-verse-ref-article",
-                new TestArticleContent(
-                    "Verse reference article",
-                    ["see verse: <s>G04300301600000</s>"],
-                    [],
-                    false
-                )
-            },
-            {
-                "test-verse-range-article",
-                new TestArticleContent(
-                    "Verse range article",
-                    ["see verse: <s>G04300301600000-G04300301700000</s>"],
-                    [],
-                    false
-                )
-            },
-            {
-                "test-verse-range-crosschapter-article",
-                new TestArticleContent(
-                    "Verse range cross-chapter article",
-                    ["see verse: <s>G04300301600000-G04300401700000</s>"],
-                    [],
-                    false
-                )
-            },
-            {
-                "test-abbreviation-article",
-                new TestArticleContent("Abbreviation article", ["read the <a>NIV</a>"], [], false)
-            },
-            {
-                "test-formatted-text-article",
-                new TestArticleContent(
-                    "Formatted text article",
-                    ["text <b>with bold</b>", "text <i>with italic</i>"],
-                    [],
-                    false
-                )
-            },
-            {
-                "test-gm011-verse-link",
-                new TestArticleContent(
-                    "GM-011 verse link",
-                    ["see verse: <s>G04300301600000</s>"],
-                    [],
-                    false
-                )
-            },
-            {
-                "test-pattern-parsing",
-                new TestArticleContent(
-                    "Pattern parsing test",
-                    ["see verse: <s>G04300301600000</s>"],
-                    [],
-                    false
-                )
-            },
-            {
-                "test-article-with-images",
-                new TestArticleContent(
-                    "Article with images",
-                    ["<image Id=\"Dromedary\"/>See the dromedary."],
-                    ["Dromedary"],
-                    true
-                )
-            },
-            {
-                "test-article-with-inline-images",
-                new TestArticleContent(
-                    "Article with inline images",
-                    ["<image Id=\"Dromedary\"/>See the dromedary."],
-                    ["Dromedary"],
-                    true
-                )
-            },
-            {
-                "test-navigation-article",
-                new TestArticleContent(
-                    "Navigation article",
-                    [
-                        "see verse: <s>G04300301600000</s>",
-                        "see this article: <l target=\"REALIA:2.8\">2.8 Camel</l>",
-                        "<image Id=\"Camel\"/>See the camel image.",
-                    ],
-                    ["Camel"],
-                    true
-                )
-            },
-            {
-                "test-launchviewer-article",
-                new TestArticleContent(
-                    "Launch viewer article",
-                    ["<image Id=\"Dromedary\"/>See the dromedary."],
-                    ["Dromedary"],
-                    true
-                )
-            },
-            {
-                "test-v2-article-with-images",
-                new TestArticleContent(
-                    "V2 article with images",
-                    ["<image Id=\"Dromedary\"/>See the dromedary."],
-                    ["Dromedary"],
-                    true
-                )
-            },
-            {
-                "test-v1-article",
-                new TestArticleContent(
-                    "V1 article",
-                    ["While there is no doubt about the identity of the animal."],
-                    [],
-                    false
-                )
-            },
-            {
-                "test-article-missing-images",
-                new TestArticleContent(
-                    "Article with missing images",
-                    ["The animal is described here."],
-                    [],
-                    false
-                )
-            },
-            {
-                "test-unknown-abbreviation-article",
-                new TestArticleContent(
-                    "Unknown abbreviation article",
-                    ["read the <a>XYZ</a>"],
-                    [],
-                    false
-                )
-            },
-        };
-
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:FormatParagraph
     // Method: EncyclopediaTab.FormatParagraph (~150 lines)
@@ -446,7 +183,7 @@ internal static partial class EncyclopediaService
     public static ArticleData GetArticle(ArticleInput input)
     {
         // Validate resource existence
-        if (!s_knownResources.Contains(input.ResourceId))
+        if (!KnownResources.Contains(input.ResourceId))
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.NotFound,
@@ -455,7 +192,7 @@ internal static partial class EncyclopediaService
         }
 
         // Validate article existence
-        if (!s_testArticles.TryGetValue(input.ArticleId, out var articleContent))
+        if (!TestArticles.TryGetValue(input.ArticleId, out var articleContent))
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.NotFound,
@@ -625,7 +362,7 @@ internal static partial class EncyclopediaService
                 match =>
                 {
                     string abbrev = match.Groups[1].Value;
-                    string fullText = s_abbreviations.TryGetValue(abbrev, out string? ft) ? ft : "";
+                    string fullText = Abbreviations.TryGetValue(abbrev, out string? ft) ? ft : "";
 
                     abbreviations.Add(new ArticleAbbreviation(Abbrev: abbrev, FullText: fullText));
 
@@ -659,11 +396,4 @@ internal static partial class EncyclopediaService
                 }
             );
     }
-
-    private record TestArticleContent(
-        string Title,
-        IList<string> RawParagraphs,
-        IList<string> ImageIds,
-        bool IsV2
-    );
 }

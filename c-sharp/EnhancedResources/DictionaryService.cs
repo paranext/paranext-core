@@ -13,37 +13,48 @@ internal static class DictionaryService
     // Maps to: EXT-053, BHV-364
     private const int OtNtBoundary = 40;
 
-    // Internal lexicon data for related lexeme discovery (gm-023, gm-024)
-    // Each entry: lemma -> (glosses, domains)
+    // Test-fixture injection seams (N3: patterns.csharp.testScaffoldingLocation).
+    // Production code treats a null override as "no data". Tests populate these
+    // from DictionaryFixtures in [SetUp] and clear them in [TearDown].
+    internal static Dictionary<
+        string,
+        (List<string> Glosses, List<string> Domains)
+    >? LexiconOverride { get; set; }
+
+    internal static HashSet<string>? KnownResourcesOverride { get; set; }
+    internal static HashSet<string>? UninitializedResourcesOverride { get; set; }
+    internal static List<DictionaryDisplayItem>? NtDisplayItemsOverride { get; set; }
+    internal static List<DictionaryDisplayItem>? OtDisplayItemsOverride { get; set; }
+    internal static Dictionary<string, DictionaryEntryRecord>? EntryDataOverride { get; set; }
+
+    private static Dictionary<string, (List<string> Glosses, List<string> Domains)> Lexicon =>
+        LexiconOverride ?? s_emptyLexicon;
+
+    private static HashSet<string> KnownResources =>
+        KnownResourcesOverride ?? s_emptyKnownResources;
+
+    private static HashSet<string> UninitializedResources =>
+        UninitializedResourcesOverride ?? s_emptyKnownResources;
+
+    private static List<DictionaryDisplayItem> NtDisplayItems =>
+        NtDisplayItemsOverride ?? s_emptyDisplayItems;
+
+    private static List<DictionaryDisplayItem> OtDisplayItems =>
+        OtDisplayItemsOverride ?? s_emptyDisplayItems;
+
+    private static Dictionary<string, DictionaryEntryRecord> EntryData =>
+        EntryDataOverride ?? s_emptyEntryData;
+
+    // Empty fallbacks so accessors never return null.
     private static readonly Dictionary<
         string,
         (List<string> Glosses, List<string> Domains)
-    > s_lexicon = BuildDefaultLexicon();
+    > s_emptyLexicon = new();
 
-    // Known resource IDs for test scaffolding
-    private static readonly HashSet<string> s_knownResources =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            "test-resource",
-            "SDBH",
-            "SDBG",
-            "empty-resource",
-            "test-resource-with-dupes",
-        };
-
-    private static readonly HashSet<string> s_uninitializedResources =
-        new(StringComparer.OrdinalIgnoreCase) { "uninitialized-resource" };
-
-    // Pre-built display items for "test-resource" style resources (NT books)
-    private static readonly List<DictionaryDisplayItem> s_ntDisplayItems = BuildNtTestItems();
-
-    // Pre-built display items for "test-resource" style resources (OT books)
-    private static readonly List<DictionaryDisplayItem> s_otDisplayItems = BuildOtTestItems();
-
-    // Internal entry data for CAP-008 GetDictionaryEntry
-    // Each entry keyed by entryId -> full structured entry data
-    private static readonly Dictionary<string, DictionaryEntryRecord> s_entryData =
-        BuildDefaultEntryData();
+    private static readonly HashSet<string> s_emptyKnownResources =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly List<DictionaryDisplayItem> s_emptyDisplayItems = new();
+    private static readonly Dictionary<string, DictionaryEntryRecord> s_emptyEntryData = new();
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/DictionaryTab.cs:GetDefinitionHtml
@@ -60,7 +71,7 @@ internal static class DictionaryService
         // Look up entry by entryId
         if (
             string.IsNullOrEmpty(input.EntryId)
-            || !s_entryData.TryGetValue(input.EntryId, out var entry)
+            || !EntryData.TryGetValue(input.EntryId, out var entry)
         )
         {
             throw PlatformErrorCodes.WithCode(
@@ -110,11 +121,11 @@ internal static class DictionaryService
     // Build related lexemes from the shared lexicon, excluding self
     private static List<RelatedLexemeData> BuildRelatedLexemes(string sourceLemma)
     {
-        if (!s_lexicon.TryGetValue(sourceLemma, out var sourceInfo))
+        if (!Lexicon.TryGetValue(sourceLemma, out var sourceInfo))
             return [];
 
         var results = new List<RelatedLexemeData>();
-        foreach (var (lemma, otherInfo) in s_lexicon)
+        foreach (var (lemma, otherInfo) in Lexicon)
         {
             if (lemma == sourceLemma)
                 continue;
@@ -150,7 +161,7 @@ internal static class DictionaryService
     }
 
     private static string? FindEntryIdForLemma(string lemma) =>
-        s_entryData.FirstOrDefault(kvp => kvp.Value.Lemma == lemma).Key;
+        EntryData.FirstOrDefault(kvp => kvp.Value.Lemma == lemma).Key;
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/DictionaryTab.cs
@@ -164,8 +175,8 @@ internal static class DictionaryService
     {
         // Validate resource existence
         if (
-            !s_knownResources.Contains(input.ResourceId)
-            && !s_uninitializedResources.Contains(input.ResourceId)
+            !KnownResources.Contains(input.ResourceId)
+            && !UninitializedResources.Contains(input.ResourceId)
         )
         {
             throw PlatformErrorCodes.WithCode(
@@ -175,7 +186,7 @@ internal static class DictionaryService
         }
 
         // Validate lexicon loaded state
-        if (s_uninitializedResources.Contains(input.ResourceId))
+        if (UninitializedResources.Contains(input.ResourceId))
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.FailedPrecondition,
@@ -238,12 +249,12 @@ internal static class DictionaryService
         if (string.IsNullOrEmpty(glossLanguage))
             return [];
 
-        if (!s_lexicon.TryGetValue(sourceLexeme, out var sourceEntry))
+        if (!Lexicon.TryGetValue(sourceLexeme, out var sourceEntry))
             return [];
 
         var results = new List<RelatedLexemeRef>();
 
-        foreach (var (lemma, entry) in s_lexicon)
+        foreach (var (lemma, entry) in Lexicon)
         {
             // INV-C07: Self-exclusion
             if (lemma == sourceLexeme)
@@ -301,39 +312,6 @@ internal static class DictionaryService
         };
     }
 
-    /// <summary>
-    /// Allows tests to add or replace entries in the internal lexicon.
-    /// Used by golden master tests that need specific lexicon configurations.
-    /// </summary>
-    internal static void SetTestLexiconEntry(
-        string lemma,
-        List<string> glosses,
-        List<string> domains
-    )
-    {
-        s_lexicon[lemma] = (glosses, domains);
-    }
-
-    /// <summary>
-    /// Removes a lexicon entry. Used for test cleanup.
-    /// </summary>
-    internal static void RemoveTestLexiconEntry(string lemma)
-    {
-        s_lexicon.Remove(lemma);
-    }
-
-    /// <summary>
-    /// Resets the lexicon to default test data.
-    /// </summary>
-    internal static void ResetTestLexicon()
-    {
-        s_lexicon.Clear();
-        foreach (var (lemma, entry) in BuildDefaultLexicon())
-        {
-            s_lexicon[lemma] = entry;
-        }
-    }
-
     private static List<DictionaryDisplayItem> GetItemsForScope(
         DictionaryLoadInput input,
         string activeDictionary
@@ -344,9 +322,9 @@ internal static class DictionaryService
 
         // Return appropriate items based on book number
         if (input.CurrentReference.BookNum < OtNtBoundary)
-            return [.. s_otDisplayItems];
+            return [.. OtDisplayItems];
 
-        return [.. s_ntDisplayItems];
+        return [.. NtDisplayItems];
     }
 
     // BHV-353: Deduplicate items by TokenId, aggregate occurrence counts
@@ -381,155 +359,4 @@ internal static class DictionaryService
         }
         return "No dictionary data available for the current scope.";
     }
-
-    // Build test display items for NT books (with lexemes that have related lexemes)
-    private static List<DictionaryDisplayItem> BuildNtTestItems()
-    {
-        return
-        [
-            new DictionaryDisplayItem(
-                TokenId: "nt-token-001",
-                Term: "logos",
-                SourceText: "\u03BB\u03CC\u03B3\u03BF\u03C2",
-                Translit: "logos",
-                Glosses: ["word", "message"],
-                PartOfSpeech: "N",
-                OccurrenceCount: 1
-            ),
-            new DictionaryDisplayItem(
-                TokenId: "nt-token-002",
-                Term: "theos",
-                SourceText: "\u03B8\u03B5\u03CC\u03C2",
-                Translit: "theos",
-                Glosses: ["God", "god"],
-                PartOfSpeech: "N",
-                OccurrenceCount: 1
-            ),
-            new DictionaryDisplayItem(
-                TokenId: "nt-token-003",
-                Term: "kurios",
-                SourceText: "\u03BA\u03CD\u03C1\u03B9\u03BF\u03C2",
-                Translit: "kurios",
-                Glosses: ["Lord", "master"],
-                PartOfSpeech: "N",
-                OccurrenceCount: 1
-            ),
-            // Duplicate of logos for deduplication testing
-            new DictionaryDisplayItem(
-                TokenId: "nt-token-001",
-                Term: "logos",
-                SourceText: "\u03BB\u03CC\u03B3\u03BF\u03C2",
-                Translit: "logos",
-                Glosses: ["word", "message"],
-                PartOfSpeech: "N",
-                OccurrenceCount: 1
-            ),
-        ];
-    }
-
-    // Single source of truth for default lexicon entries
-    private static Dictionary<
-        string,
-        (List<string> Glosses, List<string> Domains)
-    > BuildDefaultLexicon()
-    {
-        return new()
-        {
-            ["logos"] = (["word", "message"], ["Communication"]),
-            ["rhema"] = (["word"], ["Communication"]),
-            ["aggelia"] = (["message"], ["Communication"]),
-            ["graphe"] = (["scripture"], ["Sacred Texts"]),
-            ["kai"] = (["and"], []),
-        };
-    }
-
-    // Build test display items for OT books
-    private static List<DictionaryDisplayItem> BuildOtTestItems()
-    {
-        return
-        [
-            new DictionaryDisplayItem(
-                TokenId: "ot-token-001",
-                Term: "elohim",
-                SourceText: "\u05D0\u05DC\u05D4\u05D9\u05DD",
-                Translit: "elohim",
-                Glosses: ["God", "gods"],
-                PartOfSpeech: "N",
-                OccurrenceCount: 1
-            ),
-            new DictionaryDisplayItem(
-                TokenId: "ot-token-002",
-                Term: "bara",
-                SourceText: "\u05D1\u05E8\u05D0",
-                Translit: "bara",
-                Glosses: ["create"],
-                PartOfSpeech: "V",
-                OccurrenceCount: 1
-            ),
-        ];
-    }
-
-    // === NEW IN PT10 ===
-    // Reason: Internal data record for CAP-008 entry registry (no PT9 equivalent - PT9 used MarbleLexiconEntry directly)
-    // Maps to: CAP-008
-    // Build default entry data for dictionary entry lookups (CAP-008)
-    private static Dictionary<string, DictionaryEntryRecord> BuildDefaultEntryData()
-    {
-        return new()
-        {
-            ["logos-001"] = new DictionaryEntryRecord(
-                Lemma: "logos",
-                Senses:
-                [
-                    new SenseRecord(
-                        SenseId: "logos-001-s1",
-                        Glosses:
-                        [
-                            new GlossEntry(Language: "en", Text: "word"),
-                            new GlossEntry(Language: "fr", Text: "parole"),
-                        ],
-                        Definition: "a communication whereby the mind finds expression"
-                    ),
-                    new SenseRecord(
-                        SenseId: "logos-001-s2",
-                        Glosses:
-                        [
-                            new GlossEntry(Language: "en", Text: "message"),
-                            new GlossEntry(Language: "fr", Text: "message"),
-                        ],
-                        Definition: "a verbal or written communication"
-                    ),
-                ],
-                SemanticDomains: ["Communication"],
-                Morphology: "Noun",
-                SubItemIds: ["logos-001-s1", "logos-001-s2"]
-            ),
-            ["kai-001"] = new DictionaryEntryRecord(
-                Lemma: "kai",
-                Senses:
-                [
-                    new SenseRecord(
-                        SenseId: "kai-001-s1",
-                        Glosses: [new GlossEntry(Language: "en", Text: "and")],
-                        Definition: "a conjunction linking clauses or words"
-                    ),
-                ],
-                SemanticDomains: [],
-                Morphology: "Conjunction",
-                SubItemIds: ["kai-001-s1"]
-            ),
-        };
-    }
-
-    // Internal record for storing entry data used by GetDictionaryEntry
-    private record DictionaryEntryRecord(
-        string Lemma,
-        List<SenseRecord> Senses,
-        IList<string> SemanticDomains,
-        string Morphology,
-        List<string> SubItemIds
-    );
-
-    // Internal record for storing sense data
-    private record SenseRecord(string SenseId, List<GlossEntry> Glosses, string Definition);
 }

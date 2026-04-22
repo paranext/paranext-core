@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.EnhancedResources;
+using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
@@ -29,6 +30,12 @@ namespace TestParanextDataProvider.EnhancedResources;
 [ExcludeFromCodeCoverage]
 internal class DictionaryEntryTests
 {
+    [SetUp]
+    public void SetUp() => DictionaryFixtures.ApplyDefaults();
+
+    [TearDown]
+    public void TearDown() => DictionaryFixtures.Clear();
+
     #region Acceptance Tests
 
     // =========================================================================

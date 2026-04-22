@@ -25,13 +25,18 @@ internal static class SourceLanguageSearchService
     private static readonly Regex s_trailingNotation = new(@":\d+$", RegexOptions.Compiled);
 
     // Flag to control marble data availability (for testing).
-    // Defaults to true when built-in lexicon data is present.
+    // Defaults to true so built-in lexicon behavior remains the norm in tests.
     private static bool s_haveMarbleData = true;
 
-    // Built-in lexicon data for testing. Maps search term -> list of LexiconEntry.
-    // In production, this would be populated from MarbleDataAccess loaded data.
-    private static readonly Dictionary<string, List<LexiconEntry>> s_lexicon =
-        BuildDefaultLexicon();
+    // Test-fixture injection seam (N3: patterns.csharp.testScaffoldingLocation).
+    // Tests populate this from SourceLanguageSearchFixtures in [SetUp] and clear it in [TearDown].
+    internal static Dictionary<string, List<LexiconEntry>>? LexiconOverride { get; set; }
+
+    private static Dictionary<string, List<LexiconEntry>> Lexicon =>
+        LexiconOverride ?? s_emptyLexicon;
+
+    private static readonly Dictionary<string, List<LexiconEntry>> s_emptyLexicon =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Executes the full source language search pipeline.
@@ -154,8 +159,8 @@ internal static class SourceLanguageSearchService
     /// </summary>
     private static List<LexiconEntry> FindMatchingEntries(string searchText)
     {
-        // s_lexicon uses OrdinalIgnoreCase comparer, so TryGetValue is case-insensitive
-        return s_lexicon.TryGetValue(searchText, out var entries) ? entries : [];
+        // The Lexicon accessor returns the OrdinalIgnoreCase dictionary supplied by tests.
+        return Lexicon.TryGetValue(searchText, out var entries) ? entries : [];
     }
 
     // === PORTED FROM PT9 ===
@@ -188,81 +193,11 @@ internal static class SourceLanguageSearchService
         );
 
     /// <summary>
-    /// Sets marble data availability for testing.
+    /// Sets marble data availability for testing. This is an injection seam, not fixture
+    /// data — tests toggle it to exercise the FAILED_PRECONDITION branch.
     /// </summary>
     internal static void SetHaveMarbleData(bool value)
     {
         s_haveMarbleData = value;
     }
-
-    /// <summary>
-    /// Resets service state for testing.
-    /// </summary>
-    internal static void ResetForTesting()
-    {
-        s_haveMarbleData = true;
-    }
-
-    // === NEW IN PT10 ===
-    // Reason: Built-in test data for Classic TDD without real marble packages.
-    // Maps to: CAP-012, Infrastructure
-    private static Dictionary<string, List<LexiconEntry>> BuildDefaultLexicon()
-    {
-        var lexicon = new Dictionary<string, List<LexiconEntry>>(StringComparer.OrdinalIgnoreCase);
-
-        // "logos" - Greek word appearing in multiple NT books
-        lexicon["logos"] =
-        [
-            new LexiconEntry(
-                Lemma: "\u03bb\u03cc\u03b3\u03bf\u03c2",
-                Translit: "logos",
-                StrongNumber: "G3056",
-                Gloss: "word, message, reason",
-                PartOfSpeech: "Noun",
-                Occurrences:
-                [
-                    new VerseRef(43, 1, 1), // John 1:1
-                    new VerseRef(43, 1, 14), // John 1:14
-                    new VerseRef(66, 19, 13), // Revelation 19:13
-                    new VerseRef(40, 13, 19), // Matthew 13:19
-                    new VerseRef(41, 4, 14), // Mark 4:14
-                    new VerseRef(42, 8, 11), // Luke 8:11
-                    new VerseRef(44, 6, 4), // Acts 6:4
-                ]
-            ),
-        ];
-
-        // "agape" - Greek word for love
-        lexicon["agape"] =
-        [
-            new LexiconEntry(
-                Lemma: "\u03b1\u0313\u03b3\u03ac\u03c0\u03b7",
-                Translit: "agape",
-                StrongNumber: "G0026",
-                Gloss: "love",
-                PartOfSpeech: "Noun",
-                Occurrences:
-                [
-                    new VerseRef(46, 13, 1), // 1 Corinthians 13:1
-                    new VerseRef(46, 13, 13), // 1 Corinthians 13:13
-                    new VerseRef(48, 5, 22), // Galatians 5:22
-                    new VerseRef(62, 4, 8), // 1 John 4:8
-                ]
-            ),
-        ];
-
-        return lexicon;
-    }
-
-    /// <summary>
-    /// Internal lexicon entry record for test data.
-    /// </summary>
-    private record LexiconEntry(
-        string Lemma,
-        string Translit,
-        string StrongNumber,
-        string Gloss,
-        string PartOfSpeech,
-        IList<VerseRef> Occurrences
-    );
 }

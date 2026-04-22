@@ -302,21 +302,27 @@ namespace TestParanextDataProvider.EnhancedResources
         [Property("BehaviorId", "BHV-350")]
         [Property("ScenarioId", "TS-068")]
         [Description(
-            "INV-C11: MarbleDataAccessService singleton returns same instance across accesses"
+            "INV-C11: Each EnhancedResourceFactory owns a single MarbleDataAccessService instance"
         )]
-        public void MarbleDataAccessService_Default_ReturnsSameInstance()
+        public void MarbleDataAccessService_PerFactory_ReturnsSameInstance()
         {
-            // Act: Access the singleton multiple times
-            var instance1 = MarbleDataAccessService.Default;
-            var instance2 = MarbleDataAccessService.Default;
+            // INV-C11 now anchored on factory-owned instance identity. The formerly-static
+            // Default/ResetForTesting singleton was removed because no production code relied
+            // on it; EnhancedResourceFactory constructor-injects the service (N3 cleanup,
+            // W5 in adr-review-3-backend.md).
+            var factory = new EnhancedResourceFactory(Client, ParatextProjects);
 
-            // Assert: MarbleDataAccess.Default is singleton
+            // Act: Access the factory-owned service multiple times
+            var instance1 = factory.DataAccessService;
+            var instance2 = factory.DataAccessService;
+
+            // Assert: factory exposes a single MarbleDataAccess across the application lifetime
             Assert.That(instance1, Is.Not.Null);
             Assert.That(instance2, Is.Not.Null);
             Assert.That(
                 ReferenceEquals(instance1, instance2),
                 Is.True,
-                "INV-C11: Default must return the same instance"
+                "INV-C11: factory.DataAccessService must return the same instance"
             );
         }
 

@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.EnhancedResources;
 using SIL.Scripture;
+using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
@@ -23,6 +24,12 @@ namespace TestParanextDataProvider.EnhancedResources;
 [ExcludeFromCodeCoverage]
 internal class EncyclopediaServiceTests
 {
+    [SetUp]
+    public void SetUp() => EncyclopediaFixtures.ApplyDefaults();
+
+    [TearDown]
+    public void TearDown() => EncyclopediaFixtures.Clear();
+
     #region Test Data Constants
 
     // V1 format XML - the "Camel, dromedary" entry from gm-008-encyclopedia-v1
