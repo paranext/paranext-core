@@ -264,6 +264,8 @@
       "%webView_platformScripture_tools%": "Tools",
       "%webView_punctuationInventory_title%": "Punctuation Inventory: {projectName}",
       "%webView_repeatedWordsInventory_title%": "Repeated Words Inventory: {projectName}",
+      "%webView_scope_selector_book%": "Book",
+      "%webView_scope_selector_chapter%": "Chapter",
       "%webView_scope_selector_choose_books%": "Choose books",
       "%webView_scope_selector_current_book%": "Current book",
       "%webView_scope_selector_current_chapter%": "Current chapter",
@@ -271,6 +273,7 @@
       "%webView_scope_selector_scope%": "Scope",
       "%webView_scope_selector_select_books%": "Select books",
       "%webView_scope_selector_selected_text%": "Selected text",
+      "%webView_scope_selector_verse%": "Verse",
       "%webview_checksSidePanel_checkTypeFilter_deselectAll%": "Deselect all",
       "%webview_checksSidePanel_checkTypeFilter_selectAll%": "Select all",
       "%webview_checksSidePanel_checkTypeFilter_setUp%": "Set up"
