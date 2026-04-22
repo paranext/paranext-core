@@ -1,16 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
+import type { ScrollGroupId } from 'platform-bible-utils';
 import {
-  ProjectMultiSelector,
   ProjectSelector,
-  ProjectSelectorProject,
+  type OpenProjectTab,
+  type ProjectPair,
+  type ProjectSelectorProject,
 } from '@/components/advanced/project-selector.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
-
-// Fixed reference so stories are deterministic: 2026-04-21T12:00Z.
-const NOW_MS = Date.UTC(2026, 3, 21, 12, 0, 0);
-const HOURS = 60 * 60 * 1000;
-const DAYS = 24 * HOURS;
 
 const sampleProjects: ProjectSelectorProject[] = [
   {
@@ -19,71 +16,13 @@ const sampleProjects: ProjectSelectorProject[] = [
     fullName: 'Hawaii Pidgin UX Test Project',
     language: 'Hawaii Creole English',
     languageCode: 'hwc-x-ux',
-    projectType: 'project',
-    isOpenedTab: true,
-    scrollGroup: 'B',
-    scrollGroupScrRef: 'MAT 3:16',
-    lastUpdated: NOW_MS - 2 * HOURS,
   },
   {
-    id: 'esvus16-a',
+    id: 'esvus16',
     shortName: 'ESVUS16',
     fullName: 'English Standard Version (US) 2016',
     language: 'English',
     languageCode: 'en-US',
-    projectType: 'project',
-    isOpenedTab: true,
-    scrollGroup: 'A',
-    scrollGroupScrRef: 'GEN 1:1',
-    lastUpdated: NOW_MS - 5 * DAYS,
-  },
-  {
-    id: 'esvus16-b',
-    shortName: 'ESVUS16',
-    fullName: 'English Standard Version (US) 2016',
-    language: 'English',
-    languageCode: 'en-US',
-    projectType: 'resource',
-    isOpenedTab: true,
-    scrollGroup: 'B',
-    scrollGroupScrRef: 'MAT 3:16',
-    lastUpdated: NOW_MS - 5 * DAYS,
-  },
-  {
-    id: 'esvus16-plus',
-    shortName: 'ESVUS16+',
-    fullName: 'English Standard Version (US) 2016 — Enhanced',
-    language: 'English',
-    languageCode: 'en-US',
-    projectType: 'resource',
-    lastUpdated: NOW_MS - 30 * DAYS,
-  },
-  {
-    id: 'tp1',
-    shortName: 'TP1',
-    fullName: 'Test Project 1',
-    language: 'English',
-    languageCode: 'en',
-    projectType: 'project',
-    lastUpdated: NOW_MS - 1 * HOURS,
-  },
-  {
-    id: 'heb-grk',
-    shortName: 'HEB/GRK',
-    fullName: 'Hebrew / Greek',
-    language: 'Hebrew / Greek',
-    languageCode: 'he/el',
-    projectType: 'resource',
-    lastUpdated: NOW_MS - 90 * DAYS,
-  },
-  {
-    id: 'schl1951',
-    shortName: 'SCHL1951',
-    fullName: 'Schlachter 1951',
-    language: 'German',
-    languageCode: 'de',
-    projectType: 'resource',
-    lastUpdated: NOW_MS - 365 * DAYS,
   },
   {
     id: 'esv16uk',
@@ -91,8 +30,27 @@ const sampleProjects: ProjectSelectorProject[] = [
     fullName: 'English Standard Version (UK) 2016',
     language: 'English',
     languageCode: 'en-GB',
-    projectType: 'project',
-    lastUpdated: NOW_MS - 12 * HOURS,
+  },
+  {
+    id: 'tp1',
+    shortName: 'TP1',
+    fullName: 'Test Project 1',
+    language: 'English',
+    languageCode: 'en',
+  },
+  {
+    id: 'heb-grk',
+    shortName: 'HEB/GRK',
+    fullName: 'Hebrew / Greek',
+    language: 'Hebrew / Greek',
+    languageCode: 'he/el',
+  },
+  {
+    id: 'schl1951',
+    shortName: 'SCHL1951',
+    fullName: 'Schlachter 1951',
+    language: 'German',
+    languageCode: 'de',
   },
   {
     id: 'web',
@@ -100,14 +58,31 @@ const sampleProjects: ProjectSelectorProject[] = [
     fullName: 'World English Bible',
     language: 'English',
     languageCode: 'en',
-    projectType: 'resource',
-    lastUpdated: NOW_MS - 14 * DAYS,
   },
 ];
 
-const plainProjects: ProjectSelectorProject[] = sampleProjects.map(
-  ({ id, shortName, fullName }) => ({ id, shortName, fullName }),
-);
+const sampleOpenTabs: OpenProjectTab[] = [
+  {
+    projectId: 'esvus16',
+    scrollGroupId: 0 as ScrollGroupId,
+    scrollGroupScrRefLabel: 'GEN 1:1',
+  },
+  {
+    projectId: 'esvus16',
+    scrollGroupId: 1 as ScrollGroupId,
+    scrollGroupScrRefLabel: 'MAT 3:16',
+  },
+  {
+    projectId: 'hpux',
+    scrollGroupId: 1 as ScrollGroupId,
+    scrollGroupScrRefLabel: 'MAT 3:16',
+  },
+  {
+    projectId: 'web',
+    scrollGroupId: 2 as ScrollGroupId,
+    scrollGroupScrRefLabel: 'JHN 1:1',
+  },
+];
 
 const meta: Meta<typeof ProjectSelector> = {
   title: 'Advanced/Project Selector',
@@ -122,29 +97,24 @@ const meta: Meta<typeof ProjectSelector> = {
       </ThemeProvider>
     ),
   ],
-  argTypes: {
-    buttonPlaceholder: { control: 'text' },
-    commandEmptyMessage: { control: 'text' },
-    groupHeading: { control: 'text' },
-    ariaLabel: { control: 'text' },
-    isDisabled: { control: 'boolean' },
-    onChangeProject: { action: 'project changed' },
-  },
 };
 
 export default meta;
 
 type Story = StoryObj<typeof ProjectSelector>;
 
-export const Default: Story = {
-  render: () => {
-    const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>('esvus16-a');
+// #region project (single)
 
+export const SingleProject: Story = {
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
     return (
       <ProjectSelector
+        mode="project"
         projects={sampleProjects}
-        selectedProjectId={selectedProjectId}
-        onChangeProject={setSelectedProjectId}
+        openTabs={sampleOpenTabs}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
         buttonPlaceholder="Select a project"
         ariaLabel="Project"
       />
@@ -154,49 +124,41 @@ export const Default: Story = {
     docs: {
       description: {
         story:
-          'Single-select with the full dataset. Projects in opened tabs are grouped under "Opened tabs"; the rest fall under "Other projects & resources". Hover a row to see the project tooltip. The filter icon (top right of the popover) switches grouping (including "Last updated" buckets) and toggles the "Display opened tabs" filter. Projects are always sorted alphabetically inside each group.',
+          'Single-select in `project` mode. One row per project; the chips on the right list every scroll group the project is currently open in (metadata only — the whole row is the click target). Rows for projects not open anywhere render in muted text. Selected rows float to the top of their section.',
       },
     },
   },
 };
 
-export const MinimalData: Story = {
-  render: () => {
-    const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
+// #endregion
 
+// #region project-multi
+
+export const MultiProject: Story = {
+  render: () => {
+    const [pairs, setPairs] = useState<ProjectPair[]>([
+      { projectId: 'esvus16', scrollGroupId: 0 as ScrollGroupId },
+      { projectId: 'esv16uk' },
+    ]);
+    const [openTabs, setOpenTabs] = useState(sampleOpenTabs);
     return (
       <ProjectSelector
-        projects={plainProjects}
-        selectedProjectId={selectedProjectId}
-        onChangeProject={setSelectedProjectId}
-        groupHeading="Projects and resources"
-        buttonPlaceholder="Select a project"
-        ariaLabel="Project"
-      />
-    );
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Only `id`/`shortName`/`fullName` supplied — no tooltip rows, no scroll-group letters, no "Opened tabs" group. Falls back to the `groupHeading` prop.',
-      },
-    },
-  },
-};
-
-export const NarrowPopover: Story = {
-  render: () => {
-    const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>('tp1');
-
-    return (
-      <ProjectSelector
+        mode="project-multi"
         projects={sampleProjects}
-        selectedProjectId={selectedProjectId}
-        onChangeProject={setSelectedProjectId}
-        popoverContentClassName="tw-w-[200px]"
-        buttonPlaceholder="Select a project"
-        ariaLabel="Project"
+        openTabs={openTabs}
+        selection={{ pairs }}
+        onChangeSelection={({ pairs: next }) => setPairs(next)}
+        onOpenProjectInGroup={(projectId, scrollGroupId) => {
+          setOpenTabs((tabs) =>
+            tabs.some(
+              (t) => t.projectId === projectId && t.scrollGroupId === scrollGroupId,
+            )
+              ? tabs
+              : [...tabs, { projectId, scrollGroupId }],
+          );
+        }}
+        buttonPlaceholder="Select projects"
+        ariaLabel="Projects"
       />
     );
   },
@@ -204,104 +166,113 @@ export const NarrowPopover: Story = {
     docs: {
       description: {
         story:
-          'Popover forced to 200px. The full-name column hides itself below the 240px container threshold — only the short name (+ scroll-group letter for opened tabs) is rendered.',
+          'Multi-select over `(projectId, scrollGroupId)` pairs. The same project open in two scroll groups renders as two rows, each independently selectable. Trigger label reads "N: short1 (A), short2 (B), ..." and truncates with ellipsis on overflow. Filter dropdown offers "Group by open tabs" and "Show selected only". Selected pairs whose tab is closed render with a struck chip and an "Open" button.',
       },
     },
   },
 };
+
+// #endregion
+
+// #region projectScrollGroup
+
+export const ScrollGroupBinding: Story = {
+  render: () => {
+    const [selection, setSelection] = useState<{
+      projectId?: string;
+      scrollGroupId?: ScrollGroupId;
+    }>({ projectId: 'esvus16', scrollGroupId: 1 as ScrollGroupId });
+    const [openTabs, setOpenTabs] = useState<OpenProjectTab[]>(sampleOpenTabs);
+
+    return (
+      <div className="tw-flex tw-flex-col tw-gap-2">
+        <ProjectSelector
+          mode="projectScrollGroup"
+          projects={sampleProjects}
+          openTabs={openTabs}
+          selection={selection}
+          onChangeSelection={setSelection}
+          onOpenProjectInGroup={(projectId, scrollGroupId) => {
+            setOpenTabs((tabs) =>
+              tabs.some(
+                (t) => t.projectId === projectId && t.scrollGroupId === scrollGroupId,
+              )
+                ? tabs
+                : [...tabs, { projectId, scrollGroupId }],
+            );
+          }}
+          buttonPlaceholder="Select a project + scroll group"
+          ariaLabel="Project with scroll group"
+        />
+        <button
+          type="button"
+          className="tw-rounded tw-border tw-px-2 tw-py-1 tw-text-xs"
+          onClick={() =>
+            setOpenTabs((tabs) =>
+              tabs.filter(
+                (t) =>
+                  !(
+                    t.projectId === selection.projectId &&
+                    t.scrollGroupId === selection.scrollGroupId
+                  ),
+              ),
+            )
+          }
+        >
+          Close tab for current selection (shows bound-but-closed synthetic row)
+        </button>
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'One row per `(project, open scroll group)` pair, plus one row per project not open anywhere. Clicking a not-open-project row calls `onOpenProjectInGroup(projectId, 0)` to open a tab in Group A and selects that pair. Use the button to close the currently-bound tab — a synthetic row appears with an outlined chip and `○` glyph; clicking it calls `onOpenProjectInGroup` again to reopen without changing selection.',
+      },
+    },
+  },
+};
+
+// #endregion
+
+// #region no projects
 
 export const NoProjects: Story = {
   render: () => {
-    const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
-
+    const [projectId, setProjectId] = useState<string | undefined>(undefined);
     return (
       <ProjectSelector
+        mode="project"
         projects={[]}
-        selectedProjectId={selectedProjectId}
-        onChangeProject={setSelectedProjectId}
+        openTabs={[]}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
         buttonPlaceholder="Select a project"
         commandEmptyMessage="No projects found"
         ariaLabel="Project"
       />
     );
   },
-  parameters: {
-    docs: {
-      description: {
-        story: 'Empty state.',
-      },
-    },
-  },
 };
+
+// #endregion
+
+// #region disabled
 
 export const Disabled: Story = {
   render: () => (
     <ProjectSelector
+      mode="project"
       projects={sampleProjects}
-      selectedProjectId="esvus16-a"
-      onChangeProject={() => {}}
+      openTabs={sampleOpenTabs}
+      selection={{ projectId: 'esvus16' }}
+      onChangeSelection={() => {}}
       buttonPlaceholder="Select a project"
       ariaLabel="Project"
       isDisabled
     />
   ),
-  parameters: {
-    docs: {
-      description: {
-        story: 'Disabled trigger.',
-      },
-    },
-  },
 };
 
-export const Multi: StoryObj<typeof ProjectMultiSelector> = {
-  render: () => {
-    const [selected, setSelected] = useState<readonly string[]>(['esvus16-a', 'esv16uk']);
-
-    return (
-      <ProjectMultiSelector
-        projects={sampleProjects}
-        selectedProjectIds={selected}
-        onChangeSelectedProjectIds={setSelected}
-        buttonPlaceholder="Select projects"
-        ariaLabel="Projects"
-        getSelectedText={(selectedProjects) => {
-          if (selectedProjects.length === 1) return selectedProjects[0].shortName;
-          const names = selectedProjects.map((p) => p.shortName).join(', ');
-          return `${selectedProjects.length.toString()} projects: ${names}`;
-        }}
-      />
-    );
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Multi-select variant with a chevrons-up-down trigger, "Select all" / "Clear all" controls, and the same tooltip / filter / grouping behavior. The trigger shows "N projects: name1, name2, ..." and truncates with ellipsis when it overflows the button width.',
-      },
-    },
-  },
-};
-
-export const MultiEmpty: StoryObj<typeof ProjectMultiSelector> = {
-  render: () => {
-    const [selected, setSelected] = useState<readonly string[]>([]);
-
-    return (
-      <ProjectMultiSelector
-        projects={sampleProjects}
-        selectedProjectIds={selected}
-        onChangeSelectedProjectIds={setSelected}
-        buttonPlaceholder="Select projects"
-        ariaLabel="Projects"
-      />
-    );
-  },
-  parameters: {
-    docs: {
-      description: {
-        story: 'Multi-select with nothing selected — trigger shows the placeholder.',
-      },
-    },
-  },
-};
+// #endregion

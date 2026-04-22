@@ -1,7 +1,9 @@
 import { Fragment, ReactNode, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
-import { Check, ChevronDown, ChevronsUpDown, Filter } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Filter } from 'lucide-react';
+import type { ScrollGroupId } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Z_INDEX_OVERLAY } from '@/components/z-index';
+import { Badge } from '@/components/shadcn-ui/badge';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import {
@@ -18,8 +20,6 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
@@ -29,191 +29,74 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
+import {
+  computeRows,
+  partitionAndSort,
+  type OpenProjectTab,
+  type ProjectMultiSelection,
+  type ProjectPair,
+  type ProjectRow,
+  type ProjectScrollGroupSelection,
+  type ProjectSelection,
+  type ProjectSelectorMode,
+  type ProjectSelectorProject,
+  type RowSection,
+} from './project-selector.rows';
 
-// #region Types
+export type {
+  OpenProjectTab,
+  ProjectMultiSelection,
+  ProjectPair,
+  ProjectRow,
+  ProjectScrollGroupSelection,
+  ProjectSelection,
+  ProjectSelectorMode,
+  ProjectSelectorProject,
+} from './project-selector.rows';
 
-/** Category used by the "By type" grouping in the project selector. */
-export type ProjectSelectorProjectType = 'project' | 'resource';
+// #region Localized strings
 
-/**
- * Grouping applied to the project selector's list. `none` renders a flat list. Projects are
- * always sorted alphabetically within each group.
- */
-export type ProjectSelectorGroupMode =
-  | 'none'
-  | 'bySelection'
-  | 'byType'
-  | 'byOpenedTabs'
-  | 'byLastUpdated';
-
-/** A single project entry rendered in the project selector. */
-export type ProjectSelectorProject = {
-  /** Unique project identifier. */
-  id: string;
-  /** Short project name, shown as the primary label. */
-  shortName: string;
-  /** Full project name, shown as a secondary label and in the tooltip. */
-  fullName: string;
-  /** Human-readable language name (e.g. "Hawaii Creole English"). Used in the tooltip. */
-  language?: string;
-  /** BCP-47-ish language code (e.g. "hwc-x-ux"). Used in the tooltip. */
-  languageCode?: string;
-  /** Whether the project is currently opened in a tab. Drives the "Opened tabs" grouping and filter. */
-  isOpenedTab?: boolean;
-  /** Category used by the "By type" grouping. */
-  projectType?: ProjectSelectorProjectType;
-  /**
-   * Short label of the scroll group the project is docked in (e.g. "A", "B"). Rendered on the
-   * right side of the row and in the tooltip.
-   */
-  scrollGroup?: string;
-  /** Current scripture reference of the scroll group, shown in the tooltip (e.g. "MAT 3:16"). */
-  scrollGroupScrRef?: string;
-  /**
-   * When the project was last updated — `Date`, millisecond timestamp, or ISO string. Used by the
-   * "Last updated" grouping to bucket projects by recency. Projects without a value fall into the
-   * "Unknown" bucket.
-   */
-  lastUpdated?: Date | number | string;
-};
-
-/** Optional labels surfaced by the project selector UI. */
 export type ProjectSelectorLocalizedStrings = {
   /** Placeholder for the popover's search input. Defaults to `"Search projects & resources"`. */
   searchPlaceholder?: string;
-  /** Accessible label for the filter/group icon button. Defaults to `"Group and filter"`. */
+  /** Accessible label for the filter menu icon button. Defaults to `"Filter"`. */
   filterAriaLabel?: string;
-  /** Section label for the grouping options. Defaults to `"Group"`. */
+  /** Filter menu: section heading for the grouping toggle. Defaults to `"Group"`. */
   groupSectionLabel?: string;
-  /** Section label for the filter options. Defaults to `"Filter"`. */
+  /** Filter menu: section heading for the filter toggles. Defaults to `"Filter"`. */
   filterSectionLabel?: string;
-  /** Group menu: "None" item (no grouping). Defaults to `"None"`. */
-  groupNone?: string;
-  /** Group menu: "By selection" item. Defaults to `"By selection"`. */
-  groupBySelection?: string;
-  /** Group menu: "By type" item. Defaults to `"By type"`. */
-  groupByType?: string;
-  /** Group menu: "By opened tabs" item. Defaults to `"By opened tabs"`. */
-  groupByOpenedTabs?: string;
-  /** Group menu: "Last updated" item. Defaults to `"Last updated"`. */
-  groupByLastUpdated?: string;
-  /** Filter toggle: "Display opened tabs". Defaults to `"Display opened tabs"`. */
-  filterDisplayOpenedTabs?: string;
-  /** Group heading for opened tabs. Defaults to `"Opened tabs"`. */
-  openedTabsGroupHeading?: string;
-  /** Group heading for the "Other projects & resources" group. Defaults to `"Other projects & resources"`. */
-  otherProjectsGroupHeading?: string;
-  /** Group heading for selected projects (used by "By selection"). Defaults to `"Selected"`. */
-  selectedGroupHeading?: string;
-  /** Group heading for unselected projects (used by "By selection"). Defaults to `"Not selected"`. */
-  unselectedGroupHeading?: string;
-  /** Group heading for the Projects group (used by "By type"). Defaults to `"Projects"`. */
-  projectsGroupHeading?: string;
-  /** Group heading for the Resources group (used by "By type"). Defaults to `"Resources"`. */
-  resourcesGroupHeading?: string;
-  /** "Last updated" bucket: within the past day. Defaults to `"Today"`. */
-  lastUpdatedTodayHeading?: string;
-  /** "Last updated" bucket: within the past 7 days. Defaults to `"This week"`. */
-  lastUpdatedThisWeekHeading?: string;
-  /** "Last updated" bucket: within the past 30 days. Defaults to `"This month"`. */
-  lastUpdatedThisMonthHeading?: string;
-  /** "Last updated" bucket: within the past 365 days. Defaults to `"This year"`. */
-  lastUpdatedThisYearHeading?: string;
-  /** "Last updated" bucket: older than 365 days. Defaults to `"Older"`. */
-  lastUpdatedOlderHeading?: string;
-  /** "Last updated" bucket: no update information available. Defaults to `"Unknown"`. */
-  lastUpdatedUnknownHeading?: string;
+  /** Filter menu: "By open tabs" item under the Group section. Defaults to `"By open tabs"`. */
+  filterGroupByOpenTabs?: string;
+  /** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
+  filterShowSelectedOnly?: string;
+  /** Section heading for the Open tabs section. Defaults to `"Open tabs"`. */
+  openTabsSectionHeading?: string;
+  /** Section heading for the Other projects section. Defaults to `"Other projects"`. */
+  otherProjectsSectionHeading?: string;
+  /**
+   * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
+   * Defaults to `"Bound to {group} · not currently open"`.
+   */
+  boundButClosedTooltip?: string;
+  /** Label of the "Open" button shown on bound-but-closed rows. Defaults to `"Open"`. */
+  openButtonLabel?: string;
   /** Multi-select: "Select all" button. Defaults to `"Select all"`. */
   selectAll?: string;
   /** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
   clearAll?: string;
 };
 
-type CommonProjectSelectorProps = {
-  /** Projects to choose from. */
-  projects: readonly ProjectSelectorProject[];
-  /** Text shown on the trigger when no project is selected. */
-  buttonPlaceholder?: string;
-  /** Message shown when the user's search yields no matching projects. */
-  commandEmptyMessage?: string;
-  /** Accessible label for the trigger button. */
-  ariaLabel?: string;
-  /** Variant of the trigger button. Defaults to `outline`. */
-  buttonVariant?: ButtonProps['variant'];
-  /** Additional css classes for the trigger button. */
-  buttonClassName?: string;
-  /** Additional css classes for the popover content. */
-  popoverContentClassName?: string;
-  /** Inline styles for the popover content (useful for z-index overrides). */
-  popoverContentStyle?: CSSProperties;
-  /** Popover alignment. Defaults to `start`. */
-  alignDropDown?: 'start' | 'center' | 'end';
-  /** If true, the trigger is disabled. */
-  isDisabled?: boolean;
-  /**
-   * Fallback heading used by the "None" group mode. Ignored by the other grouping modes, which
-   * use their own headings from `localizedStrings`.
-   */
-  groupHeading?: string;
-  /** Optional localized strings. Each property has a reasonable English default. */
-  localizedStrings?: ProjectSelectorLocalizedStrings;
-  /** Initial group mode. Defaults to `"byOpenedTabs"`. */
-  defaultGroupMode?: ProjectSelectorGroupMode;
-  /**
-   * Initial value of the "Display opened tabs" filter. When `false`, projects with
-   * `isOpenedTab=true` are hidden from the list. Defaults to `true`.
-   */
-  defaultDisplayOpenedTabs?: boolean;
-};
-
-export type ProjectSelectorProps = CommonProjectSelectorProps & {
-  /** Id of the currently selected project, if any. */
-  selectedProjectId?: string;
-  /** Called with the newly selected project's id. */
-  onChangeProject: (projectId: string) => void;
-};
-
-export type ProjectMultiSelectorProps = CommonProjectSelectorProps & {
-  /** Ids of the currently selected projects. */
-  selectedProjectIds: readonly string[];
-  /** Called with the next full list of selected ids. */
-  onChangeSelectedProjectIds: (projectIds: string[]) => void;
-  /**
-   * Text shown on the trigger when at least one project is selected. Receives the list of
-   * selected projects so the caller can produce e.g. "3 projects: WEB, ASV, KJV" or just the
-   * short names joined. The default renders "N projects: name1, name2, ..." and relies on the
-   * trigger's ellipsis overflow to truncate.
-   */
-  getSelectedText?: (selected: readonly ProjectSelectorProject[]) => string;
-};
-
-// #endregion
-
-// #region Defaults & helpers
-
 const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   searchPlaceholder: 'Search projects & resources',
-  filterAriaLabel: 'Group and filter',
+  filterAriaLabel: 'Filter',
   groupSectionLabel: 'Group',
   filterSectionLabel: 'Filter',
-  groupNone: 'None',
-  groupBySelection: 'By selection',
-  groupByType: 'By type',
-  groupByOpenedTabs: 'By opened tabs',
-  groupByLastUpdated: 'Last updated',
-  filterDisplayOpenedTabs: 'Display opened tabs',
-  openedTabsGroupHeading: 'Opened tabs',
-  otherProjectsGroupHeading: 'Other projects & resources',
-  selectedGroupHeading: 'Selected',
-  unselectedGroupHeading: 'Not selected',
-  projectsGroupHeading: 'Projects',
-  resourcesGroupHeading: 'Resources',
-  lastUpdatedTodayHeading: 'Today',
-  lastUpdatedThisWeekHeading: 'This week',
-  lastUpdatedThisMonthHeading: 'This month',
-  lastUpdatedThisYearHeading: 'This year',
-  lastUpdatedOlderHeading: 'Older',
-  lastUpdatedUnknownHeading: 'Unknown',
+  filterGroupByOpenTabs: 'By open tabs',
+  filterShowSelectedOnly: 'Show selected only',
+  openTabsSectionHeading: 'Open tabs',
+  otherProjectsSectionHeading: 'Other projects',
+  boundButClosedTooltip: 'Bound to {group} · not currently open',
+  openButtonLabel: 'Open',
   selectAll: 'Select all',
   clearAll: 'Clear all',
 };
@@ -224,258 +107,197 @@ function resolveStrings(
   return { ...DEFAULT_STRINGS, ...partial };
 }
 
-function projectMatchesQuery(project: ProjectSelectorProject, query: string): boolean {
-  if (!query) return true;
-  const needle = query.toLowerCase();
-  return (
-    project.shortName.toLowerCase().includes(needle) ||
-    project.fullName.toLowerCase().includes(needle) ||
-    (project.language ?? '').toLowerCase().includes(needle) ||
-    (project.languageCode ?? '').toLowerCase().includes(needle)
-  );
-}
+// #endregion
 
-function toMillis(value: Date | number | string | undefined): number | undefined {
-  if (value === undefined) return undefined;
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === 'number') return value;
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? undefined : parsed;
-}
+// #region Scroll group labels
 
-function compareAlphabetically(a: ProjectSelectorProject, b: ProjectSelectorProject): number {
-  return a.shortName.localeCompare(b.shortName, undefined, { sensitivity: 'base' });
-}
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-type LastUpdatedBucket = 'today' | 'thisWeek' | 'thisMonth' | 'thisYear' | 'older' | 'unknown';
-
-function lastUpdatedBucket(value: Date | number | string | undefined): LastUpdatedBucket {
-  const ms = toMillis(value);
-  if (ms === undefined) return 'unknown';
-  const ageDays = (Date.now() - ms) / DAY_MS;
-  if (ageDays < 1) return 'today';
-  if (ageDays < 7) return 'thisWeek';
-  if (ageDays < 30) return 'thisMonth';
-  if (ageDays < 365) return 'thisYear';
-  return 'older';
+/** Map 0→A, 1→B, … 25→Z. */
+export function scrollGroupLetter(id: ScrollGroupId): string {
+  if (id >= 0 && id <= 25) return String.fromCharCode('A'.charCodeAt(0) + id);
+  return String(id);
 }
 
 // #endregion
 
-// #region Group
+// #region Common props
 
-type Group = {
-  heading?: string;
-  projects: ProjectSelectorProject[];
+type CommonProps = {
+  projects: readonly ProjectSelectorProject[];
+  openTabs: readonly OpenProjectTab[];
+  buttonPlaceholder?: string;
+  commandEmptyMessage?: string;
+  ariaLabel?: string;
+  buttonVariant?: ButtonProps['variant'];
+  buttonClassName?: string;
+  popoverContentClassName?: string;
+  popoverContentStyle?: CSSProperties;
+  alignDropDown?: 'start' | 'center' | 'end';
+  isDisabled?: boolean;
+  localizedStrings?: ProjectSelectorLocalizedStrings;
+  /** Initial state of the "Group by open tabs" toggle. Defaults to `true`. */
+  defaultGroupByOpenTabs?: boolean;
 };
 
-function groupProjects(
-  projects: readonly ProjectSelectorProject[],
-  groupMode: ProjectSelectorGroupMode,
-  isSelected: (id: string) => boolean,
-  strings: Required<ProjectSelectorLocalizedStrings>,
-  fallbackGroupHeading: string | undefined,
-): Group[] {
-  const sorted = [...projects].sort(compareAlphabetically);
-
-  switch (groupMode) {
-    case 'none': {
-      return [{ heading: fallbackGroupHeading, projects: sorted }];
-    }
-
-    case 'bySelection': {
-      const selected: ProjectSelectorProject[] = [];
-      const unselected: ProjectSelectorProject[] = [];
-      sorted.forEach((p) => (isSelected(p.id) ? selected.push(p) : unselected.push(p)));
-      return [
-        { heading: strings.selectedGroupHeading, projects: selected },
-        { heading: strings.unselectedGroupHeading, projects: unselected },
-      ].filter((g) => g.projects.length > 0);
-    }
-
-    case 'byType': {
-      const projectsGroup: ProjectSelectorProject[] = [];
-      const resourcesGroup: ProjectSelectorProject[] = [];
-      const otherGroup: ProjectSelectorProject[] = [];
-      sorted.forEach((p) => {
-        if (p.projectType === 'project') projectsGroup.push(p);
-        else if (p.projectType === 'resource') resourcesGroup.push(p);
-        else otherGroup.push(p);
-      });
-      return [
-        { heading: strings.projectsGroupHeading, projects: projectsGroup },
-        { heading: strings.resourcesGroupHeading, projects: resourcesGroup },
-        { heading: strings.otherProjectsGroupHeading, projects: otherGroup },
-      ].filter((g) => g.projects.length > 0);
-    }
-
-    case 'byOpenedTabs': {
-      const opened: ProjectSelectorProject[] = [];
-      const other: ProjectSelectorProject[] = [];
-      sorted.forEach((p) => (p.isOpenedTab ? opened.push(p) : other.push(p)));
-      return [
-        { heading: strings.openedTabsGroupHeading, projects: opened },
-        { heading: strings.otherProjectsGroupHeading, projects: other },
-      ].filter((g) => g.projects.length > 0);
-    }
-
-    case 'byLastUpdated': {
-      const buckets: Record<LastUpdatedBucket, ProjectSelectorProject[]> = {
-        today: [],
-        thisWeek: [],
-        thisMonth: [],
-        thisYear: [],
-        older: [],
-        unknown: [],
-      };
-      sorted.forEach((p) => buckets[lastUpdatedBucket(p.lastUpdated)].push(p));
-      return [
-        { heading: strings.lastUpdatedTodayHeading, projects: buckets.today },
-        { heading: strings.lastUpdatedThisWeekHeading, projects: buckets.thisWeek },
-        { heading: strings.lastUpdatedThisMonthHeading, projects: buckets.thisMonth },
-        { heading: strings.lastUpdatedThisYearHeading, projects: buckets.thisYear },
-        { heading: strings.lastUpdatedOlderHeading, projects: buckets.older },
-        { heading: strings.lastUpdatedUnknownHeading, projects: buckets.unknown },
-      ].filter((g) => g.projects.length > 0);
-    }
-
-    default:
-      return [{ heading: fallbackGroupHeading, projects: sorted }];
-  }
-}
+export type ProjectSelectorProps =
+  | (CommonProps & {
+      mode: 'project';
+      selection: ProjectSelection;
+      onChangeSelection: (selection: { projectId: string }) => void;
+    })
+  | (CommonProps & {
+      mode: 'project-multi';
+      selection: ProjectMultiSelection;
+      onChangeSelection: (selection: { pairs: ProjectPair[] }) => void;
+      /**
+       * Called when the user clicks the "Open" button on a bound-but-closed row (or the row
+       * itself). The caller is expected to open a tab via `papi.webViews.openWebView(...)`.
+       */
+      onOpenProjectInGroup?: (projectId: string, scrollGroupId: ScrollGroupId) => void;
+      /**
+       * Optional custom trigger label when at least one pair is selected. Receives the list of
+       * selected `(project, scrollGroupId)` tuples. Defaults to `"N: short1 (A), short2 (B),
+       * ..."`.
+       */
+      getSelectedText?: (
+        selected: ReadonlyArray<{
+          project: ProjectSelectorProject;
+          scrollGroupId?: ScrollGroupId;
+        }>,
+      ) => string;
+    })
+  | (CommonProps & {
+      mode: 'projectScrollGroup';
+      selection: ProjectScrollGroupSelection;
+      onChangeSelection: (selection: { projectId: string; scrollGroupId: ScrollGroupId }) => void;
+      /**
+       * Called when the user picks a not-open-project row OR clicks the "Open" button on a
+       * bound-but-closed row. The caller is expected to open a tab via
+       * `papi.webViews.openWebView(...)`.
+       */
+      onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
+    });
 
 // #endregion
 
-// #region Group & filter menu
+// #region Chip + Open button
 
-type GroupFilterMenuProps = {
-  groupMode: ProjectSelectorGroupMode;
-  onChangeGroupMode: (mode: ProjectSelectorGroupMode) => void;
-  displayOpenedTabs: boolean;
-  onChangeDisplayOpenedTabs: (value: boolean) => void;
-  strings: Required<ProjectSelectorLocalizedStrings>;
+const DIAGONAL_STRIKE_STYLE: CSSProperties = {
+  backgroundImage:
+    'linear-gradient(to top right, transparent calc(50% - 1px), currentColor calc(50% - 0.5px), currentColor calc(50% + 0.5px), transparent calc(50% + 1px))',
 };
 
-type GroupOption = {
-  mode: ProjectSelectorGroupMode;
-  labelKey: keyof Required<ProjectSelectorLocalizedStrings>;
+type ScrollGroupChipProps = {
+  scrollGroupId: ScrollGroupId;
+  isBoundButClosed: boolean;
 };
 
-const GROUP_OPTIONS: readonly GroupOption[] = [
-  { mode: 'none', labelKey: 'groupNone' },
-  { mode: 'bySelection', labelKey: 'groupBySelection' },
-  { mode: 'byType', labelKey: 'groupByType' },
-  { mode: 'byOpenedTabs', labelKey: 'groupByOpenedTabs' },
-  { mode: 'byLastUpdated', labelKey: 'groupByLastUpdated' },
-];
-
-function GroupFilterMenu({
-  groupMode,
-  onChangeGroupMode,
-  displayOpenedTabs,
-  onChangeDisplayOpenedTabs,
-  strings,
-}: GroupFilterMenuProps) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="tw-h-8 tw-w-8 tw-shrink-0 tw-p-0"
-          aria-label={strings.filterAriaLabel}
-          title={strings.filterAriaLabel}
-          // Prevent focus-stealing from the CommandInput
-          onMouseDown={(event: MouseEvent) => event.preventDefault()}
-        >
-          <Filter className="tw-h-4 tw-w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="tw-w-48"
-        style={{ zIndex: Z_INDEX_OVERLAY }}
+function ScrollGroupChip({ scrollGroupId, isBoundButClosed }: ScrollGroupChipProps) {
+  const letter = scrollGroupLetter(scrollGroupId);
+  if (isBoundButClosed) {
+    return (
+      <Badge
+        variant="outline"
+        className="tw-relative tw-text-muted-foreground"
+        style={DIAGONAL_STRIKE_STYLE}
       >
-        <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={groupMode}
-          onValueChange={(value) => onChangeGroupMode(value as ProjectSelectorGroupMode)}
-        >
-          {GROUP_OPTIONS.map((option) => (
-            <DropdownMenuRadioItem
-              key={option.mode}
-              value={option.mode}
-              onSelect={(event) => event.preventDefault()}
-            >
-              {strings[option.labelKey]}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>{strings.filterSectionLabel}</DropdownMenuLabel>
-        <DropdownMenuCheckboxItem
-          checked={displayOpenedTabs}
-          onCheckedChange={onChangeDisplayOpenedTabs}
-          onSelect={(event) => event.preventDefault()}
-        >
-          {strings.filterDisplayOpenedTabs}
-        </DropdownMenuCheckboxItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+        {letter}
+      </Badge>
+    );
+  }
+  return <Badge variant="secondary">{letter}</Badge>;
 }
 
 // #endregion
 
-// #region Row with tooltip
+// #region Row rendering
 
-type ProjectRowProps = {
-  project: ProjectSelectorProject;
-  isSelected: boolean;
-  onSelect: () => void;
-  /** Rendered on the left of the row. Checkmark for single/multi selection indicator. */
-  leftSlot: ReactNode;
+type RowRenderProps = {
+  row: ProjectRow;
+  mode: ProjectSelectorMode;
+  strings: Required<ProjectSelectorLocalizedStrings>;
+  onClick: (row: ProjectRow) => void;
+  onOpen: ((row: ProjectRow) => void) | undefined;
 };
 
-function ProjectRow({ project, isSelected, onSelect, leftSlot }: ProjectRowProps) {
-  const tooltipHasLanguage = Boolean(project.language || project.languageCode);
-  const tooltipHasScrollGroup = Boolean(project.scrollGroup || project.scrollGroupScrRef);
+function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps) {
+  const tooltipHasLanguage = Boolean(row.language || row.languageCode);
 
-  // Row layout:
-  //   [left slot] [shortName fixed w-16] [fullName flex-1, hidden under 280px] [scrollGroup at right]
-  // - The id is prefixed into `value` so two projects with the same shortName (e.g. the same
-  //   project opened in two tabs) are treated as distinct by cmdk.
-  // - shortName: fixed narrow width so columns align across rows.
-  // - fullName: takes remaining flex space, left-aligned, truncating with ellipsis.
-  // - scrollGroup: right-aligned via ms-auto; ps-4 gives breathing room before the letter.
-  // - pe-4 on the row gives 16px of space before the popover's right edge.
-  const rowContent = (
+  const leftCheck = (
+    <Check className={cn('tw-h-4 tw-w-4', row.isSelected ? 'tw-opacity-100' : 'tw-opacity-0')} />
+  );
+
+  // Right-side content: chip(s) and, for bound-but-closed rows, an "Open" button.
+  let rightContent: ReactNode = null;
+  if (mode === 'project') {
+    if (row.openGroups.length > 0) {
+      rightContent = (
+        <span className="tw-ms-auto tw-flex tw-shrink-0 tw-gap-1">
+          {row.openGroups.map((g) => (
+            <Badge key={g} variant="secondary">
+              {scrollGroupLetter(g)}
+            </Badge>
+          ))}
+        </span>
+      );
+    }
+  } else if (row.scrollGroupId !== undefined) {
+    rightContent = (
+      <span className="tw-ms-auto tw-flex tw-shrink-0 tw-items-center tw-gap-2">
+        <ScrollGroupChip
+          scrollGroupId={row.scrollGroupId}
+          isBoundButClosed={row.isBoundButClosed}
+        />
+        {row.isBoundButClosed && onOpen && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="tw-h-6 tw-gap-1 tw-px-2 tw-text-xs"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen(row);
+            }}
+            onMouseDown={(event: MouseEvent) => event.stopPropagation()}
+            aria-label={strings.openButtonLabel}
+            title={strings.openButtonLabel}
+          >
+            <ArrowRight className="tw-h-3 tw-w-3" />
+            {strings.openButtonLabel}
+          </Button>
+        )}
+      </span>
+    );
+  }
+
+  const rowNode = (
     <CommandItem
-      value={`${project.id} ${project.shortName} ${project.fullName} ${project.language ?? ''} ${project.languageCode ?? ''}`}
-      onSelect={onSelect}
+      value={`${row.rowKey} ${row.shortName} ${row.fullName} ${row.language ?? ''} ${row.languageCode ?? ''}`}
+      onSelect={() => onClick(row)}
       className="tw-flex tw-items-center tw-gap-2 tw-pe-4 tw-@container"
-      data-selected={isSelected}
+      data-selected={row.isSelected}
     >
       <span className="tw-flex tw-h-4 tw-w-4 tw-shrink-0 tw-items-center tw-justify-center">
-        {leftSlot}
+        {leftCheck}
       </span>
-      <span className="tw-w-16 tw-shrink-0 tw-truncate">{project.shortName}</span>
-      <span className="tw-hidden tw-min-w-0 tw-flex-1 tw-truncate tw-text-start tw-text-muted-foreground @[280px]:tw-block">
-        {project.fullName}
+      <span className="tw-w-16 tw-shrink-0 tw-truncate">{row.shortName}</span>
+      {/* Short name + check + chip + padding consume ~150px, so this threshold gives the full
+          name column ~100px before it collapses. */}
+      <span className="tw-hidden tw-min-w-0 tw-flex-1 tw-truncate tw-text-start tw-text-muted-foreground @[250px]:tw-block">
+        {row.fullName}
       </span>
-      {project.scrollGroup && (
-        <span className="tw-ms-auto tw-ps-4 tw-shrink-0 tw-text-xs tw-text-muted-foreground">
-          {project.scrollGroup}
-        </span>
-      )}
+      {rightContent}
     </CommandItem>
   );
 
+  const letter = row.scrollGroupId !== undefined ? scrollGroupLetter(row.scrollGroupId) : undefined;
+
+  const tooltipBoundBut =
+    row.isBoundButClosed && letter
+      ? strings.boundButClosedTooltip.replace('{group}', letter)
+      : undefined;
+
   return (
-    <Tooltip delayDuration={150}>
-      <TooltipTrigger asChild>{rowContent}</TooltipTrigger>
+    <Tooltip delayDuration={200}>
+      <TooltipTrigger asChild>{rowNode}</TooltipTrigger>
       <TooltipContent
         side="right"
         align="start"
@@ -484,23 +306,22 @@ function ProjectRow({ project, isSelected, onSelect, leftSlot }: ProjectRowProps
         className="tw-max-w-xs"
         style={{ zIndex: Z_INDEX_OVERLAY }}
       >
-        <div className="tw-font-semibold">{project.fullName}</div>
+        <div className="tw-font-semibold">{row.fullName}</div>
         {tooltipHasLanguage && (
           <div className="tw-text-sm">
-            {project.language}
-            {project.languageCode && (
-              <span className="tw-text-muted-foreground"> ({project.languageCode})</span>
+            {row.language}
+            {row.languageCode && (
+              <span className="tw-text-muted-foreground"> ({row.languageCode})</span>
             )}
           </div>
         )}
-        {tooltipHasScrollGroup && (
+        {!row.isBoundButClosed && row.scrollGroupScrRefLabel && letter && (
           <div className="tw-text-sm">
-            {project.scrollGroupScrRef}
-            {project.scrollGroup && (
-              <span className="tw-text-muted-foreground"> · {project.scrollGroup}</span>
-            )}
+            {row.scrollGroupScrRefLabel}
+            <span className="tw-text-muted-foreground"> ({letter})</span>
           </div>
         )}
+        {tooltipBoundBut && <div className="tw-text-sm tw-italic">{tooltipBoundBut}</div>}
       </TooltipContent>
     </Tooltip>
   );
@@ -508,316 +329,442 @@ function ProjectRow({ project, isSelected, onSelect, leftSlot }: ProjectRowProps
 
 // #endregion
 
-// #region Popover body (shared by single + multi)
+// #region Filter menu
 
-type PopoverBodyProps = {
-  projects: readonly ProjectSelectorProject[];
-  isProjectSelected: (id: string) => boolean;
-  onSelectProject: (id: string) => void;
-  renderLeftSlot: (project: ProjectSelectorProject) => ReactNode;
-  commandEmptyMessage?: string;
+type FilterMenuProps = {
+  groupByOpenTabs: boolean;
+  onChangeGroupByOpenTabs: (value: boolean) => void;
+  showSelectedOnly: boolean | undefined;
+  onChangeShowSelectedOnly: ((value: boolean) => void) | undefined;
   strings: Required<ProjectSelectorLocalizedStrings>;
-  groupHeading?: string;
-  defaultGroupMode: ProjectSelectorGroupMode;
-  defaultDisplayOpenedTabs: boolean;
-  /**
-   * Extra toolbar rendered between the search row and the list (used by multi-select). Receives
-   * the ids of the currently visible projects so actions like "Select all" can target them.
-   */
-  renderToolbar?: (args: { visibleProjectIds: readonly string[] }) => ReactNode;
 };
 
-function PopoverBody({
-  projects,
-  isProjectSelected,
-  onSelectProject,
-  renderLeftSlot,
-  commandEmptyMessage,
+function FilterMenu({
+  groupByOpenTabs,
+  onChangeGroupByOpenTabs,
+  showSelectedOnly,
+  onChangeShowSelectedOnly,
   strings,
-  groupHeading,
-  defaultGroupMode,
-  defaultDisplayOpenedTabs,
-  renderToolbar,
-}: PopoverBodyProps) {
-  const [query, setQuery] = useState('');
-  const [groupMode, setGroupMode] = useState<ProjectSelectorGroupMode>(defaultGroupMode);
-  const [displayOpenedTabs, setDisplayOpenedTabs] = useState(defaultDisplayOpenedTabs);
-
-  const groups = useMemo(() => {
-    const matching = projects.filter(
-      (p) => (displayOpenedTabs || !p.isOpenedTab) && projectMatchesQuery(p, query),
-    );
-    return groupProjects(matching, groupMode, isProjectSelected, strings, groupHeading);
-  }, [projects, query, groupMode, displayOpenedTabs, isProjectSelected, strings, groupHeading]);
-
-  const visibleProjectIds = useMemo(
-    () => groups.flatMap((group) => group.projects.map((project) => project.id)),
-    [groups],
-  );
+}: FilterMenuProps) {
+  // A filter (as opposed to grouping) is "active" when at least one filter toggle is on.
+  // Today that's just `showSelectedOnly`; when we add more, OR them here.
+  const isFilterActive = Boolean(showSelectedOnly);
 
   return (
-    <TooltipProvider delayDuration={150}>
-      <Command shouldFilter={false}>
-        <div className="tw-flex tw-items-center tw-border-b tw-pe-4">
-          <div className="tw-flex-1">
-            <CommandInput
-              value={query}
-              onValueChange={setQuery}
-              placeholder={strings.searchPlaceholder}
-              className="tw-border-0"
-            />
-          </div>
-          <GroupFilterMenu
-            groupMode={groupMode}
-            onChangeGroupMode={setGroupMode}
-            displayOpenedTabs={displayOpenedTabs}
-            onChangeDisplayOpenedTabs={setDisplayOpenedTabs}
-            strings={strings}
-          />
-        </div>
-        {renderToolbar?.({ visibleProjectIds })}
-        <CommandList>
-          <CommandEmpty>{commandEmptyMessage ?? 'No projects found'}</CommandEmpty>
-          {groups.map((group, index) => (
-            <Fragment key={group.heading ?? `group-${index}`}>
-              <CommandGroup heading={group.heading}>
-                {group.projects.map((project) => (
-                  <ProjectRow
-                    key={project.id}
-                    project={project}
-                    isSelected={isProjectSelected(project.id)}
-                    onSelect={() => onSelectProject(project.id)}
-                    leftSlot={renderLeftSlot(project)}
-                  />
-                ))}
-              </CommandGroup>
-              {index < groups.length - 1 && <CommandSeparator />}
-            </Fragment>
-          ))}
-        </CommandList>
-      </Command>
-    </TooltipProvider>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            'tw-h-8 tw-w-8 tw-shrink-0 tw-p-0',
+            // Match shadcn Toggle's "on" styling so the funnel reads as a toggle-group button
+            // that's currently pressed when a filter is active.
+            isFilterActive &&
+              'tw-bg-accent tw-text-accent-foreground hover:tw-bg-accent/80 data-[state=open]:tw-bg-accent',
+          )}
+          aria-label={strings.filterAriaLabel}
+          aria-pressed={isFilterActive}
+          title={strings.filterAriaLabel}
+          onMouseDown={(event: MouseEvent) => event.preventDefault()}
+        >
+          <Filter className="tw-h-4 tw-w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="tw-w-56" style={{ zIndex: Z_INDEX_OVERLAY }}>
+        <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>
+        <DropdownMenuCheckboxItem
+          checked={groupByOpenTabs}
+          onCheckedChange={onChangeGroupByOpenTabs}
+          onSelect={(event) => event.preventDefault()}
+        >
+          {strings.filterGroupByOpenTabs}
+        </DropdownMenuCheckboxItem>
+        {onChangeShowSelectedOnly && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>{strings.filterSectionLabel}</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem
+              checked={Boolean(showSelectedOnly)}
+              onCheckedChange={onChangeShowSelectedOnly}
+              onSelect={(event) => event.preventDefault()}
+            >
+              {strings.filterShowSelectedOnly}
+            </DropdownMenuCheckboxItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 // #endregion
 
-// #region Single-select: ProjectSelector
+// #region Main component
 
 /**
- * Combo-box project picker. Single selection. The popover's list can be grouped and filtered via
- * the "Group and filter" menu; by default projects with `isOpenedTab=true` are rendered under
- * "Opened tabs" and the rest under "Other projects & resources". Projects are always sorted
- * alphabetically within each group.
+ * Combo-box project picker with three modes:
+ *
+ * - `project` — single-select, one row per project; chips list every open scroll group as metadata
+ *   (non-interactive, the whole row is the click target).
+ * - `project-multi` — multi-select over `(projectId, scrollGroupId)` pairs. Same project open in two
+ *   scroll groups renders as two independently-selectable rows. Projects not open anywhere render
+ *   as a single row with no chip.
+ * - `projectScrollGroup` — single-select of one `(projectId, scrollGroupId)` pair. Clicking a
+ *   not-open-project row selects the project in Group A and calls `onOpenProjectInGroup`.
+ *
+ * In both per-pair modes, a currently-selected pair whose tab is not open renders as a synthetic
+ * row with a diagonally-struck chip and an "Open" button.
  */
-export function ProjectSelector({
-  projects,
-  selectedProjectId,
-  onChangeProject,
-  groupHeading,
-  buttonPlaceholder,
-  commandEmptyMessage,
-  ariaLabel,
-  buttonVariant = 'outline',
-  buttonClassName,
-  popoverContentClassName,
-  popoverContentStyle,
-  alignDropDown = 'start',
-  isDisabled = false,
-  localizedStrings,
-  defaultGroupMode = 'byOpenedTabs',
-  defaultDisplayOpenedTabs = true,
-}: ProjectSelectorProps) {
+export function ProjectSelector(props: ProjectSelectorProps) {
   const [open, setOpen] = useState(false);
-  const strings = resolveStrings(localizedStrings);
+  const [query, setQuery] = useState('');
+  const [groupByOpenTabs, setGroupByOpenTabs] = useState(props.defaultGroupByOpenTabs ?? true);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
 
-  const selectedProject = useMemo(
-    () => projects.find((p) => p.id === selectedProjectId),
-    [projects, selectedProjectId],
+  const strings = resolveStrings(props.localizedStrings);
+
+  const rows = useMemo(() => {
+    if (props.mode === 'project') {
+      return computeRows({
+        mode: 'project',
+        projects: props.projects,
+        openTabs: props.openTabs,
+        selection: props.selection,
+      });
+    }
+    if (props.mode === 'project-multi') {
+      return computeRows({
+        mode: 'project-multi',
+        projects: props.projects,
+        openTabs: props.openTabs,
+        selection: props.selection,
+      });
+    }
+    return computeRows({
+      mode: 'projectScrollGroup',
+      projects: props.projects,
+      openTabs: props.openTabs,
+      selection: props.selection,
+    });
+  }, [props.mode, props.projects, props.openTabs, props.selection]);
+
+  const filteredRows = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    let result = rows;
+    if (needle) {
+      result = result.filter(
+        (r) =>
+          r.shortName.toLowerCase().includes(needle) ||
+          r.fullName.toLowerCase().includes(needle) ||
+          (r.language ?? '').toLowerCase().includes(needle) ||
+          (r.languageCode ?? '').toLowerCase().includes(needle),
+      );
+    }
+    if (props.mode === 'project-multi' && showSelectedOnly) {
+      result = result.filter((r) => r.isSelected);
+    }
+    return result;
+  }, [rows, query, props.mode, showSelectedOnly]);
+
+  const sections = useMemo(
+    () => partitionAndSort(filteredRows, groupByOpenTabs),
+    [filteredRows, groupByOpenTabs],
   );
 
-  const handleSelect = (id: string) => {
-    onChangeProject(id);
-    setOpen(false);
+  // Every (project, scrollGroupId) pair available for selection — independent of the current
+  // search query or "Show selected only" filter. Used by "Select all" in multi mode so the user
+  // can select the full catalog without first clearing the search box.
+  const allPairs = useMemo<ProjectPair[]>(() => {
+    if (props.mode !== 'project-multi') return [];
+    const result: ProjectPair[] = [];
+    props.projects.forEach((project) => {
+      const tabs = props.openTabs.filter((t) => t.projectId === project.id);
+      if (tabs.length === 0) {
+        result.push({ projectId: project.id });
+        return;
+      }
+      const seenGroups = new Set<ScrollGroupId>();
+      tabs.forEach((tab) => {
+        if (seenGroups.has(tab.scrollGroupId)) return;
+        seenGroups.add(tab.scrollGroupId);
+        result.push({ projectId: project.id, scrollGroupId: tab.scrollGroupId });
+      });
+    });
+    return result;
+  }, [props.mode, props.projects, props.openTabs]);
+
+  const handleOpenProjectInGroup = (row: ProjectRow) => {
+    if (row.scrollGroupId === undefined) return;
+    if (props.mode === 'projectScrollGroup') {
+      props.onOpenProjectInGroup(row.projectId, row.scrollGroupId);
+      return;
+    }
+    if (props.mode === 'project-multi' && props.onOpenProjectInGroup) {
+      props.onOpenProjectInGroup(row.projectId, row.scrollGroupId);
+    }
   };
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant={buttonVariant}
-          role="combobox"
-          aria-expanded={open}
-          aria-label={ariaLabel}
-          disabled={isDisabled}
-          className={cn(
-            'tw-flex tw-w-[200px] tw-items-center tw-justify-between tw-overflow-hidden',
-            buttonClassName,
-          )}
-        >
-          <span className="tw-min-w-0 tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-text-start">
-            {selectedProject ? selectedProject.shortName : (buttonPlaceholder ?? '')}
-          </span>
-          <ChevronDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align={alignDropDown}
-        collisionPadding={16}
-        className={cn(
-          'tw-w-[500px] tw-max-w-[calc(100vw-2rem)] tw-p-0',
-          popoverContentClassName,
-        )}
-        style={popoverContentStyle}
-      >
-        <PopoverBody
-          projects={projects}
-          isProjectSelected={(id) => id === selectedProjectId}
-          onSelectProject={handleSelect}
-          renderLeftSlot={(project) => (
-            <Check
-              className={cn(
-                'tw-h-4 tw-w-4',
-                project.id === selectedProjectId ? 'tw-opacity-100' : 'tw-opacity-0',
-              )}
-            />
-          )}
-          commandEmptyMessage={commandEmptyMessage}
-          strings={strings}
-          groupHeading={groupHeading}
-          defaultGroupMode={defaultGroupMode}
-          defaultDisplayOpenedTabs={defaultDisplayOpenedTabs}
-        />
-      </PopoverContent>
-    </Popover>
-  );
-}
+  const handleRowClick = (row: ProjectRow) => {
+    switch (props.mode) {
+      case 'project': {
+        props.onChangeSelection({ projectId: row.projectId });
+        setOpen(false);
+        return;
+      }
+      case 'project-multi': {
+        const current = props.selection.pairs;
+        const match = (p: ProjectPair) =>
+          p.projectId === row.projectId && p.scrollGroupId === row.scrollGroupId;
+        const next = current.some(match)
+          ? current.filter((p) => !match(p))
+          : [...current, { projectId: row.projectId, scrollGroupId: row.scrollGroupId }];
+        props.onChangeSelection({ pairs: next });
+        // If the user just unticked the last selected item while "Show selected only" is on,
+        // turn the filter off so they don't end up staring at an empty list.
+        if (next.length === 0 && showSelectedOnly) setShowSelectedOnly(false);
+        return;
+      }
+      case 'projectScrollGroup': {
+        if (row.isBoundButClosed && row.scrollGroupId !== undefined) {
+          // Reopen the tab in the bound group; selection doesn't change.
+          props.onOpenProjectInGroup(row.projectId, row.scrollGroupId);
+          setOpen(false);
+          return;
+        }
+        if (row.scrollGroupId !== undefined) {
+          props.onChangeSelection({
+            projectId: row.projectId,
+            scrollGroupId: row.scrollGroupId,
+          });
+          setOpen(false);
+          return;
+        }
+        // Not-open-project row: inherit the current selection's scroll group so the newly
+        // opened tab lands where the user was already reading. If nothing is selected yet, fall
+        // back to Group 0 (A).
+        const targetGroup: ScrollGroupId = (props.selection.scrollGroupId ?? 0) as ScrollGroupId;
+        props.onChangeSelection({ projectId: row.projectId, scrollGroupId: targetGroup });
+        props.onOpenProjectInGroup(row.projectId, targetGroup);
+        setOpen(false);
+        return;
+      }
+      // no default
+    }
+  };
 
-export default ProjectSelector;
-
-// #endregion
-
-// #region Multi-select: ProjectMultiSelector
-
-function defaultMultiTriggerText(selected: readonly ProjectSelectorProject[]): string {
-  const names = selected.map((p) => p.shortName).join(', ');
-  return `${selected.length.toString()} projects: ${names}`;
-}
-
-/**
- * Combo-box project picker. Multi selection with "Select all" / "Clear all" controls, a
- * "Group and filter" menu, and a chevrons-up-down trigger icon. Same grouping and tooltip rules
- * as {@link ProjectSelector}.
- */
-export function ProjectMultiSelector({
-  projects,
-  selectedProjectIds,
-  onChangeSelectedProjectIds,
-  groupHeading,
-  buttonPlaceholder,
-  commandEmptyMessage,
-  ariaLabel,
-  buttonVariant = 'outline',
-  buttonClassName,
-  popoverContentClassName,
-  popoverContentStyle,
-  alignDropDown = 'start',
-  isDisabled = false,
-  localizedStrings,
-  getSelectedText,
-  defaultGroupMode = 'byOpenedTabs',
-  defaultDisplayOpenedTabs = true,
-}: ProjectMultiSelectorProps) {
-  const [open, setOpen] = useState(false);
-  const strings = resolveStrings(localizedStrings);
-
-  const selectedSet = useMemo(() => new Set(selectedProjectIds), [selectedProjectIds]);
-
-  const selectedProjects = useMemo(
-    () => projects.filter((p) => selectedSet.has(p.id)),
-    [projects, selectedSet],
-  );
-
-  const triggerLabel = useMemo(() => {
-    if (selectedProjects.length === 0) return buttonPlaceholder ?? '';
-    if (getSelectedText) return getSelectedText(selectedProjects);
-    return defaultMultiTriggerText(selectedProjects);
-  }, [selectedProjects, getSelectedText, buttonPlaceholder]);
-
-  const toggle = (id: string) => {
-    if (selectedSet.has(id)) onChangeSelectedProjectIds(selectedProjectIds.filter((x) => x !== id));
-    else onChangeSelectedProjectIds([...selectedProjectIds, id]);
+  const handleSelectAll = () => {
+    if (props.mode !== 'project-multi') return;
+    const existing = props.selection.pairs;
+    const existingKey = new Set(existing.map((p) => `${p.projectId}:${p.scrollGroupId ?? ''}`));
+    const merged = [...existing];
+    allPairs.forEach((pair) => {
+      const key = `${pair.projectId}:${pair.scrollGroupId ?? ''}`;
+      if (!existingKey.has(key)) {
+        existingKey.add(key);
+        merged.push(pair);
+      }
+    });
+    props.onChangeSelection({ pairs: merged });
   };
 
   const handleClearAll = () => {
-    onChangeSelectedProjectIds([]);
+    if (props.mode !== 'project-multi') return;
+    props.onChangeSelection({ pairs: [] });
+    // Clearing everything while "Show selected only" is on would leave an empty list with no
+    // obvious way out, since the toggle lives inside the filter dropdown. Turn it off.
+    if (showSelectedOnly) setShowSelectedOnly(false);
   };
+
+  const triggerContent = useMemo<{ node: ReactNode; title: string }>(() => {
+    switch (props.mode) {
+      case 'project': {
+        const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        const text = selected ? selected.shortName : (props.buttonPlaceholder ?? '');
+        return { node: text, title: text };
+      }
+      case 'project-multi': {
+        const pairs = props.selection.pairs;
+        if (pairs.length === 0) {
+          const text = props.buttonPlaceholder ?? '';
+          return { node: text, title: text };
+        }
+        type Tuple = { project: ProjectSelectorProject; scrollGroupId?: ScrollGroupId };
+        const tuples: Tuple[] = [];
+        pairs.forEach((pair) => {
+          const project = props.projects.find((p) => p.id === pair.projectId);
+          if (project) tuples.push({ project, scrollGroupId: pair.scrollGroupId });
+        });
+        if (tuples.length === 0) {
+          const text = props.buttonPlaceholder ?? '';
+          return { node: text, title: text };
+        }
+        if (props.getSelectedText) {
+          const text = props.getSelectedText(tuples);
+          return { node: text, title: text };
+        }
+        const items = tuples
+          .map(({ project, scrollGroupId }) =>
+            scrollGroupId === undefined
+              ? project.shortName
+              : `${project.shortName} (${scrollGroupLetter(scrollGroupId)})`,
+          )
+          .join(', ');
+        // One pair selected → drop the count; the name already conveys the cardinality.
+        if (tuples.length === 1) return { node: items, title: items };
+        const countText = tuples.length.toString();
+        return {
+          node: (
+            <>
+              <Badge variant="muted" className="tw-shrink-0">
+                {countText}
+              </Badge>
+              <span className="tw-min-w-0 tw-truncate">{items}</span>
+            </>
+          ),
+          title: `${countText} ${items}`,
+        };
+      }
+      case 'projectScrollGroup': {
+        const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        if (!selected) {
+          const text = props.buttonPlaceholder ?? '';
+          return { node: text, title: text };
+        }
+        const group = props.selection.scrollGroupId;
+        if (group === undefined) {
+          return { node: selected.shortName, title: selected.shortName };
+        }
+        const text = `${selected.shortName} · ${scrollGroupLetter(group)}`;
+        return { node: text, title: text };
+      }
+      default:
+        return { node: '', title: '' };
+    }
+  }, [props]);
+
+  const triggerIcon =
+    props.mode === 'project-multi' ? (
+      <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+    ) : (
+      <ChevronDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+    );
+
+  const hasMultiSelection = props.mode === 'project-multi' && props.selection.pairs.length > 0;
+
+  const openButtonHandler =
+    props.mode === 'projectScrollGroup' ||
+    (props.mode === 'project-multi' && props.onOpenProjectInGroup)
+      ? handleOpenProjectInGroup
+      : undefined;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant={buttonVariant}
+          variant={props.buttonVariant ?? 'outline'}
           role="combobox"
           aria-expanded={open}
-          aria-label={ariaLabel}
-          disabled={isDisabled}
-          title={selectedProjects.length > 0 ? triggerLabel : undefined}
+          aria-label={props.ariaLabel}
+          disabled={props.isDisabled ?? false}
+          title={hasMultiSelection ? triggerContent.title : undefined}
           className={cn(
-            'tw-flex tw-w-[200px] tw-items-center tw-justify-between tw-overflow-hidden',
-            buttonClassName,
+            'tw-flex tw-w-[180px] tw-items-center tw-justify-between tw-overflow-hidden',
+            props.buttonClassName,
           )}
         >
-          <span className="tw-min-w-0 tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-text-start">
-            {triggerLabel}
+          <span className="tw-flex tw-min-w-0 tw-flex-1 tw-items-baseline tw-gap-2 tw-overflow-hidden tw-whitespace-nowrap tw-text-start">
+            {typeof triggerContent.node === 'string' ? (
+              <span className="tw-min-w-0 tw-truncate">{triggerContent.node}</span>
+            ) : (
+              triggerContent.node
+            )}
           </span>
-          <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+          {triggerIcon}
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        align={alignDropDown}
+        align={props.alignDropDown ?? 'start'}
         collisionPadding={16}
         className={cn(
           'tw-w-[500px] tw-max-w-[calc(100vw-2rem)] tw-p-0',
-          popoverContentClassName,
+          props.popoverContentClassName,
         )}
-        style={popoverContentStyle}
+        style={props.popoverContentStyle}
       >
-        <PopoverBody
-          projects={projects}
-          isProjectSelected={(id) => selectedSet.has(id)}
-          onSelectProject={toggle}
-          renderLeftSlot={(project) => (
-            <Check
-              className={cn(
-                'tw-h-4 tw-w-4',
-                selectedSet.has(project.id) ? 'tw-opacity-100' : 'tw-opacity-0',
-              )}
-            />
-          )}
-          commandEmptyMessage={commandEmptyMessage}
-          strings={strings}
-          groupHeading={groupHeading}
-          defaultGroupMode={defaultGroupMode}
-          defaultDisplayOpenedTabs={defaultDisplayOpenedTabs}
-          renderToolbar={({ visibleProjectIds }) => (
-            <div className="tw-flex tw-justify-between tw-border-b tw-py-2 tw-ps-2 tw-pe-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onChangeSelectedProjectIds([...visibleProjectIds])}
-              >
-                {strings.selectAll}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleClearAll}>
-                {strings.clearAll}
-              </Button>
+        <TooltipProvider delayDuration={200}>
+          <Command shouldFilter={false}>
+            <div className="tw-flex tw-items-center tw-border-b tw-pe-2">
+              <div className="tw-flex-1">
+                <CommandInput
+                  value={query}
+                  onValueChange={setQuery}
+                  placeholder={strings.searchPlaceholder}
+                  className="tw-border-0"
+                />
+              </div>
+              <FilterMenu
+                groupByOpenTabs={groupByOpenTabs}
+                onChangeGroupByOpenTabs={setGroupByOpenTabs}
+                showSelectedOnly={props.mode === 'project-multi' ? showSelectedOnly : undefined}
+                onChangeShowSelectedOnly={
+                  props.mode === 'project-multi' ? setShowSelectedOnly : undefined
+                }
+                strings={strings}
+              />
             </div>
-          )}
-        />
+            {props.mode === 'project-multi' && (
+              <div className="tw-flex tw-justify-between tw-border-b tw-py-2 tw-pe-4 tw-ps-2">
+                <Button variant="ghost" size="sm" onClick={handleSelectAll}>
+                  {`${strings.selectAll} (${allPairs.length.toString()})`}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleClearAll}>
+                  {`${strings.clearAll} (${props.selection.pairs.length.toString()})`}
+                </Button>
+              </div>
+            )}
+            <CommandList>
+              <CommandEmpty>{props.commandEmptyMessage ?? 'No projects found'}</CommandEmpty>
+              {sections.map((section, index) => (
+                <Fragment key={section.kind}>
+                  <CommandGroup heading={sectionHeading(section, strings)}>
+                    {section.rows.map((row) => (
+                      <ProjectRowView
+                        key={row.rowKey}
+                        row={row}
+                        mode={props.mode}
+                        strings={strings}
+                        onClick={handleRowClick}
+                        onOpen={openButtonHandler}
+                      />
+                    ))}
+                  </CommandGroup>
+                  {index < sections.length - 1 && <CommandSeparator />}
+                </Fragment>
+              ))}
+            </CommandList>
+          </Command>
+        </TooltipProvider>
       </PopoverContent>
     </Popover>
   );
 }
+
+function sectionHeading(
+  section: RowSection,
+  strings: Required<ProjectSelectorLocalizedStrings>,
+): string | undefined {
+  switch (section.kind) {
+    case 'openTabs':
+      return strings.openTabsSectionHeading;
+    case 'other':
+      return strings.otherProjectsSectionHeading;
+    case 'flat':
+    default:
+      return undefined;
+  }
+}
+
+export default ProjectSelector;
 
 // #endregion

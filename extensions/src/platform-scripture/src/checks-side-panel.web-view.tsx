@@ -11,6 +11,7 @@ import {
   Button,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
+  OpenProjectTab,
   Progress,
   ProjectSelector,
   ProjectSelectorProject,
@@ -23,6 +24,7 @@ import {
   useEvent,
   usePromise,
 } from 'platform-bible-react';
+import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   deepEqual,
   formatReplacementString,
@@ -82,7 +84,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   useWebViewScrollGroupScrRef,
   useWebViewState,
 }: WebViewProps) {
-  const [scrRef, setScrRef, ,] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
   const [selectedCheckId, setSelectedCheckId] = useState<string>('');
   const [selectedCheckTypeIds, setSelectedCheckTypeIds] = useWebViewState<string[]>(
     'selectedCheckTypes',
@@ -137,6 +139,52 @@ global.webViewComponent = function ChecksSidePanelWebView({
     'platformScriptureEditor.react',
     editorWebViewId,
   );
+
+  // Track currently open project tabs so the project selector can render the Open tabs section
+  // and the `projectScrollGroup` mode's per-tab rows. The map is keyed by webViewId; only entries
+  // with both a projectId and a numeric scrollGroupScrRef end up in `openTabs`.
+  const [openTabsMap, setOpenTabsMap] = useState<Map<string, OpenProjectTab>>(() => new Map());
+
+  useEffect(() => {
+    const isProjectTab = (
+      webView: { projectId?: string; scrollGroupScrRef?: unknown } | undefined,
+    ): OpenProjectTab | undefined => {
+      if (!webView?.projectId) return undefined;
+      if (typeof webView.scrollGroupScrRef !== 'number') return undefined;
+      return {
+        projectId: webView.projectId,
+        scrollGroupId: webView.scrollGroupScrRef as ScrollGroupId,
+      };
+    };
+
+    const upsert = (webView: { id: string; projectId?: string; scrollGroupScrRef?: unknown }) => {
+      const entry = isProjectTab(webView);
+      setOpenTabsMap((prev) => {
+        const next = new Map(prev);
+        if (entry) next.set(webView.id, entry);
+        else next.delete(webView.id);
+        return next;
+      });
+    };
+
+    const unsubOpen = papi.webViews.onDidOpenWebView(({ webView }) => upsert(webView));
+    const unsubUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => upsert(webView));
+    const unsubClose = papi.webViews.onDidCloseWebView(({ webView }) => {
+      setOpenTabsMap((prev) => {
+        if (!prev.has(webView.id)) return prev;
+        const next = new Map(prev);
+        next.delete(webView.id);
+        return next;
+      });
+    });
+    return () => {
+      unsubOpen();
+      unsubUpdate();
+      unsubClose();
+    };
+  }, []);
+
+  const openTabs = useMemo<OpenProjectTab[]>(() => [...openTabsMap.values()], [openTabsMap]);
 
   const invalidateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -658,10 +706,30 @@ global.webViewComponent = function ChecksSidePanelWebView({
   );
 
   const handleSelectProject = useCallback(
-    (newProjectId: string) => {
-      updateWebViewDefinition({ projectId: newProjectId });
+    (newSelection: { projectId: string; scrollGroupId: ScrollGroupId }) => {
+      updateWebViewDefinition({ projectId: newSelection.projectId });
+      setScrollGroupId(newSelection.scrollGroupId);
     },
-    [updateWebViewDefinition],
+    [updateWebViewDefinition, setScrollGroupId],
+  );
+
+  const handleOpenProjectInGroup = useCallback(
+    async (projectIdToOpen: string, scrollGroupIdToOpen: ScrollGroupId) => {
+      try {
+        await papi.webViews.openWebView(
+          'platformScriptureEditor.react',
+          undefined,
+          // The editor's webview provider attaches `scrollGroupScrRef` when constructing its
+          // definition. We pass it via options for the provider to honor; if the provider ignores
+          // it, the editor still opens and the user can re-bind the scroll group from the tab.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          { projectId: projectIdToOpen, scrollGroupScrRef: scrollGroupIdToOpen } as never,
+        );
+      } catch (error) {
+        logger.debug(`Failed to open scripture editor tab: ${getErrorMessage(error)}`);
+      }
+    },
+    [],
   );
 
   const handleSelectScope = useCallback(
@@ -748,12 +816,16 @@ global.webViewComponent = function ChecksSidePanelWebView({
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
         {/* Project Filter */}
         <ProjectSelector
+          mode="projectScrollGroup"
           projects={sortedProjects}
-          selectedProjectId={projectId}
-          onChangeProject={handleSelectProject}
-          groupHeading={
-            localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
-          }
+          openTabs={openTabs}
+          selection={{
+            projectId,
+            scrollGroupId:
+              typeof scrollGroupId === 'number' ? (scrollGroupId as ScrollGroupId) : undefined,
+          }}
+          onChangeSelection={handleSelectProject}
+          onOpenProjectInGroup={handleOpenProjectInGroup}
           buttonPlaceholder={
             localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
           }
@@ -785,6 +857,18 @@ global.webViewComponent = function ChecksSidePanelWebView({
             ))}
           </SelectContent>
         </Select>
+        {/* Dev-only helper: clears the project / scroll-group binding so the selector falls back
+            to its empty state — useful for exercising the bound-but-closed / not-open flows. */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            updateWebViewDefinition({ projectId: undefined });
+            setScrollGroupId(undefined);
+          }}
+        >
+          Simulate unselect
+        </Button>
         {/* Check Type Filter */}
         <MultiSelectComboBox
           entries={checkTypeEntries}

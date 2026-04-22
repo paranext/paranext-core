@@ -1022,143 +1022,227 @@ export interface MarkerMenuProps {
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
 export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
-/** Category used by the "By type" sort/group mode in the project selector. */
-export type ProjectSelectorProjectType = "project" | "resource";
-/** Sort order for the project selector's list. */
-export type ProjectSelectorSortMode = "alphabetical" | "lastUpdated";
-/** Grouping applied to the project selector's list. `none` renders a flat list. */
-export type ProjectSelectorGroupMode = "none" | "bySelection" | "byType" | "byOpenedTabs";
-/** A single project entry rendered in the project selector. */
+/** The three modes of the project selector. */
+export type ProjectSelectorMode = "project" | "project-multi" | "projectScrollGroup";
+/** Minimal project metadata fed to the selector. */
 export type ProjectSelectorProject = {
-	/** Unique project identifier. */
 	id: string;
-	/** Short project name, shown as the primary label. */
 	shortName: string;
-	/** Full project name, shown as a secondary label and in the tooltip. */
 	fullName: string;
-	/** Human-readable language name (e.g. "Hawaii Creole English"). Used in the tooltip. */
 	language?: string;
-	/** BCP-47-ish language code (e.g. "hwc-x-ux"). Used in the tooltip. */
 	languageCode?: string;
-	/** Whether the project is currently opened in a tab. Drives the "Opened tabs" grouping. */
-	isOpenedTab?: boolean;
-	/** Category used by the "By type" grouping. */
-	projectType?: ProjectSelectorProjectType;
-	/**
-	 * Short label of the scroll group the project is docked in (e.g. "A", "B"). Rendered on the
-	 * right side of the row and in the tooltip.
-	 */
-	scrollGroup?: string;
-	/** Current scripture reference of the scroll group, shown in the tooltip (e.g. "MAT 3:16"). */
-	scrollGroupScrRef?: string;
-	/**
-	 * When the project was last updated — `Date`, millisecond timestamp, or ISO string. Used by the
-	 * "Last updated" sort mode (most recent first). Projects without a value sort after those with
-	 * one.
-	 */
-	lastUpdated?: Date | number | string;
 };
-/** Optional labels surfaced by the project selector UI. */
+/** A project that is currently open in a specific scroll group. */
+export type OpenProjectTab = {
+	projectId: string;
+	scrollGroupId: ScrollGroupId;
+	/**
+	 * Optional, pre-formatted "current scripture reference" for this scroll group
+	 * (e.g. `"MAT 3:16"`). Surfaced in the row tooltip. Caller decides the format — the selector
+	 * does no scripture-ref formatting of its own.
+	 */
+	scrollGroupScrRefLabel?: string;
+};
+/**
+ * A `(projectId, scrollGroupId)` pair. `scrollGroupId` is undefined when the pair refers to a
+ * project that is not currently open in any scroll group.
+ */
+export type ProjectPair = {
+	projectId: string;
+	scrollGroupId?: ScrollGroupId;
+};
+/** Selection shape for single `project` mode. */
+export type ProjectSelection = {
+	projectId?: string;
+};
+/**
+ * Selection shape for `project-multi` mode. Each entry is a `(projectId, scrollGroupId)` pair;
+ * the same project open in two scroll groups is two distinct pairs. `scrollGroupId` is undefined
+ * when a project that is not currently open anywhere is selected.
+ */
+export type ProjectMultiSelection = {
+	pairs: readonly ProjectPair[];
+};
+/** Selection shape for `projectScrollGroup` mode. */
+export type ProjectScrollGroupSelection = {
+	projectId?: string;
+	scrollGroupId?: ScrollGroupId;
+};
+/** One row in the project selector list. */
+export type ProjectRow = {
+	/** Stable unique key for React / cmdk. */
+	rowKey: string;
+	projectId: string;
+	shortName: string;
+	fullName: string;
+	language?: string;
+	languageCode?: string;
+	/**
+	 * The scroll group this row represents. `undefined` means the row is a project-level row
+	 * (no chip, or `project` mode chips aggregated in `openGroups`).
+	 */
+	scrollGroupId?: ScrollGroupId;
+	/**
+	 * Current scripture reference for the row's scroll group (for the tooltip). Populated only when
+	 * the caller provided one via `OpenProjectTab.scrollGroupScrRefLabel`.
+	 */
+	scrollGroupScrRefLabel?: string;
+	/**
+	 * `project` mode: scroll groups the project is open in (one chip each). Always empty in the
+	 * other modes.
+	 */
+	openGroups: readonly ScrollGroupId[];
+	isSelected: boolean;
+	/**
+	 * `project` mode: true when the project isn't open in any scroll group.
+	 * `project-multi` / `projectScrollGroup`: true for the not-open-project row (no chip). Drives
+	 * muted row styling.
+	 */
+	isMuted: boolean;
+	/**
+	 * True for a synthetic row representing a currently-selected (projectId, scrollGroupId) pair
+	 * whose tab is not currently open. Rendered with a struck-through chip and an "Open" button
+	 * that reopens the tab via `onOpenProjectInGroup`.
+	 */
+	isBoundButClosed: boolean;
+};
+export type ComputeRowsArgs = {
+	mode: "project";
+	projects: readonly ProjectSelectorProject[];
+	openTabs: readonly OpenProjectTab[];
+	selection: ProjectSelection;
+} | {
+	mode: "project-multi";
+	projects: readonly ProjectSelectorProject[];
+	openTabs: readonly OpenProjectTab[];
+	selection: ProjectMultiSelection;
+} | {
+	mode: "projectScrollGroup";
+	projects: readonly ProjectSelectorProject[];
+	openTabs: readonly OpenProjectTab[];
+	selection: ProjectScrollGroupSelection;
+};
+/**
+ * Build the selector's row list from the current inputs. Pure: same inputs produce the same
+ * output in the same order. Consumers render these rows in the order returned unless they sort
+ * further (see {@link partitionAndSort}).
+ */
+export declare function computeRows(args: ComputeRowsArgs): ProjectRow[];
+export type RowSection = {
+	/** 'flat' means no section header (grouping toggle off). */
+	kind: "openTabs" | "other" | "flat";
+	rows: ProjectRow[];
+};
+/**
+ * Split rows into the Open tabs / Other projects sections (when `groupByOpenTabs`) or a single
+ * flat section (otherwise). Within each section, selected rows float to the top, then
+ * alphabetical by `shortName`, tie-broken by `scrollGroupId`.
+ *
+ * "Open tabs" rows are: open-group rows (project-multi / projectScrollGroup modes) and
+ * `project`-mode rows whose project is open somewhere. Bound-but-closed synthetic rows and
+ * not-open project rows land in "Other projects".
+ */
+export declare function partitionAndSort(rows: readonly ProjectRow[], groupByOpenTabs: boolean): RowSection[];
 export type ProjectSelectorLocalizedStrings = {
 	/** Placeholder for the popover's search input. Defaults to `"Search projects & resources"`. */
 	searchPlaceholder?: string;
-	/** Accessible label for the sort/group icon button. Defaults to `"Sort and group"`. */
-	sortAriaLabel?: string;
-	/** Sort menu: section label for the sort options. Defaults to `"Sort"`. */
-	sortSectionLabel?: string;
-	/** Sort menu: section label for the grouping options. Defaults to `"Group"`. */
+	/** Accessible label for the filter menu icon button. Defaults to `"Filter"`. */
+	filterAriaLabel?: string;
+	/** Filter menu: section heading for the grouping toggle. Defaults to `"Group"`. */
 	groupSectionLabel?: string;
-	/** Sort menu: "Alphabetical" item. Defaults to `"Alphabetical"`. */
-	sortAlphabetical?: string;
-	/** Sort menu: "Last updated" item. Defaults to `"Last updated"`. */
-	sortLastUpdated?: string;
-	/** Group menu: "None" item (no grouping). Defaults to `"None"`. */
-	groupNone?: string;
-	/** Group menu: "By selection" item. Defaults to `"By selection"`. */
-	groupBySelection?: string;
-	/** Group menu: "By type" item. Defaults to `"By type"`. */
-	groupByType?: string;
-	/** Group menu: "By opened tabs" item. Defaults to `"By opened tabs"`. */
-	groupByOpenedTabs?: string;
-	/** Group heading for opened tabs. Defaults to `"Opened tabs"`. */
-	openedTabsGroupHeading?: string;
-	/** Group heading for the "Other projects & resources" group. Defaults to `"Other projects & resources"`. */
-	otherProjectsGroupHeading?: string;
-	/** Group heading for selected projects (used by "By selection"). Defaults to `"Selected"`. */
-	selectedGroupHeading?: string;
-	/** Group heading for unselected projects (used by "By selection"). Defaults to `"Not selected"`. */
-	unselectedGroupHeading?: string;
-	/** Group heading for the Projects group (used by "By type"). Defaults to `"Projects"`. */
-	projectsGroupHeading?: string;
-	/** Group heading for the Resources group (used by "By type"). Defaults to `"Resources"`. */
-	resourcesGroupHeading?: string;
+	/** Filter menu: section heading for the filter toggles. Defaults to `"Filter"`. */
+	filterSectionLabel?: string;
+	/** Filter menu: "By open tabs" item under the Group section. Defaults to `"By open tabs"`. */
+	filterGroupByOpenTabs?: string;
+	/** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
+	filterShowSelectedOnly?: string;
+	/** Section heading for the Open tabs section. Defaults to `"Open tabs"`. */
+	openTabsSectionHeading?: string;
+	/** Section heading for the Other projects section. Defaults to `"Other projects"`. */
+	otherProjectsSectionHeading?: string;
+	/**
+	 * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
+	 * Defaults to `"Bound to {group} · not currently open"`.
+	 */
+	boundButClosedTooltip?: string;
+	/** Label of the "Open" button shown on bound-but-closed rows. Defaults to `"Open"`. */
+	openButtonLabel?: string;
 	/** Multi-select: "Select all" button. Defaults to `"Select all"`. */
 	selectAll?: string;
 	/** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
 	clearAll?: string;
 };
-type CommonProjectSelectorProps = {
-	/** Projects to choose from. */
+/** Map 0→A, 1→B, … 25→Z. */
+export declare function scrollGroupLetter(id: ScrollGroupId): string;
+type CommonProps = {
 	projects: readonly ProjectSelectorProject[];
-	/** Text shown on the trigger when no project is selected. */
+	openTabs: readonly OpenProjectTab[];
 	buttonPlaceholder?: string;
-	/** Message shown when the user's search yields no matching projects. */
 	commandEmptyMessage?: string;
-	/** Accessible label for the trigger button. */
 	ariaLabel?: string;
-	/** Variant of the trigger button. Defaults to `outline`. */
 	buttonVariant?: ButtonProps["variant"];
-	/** Additional css classes for the trigger button. */
 	buttonClassName?: string;
-	/** Additional css classes for the popover content. */
 	popoverContentClassName?: string;
-	/** Inline styles for the popover content (useful for z-index overrides). */
 	popoverContentStyle?: React$1.CSSProperties;
-	/** Popover alignment. Defaults to `start`. */
 	alignDropDown?: "start" | "center" | "end";
-	/** If true, the trigger is disabled. */
 	isDisabled?: boolean;
-	/**
-	 * Fallback heading used by the flat sort modes ("Alphabetical" / "Last updated"). Ignored by
-	 * the grouping modes, which use their own headings from `localizedStrings`.
-	 */
-	groupHeading?: string;
-	/** Optional localized strings. Each property has a reasonable English default. */
 	localizedStrings?: ProjectSelectorLocalizedStrings;
-	/** Initial sort mode. Defaults to `"alphabetical"`. */
-	defaultSortMode?: ProjectSelectorSortMode;
-	/** Initial group mode. Defaults to `"byOpenedTabs"`. */
-	defaultGroupMode?: ProjectSelectorGroupMode;
+	/** Initial state of the "Group by open tabs" toggle. Defaults to `true`. */
+	defaultGroupByOpenTabs?: boolean;
 };
-export type ProjectSelectorProps = CommonProjectSelectorProps & {
-	/** Id of the currently selected project, if any. */
-	selectedProjectId?: string;
-	/** Called with the newly selected project's id. */
-	onChangeProject: (projectId: string) => void;
-};
-export type ProjectMultiSelectorProps = CommonProjectSelectorProps & {
-	/** Ids of the currently selected projects. */
-	selectedProjectIds: readonly string[];
-	/** Called with the next full list of selected ids. */
-	onChangeSelectedProjectIds: (projectIds: string[]) => void;
+export type ProjectSelectorProps = (CommonProps & {
+	mode: "project";
+	selection: ProjectSelection;
+	onChangeSelection: (selection: {
+		projectId: string;
+	}) => void;
+}) | (CommonProps & {
+	mode: "project-multi";
+	selection: ProjectMultiSelection;
+	onChangeSelection: (selection: {
+		pairs: ProjectPair[];
+	}) => void;
 	/**
-	 * Text shown on the trigger when at least one project is selected. Receives the list of
-	 * selected projects so the caller can produce e.g. "3 projects" or "WEB, ASV, KJV".
+	 * Called when the user clicks the "Open" button on a bound-but-closed row (or the row
+	 * itself). The caller is expected to open a tab via `papi.webViews.openWebView(...)`.
 	 */
-	getSelectedText?: (selected: readonly ProjectSelectorProject[]) => string;
-};
+	onOpenProjectInGroup?: (projectId: string, scrollGroupId: ScrollGroupId) => void;
+	/**
+	 * Optional custom trigger label when at least one pair is selected. Receives the list of
+	 * selected `(project, scrollGroupId)` tuples. Defaults to `"N: short1 (A), short2 (B), ..."`.
+	 */
+	getSelectedText?: (selected: ReadonlyArray<{
+		project: ProjectSelectorProject;
+		scrollGroupId?: ScrollGroupId;
+	}>) => string;
+}) | (CommonProps & {
+	mode: "projectScrollGroup";
+	selection: ProjectScrollGroupSelection;
+	onChangeSelection: (selection: {
+		projectId: string;
+		scrollGroupId: ScrollGroupId;
+	}) => void;
+	/**
+	 * Called when the user picks a not-open-project row OR clicks the "Open" button on a
+	 * bound-but-closed row. The caller is expected to open a tab via
+	 * `papi.webViews.openWebView(...)`.
+	 */
+	onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
+});
 /**
- * Combo-box project picker. Single selection. The popover's list can be sorted/grouped via the
- * "Sort and group" menu; by default projects with `isOpenedTab=true` are rendered under
- * "Opened tabs" and the rest under "Other projects & resources".
+ * Combo-box project picker with three modes:
+ * - `project` — single-select, one row per project; chips list every open scroll group as
+ *   metadata (non-interactive, the whole row is the click target).
+ * - `project-multi` — multi-select over `(projectId, scrollGroupId)` pairs. Same project open in
+ *   two scroll groups renders as two independently-selectable rows. Projects not open anywhere
+ *   render as a single row with no chip.
+ * - `projectScrollGroup` — single-select of one `(projectId, scrollGroupId)` pair. Clicking a
+ *   not-open-project row selects the project in Group A and calls `onOpenProjectInGroup`.
+ *
+ * In both per-pair modes, a currently-selected pair whose tab is not open renders as a synthetic
+ * row with a diagonally-struck chip and an "Open" button.
  */
-export declare function ProjectSelector({ projects, selectedProjectId, onChangeProject, groupHeading, buttonPlaceholder, commandEmptyMessage, ariaLabel, buttonVariant, buttonClassName, popoverContentClassName, popoverContentStyle, alignDropDown, isDisabled, localizedStrings, defaultSortMode, defaultGroupMode, }: ProjectSelectorProps): import("react/jsx-runtime").JSX.Element;
-/**
- * Combo-box project picker. Multi selection with "Select all" / "Clear all" controls, a
- * "Sort and group" menu, and a chevrons-up-down trigger icon. Same grouping and tooltip rules as
- * {@link ProjectSelector}.
- */
-export declare function ProjectMultiSelector({ projects, selectedProjectIds, onChangeSelectedProjectIds, groupHeading, buttonPlaceholder, commandEmptyMessage, ariaLabel, buttonVariant, buttonClassName, popoverContentClassName, popoverContentStyle, alignDropDown, isDisabled, localizedStrings, getSelectedText, defaultSortMode, defaultGroupMode, }: ProjectMultiSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ProjectSelector(props: ProjectSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
