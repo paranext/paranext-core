@@ -80,6 +80,26 @@
 }
 
 /*
+ * CUSTOM: Expose radius scale as CSS custom properties so they can be referenced in arbitrary
+ * Tailwind values like rounded-[min(var(--radius-md),12px)]. @theme inline does not emit these as
+ * CSS variables, so they must be defined here explicitly. They recompute automatically when any
+ * theme overrides --radius.
+ *
+ * Added `html` to prevent `shadcn apply` from putting new theme colors in this block instead of in
+ * the following `:root` where they belong.
+ */
+:root,
+html {
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/*
  * CUSTOM: default theme colors changed. Some colors have comments after them explaining their meaning.
  * Added `.light` so this theme can be manually applied to a specific area in the DOM.
  * Context for themes:

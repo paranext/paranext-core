@@ -75,7 +75,11 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
-  position = 'item-aligned',
+  // CUSTOM: Restored 'popper' as the default position (was changed to 'item-aligned' by the shadcn
+  // upgrade). In 'popper' mode Radix exposes --radix-select-trigger-width, which is required for
+  // min-w-(--radix-select-trigger-width) to work. In 'item-aligned' mode that variable is not set,
+  // making the popup width unconstrained. Existing callers all expected popper (dropdown) behavior.
+  position = 'popper',
   align = 'center',
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
@@ -87,10 +91,13 @@ function SelectContent({
         data-slot="select-content"
         data-align-trigger={position === 'item-aligned'}
         // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+        // CUSTOM: Replaced tw:min-w-36 with position-aware min-widths: item-aligned uses trigger
+        // width as minimum (prevents popup being much wider than a narrow w-fit trigger like
+        // ScrollGroupSelector); popper keeps the 144px floor for comfortable list readability.
         className={cn(
-          'pr-twp tw: tw: tw:relative tw:z-50 tw:max-h-(--radix-select-content-available-height) tw:min-w-36 tw:origin-(--radix-select-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[align-trigger=true]:animate-none tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 animate-none! bg-popover/70 before:-z-1 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground! relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150',
+          'pr-twp tw: tw: tw:relative tw:z-50 tw:max-h-(--radix-select-content-available-height) tw:data-[align-trigger=true]:min-w-(--radix-select-trigger-width) tw:data-[align-trigger=false]:min-w-36 tw:origin-(--radix-select-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[align-trigger=true]:animate-none tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 animate-none! bg-popover/70 before:-z-1 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground! relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150',
           position === 'popper' &&
-            'tw:data-[side=bottom]:translate-y-1 tw:data-[side=left]:-translate-x-1 rtl:tw:data-[side=left]:translate-x-1 tw:data-[side=right]:translate-x-1 rtl:tw:data-[side=right]:-translate-x-1 tw:data-[side=top]:-translate-y-1',
+            'tw:data-[side=bottom]:translate-y-1 tw:data-[side=left]:-translate-x-1 tw:rtl:data-[side=left]:translate-x-1 tw:data-[side=right]:translate-x-1 tw:rtl:data-[side=right]:-translate-x-1 tw:data-[side=top]:-translate-y-1',
           className,
         )}
         position={position}

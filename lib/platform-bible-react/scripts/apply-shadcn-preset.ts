@@ -7,7 +7,8 @@
  *   equivalents)
  * - Restores the original structure regardless of success or failure
  * - Reverts shadcn's changes to utils.ts (we keep our version)
- * - Replaces `import * as React from "react"` with `import React from 'react'` in changed files
+ * - In changed .ts/.tsx files: replaces `import * as React from "react"` with `import React from
+ *   'react'`, and replaces `rtl:tw:` with `tw:rtl:`
  *
  * Run via: tsx scripts/apply-shadcn-preset.ts <preset-name>
  */
@@ -354,11 +355,28 @@ function main(): void {
     problems.push(`Failed to revert utils.ts: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // Step 13: Replace `import * as React from "react"` with `import React from 'react'` (always runs)
-  const reactImportRetryNote =
-    "Manually replace 'import * as React from \"react\"' with 'import React from \\'react\\'' in all changed .ts/.tsx files.";
+  // Step 13: Apply fixes to changed .ts/.tsx files (always runs)
+  const changedFilesRetryNote =
+    "Manually fix changed .ts/.tsx files: replace 'import * as React from \"react\"' with 'import React from \\'react\\'' and replace 'rtl:tw:' with 'tw:rtl:'.";
 
-  console.log('Replacing React namespace imports in changed files…');
+  interface FileTransformation {
+    description: string;
+    apply: (content: string) => string;
+  }
+
+  const fileTransformations: FileTransformation[] = [
+    {
+      description: 'React namespace import → default import',
+      apply: (content) =>
+        content.replace(/^import \* as React from ['"]react['"]/gm, "import React from 'react'"),
+    },
+    {
+      description: 'rtl:tw: → tw:rtl:',
+      apply: (content) => content.replaceAll('rtl:tw:', 'tw:rtl:'),
+    },
+  ];
+
+  console.log('Applying fixes to changed files…');
   try {
     const gitRoot = execSync('git rev-parse --show-toplevel', {
       encoding: 'utf8',
@@ -376,28 +394,25 @@ function main(): void {
       .map((line) => line.slice(3).trim())
       .filter((f) => /\.(ts|tsx)$/.test(f));
 
-    const replacedFiles = changedFiles.reduce((count, relPath) => {
+    const modifiedFiles = changedFiles.reduce((count, relPath) => {
       const fullPath = join(gitRoot, relPath);
-      const content = readFileSync(fullPath, 'utf8');
-      const updated = content.replace(
-        /^import \* as React from ['"]react['"]/gm,
-        "import React from 'react'",
-      );
-      if (updated !== content) {
+      const original = readFileSync(fullPath, 'utf8');
+      const updated = fileTransformations.reduce((content, t) => t.apply(content), original);
+      if (updated !== original) {
         writeFileSync(fullPath, updated, 'utf8');
         return count + 1;
       }
       return count;
     }, 0);
 
-    if (replacedFiles > 0) {
-      console.log(`Replaced React namespace imports in ${replacedFiles} file(s).`);
+    if (modifiedFiles > 0) {
+      console.log(`Applied fixes to ${modifiedFiles} file(s).`);
     } else {
-      console.log('No React namespace imports found in changed files.');
+      console.log('No fixes needed in changed files.');
     }
   } catch (e) {
     problems.push(
-      `React import replacement failed: ${e instanceof Error ? e.message : String(e)}. ${reactImportRetryNote}`,
+      `Changed file fixes failed: ${e instanceof Error ? e.message : String(e)}. ${changedFilesRetryNote}`,
     );
   }
 

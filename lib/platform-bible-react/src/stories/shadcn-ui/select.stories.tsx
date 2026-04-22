@@ -228,6 +228,53 @@ export const Variants: Story = {
   },
 };
 
+export const Position: Story = {
+  render: () => (
+    <div className="tw:flex tw:gap-16 tw:items-start">
+      <div className="tw:space-y-2">
+        <p className="tw:text-sm tw:font-medium">popper (default)</p>
+        <p className="tw:text-xs tw:text-muted-foreground tw:max-w-40">
+          Popup drops below the trigger. Width is at least as wide as the trigger.
+        </p>
+        <Select>
+          <SelectTrigger>
+            <SelectValue placeholder="A" />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value="genesis">Genesis</SelectItem>
+            <SelectItem value="exodus">Exodus</SelectItem>
+            <SelectItem value="leviticus">Leviticus</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="tw:space-y-2">
+        <p className="tw:text-sm tw:font-medium">item-aligned</p>
+        <p className="tw:text-xs tw:text-muted-foreground tw:max-w-40">
+          Popup overlays the trigger, aligned to the selected item. Width matches content.
+        </p>
+        <Select>
+          <SelectTrigger>
+            <SelectValue placeholder="A" />
+          </SelectTrigger>
+          <SelectContent position="item-aligned">
+            <SelectItem value="genesis">Genesis</SelectItem>
+            <SelectItem value="exodus">Exodus</SelectItem>
+            <SelectItem value="leviticus">Leviticus</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**popper** (default) drops the popup below the trigger like a standard dropdown and constrains its minimum width to the trigger width. **item-aligned** overlays the popup on the trigger, positioning it so the selected item aligns with the trigger — useful when you want the list to appear "in place".',
+      },
+    },
+  },
+};
+
 export const Interactive: Story = {
   render: (args) => {
     const [value, setValue] = useState('');

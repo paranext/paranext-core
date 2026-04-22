@@ -28,6 +28,10 @@ export type DropdownMenuProps = React.ComponentProps<typeof DropdownMenuPrimitiv
 // CUSTOM: Wrap DropdownMenuPrimitive.Root in MenuContext.Provider to propagate variant down the tree
 /** @inheritdoc DropdownMenuProps */
 export function DropdownMenu({ variant = 'default', ...props }: DropdownMenuProps) {
+  // CUSTOM: Added readDirection() and dir prop so Radix uses RTL-aware popup alignment:
+  // align='start' flips to right-align in RTL so the popup's right edge aligns with the trigger's
+  // right edge, matching LTR behavior where the left edge aligns with the trigger's left edge.
+  const dir: Direction = readDirection();
   const contextValue = React.useMemo<MenuContextProps>(
     () => ({
       variant,
@@ -36,7 +40,7 @@ export function DropdownMenu({ variant = 'default', ...props }: DropdownMenuProp
   );
   return (
     <MenuContext.Provider value={contextValue}>
-      <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+      <DropdownMenuPrimitive.Root data-slot="dropdown-menu" dir={dir} {...props} />
     </MenuContext.Provider>
   );
 }
@@ -73,7 +77,10 @@ function DropdownMenuContent({
         align={align}
         className={cn(
           /* CUSTOM: adding pr-twp because the dropdown content is added to the dom as a sibling to the app root */
-          'pr-twp tw: tw: tw:z-50 tw:max-h-(--radix-dropdown-menu-content-available-height) tw:w-(--radix-dropdown-menu-trigger-width) tw:min-w-32 tw:origin-(--radix-dropdown-menu-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-[state=closed]:overflow-hidden tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 animate-none! bg-popover/70 before:-z-1 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground! relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150',
+          // CUSTOM: Removed tw:w-(--radix-dropdown-menu-trigger-width) which pinned the dropdown to
+          // exactly the trigger button width, making menus unusably narrow when the trigger is a small
+          // icon button. Restores natural min-width behavior so content determines popup width.
+          'pr-twp tw: tw: tw:z-50 tw:max-h-(--radix-dropdown-menu-content-available-height) tw:min-w-32 tw:origin-(--radix-dropdown-menu-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-[state=closed]:overflow-hidden tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 animate-none! bg-popover/70 before:-z-1 **:data-[slot$=-item]:focus:bg-foreground/10 **:data-[slot$=-item]:data-highlighted:bg-foreground/10 **:data-[slot$=-separator]:bg-foreground/5 **:data-[slot$=-trigger]:focus:bg-foreground/10 **:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! **:data-[variant=destructive]:focus:bg-foreground/10! **:data-[variant=destructive]:text-accent-foreground! **:data-[variant=destructive]:**:text-accent-foreground! relative before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150',
           className,
         )}
         {...props}
