@@ -18,6 +18,11 @@ export type ViewZoomService = {
   prune: (liveTabIds: ReadonlySet<string>) => void;
   /** Cancel any debounced persist and write the current state synchronously. */
   flush: () => Promise<void>;
+  /**
+   * Reset all stored zoom entries to 1.0 and flush immediately. Called when global app zoom
+   * changes.
+   */
+  resetAll: () => Promise<void>;
 };
 
 type SettingsLike = {
@@ -232,7 +237,19 @@ export function createViewZoomService(
     if (changed) schedulePersist();
   }
 
-  return { ready, getZoom, setZoom, adjustZoom, resetZoom, subscribe, prune, flush };
+  async function resetAll(): Promise<void> {
+    state.forEach((_, key) => {
+      state.set(key, DEFAULT_ZOOM_FACTOR);
+      notify(key, DEFAULT_ZOOM_FACTOR);
+    });
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = undefined;
+    }
+    await persistNow();
+  }
+
+  return { ready, getZoom, setZoom, adjustZoom, resetZoom, subscribe, prune, flush, resetAll };
 }
 
 export const viewZoomService: ViewZoomService = createViewZoomService();

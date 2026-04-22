@@ -263,4 +263,52 @@ describe('view-zoom.service', () => {
       'settings-tab': 1.4,
     });
   });
+
+  it('resetAll sets all entries to 1.0, flushes immediately, and notifies subscribers', async () => {
+    const settings = makeSettingsStub({
+      a: 1.3,
+      b: 1.7,
+      'platformScriptureEditor.editor:tab1': 1.5,
+      'platformScriptureEditor.editor:__default': 1.5,
+    });
+    const svc = createViewZoomService(settings, {
+      persistDebounceMs: 1000,
+      perInstanceTypes: new Set(['platformScriptureEditor.editor']),
+    });
+    await svc.ready;
+
+    const callsA: number[] = [];
+    const callsB: number[] = [];
+    const callsTab: number[] = [];
+    const callsDefault: number[] = [];
+    svc.subscribe('a', (v) => callsA.push(v));
+    svc.subscribe('b', (v) => callsB.push(v));
+    svc.subscribe('platformScriptureEditor.editor:tab1', (v) => callsTab.push(v));
+    svc.subscribe('platformScriptureEditor.editor:__default', (v) => callsDefault.push(v));
+
+    await svc.resetAll();
+
+    expect(svc.getZoom('a')).toBe(1.0);
+    expect(svc.getZoom('b')).toBe(1.0);
+    expect(svc.getZoom('platformScriptureEditor.editor:tab1')).toBe(1.0);
+    expect(svc.getZoom('platformScriptureEditor.editor:__default')).toBe(1.0);
+
+    expect(callsA).toEqual([1.0]);
+    expect(callsB).toEqual([1.0]);
+    expect(callsTab).toEqual([1.0]);
+    expect(callsDefault).toEqual([1.0]);
+
+    // Flushed immediately — debounce is 1000ms but persist was called synchronously
+    expect(settings.set).toHaveBeenCalledTimes(1);
+    expect(settings.peekValue()).toEqual({
+      a: 1.0,
+      b: 1.0,
+      'platformScriptureEditor.editor:tab1': 1.0,
+      'platformScriptureEditor.editor:__default': 1.0,
+    });
+
+    // Timer was cleared by flush — no additional persist after advance
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(settings.set).toHaveBeenCalledTimes(1);
+  });
 });
