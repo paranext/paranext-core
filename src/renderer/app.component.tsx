@@ -1,5 +1,7 @@
 import { PlatformDockLayout } from '@renderer/components/docking/platform-dock-layout.component';
 import { TestContext } from '@renderer/context/papi-context/test.context';
+import { installAppZoomInput } from '@renderer/services/app-zoom.input';
+import { appZoomService } from '@renderer/services/app-zoom.service';
 import { pruneStaleZoomEntries } from '@renderer/services/view-zoom.bootstrap';
 import { installViewZoomInput } from '@renderer/services/view-zoom.input';
 import { viewZoomService } from '@renderer/services/view-zoom.service';
@@ -18,8 +20,12 @@ function Main() {
   const [zoomReady, setZoomReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    viewZoomService.ready
+    // Temporary: measure pre-paint zoom loading cost — remove after verifying <50ms on hardware
+    performance.mark('zoom-load-start');
+    Promise.all([appZoomService.ready, viewZoomService.ready])
       .then(() => {
+        performance.mark('zoom-load-end');
+        performance.measure('zoom-load', 'zoom-load-start', 'zoom-load-end');
         if (!cancelled) setZoomReady(true);
         return undefined;
       })
@@ -58,6 +64,8 @@ function Main() {
       service: viewZoomService,
       resolveFocusedKey,
     });
+
+    const uninstallAppZoom = installAppZoomInput({ service: appZoomService });
 
     // Deprecated `platform.zoomIn` / `platform.zoomOut` commands. Kept as shims that adjust the
     // currently focused view's zoom by one step, so existing callers don't break. Logs a one-time
@@ -100,6 +108,39 @@ function Main() {
       }
     })();
 
+    (async () => {
+      try {
+        const unsubAppIn = await registerCommand('platform.appZoomIn', async () => {
+          appZoomService.adjust(+0.1);
+        });
+        if (zoomCommandsCancelled) {
+          unsubAppIn().catch(() => undefined);
+          return;
+        }
+        zoomCommandUnsubs.push(unsubAppIn);
+
+        const unsubAppOut = await registerCommand('platform.appZoomOut', async () => {
+          appZoomService.adjust(-0.1);
+        });
+        if (zoomCommandsCancelled) {
+          unsubAppOut().catch(() => undefined);
+          return;
+        }
+        zoomCommandUnsubs.push(unsubAppOut);
+
+        const unsubAppReset = await registerCommand('platform.appZoomReset', async () => {
+          appZoomService.reset();
+        });
+        if (zoomCommandsCancelled) {
+          unsubAppReset().catch(() => undefined);
+          return;
+        }
+        zoomCommandUnsubs.push(unsubAppReset);
+      } catch {
+        // Non-fatal; the commands just won't be available.
+      }
+    })();
+
     // Prune per-instance zoom entries whose tab ids no longer exist in the persisted dock layout.
     // Non-fatal; don't disrupt startup.
     (async () => {
@@ -116,6 +157,7 @@ function Main() {
     // time for the IPC to complete before teardown.
     const onBeforeUnload = () => {
       viewZoomService.flush();
+      appZoomService.flush();
     };
     window.addEventListener('beforeunload', onBeforeUnload);
 
@@ -123,6 +165,7 @@ function Main() {
       zoomCommandsCancelled = true;
       window.removeEventListener('beforeunload', onBeforeUnload);
       uninstall();
+      uninstallAppZoom();
       zoomCommandUnsubs.forEach((unsub) => {
         unsub().catch(() => undefined);
       });
