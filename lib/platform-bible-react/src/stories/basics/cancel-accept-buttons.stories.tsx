@@ -8,7 +8,7 @@ import standardStrings from '@/localizedStrings.json';
 const meta: Meta<typeof CancelAcceptButtons> = {
   title: 'Basics/CancelAcceptButtons',
   component: CancelAcceptButtons,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
   parameters: {
     docs: {
       description: {

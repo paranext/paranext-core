@@ -217,6 +217,7 @@ export {
   DialogTitle,
   DialogDescription,
 } from './components/shadcn-ui/dialog';
+export * from './components/shadcn-ui/button-group';
 export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
