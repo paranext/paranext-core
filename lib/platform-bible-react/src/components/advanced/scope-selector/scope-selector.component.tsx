@@ -3,30 +3,35 @@ import { BookChapterControl } from '@/components/advanced/book-chapter-control/b
 import { BookChapterControlLocalizedStrings } from '@/components/advanced/book-chapter-control/book-chapter-control.types';
 import { Button } from '@/components/shadcn-ui/button';
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/shadcn-ui/dialog';
+import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
+  DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Label } from '@/components/shadcn-ui/label';
+import { PopoverPortalContainerProvider } from '@/components/shadcn-ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { Scope } from '@/components/utils/scripture.util';
-import { readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { Circle, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import {
   defaultScrRef,
   formatScrRef,
   formatScrRefRange,
   LocalizedStringValue,
 } from 'platform-bible-utils';
-import { KeyboardEvent, useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -45,8 +50,11 @@ export const SCOPE_SELECTOR_STRING_KEYS = Object.freeze([
   '%webView_scope_selector_scope%',
   '%webView_scope_selector_select_books%',
   '%webView_scope_selector_range%',
+  '%webView_scope_selector_select_range%',
   '%webView_scope_selector_range_start%',
   '%webView_scope_selector_range_end%',
+  '%webView_scope_selector_ok%',
+  '%webView_scope_selector_navigate%',
   '%webView_book_selector_books_selected%',
   '%webView_book_selector_select_books%',
   '%webView_book_selector_search_books%',
@@ -86,6 +94,13 @@ const localizeString = (
 
 /** Visual layout variant for the scope options. */
 export type ScopeSelectorVariant = 'radio' | 'dropdown';
+
+/**
+ * Keys that submit the start reference in the range picker in addition to Enter. Space and `-` are
+ * the natural separators a user types between a start and end reference, so we treat them as "I'm
+ * done with the start, take me to the end" signals.
+ */
+const RANGE_START_SUBMIT_KEYS = Object.freeze([' ', '-']);
 
 /** Props for configuring the ScopeSelector component */
 interface ScopeSelectorProps {
@@ -157,6 +172,14 @@ interface ScopeSelectorProps {
    */
   currentScrRef?: SerializedVerseRef;
   /**
+   * Optional callback fired when the user picks a new scripture reference from the "Navigate"
+   * footer entry at the bottom of the dropdown variant. Provide this alongside `currentScrRef` (and
+   * using `variant="dropdown"`) to surface the footer button — a BookChapterControl picker prefixed
+   * with a "Navigate" headline and the current reference. Without this callback the footer is not
+   * rendered.
+   */
+  onCurrentScrRefChange?: (scrRef: SerializedVerseRef) => void;
+  /**
    * Optional localized strings passed to the range BCV controls. When omitted, the BCV controls
    * will fall back to their internal defaults.
    */
@@ -166,38 +189,6 @@ interface ScopeSelectorProps {
    * the range BCV controls enable verse selection. See `BookChapterControlProps.getEndVerse`.
    */
   getEndVerse?: (bookId: string, chapterNum: number) => number;
-}
-
-/**
- * Returns the tabbable descendants of a container, in document order. Used to implement manual Tab
- * / Shift+Tab focus cycling inside a dropdown submenu where Radix otherwise closes the menu.
- */
-function getTabbableElements(container: HTMLElement): HTMLElement[] {
-  const candidates = container.querySelectorAll<HTMLElement>(
-    'a[href], area[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-  );
-  return Array.from(candidates).filter(
-    (el) =>
-      !el.hasAttribute('disabled') &&
-      el.tabIndex !== -1 &&
-      // `offsetParent` returns null for elements that are hidden (display:none) or detached — the
-      // standard browser hook for "not currently rendered / focusable"; there is no undefined form.
-      // eslint-disable-next-line no-null/no-null
-      el.offsetParent !== null,
-  );
-}
-
-/**
- * Returns the next focus index when cycling Tab / Shift+Tab through a bounded list, wrapping around
- * at both ends. Extracted so the focus handler stays free of nested ternaries.
- */
-function computeNextFocusIndex(currentIndex: number, lastIndex: number, reverse: boolean): number {
-  if (reverse) {
-    if (currentIndex <= 0) return lastIndex;
-    return currentIndex - 1;
-  }
-  if (currentIndex === -1 || currentIndex === lastIndex) return 0;
-  return currentIndex + 1;
 }
 
 /**
@@ -222,6 +213,7 @@ export function ScopeSelector({
   onRangeStartChange,
   onRangeEndChange,
   currentScrRef,
+  onCurrentScrRefChange,
   bookChapterControlLocalizedStrings,
   getEndVerse,
 }: ScopeSelectorProps) {
@@ -245,8 +237,11 @@ export function ScopeSelector({
   const scopeText = localizeString(localizedStrings, '%webView_scope_selector_scope%');
   const selectBooksText = localizeString(localizedStrings, '%webView_scope_selector_select_books%');
   const rangeText = localizeString(localizedStrings, '%webView_scope_selector_range%');
+  const selectRangeText = localizeString(localizedStrings, '%webView_scope_selector_select_range%');
   const rangeStartText = localizeString(localizedStrings, '%webView_scope_selector_range_start%');
   const rangeEndText = localizeString(localizedStrings, '%webView_scope_selector_range_end%');
+  const okText = localizeString(localizedStrings, '%webView_scope_selector_ok%');
+  const navigateText = localizeString(localizedStrings, '%webView_scope_selector_navigate%');
 
   // For the verse / chapter / book scopes we surface the current scripture reference alongside the
   // base label (e.g. "Verse: GEN 1:1"). The suffix is kept separate from the base label so the
@@ -267,37 +262,38 @@ export function ScopeSelector({
     }
   };
 
-  // Each option can optionally carry a `tooltip`. For the verse / chapter / book scopes we use the
-  // "Current X" localized strings so the user can hover to confirm the meaning (e.g. "Current
-  // verse") of the short label + ScrRef suffix ("Verse: GEN 1:1").
+  // Each option carries a `label` (used in the trigger button) and an optional `dropdownLabel`
+  // (used in the dropdown menu items). For verse / chapter / book the dropdown form prefixes
+  // "Current" so users browsing the menu see the semantics up front; the trigger stays terse
+  // so the selected value stays compact ("Verse: GEN 1:1" rather than "Current verse: GEN 1:1").
   const SCOPE_OPTIONS: Array<{
     value: Scope;
     label: string;
+    dropdownLabel?: string;
     scrRefSuffix?: string;
     id: string;
-    tooltip?: string;
   }> = [
     { value: 'selectedText', label: selectedTextText, id: 'scope-selected-text' },
     {
       value: 'verse',
       label: verseText,
+      dropdownLabel: currentVerseText,
       scrRefSuffix: getScrRefSuffix('verse'),
       id: 'scope-verse',
-      tooltip: currentVerseText,
     },
     {
       value: 'chapter',
       label: chapterText,
+      dropdownLabel: currentChapterText,
       scrRefSuffix: getScrRefSuffix('chapter'),
       id: 'scope-chapter',
-      tooltip: currentChapterText,
     },
     {
       value: 'book',
       label: bookText,
+      dropdownLabel: currentBookText,
       scrRefSuffix: getScrRefSuffix('book'),
       id: 'scope-book',
-      tooltip: currentBookText,
     },
     { value: 'selectedBooks', label: chooseBooksText, id: 'scope-selected' },
     { value: 'range', label: rangeText, id: 'scope-range' },
@@ -305,14 +301,17 @@ export function ScopeSelector({
 
   // Renders a scope option label with its optional ScrRef suffix styled in muted foreground. Kept
   // inline so every render site (dropdown items, radio labels, trigger content) is visually
-  // consistent.
+  // consistent. `hideScrRef` is true only for the trigger in the dropdown variant when the
+  // trigger width is too narrow to fit both the label and the reference — the dropdown menu
+  // items and radio labels always show the suffix.
   const renderScopeLabel = (
     label: string,
     scrRefSuffix: string | undefined,
+    hideScrRef = false,
   ) => (
     <>
       {label}
-      {scrRefSuffix && (
+      {scrRefSuffix && !hideScrRef && (
         <span className="tw-text-muted-foreground">: {scrRefSuffix}</span>
       )}
     </>
@@ -331,14 +330,114 @@ export function ScopeSelector({
 
   const noopScrRefChange = () => {};
 
-  // Whenever the user submits a new start reference, mirror it onto the end reference too. The
-  // user can then narrow the end independently; the next start change will re-sync both.
+  // Wrapper around the end BCV, used to find its trigger button so we can programmatically
+  // open the end picker after the user submits the start reference. Clicking a DOM node
+  // from a callback is a bit blunt, but BCV doesn't expose an imperative API and the
+  // trigger is a stable child of this wrapper (a single `<button>`). `null` is the
+  // idiomatic ref "not attached yet" value; there is no `undefined` equivalent.
+  // eslint-disable-next-line no-null/no-null
+  const rangeEndWrapperRef = useRef<HTMLDivElement | null>(null);
+
+  // Wrapper around the navigate-footer BCV. Same shape as `rangeEndWrapperRef` — we grab
+  // the inner trigger button by query rather than threading a ref through BCV. Used by
+  // the DropdownMenuItem's onSelect to open the picker on keyboard Enter / Space.
+  // eslint-disable-next-line no-null/no-null
+  const navBcvWrapperRef = useRef<HTMLDivElement | null>(null);
+  // Flag set by a pointerDownCapture on the navigate row when the pointer lands on the
+  // BCV trigger button. The trigger's own onClick will open the popover, so the
+  // DropdownMenuItem's onSelect (which Radix also fires for pointer activations) must
+  // skip re-clicking — otherwise it would immediately toggle the popover closed again.
+  const navBcvPointerActivatedRef = useRef(false);
+  // Ref to the navigate DropdownMenuItem element. After the BCV popover closes, Radix
+  // Popover restores focus to its trigger (the BCV button inside the item) which breaks
+  // the outer DropdownMenu's arrow-key navigation — arrow keys require focus on a
+  // DropdownMenuItem, not a descendant button. We move focus back to the item so the
+  // dropdown behaves normally once the picker dismisses.
+  // eslint-disable-next-line no-null/no-null
+  const navMenuItemRef = useRef<HTMLDivElement | null>(null);
+  // Tracks whether the navigate BCV popover is currently open. Consumed by the
+  // DropdownMenuItem's onSelect to skip the programmatic trigger re-click when the
+  // picker is already open. Without this guard: Radix `MenuItem.onKeyDown` intercepts
+  // Space / Enter by calling `event.currentTarget.click()` on the item, which fires
+  // onSelect, which re-clicks the BCV trigger button — toggling the open popover shut.
+  // The menu item being "activated" while its content is already visible should be a
+  // no-op, not a dismiss.
+  const isNavBcvOpenRef = useRef(false);
+
+  // Which range BCV (if any) is currently showing its picker. Used to dim the sibling
+  // control so the active picker's focus is visually obvious.
+  const [activeRangeBcv, setActiveRangeBcv] = useState<'start' | 'end' | undefined>(undefined);
+  // Set when the start BCV submits a new reference; consumed when the start popover closes
+  // to decide whether to auto-advance focus into the end picker. Quick-nav arrow buttons
+  // inside BCV also call `handleSubmit` but don't close the popover, so they never trigger
+  // the advance — the user is still browsing, not picking.
+  const pendingAdvanceToEndRef = useRef(false);
+  // Same pattern for the end BCV: when it submits, move focus to the dialog's OK button
+  // on close so keyboard users can confirm the range with a single Enter.
+  const pendingAdvanceToOkRef = useRef(false);
+  // Ref to the range dialog's OK button so we can focus it after the end picker submits.
+  // React's ref "not attached" marker is `null`.
+  // eslint-disable-next-line no-null/no-null
+  const rangeOkButtonRef = useRef<HTMLButtonElement | null>(null);
+  // Opens update the state to the opening side; closes only clear the state if that same
+  // side was active, so a late close event from the non-active BCV can't wipe the active
+  // state (e.g. while the user is tabbing rapidly between triggers).
+  const handleRangeStartOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      setActiveRangeBcv('start');
+      // A fresh open invalidates any stale advance flag from a prior interaction.
+      pendingAdvanceToEndRef.current = false;
+      return;
+    }
+    setActiveRangeBcv((prev) => (prev === 'start' ? undefined : prev));
+    if (pendingAdvanceToEndRef.current) {
+      pendingAdvanceToEndRef.current = false;
+      // Defer so the start popover finishes closing and focus lands back on its trigger
+      // before we move it — otherwise the focus hand-off races with Radix's own restore.
+      requestAnimationFrame(() => {
+        const endTrigger = rangeEndWrapperRef.current?.querySelector('button');
+        endTrigger?.click();
+      });
+    }
+  }, []);
+  const handleRangeEndOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      setActiveRangeBcv('end');
+      // A fresh open invalidates any stale advance flag from a prior interaction.
+      pendingAdvanceToOkRef.current = false;
+      return;
+    }
+    setActiveRangeBcv((prev) => (prev === 'end' ? undefined : prev));
+    // The OK focus hand-off lives in the end BCV's `onCloseAutoFocus` (below) —
+    // not here — because Radix's own `onCloseAutoFocus` restores focus to the
+    // trigger AFTER our `onOpenChange` subscriber would run, which would overwrite
+    // the focus. `onCloseAutoFocus` lets us preventDefault that restore in-place.
+  }, []);
+
+  // Range pickers: when the user completes a valid start reference from inside the picker
+  // (grid click, Enter on the top match, or one of the `RANGE_START_SUBMIT_KEYS` — space or
+  // `-` — that also submit), the start picker submits and closes, and we then open the end
+  // picker so the user can keep typing without reaching for the mouse. The advance itself is
+  // driven from `handleRangeStartOpenChange` on close, so quick-nav arrow submissions (which
+  // don't close the popover) correctly skip advancing.
   const handleRangeStartChange = useCallback(
     (newStart: SerializedVerseRef) => {
       onRangeStartChange?.(newStart);
       onRangeEndChange?.(newStart);
+      pendingAdvanceToEndRef.current = true;
     },
     [onRangeStartChange, onRangeEndChange],
+  );
+
+  // Mirror for the end picker: when the user completes a valid end reference, flag that
+  // focus should advance to the dialog's OK button on close. Same caveat as the start —
+  // quick-nav arrow submissions keep the popover open, so they never trigger the advance.
+  const handleRangeEndChangeWrapper = useCallback(
+    (newEnd: SerializedVerseRef) => {
+      onRangeEndChange?.(newEnd);
+      pendingAdvanceToOkRef.current = true;
+    },
+    [onRangeEndChange],
   );
 
   // When the scope switches to selectedBooks and nothing is selected yet, seed the selection with
@@ -392,10 +491,19 @@ export function ScopeSelector({
     />
   );
 
+  // While one range BCV is showing its picker, fade the other side (label + trigger) to
+  // muted-foreground so the active picker visibly owns the user's focus. The fade reverts
+  // as soon as that BCV closes.
+  const startMuted = activeRangeBcv === 'end';
+  const endMuted = activeRangeBcv === 'start';
+  const mutedClass = 'tw-text-muted-foreground';
+
   const rangeBlock = (
     <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-4">
       <div className="tw-grid tw-gap-2">
-        <Label htmlFor="scope-range-start">{rangeStartText}</Label>
+        <Label htmlFor="scope-range-start" className={cn(startMuted && mutedClass)}>
+          {rangeStartText}
+        </Label>
         <BookChapterControl
           id="scope-range-start"
           scrRef={resolvedRangeStart}
@@ -403,155 +511,164 @@ export function ScopeSelector({
           localizedBookNames={localizedBookNames}
           localizedStrings={bookChapterControlLocalizedStrings}
           getEndVerse={getEndVerse}
+          // Space and `-` are natural "separator" keystrokes between a start and end
+          // reference (e.g. "GEN 1:5 " or "GEN 1:5-"). When the user types a valid start
+          // and presses either, BCV submits the match and `handleRangeStartChange` opens
+          // the end picker.
+          submitKeys={RANGE_START_SUBMIT_KEYS}
+          onOpenChange={handleRangeStartOpenChange}
+          className={cn(startMuted && mutedClass)}
+          // Modal so the picker owns its own FocusScope when opened from inside the
+          // DropdownMenuSubContent or the Dialog fallback. See the navigate footer BCV
+          // for the same reasoning — without this, view transitions (book → chapter)
+          // collide with the outer focus trap and the popover dismisses.
+          modal
         />
       </div>
-      <div className="tw-grid tw-gap-2">
-        <Label htmlFor="scope-range-end">{rangeEndText}</Label>
+      <div ref={rangeEndWrapperRef} className="tw-grid tw-gap-2">
+        <Label htmlFor="scope-range-end" className={cn(endMuted && mutedClass)}>
+          {rangeEndText}
+        </Label>
         <BookChapterControl
           id="scope-range-end"
           scrRef={resolvedRangeEnd}
-          handleSubmit={onRangeEndChange ?? noopScrRefChange}
+          handleSubmit={onRangeEndChange ? handleRangeEndChangeWrapper : noopScrRefChange}
           localizedBookNames={localizedBookNames}
           localizedStrings={bookChapterControlLocalizedStrings}
           getEndVerse={getEndVerse}
           disableReferencesUpTo={resolvedRangeStart}
+          onOpenChange={handleRangeEndOpenChange}
+          onCloseAutoFocus={(event) => {
+            // After the user submits the end reference, park focus on the dialog's
+            // OK button so a keyboard user can confirm the range with a single Enter.
+            // Radix's own `onCloseAutoFocus` for modal popovers normally restores
+            // focus to the trigger — composeEventHandlers skips that if we
+            // preventDefault here, so this single handler both suppresses the
+            // trigger-restore AND parks focus on OK without any timing race.
+            if (pendingAdvanceToOkRef.current) {
+              pendingAdvanceToOkRef.current = false;
+              event.preventDefault();
+              rangeOkButtonRef.current?.focus();
+            }
+          }}
+          className={cn(endMuted && mutedClass)}
+          // See scope-range-start — modal so the picker owns its own FocusScope.
+          modal
+          // Align the popover to the leading edge of the trigger. Without this the default
+          // `"center"` alignment can push the popover past the dialog's right edge (the end
+          // trigger sits on the right side of the flex row).
+          align="start"
         />
       </div>
     </div>
   );
 
-  // Keyboard handling inside a submenu. Two concerns:
-  //
-  //  1. Tab / Shift+Tab — Radix's DropdownMenu closes on Tab by design, which drops the user out
-  //     of the menu and (via focus-loss) also closes any BCV popover they had opened. We
-  //     preventDefault to stop Radix's handler (via composeEventHandlers' defaultPrevented check)
-  //     and then either pin focus inside a portal'd descendant popover or cycle focus through the
-  //     submenu's own controls.
-  //
-  //  2. Arrow keys — when a BCV popover is open inside the submenu, Radix's menu-navigation
-  //     handler hijacks ArrowUp/Down/Left/Right for item-to-item navigation, which prevents the
-  //     BCV's chapter / verse grid from responding. Because the event has already bubbled up
-  //     from BCV (whose own onKeyDown ran first and did whatever grid navigation was needed), we
-  //     just need to suppress Radix here: preventDefault blocks the composed Radix handler on
-  //     this element, stopPropagation prevents further bubbling to the outer DropdownMenuContent.
-  const handleSubContentKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
-    const subContent = event.currentTarget;
-    const active =
-      document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
-    const focusInsidePortaledChild = !!active && !subContent.contains(active);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  // `dialogSub` tracks which scope's content is currently showing in the modal dialog
+  // (the selectedBooks / range pickers always open as dialogs rather than as flyout submenus —
+  // the dialog form is consistent regardless of viewport size and gives those more complex
+  // pickers their own focus scope).
+  const [dialogSub, setDialogSub] = useState<Scope | undefined>(undefined);
+  // Refs to every scope entry in the dropdown (simple checkbox items and dialog-launcher
+  // items) keyed by scope value. Used by the open-focus effect below to land initial focus
+  // on the currently selected scope instead of Radix's default first-item.
+  const scopeItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const assignScopeItemRef = useCallback(
+    (targetScope: Scope) => (node: HTMLDivElement | null) => {
+      scopeItemRefs.current[targetScope] = node;
+    },
+    [],
+  );
+  // The outer combobox button. Focus is returned here when a dialog closes so the UX
+  // matches selecting a simple option (Radix's default for DropdownMenuCheckboxItem
+  // selection). React refs use `null` for "not attached"; there is no undefined equivalent
+  // in the DOM/ref API.
+  // eslint-disable-next-line no-null/no-null
+  const outerTriggerRef = useRef<HTMLButtonElement | null>(null);
 
-    if (event.key === 'Tab') {
-      event.preventDefault();
+  // When the dropdown opens, land initial focus on the currently selected scope instead
+  // of Radix's default first-item. Radix strips both `onOpenAutoFocus` and `onEntryFocus`
+  // from DropdownMenuContent's public prop type (they live in `MenuContentImplPrivateProps`
+  // / are explicitly `Omit`ed), so we can't preventDefault Radix's internal auto-focus
+  // directly — we run our own focus call after it. A cascaded double-RAF is needed in
+  // practice: Radix's layout effect focuses the content wrapper first, then a frame later
+  // `RovingFocusGroup`'s `onEntryFocus` focuses the first item. A single RAF races against
+  // that second step; the second (nested) RAF runs strictly after it.
+  useEffect(() => {
+    if (!isDropdownOpen) return undefined;
+    let secondRaf = 0;
+    const firstRaf = requestAnimationFrame(() => {
+      secondRaf = requestAnimationFrame(() => {
+        scopeItemRefs.current[scope]?.focus();
+      });
+    });
+    return () => {
+      cancelAnimationFrame(firstRaf);
+      if (secondRaf) cancelAnimationFrame(secondRaf);
+    };
+  }, [isDropdownOpen, scope]);
 
-      // If focus lives inside a descendant popover (portal'd outside the sub-content DOM
-      // subtree), leave it alone — closing that popover on Tab is the behavior we are avoiding.
-      if (focusInsidePortaledChild) return;
+  // Re-portal any BCV / BookSelector popovers opened from inside the fallback dialog into
+  // the DialogContent element itself, via `PopoverPortalContainerProvider`. If we left them
+  // portaled to document.body (Radix's default), they'd be outside the dialog's focus trap
+  // subtree — the trap would yank focus back into the dialog whenever the popover grabbed
+  // it, which closed the popover mid-selection. Rendering popovers as DOM descendants of
+  // the dialog keeps modal focus trapping intact while letting the pickers work normally.
+  // useState's initial value — null is the idiomatic "no element yet" marker that ref
+  // callbacks also use, so keep the whole lifecycle on null rather than mixing with
+  // undefined.
+  // eslint-disable-next-line no-null/no-null
+  const [rangeDialogEl, setRangeDialogEl] = useState<HTMLDivElement | null>(null);
+  // eslint-disable-next-line no-null/no-null
+  const [booksDialogEl, setBooksDialogEl] = useState<HTMLDivElement | null>(null);
+  // `null` tracking for the outer dropdown's content element. We portal the inline
+  // "change current reference" BCV popover into this container so the picker's portal'd
+  // content stays inside the dropdown's DismissableLayer / FocusScope — otherwise the
+  // dropdown's focus trap (modal by default) would yank focus out of the BCV popover the
+  // moment it opened, and any click inside the BCV popover would read as "outside the
+  // dropdown" and dismiss the menu.
+  // eslint-disable-next-line no-null/no-null
+  const [dropdownContentEl, setDropdownContentEl] = useState<HTMLDivElement | null>(null);
+  // When the dropdown's content width drops below this threshold, the ScrRef suffix on
+  // the "Current verse / chapter / book" menu items is suppressed — the scope name alone
+  // reads better than a truncated "Current verse: GEN…" at narrow widths.
+  const DROPDOWN_NARROW_THRESHOLD_PX = 200;
+  const [isDropdownNarrow, setIsDropdownNarrow] = useState(false);
+  useEffect(() => {
+    if (!dropdownContentEl || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      setIsDropdownNarrow(entry.contentRect.width < DROPDOWN_NARROW_THRESHOLD_PX);
+    });
+    observer.observe(dropdownContentEl);
+    return () => observer.disconnect();
+  }, [dropdownContentEl]);
 
-      const focusTargets = getTabbableElements(subContent);
-      if (focusTargets.length === 0) return;
-
-      const currentIndex = active ? focusTargets.indexOf(active) : -1;
-      const lastIndex = focusTargets.length - 1;
-      const nextIndex = computeNextFocusIndex(currentIndex, lastIndex, event.shiftKey);
-
-      focusTargets[nextIndex]?.focus();
-      return;
-    }
-
-    if (
-      focusInsidePortaledChild &&
-      (event.key === 'ArrowUp' ||
-        event.key === 'ArrowDown' ||
-        event.key === 'ArrowLeft' ||
-        event.key === 'ArrowRight')
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-  }, []);
-
-  const [openSub, setOpenSub] = useState<Scope | undefined>(undefined);
-  const subTriggerRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
-  // The SubMenu close UX differs from Radix's defaults. We ignore Radix's onOpenChange entirely
-  // and drive submenu state only via explicit user intent: click / Enter / Space on the trigger
-  // (toggle), Escape or ArrowLeft inside the sub-content (close), click outside (outer menu
-  // closes, see the outer `onOpenChange` below), or selecting another radio item (same path — the
-  // outer menu auto-dismisses on radio select). Radix's hover-away auto-close is what this
-  // component deliberately opts out of.
-  const toggleSubmenu = useCallback(
+  // selectedBooks / range launchers: promote the picker to a modal dialog. Closing the outer
+  // dropdown here gives the dialog a clean focus handoff — the dialog opens as the dropdown
+  // tears down, and when the dialog closes we return focus to the outer trigger (same UX as
+  // Radix's default behavior after selecting a simple DropdownMenuCheckboxItem).
+  const openDialogFallback = useCallback(
     (targetScope: Scope) => {
       handleScopeChange(targetScope);
-      setOpenSub((prev) => (prev === targetScope ? undefined : targetScope));
+      setIsDropdownOpen(false);
+      setDialogSub(targetScope);
     },
     [handleScopeChange],
   );
 
-  const closeSubmenuAndReturnFocus = useCallback(() => {
-    setOpenSub((prev) => {
-      if (!prev) return prev;
-      // Defer the focus so it lands after React tears down the sub-content and returns control
-      // to the parent menu — otherwise focus ends up on document.body.
-      const triggerEl = subTriggerRefs.current[prev];
-      requestAnimationFrame(() => triggerEl?.focus());
-      return undefined;
-    });
+  // Dialog's `onCloseAutoFocus` default restores focus to the element that had focus before
+  // the dialog opened — which was the (now-unmounted) DropdownMenuItem inside the closed
+  // dropdown. That leaves focus on document.body. PreventDefault and refocus the outer
+  // trigger so keyboard users can reopen the menu immediately.
+  const handleDialogCloseAutoFocus = useCallback((event: Event) => {
+    event.preventDefault();
+    outerTriggerRef.current?.focus();
   }, []);
 
-  const handleSubTriggerKeyDown = useCallback(
-    (targetScope: Scope) => (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        toggleSubmenu(targetScope);
-      }
-    },
-    [toggleSubmenu],
-  );
-
-  const handleSubContentKeyDownWithClose = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      // ArrowLeft in an LTR layout (and ArrowRight in RTL) is the canonical "back out of the
-      // submenu" gesture in menus. Honor it by closing + returning focus to the trigger.
-      const dir = readDirection();
-      const backKey = dir === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
-      if (event.key === backKey) {
-        // Only treat it as "back" when focus is on a plain menu element — if the user is typing
-        // inside a descendant popover (e.g. the BCV input) ArrowLeft should move the caret, not
-        // close the menu.
-        const active =
-          document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
-        const inPortaledChild = !!active && !event.currentTarget.contains(active);
-        if (!inPortaledChild) {
-          event.preventDefault();
-          event.stopPropagation();
-          closeSubmenuAndReturnFocus();
-          return;
-        }
-      }
-      handleSubContentKeyDown(event);
-    },
-    [closeSubmenuAndReturnFocus, handleSubContentKeyDown],
-  );
-
-  const handleSubEscape = useCallback(
-    (event: globalThis.KeyboardEvent) => {
-      event.preventDefault();
-      closeSubmenuAndReturnFocus();
-    },
-    [closeSubmenuAndReturnFocus],
-  );
-
-  const assignSubTriggerRef = useCallback(
-    (targetScope: Scope) => (node: HTMLDivElement | null) => {
-      subTriggerRefs.current[targetScope] = node;
-    },
-    [],
-  );
-
-  const renderSubSelectionDot = (subScope: Scope) =>
-    scope === subScope ? (
+  const renderDialogLauncherCheck = (launcherScope: Scope) =>
+    scope === launcherScope ? (
       <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
-        <Circle className="tw-h-2 tw-w-2 tw-fill-current" />
+        <Check className="tw-h-4 tw-w-4" />
       </span>
     ) : undefined;
 
@@ -560,16 +677,10 @@ export function ScopeSelector({
       <div className="tw-grid tw-gap-2">
         <Label>{scopeText}</Label>
         {variant === 'dropdown' ? (
-          <DropdownMenu
-            onOpenChange={(open) => {
-              // When the outer menu closes (click outside, Escape from the root, selecting a
-              // non-sub radio item), clear the submenu state so we don't reopen it stale next
-              // time the dropdown is opened.
-              if (!open) setOpenSub(undefined);
-            }}
-          >
+          <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <Button
+                ref={outerTriggerRef}
                 variant="outline"
                 role="combobox"
                 className="tw-w-full tw-justify-between tw-overflow-hidden tw-font-normal"
@@ -583,87 +694,182 @@ export function ScopeSelector({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
+              ref={setDropdownContentEl}
               className="tw-w-[var(--radix-dropdown-menu-trigger-width)] tw-min-w-[12rem]"
               align="start"
             >
-              <DropdownMenuRadioGroup
-                value={scope}
-                onValueChange={(value) => {
-                  const match = displayedScopes.find((option) => option.value === value);
-                  if (match) handleScopeChange(match.value);
-                }}
-              >
-                {simpleScopes.map(({ value, label, scrRefSuffix, id: scopeId, tooltip }) => (
-                  <DropdownMenuRadioItem key={scopeId} value={value} title={tooltip}>
-                    {renderScopeLabel(label, scrRefSuffix)}
-                  </DropdownMenuRadioItem>
+              <PopoverPortalContainerProvider container={dropdownContentEl}>
+                {simpleScopes.map(({ value, label, dropdownLabel, scrRefSuffix, id: scopeId }) => (
+                  <DropdownMenuCheckboxItem
+                    key={scopeId}
+                    ref={assignScopeItemRef(value)}
+                    checked={scope === value}
+                    // Scopes are mutually exclusive: a change only promotes the clicked item to
+                    // the active scope. Unchecking the current item is a no-op so there's always
+                    // exactly one selected scope.
+                    onCheckedChange={(checked) => {
+                      if (checked) handleScopeChange(value);
+                    }}
+                  >
+                    {renderScopeLabel(dropdownLabel ?? label, scrRefSuffix, isDropdownNarrow)}
+                  </DropdownMenuCheckboxItem>
                 ))}
-              </DropdownMenuRadioGroup>
-              {(selectedBooksScope || rangeScope) && <DropdownMenuSeparator />}
-              {selectedBooksScope && (
-                <DropdownMenuSub
-                  open={openSub === 'selectedBooks'}
-                  onOpenChange={() => {
-                    // Intentional no-op: Radix would otherwise close the submenu on
-                    // hover-away. Closing is driven entirely by our explicit handlers — trigger
-                    // toggle, Escape / ArrowLeft inside the sub-content, and the outer
-                    // DropdownMenu's onOpenChange when the whole menu dismisses.
-                  }}
-                >
-                  <DropdownMenuSubTrigger
-                    ref={assignSubTriggerRef('selectedBooks')}
+                {(selectedBooksScope || rangeScope) && <DropdownMenuSeparator />}
+                {selectedBooksScope && (
+                  <DropdownMenuItem
+                    ref={assignScopeItemRef('selectedBooks')}
                     // `focus:tw-text-accent-foreground` mirrors the simple RadioItems so the
-                    // hover effect is visually identical across the whole list.
+                    // hover effect is visually identical across the whole list. `tw-ps-8` keeps
+                    // the label aligned with the radio-item labels above.
                     className={cn('tw-relative tw-ps-8 focus:tw-text-accent-foreground')}
-                    onClick={() => toggleSubmenu('selectedBooks')}
-                    onKeyDown={handleSubTriggerKeyDown('selectedBooks')}
+                    onSelect={() => openDialogFallback('selectedBooks')}
                     data-selected={scope === 'selectedBooks' ? 'true' : undefined}
                   >
-                    {renderSubSelectionDot('selectedBooks')}
-                    {selectedBooksScope.label}
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent
-                    className="tw-p-2"
-                    sideOffset={4}
-                    onKeyDown={handleSubContentKeyDownWithClose}
-                    onEscapeKeyDown={handleSubEscape}
-                  >
-                    <div className="tw-grid tw-gap-2">
-                      <Label>{selectBooksText}</Label>
-                      {bookSelectorBlock}
-                    </div>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              )}
-              {rangeScope && (
-                <DropdownMenuSub
-                  open={openSub === 'range'}
-                  onOpenChange={() => {
-                    // See selectedBooks sub — intentional no-op.
-                  }}
-                >
-                  <DropdownMenuSubTrigger
-                    ref={assignSubTriggerRef('range')}
-                    // `focus:tw-text-accent-foreground` mirrors the simple RadioItems so the
-                    // hover effect is visually identical across the whole list.
+                    {renderDialogLauncherCheck('selectedBooks')}
+                    {/* Trailing ellipsis — standard affordance for a menu item that opens a
+                      dialog. */}
+                    {`${selectedBooksScope.label}…`}
+                  </DropdownMenuItem>
+                )}
+                {rangeScope && (
+                  <DropdownMenuItem
+                    ref={assignScopeItemRef('range')}
                     className={cn('tw-relative tw-ps-8 focus:tw-text-accent-foreground')}
-                    onClick={() => toggleSubmenu('range')}
-                    onKeyDown={handleSubTriggerKeyDown('range')}
+                    onSelect={() => openDialogFallback('range')}
                     data-selected={scope === 'range' ? 'true' : undefined}
                   >
-                    {renderSubSelectionDot('range')}
-                    {rangeScope.label}
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent
-                    className="tw-p-2"
-                    sideOffset={4}
-                    onKeyDown={handleSubContentKeyDownWithClose}
-                    onEscapeKeyDown={handleSubEscape}
-                  >
-                    {rangeBlock}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              )}
+                    {renderDialogLauncherCheck('range')}
+                    {`${rangeScope.label}…`}
+                  </DropdownMenuItem>
+                )}
+                {/* Navigate footer: a "Navigate" DropdownMenuLabel headline above a BCV
+                    styled as a full-width ghost menu-item-looking button showing the
+                    current reference. Only rendered when the caller wires up
+                    `onCurrentScrRefChange`, since the footer's whole purpose is to
+                    change the current ref. The BCV's own Popover portals inside
+                    `DropdownMenuContent` thanks to the enclosing
+                    `PopoverPortalContainerProvider`, and the row is wrapped in a
+                    DropdownMenuItem so arrow-key navigation can reach it alongside the
+                    other menu entries (see onSelect / pointer-down guard below). */}
+                {onCurrentScrRefChange && (
+                  <>
+                    <DropdownMenuSeparator />
+                    {/* Match cmdk's `[cmdk-group-heading]` styling used elsewhere in
+                        the app (see `CommandGroup`): xs muted-foreground medium-weight
+                        text with compact padding. Applied via className override on
+                        DropdownMenuLabel so we still get its semantic role while
+                        visually aligning with in-app command-palette section headings. */}
+                    <DropdownMenuLabel className="tw-px-2 tw-py-1.5 tw-text-xs tw-font-medium tw-text-muted-foreground">
+                      {navigateText}
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      ref={navMenuItemRef}
+                      // `tw-p-0` so the nested BCV button can fill the row — the inner
+                      // wrapper keeps the original `tw-px-1 tw-pb-1` spacing. The default
+                      // `focus:tw-bg-accent` from DropdownMenuItem is kept so arrow-key
+                      // navigation lights the row the same way as the other entries; the
+                      // BCV ghost button's hover uses the same accent color so a
+                      // simultaneous pointer hover still renders as a single highlight.
+                      className="tw-p-0"
+                      onSelect={(event) => {
+                        // Preserve the open dropdown menu: activating this row should
+                        // open the BCV popover, not dismiss the outer menu the way a
+                        // normal menu item would.
+                        event.preventDefault();
+                        // Radix fires onSelect for both mouse pointerdown and keyboard
+                        // Enter/Space. For a mouse click on the BCV button the button's
+                        // own onClick already opened the popover; re-invoking click()
+                        // here would toggle it back closed. The capture-phase handler
+                        // below flags pointer activations so we can skip re-entry in
+                        // that case; keyboard activations fall through and trigger the
+                        // BCV via its trigger button.
+                        if (navBcvPointerActivatedRef.current) {
+                          navBcvPointerActivatedRef.current = false;
+                          return;
+                        }
+                        // When the BCV popover is already open, Space / Enter on the
+                        // menu item (or on its descendant trigger button, since React
+                        // synthetic events bubble through the virtual tree to the
+                        // DropdownMenuItem) would otherwise re-click the trigger and
+                        // toggle the popover shut. Treat the activation as a no-op in
+                        // that state — the picker is already visible.
+                        if (isNavBcvOpenRef.current) return;
+                        navBcvWrapperRef.current?.querySelector('button')?.click();
+                      }}
+                    >
+                      <div
+                        ref={navBcvWrapperRef}
+                        className="tw-w-full tw-px-1 tw-pb-1"
+                        onPointerDownCapture={(e) => {
+                          // Pointer activations that land inside the BCV button are
+                          // handled by the button's own onClick; remember that so the
+                          // subsequent DropdownMenuItem onSelect skips the programmatic
+                          // re-click. Padding-only clicks fall through to onSelect so
+                          // the row still opens BCV when the user clicks near the edge.
+                          const target = e.target instanceof HTMLElement ? e.target : undefined;
+                          if (!target?.closest('button')) return;
+                          navBcvPointerActivatedRef.current = true;
+                          // Guarantee the flag doesn't outlive this gesture: click /
+                          // onSelect fire synchronously in the same frame as the
+                          // pointer gesture, so onSelect still sees the true value;
+                          // if the user cancels the click (drag-away), the RAF reset
+                          // keeps a later keyboard Enter from being wrongly skipped.
+                          requestAnimationFrame(() => {
+                            navBcvPointerActivatedRef.current = false;
+                          });
+                        }}
+                      >
+                        <BookChapterControl
+                          id="scope-navigate"
+                          scrRef={currentScrRef ?? defaultScrRef}
+                          handleSubmit={onCurrentScrRefChange}
+                          localizedBookNames={localizedBookNames}
+                          localizedStrings={bookChapterControlLocalizedStrings}
+                          getEndVerse={getEndVerse}
+                          triggerVariant="ghost"
+                          onOpenChange={(open) => {
+                            isNavBcvOpenRef.current = open;
+                          }}
+                          onCloseAutoFocus={(event) => {
+                            // By default Radix Popover restores focus to the BCV trigger
+                            // button — which lives inside this DropdownMenuItem. The outer
+                            // DropdownMenu only routes arrow-key navigation to focused
+                            // DropdownMenuItems, so leaving focus on the nested button
+                            // dead-ends keyboard navigation (arrow keys would instead
+                            // render the button's focus ring). Intercept the restore and
+                            // pull focus up to the menu item so the menu's roving focus
+                            // picks up from there.
+                            event.preventDefault();
+                            navMenuItemRef.current?.focus();
+                          }}
+                          // Modal so the picker gets its own FocusScope: opening BCV
+                          // from inside the modal DropdownMenu would otherwise collide
+                          // with the dropdown's focus trap whenever BCV's internal
+                          // view transitions (books → chapters → verses) cause a focus
+                          // blip, and the dropdown would yank focus out mid-transition
+                          // causing the popover to close before the user can select
+                          // a chapter.
+                          modal
+                          // Override BCV's default compact trigger into a full-width
+                          // left-aligned row that looks at home inside a menu list, and
+                          // drop the button's `tw-font-medium` so the reference reads at
+                          // normal weight alongside the other menu items. tailwind-merge's
+                          // last-wins conflict resolution picks these over BCV's defaults.
+                          className="tw-w-full tw-min-w-0 tw-max-w-none tw-justify-between tw-px-2 tw-font-normal"
+                          triggerContent={
+                            <>
+                              <span className="tw-min-w-0 tw-flex-1 tw-truncate tw-text-start">
+                                {formatScrRef(currentScrRef ?? defaultScrRef, 'id')}
+                              </span>
+                              <ChevronDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+                            </>
+                          }
+                        />
+                      </div>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </PopoverPortalContainerProvider>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
@@ -672,8 +878,8 @@ export function ScopeSelector({
             onValueChange={handleScopeChange}
             className="tw-flex tw-flex-col tw-space-y-1"
           >
-            {displayedScopes.map(({ value, label, scrRefSuffix, id: scopeId, tooltip }) => (
-              <div key={scopeId} className="tw-flex tw-items-center" title={tooltip}>
+            {displayedScopes.map(({ value, label, scrRefSuffix, id: scopeId }) => (
+              <div key={scopeId} className="tw-flex tw-items-center">
                 <RadioGroupItem className="tw-me-2" value={value} id={scopeId} />
                 <Label htmlFor={scopeId}>{renderScopeLabel(label, scrRefSuffix)}</Label>
               </div>
@@ -683,7 +889,7 @@ export function ScopeSelector({
       </div>
 
       {/* In the radio variant, render the picker inline below the scope chooser. In the dropdown
-          variant, the picker lives inside the flyout submenu. */}
+          variant, the picker lives inside a modal dialog (see the Dialog blocks below). */}
       {variant === 'radio' && scope === 'selectedBooks' && (
         <div className="tw-grid tw-gap-2">
           <Label>{selectBooksText}</Label>
@@ -692,6 +898,78 @@ export function ScopeSelector({
       )}
 
       {variant === 'radio' && scope === 'range' && rangeBlock}
+
+      {/* Dropdown variant: selectedBooks and range entries always open in a modal dialog
+          (no flyout submenu path). `tw-pe-8` on the header reserves space for the
+          absolute-positioned close button so it can't overlap a long title. */}
+      {variant === 'dropdown' && selectedBooksScope && (
+        <Dialog
+          open={dialogSub === 'selectedBooks'}
+          onOpenChange={(open) => {
+            if (!open) setDialogSub(undefined);
+          }}
+        >
+          <DialogContent
+            ref={setBooksDialogEl}
+            onCloseAutoFocus={handleDialogCloseAutoFocus}
+            // Defense-in-depth for Escape: Radix's DismissableLayer stack already
+            // routes ESC to the topmost open layer (the inner BookSelector popover
+            // when it's open), so the dialog's own dismiss normally doesn't fire.
+            // But if an inner popover is ever open simultaneously, make sure ESC
+            // doesn't also dismiss the dialog — search the subtree for a
+            // `data-state="open"` descendant (Radix tags every open popover content
+            // with it) and preventDefault if one exists. `querySelector` only
+            // returns descendants, so the dialog itself can't match.
+            onEscapeKeyDown={(event) => {
+              if (booksDialogEl?.querySelector('[data-state="open"]')) {
+                event.preventDefault();
+              }
+            }}
+          >
+            <PopoverPortalContainerProvider container={booksDialogEl}>
+              <DialogHeader className="tw-pe-8">
+                <DialogTitle>{chooseBooksText}</DialogTitle>
+              </DialogHeader>
+              {bookSelectorBlock}
+              <DialogFooter>
+                <Button onClick={() => setDialogSub(undefined)}>{okText}</Button>
+              </DialogFooter>
+            </PopoverPortalContainerProvider>
+          </DialogContent>
+        </Dialog>
+      )}
+      {variant === 'dropdown' && rangeScope && (
+        <Dialog
+          open={dialogSub === 'range'}
+          onOpenChange={(open) => {
+            if (!open) setDialogSub(undefined);
+          }}
+        >
+          <DialogContent
+            ref={setRangeDialogEl}
+            onCloseAutoFocus={handleDialogCloseAutoFocus}
+            // See the books dialog — same rationale. When a range BCV picker is open,
+            // Escape must dismiss only the picker, not the whole dialog.
+            onEscapeKeyDown={(event) => {
+              if (rangeDialogEl?.querySelector('[data-state="open"]')) {
+                event.preventDefault();
+              }
+            }}
+          >
+            <PopoverPortalContainerProvider container={rangeDialogEl}>
+              <DialogHeader className="tw-pe-8">
+                <DialogTitle>{selectRangeText}</DialogTitle>
+              </DialogHeader>
+              {rangeBlock}
+              <DialogFooter>
+                <Button ref={rangeOkButtonRef} onClick={() => setDialogSub(undefined)}>
+                  {okText}
+                </Button>
+              </DialogFooter>
+            </PopoverPortalContainerProvider>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

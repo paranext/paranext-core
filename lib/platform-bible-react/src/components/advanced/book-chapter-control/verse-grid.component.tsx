@@ -57,7 +57,9 @@ export function VerseGrid({
               disabled={disabled}
               aria-disabled={disabled || undefined}
               className={cn(
-                'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
+                // See chapter-grid — no fixed width, min-w-0, and px-0 override
+                // so multi-digit verse numbers fit when the popover is narrow.
+                'tw-h-8 tw-min-w-0 tw-cursor-pointer tw-justify-center tw-rounded-md tw-px-0 tw-text-center tw-text-sm',
                 {
                   'tw-bg-primary tw-text-primary-foreground':
                     bookId === scrRef.book &&

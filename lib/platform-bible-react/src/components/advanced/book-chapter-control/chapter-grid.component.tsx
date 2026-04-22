@@ -52,7 +52,13 @@ export function ChapterGrid({
               disabled={disabled}
               aria-disabled={disabled || undefined}
               className={cn(
-                'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
+                // No fixed width (previously `tw-w-8`) so cells fill their grid
+                // column (1fr) and adapt when the popover is narrower than the
+                // default 280px. `tw-min-w-0` lets cells shrink below their
+                // intrinsic content width; `tw-px-0` overrides CommandItem's
+                // default horizontal padding so multi-digit chapter numbers still
+                // fit in tight cells. Keep `tw-h-8` for a consistent row height.
+                'tw-h-8 tw-min-w-0 tw-cursor-pointer tw-justify-center tw-rounded-md tw-px-0 tw-text-center tw-text-sm',
                 {
                   'tw-bg-primary tw-text-primary-foreground':
                     bookId === scrRef.book && chapter === scrRef.chapterNum,

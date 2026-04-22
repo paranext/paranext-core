@@ -21,7 +21,15 @@ import {
   ALL_ENGLISH_BOOK_NAMES,
   doesBookMatchQuery,
 } from '@/components/shared/book.utils';
-import { KeyboardEvent, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  KeyboardEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { generateCommandValue } from '@/components/shared/book-item.utils';
 import RecentSearches from '../recent-searches.component';
 import { useQuickNavButtons } from './book-chapter-control.navigation';
@@ -58,6 +66,13 @@ export function BookChapterControl({
   id,
   getEndVerse,
   disableReferencesUpTo,
+  submitKeys,
+  triggerContent,
+  triggerVariant = 'outline',
+  onOpenChange,
+  onCloseAutoFocus,
+  modal = false,
+  align = 'center',
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
 
@@ -82,6 +97,17 @@ export function BookChapterControl({
   >(undefined);
   const [isCommandListHidden, setIsCommandListHidden] = useState(false);
 
+  // Reference to the PopoverTrigger button. Used by `onPointerDownOutside` to detect
+  // clicks on our own trigger while the popover is open — see that handler for the full
+  // story. `null` is React's canonical "not yet attached" ref value; there's no undefined
+  // equivalent in the DOM/ref API.
+  // eslint-disable-next-line no-null/no-null
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // Set in `onPointerDownOutside` when we detect a click on our trigger while the popover
+  // is open. Consumed in Button's `onClick` to call `event.preventDefault()` before Radix's
+  // own `onOpenToggle` handler runs — `composeEventHandlers` skips `onOpenToggle` when
+  // `defaultPrevented` is true, so the popover stays closed instead of toggling back open.
+  const justClosedByTriggerRef = useRef(false);
   // Reference to the Command component
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const commandRef = useRef<HTMLDivElement>(undefined!);
@@ -157,6 +183,19 @@ export function BookChapterControl({
     [inputValue, availableBooks, localizedBookNames],
   );
 
+  // Surface open/close transitions to the parent. Fires only on the true boolean flip, not on
+  // internal back-navigation (verses → chapters → books) which is handled without closing the
+  // popover. Skip the initial mount run so callers don't see a spurious `onOpenChange(false)`
+  // before any interaction — that phantom close has tripped parent focus-restore logic.
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    onOpenChange?.(isCommandOpen);
+  }, [isCommandOpen, onOpenChange]);
+
   // #endregion
 
   // #region Submitting references
@@ -194,13 +233,10 @@ export function BookChapterControl({
         chapterNum,
         verseNum: verseNumber,
       });
+      // Don't reset view / selection state here — `handleOpenChange(true)` does that
+      // when the popover reopens. Resetting now causes a flicker: the popover's fade-out
+      // animation would otherwise render the book list for a frame before unmounting.
       setIsCommandOpen(false);
-      setViewMode('books');
-      setSelectedBookForChaptersView(undefined);
-      setSelectedBookForVersesView(undefined);
-      setSelectedChapterForVersesView(undefined);
-      setInputValue('');
-      setCommandValue('');
     },
     [handleSubmitAndAddToRecent, selectedBookForVersesView, selectedChapterForVersesView, topMatch],
   );
@@ -251,10 +287,9 @@ export function BookChapterControl({
         chapterNum: chapterNumber,
         verseNum: 1,
       });
+      // See `handleVerseSelect` — skip the view/selection reset to avoid a flicker
+      // back to the book list during the popover's fade-out animation.
       setIsCommandOpen(false);
-      setViewMode('books');
-      setSelectedBookForChaptersView(undefined);
-      setInputValue('');
     },
     [handleSubmitAndAddToRecent, viewMode, selectedBookForChaptersView, topMatch, getEndVerse],
   );
@@ -304,33 +339,22 @@ export function BookChapterControl({
     }
   }, [selectedBookForVersesView, handleBackToBooks]);
 
-  // Reset view state when popover opens
-  const handleOpenChange = useCallback(
-    (shouldCommandBeOpen: boolean) => {
-      // If we're closing from verse view, go back to chapter view instead
-      if (!shouldCommandBeOpen && viewMode === 'verses') {
-        handleBackToChapters();
-        return;
-      }
-      // If we're closing from chapter view, don't close popover but go back to books view instead
-      if (!shouldCommandBeOpen && viewMode === 'chapters') {
-        handleBackToBooks();
-        return;
-      }
-
-      setIsCommandOpen(shouldCommandBeOpen);
-
-      if (shouldCommandBeOpen) {
-        // Reset Command state when opening
-        setViewMode('books');
-        setSelectedBookForChaptersView(undefined);
-        setSelectedBookForVersesView(undefined);
-        setSelectedChapterForVersesView(undefined);
-        setInputValue('');
-      }
-    },
-    [viewMode, handleBackToBooks, handleBackToChapters],
-  );
+  // Reset view state when popover opens. Close requests always close the popover —
+  // `Escape`, outside-click, and any other Radix-initiated dismiss route through here and
+  // the user expects them to dismiss the whole picker. Stepping back through views is the
+  // back button's job; trying to double-duty dismiss as "go up one level" silently rewinds
+  // the user's selection when Radix fires a close for a transient reason (focus blip, click
+  // in a non-item padding area, etc.).
+  const handleOpenChange = useCallback((shouldCommandBeOpen: boolean) => {
+    setIsCommandOpen(shouldCommandBeOpen);
+    if (shouldCommandBeOpen) {
+      setViewMode('books');
+      setSelectedBookForChaptersView(undefined);
+      setSelectedBookForVersesView(undefined);
+      setSelectedChapterForVersesView(undefined);
+      setInputValue('');
+    }
+  }, []);
 
   // #endregion
 
@@ -422,13 +446,34 @@ export function BookChapterControl({
   // #region Keyboard handling
 
   // Handle keyboard navigation for CommandInput
-  const handleInputKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
-    // Override default Home and End key behavior to work normally for cursor movement.
-    // Default behavior was to jump to the start/end of the list of items in the Command
-    if (event.key === 'Home' || event.key === 'End') {
-      event.stopPropagation(); // Prevent Command component from handling these
-    }
-  }, []);
+  const handleInputKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      // Override default Home and End key behavior to work normally for cursor movement.
+      // Default behavior was to jump to the start/end of the list of items in the Command
+      if (event.key === 'Home' || event.key === 'End') {
+        event.stopPropagation(); // Prevent Command component from handling these
+      }
+
+      // Callers can declare extra submit keys (e.g. space and `-` for range pickers). We
+      // only submit when the typed input resolves to a fully-qualified reference (book
+      // AND chapter AND verse) — a partial match like "GEN" or "GEN 1" would be ambiguous
+      // as an auto-complete from a separator keystroke, so we leave those for the user to
+      // finish. When we do submit, consume the keystroke so the character doesn't end up
+      // in the input after the popover closes.
+      if (
+        submitKeys &&
+        submitKeys.includes(event.key) &&
+        topMatch &&
+        topMatch.chapterNum !== undefined &&
+        topMatch.verseNum !== undefined
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        handleTopMatchSelect();
+      }
+    },
+    [submitKeys, topMatch, handleTopMatchSelect],
+  );
 
   // Grid-aware keyboard navigation using Command's controlled value
   const handleCommandKeyDown = useCallback(
@@ -437,6 +482,49 @@ export function BookChapterControl({
 
       const { isLetter, isDigit } = getKeyCharacterType(event.key);
 
+      // Enter / Space pick the highlighted chapter / verse. cmdk binds Enter natively on
+      // the Command root, but a grid picker reads more like "activate the focused cell"
+      // than an input form, so we centralize both keys here and let the `data-selected`
+      // item drive the submit. When focus is on a natively interactive element (the back
+      // button), yield: the browser's own activation (click on Enter keydown / Space
+      // keyup) should run the button's `onClick`, not submit a grid cell. We still
+      // `stopPropagation` so cmdk's Enter handler doesn't ALSO fire in parallel and
+      // submit the highlighted chapter while the back button is being pressed.
+      if (
+        (viewMode === 'chapters' || viewMode === 'verses') &&
+        (event.key === ' ' || event.key === 'Enter')
+      ) {
+        const target = event.target instanceof HTMLElement ? event.target : undefined;
+        const isTargetInteractive = !!target?.closest(
+          'button, a, input, select, textarea, [role="button"]',
+        );
+        if (isTargetInteractive) {
+          // Don't preventDefault — browser-native activation (Enter → click, Space →
+          // click on keyup) must still reach the button's onClick.
+          event.stopPropagation();
+          return;
+        }
+        const highlighted = commandRef.current?.querySelector<HTMLElement>(
+          '[cmdk-item][data-selected="true"]:not([data-disabled="true"])',
+        );
+        if (highlighted) {
+          event.preventDefault();
+          event.stopPropagation();
+          highlighted.click();
+          return;
+        }
+      }
+
+      // Letter / digit keys in chapter or verse view do nothing: the filter input isn't
+      // visible there, so forwarding keystrokes to it would silently exit the grid
+      // (jumping back to the book list and typing into the hidden input). Users stay
+      // on the current page; Backspace is the explicit way back.
+      if ((viewMode === 'chapters' || viewMode === 'verses') && (isLetter || isDigit)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       // Handle keypresses in chapter viewmode
       if (viewMode === 'chapters') {
         // Handle backspace for going back to books
@@ -444,28 +532,6 @@ export function BookChapterControl({
           event.preventDefault();
           event.stopPropagation();
           handleBackToBooks();
-          return;
-        }
-
-        if (isLetter || isDigit) {
-          event.preventDefault();
-          event.stopPropagation();
-          setViewMode('books');
-          setSelectedBookForChaptersView(undefined);
-
-          if (isDigit && selectedBookForChaptersView) {
-            // Digit pressed: go back to book list and start search with current book name + digit
-            const currentBookName = ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView];
-            setInputValue(`${currentBookName} ${event.key}`);
-          } else {
-            setInputValue(event.key);
-          }
-
-          setTimeout(() => {
-            if (commandInputRef.current) {
-              commandInputRef.current.focus();
-            }
-          }, 0);
           return;
         }
       }
@@ -477,22 +543,6 @@ export function BookChapterControl({
           event.preventDefault();
           event.stopPropagation();
           handleBackToChapters();
-          return;
-        }
-
-        if (isLetter) {
-          event.preventDefault();
-          event.stopPropagation();
-          setViewMode('books');
-          setSelectedBookForChaptersView(undefined);
-          setSelectedBookForVersesView(undefined);
-          setSelectedChapterForVersesView(undefined);
-          setInputValue(event.key);
-          setTimeout(() => {
-            if (commandInputRef.current) {
-              commandInputRef.current.focus();
-            }
-          }, 0);
           return;
         }
       }
@@ -507,6 +557,13 @@ export function BookChapterControl({
 
         const maxVerse = getEndVerse(bookId, chapterNum);
         if (!maxVerse) return;
+
+        // Arrow keys drive the grid now — pull focus off the back button (the only
+        // natively focusable element in this view) so its lingering focus ring doesn't
+        // compete visually with the grid's `data-selected` highlight. The Command root
+        // has `tabIndex={-1}` (cmdk sets it), so it's a valid focus target and keeps
+        // our PopoverContent capture-phase key handling working unchanged.
+        commandRef.current?.focus();
 
         const currentVerse = (() => {
           if (!commandValue) return 1;
@@ -558,6 +615,14 @@ export function BookChapterControl({
           viewMode === 'chapters' ? selectedBookForChaptersView : topMatch?.book;
         if (!currentBookId) return;
 
+        // See the verses grid above — pull focus off the back button when arrow
+        // navigation starts so its focus ring doesn't shadow the `data-selected`
+        // highlight in the grid. Skipped for the `books` + topMatch branch where focus
+        // already lives on the CommandInput.
+        if (viewMode === 'chapters') {
+          commandRef.current?.focus();
+        }
+
         // Parse chapter from current command value
         const currentChapter = (() => {
           if (!commandValue) return 1;
@@ -597,8 +662,12 @@ export function BookChapterControl({
           event.preventDefault();
           event.stopPropagation();
 
-          // Update the command value to the target chapter
-          setCommandValue(generateCommandValue(currentBookId, localizedBookNames, targetChapter));
+          // Match ChapterGrid's CommandItem value exactly (no localized parts) — using
+          // generateCommandValue here would diverge when localizedBookNames is provided and
+          // cmdk wouldn't find a matching item to highlight.
+          setCommandValue(
+            `${currentBookId} ${ALL_ENGLISH_BOOK_NAMES[currentBookId] || ''} ${targetChapter}`,
+          );
 
           // Scroll the target chapter into view using refs
           setTimeout(() => {
@@ -620,12 +689,35 @@ export function BookChapterControl({
       selectedChapterForVersesView,
       getEndVerse,
       commandValue,
-      localizedBookNames,
     ],
   );
 
   const handleQuickNavButtonKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.shiftKey || event.key === 'Tab' || event.key === ' ') return;
+
+    // Enter must activate the focused quick-nav button the way any other button
+    // would. The browser turns keydown Enter into a click automatically, but cmdk's
+    // onKeyDown on the Command root (an ancestor) would fire next and call
+    // `event.preventDefault()` in its Enter branch — canceling that click synthesis
+    // and submitting the highlighted book list item instead of running the
+    // quick-nav handler. Stop propagation here (button onKeyDown runs before the
+    // ancestor's) so cmdk never sees the Enter. Do NOT preventDefault — that's
+    // what the browser uses to produce the click on the button.
+    if (event.key === 'Enter') {
+      event.stopPropagation();
+      return;
+    }
+
+    // Up / Down signal the user wants to walk the book list. cmdk's arrow-key
+    // handler on the Command root takes care of moving the `data-selected`
+    // highlight (the keydown keeps bubbling up past us to reach it), but the
+    // quick-nav button's focus ring would otherwise linger and compete with
+    // the cmdk highlight. Pull focus to the search input — the visual focus
+    // state that a user expects to see during book-list navigation.
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      commandInputRef.current?.focus();
+      return;
+    }
 
     const { isLetter, isDigit } = getKeyCharacterType(event.key);
 
@@ -681,6 +773,15 @@ export function BookChapterControl({
     if (viewMode === 'chapters' && selectedBookForChaptersView) {
       // Check if we're entering chapter view for the currently selected book
       const isCurrentlySelectedBook = selectedBookForChaptersView === scrRef.book;
+      const initialChapter = isCurrentlySelectedBook ? scrRef.chapterNum : 1;
+
+      // Seed commandValue to the starting chapter so arrow-key navigation has a concrete
+      // starting point (see handleCommandKeyDown) and cmdk visibly highlights that chapter
+      // even when focus is pinned on the PopoverContent wrapper by Radix's FocusScope in
+      // modal mode. Format must match ChapterGrid's CommandItem `value`.
+      setCommandValue(
+        `${selectedBookForChaptersView} ${ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView] || ''} ${initialChapter}`,
+      );
 
       // Reset scroll position to top, except when viewing the currently selected book
       setTimeout(() => {
@@ -715,6 +816,14 @@ export function BookChapterControl({
       const isCurrentlySelectedChapter =
         selectedBookForVersesView === scrRef.book &&
         selectedChapterForVersesView === scrRef.chapterNum;
+      const initialVerse = isCurrentlySelectedChapter ? scrRef.verseNum : 1;
+
+      // Seed commandValue so arrow-key navigation has a concrete starting verse and cmdk
+      // highlights it when focus is pinned on the PopoverContent wrapper (modal FocusScope).
+      // Format must match VerseGrid's CommandItem `value`.
+      setCommandValue(
+        `${selectedBookForVersesView} ${ALL_ENGLISH_BOOK_NAMES[selectedBookForVersesView] || ''} ${selectedChapterForVersesView}:${initialVerse}`,
+      );
 
       setTimeout(() => {
         if (commandListRef.current) {
@@ -744,25 +853,81 @@ export function BookChapterControl({
   // #endregion
 
   return (
-    <Popover open={isCommandOpen} onOpenChange={handleOpenChange}>
+    <Popover open={isCommandOpen} onOpenChange={handleOpenChange} modal={modal}>
       <PopoverTrigger asChild>
         <Button
+          ref={triggerRef}
           aria-label="book-chapter-trigger"
-          variant="outline"
+          variant={triggerVariant}
           role="combobox"
           aria-expanded={isCommandOpen}
           className={cn(
             'tw-h-8 tw-w-full tw-min-w-16 tw-max-w-48 tw-overflow-hidden tw-px-1',
             className,
           )}
+          onClick={(event) => {
+            // When `onPointerDownOutside` detected our trigger was clicked while the
+            // popover was open, it already closed the popover and set this flag. Without
+            // this guard, the click event reaches Radix's `onOpenToggle` which sees
+            // `open=false` (we already closed it) and toggles it back to `true`, causing
+            // the reopen. `event.preventDefault()` makes `composeEventHandlers` skip
+            // `onOpenToggle` so the popover stays closed.
+            if (justClosedByTriggerRef.current) {
+              justClosedByTriggerRef.current = false;
+              event.preventDefault();
+            }
+          }}
         >
-          <span className="tw-truncate">{currentDisplayValue}</span>
+          {triggerContent ?? <span className="tw-truncate">{currentDisplayValue}</span>}
         </Button>
       </PopoverTrigger>
-      <PopoverContent id={id} forceMount className="tw-w-[280px] tw-p-0" align="center">
+      <PopoverContent
+        id={id}
+        // Adaptive width: follow the trigger's width (Radix exposes it as
+        // `--radix-popper-anchor-width`) with sensible bounds so the popover works
+        // in narrow host contexts (e.g. a 200px scope dropdown) without forcing a
+        // fixed 280px that would overflow the container. Floor at 200px so very
+        // small triggers still get a usable picker; cap at 280px so a wide trigger
+        // (full-row menu item) doesn't spawn an unnecessarily large popover.
+        className="tw-w-[var(--radix-popper-anchor-width,280px)] tw-min-w-[200px] tw-max-w-[280px] tw-p-0"
+        align={align}
+        // Capture-phase handler at the popover root so grid / view-switch key handling works
+        // regardless of which element inside the popover has focus. When `modal` is true Radix's
+        // FocusScope frequently lands focus on the popover wrapper after a view transition (e.g.
+        // book → chapter), because the chapter grid has no natively tabbable elements — and a
+        // bubble-phase handler on Command would never fire because Command isn't in the event path.
+        onKeyDownCapture={handleCommandKeyDown}
+        // Bubble-phase stopPropagation: the PopoverContent portals into its container, but React
+        // synthetic events still bubble through the virtual tree — so keystrokes typed in the
+        // Command input would reach any ancestor DropdownMenu and be interpreted as menu
+        // activation (e.g. Space toggling the navigate DropdownMenuItem, which closes the
+        // picker). The picker is a self-contained modal; every key either fired the cmdk / grid
+        // handlers above or should just type into the input. Either way it has no business
+        // reaching an outer menu.
+        onKeyDown={(event) => event.stopPropagation()}
+        // Close-on-trigger-click while open: Radix's built-in DismissableLayer prevents
+        // dismissal when the pointer target is the trigger (it treats that as "user intends
+        // to toggle, let the trigger's own onClick handle it"). But in our controlled
+        // Popover the trigger's `onOpenToggle` calls `onOpenChange(!open)` — by the time
+        // the click fires, React may have already re-rendered with `open=false` (from a
+        // prior close), so `!open = true` and the popover reopens. We intercept here:
+        // close the popover early (before Radix's own dismiss path) and set
+        // `justClosedByTriggerRef` so the trigger's `onClick` can call `preventDefault()`
+        // which makes Radix's `composeEventHandlers` skip `onOpenToggle` entirely.
+        onPointerDownOutside={(event) => {
+          const target = event.target;
+          if (triggerRef.current && target instanceof Node && triggerRef.current.contains(target)) {
+            // Mark that we're closing due to a trigger click so the subsequent `click`
+            // event on the button (which would reopen the popover via Radix's
+            // `onOpenToggle`) can be blocked. See `justClosedByTriggerRef`.
+            justClosedByTriggerRef.current = true;
+            handleOpenChange(false);
+          }
+        }}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <Command
           ref={commandRef}
-          onKeyDown={handleCommandKeyDown}
           loop
           value={commandValue}
           onValueChange={setCommandValue}
@@ -821,7 +986,6 @@ export function BookChapterControl({
                 size="sm"
                 onClick={viewMode === 'verses' ? handleBackToChapters : handleBackToBooks}
                 className="tw-mr-2 tw-h-6 tw-w-6 tw-p-0"
-                tabIndex={-1}
               >
                 {direction === 'ltr' ? (
                   <ArrowLeft className="tw-h-4 tw-w-4" />
