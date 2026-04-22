@@ -21,7 +21,10 @@ namespace TestParanextDataProvider
                 new ProjectName
                 {
                     ShortName = projectDetails.Name,
-                    ProjectPath = projectDetails.HomeDirectory
+                    ProjectPath = EnsureNonEmptyHomeDirectory(
+                        projectDetails.HomeDirectory,
+                        projectDetails.Metadata.Id
+                    ),
                 },
                 RegistrationInfo.DefaultUser
             )
@@ -30,7 +33,10 @@ namespace TestParanextDataProvider
             projectName = new ProjectName
             {
                 ShortName = projectDetails.Name + _id,
-                ProjectPath = projectDetails.HomeDirectory
+                ProjectPath = EnsureNonEmptyHomeDirectory(
+                    projectDetails.HomeDirectory,
+                    projectDetails.Metadata.Id
+                ),
             };
 
             Settings.Editable = true;
@@ -49,13 +55,46 @@ namespace TestParanextDataProvider
         }
 
         public DummyScrText()
-            : this(
-                new ProjectDetails(
-                    "Dummy",
-                    new ProjectMetadata(HexId.CreateNew().ToString(), []),
-                    ""
-                )
-            ) { }
+            : this(CreateUniqueDummyDetails()) { }
+
+        /// <summary>
+        /// Build <see cref="ProjectDetails"/> with a unique, non-empty
+        /// <see cref="ProjectDetails.HomeDirectory"/> per invocation.
+        /// </summary>
+        /// <remarks>
+        /// Using an empty <c>HomeDirectory</c> causes multiple instances to
+        /// share the same <c>ProjectPath</c> on the resulting <c>ScrText</c>.
+        /// When several such instances are added to the global
+        /// <c>ScrTextCollection</c> via <c>FakeAddProject</c>, internal
+        /// path-indexed lookups inside
+        /// <c>ScrTextCollection.RefreshScrTextsInternal</c> fail a
+        /// <c>SingleOrDefault</c> call with "Sequence contains more than one
+        /// matching element" the next time <c>ParatextData.Initialize</c> is
+        /// called — even after the tests that added them have completed and
+        /// called <c>ScrTextCollection.Remove</c>. A unique non-empty path
+        /// per instance sidesteps the collision entirely.
+        /// </remarks>
+        private static ProjectDetails CreateUniqueDummyDetails()
+        {
+            var id = HexId.CreateNew().ToString();
+            return new ProjectDetails("Dummy", new ProjectMetadata(id, []), "testDirectory_" + id);
+        }
+
+        /// <summary>
+        /// Returns <paramref name="homeDirectory"/> when non-empty; otherwise
+        /// returns a unique fake path derived from <paramref name="id"/>.
+        /// </summary>
+        /// <remarks>
+        /// Idempotent: for a given <paramref name="id"/>, multiple calls with
+        /// an empty <paramref name="homeDirectory"/> return the same
+        /// substituted path, so the constructor's two invocations (for the
+        /// <c>base(...)</c> call and the field assignment) stay consistent.
+        /// Protects all callers of the parameterized constructor — not just
+        /// the parameterless overload — from the collision described on
+        /// <see cref="CreateUniqueDummyDetails"/>.
+        /// </remarks>
+        private static string EnsureNonEmptyHomeDirectory(string homeDirectory, string id) =>
+            string.IsNullOrEmpty(homeDirectory) ? "testDirectory_" + id : homeDirectory;
 
         protected override void Load(bool ignoreLoadErrors = false)
         {
@@ -74,7 +113,7 @@ namespace TestParanextDataProvider
                 {
                     FullName = "Test ScrText",
                     MinParatextDataVersion = ParatextInfo.MinSupportedParatextDataVersion,
-                    Guid = _id
+                    Guid = _id,
                 };
 
             return settings;
