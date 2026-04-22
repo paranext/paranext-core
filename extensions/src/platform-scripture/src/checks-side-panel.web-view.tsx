@@ -764,7 +764,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
             localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
           }
           buttonClassName="tw-flex-1 tw-min-w-32 tw-font-normal"
-          popoverContentClassName="tw-w-[300px]"
         />
 
         {/* Scope Filter */}

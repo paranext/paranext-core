@@ -1022,24 +1022,84 @@ export interface MarkerMenuProps {
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
 export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
-/** A single project entry rendered in the {@link ProjectSelector}. */
+/** Category used by the "By type" sort/group mode in the project selector. */
+export type ProjectSelectorProjectType = "project" | "resource";
+/** Sort order for the project selector's list. */
+export type ProjectSelectorSortMode = "alphabetical" | "lastUpdated";
+/** Grouping applied to the project selector's list. `none` renders a flat list. */
+export type ProjectSelectorGroupMode = "none" | "bySelection" | "byType" | "byOpenedTabs";
+/** A single project entry rendered in the project selector. */
 export type ProjectSelectorProject = {
 	/** Unique project identifier. */
 	id: string;
-	/** Short project name, shown as the primary label on the trigger and in the list. */
+	/** Short project name, shown as the primary label. */
 	shortName: string;
-	/** Full project name, shown as a secondary label next to the short name. */
+	/** Full project name, shown as a secondary label and in the tooltip. */
 	fullName: string;
+	/** Human-readable language name (e.g. "Hawaii Creole English"). Used in the tooltip. */
+	language?: string;
+	/** BCP-47-ish language code (e.g. "hwc-x-ux"). Used in the tooltip. */
+	languageCode?: string;
+	/** Whether the project is currently opened in a tab. Drives the "Opened tabs" grouping. */
+	isOpenedTab?: boolean;
+	/** Category used by the "By type" grouping. */
+	projectType?: ProjectSelectorProjectType;
+	/**
+	 * Short label of the scroll group the project is docked in (e.g. "A", "B"). Rendered on the
+	 * right side of the row and in the tooltip.
+	 */
+	scrollGroup?: string;
+	/** Current scripture reference of the scroll group, shown in the tooltip (e.g. "MAT 3:16"). */
+	scrollGroupScrRef?: string;
+	/**
+	 * When the project was last updated — `Date`, millisecond timestamp, or ISO string. Used by the
+	 * "Last updated" sort mode (most recent first). Projects without a value sort after those with
+	 * one.
+	 */
+	lastUpdated?: Date | number | string;
 };
-export type ProjectSelectorProps = {
-	/** Projects to choose from. Rendered in the order provided. */
+/** Optional labels surfaced by the project selector UI. */
+export type ProjectSelectorLocalizedStrings = {
+	/** Placeholder for the popover's search input. Defaults to `"Search projects & resources"`. */
+	searchPlaceholder?: string;
+	/** Accessible label for the sort/group icon button. Defaults to `"Sort and group"`. */
+	sortAriaLabel?: string;
+	/** Sort menu: section label for the sort options. Defaults to `"Sort"`. */
+	sortSectionLabel?: string;
+	/** Sort menu: section label for the grouping options. Defaults to `"Group"`. */
+	groupSectionLabel?: string;
+	/** Sort menu: "Alphabetical" item. Defaults to `"Alphabetical"`. */
+	sortAlphabetical?: string;
+	/** Sort menu: "Last updated" item. Defaults to `"Last updated"`. */
+	sortLastUpdated?: string;
+	/** Group menu: "None" item (no grouping). Defaults to `"None"`. */
+	groupNone?: string;
+	/** Group menu: "By selection" item. Defaults to `"By selection"`. */
+	groupBySelection?: string;
+	/** Group menu: "By type" item. Defaults to `"By type"`. */
+	groupByType?: string;
+	/** Group menu: "By opened tabs" item. Defaults to `"By opened tabs"`. */
+	groupByOpenedTabs?: string;
+	/** Group heading for opened tabs. Defaults to `"Opened tabs"`. */
+	openedTabsGroupHeading?: string;
+	/** Group heading for the "Other projects & resources" group. Defaults to `"Other projects & resources"`. */
+	otherProjectsGroupHeading?: string;
+	/** Group heading for selected projects (used by "By selection"). Defaults to `"Selected"`. */
+	selectedGroupHeading?: string;
+	/** Group heading for unselected projects (used by "By selection"). Defaults to `"Not selected"`. */
+	unselectedGroupHeading?: string;
+	/** Group heading for the Projects group (used by "By type"). Defaults to `"Projects"`. */
+	projectsGroupHeading?: string;
+	/** Group heading for the Resources group (used by "By type"). Defaults to `"Resources"`. */
+	resourcesGroupHeading?: string;
+	/** Multi-select: "Select all" button. Defaults to `"Select all"`. */
+	selectAll?: string;
+	/** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
+	clearAll?: string;
+};
+type CommonProjectSelectorProps = {
+	/** Projects to choose from. */
 	projects: readonly ProjectSelectorProject[];
-	/** The id of the currently selected project, if any. */
-	selectedProjectId?: string;
-	/** Called with the newly selected project's id. */
-	onChangeProject: (projectId: string) => void;
-	/** If provided, the options are rendered under a group with this heading. */
-	groupHeading?: string;
 	/** Text shown on the trigger when no project is selected. */
 	buttonPlaceholder?: string;
 	/** Message shown when the user's search yields no matching projects. */
@@ -1058,15 +1118,47 @@ export type ProjectSelectorProps = {
 	alignDropDown?: "start" | "center" | "end";
 	/** If true, the trigger is disabled. */
 	isDisabled?: boolean;
+	/**
+	 * Fallback heading used by the flat sort modes ("Alphabetical" / "Last updated"). Ignored by
+	 * the grouping modes, which use their own headings from `localizedStrings`.
+	 */
+	groupHeading?: string;
+	/** Optional localized strings. Each property has a reasonable English default. */
+	localizedStrings?: ProjectSelectorLocalizedStrings;
+	/** Initial sort mode. Defaults to `"alphabetical"`. */
+	defaultSortMode?: ProjectSelectorSortMode;
+	/** Initial group mode. Defaults to `"byOpenedTabs"`. */
+	defaultGroupMode?: ProjectSelectorGroupMode;
+};
+export type ProjectSelectorProps = CommonProjectSelectorProps & {
+	/** Id of the currently selected project, if any. */
+	selectedProjectId?: string;
+	/** Called with the newly selected project's id. */
+	onChangeProject: (projectId: string) => void;
+};
+export type ProjectMultiSelectorProps = CommonProjectSelectorProps & {
+	/** Ids of the currently selected projects. */
+	selectedProjectIds: readonly string[];
+	/** Called with the next full list of selected ids. */
+	onChangeSelectedProjectIds: (projectIds: string[]) => void;
+	/**
+	 * Text shown on the trigger when at least one project is selected. Receives the list of
+	 * selected projects so the caller can produce e.g. "3 projects" or "WEB, ASV, KJV".
+	 */
+	getSelectedText?: (selected: readonly ProjectSelectorProject[]) => string;
 };
 /**
- * A combo-box project picker. Displays each project as `shortName · fullName` and calls
- * `onChangeProject` with the selected project's id.
- *
- * Thin wrapper around {@link ComboBox} — use it directly when you need a grouped or flat list of
- * `{ id, shortName, fullName }` projects.
+ * Combo-box project picker. Single selection. The popover's list can be sorted/grouped via the
+ * "Sort and group" menu; by default projects with `isOpenedTab=true` are rendered under
+ * "Opened tabs" and the rest under "Other projects & resources".
  */
-export declare function ProjectSelector({ projects, selectedProjectId, onChangeProject, groupHeading, buttonPlaceholder, commandEmptyMessage, ariaLabel, buttonVariant, buttonClassName, popoverContentClassName, popoverContentStyle, alignDropDown, isDisabled, }: ProjectSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ProjectSelector({ projects, selectedProjectId, onChangeProject, groupHeading, buttonPlaceholder, commandEmptyMessage, ariaLabel, buttonVariant, buttonClassName, popoverContentClassName, popoverContentStyle, alignDropDown, isDisabled, localizedStrings, defaultSortMode, defaultGroupMode, }: ProjectSelectorProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Combo-box project picker. Multi selection with "Select all" / "Clear all" controls, a
+ * "Sort and group" menu, and a chevrons-up-down trigger icon. Same grouping and tooltip rules as
+ * {@link ProjectSelector}.
+ */
+export declare function ProjectMultiSelector({ projects, selectedProjectIds, onChangeSelectedProjectIds, groupHeading, buttonPlaceholder, commandEmptyMessage, ariaLabel, buttonVariant, buttonClassName, popoverContentClassName, popoverContentStyle, alignDropDown, isDisabled, localizedStrings, getSelectedText, defaultSortMode, defaultGroupMode, }: ProjectMultiSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.

@@ -106,8 +106,13 @@ export {
 } from './components/advanced/multi-select-combo-box.component';
 export {
   default as ProjectSelector,
+  ProjectMultiSelector,
   type ProjectSelectorProject,
+  type ProjectSelectorProjectType,
+  type ProjectSelectorGroupMode,
   type ProjectSelectorProps,
+  type ProjectMultiSelectorProps,
+  type ProjectSelectorLocalizedStrings,
 } from './components/advanced/project-selector.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
