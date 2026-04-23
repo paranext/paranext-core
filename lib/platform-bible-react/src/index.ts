@@ -39,6 +39,15 @@ export type {
   SortDirection,
   TableContents,
 } from './components/advanced/data-table/data-table.component';
+export {
+  ManageBooksDialog,
+  type ManageBooksDialogProps,
+  type ManageBooksDialogProject,
+  type ManageBooksDialogBookInfo,
+  type ManageBooksCreateMethod,
+  type ManageBooksImportStrategy,
+  type ManageBooksImportFile,
+} from './components/advanced/manage-books-dialog/manage-books-dialog.component';
 export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
 export {
   ErrorPopover,

@@ -1,13 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpenCheck,
   BookPlus,
   Copy,
   Download,
-  ExternalLink,
   FolderOpen,
-  Info,
   Loader2,
   Trash2,
 } from 'lucide-react';
@@ -49,7 +47,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
-import { Sonner, sonner } from '@/components/shadcn-ui/sonner';
+import {
+  ManageBooksDialog as SharedManageBooksDialog,
+  type ManageBooksDialogProject,
+  type ManageBooksDialogBookInfo,
+  type ManageBooksCreateMethod as SharedCreateMethod,
+  type ManageBooksImportFile as SharedImportFile,
+  type ManageBooksImportStrategy as SharedImportStrategy,
+} from '@/components/advanced/manage-books-dialog/manage-books-dialog.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Canon } from '@sillsdev/scripture';
@@ -2784,555 +2789,132 @@ function SelectionManageBooksDialog() {
 // inline alongside the action picker. Reuses CopySubDialog and ImportSubDialog.
 // --------------------------------------------------------------------------
 
-type ActionFirstAction = 'view' | 'create' | 'import' | 'copy' | 'delete';
-
 function ActionFirstManageBooksDialog() {
   const [open, setOpen] = useState(true);
   const [projectId, setProjectId] = useState<string>(MOCK_PROJECTS[0].id);
-  const [projectsData, setProjectsData] = useState<Record<string, ProjectBookState>>(() =>
-    createInitialProjectBooks(),
+  const [projectsData, setProjectsData] = useState<Record<string, ProjectBookState>>(
+    () => createInitialProjectBooks(),
   );
-  const [action, setAction] = useState<ActionFirstAction>('view');
-  // One selection set per action. A filter (copy state / import presence) only
-  // affects what is visible and counted; the underlying selection persists, so
-  // a subset filter naturally "reduces" the visible count while items outside
-  // the filter stay selected for when the user switches back.
-  const [selectionsByAction, setSelectionsByAction] = useState<
-    Record<string, Set<string>>
-  >({});
-  const [filter, setFilter] = useState('');
-  const [copySourceId, setCopySourceId] = useState<string | undefined>(undefined);
-  const [createMethod, setCreateMethod] = useState<CreateMethod>('referenceText');
-  const [importTargets, setImportTargets] = useState<string[]>([]);
-  const [importFiles, setImportFiles] = useState<
-    Record<string, { file: string; date: string }>
-  >({});
-  const importFileInputRef = useRef<HTMLInputElement>(null);
-  const toggleGroupRef = useRef<HTMLDivElement>(null);
-  const [toggleGroupWidth, setToggleGroupWidth] = useState<number | undefined>(
-    undefined,
-  );
-  const [createReferenceId, setCreateReferenceId] = useState<string | undefined>(undefined);
-  const [copyStateFilter, setCopyStateFilter] = useState<
-    'all' | 'new' | 'newer' | 'older' | 'same'
-  >('all');
-  const [importPresenceFilter, setImportPresenceFilter] = useState<
-    'all' | 'new' | 'existing'
-  >('all');
-  const [viewPresenceFilter, setViewPresenceFilter] = useState<
-    'all' | 'new' | 'existing'
-  >('all');
-  const [importConflict, setImportConflict] = useState<
-    { books: string[]; existing: string[] } | null
-  >(null);
 
-  const project = MOCK_PROJECTS.find((p) => p.id === projectId) ?? MOCK_PROJECTS[0];
-  const current = projectsData[projectId] ?? { present: new Set<string>(), dates: {} };
-  const otherProjects = MOCK_PROJECTS.filter((p) => p.id !== projectId);
-  const copySourceProject = copySourceId
-    ? MOCK_PROJECTS.find((p) => p.id === copySourceId)
-    : undefined;
-  const copySource = copySourceId ? projectsData[copySourceId] : undefined;
-  const allBooks = useMemo(() => [...OT_BOOKS, ...NT_BOOKS, ...DC_BOOKS], []);
+  const projectsDataRef = useRef(projectsData);
+  useEffect(() => {
+    projectsDataRef.current = projectsData;
+  }, [projectsData]);
 
-  const selected = useMemo(
-    () => selectionsByAction[action] ?? new Set<string>(),
-    [selectionsByAction, action],
+  const loadProjects = useCallback(
+    (): ManageBooksDialogProject[] =>
+      MOCK_PROJECTS.map((p) => ({ id: p.id, shortName: p.shortName, name: p.name })),
+    [],
   );
-  const setSelected = (
-    updater: Set<string> | ((prev: Set<string>) => Set<string>),
+  const loadBooks = useCallback(
+    (pid: string): ManageBooksDialogBookInfo[] => {
+      const data = projectsDataRef.current[pid] ?? {
+        present: new Set<string>(),
+        dates: {},
+      };
+      return Array.from(data.present).map((id) => ({
+        id,
+        lastModified: data.dates[id],
+      }));
+    },
+    [],
+  );
+  const loadVersification = useCallback((_pid: string) => 'eng', []);
+
+  const applyTo = (
+    pid: string,
+    mutate: (p: ProjectBookState) => ProjectBookState,
   ) =>
-    setSelectionsByAction((prev) => {
-      const current = prev[action] ?? new Set<string>();
-      const next = typeof updater === 'function' ? updater(current) : updater;
-      return { ...prev, [action]: next };
-    });
+    setProjectsData((prev) => ({
+      ...prev,
+      [pid]: mutate(prev[pid] ?? { present: new Set<string>(), dates: {} }),
+    }));
 
-  // Project change wipes selections: nothing carries across projects.
-  useEffect(() => setSelectionsByAction({}), [projectId]);
-
-  // Changing the copy source invalidates the copy selection.
-  useEffect(() => {
-    setSelectionsByAction((prev) => {
-      if (!prev.copy) return prev;
-      const next = { ...prev };
-      delete next.copy;
-      return next;
-    });
-  }, [copySourceId]);
-
-  // Reset per-action filters when the action changes.
-  useEffect(() => {
-    setCopyStateFilter('all');
-    setImportPresenceFilter('all');
-    setViewPresenceFilter('all');
-  }, [action]);
-
-  // Clear the reference project when the creation method is no longer referenceText.
-  useEffect(() => {
-    if (createMethod !== 'referenceText') setCreateReferenceId(undefined);
-  }, [createMethod]);
-
-  // Source and reference projects can never equal destination.
-  useEffect(() => {
-    if (copySourceId === projectId) setCopySourceId(undefined);
-    if (createReferenceId === projectId) setCreateReferenceId(undefined);
-  }, [copySourceId, createReferenceId, projectId]);
-
-  // Mirror the ToggleGroup width so the Create dropdown row can span the same
-  // width (single dropdown fills; referenceText splits 50/50). Measure before
-  // paint so the row renders at the correct width the first time Create is
-  // selected, with no one-frame flash.
-  useLayoutEffect(() => {
-    const el = toggleGroupRef.current;
-    if (!el) return undefined;
-    const update = () => {
-      const rect = el.getBoundingClientRect();
-      setToggleGroupWidth(rect.width);
-    };
-    update();
-    const obs = new ResizeObserver(update);
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [action]);
-
-  const universe = useMemo<string[]>(() => {
-    switch (action) {
-      case 'view':
-        return allBooks;
-      case 'create':
-        return allBooks.filter((b) => !current.present.has(b));
-      case 'delete':
-        return allBooks.filter((b) => current.present.has(b));
-      case 'copy':
-        return copySource ? allBooks.filter((b) => copySource.present.has(b)) : [];
-      case 'import':
-        return allBooks;
-      default:
-        return [];
-    }
-  }, [action, allBooks, current, copySource]);
-
-  const detectBookId = (filename: string): string | undefined => {
-    const upper = filename.toUpperCase();
-    return allBooks.find((b) => upper.includes(b));
-  };
-  const handleImportFilesPicked = (picked: FileList | null) => {
-    if (!picked || picked.length === 0) return;
-    const additions: Record<string, { file: string; date: string }> = {};
-    const addedBooks: string[] = [];
-    const unmatched: string[] = [];
-    Array.from(picked).forEach((f) => {
-      const book = detectBookId(f.name);
-      if (!book) {
-        unmatched.push(f.name);
-        return;
-      }
-      additions[book] = { file: f.name, date: todayISO() };
-      addedBooks.push(book);
-    });
-    if (unmatched.length > 0) {
-      sonner.warning(
-        unmatched.length === 1
-          ? `Could not detect a matching book in "${unmatched[0]}"`
-          : `Could not detect a matching book in ${unmatched.length} files`,
-        {
-          description:
-            unmatched.length > 1 ? unmatched.join(', ') : undefined,
-          duration: Infinity,
-          closeButton: true,
-        },
-      );
-    }
-    if (addedBooks.length === 0) return;
-    setImportFiles((prev) => ({ ...prev, ...additions }));
-    setSelected((prev) => {
-      const next = new Set(prev);
-      addedBooks.forEach((b) => next.add(b));
-      return next;
-    });
-  };
-
-  const filterTerm = filter.trim().toLowerCase();
-
-  // Apply the action-specific presence/state filter on top of the universe.
-  const actionFilteredBooks = useMemo<string[]>(() => {
-    if (action === 'copy' && copySource && copyStateFilter !== 'all') {
-      return universe.filter((b) => {
-        const destHas = current.present.has(b);
-        const state = computeCompareState(
-          copySource.dates[b],
-          destHas ? current.dates[b] : undefined,
-        );
-        return state.toLowerCase() === copyStateFilter;
-      });
-    }
-    if (action === 'import' && importPresenceFilter !== 'all') {
-      return universe.filter((b) =>
-        importPresenceFilter === 'new'
-          ? !current.present.has(b)
-          : current.present.has(b),
-      );
-    }
-    if (action === 'view' && viewPresenceFilter !== 'all') {
-      return universe.filter((b) =>
-        viewPresenceFilter === 'existing'
-          ? current.present.has(b)
-          : !current.present.has(b),
-      );
-    }
-    return universe;
-  }, [
-    action,
-    universe,
-    copyStateFilter,
-    copySource,
-    current,
-    importPresenceFilter,
-    viewPresenceFilter,
-  ]);
-
-  const textFilteredBooks = filterTerm
-    ? actionFilteredBooks.filter(
-        (b) =>
-          b.toLowerCase().includes(filterTerm) ||
-          Canon.bookIdToEnglishName(b).toLowerCase().includes(filterTerm),
-      )
-    : actionFilteredBooks;
-
-  // Import mode: float books that have a picked file to the top, each group in
-  // canonical order (the split preserves the original order within each group).
-  const visibleBooks = useMemo<string[]>(() => {
-    if (action !== 'import') return textFilteredBooks;
-    const withFiles = textFilteredBooks.filter((b) => importFiles[b]);
-    const withoutFiles = textFilteredBooks.filter((b) => !importFiles[b]);
-    return [...withFiles, ...withoutFiles];
-  }, [action, textFilteredBooks, importFiles]);
-
-  const applyToCurrent = (mutate: (p: ProjectBookState) => ProjectBookState) =>
-    setProjectsData((prev) => ({ ...prev, [projectId]: mutate(prev[projectId]) }));
-
-  const runCreate = (books: string[]) => {
-    if (books.length === 0) return;
-    applyToCurrent((p) => {
-      const nextPresent = new Set(p.present);
-      const nextDates = { ...p.dates };
-      books.forEach((b) => {
-        nextPresent.add(b);
-        nextDates[b] = todayISO();
-      });
-      return { present: nextPresent, dates: nextDates };
-    });
-    setSelected(new Set());
-  };
-
-  const runDelete = (books: string[]) => {
-    if (books.length === 0) return;
-    applyToCurrent((p) => {
-      const nextPresent = new Set(p.present);
-      const nextDates = { ...p.dates };
-      books.forEach((b) => {
-        nextPresent.delete(b);
-        delete nextDates[b];
-      });
-      return { present: nextPresent, dates: nextDates };
-    });
-    setSelected(new Set());
-  };
-
-  const handleApplyCopy = (books: string[], sourceId: string) => {
-    const srcData = projectsData[sourceId];
-    if (!srcData) return;
-    applyToCurrent((p) => {
-      const nextPresent = new Set(p.present);
-      const nextDates = { ...p.dates };
-      books.forEach((b) => {
-        if (srcData.present.has(b)) {
-          nextPresent.add(b);
-          nextDates[b] = srcData.dates[b] ?? todayISO();
-        }
-      });
-      return { present: nextPresent, dates: nextDates };
-    });
-    setSelected(new Set());
-  };
-
-  const handleApplyImport = (rows: { book: string; overwrite: boolean }[]) => {
-    applyToCurrent((p) => {
-      const nextPresent = new Set(p.present);
-      const nextDates = { ...p.dates };
-      rows.forEach((r) => {
-        if (nextPresent.has(r.book) && !r.overwrite) return;
-        nextPresent.add(r.book);
-        nextDates[r.book] = todayISO();
-      });
-      return { present: nextPresent, dates: nextDates };
-    });
-    setImportTargets([]);
-    setImportFiles((prev) => {
-      const next = { ...prev };
-      rows.forEach((r) => delete next[r.book]);
-      return next;
-    });
-    setSelected(new Set());
-  };
-
-  const toggleOne = (book: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(book)) next.delete(book);
-      else next.add(book);
-      return next;
-    });
-
-  // Books in the visible list that actually have a selection control (checkbox).
-  // Select-all and the selected-count tooltip both operate on this narrower set,
-  // so changing a filter (e.g. copy state or import presence) updates the count.
-  const selectableVisibleBooks = useMemo<string[]>(() => {
-    if (action === 'view') return [];
-    if (action === 'import') return visibleBooks.filter((b) => !!importFiles[b]);
-    return visibleBooks;
-  }, [action, visibleBooks, importFiles]);
-  const visibleSelectedCount = selectableVisibleBooks.filter((b) => selected.has(b)).length;
-
-  const headerSelectState: boolean | 'indeterminate' = (() => {
-    if (selectableVisibleBooks.length === 0 || visibleSelectedCount === 0) return false;
-    if (visibleSelectedCount === selectableVisibleBooks.length) return true;
-    return 'indeterminate';
-  })();
-  const toggleAllVisible = () =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      const allSel = selectableVisibleBooks.every((b) => next.has(b));
-      if (allSel) selectableVisibleBooks.forEach((b) => next.delete(b));
-      else selectableVisibleBooks.forEach((b) => next.add(b));
-      return next;
-    });
-
-  // Apply / count only the books that are both selected and currently visible
-  // (i.e. checkboxes under the current filter). Items selected but hidden by a
-  // state/presence filter stay in `selected` for when the user switches back.
-  const selectedArr = selectableVisibleBooks.filter((b) => selected.has(b));
-  const hasInlineFiles = Object.keys(importFiles).length > 0;
-  const canApply =
-    action !== 'view' &&
-    selectedArr.length > 0 &&
-    (action !== 'copy' || !!copySourceId) &&
-    !(action === 'create' && createMethod === 'referenceText' && !createReferenceId);
-
-  const performImport = (books: string[], overwriteExisting: boolean) => {
-    if (books.length === 0) return;
-    const withFiles = books.filter((b) => importFiles[b]);
-    if (withFiles.length > 0) {
-      // Commit the books whose files were picked inline using the inline
-      // modification dates. Any other selected books without inline files
-      // fall back to the per-book sub-dialog.
-      applyToCurrent((p) => {
+  const onCreateBooks = useCallback(
+    ({
+      projectId: pid,
+      books,
+    }: {
+      projectId: string;
+      books: string[];
+      method: SharedCreateMethod;
+      referenceProjectId?: string;
+    }) => {
+      applyTo(pid, (p) => {
         const nextPresent = new Set(p.present);
         const nextDates = { ...p.dates };
-        withFiles.forEach((b) => {
-          if (nextPresent.has(b) && !overwriteExisting) return;
+        books.forEach((b) => {
           nextPresent.add(b);
-          nextDates[b] = importFiles[b].date;
+          nextDates[b] = todayISO();
         });
         return { present: nextPresent, dates: nextDates };
       });
-      setSelected((prev) => {
-        const next = new Set(prev);
-        withFiles.forEach((b) => next.delete(b));
-        return next;
+    },
+    [],
+  );
+  const onDeleteBooks = useCallback(
+    ({ projectId: pid, books }: { projectId: string; books: string[] }) => {
+      applyTo(pid, (p) => {
+        const nextPresent = new Set(p.present);
+        const nextDates = { ...p.dates };
+        books.forEach((b) => {
+          nextPresent.delete(b);
+          delete nextDates[b];
+        });
+        return { present: nextPresent, dates: nextDates };
       });
-      setImportFiles((prev) => {
-        const next = { ...prev };
-        withFiles.forEach((b) => delete next[b]);
-        return next;
+    },
+    [],
+  );
+  const onCopyBooks = useCallback(
+    ({
+      destProjectId,
+      sourceProjectId,
+      books,
+    }: {
+      destProjectId: string;
+      sourceProjectId: string;
+      books: string[];
+    }) => {
+      const src = projectsDataRef.current[sourceProjectId];
+      if (!src) return;
+      applyTo(destProjectId, (p) => {
+        const nextPresent = new Set(p.present);
+        const nextDates = { ...p.dates };
+        books.forEach((b) => {
+          if (src.present.has(b)) {
+            nextPresent.add(b);
+            nextDates[b] = src.dates[b] ?? todayISO();
+          }
+        });
+        return { present: nextPresent, dates: nextDates };
       });
-      const remaining = books.filter((b) => !importFiles[b]);
-      if (remaining.length > 0) setImportTargets(remaining);
-      return;
-    }
-    setImportTargets(books);
-  };
-
-  const apply = () => {
-    if (!canApply) return;
-    switch (action) {
-      case 'create':
-        runCreate(selectedArr);
-        return;
-      case 'delete':
-        runDelete(selectedArr);
-        return;
-      case 'copy':
-        if (copySourceId) handleApplyCopy(selectedArr, copySourceId);
-        return;
-      case 'import': {
-        const existing = selectedArr.filter((b) => current.present.has(b));
-        if (existing.length > 0) {
-          setImportConflict({ books: selectedArr, existing });
-          return;
-        }
-        performImport(selectedArr, false);
-        return;
-      }
-      default:
-        return;
-    }
-  };
-
-  const totalPresent = allBooks.filter((b) => current.present.has(b)).length;
-  const subDialogOpen = importTargets.length > 0;
-
-  const actionVerb = (() => {
-    if (action === 'create') return 'Create';
-    if (action === 'delete') return 'Delete';
-    if (action === 'copy') return 'Copy';
-    if (action === 'import') return 'Import';
-    return '';
-  })();
-
-  const actionButtonLabel = (() => {
-    if (!canApply) return actionVerb;
-    const n = selectedArr.length;
-    const suffix = `${n} book${n === 1 ? '' : 's'}`;
-    const dest = project.shortName;
-    if (action === 'create') return `Create ${suffix} in ${dest}`;
-    if (action === 'delete') return `Delete ${suffix} from ${dest}`;
-    if (action === 'copy') return `Copy ${suffix} into ${dest}`;
-    if (action === 'import') {
-      const withFiles = selectedArr.filter((b) => importFiles[b]).length;
-      if (withFiles === n) return `Import ${suffix} into ${dest}`;
-      if (withFiles > 0)
-        return `Import ${withFiles} file${withFiles === 1 ? '' : 's'} into ${dest}, choose ${n - withFiles} more…`;
-      return `Import ${suffix} into ${dest}…`;
-    }
-    return actionVerb;
-  })();
-
-  const renderComparisonBadge = (
-    state: ComparisonState,
-    sideALabel: string,
-    sideADate: string | undefined,
-    sideBLabel: string,
-    sideBDate: string | undefined,
-  ) => (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Badge variant={comparisonVariant(state)}>{state}</Badge>
-      </TooltipTrigger>
-      <TooltipContent>
-        <div>{`${sideALabel}: ${sideADate ?? '—'}`}</div>
-        <div>{`${sideBLabel}: ${sideBDate ?? '—'}`}</div>
-      </TooltipContent>
-    </Tooltip>
+    },
+    [],
+  );
+  const onImportBooks = useCallback(
+    ({
+      projectId: pid,
+      files,
+    }: {
+      projectId: string;
+      files: Record<string, SharedImportFile>;
+      strategy: SharedImportStrategy;
+    }) => {
+      applyTo(pid, (p) => {
+        const nextPresent = new Set(p.present);
+        const nextDates = { ...p.dates };
+        Object.entries(files).forEach(([book, { date }]) => {
+          nextPresent.add(book);
+          nextDates[book] = date;
+        });
+        return { present: nextPresent, dates: nextDates };
+      });
+    },
+    [],
   );
 
-  const renderMeta = (book: string) => {
-    const isPresent = current.present.has(book);
-    const destDate = current.dates[book];
-    if (action === 'copy' && copySource && copySourceProject) {
-      const sourceDate = copySource.dates[book];
-      const state = computeCompareState(
-        sourceDate,
-        isPresent ? destDate : undefined,
-      );
-      if (state === 'New') {
-        return (
-          <Badge
-            variant="outline"
-            className="tw-font-normal tw-text-muted-foreground"
-          >
-            New
-          </Badge>
-        );
-      }
-      return renderComparisonBadge(
-        state,
-        copySourceProject.shortName,
-        sourceDate,
-        project.shortName,
-        isPresent ? destDate : undefined,
-      );
-    }
-    if (action === 'delete') {
-      return (
-        <Badge variant="secondary" className="tw-font-normal">
-          {destDate ?? 'Present'}
-        </Badge>
-      );
-    }
-    if (action === 'create') {
-      return (
-        <Badge
-          variant="outline"
-          className="tw-font-normal tw-text-muted-foreground"
-        >
-          New
-        </Badge>
-      );
-    }
-    if (action === 'import') {
-      const pick = importFiles[book];
-      if (pick) {
-        const state = computeCompareState(
-          pick.date,
-          isPresent ? destDate : undefined,
-        );
-        return (
-          <>
-            <span
-              className="tw-max-w-[12rem] tw-truncate tw-text-xs tw-text-muted-foreground"
-              title={pick.file}
-            >
-              {pick.file}
-            </span>
-            {renderComparisonBadge(
-              state,
-              'File',
-              pick.date,
-              project.shortName,
-              isPresent ? destDate : undefined,
-            )}
-          </>
-        );
-      }
-    }
-    if (action === 'view' && !isPresent) return undefined;
-    return isPresent ? (
-      <Badge variant="secondary" className="tw-font-normal">
-        {destDate ?? 'Present'}
-      </Badge>
-    ) : (
-      <Badge
-        variant="outline"
-        className="tw-font-normal tw-text-muted-foreground"
-      >
-        New
-      </Badge>
-    );
-  };
-
-  const isFilterEmptyState =
-    visibleBooks.length === 0 &&
-    universe.length > 0 &&
-    !(action === 'copy' && !copySourceId);
-  const emptyStateMessage = (() => {
-    if (action === 'copy' && !copySourceId)
-      return 'Choose a source project to see books available to copy.';
-    if (universe.length === 0) {
-      if (action === 'create')
-        return 'This project already contains every canonical book.';
-      if (action === 'delete') return 'This project has no books to delete.';
-      if (action === 'copy') return 'The chosen source project has no books to copy.';
-    }
-    return 'No books match the current filter.';
-  })();
-  const clearActiveFilters = () => {
-    setFilter('');
-    setCopyStateFilter('all');
-    setImportPresenceFilter('all');
-    setViewPresenceFilter('all');
-  };
+  const noop = useCallback((_pid: string) => {}, []);
 
   return (
     <>
@@ -3346,678 +2928,27 @@ function ActionFirstManageBooksDialog() {
         }
       `}</style>
       <Button onClick={() => setOpen(true)}>Open Action-First Manage Books</Button>
-      <Dialog open={open} onOpenChange={setOpen} modal={false}>
-        <DialogContent
-          className="tw-h-[80vh] tw-w-[95vw] tw-max-w-4xl tw-gap-0 tw-overflow-hidden tw-p-0"
-          onInteractOutside={(e) => e.preventDefault()}
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onFocusOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => {
-            const wrapper = document.querySelector(
-              '[data-radix-popper-content-wrapper][data-state="open"]',
-            );
-            if (wrapper || subDialogOpen) e.preventDefault();
-          }}
-        >
-          <TooltipProvider delayDuration={200}>
-            <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col">
-              <header className="tw-flex tw-items-center tw-gap-3 tw-border-b tw-px-6 tw-py-4">
-                <BookOpenCheck
-                  className="tw-h-5 tw-w-5 tw-text-muted-foreground"
-                  aria-hidden
-                />
-                <div className="tw-flex tw-flex-col">
-                  <h2 className="tw-text-lg tw-font-semibold">Manage Books</h2>
-                  <p className="tw-text-xs tw-text-muted-foreground">
-                    {`${totalPresent} of ${allBooks.length} canonical books in ${project.shortName}`}
-                  </p>
-                </div>
-                <div className="tw-ml-auto tw-mr-8 tw-flex tw-items-center tw-gap-2">
-                  <Label
-                    htmlFor="af-project"
-                    className="tw-text-xs tw-text-muted-foreground"
-                  >
-                    Project
-                  </Label>
-                  <Select value={projectId} onValueChange={setProjectId}>
-                    <SelectTrigger id="af-project" className="tw-h-8 tw-w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MOCK_PROJECTS.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.shortName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </header>
-
-              <div className="tw-flex tw-flex-col tw-items-start tw-gap-2 tw-border-b tw-px-6 tw-py-3 tw-@container/actions">
-                <ToggleGroup
-                  ref={toggleGroupRef}
-                  type="single"
-                  variant="outline"
-                  value={action}
-                  onValueChange={(v) => v && setAction(v as ActionFirstAction)}
-                  className="tw-gap-0"
-                >
-                  <ToggleGroupItem
-                    value="view"
-                    className="tw-h-9 tw-gap-1.5 !tw-rounded-r-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
-                  >
-                    <BookOpenCheck
-                      className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline"
-                      aria-hidden
-                    />
-                    View
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="create"
-                    className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
-                  >
-                    <BookPlus
-                      className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline"
-                      aria-hidden
-                    />
-                    Create
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="import"
-                    className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
-                  >
-                    <Download
-                      className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline"
-                      aria-hidden
-                    />
-                    Import
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="copy"
-                    className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
-                  >
-                    <Copy
-                      className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline"
-                      aria-hidden
-                    />
-                    Copy
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="delete"
-                    className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-l-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
-                  >
-                    <Trash2
-                      className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline"
-                      aria-hidden
-                    />
-                    Delete
-                  </ToggleGroupItem>
-                </ToggleGroup>
-
-                {action === 'view' && (
-                  <div className="tw-flex tw-items-center tw-gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="tw-h-8 tw-px-2 tw-text-xs"
-                    >
-                      Scripture reference settings...
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="tw-h-8 tw-px-2 tw-text-xs"
-                    >
-                      Project canons...
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="tw-h-8 tw-gap-1.5 tw-px-2 tw-text-xs"
-                    >
-                      Registry
-                      <ExternalLink
-                        className="tw-h-3 tw-w-3 tw-text-muted-foreground"
-                        aria-hidden
-                      />
-                    </Button>
-                  </div>
-                )}
-
-                {action === 'create' && (
-                  <div
-                    className="tw-flex tw-items-center tw-gap-2"
-                    style={{ width: toggleGroupWidth }}
-                  >
-                    <Select
-                      value={createMethod}
-                      onValueChange={(v) => setCreateMethod(v as CreateMethod)}
-                    >
-                      <SelectTrigger
-                        id="af-method"
-                        className="tw-h-8 tw-min-w-0 tw-flex-1"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(Object.keys(CREATE_METHOD_LABELS) as CreateMethod[]).map(
-                          (m) => (
-                            <SelectItem key={m} value={m}>
-                              {CREATE_METHOD_LABELS[m]}
-                            </SelectItem>
-                          ),
-                        )}
-                      </SelectContent>
-                    </Select>
-                    {createMethod === 'referenceText' && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info
-                            className="tw-h-4 tw-w-4 tw-shrink-0 tw-text-muted-foreground"
-                            aria-label="Based on info"
-                          />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          Prefill with the same markers as a selected project
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    {createMethod === 'referenceText' && (
-                      <Select
-                        value={createReferenceId ?? ''}
-                        onValueChange={(v) =>
-                          setCreateReferenceId(v || undefined)
-                        }
-                      >
-                        <SelectTrigger
-                          id="af-reference"
-                          className={cn(
-                            'tw-h-8 tw-min-w-0 tw-flex-1',
-                            !createReferenceId &&
-                              'tw-border-primary tw-bg-primary tw-text-primary-foreground [&>span]:tw-text-primary-foreground [&_svg]:tw-text-primary-foreground hover:tw-bg-primary/90',
-                          )}
-                        >
-                          <SelectValue placeholder="Select reference project" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {otherProjects.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                )}
-
-                {action === 'copy' && (
-                  <div className="tw-flex tw-items-center tw-gap-2">
-                    <Label
-                      htmlFor="af-source"
-                      className="tw-text-xs tw-text-muted-foreground"
-                    >
-                      From
-                    </Label>
-                    <Select
-                      value={copySourceId ?? ''}
-                      onValueChange={(v) => setCopySourceId(v || undefined)}
-                    >
-                      <SelectTrigger
-                        id="af-source"
-                        className={cn(
-                          'tw-h-8 tw-w-52',
-                          !copySourceId &&
-                            'tw-border-primary tw-bg-primary tw-text-primary-foreground [&>span]:tw-text-primary-foreground [&_svg]:tw-text-primary-foreground hover:tw-bg-primary/90',
-                        )}
-                      >
-                        <SelectValue placeholder="Select project" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {otherProjects.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {action === 'import' && (
-                  <div className="tw-flex tw-items-center tw-gap-2">
-                    <input
-                      ref={importFileInputRef}
-                      type="file"
-                      multiple
-                      accept=".sfm,.usfm,.usx,.xml"
-                      className="tw-hidden"
-                      onChange={(e) => {
-                        handleImportFilesPicked(e.target.files);
-                        e.target.value = '';
-                      }}
-                    />
-                    <Button
-                      variant={hasInlineFiles ? 'outline' : 'default'}
-                      size="sm"
-                      className="tw-h-8"
-                      onClick={() => importFileInputRef.current?.click()}
-                    >
-                      <FolderOpen
-                        className="tw-mr-1.5 tw-h-3.5 tw-w-3.5"
-                        aria-hidden
-                      />
-                      {hasInlineFiles ? 'Add files…' : 'Choose files…'}
-                    </Button>
-                    {hasInlineFiles && (
-                      <>
-                        <span className="tw-text-xs tw-text-muted-foreground">
-                          {`${Object.keys(importFiles).length} file${Object.keys(importFiles).length === 1 ? '' : 's'} matched`}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="tw-h-8"
-                          onClick={() => setImportFiles({})}
-                        >
-                          Clear
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="tw-flex tw-flex-nowrap tw-items-center tw-gap-2 tw-border-b tw-px-6 tw-py-2 tw-@container/filterbar">
-                {action !== 'view' && (action !== 'import' || hasInlineFiles) && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span>
-                        <Checkbox
-                          id="af-sel-all"
-                          checked={headerSelectState}
-                          disabled={selectableVisibleBooks.length === 0}
-                          onCheckedChange={toggleAllVisible}
-                          aria-label={
-                            visibleSelectedCount > 0
-                              ? `${visibleSelectedCount} selected`
-                              : 'Select all'
-                          }
-                        />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {visibleSelectedCount > 0
-                        ? `${visibleSelectedCount} selected`
-                        : 'Select all'}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                <Input
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                  placeholder="Filter books…"
-                  className="tw-h-8 tw-min-w-0 tw-max-w-xs tw-flex-1 tw-basis-24"
-                  aria-label="Filter books"
-                />
-                <span
-                  className={cn(
-                    'tw-whitespace-nowrap tw-text-xs tw-text-muted-foreground',
-                    action === 'copy' &&
-                      'tw-hidden @md/filterbar:tw-inline',
-                  )}
-                >
-                  {universe.length === 0
-                    ? '0 books'
-                    : `${visibleBooks.length} of ${universe.length}`}
-                </span>
-                {action === 'view' && (
-                  <ToggleGroup
-                    type="single"
-                    value={viewPresenceFilter}
-                    onValueChange={(v) =>
-                      v && setViewPresenceFilter(v as typeof viewPresenceFilter)
-                    }
-                    className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
-                  >
-                    {(['all', 'new', 'existing'] as const).map((s) => (
-                      <ToggleGroupItem
-                        key={s}
-                        value={s}
-                        className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
-                      >
-                        {s}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
-                )}
-                {action === 'copy' && copySourceId && (
-                  <ToggleGroup
-                    type="single"
-                    value={copyStateFilter}
-                    onValueChange={(v) =>
-                      v && setCopyStateFilter(v as typeof copyStateFilter)
-                    }
-                    className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
-                  >
-                    {(['all', 'new', 'newer', 'older', 'same'] as const).map((s) => (
-                      <ToggleGroupItem
-                        key={s}
-                        value={s}
-                        className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
-                      >
-                        {s}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
-                )}
-                {action === 'import' && (
-                  <ToggleGroup
-                    type="single"
-                    value={importPresenceFilter}
-                    onValueChange={(v) =>
-                      v && setImportPresenceFilter(v as typeof importPresenceFilter)
-                    }
-                    className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
-                  >
-                    {(['all', 'new', 'existing'] as const).map((s) => (
-                      <ToggleGroupItem
-                        key={s}
-                        value={s}
-                        className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
-                      >
-                        {s}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
-                )}
-              </div>
-
-              <div className="tw-min-h-0 tw-flex-1 tw-overflow-auto tw-px-3 tw-py-2">
-                {visibleBooks.length === 0 ? (
-                  <div className="tw-flex tw-min-h-40 tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-text-center tw-text-sm tw-text-muted-foreground">
-                    <span>{emptyStateMessage}</span>
-                    {isFilterEmptyState && (
-                      <Button variant="outline" size="sm" onClick={clearActiveFilters}>
-                        Clear filter
-                      </Button>
-                    )}
-                  </div>
-                ) : (
-                  <ul className="tw-flex tw-flex-col tw-gap-0.5">
-                    {visibleBooks.map((book) => {
-                      const isSelected = selected.has(book);
-                      const showCheckbox =
-                        action === 'create' ||
-                        action === 'delete' ||
-                        action === 'copy' ||
-                        (action === 'import' && !!importFiles[book]);
-                      // View mode has no placeholder — book names align with
-                      // the filter input (which sits at the row's start since
-                      // the bar's select-all checkbox is hidden too).
-                      const showCheckboxPlaceholder =
-                        action === 'import' && !importFiles[book];
-                      const isMissingInView =
-                        action === 'view' && !current.present.has(book);
-                      return (
-                        <li
-                          key={book}
-                          onClick={() => {
-                            if (showCheckbox) toggleOne(book);
-                          }}
-                          className={cn(
-                            'tw-flex tw-items-center tw-gap-2 tw-rounded-md tw-px-3 tw-py-1.5 tw-text-sm hover:tw-bg-accent/60',
-                            isSelected && 'tw-bg-accent',
-                            showCheckbox && 'tw-cursor-pointer',
-                          )}
-                        >
-                          {showCheckbox && (
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => toggleOne(book)}
-                              onClick={(e) => e.stopPropagation()}
-                              aria-label={`Select ${book}`}
-                            />
-                          )}
-                          {showCheckboxPlaceholder && (
-                            <span className="tw-h-4 tw-w-4 tw-shrink-0" aria-hidden />
-                          )}
-                          <div
-                            className={cn(
-                              'tw-flex tw-min-w-0 tw-flex-1 tw-items-baseline tw-gap-2',
-                              isMissingInView &&
-                                'tw-text-muted-foreground tw-line-through',
-                            )}
-                          >
-                            <span className="tw-font-medium">{book}</span>
-                            <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
-                              {Canon.bookIdToEnglishName(book)}
-                            </span>
-                          </div>
-                          <div className="tw-flex tw-shrink-0 tw-items-center tw-gap-2">
-                            {renderMeta(book)}
-                            {action === 'view' &&
-                              (current.present.has(book) ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="tw-h-7 tw-w-7 tw-p-0"
-                                      aria-label={`Delete ${book}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectionsByAction((prev) => ({
-                                          ...prev,
-                                          delete: new Set([book]),
-                                        }));
-                                        setAction('delete');
-                                      }}
-                                    >
-                                      <Trash2
-                                        className="tw-h-3.5 tw-w-3.5"
-                                        aria-hidden
-                                      />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="left">
-                                    Go to Delete screen
-                                  </TooltipContent>
-                                </Tooltip>
-                              ) : (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="tw-h-7 tw-px-2 tw-text-xs"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectionsByAction((prev) => ({
-                                          ...prev,
-                                          create: new Set([book]),
-                                        }));
-                                        setAction('create');
-                                      }}
-                                    >
-                                      Create
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="left">
-                                    Go to Create screen
-                                  </TooltipContent>
-                                </Tooltip>
-                              ))}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              <footer className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-px-6 tw-py-3">
-                <span className="tw-text-xs tw-text-muted-foreground">
-                  {action === 'view'
-                    ? `Viewing ${project.shortName}`
-                    : action === 'create'
-                      ? `Create in ${project.shortName} — ${CREATE_METHOD_LABELS[createMethod]}`
-                      : action === 'delete'
-                        ? `Delete from ${project.shortName}`
-                        : action === 'copy'
-                          ? copySourceProject
-                            ? `Copy from ${copySourceProject.shortName} into ${project.shortName}`
-                            : `Copy into ${project.shortName}`
-                          : `Import into ${project.shortName}`}
-                </span>
-                <div className="tw-flex tw-items-center tw-gap-2">
-                  <Button variant="outline" onClick={() => setOpen(false)}>
-                    {action === 'view' ? 'Close' : 'Cancel'}
-                  </Button>
-                  {action !== 'view' &&
-                    (() => {
-                      const actionButton = (
-                        <Button
-                          variant={action === 'delete' ? 'destructive' : 'default'}
-                          disabled={!canApply}
-                          onClick={apply}
-                        >
-                          {action === 'create' && (
-                            <BookPlus
-                              className="tw-mr-1.5 tw-h-4 tw-w-4"
-                              aria-hidden
-                            />
-                          )}
-                          {action === 'delete' && (
-                            <Trash2 className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />
-                          )}
-                          {action === 'copy' && (
-                            <Copy className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />
-                          )}
-                          {action === 'import' && (
-                            <Download
-                              className="tw-mr-1.5 tw-h-4 tw-w-4"
-                              aria-hidden
-                            />
-                          )}
-                          {actionButtonLabel}
-                        </Button>
-                      );
-                      let tooltip: string | undefined;
-                      if (!canApply) {
-                        const missing: string[] = [];
-                        if (
-                          action === 'copy' &&
-                          !copySourceId
-                        )
-                          missing.push('choose a source project');
-                        if (
-                          action === 'create' &&
-                          createMethod === 'referenceText' &&
-                          !createReferenceId
-                        )
-                          missing.push(
-                            "choose a reference project or change 'based on'",
-                          );
-                        if (selectedArr.length === 0)
-                          missing.push(
-                            action === 'import'
-                              ? 'add a file or select a book'
-                              : 'select at least one book',
-                          );
-                        if (missing.length > 0) {
-                          const next = missing[0];
-                          tooltip = `${next[0].toUpperCase()}${next.slice(1)}`;
-                        }
-                      } else if (action === 'create') {
-                        if (createMethod === 'empty') tooltip = 'Create empty';
-                        else if (createMethod === 'chapterVerse')
-                          tooltip = 'Create with all chapters and verses';
-                        else {
-                          const ref = createReferenceId
-                            ? MOCK_PROJECTS.find((p) => p.id === createReferenceId)
-                            : undefined;
-                          tooltip = `Create based on ${ref?.name ?? '…'}`;
-                        }
-                      } else if (action === 'copy') {
-                        tooltip = `Create from ${copySourceProject?.name ?? '…'}`;
-                      }
-                      if (!tooltip) return actionButton;
-                      return (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>{actionButton}</span>
-                          </TooltipTrigger>
-                          <TooltipContent>{tooltip}</TooltipContent>
-                        </Tooltip>
-                      );
-                    })()}
-                </div>
-              </footer>
-            </div>
-          </TooltipProvider>
-        </DialogContent>
-      </Dialog>
-
-      <ImportSubDialog
-        books={importTargets}
-        destProjectId={projectId}
-        projectsData={projectsData}
-        onClose={() => setImportTargets([])}
-        onApply={handleApplyImport}
+      <SharedManageBooksDialog
+        open={open}
+        onOpenChange={setOpen}
+        projectId={projectId}
+        onProjectIdChange={setProjectId}
+        loadProjects={loadProjects}
+        loadBooks={loadBooks}
+        loadVersification={loadVersification}
+        onOpenScriptureReferenceSettings={noop}
+        onOpenProjectCanons={noop}
+        onOpenRegistry={noop}
+        onCreateBooks={onCreateBooks}
+        onDeleteBooks={onDeleteBooks}
+        onCopyBooks={onCopyBooks}
+        onImportBooks={onImportBooks}
+        bookIds={[...OT_BOOKS, ...NT_BOOKS, ...DC_BOOKS]}
       />
-      <Dialog
-        open={!!importConflict}
-        onOpenChange={(v) => {
-          if (!v) setImportConflict(null);
-        }}
-      >
-        <DialogContent className="tw-max-w-md">
-          <div className="tw-flex tw-flex-col tw-gap-4">
-            <div className="tw-flex tw-flex-col tw-gap-1">
-              <h2 className="tw-text-base tw-font-semibold">Books already exist</h2>
-              <p className="tw-text-sm tw-text-muted-foreground">
-                {importConflict &&
-                  `${importConflict.existing.length} book${importConflict.existing.length === 1 ? '' : 's'} already exist${importConflict.existing.length === 1 ? 's' : ''} in ${project.name}: ${importConflict.existing.join(', ')}`}
-              </p>
-              <p className="tw-text-sm tw-text-muted-foreground">
-                Choose how to proceed with the import or close to cancel.
-              </p>
-            </div>
-            <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (!importConflict) return;
-                  // In a real consumer this would dispatch a "replace entire
-                  // books" callback; the local mock commits all selected books.
-                  performImport(importConflict.books, true);
-                  setImportConflict(null);
-                }}
-              >
-                Replace entire books
-              </Button>
-              <Button
-                onClick={() => {
-                  if (!importConflict) return;
-                  // Same local state change as Replace — real consumers wire
-                  // this to a separate "import non-existing chapters" callback
-                  // that merges at the chapter level instead of replacing.
-                  performImport(importConflict.books, true);
-                  setImportConflict(null);
-                }}
-              >
-                Import non-existing chapters
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Sonner position="top-center" />
     </>
   );
 }
+
 
 // --------------------------------------------------------------------------
 // Storybook meta
