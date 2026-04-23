@@ -303,19 +303,42 @@ internal class MarkerSettingsValidationTests
     [Property("Contract", "ValidateMarkerSettings")]
     [Property("BehaviorId", "BHV-105")]
     [Property("ValidationRule", "VAL-002")]
-    public void ValidateMarkerSettings_WhitespaceOnlySides_ReturnsInvalid()
+    public void ValidateMarkerSettings_TrailingWhitespaceOnRightSide_ReturnsInvalid()
     {
         // VAL-002 requires BOTH sides non-empty **after trim**. PT9 line 37:
         // `items[0].Trim().Length == 0 || items[1].Trim().Length == 0`.
-        // Note: " / " — after the outer Regex.Replace(" +", " ").Trim() this
-        // becomes "/", but a pair like "a/ " inside a multi-pair string would
-        // exercise the per-side trim. We test the clearer explicit case.
+        // Input "p/q  a/ " — the second pair `a/ ` has trailing whitespace
+        // after the slash, so its right side is empty-after-trim and the
+        // per-side trim check rejects the entire settings string.
         var result = MarkersDataSource.ValidateMarkerSettings("p/q  a/ ");
         //                                                        ^^ second pair has
-        //                                                 empty-after-trim right side
+        //                                                 trailing whitespace right side
 
         Assert.That(result.Valid, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo(Pt9ErrorMessageKey));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("Contract", "ValidateMarkerSettings")]
+    [Property("BehaviorId", "BHV-105")]
+    [Property("ValidationRule", "VAL-002")]
+    public void ValidateMarkerSettings_WhitespaceOnlySides_ReturnsInvalid()
+    {
+        // VAL-002 explicit whitespace-only-side coverage: both the "whitespace
+        // after slash" and "whitespace before slash" shapes must be rejected
+        // via the per-side Trim() check. These supplement the
+        // TrailingWhitespaceOnRightSide test above by exercising a standalone
+        // pair (no preceding valid pair) on each side of the slash.
+
+        var resultRight = MarkersDataSource.ValidateMarkerSettings("p/ ");
+        Assert.That(resultRight.Valid, Is.False, "'p/ ' — whitespace-only right side");
+        Assert.That(resultRight.ErrorMessage, Is.EqualTo(Pt9ErrorMessageKey));
+
+        var resultLeft = MarkersDataSource.ValidateMarkerSettings(" /q");
+        Assert.That(resultLeft.Valid, Is.False, "' /q' — whitespace-only left side");
+        Assert.That(resultLeft.ErrorMessage, Is.EqualTo(Pt9ErrorMessageKey));
     }
 
     [Test]

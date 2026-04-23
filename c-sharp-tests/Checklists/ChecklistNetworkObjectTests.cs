@@ -374,8 +374,7 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
             MarkerSettings: new MarkerSettings(EquivalentMarkers: "", MarkerFilter: ""),
             VerseRange: null,
             HideMatches: false,
-            ShowVerseText: false,
-            BookNumbers: null
+            ShowVerseText: false
         );
 
         // Act — invoke via the polymorphic object return type (ChecklistResultResponse

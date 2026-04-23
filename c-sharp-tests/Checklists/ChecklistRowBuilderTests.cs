@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Paranext.DataProvider.Checklists;
+using SIL.Scripture;
 
 namespace TestParanextDataProvider.Checklists;
 
@@ -661,10 +662,12 @@ internal class ChecklistRowBuilderTests
 
         var rows = ChecklistRowBuilder.BuildRowsMergingCells(columns);
 
-        // We expect 4 rows — the two duplicates each get their own row.
+        // Exactly 4 rows — each of the 4 cells in col 0 (MRK 16:1, 16:2, 16:1-dup,
+        // 16:2-dup) gets its own row because the handledCells HashSet prevents
+        // re-grabbing an already-processed cell (see AddIfUnhandled).
         Assert.That(
             rows.Count,
-            Is.GreaterThanOrEqualTo(4),
+            Is.EqualTo(4),
             "duplicate verse refs must each produce their own row (TS-068)"
         );
 
@@ -750,13 +753,17 @@ internal class ChecklistRowBuilderTests
         }
 
         // Rows should be ordered by FirstRef ascending (binary-search insertion).
-        // Assert that each row's FirstRef is lexicographically <= the next row's FirstRef.
+        // Assert each row's FirstRef sorts canonically via VerseRef.CompareTo,
+        // not string ordinal (string ordinal breaks across book/chapter
+        // transitions where the canonical ordering is semantic).
         for (int i = 1; i < rows.Count; i++)
         {
+            var prevRef = new VerseRef(rows[i - 1].FirstRef!, ScrVers.English);
+            var currRef = new VerseRef(rows[i].FirstRef!, ScrVers.English);
             Assert.That(
-                string.CompareOrdinal(rows[i - 1].FirstRef, rows[i].FirstRef),
+                prevRef.CompareTo(currRef),
                 Is.LessThanOrEqualTo(0),
-                $"rows must be ordered by FirstRef: "
+                $"rows must be ordered by canonical VerseRef compare: "
                     + $"row {i - 1}={rows[i - 1].FirstRef}, row {i}={rows[i].FirstRef}"
             );
         }

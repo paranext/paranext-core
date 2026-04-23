@@ -56,8 +56,7 @@ internal static class ChecklistService
     //   2. Parse marker settings via
     //      MarkersDataSource.InitializeMarkerMappings(equivalentMarkers,
     //      markerFilter) — yields (mappings, markerFilter).
-    //   3. Compute the iteration book list: request.BookNumbers when
-    //      non-null (empty-array honored as "no books"), else
+    //   3. Compute the iteration book list:
     //      mainScrText.Settings.BooksPresentSet.SelectedBookNumbers
     //      intersected with [startRef.BookNum..endRef.BookNum] (PT9
     //      SelectedBooks lines 356-363).
@@ -142,12 +141,7 @@ internal static class ChecklistService
             );
 
         // Step 3: compute the iteration book list.
-        IReadOnlyList<int> bookNumbers = ResolveBookNumbers(
-            request.BookNumbers,
-            mainScrText,
-            startRef,
-            endRef
-        );
+        IReadOnlyList<int> bookNumbers = ResolveBookNumbers(mainScrText, startRef, endRef);
 
         // Step 4: per-column, per-book cell extraction with
         // MarkersDataSource.PostProcessParagraph applied per paragraph.
@@ -440,26 +434,20 @@ internal static class ChecklistService
     // Maps to: BHV-118
     //
     // EXPLANATION:
-    // PT9 enumerated `baseScrText.Settings.BooksPresentSet.SelectedBookNumbers`
-    // intersected with `[startRef.BookNum..endRef.BookNum]`. PT10 exposes an
-    // explicit `request.BookNumbers` override for callers that want to scope
-    // the iteration (e.g. the UI's "this book only" button).
+    // Enumerates `baseScrText.Settings.BooksPresentSet.SelectedBookNumbers`
+    // intersected with `[startRef.BookNum..endRef.BookNum]`. PT9's range filter
+    // is inclusive on both sides.
     //
-    // Null vs empty-array distinction (INV-008 edge):
-    //   - null  -> "no caller preference" -> use BooksPresentSet.
-    //   - empty -> "caller explicitly asked for zero books" -> honour it.
-    //
-    // PT9's range filter is inclusive on both sides.
+    // Note: data-contracts.md §2.1 intentionally omits a request-level
+    // BookNumbers override (removed as speculative/unused — see revise round 1
+    // T-R-1 action 4). The iteration book list is derived entirely from the
+    // active project's BooksPresentSet filtered by the verse range.
     private static IReadOnlyList<int> ResolveBookNumbers(
-        IReadOnlyList<int>? requestedBookNumbers,
         ScrText mainScrText,
         VerseRef startRef,
         VerseRef endRef
     )
     {
-        if (requestedBookNumbers != null)
-            return requestedBookNumbers;
-
         return mainScrText
             .Settings.BooksPresentSet.SelectedBookNumbers.Where(bookNum =>
                 bookNum >= startRef.BookNum && bookNum <= endRef.BookNum
@@ -546,8 +534,7 @@ internal static class ChecklistService
                 bookNum,
                 startRef,
                 endRef,
-                paragraphs,
-                showVerseText
+                paragraphs
             );
 
             foreach (ChecklistCell cell in cells)
@@ -618,11 +605,23 @@ internal static class ChecklistService
         if (cell.Paragraphs.Count == 0)
             return cell;
 
-        // TODO: DEF-BE-001 — chapter-level permission (see deferred-functionality.md).
+        // TODO: create tracking issue — chapter-level permission
+        // (see deferred-functionality.md; tracked at
+        // https://github.com/paranext/paranext-core/issues/TBD).
         // PT9 also gated on scrText.Permissions.CanEdit(bookNum, chapterNum).
         // paranext-core lacks that API today; revisit when it lands.
 
-        VerseRef vref = new(cell.Reference, scrText.Settings.Versification);
+        // Defensive: a malformed / non-parseable Reference string must not crash
+        // the pipeline. Mirrors the try/catch around GetJoinedText in BuildCLCell.
+        VerseRef vref;
+        try
+        {
+            vref = new VerseRef(cell.Reference, scrText.Settings.Versification);
+        }
+        catch (Exception)
+        {
+            return cell;
+        }
         var editLink = new EditLinkItem(vref.BookNum, vref.ChapterNum, vref.VerseNum);
 
         ChecklistParagraph lastParagraph = cell.Paragraphs[^1];
@@ -915,13 +914,10 @@ internal static class ChecklistService
     // PT10 deviations vs PT9:
     //   - Stateless: no ChecklistType dispatch, no virtual overrides,
     //     no instance fields.
-    //   - showVerseText is threaded through the signature but NOT consumed
-    //     here — it's a PostProcessParagraph argument and PostProcessParagraph
-    //     placement is a CAP-006 orchestration concern (see plan Decisions
-    //     Made: "PostProcessParagraph placement"). The parameter is kept on
-    //     the signature because the contract in strategic-plan-backend.md
-    //     §CAP-004 lists it, and CAP-006 will consume it when invoking
-    //     MarkersDataSource.PostProcessParagraph per paragraph.
+    //   - showVerseText is NOT a parameter here: CAP-006's ExtractColumnCells
+    //     passes the flag directly into ApplyPostProcessParagraph per cell, so
+    //     GetCellsForBook has no use for it. PT9's CLDataSource interleaved
+    //     the two concerns; PT10 separates them cleanly.
     //   - EditLinkItem is NOT emitted at this layer (VAL-007). CAP-012 owns
     //     inline emission; CAP-004 only ensures the cell STRUCTURE is ready
     //     for an EditLinkItem to be appended (Paragraphs[*].Items is a
@@ -953,12 +949,9 @@ internal static class ChecklistService
         int bookNum,
         VerseRef startRef,
         VerseRef endRef,
-        List<ChecklistParagraphTokens> paragraphs,
-        bool showVerseText
+        List<ChecklistParagraphTokens> paragraphs
     )
     {
-        _ = showVerseText; // kept on signature for CAP-006 orchestration (see EXPLANATION above).
-
         var cells = new List<ChecklistCell>();
         var cellVrefs = new List<VerseRef>();
 
@@ -1044,9 +1037,10 @@ internal static class ChecklistService
     //
     //   5. PT9 line 430 calls `PostProcessParagraph(cell, state.VerseRef,
     //      paragraph)`; CAP-004 does NOT — that's a CAP-006 orchestration
-    //      concern (see plan Decisions Made). The `showVerseText` argument
-    //      threads through to CAP-006's call to
-    //      MarkersDataSource.PostProcessParagraph.
+    //      concern (see plan Decisions Made). CAP-006's ExtractColumnCells
+    //      applies MarkersDataSource.PostProcessParagraph directly with the
+    //      orchestrator's showVerseText flag, so BuildCLCell does not carry
+    //      that argument.
     //
     // Return tuple: the cell AND its live VerseRef (so GetCellsForBook can
     // drive the same-reference merge via VerseRef.CompareTo).
@@ -1068,12 +1062,18 @@ internal static class ChecklistService
         vref.Versification = scrText.Settings.Versification;
 
         // Step 2: PT9 :371 — FB-11372 language lookup with DummyScrText-safe fallback.
+        // The chained access `GetJoinedText(bookNum).Settings.LanguageID.Id` can
+        // surface a NullReferenceException when the joined-text wrapper is not
+        // fully populated (DummyScrText returns `this`, so its Settings/LanguageID
+        // may be uninitialized in some test scenarios). Narrow the catch to that
+        // concrete case so other exceptions (e.g. I/O failures from a real
+        // JoinedScrText) propagate normally.
         string language;
         try
         {
             language = scrText.GetJoinedText(bookNum).Settings.LanguageID.Id;
         }
-        catch (Exception)
+        catch (NullReferenceException)
         {
             language = scrText.Settings.LanguageID?.Id ?? string.Empty;
         }

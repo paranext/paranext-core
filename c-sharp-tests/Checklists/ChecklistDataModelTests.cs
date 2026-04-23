@@ -56,8 +56,7 @@ internal class ChecklistDataModelTests
             MarkerSettings: markerSettings,
             VerseRange: range,
             HideMatches: true,
-            ShowVerseText: false,
-            BookNumbers: new List<int> { 1, 2, 40 }
+            ShowVerseText: false
         );
 
         var json = JsonSerializer.Serialize(request, _options);
@@ -70,7 +69,6 @@ internal class ChecklistDataModelTests
         Assert.That(actual.MarkerSettings.MarkerFilter, Is.EqualTo("p q"));
         Assert.That(actual.HideMatches, Is.True);
         Assert.That(actual.ShowVerseText, Is.False);
-        Assert.That(actual.BookNumbers, Is.EqualTo(new[] { 1, 2, 40 }));
         Assert.That(actual.VerseRange, Is.Not.Null);
     }
 
@@ -80,15 +78,14 @@ internal class ChecklistDataModelTests
     [Property("Contract", "ChecklistRequest")]
     public void ChecklistRequest_NullableFieldsNull_RoundTripsThroughJson()
     {
-        // VerseRange and BookNumbers are nullable per contract §2.1.
+        // VerseRange is nullable per contract §2.1.
         var request = new ChecklistRequest(
             ProjectId: "p1",
             ComparativeTextIds: new List<string>(),
             MarkerSettings: new MarkerSettings("", ""),
             VerseRange: null,
             HideMatches: false,
-            ShowVerseText: false,
-            BookNumbers: null
+            ShowVerseText: false
         );
 
         var json = JsonSerializer.Serialize(request, _options);
@@ -96,7 +93,6 @@ internal class ChecklistDataModelTests
 
         Assert.That(actual, Is.Not.Null);
         Assert.That(actual!.VerseRange, Is.Null);
-        Assert.That(actual.BookNumbers, Is.Null);
         Assert.That(actual.ComparativeTextIds, Is.Empty);
     }
 
@@ -112,8 +108,7 @@ internal class ChecklistDataModelTests
             MarkerSettings: new MarkerSettings("", ""),
             VerseRange: null,
             HideMatches: false,
-            ShowVerseText: false,
-            BookNumbers: null
+            ShowVerseText: false
         );
 
         var json = JsonSerializer.Serialize(request, _options);

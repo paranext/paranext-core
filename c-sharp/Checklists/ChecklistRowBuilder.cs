@@ -12,7 +12,7 @@ namespace Paranext.DataProvider.Checklists;
 //   GrabMatchingCellsFromColumns, MergeGrabbedCells, FindInsertionIndex,
 //   AddIfUnhandled, GetLargestGrabbedVerseRef, GetRefsFromGrabbedCells)
 // Maps to: EXT-009 / BHV-109
-// Invariants: INV-001 (N cells per row), INV-006 (MAX_CELLS_TO_GRAB=3),
+// Invariants: INV-001 (N cells per row), INV-006 (MaxCellsToGrab=3),
 //   INV-007 (common versification — orchestrator pre-normalizes), INV-011
 //   (Markers uses merging mode — only public entry is BuildRowsMergingCells).
 //
@@ -22,7 +22,7 @@ namespace Paranext.DataProvider.Checklists;
 // normalized verse reference land in the same row. When one column has a verse
 // bridge (e.g. "EXO 20:2-5") and another has individual verse cells
 // (e.g. "EXO 20:4", "EXO 20:5", "EXO 20:6", ...), adjacent cells are grabbed
-// and merged until either the bridges align or MAX_CELLS_TO_GRAB (3) is
+// and merged until either the bridges align or MaxCellsToGrab (3) is
 // reached per column per row.
 //
 // Algorithmic phases (per invocation, in order):
@@ -33,7 +33,7 @@ namespace Paranext.DataProvider.Checklists;
 //      - GrabMatchingCellsFromColumns collects one cell per later column
 //        whose normalized verse refs overlap the current cell's.
 //      - ExpandGrabCountToAlignCells extends the grab set until bridge
-//        boundaries align (bounded by MAX_CELLS_TO_GRAB).
+//        boundaries align (bounded by MaxCellsToGrab).
 //      - MergeGrabbedCells concatenates paragraphs within each column's
 //        grabbed set into a single MutableCell (the lead cell).
 //      - AddRowOfGrabbedCells emits a ChecklistRow: one ChecklistCell per
@@ -56,7 +56,7 @@ namespace Paranext.DataProvider.Checklists;
 /// Aligns cells from multiple columns into rows by verse reference. Markers
 /// checklist always uses the merging mode (INV-011) — verse bridges in one
 /// column are merged with individual verse cells in another column up to
-/// <see cref="MAX_CELLS_TO_GRAB"/> cells per column per row (INV-006).
+/// <see cref="MaxCellsToGrab"/> cells per column per row (INV-006).
 ///
 /// <para>See class-level <c>EXPLANATION</c> comment for full algorithm and
 /// data-contracts.md §4.1 (BHV-109 within BuildChecklistData), §3.2
@@ -74,7 +74,7 @@ internal static class ChecklistRowBuilder
     /// bridge in one column would otherwise pull in an unbounded number of
     /// adjacent cells from another column.
     /// </summary>
-    public const int MAX_CELLS_TO_GRAB = 3;
+    public const int MaxCellsToGrab = 3;
 
     /// <summary>
     /// Aligns per-column cell lists into rows. Always uses merging mode
@@ -173,18 +173,18 @@ internal static class ChecklistRowBuilder
     /// </summary>
     private sealed class Builder
     {
-        private readonly List<List<ChecklistCell>> columns;
-        private readonly List<List<MutableCell>> mutableCells;
-        private readonly List<ChecklistRow> rows = new List<ChecklistRow>();
-        private ScrVers versification = ScrVers.English;
-        private Dictionary<VerseRef, int>[] referenceMap = null!;
-        private Dictionary<int, List<VerseRef>>[] cellRefMap = null!;
-        private HashSet<int>[] handledCells = null!;
+        private readonly List<List<ChecklistCell>> _columns;
+        private readonly List<List<MutableCell>> _mutableCells;
+        private readonly List<ChecklistRow> _rows = new();
+        private ScrVers _versification = ScrVers.English;
+        private Dictionary<VerseRef, int>[] _referenceMap = null!;
+        private Dictionary<int, List<VerseRef>>[] _cellRefMap = null!;
+        private HashSet<int>[] _handledCells = null!;
 
         public Builder(List<List<ChecklistCell>> columnsList)
         {
-            columns = columnsList;
-            mutableCells = new List<List<MutableCell>>(columns.Count);
+            _columns = columnsList;
+            _mutableCells = new List<List<MutableCell>>(_columns.Count);
         }
 
         // === PORTED FROM PT9 ===
@@ -196,17 +196,17 @@ internal static class ChecklistRowBuilder
         // Outer loop walks every (column, cell) pair. For each pair,
         // GrabMatchingCellsFromColumns collects one aligned cell per later
         // column; if anything was grabbed, we expand the grab to align bridge
-        // boundaries (bounded by MAX_CELLS_TO_GRAB), merge paragraphs within
+        // boundaries (bounded by MaxCellsToGrab), merge paragraphs within
         // each column's grabbed set, and emit the row. Always merging mode
         // (Markers invariant INV-011).
         public List<ChecklistRow> Build()
         {
             Initialize();
 
-            for (int currentCol = 0; currentCol < columns.Count; currentCol++)
+            for (int currentCol = 0; currentCol < _columns.Count; currentCol++)
             {
                 int columnCellIndex = 0;
-                while (columnCellIndex < columns[currentCol].Count)
+                while (columnCellIndex < _columns[currentCol].Count)
                 {
                     List<int>[] cellsToGrab = GrabMatchingCellsFromColumns(
                         currentCol,
@@ -228,7 +228,7 @@ internal static class ChecklistRowBuilder
                 }
             }
 
-            return rows;
+            return _rows;
         }
 
         // === PORTED FROM PT9 ===
@@ -237,7 +237,7 @@ internal static class ChecklistRowBuilder
         // Maps to: EXT-009 / BHV-109
         //
         // EXPLANATION:
-        // PT9 reads default versification from the first cell's live VerseRef.
+        // PT9 reads default _versification from the first cell's live VerseRef.
         // PT10's ChecklistCell has no VerseRef field, so we default to
         // ScrVers.English and rely on the orchestrator (CAP-006) to
         // pre-normalize per INV-007. We also pre-build the MutableCell shadow
@@ -247,7 +247,7 @@ internal static class ChecklistRowBuilder
             // Build the MutableCell shadow per source cell. (Versification
             // defaults to ScrVers.English at field declaration — see class-level
             // EXPLANATION; orchestrator pre-normalizes cells before calling.)
-            foreach (var column in columns)
+            foreach (var column in _columns)
             {
                 var mcol = new List<MutableCell>(column.Count);
                 foreach (var cell in column)
@@ -265,14 +265,14 @@ internal static class ChecklistRowBuilder
                         )
                     );
                 }
-                mutableCells.Add(mcol);
+                _mutableCells.Add(mcol);
             }
 
             BuildReferenceMappings();
 
-            handledCells = new HashSet<int>[columns.Count];
-            for (int col = 0; col < columns.Count; col++)
-                handledCells[col] = new HashSet<int>();
+            _handledCells = new HashSet<int>[_columns.Count];
+            for (int col = 0; col < _columns.Count; col++)
+                _handledCells[col] = new HashSet<int>();
         }
 
         // === NEW IN PT10 ===
@@ -309,7 +309,7 @@ internal static class ChecklistRowBuilder
             VerseRef start;
             try
             {
-                start = new VerseRef(refToParse, versification);
+                start = new VerseRef(refToParse, _versification);
             }
             catch
             {
@@ -337,41 +337,41 @@ internal static class ChecklistRowBuilder
         //
         // EXPLANATION:
         // For each column, build two lookup tables:
-        //   - referenceMap: normalized VerseRef -> index of the first cell
+        //   - _referenceMap: normalized VerseRef -> index of the first cell
         //     containing that verse. Used by GrabMatchingCellsFromColumns.
-        //   - cellRefMap:  cell index -> list of every normalized VerseRef
+        //   - _cellRefMap:  cell index -> list of every normalized VerseRef
         //     that cell covers (bridges expanded via AllVerses).
         // ChangeVersification is applied to each normalized ref; in practice
         // the orchestrator already pre-normalized, so this is a no-op for the
         // 20 CAP-005 tests but preserves PT9's semantic for future callers.
         private void BuildReferenceMappings()
         {
-            cellRefMap = new Dictionary<int, List<VerseRef>>[columns.Count];
-            referenceMap = new Dictionary<VerseRef, int>[columns.Count];
+            _cellRefMap = new Dictionary<int, List<VerseRef>>[_columns.Count];
+            _referenceMap = new Dictionary<VerseRef, int>[_columns.Count];
 
-            for (int col = 0; col < columns.Count; col++)
+            for (int col = 0; col < _columns.Count; col++)
             {
-                cellRefMap[col] = new Dictionary<int, List<VerseRef>>();
-                referenceMap[col] = new Dictionary<VerseRef, int>();
+                _cellRefMap[col] = new Dictionary<int, List<VerseRef>>();
+                _referenceMap[col] = new Dictionary<VerseRef, int>();
 
-                for (int cell = 0; cell < columns[col].Count; cell++)
+                for (int cell = 0; cell < _columns[col].Count; cell++)
                 {
                     var cellRefs = new List<VerseRef>();
-                    VerseRef cellVerseRef = mutableCells[col][cell].StartVerseRef;
+                    VerseRef cellVerseRef = _mutableCells[col][cell].StartVerseRef;
                     if (cellVerseRef.IsDefault)
                     {
-                        cellRefMap[col][cell] = cellRefs;
+                        _cellRefMap[col][cell] = cellRefs;
                         continue;
                     }
                     foreach (VerseRef vRef in cellVerseRef.AllVerses())
                     {
                         var vrefCopy = vRef;
-                        vrefCopy.ChangeVersification(versification);
-                        if (!referenceMap[col].ContainsKey(vrefCopy))
-                            referenceMap[col].Add(vrefCopy, cell);
+                        vrefCopy.ChangeVersification(_versification);
+                        if (!_referenceMap[col].ContainsKey(vrefCopy))
+                            _referenceMap[col].Add(vrefCopy, cell);
                         cellRefs.Add(vrefCopy);
                     }
-                    cellRefMap[col][cell] = cellRefs;
+                    _cellRefMap[col][cell] = cellRefs;
                 }
             }
         }
@@ -383,7 +383,7 @@ internal static class ChecklistRowBuilder
         //
         // EXPLANATION:
         // Iteratively extends the grabbed-cells set until bridge boundaries
-        // align across columns. Each iteration:
+        // align across _columns. Each iteration:
         //   1. Find the largest (latest) verse ref among grabbed cells, and
         //      which column it belongs to.
         //   2. For the current column: if its next unhandled cell starts at
@@ -391,7 +391,7 @@ internal static class ChecklistRowBuilder
         //      loop counter).
         //   3. For every later column: scan the grabbed verse refs; if a
         //      ref maps to an unhandled cell in this column, grab it.
-        // The MAX_CELLS_TO_GRAB check on each column prevents runaway merges
+        // The MaxCellsToGrab check on each column prevents runaway merges
         // (INV-006).
         private void ExpandGrabCountToAlignCells(
             int currentCol,
@@ -410,9 +410,9 @@ internal static class ChecklistRowBuilder
                     out int colWithLargest
                 );
 
-                for (int col = currentCol; col < columns.Count; col++)
+                for (int col = currentCol; col < _columns.Count; col++)
                 {
-                    if (cellsToGrab[col].Count >= MAX_CELLS_TO_GRAB)
+                    if (cellsToGrab[col].Count >= MaxCellsToGrab)
                         continue; // INV-006 guard
 
                     if (col == currentCol)
@@ -420,8 +420,8 @@ internal static class ChecklistRowBuilder
                         int nextIndex = columnCellIndex + 1;
                         if (
                             col != colWithLargest
-                            && nextIndex < columns[currentCol].Count
-                            && cellRefMap[currentCol][nextIndex].Any(v => v <= largestRef)
+                            && nextIndex < _columns[currentCol].Count
+                            && _cellRefMap[currentCol][nextIndex].Any(v => v <= largestRef)
                             && AddIfUnhandled(col, nextIndex, cellsToGrab)
                         )
                         {
@@ -434,7 +434,7 @@ internal static class ChecklistRowBuilder
                     foreach (VerseRef vRef in GetRefsFromGrabbedCells(currentCol, cellsToGrab))
                     {
                         if (
-                            referenceMap[col].TryGetValue(vRef, out int cellIndex)
+                            _referenceMap[col].TryGetValue(vRef, out int cellIndex)
                             && AddIfUnhandled(col, cellIndex, cellsToGrab)
                         )
                         {
@@ -455,14 +455,14 @@ internal static class ChecklistRowBuilder
             List<int>[] cellsToGrab
         )
         {
-            for (int col = currentCol; col < columns.Count; col++)
+            for (int col = currentCol; col < _columns.Count; col++)
             {
                 if (cellsToGrab[col] == null)
                     continue;
 
                 foreach (int index in cellsToGrab[col])
                 {
-                    foreach (VerseRef verseRef in cellRefMap[col][index])
+                    foreach (VerseRef verseRef in _cellRefMap[col][index])
                         yield return verseRef;
                 }
             }
@@ -494,10 +494,10 @@ internal static class ChecklistRowBuilder
                     continue;
                 for (int cell = 0; cell < grabbedCells[col].Count; cell++)
                 {
-                    VerseRef cellEnd = mutableCells[col][grabbedCells[col][cell]].EndVerseRef;
+                    VerseRef cellEnd = _mutableCells[col][grabbedCells[col][cell]].EndVerseRef;
                     if (cellEnd.IsDefault)
                         continue;
-                    cellEnd.ChangeVersification(versification);
+                    cellEnd.ChangeVersification(_versification);
                     if (largestRef == null || largestRef.Value < cellEnd)
                     {
                         largestRef = cellEnd;
@@ -530,13 +530,13 @@ internal static class ChecklistRowBuilder
                     continue;
 
                 int firstCellIndex = cellsToMerge[col][0];
-                var lead = mutableCells[col][firstCellIndex];
+                var lead = _mutableCells[col][firstCellIndex];
                 VerseRef mergedEnd = lead.EndVerseRef;
 
                 for (int cellIdx = 1; cellIdx < cellsToMerge[col].Count; cellIdx++)
                 {
                     int otherIndex = cellsToMerge[col][cellIdx];
-                    var other = mutableCells[col][otherIndex];
+                    var other = _mutableCells[col][otherIndex];
                     lead.Paragraphs.AddRange(other.Paragraphs);
                     if (
                         !other.EndVerseRef.IsDefault
@@ -562,7 +562,7 @@ internal static class ChecklistRowBuilder
         /// <summary>
         /// Builds a displayed-reference string spanning a start and end verse
         /// reference. When both refs share book+chapter, produces
-        /// <c>"XXX C:S-E"</c>; otherwise falls back to the concatenated form
+        /// <c>"EXO 20:2-5"</c>; otherwise falls back to the concatenated form
         /// <c>"{start}-{end}"</c>.
         /// </summary>
         private static string BuildRangeDisplayedReference(VerseRef start, VerseRef end)
@@ -584,14 +584,14 @@ internal static class ChecklistRowBuilder
         // EXPLANATION:
         // For the current (col, cellIndex), gather one cell per later column
         // whose verse refs overlap. The current column always gets the
-        // current cell; later columns look up each of the current cell's
-        // normalized refs in their referenceMap and grab the FIRST
+        // current cell; later _columns look up each of the current cell's
+        // normalized refs in their _referenceMap and grab the FIRST
         // unhandled match.
         private List<int>[] GrabMatchingCellsFromColumns(int currentCol, int masterListCellIndex)
         {
-            List<int>[] cellsToGrab = new List<int>[columns.Count];
+            List<int>[] cellsToGrab = new List<int>[_columns.Count];
 
-            for (int col = currentCol; col < columns.Count; col++)
+            for (int col = currentCol; col < _columns.Count; col++)
             {
                 cellsToGrab[col] = new List<int>();
                 if (col == currentCol)
@@ -600,10 +600,10 @@ internal static class ChecklistRowBuilder
                 }
                 else
                 {
-                    foreach (VerseRef vRef in cellRefMap[currentCol][masterListCellIndex])
+                    foreach (VerseRef vRef in _cellRefMap[currentCol][masterListCellIndex])
                     {
                         if (
-                            referenceMap[col].TryGetValue(vRef, out int cellIndex)
+                            _referenceMap[col].TryGetValue(vRef, out int cellIndex)
                             && AddIfUnhandled(col, cellIndex, cellsToGrab)
                         )
                             break;
@@ -622,23 +622,23 @@ internal static class ChecklistRowBuilder
         // EXPLANATION:
         // Adds cellIndex to cellsToGrab[col] at the right position so the
         // grabbed list stays in verse-reference order. Marks the cell in
-        // handledCells so the same cell is never grabbed twice (this is
-        // what gives TS-068 duplicate verse refs their own separate rows).
+        // _handledCells so the same cell is never grabbed twice (this is
+        // what gives TS-068 duplicate verse refs their own separate _rows).
         // The insertion index is the first position i where some verse ref
         // in the cell-being-inserted is smaller than any verse ref of
         // cellsToGrab[col][i]; otherwise append to end.
         private bool AddIfUnhandled(int col, int cellIndex, List<int>[] cellsToGrab)
         {
-            if (handledCells[col].Contains(cellIndex))
+            if (_handledCells[col].Contains(cellIndex))
                 return false;
 
             int insertIndex = cellsToGrab[col].Count; // default: append at end
             for (int i = 0; i < cellsToGrab[col].Count; i++)
             {
                 int grabbedCell = cellsToGrab[col][i];
-                foreach (VerseRef verseRef in cellRefMap[col][grabbedCell])
+                foreach (VerseRef verseRef in _cellRefMap[col][grabbedCell])
                 {
-                    if (cellRefMap[col][cellIndex].Any(vref => vref < verseRef))
+                    if (_cellRefMap[col][cellIndex].Any(vref => vref < verseRef))
                     {
                         insertIndex = i;
                         break;
@@ -647,7 +647,7 @@ internal static class ChecklistRowBuilder
             }
 
             cellsToGrab[col].Insert(insertIndex, cellIndex);
-            handledCells[col].Add(cellIndex);
+            _handledCells[col].Add(cellIndex);
             return true;
         }
 
@@ -664,12 +664,12 @@ internal static class ChecklistRowBuilder
         //     ChecklistCell.
         //   - FirstRef: earliest verse reference across all populated
         //     cells (BHV-111 carry-through).
-        //   - Rows coming from col 0 append to the end; rows from later
-        //     columns are binary-search inserted into their correct
+        //   - Rows coming from col 0 append to the end; _rows from later
+        //     _columns are binary-search inserted into their correct
         //     position by FirstRef.
         private void AddRowOfGrabbedCells(int currentCol, List<int>[] grabbedCells)
         {
-            var cells = new List<ChecklistCell>(columns.Count);
+            var cells = new List<ChecklistCell>(_columns.Count);
             VerseRef? earliestRef = null;
 
             for (int col = 0; col < grabbedCells.Length; col++)
@@ -682,7 +682,7 @@ internal static class ChecklistRowBuilder
                 }
 
                 int firstCellIndex = grabbedCells[col][0];
-                var mc = mutableCells[col][firstCellIndex];
+                var mc = _mutableCells[col][firstCellIndex];
                 cells.Add(mc.ToChecklistCell());
 
                 if (!mc.StartVerseRef.IsDefault)
@@ -700,20 +700,29 @@ internal static class ChecklistRowBuilder
 
             string firstRef = earliestRef.HasValue ? earliestRef.Value.ToString() : string.Empty;
 
+            // VAL-007 cond 2 (row-level signal): mark IncludeEditLink=true when
+            // the first cell of the row has a non-default VerseRef (mapped to a
+            // non-empty Reference per §3.3). TODO (VAL-007): downstream inline
+            // emission in ChecklistService.ApplyEditLinkGating currently runs
+            // per-cell and does not consult this row-level flag. Wire the flag
+            // into the emission gate (or promote the gate to row-level) once
+            // chapter-level CanEdit lands alongside DEF-BE-001.
+            bool includeEditLink = cells.Count > 0 && !string.IsNullOrEmpty(cells[0].Reference);
+
             var newRow = new ChecklistRow(
                 Cells: cells,
                 IsMatch: false,
-                IncludeEditLink: false,
+                IncludeEditLink: includeEditLink,
                 Score: 0.0,
                 FirstRef: firstRef
             );
 
-            if (currentCol == 0 || rows.Count == 0)
-                rows.Add(newRow);
+            if (currentCol == 0 || _rows.Count == 0)
+                _rows.Add(newRow);
             else
             {
                 int insertIndex = FindInsertionIndex(newRow);
-                rows.Insert(insertIndex, newRow);
+                _rows.Insert(insertIndex, newRow);
             }
         }
 
@@ -741,7 +750,7 @@ internal static class ChecklistRowBuilder
         // Maps to: EXT-009 / BHV-109
         //
         // EXPLANATION:
-        // Binary search over the in-progress rows list to find the right
+        // Binary search over the in-progress _rows list to find the right
         // insertion index for a new row by its FirstRef. When an existing
         // row has the same FirstRef, the new row is inserted immediately
         // AFTER it (PT9 semantic).
@@ -753,12 +762,12 @@ internal static class ChecklistRowBuilder
         private int FindInsertionIndex(ChecklistRow newRow)
         {
             int start = 0;
-            int end = rows.Count;
+            int end = _rows.Count;
             VerseRef newRef = ParseFirstRef(newRow.FirstRef);
             while (true)
             {
                 int indexToCheck = start + ((end - start) >> 1);
-                VerseRef checkRef = ParseFirstRef(rows[indexToCheck].FirstRef);
+                VerseRef checkRef = ParseFirstRef(_rows[indexToCheck].FirstRef);
                 int compareValue = CompareVerseRefs(checkRef, newRef);
 
                 if (compareValue > 0)
@@ -785,7 +794,7 @@ internal static class ChecklistRowBuilder
                 return new VerseRef();
             try
             {
-                return new VerseRef(firstRef, versification);
+                return new VerseRef(firstRef, _versification);
             }
             catch
             {

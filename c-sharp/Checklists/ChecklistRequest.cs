@@ -32,8 +32,7 @@ public record ChecklistRequest(
     MarkerSettings MarkerSettings,
     ScriptureRange? VerseRange,
     bool HideMatches,
-    bool ShowVerseText,
-    IReadOnlyList<int>? BookNumbers
+    bool ShowVerseText
 );
 
 // === NEW IN PT10 ===

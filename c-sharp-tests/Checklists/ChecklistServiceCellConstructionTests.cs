@@ -193,8 +193,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             startRef,
             endRef,
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         Assert.That(cells, Is.Not.Null);
@@ -245,8 +244,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             new VerseRef(),
             new VerseRef(),
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         var allText = string.Concat(
@@ -288,8 +286,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             new VerseRef(),
             new VerseRef(),
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         var verseNumbers = result
@@ -330,8 +327,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             new VerseRef(),
             new VerseRef(),
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         var styled = result
@@ -382,8 +378,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             startRef,
             endRef,
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         // None of the produced cells should carry text from chapter 21.
@@ -428,8 +423,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             new VerseRef(), // IsDefault
             new VerseRef(),
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         var allText = string.Concat(
@@ -467,8 +461,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             new VerseRef(),
             new VerseRef(),
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         Assert.That(
@@ -520,8 +513,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             new VerseRef(),
             new VerseRef(),
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         Assert.That(
@@ -568,8 +560,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             new VerseRef(),
             new VerseRef(),
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         var textItems = result
@@ -624,8 +615,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             new VerseRef(),
             new VerseRef(),
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         Assert.That(
@@ -675,8 +665,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             new VerseRef(),
             new VerseRef(),
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         Assert.That(
@@ -713,8 +702,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             new VerseRef(),
             new VerseRef(),
-            paragraphs,
-            showVerseText: true
+            paragraphs
         );
 
         Assert.That(
@@ -746,8 +734,7 @@ internal class ChecklistServiceCellConstructionTests
             BookNum,
             new VerseRef(),
             new VerseRef(),
-            new List<ChecklistParagraphTokens>(),
-            showVerseText: true
+            new List<ChecklistParagraphTokens>()
         );
 
         Assert.That(result, Is.Not.Null);

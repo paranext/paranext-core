@@ -190,7 +190,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         ScriptureRange? verseRange = null,
         bool hideMatches = false,
         bool showVerseText = false,
-        IReadOnlyList<int>? bookNumbers = null,
         string equivalentMarkers = "",
         string markerFilter = ""
     )
@@ -206,8 +205,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
             MarkerSettings: new MarkerSettings(equivalentMarkers, markerFilter),
             VerseRange: verseRange,
             HideMatches: hideMatches,
-            ShowVerseText: showVerseText,
-            BookNumbers: bookNumbers
+            ShowVerseText: showVerseText
         );
     }
 
@@ -226,10 +224,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         // TS-001: Single ScrText with EXO containing \p, \q, \q2 produces rows
         // whose cells carry paragraphs with those markers.
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
-        var request = BuildRequest(
-            activeProjectId: scrText.Guid.ToString(),
-            bookNumbers: new[] { 2 }
-        );
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString());
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
@@ -265,10 +260,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         // TS-005 / INV-002: Single-column checklists mark every row IsMatch=true
         // (no difference highlighting is meaningful with only one column).
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
-        var request = BuildRequest(
-            activeProjectId: scrText.Guid.ToString(),
-            bookNumbers: new[] { 2 }
-        );
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString());
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
@@ -298,11 +290,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         // INV-010 edge: single-column checklists never hide anything, so
         // ExcludedCount must be 0 regardless of the hideMatches flag.
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
-        var request = BuildRequest(
-            activeProjectId: scrText.Guid.ToString(),
-            hideMatches: true,
-            bookNumbers: new[] { 2 }
-        );
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString(), hideMatches: true);
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
@@ -338,8 +326,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         var request = BuildRequest(
             activeProjectId: active.Guid.ToString(),
             comparativeTextIds: new[] { compare.Guid.ToString() },
-            hideMatches: true,
-            bookNumbers: new[] { 2 }
+            hideMatches: true
         );
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
@@ -384,8 +371,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         var request = BuildRequest(
             activeProjectId: active.Guid.ToString(),
             comparativeTextIds: new[] { compare.Guid.ToString() },
-            hideMatches: false,
-            bookNumbers: new[] { 2 }
+            hideMatches: false
         );
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
@@ -396,8 +382,8 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         Assert.That(
             result.Rows.Count,
-            Is.GreaterThanOrEqualTo(3),
-            "all rows retained -> at least the 3 captured rows (1 match + 2 non-match)"
+            Is.EqualTo(3),
+            "all 3 rows retained -> 1 match (EXO 20:1) + 2 non-match (EXO 20:2, 20:3)"
         );
         Assert.That(
             result.ExcludedCount,
@@ -431,8 +417,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
             verseRange: new ScriptureRange(
                 new VerseRef("GEN", "1", "1", ScrVers.English),
                 new VerseRef("GEN", "1", "20", ScrVers.English)
-            ),
-            bookNumbers: new[] { 1 }
+            )
         );
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
@@ -472,8 +457,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
             verseRange: new ScriptureRange(
                 new VerseRef("GEN", "1", "2", ScrVers.English),
                 new VerseRef("GEN", "1", "20", ScrVers.English)
-            ),
-            bookNumbers: new[] { 1 }
+            )
         );
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
@@ -509,10 +493,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         // INV-012 negative direction: a small result (well under 5000) must
         // have Truncated=false.
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
-        var request = BuildRequest(
-            activeProjectId: scrText.Guid.ToString(),
-            bookNumbers: new[] { 2 }
-        );
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString());
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
@@ -564,8 +545,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
             verseRange: new ScriptureRange(
                 new VerseRef("GEN", "1", "1", ScrVers.English),
                 new VerseRef("GEN", "110", "50", ScrVers.English)
-            ),
-            bookNumbers: new[] { 1 }
+            )
         );
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
@@ -608,10 +588,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         // §4.1 error table). In that case this test will be adjusted to
         // match the chosen contract — RED compile-fail is robust to either.
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
-        var request = BuildRequest(
-            activeProjectId: scrText.Guid.ToString(),
-            bookNumbers: new[] { 2 }
-        );
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString());
 
         using var cts = new CancellationTokenSource();
         cts.Cancel();
@@ -642,11 +619,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         // through MarkersDataSource, the first item of each paragraph would
         // not be a TextItem with text "\p" / "\q" / "\q2".
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
-        var request = BuildRequest(
-            activeProjectId: scrText.Guid.ToString(),
-            showVerseText: true,
-            bookNumbers: new[] { 2 }
-        );
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString(), showVerseText: true);
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
@@ -691,8 +664,9 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
     )]
     public void BuildChecklistData_UnknownChecklistType_ThrowsInvalidOperationException()
     {
-        // VAL-004 placeholder. See [Ignore] rationale above.
-        Assert.Fail("placeholder — see [Ignore] rationale");
+        // VAL-004 placeholder. See [Ignore] rationale above — the test is
+        // always skipped via [Ignore] so this body is never executed.
+        Assert.Pass("placeholder — see [Ignore] rationale");
     }
 
     // =====================================================================
@@ -720,9 +694,9 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         // structured result (ChecklistResultError with code "PROJECT_NOT_FOUND"),
         // this test will be adjusted to inspect the structured error instead
         // of asserting Throws.
+        const string missingProjectId = "0123456789abcdef0123456789abcdef01234567";
         var request = BuildRequest(
-            activeProjectId: "0123456789abcdef0123456789abcdef01234567", // not registered
-            bookNumbers: new[] { 2 }
+            activeProjectId: missingProjectId // not registered
         );
 
         Exception? caught = null;
@@ -747,6 +721,12 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
                 + "GREEN implementer must actively reject unknown projectIds (either throw a PT9-style "
                 + "resolver exception or return a structured PROJECT_NOT_FOUND error)."
         );
+        Assert.That(
+            caught!.Message,
+            Does.Contain(missingProjectId),
+            "TS-070 — the exception message must reference the missing projectId so the "
+                + "failure is self-diagnosing (not just a generic \"project not found\" opaque error)."
+        );
     }
 
     [Test]
@@ -755,14 +735,18 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
     [Property("Contract", "BuildChecklistData")]
     [Property("BehaviorId", "BHV-101")]
     [Property("Invariant", "INV-008")]
-    public void BuildChecklistData_EmptyBookNumbersList_ProducesEmptyResultWithMessage()
+    public void BuildChecklistData_VerseRangeOutsideBooksPresentSet_ProducesEmptyResultWithMessage()
     {
-        // Edge: BookNumbers=[] — no books processed, so no rows. INV-008
-        // requires an EmptyResultMessage in that case.
-        var scrText = RegisterDummyProject(Gm001ExoUsfm);
+        // Edge: verse range does not intersect any book in BooksPresentSet, so
+        // no books are iterated and no rows are produced. INV-008 requires an
+        // EmptyResultMessage in that case.
+        var scrText = RegisterDummyProject(Gm001ExoUsfm); // registers EXO (book 2)
         var request = BuildRequest(
             activeProjectId: scrText.Guid.ToString(),
-            bookNumbers: Array.Empty<int>()
+            verseRange: new ScriptureRange(
+                new VerseRef("JHN", "1", "1", ScrVers.English),
+                new VerseRef("JHN", "1", "20", ScrVers.English)
+            )
         );
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
@@ -771,7 +755,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
             CancellationToken.None
         );
 
-        Assert.That(result.Rows, Is.Empty, "empty book list -> no rows");
+        Assert.That(result.Rows, Is.Empty, "range outside registered books -> no rows");
         Assert.That(
             result.EmptyResultMessage,
             Is.Not.Null,
@@ -795,10 +779,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         // both have exactly one entry, and ColumnProjectIds[0] equals the
         // request's ProjectId.
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
-        var request = BuildRequest(
-            activeProjectId: scrText.Guid.ToString(),
-            bookNumbers: new[] { 2 }
-        );
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString());
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
@@ -837,8 +818,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         var compare = RegisterDummyProject(Gm004Text2ExoUsfm);
         var request = BuildRequest(
             activeProjectId: active.Guid.ToString(),
-            comparativeTextIds: new[] { compare.Guid.ToString() },
-            bookNumbers: new[] { 2 }
+            comparativeTextIds: new[] { compare.Guid.ToString() }
         );
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
@@ -891,8 +871,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         var request = BuildRequest(
             activeProjectId: scrText.Guid.ToString(),
             hideMatches: true,
-            showVerseText: true,
-            bookNumbers: new[] { 2 }
+            showVerseText: true
         );
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
@@ -969,8 +948,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
             activeProjectId: active.Guid.ToString(),
             comparativeTextIds: new[] { compare.Guid.ToString() },
             hideMatches: true,
-            showVerseText: false,
-            bookNumbers: new[] { 2 }
+            showVerseText: false
         );
 
         ChecklistResult result = ChecklistService.BuildChecklistData(

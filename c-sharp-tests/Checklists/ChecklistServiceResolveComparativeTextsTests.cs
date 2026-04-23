@@ -614,5 +614,11 @@ internal class ChecklistServiceResolveComparativeTextsTests : PapiTestBase
             Is.Not.InstanceOf<NotImplementedException>(),
             "§4.5 Error Conditions — NotImplementedException is a RED-stub artifact, not the expected resolution error"
         );
+        Assert.That(
+            caught!.Message,
+            Does.Contain(unregisteredActiveProjectId),
+            "§4.5 Error Conditions — the exception message must reference the invalid "
+                + "activeProjectId so the failure is self-diagnosing."
+        );
     }
 }

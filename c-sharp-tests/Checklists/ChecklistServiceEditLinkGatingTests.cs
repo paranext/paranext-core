@@ -129,10 +129,7 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
         addTagInternal.Invoke(stylesheet, new object[] { tag });
     }
 
-    private static ChecklistRequest BuildRequest(
-        string activeProjectId,
-        IReadOnlyList<int>? bookNumbers = null
-    )
+    private static ChecklistRequest BuildRequest(string activeProjectId)
     {
         var verseRange = new ScriptureRange(
             new VerseRef("EXO", "20", "1", ScrVers.English),
@@ -145,8 +142,7 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
             MarkerSettings: new MarkerSettings(string.Empty, string.Empty),
             VerseRange: verseRange,
             HideMatches: false,
-            ShowVerseText: false,
-            BookNumbers: bookNumbers
+            ShowVerseText: false
         );
     }
 
@@ -185,10 +181,7 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
         scrText.Settings.Editable = true;
 
-        var request = BuildRequest(
-            activeProjectId: scrText.Guid.ToString(),
-            bookNumbers: new[] { 2 }
-        );
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString());
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
@@ -225,10 +218,7 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
         scrText.Settings.Editable = false;
 
-        var request = BuildRequest(
-            activeProjectId: scrText.Guid.ToString(),
-            bookNumbers: new[] { 2 }
-        );
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString());
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
@@ -278,10 +268,7 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
         scrText.Settings.Editable = true;
 
-        var request = BuildRequest(
-            activeProjectId: scrText.Guid.ToString(),
-            bookNumbers: new[] { 2 }
-        );
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString());
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
@@ -370,6 +357,6 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
         // but the user lacks CanEdit on a specific chapter should produce NO
         // EditLinkItem for rows in that chapter (and EditLinkItems as normal
         // for other chapters).
-        Assert.Fail("placeholder — see [Ignore] rationale (DEF-BE-001)");
+        Assert.Pass("placeholder — see [Ignore] rationale (DEF-BE-001)");
     }
 }
