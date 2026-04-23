@@ -6,6 +6,7 @@ using Paranext.DataProvider.Checklists.Markers;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Services;
+using Paratext.Data;
 
 namespace Paranext.DataProvider.Checklists;
 
@@ -38,7 +39,7 @@ namespace Paranext.DataProvider.Checklists;
 /// pipeline behaviour lives in <see cref="ChecklistService"/> /
 /// <see cref="MarkersDataSource"/>; this class is purely the wire shim.
 /// </summary>
-internal class ChecklistNetworkObject : NetworkObject
+internal sealed class ChecklistNetworkObject : NetworkObject
 {
     // Wire contract — pinned here as a single source of truth so the tuple
     // list passed to RegisterNetworkObjectAsync and the FunctionNames array
@@ -49,6 +50,12 @@ internal class ChecklistNetworkObject : NetworkObject
     private const string BuildMethodName = "buildChecklistData";
     private const string ResolveMethodName = "resolveComparativeTexts";
     private const string ValidateMethodName = "validateMarkerSettings";
+
+    // Build can traverse many books × multiple comparative projects; 30s matches
+    // the default PAPI request timeout (see PapiClient._requestTimeout) and is
+    // explicit here so a regression in request-handler attribution is obvious
+    // at registration time rather than surfacing as a silent wire truncation.
+    private const int BUILD_CHECKLIST_TIMEOUT_MS = 30_000;
 
     private readonly LocalParatextProjects _paratextProjects;
 
@@ -72,9 +79,7 @@ internal class ChecklistNetworkObject : NetworkObject
             [
                 (
                     BuildMethodName,
-                    new Func<ChecklistRequest, CancellationToken, ChecklistResult>(
-                        BuildChecklistData
-                    )
+                    new Func<ChecklistRequest, CancellationToken, object>(BuildChecklistData)
                 ),
                 (
                     ResolveMethodName,
@@ -111,11 +116,35 @@ internal class ChecklistNetworkObject : NetworkObject
     /// for the "identical" variant) are resolved here before the wire
     /// response leaves the backend, per the
     /// <c>patterns.errorHandling.backendLocalization</c> registry entry.
+    /// <para>
+    /// Return type is <see cref="object"/> because this delegate serves the
+    /// <c>ChecklistResultResponse</c> discriminated union (data-contracts.md §3.1):
+    /// the success branch returns <see cref="ChecklistResult"/>; the error branch
+    /// returns <see cref="ChecklistResultError"/> (mapped from the contract-listed
+    /// exception types). <see cref="OperationCanceledException"/> is deliberately
+    /// NOT caught — it propagates so PAPI can surface cooperative cancellation
+    /// semantics to the caller (TS-062).
+    /// </para>
     /// </summary>
-    private ChecklistResult BuildChecklistData(ChecklistRequest request, CancellationToken ct)
+    [NetworkTimeout(BUILD_CHECKLIST_TIMEOUT_MS)]
+    private object BuildChecklistData(ChecklistRequest request, CancellationToken ct)
     {
-        var result = ChecklistService.BuildChecklistData(request, _paratextProjects, ct);
-        return ResolveLocalizeKeys(result);
+        try
+        {
+            var result = ChecklistService.BuildChecklistData(request, _paratextProjects, ct);
+            return ResolveLocalizeKeys(result);
+        }
+        catch (Exception ex) when (ex is ProjectNotFoundException or ArgumentException)
+        {
+            // PROJECT_NOT_FOUND covers both the unresolved-GUID case
+            // (ProjectNotFoundException from ScrTextCollection) and the
+            // malformed-projectId case (ArgumentException from
+            // HexId.FromStr / HexToByteArr). From the wire contract's
+            // perspective, both mean "the active projectId is not a valid
+            // Scripture project on this machine" (data-contracts.md §4.1
+            // error conditions).
+            return new ChecklistResultError(ChecklistErrorCodes.ProjectNotFound, ex.Message);
+        }
     }
 
     /// <summary>
@@ -184,6 +213,6 @@ internal class ChecklistNetworkObject : NetworkObject
     /// when a NetworkObject method is invoked multiple times on the same
     /// record (e.g. in test assertions that round-trip).
     /// </summary>
-    private static bool IsLocalizeKey(string? s) =>
-        s != null && s.Length >= 2 && s[0] == '%' && s[^1] == '%';
+    private static bool IsLocalizeKey(string? value) =>
+        value != null && value.Length >= 2 && value[0] == '%' && value[^1] == '%';
 }

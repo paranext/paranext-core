@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checklists.Markers;
 using Paranext.DataProvider.NetworkObjects;
+using Paranext.DataProvider.Services;
 using Paratext.Data;
 using PtxUtils;
 
@@ -353,16 +355,18 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
     [Property("Routing", "buildChecklistData")]
     [Description(
         "The registered 'buildChecklistData' delegate routes to "
-            + "ChecklistService.BuildChecklistData — an unregistered projectId "
-            + "surfaces as ProjectNotFoundException. The throw propagating out "
-            + "of the handler confirms the delegate is wired (a never-registered "
-            + "handler would return default silently)."
+            + "ChecklistService.BuildChecklistData and wraps ProjectNotFoundException "
+            + "into a structured ChecklistResultError { Code=PROJECT_NOT_FOUND, "
+            + "Message=<non-empty> } per data-contracts.md §3.1 / §3.6. A "
+            + "never-registered handler would return null silently; the returned "
+            + "ChecklistResultError instance therefore confirms both delegate "
+            + "wiring and the T-B-7 structured-error path."
     )]
-    public void BuildChecklistData_RoutesToChecklistServiceBuildChecklistData()
+    public async Task BuildChecklistData_UnknownProject_ReturnsChecklistResultError()
     {
         // Arrange
         var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
-        networkObject.InitializeAsync().GetAwaiter().GetResult();
+        await networkObject.InitializeAsync();
 
         var request = new ChecklistRequest(
             ProjectId: "NONEXISTENT_PROJECT_ID",
@@ -374,27 +378,46 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
             BookNumbers: null
         );
 
-        // Act + Assert — the routing path must throw ProjectNotFoundException
-        // (ChecklistService.BuildChecklistData line 124). A never-registered
-        // handler path returns default; the throw confirms the wiring.
-        //
-        // False-green guard: Throws.Exception would also be satisfied by
-        // NotImplementedException leaking from a RED stub. We explicitly
-        // exclude NotImplementedException so this test forces a real
-        // GREEN implementation to pass.
-        Assert.That(
-            async () =>
-                await InvokeRegisteredHandlerAsync<ChecklistResult>(
-                    $"{ObjectPrefix}.buildChecklistData",
-                    request,
-                    CancellationToken.None
-                ),
-            Throws.Exception.Not.InstanceOf<NotImplementedException>(),
-            "BuildChecklistData must be wired — throw on unregistered projectId "
-                + "confirms delegate identity (silent default would mean not wired). "
-                + "NotImplementedException indicates the stub leaked through, not a "
-                + "real GREEN implementation."
+        // Act — invoke via the polymorphic object return type (ChecklistResultResponse
+        // discriminated union). The success branch returns ChecklistResult; the
+        // error branch returns ChecklistResultError.
+        var result = await InvokeRegisteredHandlerAsync<object>(
+            $"{ObjectPrefix}.buildChecklistData",
+            request,
+            CancellationToken.None
         );
+
+        // Assert — the caught ProjectNotFoundException was mapped to a
+        // structured ChecklistResultError carrying the PROJECT_NOT_FOUND code
+        // and a non-empty message. JsonRpc/StreamJsonRpc may serialize the
+        // polymorphic return through System.Text.Json and hand us back a
+        // JsonElement — handle both in-proc (ChecklistResultError instance)
+        // and round-tripped (JsonElement) paths.
+        Assert.That(result, Is.Not.Null, "handler must return a non-null ChecklistResultError");
+
+        if (result is ChecklistResultError err)
+        {
+            Assert.That(
+                err.Code,
+                Is.EqualTo(ChecklistErrorCodes.ProjectNotFound),
+                "error code must be PROJECT_NOT_FOUND"
+            );
+            Assert.That(err.Message, Is.Not.Null.And.Not.Empty, "message must be populated");
+        }
+        else if (result is JsonElement json)
+        {
+            Assert.That(
+                json.GetProperty("code").GetString(),
+                Is.EqualTo(ChecklistErrorCodes.ProjectNotFound)
+            );
+            Assert.That(json.GetProperty("message").GetString(), Is.Not.Null.And.Not.Empty);
+        }
+        else
+        {
+            Assert.Fail(
+                $"expected ChecklistResultError (or JsonElement round-trip); got {result.GetType()}"
+            );
+        }
     }
 
     // =====================================================================
@@ -419,16 +442,21 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
         var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
         await networkObject.InitializeAsync();
 
-        // Act + Assert — false-green guard: exclude NotImplementedException
-        // so a RED stub that throws on every call cannot satisfy this test;
-        // only a real GREEN implementation that registers once and rejects
-        // the second registration via the base NetworkObject guard will pass.
+        // Act + Assert — pin to the exact exception type thrown by the
+        // base NetworkObject.RegisterNetworkObjectAsync guard
+        // (NetworkObject.cs:29-30), rather than a loose "any throw that is
+        // not NotImplementedException" probe. A stricter assertion makes a
+        // future base-class change (e.g. a custom DoubleRegistrationException)
+        // surface here loudly instead of silently passing.
         Assert.That(
             async () => await networkObject.InitializeAsync(),
-            Throws.Exception.Not.InstanceOf<NotImplementedException>(),
-            "second InitializeAsync must throw a real single-registration "
-                + "guard error (not NotImplementedException — that would mean "
-                + "the stub leaked through, not a real GREEN implementation)"
+            Throws
+                .InstanceOf<Exception>()
+                .With.Message.Contains(NetworkObjectName)
+                .And.Message.Contains("already been registered"),
+            "second InitializeAsync must throw the base NetworkObject "
+                + "single-registration guard error carrying the network object "
+                + "name and the 'already been registered' literal"
         );
     }
 
@@ -437,44 +465,15 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
     // =====================================================================
 
     /// <summary>
-    /// Probes whether a handler is registered for the given wire name.
-    /// <para>
-    /// <see cref="DummyPapiClient.SendRequestAsync{T}"/> (cs-tests/DummyPapiClient.cs:50-59)
-    /// <b>only invokes the base implementation if <c>_localMethods</c>
-    /// contains the key</b>; for an unregistered name it returns
-    /// <c>Task.FromResult&lt;T?&gt;(default)</c> without any delegate invocation.
-    /// For a registered name, the base path calls <c>DynamicInvoke</c> on the
-    /// delegate — which typically throws <c>TargetParameterCountException</c>
-    /// or <c>TargetInvocationException</c> when we probe with mismatched args.
-    /// A throw therefore uniquely signals "handler was found"; a silent
-    /// default return uniquely signals "handler was NOT registered".
-    /// </para>
-    /// <para>
-    /// The lone exception is the sentinel handler registered at the object
-    /// prefix by <see cref="NetworkObject.RegisterNetworkObjectAsync"/> —
-    /// it is <c>Func&lt;bool&gt;(() =&gt; true)</c>, so DynamicInvoke with
-    /// null args succeeds and returns <c>true</c>. A non-null return also
-    /// signals "registered". Combining both paths gives a robust probe.
-    /// </para>
+    /// Reports whether a handler is registered for the given wire name by
+    /// directly inspecting <see cref="DummyPapiClient"/>'s <c>_localMethods</c>
+    /// dictionary through the test-only
+    /// <see cref="DummyPapiClient.IsHandlerRegistered"/> accessor. This replaces
+    /// the earlier exception-catching probe (which conflated "handler present"
+    /// with "handler threw on bad args") per T-B-3 feedback — a direct
+    /// dictionary lookup is unambiguous and has no false-positive failure modes.
     /// </summary>
-    private bool IsHandlerRegistered(string wireName)
-    {
-        try
-        {
-            var result = Client
-                .SendRequestAsync<object>(wireName, requestContents: null)
-                .GetAwaiter()
-                .GetResult();
-            // Registered sentinel handler (no args, returns true) → non-null result.
-            // Unregistered name → DummyPapiClient short-circuits to default (null).
-            return result != null;
-        }
-        catch
-        {
-            // Any exception means DynamicInvoke was called → handler IS registered.
-            return true;
-        }
-    }
+    private bool IsHandlerRegistered(string wireName) => Client.IsHandlerRegistered(wireName);
 
     /// <summary>
     /// Invokes a registered handler by wire name through <see cref="DummyPapiClient.SendRequestAsync{T}"/>.

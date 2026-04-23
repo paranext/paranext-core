@@ -117,10 +117,13 @@ internal static class ChecklistService
         ct.ThrowIfCancellationRequested();
 
         // Step 0b: resolve active ScrText + comparative ScrTexts. A missing
-        // projectId surfaces as the underlying ScrTextCollection exception
-        // (TS-070 — the PROJECT_NOT_FOUND structured-error wrapping is a
-        // future CAP-011 concern; CAP-006 tests accept either path as long
-        // as the thrown exception is not NotImplementedException).
+        // projectId surfaces as ProjectNotFoundException from
+        // LocalParatextProjects.GetParatextProject; the wire-level
+        // PROJECT_NOT_FOUND structured error is produced by the wrapping
+        // ChecklistNetworkObject.BuildChecklistData delegate, which catches
+        // ProjectNotFoundException and returns a ChecklistResultError per
+        // data-contracts.md §3.1 (ChecklistResultResponse union) and §3.6
+        // (ChecklistErrorCodes.ProjectNotFound). See TS-070.
         ScrText mainScrText = LocalParatextProjects.GetParatextProject(request.ProjectId);
         List<ScrText> comparativeScrTexts = request
             .ComparativeTextIds.Select(LocalParatextProjects.GetParatextProject)

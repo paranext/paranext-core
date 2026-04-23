@@ -16,6 +16,9 @@ public static class ChecklistErrorCodes
     public const string InvalidState = "INVALID_STATE";
     public const string InvalidChecklistType = "INVALID_CHECKLIST_TYPE";
     public const string InvalidVerseRange = "INVALID_VERSE_RANGE";
+    public const string InvalidVerseRef = "INVALID_VERSE_REF";
+    public const string VersificationMismatch = "VERSIFICATION_MISMATCH";
+    public const string InvalidSource = "INVALID_SOURCE";
     public const string InvalidMarkerSettings = "INVALID_MARKER_SETTINGS";
     public const string MaxRowsExceeded = "MAX_ROWS_EXCEEDED";
     public const string Cancelled = "CANCELLED";

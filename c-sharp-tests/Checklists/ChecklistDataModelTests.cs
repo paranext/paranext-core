@@ -498,46 +498,26 @@ internal class ChecklistDataModelTests
     }
 
     // ---------------------------------------------------------------------
-    // ChecklistError + ChecklistErrorCodes (§3.6)
+    // ChecklistResultError + ChecklistErrorCodes (§3.1 / §3.6)
     // ---------------------------------------------------------------------
 
     [Test]
     [Category("Contract")]
-    [Property("CapabilityId", "CAP-001")]
-    [Property("Contract", "ChecklistError")]
-    public void ChecklistError_RoundTripsThroughJson()
+    [Property("CapabilityId", "CAP-011")]
+    [Property("Contract", "ChecklistResultError")]
+    public void ChecklistResultError_RoundTripsThroughJson()
     {
-        var err = new ChecklistError(
-            ErrorCode: ChecklistErrorCodes.ProjectNotFound,
-            Message: "Project xyz does not exist",
-            Details: "Tried resolving via GUID and name"
+        var err = new ChecklistResultError(
+            Code: ChecklistErrorCodes.ProjectNotFound,
+            Message: "Project xyz does not exist"
         );
 
         var json = JsonSerializer.Serialize(err, _options);
-        var actual = JsonSerializer.Deserialize<ChecklistError>(json, _options);
+        var actual = JsonSerializer.Deserialize<ChecklistResultError>(json, _options);
 
         Assert.That(actual, Is.Not.Null);
-        Assert.That(actual!.ErrorCode, Is.EqualTo("PROJECT_NOT_FOUND"));
+        Assert.That(actual!.Code, Is.EqualTo("PROJECT_NOT_FOUND"));
         Assert.That(actual.Message, Is.EqualTo("Project xyz does not exist"));
-        Assert.That(actual.Details, Is.EqualTo("Tried resolving via GUID and name"));
-    }
-
-    [Test]
-    [Category("Contract")]
-    [Property("CapabilityId", "CAP-001")]
-    [Property("Contract", "ChecklistError")]
-    public void ChecklistError_NullDetails_SurvivesRoundTrip()
-    {
-        var err = new ChecklistError(
-            ErrorCode: ChecklistErrorCodes.Cancelled,
-            Message: "Operation cancelled",
-            Details: null
-        );
-
-        var json = JsonSerializer.Serialize(err, _options);
-        var actual = JsonSerializer.Deserialize<ChecklistError>(json, _options);
-
-        Assert.That(actual!.Details, Is.Null);
     }
 
     [Test]
