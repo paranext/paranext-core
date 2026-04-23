@@ -139,6 +139,7 @@
       "%settings_platformScripture_paratext_group_description%": "Settings related to how Platform.Bible should interact with older Paratext installations",
       "%settings_platformScripture_paratext_group_label%": "Paratext 9-related Settings",
       "%versionHistoryCommit_beforeReplace%": "Before doing Replace: {replaceTerms}",
+      "%versionHistoryCommit_beforeReplace_failureMessage%": "Failed to commit current changes to version history! Aborting replace operation.",
       "%versionHistoryCommit_afterReplace%": "Replaced: {replaceTerms}",
       "%webView_bookSelector_choose%": "Choose...",
       "%webView_bookSelector_chooseBooks%": "Choose Books",

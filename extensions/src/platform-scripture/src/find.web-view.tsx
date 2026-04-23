@@ -72,6 +72,7 @@ import { SearchResultsInBook } from './find/search-results-in-book.component';
 const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%general_countOfTotal%',
   '%versionHistoryCommit_beforeReplace%',
+  '%versionHistoryCommit_beforeReplace_failureMessage%',
   '%versionHistoryCommit_afterReplace%',
   '%webView_find_allText%',
   '%webView_find_allText_tooltip%',
@@ -913,14 +914,14 @@ global.webViewComponent = function FindWebView({
         : replaceTerm;
 
       const bookVerseRef = { book: result.start.verseRef.book, chapterNum: 1, verseNum: 0 };
-      setIsReplacing(true);
       try {
         // Snapshot the book before replacing so revert can restore USFM exactly
         const bookSnapshot = await usfmBookPdp?.getBookUSFM(bookVerseRef);
         // Also commits changes to the version history
+        let isCommitSuccess = false;
         try {
           if (projectId)
-            await papi.commands.sendCommand(
+            isCommitSuccess = await papi.commands.sendCommand(
               'paratextBibleSendReceive.commitChanges',
               projectId,
               formatReplacementString(localizedStrings['%versionHistoryCommit_beforeReplace%'], {
@@ -931,6 +932,9 @@ global.webViewComponent = function FindWebView({
         } catch (err: unknown) {
           const errMessage = getErrorMessage(err);
           if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+            // Should'nt stop the replace if the commit commands are only unimplemented in the
+            // current version of the application.
+            isCommitSuccess = true;
             logger.info(errMessage);
           } else {
             logger.error(
@@ -938,6 +942,16 @@ global.webViewComponent = function FindWebView({
             );
           }
         }
+        // If the commit fails, aborts the replace operation
+        if (!isCommitSuccess) {
+          papi.notifications.send({
+            message: localizedStrings['%versionHistoryCommit_beforeReplace_failureMessage%'],
+            severity: 'error',
+          });
+          return;
+        }
+
+        setIsReplacing(true);
         await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
 
         // Commits resulting changes from the replace to the version history
@@ -1058,6 +1072,41 @@ global.webViewComponent = function FindWebView({
       const visibleResultsList = allResults.filter((r) => !r.isHidden);
       if (visibleResultsList.length === 0) return;
 
+      let isCommitSuccess = false;
+      // Also commits changes to the version history
+      try {
+        if (projectId)
+          isCommitSuccess = await papi.commands.sendCommand(
+            'paratextBibleSendReceive.commitChanges',
+            projectId,
+            formatReplacementString(localizedStrings['%versionHistoryCommit_beforeReplace%'], {
+              replaceTerms: `<vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+            }),
+            true,
+          );
+      } catch (err: unknown) {
+        const errMessage = getErrorMessage(err);
+        if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+          // If the commit commands are simply not implemented in this version of the application,
+          // shouldn't skip the replace.
+          isCommitSuccess = true;
+          logger.info(errMessage);
+        } else {
+          logger.error(
+            `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
+          );
+        }
+      }
+      // If the initial commit failed, aborts replace operation
+      if (!isCommitSuccess) {
+        setIsReplacing(false);
+        papi.notifications.send({
+          message: localizedStrings['%versionHistoryCommit_beforeReplace_failureMessage%'],
+          severity: 'error',
+        });
+        return;
+      }
+
       const usfmToInsert = preserveCase
         ? visibleResultsList.map((r) => applyPreserveCase(r.text ?? '', replaceTerm))
         : replaceTerm;
@@ -1073,28 +1122,6 @@ global.webViewComponent = function FindWebView({
           if (snapshot !== undefined) bookSnapshots.set(bookId, snapshot);
         }),
       );
-
-      // Also commits changes to the version history
-      try {
-        if (projectId)
-          await papi.commands.sendCommand(
-            'paratextBibleSendReceive.commitChanges',
-            projectId,
-            formatReplacementString(localizedStrings['%versionHistoryCommit_beforeReplace%'], {
-              replaceTerms: `<vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
-            }),
-            true,
-          );
-      } catch (err: unknown) {
-        const errMessage = getErrorMessage(err);
-        if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
-          logger.info(errMessage);
-        } else {
-          logger.error(
-            `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
-          );
-        }
-      }
 
       // Group results by book and call replace() once per book (API requires all ranges in same book).
       const bookGroupMap = new Map<
