@@ -704,7 +704,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
                 logger.info(errMessage);
               } else {
-                logger.error(
+                logger.warn(
                   `Error committing changes to version history before inserting footnote: ${getErrorMessage(err)}`,
                 );
               }
@@ -734,7 +734,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
                 logger.info(errMessage);
               } else {
-                logger.error(
+                logger.warn(
                   `Error committing changes to version history before inserting cross-reference: ${getErrorMessage(err)}`,
                 );
               }
@@ -1209,7 +1209,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
               logger.info(errMessage);
             } else {
-              logger.error(
+              logger.warn(
                 `Error committing version history after saving USJ to PDP: ${getErrorMessage(err)}`,
               );
             }

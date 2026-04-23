@@ -941,7 +941,7 @@ global.webViewComponent = function FindWebView({
             isCommitSuccess = true;
             logger.info(errMessage);
           } else {
-            logger.error(
+            logger.warn(
               `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
             );
           }
@@ -977,7 +977,7 @@ global.webViewComponent = function FindWebView({
           if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
             logger.info(errMessage);
           } else {
-            logger.error(
+            logger.warn(
               `Error committing changes to version history after replacing: ${getErrorMessage(err)}`,
             );
           }
@@ -1102,7 +1102,7 @@ global.webViewComponent = function FindWebView({
           isCommitSuccess = true;
           logger.info(errMessage);
         } else {
-          logger.error(
+          logger.warn(
             `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
           );
         }
@@ -1184,7 +1184,7 @@ global.webViewComponent = function FindWebView({
         if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
           logger.info(errMessage);
         } else {
-          logger.error(
+          logger.warn(
             `Error committing changes to version history after replacing: ${getErrorMessage(err)}`,
           );
         }
