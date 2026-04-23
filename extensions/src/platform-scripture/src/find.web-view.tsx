@@ -933,9 +933,9 @@ global.webViewComponent = function FindWebView({
         } catch (err: unknown) {
           const errMessage = getErrorMessage(err);
           if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
-            // Should'nt stop the replace if the commit commands are only unimplemented in the
+            // Shouldn't stop the replace if the commit commands are only unimplemented in the
             // current version of the application.
-            // isCommitSuccess = true;
+            isCommitSuccess = true;
             logger.info(errMessage);
           } else {
             logger.error(
@@ -1090,7 +1090,7 @@ global.webViewComponent = function FindWebView({
         if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
           // If the commit commands are simply not implemented in this version of the application,
           // shouldn't skip the replace.
-          // isCommitSuccess = true;
+          isCommitSuccess = true;
           logger.info(errMessage);
         } else {
           logger.error(
