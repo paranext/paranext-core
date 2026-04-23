@@ -33,22 +33,26 @@ internal class ParatextProjectSendReceiveService(
     /// <summary>
     /// Function to commit a snapshot of the current changes. Without `forceCommit` set to `true`,
     /// will only commit if there are changes/revisions detected.
+    /// Exception is thrown if this function is not implemented in the current application or if an
+    /// error was encountered committing.
     /// </summary>
     /// <returns>Whether there were changes to commit (if not forcing)</returns>
     protected Boolean CommitChanges(String projectId, String comment, Boolean forceCommit = false)
     {
-        throw new Exception(
-            "ERROR_UNIMPLEMENTED: This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+        throw new PlatformUnimplementedException(
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
     }
 
     /// <summary>
-    /// Function that only commits if it's been a day since the last commit
+    /// Function that only commits if it's been a day since the last commit.
+    /// Exception is thrown if this function is not implemented in the current application or if an
+    /// error was encountered committing.
     /// </summary>
     protected void CommitDaily(String projectId)
     {
-        throw new Exception(
-            "ERROR_UNIMPLEMENTED: This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+        throw new PlatformUnimplementedException(
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
     }
 
