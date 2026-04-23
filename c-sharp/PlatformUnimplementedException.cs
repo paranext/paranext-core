@@ -1,3 +1,5 @@
+namespace Paranext.DataProvider;
+
 /// <summary>
 /// Exception used when a function is not implemented in the current application version.
 /// </summary>
