@@ -914,6 +914,7 @@ global.webViewComponent = function FindWebView({
         : replaceTerm;
 
       const bookVerseRef = { book: result.start.verseRef.book, chapterNum: 1, verseNum: 0 };
+      setIsReplacing(true);
       try {
         // Snapshot the book before replacing so revert can restore USFM exactly
         const bookSnapshot = await usfmBookPdp?.getBookUSFM(bookVerseRef);
@@ -934,7 +935,7 @@ global.webViewComponent = function FindWebView({
           if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
             // Should'nt stop the replace if the commit commands are only unimplemented in the
             // current version of the application.
-            isCommitSuccess = true;
+            // isCommitSuccess = true;
             logger.info(errMessage);
           } else {
             logger.error(
@@ -944,6 +945,7 @@ global.webViewComponent = function FindWebView({
         }
         // If the commit fails, aborts the replace operation
         if (!isCommitSuccess) {
+          setIsReplacing(false);
           papi.notifications.send({
             message: localizedStrings['%versionHistoryCommit_beforeReplace_failureMessage%'],
             severity: 'error',
@@ -951,7 +953,6 @@ global.webViewComponent = function FindWebView({
           return;
         }
 
-        setIsReplacing(true);
         await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
 
         // Commits resulting changes from the replace to the version history
@@ -1089,7 +1090,7 @@ global.webViewComponent = function FindWebView({
         if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
           // If the commit commands are simply not implemented in this version of the application,
           // shouldn't skip the replace.
-          isCommitSuccess = true;
+          // isCommitSuccess = true;
           logger.info(errMessage);
         } else {
           logger.error(
