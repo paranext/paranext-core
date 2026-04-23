@@ -1,3 +1,6 @@
+using Paratext.Data;
+using Paratext.Data.Repository;
+
 namespace Paranext.DataProvider.Projects.SendReceive;
 
 /// <summary>
@@ -51,6 +54,9 @@ internal class ParatextProjectSendReceiveService(
     /// </summary>
     protected void CommitDaily(String projectId)
     {
+        ScrText scrText = LocalParatextProjects.GetParatextProject(projectId);
+        VersionedText versionedText = VersioningManager.Get(scrText);
+        versionedText.CommitDaily();
         throw new PlatformUnimplementedException(
             "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );

@@ -932,6 +932,9 @@ global.webViewComponent = function FindWebView({
             );
         } catch (err: unknown) {
           const errMessage = getErrorMessage(err);
+          // Requires the `commitChanges` command handler to throw
+          // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+          // successfully handle if this command is not implemented in the application version
           if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
             // Shouldn't stop the replace if the commit commands are only unimplemented in the
             // current version of the application.
@@ -968,6 +971,9 @@ global.webViewComponent = function FindWebView({
             );
         } catch (err: unknown) {
           const errMessage = getErrorMessage(err);
+          // Requires the `commitChanges` command handler to throw
+          // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+          // successfully handle if this command is not implemented in the application version
           if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
             logger.info(errMessage);
           } else {
@@ -1087,6 +1093,9 @@ global.webViewComponent = function FindWebView({
           );
       } catch (err: unknown) {
         const errMessage = getErrorMessage(err);
+        // Requires the `commitChanges` command handler to throw
+        // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+        // successfully handle if this command is not implemented in the application version
         if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
           // If the commit commands are simply not implemented in this version of the application,
           // shouldn't skip the replace.
@@ -1169,6 +1178,9 @@ global.webViewComponent = function FindWebView({
           );
       } catch (err: unknown) {
         const errMessage = getErrorMessage(err);
+        // Requires the `commitChanges` command handler to throw
+        // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+        // successfully handle if this command is not implemented in the application version
         if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
           logger.info(errMessage);
         } else {
