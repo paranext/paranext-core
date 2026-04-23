@@ -110,6 +110,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
 
+        retVal.Add(("getLastVerse", GetLastVerse));
+        retVal.Add(("getLastChapter", GetLastChapter));
+        retVal.Add(("getLastVersesInBook", GetLastVersesInBook));
+
         return retVal;
     }
 
@@ -1297,6 +1301,41 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             scrText.ScrStylesheet(bookNum)
             ?? throw new InvalidDataException($"ScrStylesheet for book number '{bookNum}' is null");
         return scrStylesheet.Tags.Where(tag => tag != null).Select(tag => tag.Name).ToArray();
+    }
+
+    /// <summary>
+    /// Gets the last verse number in the specified book and chapter using this project's
+    /// versification.
+    /// </summary>
+    public int GetLastVerse(int bookNum, int chapterNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        return scrText.Settings.Versification.GetLastVerse(bookNum, chapterNum);
+    }
+
+    /// <summary>
+    /// Gets the last chapter number in the specified book using this project's versification.
+    /// </summary>
+    public int GetLastChapter(int bookNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        return scrText.Settings.Versification.GetLastChapter(bookNum);
+    }
+
+    /// <summary>
+    /// Gets the last verse number for each chapter in the specified book using this project's
+    /// versification. Returns an array where index <c>n</c> is the last verse number in chapter
+    /// <c>n</c> (1-based). Index 0 is unused.
+    /// </summary>
+    public int[] GetLastVersesInBook(int bookNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        var versification = scrText.Settings.Versification;
+        int lastChapter = versification.GetLastChapter(bookNum);
+        int[] result = new int[lastChapter + 1];
+        for (int chapter = 1; chapter <= lastChapter; chapter++)
+            result[chapter] = versification.GetLastVerse(bookNum, chapter);
+        return result;
     }
 
     #endregion

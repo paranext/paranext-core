@@ -799,6 +799,68 @@ declare module 'platform-scripture' {
 
   // #endregion Marker Types
 
+  // #region Versification Types
+
+  /**
+   * Provides the project's versification data — the number of chapters per book and the number of
+   * verses per chapter — so consumers (e.g. reference pickers) can constrain selection to valid
+   * references for this project.
+   */
+  export type VersificationProjectInterfaceDataTypes = {
+    /**
+     * For a given book number, gets an array where index `n` is the last verse number in chapter
+     * `n` (1-based). Index 0 is unused. Array length is one greater than the last chapter.
+     */
+    LastVersesInBook: DataProviderDataType<number, number[] | undefined, never>;
+  };
+
+  /** Provides versification lookups (last chapter per book, last verse per chapter) for a project */
+  export type IVersificationProjectDataProvider =
+    IProjectDataProvider<VersificationProjectInterfaceDataTypes> & {
+      /**
+       * Gets the last verse number for each chapter in the specified book, using this project's
+       * versification. Returns an array where index `n` is the last verse number in chapter `n`
+       * (1-based). Index 0 is unused. Useful for pre-fetching all verse counts for a book in a
+       * single round trip.
+       */
+      getLastVersesInBook(bookNum: number): Promise<number[] | undefined>;
+      /**
+       * Gets the last verse number in the specified book and chapter using this project's
+       * versification.
+       */
+      getLastVerse(bookNum: number, chapterNum: number): Promise<number | undefined>;
+      /** Gets the last chapter number in the specified book using this project's versification. */
+      getLastChapter(bookNum: number): Promise<number | undefined>;
+      /**
+       * Setting is not supported — versification is part of the project's configuration and cannot
+       * be changed through this provider.
+       */
+      setLastVersesInBook(
+        versesInBook: never,
+      ): Promise<DataProviderUpdateInstructions<VersificationProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the last-verses data changes.
+       *
+       * In practice versification for a given project is static; this subscribe exists to satisfy
+       * the data provider contract and will typically only fire once (with the current data) per
+       * subscription.
+       *
+       * @param bookNum Tells the provider which book to listen for
+       * @param callback Function to run with the updated verse counts. If there is an error while
+       *   retrieving the updated data, the function will run with a {@link PlatformError} instead of
+       *   the data. You can call {@link isPlatformError} on this value to check if it is an error.
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeLastVersesInBook(
+        bookNum: number,
+        callback: (versesInBook: number[] | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
+  // #endregion Versification Types
+
   // #region Check Types
 
   /** Details about a check provided by the check itself */
@@ -957,7 +1019,7 @@ declare module 'platform-scripture' {
      *
      * @example Not a known name "{name}"
      *
-     * @example %extensionName.unknownName%
+     * @example %<localizeKeyForYourFormatString>%
      */
     messageFormatString: LocalizeKey | string;
     /**
@@ -1595,6 +1657,7 @@ declare module 'papi-shared-types' {
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
     IMarkerNamesProjectDataProvider,
+    IVersificationProjectDataProvider,
     IFindInScriptureProjectDataProvider,
     IReplaceWithUsfmProjectDataProvider,
     ICheckAggregatorService,
@@ -1617,6 +1680,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
+    'platformScripture.Versification': IVersificationProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
   }
