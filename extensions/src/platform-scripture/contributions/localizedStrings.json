@@ -275,7 +275,17 @@
       "%webview_checksSidePanel_checkTypeFilter_selectAll%": "Select all",
       "%webview_checksSidePanel_checkTypeFilter_setUp%": "Set up",
       "%markersChecklist_errorInvalidMarkerPair%": "Equivalent markers need to be entered in the form: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Comparative texts have identical markers."
+      "%markersChecklist_emptyResult_identicalMarkers%": "Comparative texts have identical markers.",
+      "%markers_checklist_settings_title%": "Marker Settings",
+      "%markers_checklist_settings_description%": "Configure the equivalent markers and marker filter used when building the checklist.",
+      "%markers_checklist_settings_equivalentMarkersLabel%": "Equivalent marker mappings",
+      "%markers_checklist_settings_markerFilterLabel%": "Markers to be displayed (blank for all)",
+      "%markers_checklist_settings_ok%": "OK",
+      "%markers_checklist_settings_cancel%": "Cancel",
+      "%markers_checklist_settings_close%": "Close",
+      "%markers_checklist_settings_validationErrorTitle%": "Invalid equivalent markers",
+      "%markers_checklist_settings_validationErrorDescription%": "Equivalent markers need to be entered in the form: p/q",
+      "%markers_checklist_settings_validationErrorOk%": "OK"
     },
     "es": {
       "%inventoryName_Character%": "Inventario de caracteres",
