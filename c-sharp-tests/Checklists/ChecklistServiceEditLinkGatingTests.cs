@@ -185,7 +185,6 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -222,7 +221,6 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -272,7 +270,6 @@ internal class ChecklistServiceEditLinkGatingTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 

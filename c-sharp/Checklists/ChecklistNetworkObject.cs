@@ -57,13 +57,8 @@ internal sealed class ChecklistNetworkObject : NetworkObject
     // at registration time rather than surfacing as a silent wire truncation.
     private const int BUILD_CHECKLIST_TIMEOUT_MS = 30_000;
 
-    private readonly LocalParatextProjects _paratextProjects;
-
-    public ChecklistNetworkObject(PapiClient papiClient, LocalParatextProjects paratextProjects)
-        : base(papiClient)
-    {
-        _paratextProjects = paratextProjects;
-    }
+    public ChecklistNetworkObject(PapiClient papiClient)
+        : base(papiClient) { }
 
     /// <summary>
     /// Registers the checklist network object with PAPI. Calls
@@ -105,12 +100,12 @@ internal sealed class ChecklistNetworkObject : NetworkObject
     }
 
     /// <summary>
-    /// PAPI delegate target for <c>buildChecklistData</c>. Routes to
-    /// <see cref="ChecklistService.BuildChecklistData"/>, threading the
-    /// constructor-injected <see cref="LocalParatextProjects"/> collaborator
-    /// (hence an instance method — the other two routers can stay static
-    /// at the service-method level; both still need <see cref="PapiClient"/>
-    /// to resolve localize keys at the wire boundary).
+    /// PAPI delegate target for <c>buildChecklistData</c>. Routes to the
+    /// stateless <see cref="ChecklistService.BuildChecklistData"/> — which
+    /// itself calls <see cref="LocalParatextProjects.GetParatextProject(string)"/>
+    /// statically against the shared <c>ScrTextCollection</c>. Instance method
+    /// (rather than static) so it can access <see cref="PapiClient"/> to
+    /// resolve localize keys at the wire boundary.
     /// Behaviour lives in <c>ChecklistService</c>; this is a transport shim.
     /// Localize keys carried in the result (e.g. <see cref="EmptyResultMessage.Message"/>
     /// for the "identical" variant) are resolved here before the wire
@@ -131,7 +126,7 @@ internal sealed class ChecklistNetworkObject : NetworkObject
     {
         try
         {
-            var result = ChecklistService.BuildChecklistData(request, _paratextProjects, ct);
+            var result = ChecklistService.BuildChecklistData(request, ct);
             return ResolveLocalizeKeys(result);
         }
         catch (Exception ex) when (ex is ProjectNotFoundException or ArgumentException)

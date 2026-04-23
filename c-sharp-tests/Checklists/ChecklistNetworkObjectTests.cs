@@ -107,7 +107,7 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
     public async Task InitializeAsync_RegistersWithExpectedNameAndType()
     {
         // Arrange
-        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        var networkObject = new ChecklistNetworkObject(Client);
 
         // Act
         await networkObject.InitializeAsync();
@@ -166,7 +166,7 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
     public async Task InitializeAsync_RegistersExactlyThreeFunctionHandlers()
     {
         // Arrange
-        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        var networkObject = new ChecklistNetworkObject(Client);
         await networkObject.InitializeAsync();
 
         // Act + Assert — each expected wire name must be registered.
@@ -208,7 +208,7 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
     public async Task InitializeAsync_RegistersTopLevelObjectHandler()
     {
         // Arrange
-        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        var networkObject = new ChecklistNetworkObject(Client);
         await networkObject.InitializeAsync();
 
         // Act + Assert — the base-class NetworkObject registers a sentinel
@@ -251,7 +251,7 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
     public async Task ValidateMarkerSettings_RoutesToChecklistServiceValidateMarkerSettings()
     {
         // Arrange
-        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        var networkObject = new ChecklistNetworkObject(Client);
         await networkObject.InitializeAsync();
 
         // Act — invoke the registered handler through the PapiClient routing
@@ -289,7 +289,7 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
     public async Task ValidateMarkerSettings_ErrorCase_RoutesAndReturnsError()
     {
         // Arrange
-        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        var networkObject = new ChecklistNetworkObject(Client);
         await networkObject.InitializeAsync();
 
         // Act — "p/q badpair" has a malformed token; ValidateMarkerSettings
@@ -352,7 +352,7 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
             null
         );
 
-        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        var networkObject = new ChecklistNetworkObject(Client);
         await networkObject.InitializeAsync();
 
         // Act — malformed input ⇒ MarkersDataSource.ValidateMarkerSettings
@@ -403,7 +403,7 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
     {
         // Arrange — register an active project so the method can resolve it.
         DummyScrText active = RegisterDummyProject("ACTIVE_P");
-        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        var networkObject = new ChecklistNetworkObject(Client);
         await networkObject.InitializeAsync();
 
         // Act — empty requestedTexts is the simplest routing probe; CAP-009's
@@ -442,7 +442,7 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
     public async Task BuildChecklistData_UnknownProject_ReturnsChecklistResultError()
     {
         // Arrange
-        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        var networkObject = new ChecklistNetworkObject(Client);
         await networkObject.InitializeAsync();
 
         var request = new ChecklistRequest(
@@ -520,7 +520,7 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
             @"\id EXO \c 20 \p \v 1 one. \v 2 two, \q poetry \q2 indented poetry";
         var scrText = RegisterDummyProjectWithPoetry(Gm001ExoUsfm);
 
-        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        var networkObject = new ChecklistNetworkObject(Client);
         await networkObject.InitializeAsync();
 
         var request = new ChecklistRequest(
@@ -591,7 +591,7 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
     public async Task InitializeAsync_CalledTwice_Throws()
     {
         // Arrange
-        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        var networkObject = new ChecklistNetworkObject(Client);
         await networkObject.InitializeAsync();
 
         // Act + Assert — pin to the exact exception type thrown by the

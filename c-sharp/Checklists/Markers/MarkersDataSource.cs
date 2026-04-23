@@ -290,7 +290,7 @@ internal static class MarkersDataSource
             // as a UI decoration added outside the localized string (CLParagraphCellsDataSource.cs:313);
             // we deliberately drop that wrapping so the UI can decorate as it sees fit.
             return new EmptyResultMessage(
-                Variant: "identical",
+                Variant: EmptyResultMessageVariant.Identical,
                 Message: IdenticalMarkersMessageKey,
                 SearchedMarkers: null,
                 SearchedBooks: null
@@ -301,7 +301,7 @@ internal static class MarkersDataSource
         // rendering (see data-contracts.md §3.8). Tests assert only on
         // Variant + SearchedMarkers + SearchedBooks.
         return new EmptyResultMessage(
-            Variant: "noResults",
+            Variant: EmptyResultMessageVariant.NoResults,
             Message: string.Empty,
             SearchedMarkers: markerFilter.ToList(),
             SearchedBooks: searchedBookNames

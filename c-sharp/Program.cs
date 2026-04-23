@@ -78,7 +78,7 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
-            var checklistNetworkObject = new ChecklistNetworkObject(papi, paratextProjects);
+            var checklistNetworkObject = new ChecklistNetworkObject(papi);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),

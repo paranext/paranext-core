@@ -19,7 +19,7 @@ namespace TestParanextDataProvider.Checklists;
 /// <para>
 /// These tests will NOT compile until the implementer adds
 /// <c>Paranext.DataProvider.Checklists.ChecklistService.BuildChecklistData(
-/// ChecklistRequest, LocalParatextProjects, CancellationToken)</c>. The
+/// ChecklistRequest, CancellationToken)</c>. The
 /// compile error is the first layer of the RED signal; the test assertion
 /// failures (after a stub body lands) are the second. Matches the
 /// CAP-003 / CAP-004 / CAP-005 RED precedents.
@@ -60,9 +60,9 @@ namespace TestParanextDataProvider.Checklists;
 /// <b>Signature note.</b> data-contracts.md §4.1 and strategic-plan-backend.md
 /// differ on the method signature: the former lists
 /// <c>Task&lt;ChecklistResult&gt; BuildChecklistDataAsync(ChecklistRequest,
-/// CancellationToken)</c>; the latter lists the more-specific
+/// CancellationToken)</c>; the latter lists the sync
 /// <c>ChecklistResult BuildChecklistData(ChecklistRequest,
-/// LocalParatextProjects, CancellationToken)</c>. These tests follow the
+/// CancellationToken)</c>. These tests follow the
 /// strategic-plan signature; if GREEN adopts the async shape, the tests
 /// will be touched up to <c>await</c> the result. The compile-fail RED
 /// signal is robust to either choice.
@@ -228,7 +228,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -273,7 +272,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -336,7 +334,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -366,7 +363,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -403,7 +399,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -448,7 +443,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -494,7 +488,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -534,7 +527,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -569,7 +561,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -622,7 +613,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -666,7 +656,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         cts.Cancel();
 
         Assert.That(
-            () => ChecklistService.BuildChecklistData(request, ParatextProjects, cts.Token),
+            () => ChecklistService.BuildChecklistData(request, cts.Token),
             Throws.InstanceOf<OperationCanceledException>(),
             "TS-062 — cancelled token must surface as OperationCanceledException"
         );
@@ -695,7 +685,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -774,7 +763,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         Exception? caught = null;
         try
         {
-            ChecklistService.BuildChecklistData(request, ParatextProjects, CancellationToken.None);
+            ChecklistService.BuildChecklistData(request, CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -823,7 +812,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -855,7 +843,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -895,7 +882,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -948,7 +934,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -1052,7 +1037,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -1068,7 +1052,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         );
         Assert.That(
             result.EmptyResultMessage!.Variant,
-            Is.EqualTo("identical"),
+            Is.EqualTo(EmptyResultMessageVariant.Identical),
             "gm-002 — 'identical' variant (no filter active; empty via hide-matches-all)"
         );
     }
@@ -1096,7 +1080,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -1142,7 +1125,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -1158,7 +1140,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         );
         Assert.That(
             result.EmptyResultMessage!.Variant,
-            Is.EqualTo("identical"),
+            Is.EqualTo(EmptyResultMessageVariant.Identical),
             "gm-005 — 'identical' variant (no filter active; empty via mapping-made-matches)"
         );
     }
@@ -1187,7 +1169,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -1220,20 +1201,78 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
     [Category("GoldenMaster")]
     [Property("CapabilityId", "CAP-006")]
     [Property("Contract", "BuildChecklistData")]
-    [Property("ScenarioId", "TS-016")]
-    [Property("GoldenMaster", "gm-007")]
-    [Ignore(
-        "gm-007 exercises the private MarkersDataSource.InitializeMarkerMappings parser, "
-            + "not the BuildChecklistData pipeline. Its expected output is a "
-            + "{markerMappings, markerFilter} structure rather than a ChecklistResult, "
-            + "so a BuildChecklistData replay is not the right probe. Coverage lives in "
-            + "CAP-002 tests (InitializeMarkerMappings) and is indirectly exercised by the "
-            + "gm-005 / gm-006 replays above. Ignore marker pins the traceability matrix "
-            + "to gm-007 and documents the scope divergence."
-    )]
-    public void Gm007_MarkerMappingParsing_Replay_NotApplicableToBuildChecklistData()
+    [Property("ScenarioId", "TS-055")]
+    [Property("GoldenMaster", "gm-018")]
+    [Property("BehaviorId", "BHV-103")]
+    [Property("Invariant", "INV-004")]
+    public void Gm018_MarkerDisplayFormat_Replay_ProducesBackslashPrefixedMarkerItems()
     {
-        Assert.Pass("placeholder — see [Ignore] rationale");
+        // gm-018 exercises INV-004 (backslash-prefixed marker display) via the
+        // BuildChecklistData pipeline. Same USFM as gm-001 but with
+        // showVerseText=false so the only text item emitted per paragraph is
+        // the backslash-marker name. Expected (per gm-018/expected-output.json):
+        // rowCount=2, excludedCount=0, every paragraph's first content item is
+        // a TextItem whose Text starts with "\".
+        var active = RegisterDummyProject(Gm001ExoUsfm);
+        var request = BuildRequest(
+            activeProjectId: active.Guid.ToString(),
+            comparativeTextIds: Array.Empty<string>(),
+            hideMatches: false,
+            showVerseText: false
+        );
+
+        ChecklistResult result = ChecklistService.BuildChecklistData(
+            request,
+            CancellationToken.None
+        );
+
+        Assert.That(
+            result.Rows,
+            Has.Count.EqualTo(2),
+            "gm-018 — rowCount=2 per captured expected-output.json"
+        );
+        Assert.That(
+            result.ExcludedCount,
+            Is.EqualTo(0),
+            "gm-018 — excludedCount=0 (hideMatches=false)"
+        );
+
+        // INV-004: every paragraph's first content item (the marker name item)
+        // must carry the backslash-prefixed marker as its Text. The gm-018
+        // expected-output shows "\\p", "\\q", "\\q2" as the Text value of the
+        // CLText item at position 0 in each paragraph. PostProcessParagraph
+        // prepends this; when showVerseText=false the following text items
+        // are dropped (BHV-103), so the marker item is often the ONLY item.
+        foreach (var row in result.Rows)
+        {
+            foreach (var cell in row.Cells)
+            {
+                foreach (var paragraph in cell.Paragraphs)
+                {
+                    Assert.That(
+                        paragraph.Items,
+                        Is.Not.Empty,
+                        "INV-004 — every paragraph has at least the marker-name item"
+                    );
+                    Assert.That(
+                        paragraph.Items[0],
+                        Is.InstanceOf<TextItem>(),
+                        $"INV-004 — first item of paragraph '{paragraph.Marker}' must be the marker-name TextItem"
+                    );
+                    var markerItem = (TextItem)paragraph.Items[0];
+                    Assert.That(
+                        markerItem.Text,
+                        Does.StartWith(@"\"),
+                        $"INV-004 — marker-name TextItem must start with '\\' for paragraph '{paragraph.Marker}'"
+                    );
+                    Assert.That(
+                        markerItem.Text,
+                        Is.EqualTo(@"\" + paragraph.Marker),
+                        $"INV-004 — marker-name text is '\\{paragraph.Marker}'"
+                    );
+                }
+            }
+        }
     }
 
     // =====================================================================
@@ -1265,7 +1304,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -1338,7 +1376,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -1346,7 +1383,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         Assert.That(result.EmptyResultMessage, Is.Not.Null);
         Assert.That(
             result.EmptyResultMessage!.Variant,
-            Is.EqualTo("identical"),
+            Is.EqualTo(EmptyResultMessageVariant.Identical),
             "BHV-600 — 'identical' variant when no filter is active"
         );
         Assert.That(
@@ -1389,7 +1426,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 
@@ -1401,7 +1437,7 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         Assert.That(result.EmptyResultMessage, Is.Not.Null);
         Assert.That(
             result.EmptyResultMessage!.Variant,
-            Is.EqualTo("noResults"),
+            Is.EqualTo(EmptyResultMessageVariant.NoResults),
             "BHV-106 — 'noResults' variant when a filter is active but no rows match"
         );
         Assert.That(
@@ -1433,7 +1469,6 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
 
         ChecklistResult result = ChecklistService.BuildChecklistData(
             request,
-            ParatextProjects,
             CancellationToken.None
         );
 

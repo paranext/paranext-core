@@ -97,20 +97,8 @@ internal static class ChecklistService
     /// strategic-plan-backend.md §CAP-006 for the full contract.
     /// </summary>
     /// <param name="request">Checklist request (project, comparatives, verse range, marker settings).</param>
-    /// <param name="projects">
-    /// Accepted for DI-friendly CAP-011 wiring and test-double compatibility.
-    /// Project resolution itself delegates to the static
-    /// <see cref="LocalParatextProjects.GetParatextProject(string)"/> helper
-    /// (which reads from <c>ScrTextCollection</c>); test doubles such as
-    /// <c>DummyLocalParatextProjects.FakeAddProject</c> register into that
-    /// same shared collection, so the static call succeeds in tests.
-    /// </param>
     /// <param name="ct">Cancellation token; checked at entry and per book iteration (TS-062).</param>
-    public static ChecklistResult BuildChecklistData(
-        ChecklistRequest request,
-        LocalParatextProjects projects,
-        CancellationToken ct
-    )
+    public static ChecklistResult BuildChecklistData(ChecklistRequest request, CancellationToken ct)
     {
         // Step 0a: honour pre-cancellation immediately (TS-062).
         ct.ThrowIfCancellationRequested();
