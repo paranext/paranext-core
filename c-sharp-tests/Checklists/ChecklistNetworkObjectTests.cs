@@ -304,10 +304,87 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
         Assert.That(result!.Valid, Is.False, "'badpair' has no slash → invalid");
         Assert.That(result.ParsedPairs, Is.Null, "§3.13 — ParsedPairs null on failure");
         Assert.That(result.ErrorMessage, Is.Not.Null);
+        // The NetworkObject resolves the localize key via LocalizationService.
+        // DummyPapiClient returns null when the localization service handler is
+        // not registered; GetLocalizedString then falls back to
+        // MarkersDataSource.InvalidMarkerPairErrorFallback, which matches the
+        // PT9 literal. A dedicated LocalizationService-mock test
+        // (ValidateMarkerSettings_ErrorCase_ResolvesLocalizeKeyThroughLocalizationService)
+        // covers the key-invocation path.
         Assert.That(
             result.ErrorMessage,
             Does.Contain("p/q"),
             "error message is the PT9 canonical 'Equivalent markers need to be entered in the form: p/q'"
+        );
+    }
+
+    [Test]
+    [Category("Integration")]
+    [Property("CapabilityId", "CAP-011")]
+    [Property("Contract", "NetworkObjectRegistration")]
+    [Property("Routing", "validateMarkerSettings")]
+    [Property("Localization", "InvalidMarkerPairError")]
+    [Description(
+        "T-B-6 / Rolf commitment #3124165012 — the 'validateMarkerSettings' "
+            + "delegate resolves the %markersChecklist_errorInvalidMarkerPair% "
+            + "localize key through LocalizationService.GetLocalizedString (which "
+            + "routes to the platform.localizationDataServiceDataProvider PAPI "
+            + "request) before returning. Asserts (a) the expected key is sent "
+            + "to the localization service, and (b) the resolved string "
+            + "replaces the raw %...% key in the response. Pins the "
+            + "key→string resolution at the wire boundary so a regression that "
+            + "drops the LocalizationService call is caught."
+    )]
+    public async Task ValidateMarkerSettings_ErrorCase_ResolvesLocalizeKeyThroughLocalizationService()
+    {
+        // Arrange — register a stand-in LocalizationService handler that
+        // captures the requested key and returns a distinctive resolved string.
+        const string ResolvedLocalizedMessage =
+            "LOCALIZED: markers must be entered as marker1/marker2";
+        var observedKeys = new List<string>();
+        await Client.RegisterRequestHandlerAsync(
+            "object:platform.localizationDataServiceDataProvider-data.getLocalizedString",
+            new Func<LocalizationSelector, string>(selector =>
+            {
+                observedKeys.Add(selector.LocalizeKey);
+                return ResolvedLocalizedMessage;
+            }),
+            null
+        );
+
+        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        await networkObject.InitializeAsync();
+
+        // Act — malformed input ⇒ MarkersDataSource.ValidateMarkerSettings
+        // returns InvalidMarkerPairErrorKey in ErrorMessage. The NetworkObject
+        // delegate must then resolve that key via LocalizationService.
+        var result = await InvokeRegisteredHandlerAsync<MarkerSettingsValidationResult>(
+            $"{ObjectPrefix}.validateMarkerSettings",
+            "badpair"
+        );
+
+        // Assert (a) — the localization service was invoked with the
+        // canonical InvalidMarkerPairErrorKey.
+        Assert.That(
+            observedKeys,
+            Is.EqualTo(new[] { MarkersDataSource.InvalidMarkerPairErrorKey }),
+            "LocalizationService.GetLocalizedString must be invoked exactly once "
+                + "with the InvalidMarkerPairErrorKey"
+        );
+
+        // Assert (b) — the resolved string flowed into the response in
+        // place of the raw %...% key.
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Valid, Is.False);
+        Assert.That(
+            result.ErrorMessage,
+            Is.EqualTo(ResolvedLocalizedMessage),
+            "NetworkObject must replace the %key% form with the resolved localized string"
+        );
+        Assert.That(
+            result.ErrorMessage,
+            Does.Not.StartWith("%"),
+            "resolved string must not retain the %...% localize-key wrapping"
         );
     }
 
@@ -419,6 +496,82 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
         }
     }
 
+    [Test]
+    [Category("Integration")]
+    [Property("CapabilityId", "CAP-011")]
+    [Property("Contract", "NetworkObjectRegistration")]
+    [Property("Routing", "buildChecklistData")]
+    [Description(
+        "T-B-6 / Rolf commitment #3124021837 — happy-path routing test. "
+            + "Registers a real DummyScrText project, invokes buildChecklistData "
+            + "through the NetworkObject, and asserts a ChecklistResult flows "
+            + "back with non-empty rows. The positive sibling of "
+            + "BuildChecklistData_UnknownProject_ReturnsChecklistResultError: a "
+            + "regression that broke serialization / arg binding / CT wiring on "
+            + "the success branch would fail here even if the error branch still "
+            + "worked."
+    )]
+    public async Task BuildChecklistData_RegisteredProject_ReturnsChecklistResult()
+    {
+        // Arrange — register a real project with content so the pipeline
+        // produces at least one row. Poetry markers need the paragraph-style
+        // upgrade (same approach as ChecklistServiceBuildChecklistDataTests).
+        const string Gm001ExoUsfm =
+            @"\id EXO \c 20 \p \v 1 one. \v 2 two, \q poetry \q2 indented poetry";
+        var scrText = RegisterDummyProjectWithPoetry(Gm001ExoUsfm);
+
+        var networkObject = new ChecklistNetworkObject(Client, ParatextProjects);
+        await networkObject.InitializeAsync();
+
+        var request = new ChecklistRequest(
+            ProjectId: scrText.Guid.ToString(),
+            ComparativeTextIds: new List<string>(),
+            MarkerSettings: new MarkerSettings(EquivalentMarkers: "", MarkerFilter: ""),
+            VerseRange: null,
+            HideMatches: false,
+            ShowVerseText: false
+        );
+
+        // Act — invoke through the registered PAPI handler (happy path). The
+        // delegate returns the ChecklistResult success branch.
+        var result = await InvokeRegisteredHandlerAsync<object>(
+            $"{ObjectPrefix}.buildChecklistData",
+            request,
+            CancellationToken.None
+        );
+
+        // Assert — a ChecklistResult (not a ChecklistResultError) flowed
+        // through the NetworkObject wire boundary, with real content.
+        Assert.That(result, Is.Not.Null, "handler must return a ChecklistResult on happy path");
+        Assert.That(
+            result,
+            Is.Not.InstanceOf<ChecklistResultError>(),
+            "happy path must NOT return the error branch"
+        );
+        Assert.That(
+            result,
+            Is.InstanceOf<ChecklistResult>(),
+            "happy path returns ChecklistResult (data-contracts.md §3.1 success variant)"
+        );
+
+        var checklistResult = (ChecklistResult)result!;
+        Assert.That(
+            checklistResult.Rows,
+            Is.Not.Null.And.Not.Empty,
+            "happy path with registered project produces at least one row"
+        );
+        Assert.That(
+            checklistResult.ColumnHeaders,
+            Is.Not.Null.And.Not.Empty,
+            "happy path result carries column headers"
+        );
+        Assert.That(
+            checklistResult.ColumnProjectIds[0],
+            Is.EqualTo(scrText.Guid.ToString()),
+            "INV-C15 — registered project id must appear at column index 0"
+        );
+    }
+
     // =====================================================================
     // Group C — Double-Registration Guard
     //
@@ -495,5 +648,65 @@ internal class ChecklistNetworkObjectTests : PapiTestBase
         var scrText = new DummyScrText(details);
         ParatextProjects.FakeAddProject(details, scrText);
         return scrText;
+    }
+
+    /// <summary>
+    /// Registers a <see cref="DummyScrText"/> with real USFM content for
+    /// happy-path routing tests. Upgrades the stylesheet's poetry tags
+    /// (<c>\q</c>, <c>\q1</c>, <c>\q2</c>, <c>\b</c>) to paragraph style via
+    /// reflection so the Markers pipeline treats them as paragraph markers —
+    /// mirrors the helper in <c>ChecklistServiceBuildChecklistDataTests</c>.
+    /// </summary>
+    private DummyScrText RegisterDummyProjectWithPoetry(string usfm, int bookNum = 2)
+    {
+        var scrText = new DummyScrText();
+        UpgradePoetryMarkersToParagraphStyle(scrText);
+        scrText.PutText(bookNum, 0, false, usfm, null);
+        ParatextProjects.FakeAddProject(CreateProjectDetails(scrText), scrText);
+        return scrText;
+    }
+
+    /// <summary>
+    /// Replaces the character-style <c>q / q1 / q2 / b</c> tags on the
+    /// DummyScrStylesheet with paragraph-style tags so the Markers pipeline
+    /// recognises them as paragraph markers. Copied verbatim from the sister
+    /// helper in <c>ChecklistServiceBuildChecklistDataTests</c>.
+    /// </summary>
+    private static void UpgradePoetryMarkersToParagraphStyle(DummyScrText scrText)
+    {
+        var stylesheet = scrText.DefaultStylesheet;
+        foreach (var marker in new[] { "q", "q1", "q2", "b" })
+        {
+            AddPoetryTag(stylesheet, marker);
+        }
+    }
+
+    private static void AddPoetryTag(ScrStylesheet stylesheet, string marker)
+    {
+        var tag = new ScrTag
+        {
+            Marker = marker,
+            TextProperties =
+                TextProperties.scParagraph
+                | TextProperties.scPublishable
+                | TextProperties.scVernacular
+                | TextProperties.scPoetic,
+            TextType = ScrTextType.scVerseText,
+            StyleType = ScrStyleType.scParagraphStyle,
+            OccursUnder = "c",
+        };
+
+        var addTagInternal = typeof(ScrStylesheet).GetMethod(
+            "AddTagInternal",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
+        );
+        if (addTagInternal == null)
+        {
+            throw new InvalidOperationException(
+                "ScrStylesheet.AddTagInternal not found via reflection; "
+                    + "API has changed and this test helper must be updated."
+            );
+        }
+        addTagInternal.Invoke(stylesheet, new object[] { tag });
     }
 }

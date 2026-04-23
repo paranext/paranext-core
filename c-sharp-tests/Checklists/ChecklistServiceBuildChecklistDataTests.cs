@@ -252,6 +252,78 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
     [Category("Contract")]
     [Property("CapabilityId", "CAP-006")]
     [Property("Contract", "BuildChecklistData")]
+    [Property("ScenarioId", "TS-031")]
+    [Property("BehaviorId", "BHV-604")]
+    [Property("GoldenMaster", "gm-016")]
+    public void BuildChecklistData_ShowVerseTextWithCharacterStyle_PreservesCharacterStyleAttribution()
+    {
+        // T-B-6 / Rolf commitment #3124021961 — BHV-604 / gm-016 integration
+        // test. When showVerseText=true and USFM contains a character style
+        // (\em...\em*) inside a paragraph, the resulting TextItem items must
+        // include the character-style attribution on a distinct sub-item
+        // (TextItem.CharacterStyle == "em") for the styled run while the
+        // surrounding text carries CharacterStyle == null. Pins the behaviour
+        // end-to-end through the orchestrator (not just at the
+        // CAP-003 leaf level) so a regression that drops the CharacterStyle
+        // field on the wire cannot hide behind a passing golden master.
+        const string usfm =
+            @"\id EXO \c 20 \p \v 1 one. \v 2 two, \q poetry \q2 indented \em poetry\em* ";
+        var scrText = RegisterDummyProject(usfm);
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString(), showVerseText: true);
+
+        ChecklistResult result = ChecklistService.BuildChecklistData(
+            request,
+            ParatextProjects,
+            CancellationToken.None
+        );
+
+        // Collect all TextItems across all paragraphs so we can inspect the
+        // character-style attribution directly.
+        var textItems = result
+            .Rows.SelectMany(r => r.Cells)
+            .SelectMany(c => c.Paragraphs)
+            .SelectMany(p => p.Items)
+            .OfType<TextItem>()
+            .ToList();
+
+        Assert.That(
+            textItems,
+            Is.Not.Empty,
+            "showVerseText=true must emit TextItems alongside the marker attribution"
+        );
+
+        // Partition by CharacterStyle field — null for plain text, non-null
+        // for character-style runs. Both flavours must be present.
+        var styledItems = textItems.Where(t => t.CharacterStyle != null).ToList();
+        var plainItems = textItems.Where(t => t.CharacterStyle == null).ToList();
+
+        Assert.That(
+            plainItems,
+            Is.Not.Empty,
+            "plain (non-styled) TextItems must be present (marker + surrounding text)"
+        );
+        Assert.That(
+            styledItems,
+            Is.Not.Empty,
+            "BHV-604 / gm-016 — \\em character-style run must surface as a TextItem "
+                + "with CharacterStyle=\"em\""
+        );
+        Assert.That(
+            styledItems.Select(t => t.CharacterStyle).Distinct(),
+            Is.EqualTo(new[] { "em" }),
+            "BHV-604 — the only character style emitted here is \\em"
+        );
+        Assert.That(
+            styledItems.Any(t => t.Text.Contains("poetry")),
+            Is.True,
+            "BHV-604 — the \\em-styled text \"poetry\" must carry CharacterStyle=\"em\""
+        );
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("Contract", "BuildChecklistData")]
     [Property("ScenarioId", "TS-005")]
     [Property("BehaviorId", "BHV-101")]
     [Property("Invariant", "INV-002")]
@@ -925,6 +997,246 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
     }
 
     // =====================================================================
+    // Group I-a — Additional GM replays (T-B-6 / Rolf commitment #3124164642)
+    //
+    //   Integration-level BuildChecklistData replays for gm-002, gm-003, gm-005,
+    //   gm-006 — each pinning the distinctive assertion that the GM targets
+    //   (identical-markers empty message vs different-markers row output vs
+    //   bidirectional-mapping identical vs partial-mapping-differences). gm-007
+    //   exercises the private InitializeMarkerMappings parser — not the
+    //   BuildChecklistData pipeline — so it's ignored here and covered by
+    //   CAP-002's tests instead.
+    // =====================================================================
+
+    /// <summary>
+    /// gm-002 text1 — same as <see cref="Gm001ExoUsfm"/> (two verses, markers p, q, q2).
+    /// The gm-002 fixture uses the gm-001 EXO USFM verbatim.
+    /// </summary>
+    private const string Gm002_Text1ExoUsfm = Gm001ExoUsfm;
+
+    /// <summary>gm-002 text2 — identical marker structure (p, q, q2) to text1 but different content.</summary>
+    private const string Gm002_Text2ExoUsfm =
+        @"\id EXO \c 20 \p \v 1 uno. \v 2 dos, \q prose \q2 indented prose";
+
+    /// <summary>gm-003 / gm-005 / gm-006 text1 — same as gm-004 text1 (adds \v 3 with \p).</summary>
+    private const string GmShared_Text1ExoUsfm_WithV3 = Gm004Text1ExoUsfm;
+
+    /// <summary>gm-003 text2 — differing marker structure from text1.</summary>
+    private const string Gm003_Text2ExoUsfm = Gm004Text2ExoUsfm;
+
+    /// <summary>gm-005 / gm-006 text2 — uses \q1 where gm-003 text2 uses \q2/\q.</summary>
+    private const string Gm005_Text2ExoUsfm =
+        @"\id EXO \c 20 \p \v 1 uno. \v 2 dos, \p more text \q1 prose \q \v 3 indented prose";
+
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("Contract", "BuildChecklistData")]
+    [Property("ScenarioId", "TS-002")]
+    [Property("GoldenMaster", "gm-002")]
+    [Property("BehaviorId", "BHV-106")]
+    public void Gm002_IdenticalMarkersMessage_Replay_ProducesIdenticalEmptyResultMessage()
+    {
+        // gm-002: two texts with IDENTICAL paragraph markers (p, q, q2) across
+        // the two verses present (EXO 20:1-2). hideMatches=true filters every
+        // row, so the result is empty and PostProcessRows returns
+        // EmptyResultMessage with Variant="identical".
+        var active = RegisterDummyProject(Gm002_Text1ExoUsfm);
+        var compare = RegisterDummyProject(Gm002_Text2ExoUsfm);
+        var request = BuildRequest(
+            activeProjectId: active.Guid.ToString(),
+            comparativeTextIds: new[] { compare.Guid.ToString() },
+            hideMatches: true,
+            showVerseText: false
+        );
+
+        ChecklistResult result = ChecklistService.BuildChecklistData(
+            request,
+            ParatextProjects,
+            CancellationToken.None
+        );
+
+        Assert.That(
+            result.Rows,
+            Is.Empty,
+            "gm-002 — identical markers across both texts + hideMatches=true → empty rows"
+        );
+        Assert.That(
+            result.EmptyResultMessage,
+            Is.Not.Null,
+            "gm-002 — empty result must carry an EmptyResultMessage (INV-008)"
+        );
+        Assert.That(
+            result.EmptyResultMessage!.Variant,
+            Is.EqualTo("identical"),
+            "gm-002 — 'identical' variant (no filter active; empty via hide-matches-all)"
+        );
+    }
+
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("Contract", "BuildChecklistData")]
+    [Property("ScenarioId", "TS-003")]
+    [Property("GoldenMaster", "gm-003")]
+    [Property("BehaviorId", "BHV-101")]
+    public void Gm003_DifferentMarkersComparison_Replay_ProducesDifferenceRows()
+    {
+        // gm-003: two texts with DIFFERENT marker structures. Per expected-output.json
+        // rowCount=2, excludedCount=1 (the v1 \p match hides). Row 0 EXO 20:2
+        // has [q,q2] | [p,q]; row 1 EXO 20:3 has [p] | [q2].
+        var active = RegisterDummyProject(GmShared_Text1ExoUsfm_WithV3);
+        var compare = RegisterDummyProject(Gm003_Text2ExoUsfm);
+        var request = BuildRequest(
+            activeProjectId: active.Guid.ToString(),
+            comparativeTextIds: new[] { compare.Guid.ToString() },
+            hideMatches: true,
+            showVerseText: false
+        );
+
+        ChecklistResult result = ChecklistService.BuildChecklistData(
+            request,
+            ParatextProjects,
+            CancellationToken.None
+        );
+
+        Assert.That(result.Rows.Count, Is.EqualTo(2), "gm-003 — 2 non-matching rows retained");
+        Assert.That(result.ExcludedCount, Is.EqualTo(1), "gm-003 — 1 matching row hidden");
+
+        var row0Col0Markers = result.Rows[0].Cells[0].Paragraphs.Select(p => p.Marker).ToList();
+        var row0Col1Markers = result.Rows[0].Cells[1].Paragraphs.Select(p => p.Marker).ToList();
+        Assert.That(
+            row0Col0Markers,
+            Is.EqualTo(new[] { "q", "q2" }),
+            "gm-003 row 0 col 0 — [q, q2]"
+        );
+        Assert.That(row0Col1Markers, Is.EqualTo(new[] { "p", "q" }), "gm-003 row 0 col 1 — [p, q]");
+        var row1Col0Markers = result.Rows[1].Cells[0].Paragraphs.Select(p => p.Marker).ToList();
+        var row1Col1Markers = result.Rows[1].Cells[1].Paragraphs.Select(p => p.Marker).ToList();
+        Assert.That(row1Col0Markers, Is.EqualTo(new[] { "p" }), "gm-003 row 1 col 0 — [p]");
+        Assert.That(row1Col1Markers, Is.EqualTo(new[] { "q2" }), "gm-003 row 1 col 1 — [q2]");
+    }
+
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("Contract", "BuildChecklistData")]
+    [Property("ScenarioId", "TS-013")]
+    [Property("GoldenMaster", "gm-005")]
+    [Property("BehaviorId", "BHV-104")]
+    public void Gm005_BidirectionalMappingIdentical_Replay_ProducesIdenticalEmptyResultMessage()
+    {
+        // gm-005: full bidirectional mapping "p/q q1/q2" makes all markers
+        // equivalent across the two texts (p==q, q1==q2). Every row becomes a
+        // match, so hideMatches=true filters everything → EmptyResultMessage
+        // Variant="identical".
+        var active = RegisterDummyProject(GmShared_Text1ExoUsfm_WithV3);
+        var compare = RegisterDummyProject(Gm005_Text2ExoUsfm);
+        var request = BuildRequest(
+            activeProjectId: active.Guid.ToString(),
+            comparativeTextIds: new[] { compare.Guid.ToString() },
+            hideMatches: true,
+            showVerseText: false,
+            equivalentMarkers: "p/q q1/q2"
+        );
+
+        ChecklistResult result = ChecklistService.BuildChecklistData(
+            request,
+            ParatextProjects,
+            CancellationToken.None
+        );
+
+        Assert.That(
+            result.Rows,
+            Is.Empty,
+            "gm-005 — full bidirectional mapping makes all markers equivalent → empty rows"
+        );
+        Assert.That(
+            result.EmptyResultMessage,
+            Is.Not.Null,
+            "gm-005 — empty result must carry an EmptyResultMessage"
+        );
+        Assert.That(
+            result.EmptyResultMessage!.Variant,
+            Is.EqualTo("identical"),
+            "gm-005 — 'identical' variant (no filter active; empty via mapping-made-matches)"
+        );
+    }
+
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("Contract", "BuildChecklistData")]
+    [Property("ScenarioId", "TS-014")]
+    [Property("GoldenMaster", "gm-006")]
+    [Property("BehaviorId", "BHV-104")]
+    public void Gm006_PartialMappingDifferences_Replay_RetainsOnlyUnmappedDifferenceRows()
+    {
+        // gm-006: only p/q is mapped (q1/q2 unmapped). v1 p==p match, v2 q==p
+        // (mapped) BUT q2!=q1 (unmapped) → difference, v3 p==q (mapped) match.
+        // rowCount=1, excludedCount=2 per expected-output.json.
+        var active = RegisterDummyProject(GmShared_Text1ExoUsfm_WithV3);
+        var compare = RegisterDummyProject(Gm005_Text2ExoUsfm);
+        var request = BuildRequest(
+            activeProjectId: active.Guid.ToString(),
+            comparativeTextIds: new[] { compare.Guid.ToString() },
+            hideMatches: true,
+            showVerseText: false,
+            equivalentMarkers: "p/q"
+        );
+
+        ChecklistResult result = ChecklistService.BuildChecklistData(
+            request,
+            ParatextProjects,
+            CancellationToken.None
+        );
+
+        Assert.That(
+            result.Rows.Count,
+            Is.EqualTo(1),
+            "gm-006 — only v2 differs (q2 vs q1 unmapped) → 1 row retained"
+        );
+        Assert.That(
+            result.ExcludedCount,
+            Is.EqualTo(2),
+            "gm-006 — v1 + v3 matches hidden → ExcludedCount=2"
+        );
+
+        var row0Col0Markers = result.Rows[0].Cells[0].Paragraphs.Select(p => p.Marker).ToList();
+        var row0Col1Markers = result.Rows[0].Cells[1].Paragraphs.Select(p => p.Marker).ToList();
+        Assert.That(
+            row0Col0Markers,
+            Is.EqualTo(new[] { "q", "q2" }),
+            "gm-006 row 0 col 0 — [q, q2] (active text at v2)"
+        );
+        Assert.That(
+            row0Col1Markers,
+            Is.EqualTo(new[] { "p", "q1" }),
+            "gm-006 row 0 col 1 — [p, q1] (comparative text at v2)"
+        );
+    }
+
+    [Test]
+    [Category("GoldenMaster")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("Contract", "BuildChecklistData")]
+    [Property("ScenarioId", "TS-016")]
+    [Property("GoldenMaster", "gm-007")]
+    [Ignore(
+        "gm-007 exercises the private MarkersDataSource.InitializeMarkerMappings parser, "
+            + "not the BuildChecklistData pipeline. Its expected output is a "
+            + "{markerMappings, markerFilter} structure rather than a ChecklistResult, "
+            + "so a BuildChecklistData replay is not the right probe. Coverage lives in "
+            + "CAP-002 tests (InitializeMarkerMappings) and is indirectly exercised by the "
+            + "gm-005 / gm-006 replays above. Ignore marker pins the traceability matrix "
+            + "to gm-007 and documents the scope divergence."
+    )]
+    public void Gm007_MarkerMappingParsing_Replay_NotApplicableToBuildChecklistData()
+    {
+        Assert.Pass("placeholder — see [Ignore] rationale");
+    }
+
+    // =====================================================================
     // Group J — Outer acceptance gm-004 replay (secondary)
     // =====================================================================
 
@@ -992,6 +1304,144 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
             row1Col1Markers,
             Is.EqualTo(new[] { "q2" }),
             "gm-004 row 1 col 1 — paragraph [q2]"
+        );
+    }
+
+    // =====================================================================
+    // Group K — EmptyResultMessage variant pins
+    //   T-B-6 / Rolf commitment #3124164814 — pin Variant ('identical' vs
+    //   'noResults'), SearchedMarkers, SearchedBooks, and the localize-key
+    //   Message so BHV-600 / BHV-106 variants can't silently regress.
+    // =====================================================================
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("Contract", "BuildChecklistData")]
+    [Property("BehaviorId", "BHV-600")]
+    [Property("Invariant", "INV-008")]
+    public void BuildChecklistData_IdenticalMarkersEmptyResult_VariantIsIdenticalAndFieldsNull()
+    {
+        // BHV-600 "identical" path: two comparative texts with matching marker
+        // structures + hideMatches=true → every row filtered → empty rows.
+        // PostProcessRows sees markerFilter.Count == 0 and returns
+        // Variant="identical" with SearchedMarkers=null + SearchedBooks=null.
+        // Message carries the localize key (resolved at the NetworkObject wire
+        // boundary, not here).
+        var active = RegisterDummyProject(Gm002_Text1ExoUsfm);
+        var compare = RegisterDummyProject(Gm002_Text2ExoUsfm);
+        var request = BuildRequest(
+            activeProjectId: active.Guid.ToString(),
+            comparativeTextIds: new[] { compare.Guid.ToString() },
+            hideMatches: true
+        );
+
+        ChecklistResult result = ChecklistService.BuildChecklistData(
+            request,
+            ParatextProjects,
+            CancellationToken.None
+        );
+
+        Assert.That(result.Rows, Is.Empty, "identical markers + hideMatches=true → empty rows");
+        Assert.That(result.EmptyResultMessage, Is.Not.Null);
+        Assert.That(
+            result.EmptyResultMessage!.Variant,
+            Is.EqualTo("identical"),
+            "BHV-600 — 'identical' variant when no filter is active"
+        );
+        Assert.That(
+            result.EmptyResultMessage.SearchedMarkers,
+            Is.Null,
+            "BHV-600 — SearchedMarkers MUST be null for the 'identical' variant"
+        );
+        Assert.That(
+            result.EmptyResultMessage.SearchedBooks,
+            Is.Null,
+            "BHV-600 — SearchedBooks MUST be null for the 'identical' variant"
+        );
+        Assert.That(
+            result.EmptyResultMessage.Message,
+            Is.EqualTo(MarkersDataSource.IdenticalMarkersMessageKey),
+            "BHV-600 — Message must carry the IdenticalMarkersMessageKey localize key; "
+                + "resolution happens at the NetworkObject wire boundary"
+        );
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("Contract", "BuildChecklistData")]
+    [Property("BehaviorId", "BHV-106")]
+    [Property("Invariant", "INV-008")]
+    public void BuildChecklistData_FilterActiveNoMatches_VariantIsNoResultsAndFieldsPopulated()
+    {
+        // BHV-106 "noResults" path: markerFilter is active (non-empty) but no
+        // paragraphs match any filtered marker → empty rows.
+        // PostProcessRows returns Variant="noResults" with SearchedMarkers
+        // populated from the filter and SearchedBooks populated from the
+        // iterated book set.
+        const string filteredMarker = "zz"; // not present in any USFM
+        var scrText = RegisterDummyProject(Gm001ExoUsfm);
+        var request = BuildRequest(
+            activeProjectId: scrText.Guid.ToString(),
+            markerFilter: filteredMarker
+        );
+
+        ChecklistResult result = ChecklistService.BuildChecklistData(
+            request,
+            ParatextProjects,
+            CancellationToken.None
+        );
+
+        Assert.That(
+            result.Rows,
+            Is.Empty,
+            "filter on a non-present marker produces no matching rows"
+        );
+        Assert.That(result.EmptyResultMessage, Is.Not.Null);
+        Assert.That(
+            result.EmptyResultMessage!.Variant,
+            Is.EqualTo("noResults"),
+            "BHV-106 — 'noResults' variant when a filter is active but no rows match"
+        );
+        Assert.That(
+            result.EmptyResultMessage.SearchedMarkers,
+            Is.Not.Null.And.Contains(filteredMarker),
+            "BHV-106 — SearchedMarkers must carry the active filter tokens"
+        );
+        Assert.That(
+            result.EmptyResultMessage.SearchedBooks,
+            Is.Not.Null.And.Contains("EXO"),
+            "BHV-106 — SearchedBooks must carry the iterated book ids (EXO registered here)"
+        );
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("Contract", "BuildChecklistData")]
+    [Property("BehaviorId", "BHV-600")]
+    [Property("Invariant", "INV-008")]
+    public void BuildChecklistData_NonEmptyRows_EmptyResultMessageIsNull()
+    {
+        // INV-008 inverse direction: when rows are non-empty, EmptyResultMessage
+        // MUST be null (neither variant applies). Keeps the variant pin
+        // non-fragile — a regression that always emitted an "identical"
+        // message would pass the other two tests but fail here.
+        var scrText = RegisterDummyProject(Gm001ExoUsfm);
+        var request = BuildRequest(activeProjectId: scrText.Guid.ToString());
+
+        ChecklistResult result = ChecklistService.BuildChecklistData(
+            request,
+            ParatextProjects,
+            CancellationToken.None
+        );
+
+        Assume.That(result.Rows, Is.Not.Empty, "precondition — rows produced");
+        Assert.That(
+            result.EmptyResultMessage,
+            Is.Null,
+            "INV-008 inverse — non-empty rows must not carry an EmptyResultMessage"
         );
     }
 }
