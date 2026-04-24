@@ -956,7 +956,8 @@ export function getSavedWebViewDefinitionSync(
 async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]> {
   const dockLayout = await getDockLayout();
   return dockLayout.getAllWebViewDefinitions().map((webViewData) => {
-    // Strip runtime-only properties (content, styles, security flags); providers re-supply these when the view is loaded.
+    // Strip runtime-only properties (content, styles, security flags); providers re-supply these
+    // when the view is loaded.
     const savedWebViewDefinition = convertWebViewDefinitionToSaved(webViewData);
     // Load the WebView state so the WebViewState service doesn't delete this entry. We should
     // remove this if/when we feel good about removing the WebViewState service
