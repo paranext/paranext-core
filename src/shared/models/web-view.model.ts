@@ -255,6 +255,11 @@ export type WebViewDefinition =
   | WebViewDefinitionHtml
   | WebViewDefinitionURL;
 
+/** Type guard to check if an unknown value is a {@link WebViewDefinition} */
+export function isWebViewDefinition(data: unknown): data is WebViewDefinition {
+  return typeof data === 'object' && data !== null && 'webViewType' in data;
+}
+
 /**
  * The keys of properties on a WebViewDefinition that are omitted when converting to a
  * {@link SavedWebViewDefinition}

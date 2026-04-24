@@ -35,6 +35,7 @@ import {
   WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS,
   WebViewDefinition,
   WebViewDefinitionReact,
+  isWebViewDefinition,
   WebViewDefinitionUpdateInfo,
   WebViewId,
   WebViewType,
@@ -1563,9 +1564,8 @@ export const openWebView = async (
             // This is not a webview
             if (!('data' in item)) return false;
 
-            // Find any webview with the specified webViewType. Type assert the unknown `data`.
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            return (item.data as WebViewDefinition).webViewType === webViewType;
+            // Find any webview with the specified webViewType
+            return isWebViewDefinition(item.data) && item.data.webViewType === webViewType;
           }
         : // If they provided any other string, look for a webview with that ID
           optionsDefaulted.existingId,
