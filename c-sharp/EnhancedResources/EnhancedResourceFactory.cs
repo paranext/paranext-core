@@ -2,6 +2,7 @@
 // Reason: PAPI factory pattern - creates per-resource NetworkObjects on demand
 // Maps to: CAP-001
 using System.Collections.Concurrent;
+using Paranext.DataProvider.Errors;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
 

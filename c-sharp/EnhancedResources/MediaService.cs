@@ -1,3 +1,4 @@
+using Paranext.DataProvider.Errors;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.EnhancedResources;

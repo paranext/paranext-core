@@ -1,5 +1,6 @@
 using System.Xml;
 using System.Xml.Linq;
+using Paranext.DataProvider.Errors;
 
 namespace Paranext.DataProvider.EnhancedResources;
 

@@ -1,3 +1,5 @@
+using Paranext.DataProvider.Errors;
+
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>

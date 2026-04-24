@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.EnhancedResources;
+using Paranext.DataProvider.Errors;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
