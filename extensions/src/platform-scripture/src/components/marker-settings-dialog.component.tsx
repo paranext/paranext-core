@@ -10,7 +10,8 @@ import {
   Label,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { FormEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 /**
  * Localization keys used by the Marker Settings Dialog. Import this constant, pass it to the
@@ -181,20 +182,35 @@ export function MarkerSettingsDialog({
   // eslint-disable-next-line no-null/no-null
   const equivalentMarkersInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const result = validateEquivalentMarkers(equivalentMarkers);
-      if (!result.isValid) {
-        setIsValidationAlertOpen(true);
-        return;
+  // Validate + commit. Invoked by the OK button's onClick and by Enter in the inputs.
+  //
+  // We deliberately DO NOT use a `<form onSubmit>` wrapper with `type="submit"` OK: Platform.Bible
+  // web views run in sandboxed iframes without `allow-forms`, so the browser blocks form-submit
+  // events before React's onSubmit handler can see them (`Blocked form submission to '' because the
+  // form's frame is sandboxed and the 'allow-forms' permission is not set.`). Handling OK as a
+  // plain button click with onClick sidesteps the sandbox restriction entirely.
+  const handleCommit = useCallback(() => {
+    const result = validateEquivalentMarkers(equivalentMarkers);
+    if (!result.isValid) {
+      setIsValidationAlertOpen(true);
+      return;
+    }
+    onSubmit({
+      equivalentMarkers: normalizeEquivalentMarkers(equivalentMarkers),
+      markerFilter: markerFilter.trim(),
+    });
+  }, [equivalentMarkers, markerFilter, onSubmit]);
+
+  // Enter-to-submit on either input. Matching the form-submit semantics that users expect from a
+  // traditional dialog, without actually using a <form>.
+  const handleInputKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter' && !event.isDefaultPrevented()) {
+        event.preventDefault();
+        handleCommit();
       }
-      onSubmit({
-        equivalentMarkers: normalizeEquivalentMarkers(equivalentMarkers),
-        markerFilter: markerFilter.trim(),
-      });
     },
-    [equivalentMarkers, markerFilter, onSubmit],
+    [handleCommit],
   );
 
   const handleDialogOpenChange = useCallback(
@@ -230,56 +246,56 @@ export function MarkerSettingsDialog({
         // Localize the screen-reader close-button label injected by `DialogContent`.
         aria-label={getLocalizedString('%markersChecklist_settings_title%')}
       >
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>{getLocalizedString('%markersChecklist_settings_title%')}</DialogTitle>
-            <DialogDescription className="tw-sr-only">
-              {getLocalizedString('%markersChecklist_settings_description%')}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{getLocalizedString('%markersChecklist_settings_title%')}</DialogTitle>
+          <DialogDescription className="tw-sr-only">
+            {getLocalizedString('%markersChecklist_settings_description%')}
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="tw-flex tw-flex-col tw-gap-4 tw-py-4">
-            <div className="tw-flex tw-flex-col tw-gap-2">
-              <Label htmlFor={equivalentMarkersInputId}>
-                {getLocalizedString('%markersChecklist_settings_equivalentMarkersLabel%')}
-              </Label>
-              <Input
-                ref={equivalentMarkersInputRef}
-                id={equivalentMarkersInputId}
-                data-testid="marker-settings-equivalent-markers"
-                value={equivalentMarkers}
-                onChange={(event) => setEquivalentMarkers(event.target.value)}
-                autoFocus
-              />
-            </div>
-
-            <div className="tw-flex tw-flex-col tw-gap-2">
-              <Label htmlFor={markerFilterInputId}>
-                {getLocalizedString('%markersChecklist_settings_markerFilterLabel%')}
-              </Label>
-              <Input
-                id={markerFilterInputId}
-                data-testid="marker-settings-marker-filter"
-                value={markerFilter}
-                onChange={(event) => setMarkerFilter(event.target.value)}
-              />
-            </div>
+        <div className="tw-flex tw-flex-col tw-gap-4 tw-py-4">
+          <div className="tw-flex tw-flex-col tw-gap-2">
+            <Label htmlFor={equivalentMarkersInputId}>
+              {getLocalizedString('%markersChecklist_settings_equivalentMarkersLabel%')}
+            </Label>
+            <Input
+              ref={equivalentMarkersInputRef}
+              id={equivalentMarkersInputId}
+              data-testid="marker-settings-equivalent-markers"
+              value={equivalentMarkers}
+              onChange={(event) => setEquivalentMarkers(event.target.value)}
+              onKeyDown={handleInputKeyDown}
+              autoFocus
+            />
           </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              data-testid="marker-settings-cancel"
-            >
-              {getLocalizedString('%markersChecklist_settings_cancel%')}
-            </Button>
-            <Button type="submit" data-testid="marker-settings-ok">
-              {getLocalizedString('%markersChecklist_settings_ok%')}
-            </Button>
-          </DialogFooter>
-        </form>
+          <div className="tw-flex tw-flex-col tw-gap-2">
+            <Label htmlFor={markerFilterInputId}>
+              {getLocalizedString('%markersChecklist_settings_markerFilterLabel%')}
+            </Label>
+            <Input
+              id={markerFilterInputId}
+              data-testid="marker-settings-marker-filter"
+              value={markerFilter}
+              onChange={(event) => setMarkerFilter(event.target.value)}
+              onKeyDown={handleInputKeyDown}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            data-testid="marker-settings-cancel"
+          >
+            {getLocalizedString('%markersChecklist_settings_cancel%')}
+          </Button>
+          <Button type="button" onClick={handleCommit} data-testid="marker-settings-ok">
+            {getLocalizedString('%markersChecklist_settings_ok%')}
+          </Button>
+        </DialogFooter>
       </DialogContent>
 
       {/* Validation error — a nested blocking alert. shadcn does not export an `AlertDialog`

@@ -88,13 +88,17 @@ async function openMarkersChecklistTool(page: Page): Promise<void> {
 }
 
 /**
- * From an open Markers Checklist tab, click the three-dot tab-view menu and pick the `Settings…`
- * item. Asserts the dialog dialog opens (role=dialog with title "Marker Settings"). Returns a
+ * From an open Markers Checklist tab, click the hamburger (`View Info`) menu and pick the
+ * `Settings…` item. Asserts the dialog opens (role=dialog with title "Marker Settings"). Returns a
  * `FrameLocator` for the Markers Checklist web view (the dialog renders inside the same iframe per
  * the inline-Dialog implementation pattern).
+ *
+ * The hamburger menu lives INSIDE the Markers Checklist iframe (Platform.Bible's web-view chrome
+ * renders the `topMenu` contributions there — same pattern as the scripture editor's Project
+ * hamburger). Radix portals the menu items into the iframe body, so menu items are also in-frame.
  */
 async function openMarkerSettingsDialog(page: Page): Promise<FrameLocator> {
-  // Ensure the Markers Checklist dock-tab is the active tab so the tab-view menu lives on it.
+  // Ensure the Markers Checklist dock-tab is the active tab so the hamburger is available.
   const checklistTab = page.locator('.dock-tab.dock-tab-active', {
     hasText: CHECKLIST_TAB_TITLE_PATTERN,
   });
@@ -102,17 +106,15 @@ async function openMarkerSettingsDialog(page: Page): Promise<FrameLocator> {
     await page.locator('.dock-tab', { hasText: CHECKLIST_TAB_TITLE_PATTERN }).first().click();
   }
 
-  // `TabToolbar` renders the tab-view (three-dot) menu with `tabLabel="View Info"` — see
-  // lib/platform-bible-react/src/components/advanced/tab-toolbar/tab-toolbar.component.tsx:95.
-  const tabViewMenuTrigger = page.getByRole('button', { name: /View Info/i });
-  await tabViewMenuTrigger.click();
+  const frame = page.frameLocator('iframe[title*="Markers Checklist"]');
 
-  const settingsMenuItem = page.getByRole('menuitem', { name: /Settings…|Settings\.\.\./i });
-  await settingsMenuItem.click();
+  // The web-view chrome renders the hamburger (`aria-label="View Info"`) inside the iframe.
+  await frame.locator("button[aria-label='View Info']").first().click();
 
-  const frame = page.frameLocator(
-    `iframe[title*="${PROJECT_NAME}" i], iframe[title="Marker Settings"]`,
-  );
+  // Settings... menu item — match exactly to disambiguate from "Open Project Settings..."
+  // injected by default contributions.
+  await frame.getByRole('menuitem', { name: 'Settings...', exact: true }).click();
+
   // Primary dialog title assertion — confirms `MarkerSettingsDialog` mounted with `open={true}`.
   await expect(
     frame
@@ -172,26 +174,26 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
   // ─────────────────────────────────────────────────────────────────────────
 
   // @behavior BHV-312
-  test('opens the Marker Settings dialog via the tab-menu Settings… item', async ({ mainPage }) => {
+  test('opens the Marker Settings dialog via the hamburger-menu Settings… item', async ({
+    mainPage,
+  }) => {
     await waitForAppReady(mainPage);
     await openProjectByName(mainPage, PROJECT_NAME);
     await openMarkersChecklistTool(mainPage);
 
-    // Sanity — the tab-view menu exists on the active Markers Checklist tab.
-    const tabViewMenuTrigger = mainPage.getByRole('button', { name: /View Info/i });
-    await expect(tabViewMenuTrigger).toBeVisible();
+    const frame = mainPage.frameLocator('iframe[title*="Markers Checklist"]');
 
-    await tabViewMenuTrigger.click();
-    const settingsMenuItem = mainPage.getByRole('menuitem', {
-      name: /Settings…|Settings\.\.\./i,
-    });
+    // The hamburger (`View Info`) lives INSIDE the Markers Checklist iframe — the web-view chrome
+    // renders `topMenu` contributions there. Radix portals the menu into the iframe body.
+    const hamburger = frame.locator("button[aria-label='View Info']");
+    await expect(hamburger).toBeVisible();
+    await hamburger.click();
+
+    const settingsMenuItem = frame.getByRole('menuitem', { name: 'Settings...', exact: true });
     await expect(settingsMenuItem).toBeVisible();
     await settingsMenuItem.click();
 
     // The dialog mounts inside the Markers Checklist web view's iframe.
-    const frame = mainPage.frameLocator(
-      `iframe[title*="${PROJECT_NAME}" i], iframe[title="Marker Settings"]`,
-    );
     const dialog = frame
       .getByRole('dialog')
       .filter({ hasText: /Marker Settings/i })
@@ -289,8 +291,11 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
     await expect(alert).toContainText(/Invalid equivalent markers/i);
     await expect(alert).toContainText(/Equivalent markers need to be entered in the form: p\/q/i);
 
-    // Parent dialog is still open (blocking behavior — PT9 parity).
-    await expect(frame.getByRole('dialog').filter({ hasText: /Marker Settings/i })).toBeVisible();
+    // Parent dialog is still open (blocking behavior — PT9 parity). When the nested alertdialog
+    // opens, Radix sets `aria-hidden=true` on the parent Dialog to trap focus, which removes it
+    // from the a11y tree. Use a CSS selector (not getByRole) so we verify the element is
+    // rendered/visible regardless of ARIA visibility.
+    await expect(frame.locator('[aria-label="Marker Settings"][data-state="open"]')).toBeVisible();
 
     await mainPage.screenshot({
       path: `${EVIDENCE_DIR}/EVD-011-settings-validation-error.png`,
@@ -307,8 +312,11 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
     await frame.getByRole('button', { name: /^OK$/ }).click();
 
     await expect(frame.getByRole('alertdialog')).toBeVisible({ timeout: 5_000 });
-    // Parent dialog still open — user must correct and retry.
-    await expect(frame.getByRole('dialog').filter({ hasText: /Marker Settings/i })).toBeVisible();
+    // Parent dialog still open — user must correct and retry. When the nested alertdialog opens,
+    // Radix sets `aria-hidden=true` on the parent Dialog to trap focus, which removes it from the
+    // a11y tree. Use a CSS selector (not getByRole) so we verify the element is rendered/visible
+    // regardless of ARIA visibility.
+    await expect(frame.locator('[aria-label="Marker Settings"][data-state="open"]')).toBeVisible();
   });
 
   // @behavior BHV-602 (VAL-100)
@@ -319,7 +327,9 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
     await frame.getByRole('button', { name: /^OK$/ }).click();
 
     await expect(frame.getByRole('alertdialog')).toBeVisible({ timeout: 5_000 });
-    await expect(frame.getByRole('dialog').filter({ hasText: /Marker Settings/i })).toBeVisible();
+    // CSS selector (not getByRole) because Radix sets aria-hidden=true on the parent when the
+    // nested alertdialog opens — see sibling rejection tests for details.
+    await expect(frame.locator('[aria-label="Marker Settings"][data-state="open"]')).toBeVisible();
   });
 
   // ─────────────────────────────────────────────────────────────────────────
