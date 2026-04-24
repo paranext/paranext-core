@@ -76,6 +76,7 @@ import {
   Unsubscriber,
 } from 'platform-bible-utils';
 import { LayoutBase } from 'rc-dock';
+import { Filter } from 'rc-dock/lib/Algorithm';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
