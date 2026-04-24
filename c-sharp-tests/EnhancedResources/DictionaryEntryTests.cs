@@ -30,11 +30,8 @@ namespace TestParanextDataProvider.EnhancedResources;
 [ExcludeFromCodeCoverage]
 internal class DictionaryEntryTests
 {
-    [SetUp]
-    public void SetUp() => DictionaryFixtures.ApplyDefaults();
-
-    [TearDown]
-    public void TearDown() => DictionaryFixtures.Clear();
+    private static DictionaryService BuildService() =>
+        new(DictionaryFixtures.BuildDictionaryData());
 
     #region Acceptance Tests
 
@@ -59,7 +56,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert: All required fields populated in the structured DTO
         Assert.That(result, Is.Not.Null);
@@ -90,7 +87,7 @@ internal class DictionaryEntryTests
 
         // Act & Assert
         var ex = Assert.Throws<InvalidOperationException>(
-            () => DictionaryService.GetDictionaryEntry(input)
+            () => BuildService().GetDictionaryEntry(input)
         );
         Assert.That(
             ex!.Data["platformErrorCode"],
@@ -123,7 +120,7 @@ internal class DictionaryEntryTests
 
         // Act & Assert
         var ex = Assert.Throws<InvalidOperationException>(
-            () => DictionaryService.GetDictionaryEntry(input)
+            () => BuildService().GetDictionaryEntry(input)
         );
         Assert.That(
             ex!.Data["platformErrorCode"],
@@ -158,7 +155,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert: Each sense has required structure
         Assert.That(result.Senses, Is.Not.Empty, "Expected at least one sense");
@@ -190,7 +187,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert: Glosses have language and text
         var allGlosses = result.Senses.SelectMany(s => s.Glosses).ToList();
@@ -219,7 +216,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert: Multiple senses
         Assert.That(
@@ -245,7 +242,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert: SemanticDomains populated
         Assert.That(
@@ -275,7 +272,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "kai-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert: Empty list, not null
         Assert.That(result.SemanticDomains, Is.Not.Null, "SemanticDomains must not be null");
@@ -302,7 +299,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert: Related lexemes have all required fields
         Assert.That(
@@ -347,7 +344,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert: Source entry's own lemma must not appear in related lexemes
         Assert.That(result.RelatedLexemes, Is.Not.Empty);
@@ -372,7 +369,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "kai-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert
         Assert.That(result.RelatedLexemes, Is.Not.Null, "RelatedLexemes must not be null");
@@ -399,7 +396,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert: Morphology is populated (e.g., "Noun" or POS abbreviation)
         Assert.That(
@@ -425,7 +422,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert: No HTML tags in any field
         Assert.That(result.Lemma, Does.Not.Match(@"<[^>]+>"), "Lemma must not contain HTML tags");
@@ -471,7 +468,7 @@ internal class DictionaryEntryTests
 
         // Act & Assert
         var ex = Assert.Throws<InvalidOperationException>(
-            () => DictionaryService.GetDictionaryEntry(input)
+            () => BuildService().GetDictionaryEntry(input)
         );
         Assert.That(
             ex!.Data["platformErrorCode"],
@@ -498,7 +495,7 @@ internal class DictionaryEntryTests
 
         // Act & Assert
         var ex = Assert.Throws<InvalidOperationException>(
-            () => DictionaryService.GetDictionaryEntry(input)
+            () => BuildService().GetDictionaryEntry(input)
         );
         Assert.That(
             ex!.Data["platformErrorCode"],
@@ -530,7 +527,7 @@ internal class DictionaryEntryTests
 
         // Act & Assert
         var ex = Assert.Throws<InvalidOperationException>(
-            () => DictionaryService.GetDictionaryEntry(input)
+            () => BuildService().GetDictionaryEntry(input)
         );
         Assert.That(
             ex!.Data["platformErrorCode"],
@@ -564,7 +561,7 @@ internal class DictionaryEntryTests
 
         // Act & Assert
         var ex = Assert.Throws<InvalidOperationException>(
-            () => DictionaryService.GetDictionaryEntry(input)
+            () => BuildService().GetDictionaryEntry(input)
         );
         Assert.That(
             ex!.Data["platformErrorCode"],
@@ -600,7 +597,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert
         Assert.That(
@@ -626,7 +623,7 @@ internal class DictionaryEntryTests
         var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
 
         // Act
-        var result = DictionaryService.GetDictionaryEntry(input);
+        var result = BuildService().GetDictionaryEntry(input);
 
         // Assert: At least one gloss in the requested language
         var glossLanguages = result

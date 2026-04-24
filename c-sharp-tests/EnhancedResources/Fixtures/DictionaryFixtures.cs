@@ -4,12 +4,12 @@ using Paranext.DataProvider.EnhancedResources;
 namespace TestParanextDataProvider.EnhancedResources.Fixtures;
 
 /// <summary>
-/// Test fixtures for DictionaryService. Holds canned lexicon, display items, and entry data
-/// previously embedded in DictionaryService.cs. Tests populate DictionaryService overrides
-/// from these fixtures in [SetUp] and clear them in [TearDown].
+/// Test fixtures for DictionaryService. Holds canned lexicon, display items, entry data,
+/// and known-resource sets. Exposes BuildDictionaryData() returning an immutable record
+/// consumed by DictionaryService's primary constructor.
 ///
-/// Precedent: MarbleTestHelper. Enforced by N3 policy
-/// (patterns.csharp.testScaffoldingLocation).
+/// Prior ApplyDefaults/Clear pattern was retired alongside DictionaryService's static
+/// *Override seams. See ADR serviceComposition.
 /// </summary>
 [ExcludeFromCodeCoverage]
 internal static class DictionaryFixtures
@@ -20,7 +20,6 @@ internal static class DictionaryFixtures
             "test-resource",
             "SDBH",
             "SDBG",
-            "empty-resource",
             "test-resource-with-dupes",
         };
 
@@ -109,6 +108,58 @@ internal static class DictionaryFixtures
             ),
         ];
 
+    /// <summary>
+    /// Builds the full DictionaryData record used by the DI'd DictionaryService.
+    /// Routes the OT display items under SDBH, NT display items under SDBG, and
+    /// (for now) an empty slice under DCLEX so three-way routing tests can target it.
+    /// Entry data is duplicated across packages so GetDictionaryEntry works
+    /// regardless of which dictionary the caller's book number routes to.
+    /// </summary>
+    internal static DictionaryData BuildDictionaryData()
+    {
+        var defaultLexicon = BuildDefaultLexicon();
+        var lexiconAsReadOnly = defaultLexicon.ToDictionary(
+            kv => kv.Key,
+            kv =>
+                ((IReadOnlyList<string>)kv.Value.Glosses, (IReadOnlyList<string>)kv.Value.Domains),
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        var entries = BuildDefaultEntryData();
+
+        var sdbh = new DictionaryPerPackage(
+            EntriesById: entries,
+            Lexicon: lexiconAsReadOnly,
+            DisplayItems: BuildOtDisplayItems()
+        );
+        var sdbg = new DictionaryPerPackage(
+            EntriesById: entries,
+            Lexicon: lexiconAsReadOnly,
+            DisplayItems: BuildNtDisplayItems()
+        );
+        var dclex = new DictionaryPerPackage(
+            EntriesById: entries,
+            Lexicon: lexiconAsReadOnly,
+            DisplayItems: []
+        );
+
+        return new DictionaryData(
+            ByDictionary: new Dictionary<string, DictionaryPerPackage>(
+                StringComparer.OrdinalIgnoreCase
+            )
+            {
+                ["SDBH"] = sdbh,
+                ["SDBG"] = sdbg,
+                ["DCLEX"] = dclex,
+            },
+            KnownResourceIds: new HashSet<string>(KnownResources, StringComparer.OrdinalIgnoreCase),
+            UninitializedResourceIds: new HashSet<string>(
+                UninitializedResources,
+                StringComparer.OrdinalIgnoreCase
+            )
+        );
+    }
+
     internal static Dictionary<string, DictionaryEntryRecord> BuildDefaultEntryData() =>
         new()
         {
@@ -154,35 +205,4 @@ internal static class DictionaryFixtures
                 SubItemIds: ["kai-001-s1"]
             ),
         };
-
-    /// <summary>
-    /// Populates the DictionaryService overrides with a fresh copy of every default fixture.
-    /// Call this from [SetUp]. Use <see cref="Clear"/> from [TearDown].
-    /// </summary>
-    internal static void ApplyDefaults()
-    {
-        DictionaryService.LexiconOverride = BuildDefaultLexicon();
-        DictionaryService.KnownResourcesOverride = new HashSet<string>(
-            KnownResources,
-            StringComparer.OrdinalIgnoreCase
-        );
-        DictionaryService.UninitializedResourcesOverride = new HashSet<string>(
-            UninitializedResources,
-            StringComparer.OrdinalIgnoreCase
-        );
-        DictionaryService.NtDisplayItemsOverride = BuildNtDisplayItems();
-        DictionaryService.OtDisplayItemsOverride = BuildOtDisplayItems();
-        DictionaryService.EntryDataOverride = BuildDefaultEntryData();
-    }
-
-    /// <summary>Clears all DictionaryService overrides. Call from [TearDown].</summary>
-    internal static void Clear()
-    {
-        DictionaryService.LexiconOverride = null;
-        DictionaryService.KnownResourcesOverride = null;
-        DictionaryService.UninitializedResourcesOverride = null;
-        DictionaryService.NtDisplayItemsOverride = null;
-        DictionaryService.OtDisplayItemsOverride = null;
-        DictionaryService.EntryDataOverride = null;
-    }
 }
