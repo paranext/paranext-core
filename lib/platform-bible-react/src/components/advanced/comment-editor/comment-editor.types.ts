@@ -8,6 +8,7 @@ import { CANCEL_ACCEPT_BUTTONS_STRING_KEYS } from '@/components/basics/cancel-ac
 export const COMMENT_EDITOR_STRING_KEYS = Object.freeze([
   '%commentEditor_placeholder%',
   '%commentEditor_assignTo_label%',
+  '%commentEditor_saveButton_tooltip%',
   '%commentEditor_unassigned%',
   '%commentEditor_team%',
   ...CANCEL_ACCEPT_BUTTONS_STRING_KEYS,

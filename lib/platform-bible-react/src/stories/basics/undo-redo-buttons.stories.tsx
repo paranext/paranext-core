@@ -8,7 +8,7 @@ import standardStrings from '@/localizedStrings.json';
 const meta: Meta<typeof UndoRedoButtons> = {
   title: 'Basics/UndoRedoButtons',
   component: UndoRedoButtons,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
   parameters: {
     docs: {
       description: {

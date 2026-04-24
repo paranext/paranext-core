@@ -41,6 +41,11 @@ export type CancelAcceptButtonsProps = {
   localizedStrings?: CancelAcceptButtonsLocalizedStrings;
   /** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
   className?: string;
+  /**
+   * Optional context-specific label for the accept button (e.g. "Save Comment", "Save Footnote").
+   * When provided, overrides the generic `%acceptButton_tooltip%` localized string.
+   */
+  acceptLabel?: string;
 };
 
 /**
@@ -53,9 +58,10 @@ export function CancelAcceptButtons({
   canAccept = true,
   localizedStrings = {},
   className = 'tw-h-6 tw-w-6',
+  acceptLabel,
 }: CancelAcceptButtonsProps) {
   const cancelLocalized = localizeString(localizedStrings, '%cancelButton_tooltip%');
-  const acceptLocalized = localizeString(localizedStrings, '%acceptButton_tooltip%');
+  const acceptLocalized = acceptLabel ?? localizeString(localizedStrings, '%acceptButton_tooltip%');
 
   return (
     <ButtonGroup>

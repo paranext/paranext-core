@@ -24,6 +24,7 @@ export const FOOTNOTE_EDITOR_STRING_KEYS = Object.freeze([
   '%footnoteEditor_noteType_footnote_label%',
   '%footnoteEditor_noteType_tooltip%',
   '%footnoteEditor_noteTypeDropdown_label%',
+  '%footnoteEditor_saveButton_tooltip%',
   ...UNDO_REDO_BUTTONS_STRING_KEYS,
   ...CANCEL_ACCEPT_BUTTONS_STRING_KEYS,
 ] as const);

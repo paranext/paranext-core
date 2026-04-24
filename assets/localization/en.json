@@ -35,7 +35,7 @@
   "%footnoteEditor_noteType_footnote_label%": "Footnote",
   "%footnoteEditor_noteType_tooltip%": "Change type: Footnote",
   "%footnoteEditor_noteTypeDropdown_label%": "Type",
-  "%footnoteEditor_saveButton_tooltip%": "Save",
+  "%footnoteEditor_saveButton_tooltip%": "Save footnote",
   "%general_button_submit%": "Submit",
   "%general_cancel%": "Cancel",
   "%general_countOfTotal%": "{count} of {total}",

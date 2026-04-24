@@ -26,6 +26,7 @@ Cancel and Accept buttons with tooltips for use in editor toolbars.
     onAcceptClick: { action: 'accept-clicked' },
     canAccept: { control: 'boolean' },
     localizedStrings: { control: 'object' },
+    acceptLabel: { control: 'text' },
   },
 };
 
@@ -69,6 +70,22 @@ export const FallbackLocalization: Story = {
       description: {
         story:
           'When localized strings are not provided the raw key (e.g. `%cancelButton_tooltip%`) is shown as fallback tooltip text.',
+      },
+    },
+  },
+};
+
+export const ContextSpecificLabel: Story = {
+  args: {
+    canAccept: true,
+    localizedStrings: defaultLocalizedStrings,
+    acceptLabel: 'Save Comment',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Pass `acceptLabel` to override the generic accept tooltip with a context-specific label such as "Save Comment" or "Save Footnote".',
       },
     },
   },

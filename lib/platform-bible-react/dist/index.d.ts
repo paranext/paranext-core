@@ -197,6 +197,7 @@ export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearc
 export declare const COMMENT_EDITOR_STRING_KEYS: readonly [
 	"%commentEditor_placeholder%",
 	"%commentEditor_assignTo_label%",
+	"%commentEditor_saveButton_tooltip%",
 	"%commentEditor_unassigned%",
 	"%commentEditor_team%",
 	"%cancelButton_tooltip%",
@@ -718,6 +719,7 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%footnoteEditor_noteType_footnote_label%",
 	"%footnoteEditor_noteType_tooltip%",
 	"%footnoteEditor_noteTypeDropdown_label%",
+	"%footnoteEditor_saveButton_tooltip%",
 	"%undoButton_tooltip%",
 	"%redoButton_tooltip%",
 	"%cancelButton_tooltip%",
@@ -1757,12 +1759,17 @@ export type CancelAcceptButtonsProps = {
 	localizedStrings?: CancelAcceptButtonsLocalizedStrings;
 	/** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
 	className?: string;
+	/**
+	 * Optional context-specific label for the accept button (e.g. "Save Comment", "Save Footnote").
+	 * When provided, overrides the generic `%acceptButton_tooltip%` localized string.
+	 */
+	acceptLabel?: string;
 };
 /**
  * Cancel and Accept buttons with tooltips in a ButtonGroup. Suitable for use in any editor toolbar.
  * Tooltip text defaults to the localization key if no localized strings are provided.
  */
-export declare function CancelAcceptButtons({ onCancelClick, onAcceptClick, canAccept, localizedStrings, className, }: CancelAcceptButtonsProps): import("react/jsx-runtime").JSX.Element;
+export declare function CancelAcceptButtons({ onCancelClick, onAcceptClick, canAccept, localizedStrings, className, acceptLabel, }: CancelAcceptButtonsProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -2163,6 +2170,22 @@ export declare const DialogTitle: React$1.ForwardRefExoticComponent<Omit<DialogP
 /** Renders the dialog's description text in a muted style. Used inside DialogHeader. */
 export declare const DialogDescription: React$1.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogDescriptionProps & React$1.RefAttributes<HTMLParagraphElement>, "ref"> & React$1.RefAttributes<HTMLParagraphElement>>;
 /**
+ * The Separator component visually or semantically separates content. This component is built on
+ * Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/separator}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/separator}
+ */
+export declare const Separator: React$1.ForwardRefExoticComponent<Omit<SeparatorPrimitive.SeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const buttonGroupVariants: (props?: ({
+	orientation?: "horizontal" | "vertical" | null | undefined;
+} & ClassProp) | undefined) => string;
+export declare function ButtonGroup({ className, orientation, ...props }: React$1.ComponentProps<"div"> & VariantProps<typeof buttonGroupVariants>): import("react/jsx-runtime").JSX.Element;
+export declare function ButtonGroupText({ className, asChild, ...props }: React$1.ComponentProps<"div"> & {
+	asChild?: boolean;
+}): import("react/jsx-runtime").JSX.Element;
+export declare function ButtonGroupSeparator({ className, orientation, ...props }: React$1.ComponentProps<typeof Separator>): import("react/jsx-runtime").JSX.Element;
+/**
  * A drawer component for React. These components are built on Vaul and styled with Shadcn UI. See
  * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/drawer See Vaul Documentation:
  * https://vaul.emilkowal.ski/getting-started
@@ -2441,14 +2464,6 @@ export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<Reac
 export declare function ResizableHandle({ withHandle, className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelResizeHandle> & {
 	withHandle?: boolean;
 }): import("react/jsx-runtime").JSX.Element;
-/**
- * The Separator component visually or semantically separates content. This component is built on
- * Radix UI primitives and styled with Shadcn UI.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/separator}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/separator}
- */
-export declare const Separator: React$1.ForwardRefExoticComponent<Omit<SeparatorPrimitive.SeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Tooltip */
 export declare const TooltipProvider: React$1.FC<TooltipPrimitive.TooltipProviderProps>;
 /**

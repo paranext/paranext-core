@@ -17,12 +17,6 @@
       "message": "The comment editor now uses the generic %cancelButton_tooltip% key."
     }
   },
-  "%commentEditor_saveButton_tooltip%": {
-    "deprecationInfo": {
-      "date": "2026-04-22",
-      "message": "The comment editor now uses the generic %acceptButton_tooltip% key."
-    }
-  },
   "%data_loading_error_paratextData_internet_disabled%": {
     "deprecationInfo": {
       "date": "2025-09-24",
@@ -47,12 +41,6 @@
   },
   "%footnoteEditor_noteType_footnote_label%": {
     "fallbackKey": "%Paratext.TextForm.footnoteToolStripMenuItem.Text%"
-  },
-  "%footnoteEditor_saveButton_tooltip%": {
-    "deprecationInfo": {
-      "date": "2026-04-22",
-      "message": "Prefer the generic %acceptButton_tooltip% key for new code."
-    }
   },
   "%general_cancel%": {
     "fallbackKey": "%MainForm_90%"

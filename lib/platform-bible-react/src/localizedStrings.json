@@ -1,8 +1,5 @@
 {
   "metadata": {
-    "%acceptButton_tooltip%": {
-      "fallbackKey": "%footnoteEditor_saveButton_tooltip%"
-    },
     "%cancelButton_tooltip%": {
       "fallbackKey": "%footnoteEditor_cancelButton_tooltip%"
     },
@@ -34,6 +31,7 @@
     "en": {
       "%acceptButton_tooltip%": "Save",
       "%cancelButton_tooltip%": "Cancel",
+      "%commentEditor_saveButton_tooltip%": "Save comment",
       "%footnoteEditor_callerDropdown_item_custom%": "Custom",
       "%footnoteEditor_callerDropdown_item_generated%": "Auto-generated",
       "%footnoteEditor_callerDropdown_item_hidden%": "Hidden",
@@ -46,7 +44,7 @@
       "%footnoteEditor_noteType_footnote_label%": "Footnote",
       "%footnoteEditor_noteType_tooltip%": "Change type: Footnote",
       "%footnoteEditor_noteTypeDropdown_label%": "Type",
-      "%footnoteEditor_saveButton_tooltip%": "Save",
+      "%footnoteEditor_saveButton_tooltip%": "Save footnote",
       "%markerMenu_deprecated_label%": "Deprecated",
       "%markerMenu_disallowed_label%": "Disallowed",
       "%markerMenu_marker_add_description%": "For a translational addition to the text",
@@ -243,6 +241,7 @@
     "es": {
       "%acceptButton_tooltip%": "Guardar",
       "%cancelButton_tooltip%": "Cancelar",
+      "%commentEditor_saveButton_tooltip%": "Guardar comentario",
       "%footnoteEditor_callerDropdown_item_custom%": "personalizado",
       "%footnoteEditor_callerDropdown_item_generated%": "automáticamente generado",
       "%footnoteEditor_callerDropdown_item_hidden%": "escondido",
@@ -255,7 +254,7 @@
       "%footnoteEditor_noteType_footnote_label%": "Nota a pie de página",
       "%footnoteEditor_noteType_tooltip%": "Tipo de nota",
       "%footnoteEditor_noteTypeDropdown_label%": "Tipo",
-      "%footnoteEditor_saveButton_tooltip%": "Guardar",
+      "%footnoteEditor_saveButton_tooltip%": "Guardar nota",
       "%markerMenu_deprecated_label%": "Obsoleto",
       "%markerMenu_disallowed_label%": "No permitido",
       "%markerMenu_marker_add_description%": "Para un ajuste de traducción al texto",

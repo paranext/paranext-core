@@ -543,6 +543,7 @@ export default function FootnoteEditor({
                   (callerType === 'custom' && customCaller !== originalCustomCaller)
                 }
                 localizedStrings={localizedStrings}
+                acceptLabel={localizedStrings['%footnoteEditor_saveButton_tooltip%']}
               />
             </ButtonGroup>
           </div>

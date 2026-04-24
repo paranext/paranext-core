@@ -151,6 +151,7 @@ export default function CommentEditor({
           onAcceptClick={handleSave}
           canAccept={hasEditorContent(editorState)}
           localizedStrings={localizedStrings}
+          acceptLabel={localizedStrings['%commentEditor_saveButton_tooltip%']}
         />
       </div>
 

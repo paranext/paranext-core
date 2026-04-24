@@ -156,7 +156,7 @@
   "%footnoteEditor_noteType_footnote_label%": "Nota a pie de página",
   "%footnoteEditor_noteType_tooltip%": "Tipo de nota",
   "%footnoteEditor_noteTypeDropdown_label%": "Tipo",
-  "%footnoteEditor_saveButton_tooltip%": "Guardar",
+  "%footnoteEditor_saveButton_tooltip%": "Guardar nota",
   "%general_button_submit%": "Enviar",
   "%general_cancel%": "Cancelar",
   "%general_countOfTotal%": "{count} de {total}",
