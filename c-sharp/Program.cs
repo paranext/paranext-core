@@ -4,9 +4,11 @@ using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Projects.DigitalBibleLibrary;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paranext.DataProvider.Services;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
+using Paratext.Data.Repository;
 using PtxUtils;
 using PtxUtils.Progress;
 
@@ -62,8 +64,16 @@ public static class Program
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
             PtxUtilsDataSettings.Initialize(new PersistedPtxUtilsSettings(papi));
 
+            // Initializes the versioning manager
+            VersioningManager.Initialize();
+
             SettingsService.Initialize(papi);
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
+            var paratextSendReceiveService = new ParatextProjectSendReceiveService(
+                papi,
+                paratextFactory,
+                appInfo
+            );
             var inventoryDataProvider = new InventoryDataProvider(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var dblResources = new DblResourcesDataProvider(papi);
@@ -73,7 +83,8 @@ public static class Program
                 inventoryDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
                 dblResources.RegisterDataProviderAsync(),
-                paratextRegistrationService.InitializeAsync()
+                paratextRegistrationService.InitializeAsync(),
+                paratextSendReceiveService.InitializeAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here

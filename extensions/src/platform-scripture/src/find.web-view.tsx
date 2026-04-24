@@ -71,6 +71,9 @@ import { SearchResultsInBook } from './find/search-results-in-book.component';
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%general_countOfTotal%',
+  '%versionHistoryCommit_beforeReplace%',
+  '%versionHistoryCommit_beforeReplace_failureMessage%',
+  '%versionHistoryCommit_afterReplace%',
   '%webView_find_allText%',
   '%webView_find_allText_tooltip%',
   '%webView_find_allowRegex%',
@@ -899,7 +902,7 @@ global.webViewComponent = function FindWebView({
 
   const handleReplace = useCallback(
     async (resultIndex?: number) => {
-      if (isReplacing) return;
+      if (isReplacing || !projectId) return;
       const indexToReplace = resultIndex ?? focusedResultIndex;
       if (indexToReplace === undefined || !replacePdp) return;
 
@@ -915,7 +918,71 @@ global.webViewComponent = function FindWebView({
       try {
         // Snapshot the book before replacing so revert can restore USFM exactly
         const bookSnapshot = await usfmBookPdp?.getBookUSFM(bookVerseRef);
+        // Also commits changes to the version history
+        let isCommitSuccess = false;
+        try {
+          if (projectId)
+            isCommitSuccess = await papi.commands.sendCommand(
+              'paratextBibleSendReceive.commitChanges',
+              projectId,
+              formatReplacementString(localizedStrings['%versionHistoryCommit_beforeReplace%'], {
+                replaceTerms: `<vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+              }),
+              true,
+            );
+        } catch (err: unknown) {
+          const errMessage = getErrorMessage(err);
+          // Requires the `commitChanges` command handler to throw
+          // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+          // successfully handle if this command is not implemented in the application version
+          if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+            // Shouldn't stop the replace if the commit commands are only unimplemented in the
+            // current version of the application.
+            isCommitSuccess = true;
+            logger.info(errMessage);
+          } else {
+            logger.warn(
+              `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
+            );
+          }
+        }
+        // If the commit fails, aborts the replace operation
+        if (!isCommitSuccess) {
+          setIsReplacing(false);
+          papi.notifications.send({
+            message: localizedStrings['%versionHistoryCommit_beforeReplace_failureMessage%'],
+            severity: 'error',
+          });
+          return;
+        }
+
         await replacePdp.replace([{ start: result.start, end: result.end }], usfmToInsert);
+
+        // Commits resulting changes from the replace to the version history
+        try {
+          if (projectId)
+            await papi.commands.sendCommand(
+              'paratextBibleSendReceive.commitChanges',
+              projectId,
+              formatReplacementString(localizedStrings['%versionHistoryCommit_afterReplace%'], {
+                replaceTerms: `<vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+              }),
+              false,
+            );
+        } catch (err: unknown) {
+          const errMessage = getErrorMessage(err);
+          // Requires the `commitChanges` command handler to throw
+          // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+          // successfully handle if this command is not implemented in the application version
+          if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+            logger.info(errMessage);
+          } else {
+            logger.warn(
+              `Error committing changes to version history after replacing: ${getErrorMessage(err)}`,
+            );
+          }
+        }
+
         // Mark the replaced result with visual feedback before re-running the search
         setResults((prev) =>
           prev.map((r, i) => (i === indexToReplace ? { ...r, isReplaced: true } : r)),
@@ -976,11 +1043,13 @@ global.webViewComponent = function FindWebView({
       replaceTerm,
       results,
       usfmBookPdp,
+      searchTerm,
+      projectId,
     ],
   );
 
   const handleReplaceAll = useCallback(async () => {
-    if (isReplacing || !replacePdp) return;
+    if (isReplacing || !replacePdp || !projectId) return;
 
     setIsReplacing(true);
     try {
@@ -1009,6 +1078,44 @@ global.webViewComponent = function FindWebView({
 
       const visibleResultsList = allResults.filter((r) => !r.isHidden);
       if (visibleResultsList.length === 0) return;
+
+      let isCommitSuccess = false;
+      // Also commits changes to the version history
+      try {
+        if (projectId)
+          isCommitSuccess = await papi.commands.sendCommand(
+            'paratextBibleSendReceive.commitChanges',
+            projectId,
+            formatReplacementString(localizedStrings['%versionHistoryCommit_beforeReplace%'], {
+              replaceTerms: `<vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+            }),
+            true,
+          );
+      } catch (err: unknown) {
+        const errMessage = getErrorMessage(err);
+        // Requires the `commitChanges` command handler to throw
+        // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+        // successfully handle if this command is not implemented in the application version
+        if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+          // If the commit commands are simply not implemented in this version of the application,
+          // shouldn't skip the replace.
+          isCommitSuccess = true;
+          logger.info(errMessage);
+        } else {
+          logger.warn(
+            `Error committing changes to version history before replacing: ${getErrorMessage(err)}`,
+          );
+        }
+      }
+      // If the initial commit failed, aborts replace operation
+      if (!isCommitSuccess) {
+        setIsReplacing(false);
+        papi.notifications.send({
+          message: localizedStrings['%versionHistoryCommit_beforeReplace_failureMessage%'],
+          severity: 'error',
+        });
+        return;
+      }
 
       const usfmToInsert = preserveCase
         ? visibleResultsList.map((r) => applyPreserveCase(r.text ?? '', replaceTerm))
@@ -1058,6 +1165,31 @@ global.webViewComponent = function FindWebView({
             }),
       );
 
+      // Commits resulting changes from the replace to the version history
+      try {
+        if (projectId)
+          await papi.commands.sendCommand(
+            'paratextBibleSendReceive.commitChanges',
+            projectId,
+            formatReplacementString(localizedStrings['%versionHistoryCommit_afterReplace%'], {
+              replaceTerms: `<vern>${searchTerm}\u2014>${replaceTerm}</vern>`,
+            }),
+            false,
+          );
+      } catch (err: unknown) {
+        const errMessage = getErrorMessage(err);
+        // Requires the `commitChanges` command handler to throw
+        // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+        // successfully handle if this command is not implemented in the application version
+        if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+          logger.info(errMessage);
+        } else {
+          logger.warn(
+            `Error committing changes to version history after replacing: ${getErrorMessage(err)}`,
+          );
+        }
+      }
+
       // Mark all visible results as replaced for visual feedback (red background + progress bar)
       setResults(allResults.map((r) => (r.isHidden ? r : { ...r, isReplaced: true })));
 
@@ -1101,6 +1233,8 @@ global.webViewComponent = function FindWebView({
     retrieveFindJobUpdate,
     totalNumberOfResults,
     usfmBookPdp,
+    searchTerm,
+    projectId,
   ]);
 
   const handleCancelReplace = useCallback(() => {

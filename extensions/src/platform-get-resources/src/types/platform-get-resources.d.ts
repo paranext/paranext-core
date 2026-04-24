@@ -63,6 +63,28 @@ declare module 'papi-shared-types' {
 
     /** @returns True if Send/Receive is available to the user, false if not */
     'platformGetResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
+
+    /**
+     * Commits changes in the specified project to the version history. Unless `forceCommit` is
+     * `true`, will only commit if there are changes/revisions detected.
+     *
+     * @param projectId Id of the project
+     * @param comment Specified comment describing the change/revisions
+     * @param forceCommit Whether to force a commit even if there are no changes
+     * @returns Whether or not changes were committed
+     */
+    'paratextBibleSendReceive.commitChanges': (
+      projectId: string,
+      comment: string,
+      forceCommit?: boolean,
+    ) => Promise<boolean>;
+
+    /**
+     * Commits changes only if it's been a day since the last commit.
+     *
+     * @param projectId Id of the project
+     */
+    'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
   }
 
   export interface SettingTypes {
