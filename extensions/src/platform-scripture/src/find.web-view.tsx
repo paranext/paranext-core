@@ -902,7 +902,7 @@ global.webViewComponent = function FindWebView({
 
   const handleReplace = useCallback(
     async (resultIndex?: number) => {
-      if (isReplacing) return;
+      if (isReplacing || !projectId) return;
       const indexToReplace = resultIndex ?? focusedResultIndex;
       if (indexToReplace === undefined || !replacePdp) return;
 
@@ -919,7 +919,7 @@ global.webViewComponent = function FindWebView({
         // Snapshot the book before replacing so revert can restore USFM exactly
         const bookSnapshot = await usfmBookPdp?.getBookUSFM(bookVerseRef);
         // Also commits changes to the version history
-        let isCommitSuccess = !projectId;
+        let isCommitSuccess = false;
         try {
           if (projectId)
             isCommitSuccess = await papi.commands.sendCommand(
@@ -1049,7 +1049,7 @@ global.webViewComponent = function FindWebView({
   );
 
   const handleReplaceAll = useCallback(async () => {
-    if (isReplacing || !replacePdp) return;
+    if (isReplacing || !replacePdp || !projectId) return;
 
     setIsReplacing(true);
     try {
@@ -1079,7 +1079,7 @@ global.webViewComponent = function FindWebView({
       const visibleResultsList = allResults.filter((r) => !r.isHidden);
       if (visibleResultsList.length === 0) return;
 
-      let isCommitSuccess = !projectId;
+      let isCommitSuccess = false;
       // Also commits changes to the version history
       try {
         if (projectId)
