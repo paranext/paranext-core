@@ -1,8 +1,16 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
 import { useData, useLocalizedStrings } from '@papi/frontend/react';
-import { useEvent } from 'platform-bible-react';
+import {
+  useEvent,
+  ProjectSelector,
+  type OpenProjectTab,
+  type ProjectPair,
+  type ProjectSelectorProject,
+  usePromise,
+} from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import type { ScrollGroupId } from 'platform-bible-utils';
 import type {
   ChecklistComparativeTextRef,
   ChecklistRequest,
@@ -152,12 +160,9 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
     'checklistShowVerseText',
     false,
   );
-  // The `setComparativeTexts` writer is intentionally omitted from this destructure — the draft-PR
-  // `ProjectSelector` popover (#2223, `mode: 'project-multi'`) that would call it isn't wired yet.
-  // The slot key remains declared so persistence is preserved; when the popover lands, re-add the
-  // setter and route `onValueChange` through it. See UI-PKG-004 acceptance criteria in
-  // strategic-plan-ui.md.
-  const [comparativeTexts] = useWebViewState<ChecklistComparativeTextRef[]>(
+  // Comparative-texts selection is driven by the real `ProjectSelector` (`mode: 'project-multi'`,
+  // vendored from draft PR #2223).
+  const [comparativeTexts, setComparativeTexts] = useWebViewState<ChecklistComparativeTextRef[]>(
     'checklistComparativeTexts',
     [],
   );
@@ -404,29 +409,137 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
     [],
   );
 
-  // ─── Toolbar trigger click handlers (stubs until draft PRs land) ─────────
+  // ─── Toolbar trigger click handlers (stubs for primary-project + verse-range) ────────────
+  //
+  // Primary-project and verse-range still use the stand-in triggers: primary is derived from the
+  // web-view's options (users don't retarget a running checklist to a different project); verse
+  // range integration with the `ScopeSelector` dropdown variant (draft PR #2212) is deferred.
+  // Comparative-texts is wired to the real `ProjectSelector` below.
 
   const handlePrimaryProjectTriggerClick = useCallback(() => {
-    // Draft-PR dependency: #2223 `ProjectSelector`. Until the shared popover lands, this is a
-    // documentation hook — the trigger still renders so screen-reader users see the affordance.
-    logger.debug('ChecklistWebView: primary-project trigger clicked (popover deferred to #2223).');
-  }, []);
-
-  const handleComparativeTextsTriggerClick = useCallback(() => {
-    // Draft-PR dependency: #2223 `ProjectSelector` `mode: 'project-multi'`. Click intentionally
-    // does nothing at runtime today; comparative texts are currently driven by the persisted slot
-    // which is written via the dialog (UI-PKG-003) or future popover wiring.
-    logger.debug(
-      'ChecklistWebView: comparative-texts trigger clicked (multi-select popover deferred to #2223).',
-    );
+    logger.debug('ChecklistWebView: primary-project trigger clicked (stand-in).');
   }, []);
 
   const handleVerseRangeTriggerClick = useCallback(() => {
-    // Draft-PR dependency: #2212 `ScopeSelector` dropdown variant. Same rationale.
-    logger.debug(
-      'ChecklistWebView: verse-range trigger clicked (dropdown popover deferred to #2212).',
-    );
+    logger.debug('ChecklistWebView: verse-range trigger clicked (stand-in).');
   }, []);
+
+  // ─── Comparative-texts picker via real ProjectSelector (draft PR #2223) ────
+  //
+  // Fetch all scripture projects on mount; filter the primary out (no self-comparison); track open
+  // tabs for the "Open tabs" section in the popover. On selection change, map the returned
+  // `ProjectPair[]` back to our `ChecklistComparativeTextRef[]` persistence shape.
+
+  const [allProjects] = usePromise(
+    useCallback(async () => {
+      const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+      });
+      const results: ProjectSelectorProject[] = [];
+      await Promise.all(
+        allMetadata.map(async (metadata) => {
+          try {
+            const pdp = await papi.projectDataProviders.get('platform.base', metadata.id);
+            const [shortName, fullName, language] = await Promise.all([
+              pdp.getSetting('platform.name'),
+              pdp.getSetting('platform.fullName'),
+              Promise.resolve(undefined), // language not strictly required
+            ]);
+            // eslint-disable-next-line no-null/no-null
+            if (shortName !== null && shortName !== undefined) {
+              results.push({
+                id: metadata.id,
+                shortName,
+                fullName: fullName ?? shortName,
+                language,
+              });
+            }
+          } catch (err) {
+            logger.warn(
+              `ChecklistWebView: failed to load project names for ${metadata.id}: ${getErrorMessage(err)}`,
+            );
+          }
+        }),
+      );
+      return results;
+    }, []),
+    useMemo<ProjectSelectorProject[]>(() => [], []),
+  );
+
+  const comparativeProjects = useMemo<ProjectSelectorProject[]>(
+    () => allProjects.filter((p) => p.id !== projectId),
+    [allProjects, projectId],
+  );
+
+  const [comparativeOpenTabsMap, setComparativeOpenTabsMap] = useState<Map<string, OpenProjectTab>>(
+    () => new Map(),
+  );
+
+  useEffect(() => {
+    const upsert = (webView: { id: string; projectId?: string; scrollGroupScrRef?: unknown }) => {
+      if (!webView.projectId || typeof webView.scrollGroupScrRef !== 'number') return;
+      setComparativeOpenTabsMap((prev) => {
+        const next = new Map(prev);
+        next.set(webView.id, {
+          projectId: webView.projectId!,
+          scrollGroupId: webView.scrollGroupScrRef as ScrollGroupId,
+        });
+        return next;
+      });
+    };
+    const unsubOpen = papi.webViews.onDidOpenWebView(({ webView }) => upsert(webView));
+    const unsubUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => upsert(webView));
+    const unsubClose = papi.webViews.onDidCloseWebView(({ webView }) => {
+      setComparativeOpenTabsMap((prev) => {
+        if (!prev.has(webView.id)) return prev;
+        const next = new Map(prev);
+        next.delete(webView.id);
+        return next;
+      });
+    });
+    return () => {
+      unsubOpen();
+      unsubUpdate();
+      unsubClose();
+    };
+  }, []);
+
+  const comparativeOpenTabs = useMemo<OpenProjectTab[]>(
+    () => [...comparativeOpenTabsMap.values()],
+    [comparativeOpenTabsMap],
+  );
+
+  const comparativeSelection = useMemo(
+    () => ({ pairs: comparativeTexts.map((ref) => ({ projectId: ref.id })) }),
+    [comparativeTexts],
+  );
+
+  const handleComparativeTextsChange = useCallback(
+    (selection: { pairs: ProjectPair[] }) => {
+      const projectIdToName = new Map(allProjects.map((p) => [p.id, p.shortName]));
+      const nextRefs: ChecklistComparativeTextRef[] = selection.pairs.map((pair) => ({
+        id: pair.projectId,
+        name: projectIdToName.get(pair.projectId) ?? pair.projectId,
+      }));
+      setComparativeTexts(nextRefs);
+    },
+    [allProjects, setComparativeTexts],
+  );
+
+  const comparativeTextsSelectorNode = useMemo(
+    () => (
+      <div data-testid="checklist-comparative-texts-trigger">
+        <ProjectSelector
+          mode="project-multi"
+          projects={comparativeProjects}
+          openTabs={comparativeOpenTabs}
+          selection={comparativeSelection}
+          onChangeSelection={handleComparativeTextsChange}
+        />
+      </div>
+    ),
+    [comparativeProjects, comparativeOpenTabs, comparativeSelection, handleComparativeTextsChange],
+  );
 
   // ─── Copy (BHV-313) ───────────────────────────────────────────────────────
 
@@ -506,7 +619,7 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
         primaryProjectLabel={primaryProjectLabel}
         onPrimaryProjectTriggerClick={handlePrimaryProjectTriggerClick}
         comparativeTextsLabel={comparativeTextsLabel}
-        onComparativeTextsTriggerClick={handleComparativeTextsTriggerClick}
+        comparativeTextsSelector={comparativeTextsSelectorNode}
         verseRangeLabel={verseRangeLabel}
         onVerseRangeTriggerClick={handleVerseRangeTriggerClick}
         hideMatches={hideMatches}

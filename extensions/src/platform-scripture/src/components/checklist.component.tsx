@@ -271,10 +271,13 @@ export function ChecklistTool({
   helpText,
   primaryProjectLabel,
   onPrimaryProjectTriggerClick,
+  primaryProjectSelector,
   comparativeTextsLabel,
   onComparativeTextsTriggerClick,
+  comparativeTextsSelector,
   verseRangeLabel,
   onVerseRangeTriggerClick,
+  verseRangeSelector,
   hideMatches,
   onHideMatchesChange,
   showVerseText,
@@ -425,25 +428,31 @@ export function ChecklistTool({
 
   const renderToolbarStart = () => (
     <>
-      <SelectorTrigger
-        label={primaryProjectLabel}
-        ariaLabel={getLocalizedString('%markersChecklist_toolbar_primaryProject%')}
-        onClick={onPrimaryProjectTriggerClick}
-        testId="checklist-primary-project-trigger"
-      />
-      <SelectorTrigger
-        label={comparativeTextsLabel}
-        ariaLabel={getLocalizedString('%markersChecklist_toolbar_comparativeTexts%')}
-        icon={<ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0" aria-hidden="true" />}
-        onClick={onComparativeTextsTriggerClick}
-        testId="checklist-comparative-texts-trigger"
-      />
-      <SelectorTrigger
-        label={verseRangeLabel}
-        ariaLabel={getLocalizedString('%markersChecklist_toolbar_verseRange%')}
-        onClick={onVerseRangeTriggerClick}
-        testId="checklist-verse-range-trigger"
-      />
+      {primaryProjectSelector ?? (
+        <SelectorTrigger
+          label={primaryProjectLabel}
+          ariaLabel={getLocalizedString('%markersChecklist_toolbar_primaryProject%')}
+          onClick={onPrimaryProjectTriggerClick}
+          testId="checklist-primary-project-trigger"
+        />
+      )}
+      {comparativeTextsSelector ?? (
+        <SelectorTrigger
+          label={comparativeTextsLabel}
+          ariaLabel={getLocalizedString('%markersChecklist_toolbar_comparativeTexts%')}
+          icon={<ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0" aria-hidden="true" />}
+          onClick={onComparativeTextsTriggerClick}
+          testId="checklist-comparative-texts-trigger"
+        />
+      )}
+      {verseRangeSelector ?? (
+        <SelectorTrigger
+          label={verseRangeLabel}
+          ariaLabel={getLocalizedString('%markersChecklist_toolbar_verseRange%')}
+          onClick={onVerseRangeTriggerClick}
+          testId="checklist-verse-range-trigger"
+        />
+      )}
     </>
   );
 

@@ -183,20 +183,49 @@ export type ChecklistToolProps = {
    */
   helpText?: string | null | undefined;
 
-  // ----- Toolbar selector stand-ins (phase-3-ui-design-scope §"Draft-PR Dependency Note") -----
+  // ----- Toolbar selectors -----
+  //
+  // The three toolbar selectors (primary project, comparative texts, verse range) may be
+  // rendered in two ways:
+  //
+  //  1. STAND-IN (default for Storybook stories): pass a `*Label` + optional `*TriggerClick`
+  //     callback. The component renders an outline-button with a chevron icon; the parent
+  //     chooses what to open on click (or does nothing). Used for presentational review.
+  //
+  //  2. REAL (wiring phase): pass a `*Selector` ReactNode containing a fully-functional
+  //     popover trigger — typically `<ProjectSelector ... />` or `<ScopeSelector variant=
+  //     'dropdown' ... />` from `platform-bible-react`. When provided, the stand-in button
+  //     is NOT rendered; the custom ReactNode takes its place inline in the TabToolbar.
+  //
+  // If both a `*Selector` ReactNode AND the stand-in props are provided, `*Selector` wins.
 
   /** Already-resolved label text for the primary project trigger (e.g. project short name). */
   primaryProjectLabel: string;
   /** Called when the user clicks the primary-project trigger. Parent opens its popover/dialog. */
   onPrimaryProjectTriggerClick?: () => void;
+  /**
+   * Real primary-project selector — typically `<ProjectSelector mode="project" ... />`. When
+   * provided, replaces the stand-in button.
+   */
+  primaryProjectSelector?: React.ReactNode;
 
   /** Already-resolved label for the comparative-texts trigger (e.g. "3 selected" or a list). */
   comparativeTextsLabel: string;
   onComparativeTextsTriggerClick?: () => void;
+  /**
+   * Real comparative-texts selector — typically `<ProjectSelector mode="project-multi" ... />`.
+   * When provided, replaces the stand-in button.
+   */
+  comparativeTextsSelector?: React.ReactNode;
 
   /** Already-resolved label for the verse-range trigger (e.g. "GEN 1:1 - REV 22:21"). */
   verseRangeLabel: string;
   onVerseRangeTriggerClick?: () => void;
+  /**
+   * Real verse-range selector — typically `<ScopeSelector variant="dropdown" ... />`. When
+   * provided, replaces the stand-in button.
+   */
+  verseRangeSelector?: React.ReactNode;
 
   // ----- View dropdown toggles (bound to UI-PKG-004 slots in the wiring phase) -----
 
