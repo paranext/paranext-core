@@ -76,6 +76,7 @@ import {
   Unsubscriber,
 } from 'platform-bible-utils';
 import { LayoutBase } from 'rc-dock';
+import { Filter } from 'rc-dock/lib/Algorithm';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -952,6 +953,34 @@ export function getSavedWebViewDefinitionSync(
   return savedWebViewDefinition;
 }
 
+/** See {@link WebViewServiceType.getAllOpenWebViewDefinitions} */
+async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]> {
+  const dockLayout = await getDockLayout();
+  const webViewDefinitions: SavedWebViewDefinition[] = [];
+
+  dockLayout.dockLayout.find((item) => {
+    // Skip anything that isn't a tab with data
+    if (!('data' in item)) return false;
+
+    // Skip tabs whose data doesn't have webViewType (i.e. not a web view)
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const tabData = item.data as WebViewDefinition;
+    if (!tabData?.webViewType) return false;
+
+    const savedWebViewDefinition = convertWebViewDefinitionToSaved(tabData);
+
+    // Load the WebView state so the WebViewState service doesn't delete this entry
+    getFullWebViewStateById(savedWebViewDefinition.id);
+
+    webViewDefinitions.push(savedWebViewDefinition);
+
+    // Always return false — we want to collect ALL webviews, not stop at the first
+    return false;
+  }, Filter.AnyTab);
+
+  return webViewDefinitions;
+}
+
 // #endregion WebView definitions
 
 // #region WebViewState
@@ -1777,6 +1806,7 @@ const papiWebViewService: WebViewServiceType = {
   reloadWebView,
   getSavedWebViewDefinition: getOpenWebViewDefinition,
   getOpenWebViewDefinition,
+  getAllOpenWebViewDefinitions,
   getWebViewController,
 };
 
