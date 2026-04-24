@@ -19,16 +19,16 @@ import { FormEvent, useCallback, useEffect, useId, useRef, useState } from 'reac
  * directly.
  */
 export const MARKER_SETTINGS_STRING_KEYS = Object.freeze([
-  '%markers_checklist_settings_title%',
-  '%markers_checklist_settings_description%',
-  '%markers_checklist_settings_equivalentMarkersLabel%',
-  '%markers_checklist_settings_markerFilterLabel%',
-  '%markers_checklist_settings_ok%',
-  '%markers_checklist_settings_cancel%',
-  '%markers_checklist_settings_validationErrorTitle%',
-  '%markers_checklist_settings_validationErrorDescription%',
-  '%markers_checklist_settings_validationErrorOk%',
-  '%markers_checklist_settings_close%',
+  '%markersChecklist_settings_title%',
+  '%markersChecklist_settings_description%',
+  '%markersChecklist_settings_equivalentMarkersLabel%',
+  '%markersChecklist_settings_markerFilterLabel%',
+  '%markersChecklist_settings_ok%',
+  '%markersChecklist_settings_cancel%',
+  '%markersChecklist_settings_validationErrorTitle%',
+  '%markersChecklist_settings_validationErrorDescription%',
+  '%markersChecklist_settings_validationErrorOk%',
+  '%markersChecklist_settings_close%',
 ] as const);
 
 type MarkerSettingsLocalizedStringKey = (typeof MARKER_SETTINGS_STRING_KEYS)[number];
@@ -107,7 +107,7 @@ export function validateEquivalentMarkers(mappings: string): MarkerSettingsValid
   });
   return isValid
     ? { isValid: true }
-    : { isValid: false, errorKey: '%markers_checklist_settings_validationErrorDescription%' };
+    : { isValid: false, errorKey: '%markersChecklist_settings_validationErrorDescription%' };
 }
 
 /**
@@ -228,20 +228,20 @@ export function MarkerSettingsDialog({
       <DialogContent
         className="tw-max-w-md"
         // Localize the screen-reader close-button label injected by `DialogContent`.
-        aria-label={getLocalizedString('%markers_checklist_settings_title%')}
+        aria-label={getLocalizedString('%markersChecklist_settings_title%')}
       >
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{getLocalizedString('%markers_checklist_settings_title%')}</DialogTitle>
+            <DialogTitle>{getLocalizedString('%markersChecklist_settings_title%')}</DialogTitle>
             <DialogDescription className="tw-sr-only">
-              {getLocalizedString('%markers_checklist_settings_description%')}
+              {getLocalizedString('%markersChecklist_settings_description%')}
             </DialogDescription>
           </DialogHeader>
 
           <div className="tw-flex tw-flex-col tw-gap-4 tw-py-4">
             <div className="tw-flex tw-flex-col tw-gap-2">
               <Label htmlFor={equivalentMarkersInputId}>
-                {getLocalizedString('%markers_checklist_settings_equivalentMarkersLabel%')}
+                {getLocalizedString('%markersChecklist_settings_equivalentMarkersLabel%')}
               </Label>
               <Input
                 ref={equivalentMarkersInputRef}
@@ -255,7 +255,7 @@ export function MarkerSettingsDialog({
 
             <div className="tw-flex tw-flex-col tw-gap-2">
               <Label htmlFor={markerFilterInputId}>
-                {getLocalizedString('%markers_checklist_settings_markerFilterLabel%')}
+                {getLocalizedString('%markersChecklist_settings_markerFilterLabel%')}
               </Label>
               <Input
                 id={markerFilterInputId}
@@ -273,10 +273,10 @@ export function MarkerSettingsDialog({
               onClick={onCancel}
               data-testid="marker-settings-cancel"
             >
-              {getLocalizedString('%markers_checklist_settings_cancel%')}
+              {getLocalizedString('%markersChecklist_settings_cancel%')}
             </Button>
             <Button type="submit" data-testid="marker-settings-ok">
-              {getLocalizedString('%markers_checklist_settings_ok%')}
+              {getLocalizedString('%markersChecklist_settings_ok%')}
             </Button>
           </DialogFooter>
         </form>
@@ -293,14 +293,14 @@ export function MarkerSettingsDialog({
           role="alertdialog"
           aria-labelledby={validationTitleId}
           aria-describedby={validationDescriptionId}
-          aria-label={getLocalizedString('%markers_checklist_settings_validationErrorTitle%')}
+          aria-label={getLocalizedString('%markersChecklist_settings_validationErrorTitle%')}
         >
           <DialogHeader>
             <DialogTitle id={validationTitleId}>
-              {getLocalizedString('%markers_checklist_settings_validationErrorTitle%')}
+              {getLocalizedString('%markersChecklist_settings_validationErrorTitle%')}
             </DialogTitle>
             <DialogDescription id={validationDescriptionId}>
-              {getLocalizedString('%markers_checklist_settings_validationErrorDescription%')}
+              {getLocalizedString('%markersChecklist_settings_validationErrorDescription%')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -310,7 +310,7 @@ export function MarkerSettingsDialog({
               data-testid="marker-settings-validation-ok"
               autoFocus
             >
-              {getLocalizedString('%markers_checklist_settings_validationErrorOk%')}
+              {getLocalizedString('%markersChecklist_settings_validationErrorOk%')}
             </Button>
           </DialogFooter>
         </DialogContent>

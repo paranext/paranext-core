@@ -25,28 +25,28 @@ import {
  * design-phase defaults so the Storybook review is readable without contributing new keys first.
  */
 const englishFallbacks: ChecklistLocalizedStrings = {
-  '%markers_checklist_toolbar_primaryProject%': 'Select primary Scripture text',
-  '%markers_checklist_toolbar_comparativeTexts%': 'Select comparative texts',
-  '%markers_checklist_toolbar_verseRange%': 'Select verse range',
-  '%markers_checklist_toolbar_copy%': 'Copy',
-  '%markers_checklist_toolbar_view%': 'View',
-  '%markers_checklist_toolbar_hideMatches%': 'Hide Matches',
-  '%markers_checklist_toolbar_showVerseText%': 'Show Verse Text',
-  '%markers_checklist_toolbar_aria%': 'Markers Checklist toolbar',
-  '%markers_checklist_matches_omitted%': '{count} Matches Omitted',
-  '%markers_checklist_table_aria%': 'Markers checklist',
-  '%markers_checklist_noResults%': 'No markers found.',
-  '%markers_checklist_helptext%':
+  '%markersChecklist_toolbar_primaryProject%': 'Select primary Scripture text',
+  '%markersChecklist_toolbar_comparativeTexts%': 'Select comparative texts',
+  '%markersChecklist_toolbar_verseRange%': 'Select verse range',
+  '%markersChecklist_toolbar_copy%': 'Copy',
+  '%markersChecklist_toolbar_view%': 'View',
+  '%markersChecklist_toolbar_hideMatches%': 'Hide Matches',
+  '%markersChecklist_toolbar_showVerseText%': 'Show Verse Text',
+  '%markersChecklist_toolbar_aria%': 'Markers Checklist toolbar',
+  '%markersChecklist_matches_omitted%': '{count} Matches Omitted',
+  '%markersChecklist_table_aria%': 'Markers checklist',
+  '%markersChecklist_noResults%': 'No markers found.',
+  '%markersChecklist_helptext%':
     'Use the toolbar to change the primary project, pick comparative texts, or narrow the verse range.',
   '%markersChecklist_emptyResult_identicalMarkers%': 'Comparative texts have identical markers.',
-  '%markers_checklist_errorTitle%': "Couldn't load checklist",
-  '%markers_checklist_errorRetry%': 'Retry',
-  '%markers_checklist_edit%': 'edit',
-  '%markers_checklist_goto%': 'goto',
-  '%markers_checklist_edit_aria%': 'Edit {ref}',
-  '%markers_checklist_goto_aria%': 'Goto {ref}',
-  '%markers_checklist_edit_disabled_tooltip%': 'Coming in a future release',
-  '%markers_checklist_columnHeader_aria%': 'Project: {name}',
+  '%markersChecklist_errorTitle%': "Couldn't load checklist",
+  '%markersChecklist_errorRetry%': 'Retry',
+  '%markersChecklist_edit%': 'edit',
+  '%markersChecklist_goto%': 'goto',
+  '%markersChecklist_edit_aria%': 'Edit {ref}',
+  '%markersChecklist_goto_aria%': 'Goto {ref}',
+  '%markersChecklist_edit_disabled_tooltip%': 'Coming in a future release',
+  '%markersChecklist_columnHeader_aria%': 'Project: {name}',
 };
 
 // Resolve localization keys from the repo's locale files, then overlay the English design-phase

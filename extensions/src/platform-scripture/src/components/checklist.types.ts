@@ -13,36 +13,36 @@ import type { Localized, LocalizedStringValue, MultiColumnMenu } from 'platform-
  */
 export const CHECKLIST_STRING_KEYS = Object.freeze([
   // Toolbar — selector trigger labels (aria-label on the outline-button stand-ins)
-  '%markers_checklist_toolbar_primaryProject%',
-  '%markers_checklist_toolbar_comparativeTexts%',
-  '%markers_checklist_toolbar_verseRange%',
+  '%markersChecklist_toolbar_primaryProject%',
+  '%markersChecklist_toolbar_comparativeTexts%',
+  '%markersChecklist_toolbar_verseRange%',
   // Toolbar — action buttons + view dropdown
-  '%markers_checklist_toolbar_copy%',
-  '%markers_checklist_toolbar_view%',
-  '%markers_checklist_toolbar_hideMatches%',
-  '%markers_checklist_toolbar_showVerseText%',
-  '%markers_checklist_toolbar_aria%',
+  '%markersChecklist_toolbar_copy%',
+  '%markersChecklist_toolbar_view%',
+  '%markersChecklist_toolbar_hideMatches%',
+  '%markersChecklist_toolbar_showVerseText%',
+  '%markersChecklist_toolbar_aria%',
   // Match-count live region (BHV-303; `{count}` placeholder is replaced client-side)
-  '%markers_checklist_matches_omitted%',
+  '%markersChecklist_matches_omitted%',
   // Data table + landmark
-  '%markers_checklist_table_aria%',
-  '%markers_checklist_noResults%',
+  '%markersChecklist_table_aria%',
+  '%markersChecklist_noResults%',
   // Help text banner (fallback copy when the backend doesn't supply one)
-  '%markers_checklist_helptext%',
+  '%markersChecklist_helptext%',
   // Empty result — reuse the existing key so we don't duplicate the translation
   '%markersChecklist_emptyResult_identicalMarkers%',
   // Error banner + retry (T-R-2 rendering contract)
-  '%markers_checklist_errorTitle%',
-  '%markers_checklist_errorRetry%',
+  '%markersChecklist_errorTitle%',
+  '%markersChecklist_errorRetry%',
   // Per-row edit / goto affordances (disabled stubs per DEF-UI-003)
-  '%markers_checklist_edit%',
-  '%markers_checklist_goto%',
+  '%markersChecklist_edit%',
+  '%markersChecklist_goto%',
   // Per-row aria-label patterns (spec §Edit/Goto Link Accessible Names); `{ref}` is replaced
-  '%markers_checklist_edit_aria%',
-  '%markers_checklist_goto_aria%',
-  '%markers_checklist_edit_disabled_tooltip%',
+  '%markersChecklist_edit_aria%',
+  '%markersChecklist_goto_aria%',
+  '%markersChecklist_edit_disabled_tooltip%',
   // Column-header full-name tooltip (PT10 enhancement #3092235610)
-  '%markers_checklist_columnHeader_aria%',
+  '%markersChecklist_columnHeader_aria%',
 ] as const);
 
 /** Union of the localization keys declared above. */

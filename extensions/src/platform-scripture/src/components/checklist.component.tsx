@@ -346,7 +346,7 @@ export function ChecklistTool({
               <ColumnHeaderWithTooltip
                 shortName={shortName}
                 fullName={fullName}
-                ariaLabelTemplate={getLocalizedString('%markers_checklist_columnHeader_aria%')}
+                ariaLabelTemplate={getLocalizedString('%markersChecklist_columnHeader_aria%')}
               />
             </div>
           ),
@@ -427,20 +427,20 @@ export function ChecklistTool({
     <>
       <SelectorTrigger
         label={primaryProjectLabel}
-        ariaLabel={getLocalizedString('%markers_checklist_toolbar_primaryProject%')}
+        ariaLabel={getLocalizedString('%markersChecklist_toolbar_primaryProject%')}
         onClick={onPrimaryProjectTriggerClick}
         testId="checklist-primary-project-trigger"
       />
       <SelectorTrigger
         label={comparativeTextsLabel}
-        ariaLabel={getLocalizedString('%markers_checklist_toolbar_comparativeTexts%')}
+        ariaLabel={getLocalizedString('%markersChecklist_toolbar_comparativeTexts%')}
         icon={<ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0" aria-hidden="true" />}
         onClick={onComparativeTextsTriggerClick}
         testId="checklist-comparative-texts-trigger"
       />
       <SelectorTrigger
         label={verseRangeLabel}
-        ariaLabel={getLocalizedString('%markers_checklist_toolbar_verseRange%')}
+        ariaLabel={getLocalizedString('%markersChecklist_toolbar_verseRange%')}
         onClick={onVerseRangeTriggerClick}
         testId="checklist-verse-range-trigger"
       />
@@ -454,7 +454,7 @@ export function ChecklistTool({
         variant="outline"
         size="icon"
         className="tw-h-8 tw-w-8"
-        aria-label={getLocalizedString('%markers_checklist_toolbar_copy%')}
+        aria-label={getLocalizedString('%markersChecklist_toolbar_copy%')}
         onClick={onCopy}
         data-testid="checklist-copy-button"
       >
@@ -467,10 +467,10 @@ export function ChecklistTool({
             type="button"
             variant="outline"
             className="tw-h-8 tw-gap-2"
-            aria-label={getLocalizedString('%markers_checklist_toolbar_view%')}
+            aria-label={getLocalizedString('%markersChecklist_toolbar_view%')}
             data-testid="checklist-view-button"
           >
-            <span>{getLocalizedString('%markers_checklist_toolbar_view%')}</span>
+            <span>{getLocalizedString('%markersChecklist_toolbar_view%')}</span>
             <ChevronDown className="tw-h-4 tw-w-4 tw-shrink-0" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
@@ -481,7 +481,7 @@ export function ChecklistTool({
               onCheckedChange={handleHideMatchesChange}
               data-testid="checklist-hide-matches-item"
             >
-              {getLocalizedString('%markers_checklist_toolbar_hideMatches%')}
+              {getLocalizedString('%markersChecklist_toolbar_hideMatches%')}
             </DropdownMenuCheckboxItem>
           )}
           <DropdownMenuCheckboxItem
@@ -489,7 +489,7 @@ export function ChecklistTool({
             onCheckedChange={handleShowVerseTextChange}
             data-testid="checklist-show-verse-text-item"
           >
-            {getLocalizedString('%markers_checklist_toolbar_showVerseText%')}
+            {getLocalizedString('%markersChecklist_toolbar_showVerseText%')}
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -512,7 +512,7 @@ export function ChecklistTool({
       return (
         <Alert variant="destructive" className="tw-m-2" data-testid="checklist-error-alert">
           <AlertTriangle className="tw-h-4 tw-w-4" aria-hidden="true" />
-          <AlertTitle>{getLocalizedString('%markers_checklist_errorTitle%')}</AlertTitle>
+          <AlertTitle>{getLocalizedString('%markersChecklist_errorTitle%')}</AlertTitle>
           <AlertDescription className="tw-flex tw-flex-col tw-gap-2">
             <span>{error}</span>
             {onRetry && (
@@ -522,10 +522,10 @@ export function ChecklistTool({
                   variant="outline"
                   size="sm"
                   onClick={onRetry}
-                  aria-label={getLocalizedString('%markers_checklist_errorRetry%')}
+                  aria-label={getLocalizedString('%markersChecklist_errorRetry%')}
                   data-testid="checklist-retry-button"
                 >
-                  {getLocalizedString('%markers_checklist_errorRetry%')}
+                  {getLocalizedString('%markersChecklist_errorRetry%')}
                 </Button>
               </div>
             )}
@@ -550,12 +550,12 @@ export function ChecklistTool({
   const noResultsMessage =
     data?.emptyResultMessage?.message ??
     getLocalizedString('%markersChecklist_emptyResult_identicalMarkers%') ??
-    getLocalizedString('%markers_checklist_noResults%');
+    getLocalizedString('%markersChecklist_noResults%');
 
   return (
     <div
       className="pr-twp tw-flex tw-h-full tw-flex-col"
-      aria-label={getLocalizedString('%markers_checklist_toolbar_aria%')}
+      aria-label={getLocalizedString('%markersChecklist_toolbar_aria%')}
     >
       <TabToolbar
         onSelectProjectMenuItem={handleTabMenuSelect}
@@ -568,7 +568,7 @@ export function ChecklistTool({
       {renderBanners()}
 
       <section
-        aria-label={getLocalizedString('%markers_checklist_table_aria%')}
+        aria-label={getLocalizedString('%markersChecklist_table_aria%')}
         aria-busy={isLoading}
         className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border"
         data-testid="checklist-data-table"
@@ -605,11 +605,11 @@ function EditGotoLinks({
   onGotoLinkClick,
 }: EditGotoLinksProps) {
   const firstRef = row.firstRef ?? cell.reference;
-  const editAriaTemplate = getLocalizedString('%markers_checklist_edit_aria%');
-  const gotoAriaTemplate = getLocalizedString('%markers_checklist_goto_aria%');
+  const editAriaTemplate = getLocalizedString('%markersChecklist_edit_aria%');
+  const gotoAriaTemplate = getLocalizedString('%markersChecklist_goto_aria%');
   const editAria = editAriaTemplate.replace('{ref}', firstRef);
   const gotoAria = gotoAriaTemplate.replace('{ref}', firstRef);
-  const disabledTooltip = getLocalizedString('%markers_checklist_edit_disabled_tooltip%');
+  const disabledTooltip = getLocalizedString('%markersChecklist_edit_disabled_tooltip%');
 
   const handleEdit = useCallback(() => {
     onEditLinkClick?.(row, firstRef);
@@ -633,7 +633,7 @@ function EditGotoLinks({
         data-testid="checklist-edit-link"
       >
         <Pencil className="tw-h-3 tw-w-3" aria-hidden="true" />
-        <span>{getLocalizedString('%markers_checklist_edit%')}</span>
+        <span>{getLocalizedString('%markersChecklist_edit%')}</span>
       </Button>
       <Button
         type="button"
@@ -647,7 +647,7 @@ function EditGotoLinks({
         data-testid="checklist-goto-link"
       >
         <Navigation className="tw-h-3 tw-w-3" aria-hidden="true" />
-        <span>{getLocalizedString('%markers_checklist_goto%')}</span>
+        <span>{getLocalizedString('%markersChecklist_goto%')}</span>
       </Button>
     </div>
   );

@@ -15,18 +15,18 @@ import {
  * also match what PT9's `MarkerSettingsForm` showed).
  */
 const englishFallbacks: MarkerSettingsLocalizedStrings = {
-  '%markers_checklist_settings_title%': 'Marker Settings',
-  '%markers_checklist_settings_description%':
+  '%markersChecklist_settings_title%': 'Marker Settings',
+  '%markersChecklist_settings_description%':
     'Configure equivalent marker mappings and the marker filter for the Markers checklist.',
-  '%markers_checklist_settings_equivalentMarkersLabel%': 'Equivalent marker mappings',
-  '%markers_checklist_settings_markerFilterLabel%': 'Markers to be displayed (blank for all)',
-  '%markers_checklist_settings_ok%': 'OK',
-  '%markers_checklist_settings_cancel%': 'Cancel',
-  '%markers_checklist_settings_validationErrorTitle%': 'Invalid marker mappings',
-  '%markers_checklist_settings_validationErrorDescription%':
+  '%markersChecklist_settings_equivalentMarkersLabel%': 'Equivalent marker mappings',
+  '%markersChecklist_settings_markerFilterLabel%': 'Markers to be displayed (blank for all)',
+  '%markersChecklist_settings_ok%': 'OK',
+  '%markersChecklist_settings_cancel%': 'Cancel',
+  '%markersChecklist_settings_validationErrorTitle%': 'Invalid marker mappings',
+  '%markersChecklist_settings_validationErrorDescription%':
     'Equivalent markers need to be entered in the form: p/q',
-  '%markers_checklist_settings_validationErrorOk%': 'OK',
-  '%markers_checklist_settings_close%': 'Close',
+  '%markersChecklist_settings_validationErrorOk%': 'OK',
+  '%markersChecklist_settings_close%': 'Close',
 };
 
 // Resolve localization keys for English. Any keys that aren't yet contributed to
