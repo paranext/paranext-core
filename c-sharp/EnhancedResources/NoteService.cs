@@ -130,38 +130,11 @@ internal static class NoteService
     }
 
     // === NEW IN PT10 ===
-    // Reason: Parses USX ref loc attribute format "BBB C:V" or "BBB C:V-V" to VerseRef
+    // Reason: Parses USX ref loc attribute format "BBB C:V" or "BBB C:V-V" via
+    // VerseRef.TryParse, which handles both single refs and ranges.
     // Maps to: CAP-015
     private static VerseRef? ParseLocAttribute(string loc)
     {
-        // Format: "MAT 7:1-5" or "LUK 6:37"
-        // Split into book and chapter:verse
-        int spaceIndex = loc.IndexOf(' ');
-        if (spaceIndex < 0)
-            return null;
-
-        string bookCode = loc[..spaceIndex];
-        string rest = loc[(spaceIndex + 1)..];
-
-        int colonIndex = rest.IndexOf(':');
-        if (colonIndex < 0)
-            return null;
-
-        string chapterStr = rest[..colonIndex];
-        string verseStr = rest[(colonIndex + 1)..];
-
-        // Handle verse ranges like "1-5" - take the start verse
-        int dashIndex = verseStr.IndexOf('-');
-        if (dashIndex >= 0)
-            verseStr = verseStr[..dashIndex];
-
-        try
-        {
-            return new VerseRef(bookCode, chapterStr, verseStr, null);
-        }
-        catch
-        {
-            return null;
-        }
+        return VerseRef.TryParse(loc, out var vref) ? vref : null;
     }
 }
