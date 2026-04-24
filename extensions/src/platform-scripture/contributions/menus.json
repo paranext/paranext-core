@@ -1,19 +1,13 @@
 {
   "mainMenu": {
     "columns": {},
-    "groups": {
-      "platformScripture.checklists": {
-        "column": "platform.app",
-        "order": 3.5,
-        "isExtensible": true
-      }
-    },
+    "groups": {},
     "items": [
       {
         "label": "%markersChecklist_menu_openTool%",
         "localizeNotes": "Application main menu > Project > Markers Checklist...",
-        "group": "platformScripture.checklists",
-        "order": 1,
+        "group": "platform.projectResources",
+        "order": 200,
         "command": "platformScripture.openMarkersChecklist"
       }
     ]

@@ -11,6 +11,7 @@ import {
   ChecklistWebViewProvider,
   markersChecklistWebViewType,
 } from './checklist.web-view-provider';
+import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import {
   checkAggregatorService,
@@ -174,14 +175,30 @@ async function openMarkersChecklist(webViewId: string | undefined): Promise<stri
 }
 
 /**
- * Stub handler for the "Settings…" tab-menu item. Replaced in UI-PKG-003 when the
- * `marker-settings-dialog` is wired. Registering the command up-front lets the tab-menu
- * contribution in `menus.json` reference a real command without a broken-command warning.
+ * Network event emitter used by the tab-menu `Settings…` command to ask any mounted Markers
+ * Checklist web view to open its Marker Settings dialog (UI-PKG-003 wiring). The web view
+ * subscribes to this event via `papi.network.getNetworkEvent(CHECKLIST_OPEN_SETTINGS_EVENT)` and
+ * flips its local `isSettingsOpen` state to `true` when it fires. See
+ * `extensions/src/platform-scripture/src/checklist.model.ts` for the event contract.
+ *
+ * We keep this as a module-level lazy-initialized variable (rather than an eager top-level
+ * constant) so the emitter registers during `activate` and is disposed deterministically via
+ * `context.registrations`. The fallback `?? undefined` guard in the handler below makes the command
+ * still succeed (no-op) if the emitter hasn't been initialized yet (e.g. in tests that stub out
+ * activation).
  */
+let openSettingsEventEmitter:
+  | ReturnType<typeof papi.network.createNetworkEventEmitter<undefined>>
+  | undefined;
+
 async function openMarkersChecklistSettings(): Promise<void> {
-  logger.debug(
-    'platformScripture.openMarkersChecklistSettings invoked — stub (wired in UI-PKG-003).',
-  );
+  if (!openSettingsEventEmitter) {
+    logger.warn(
+      'platformScripture.openMarkersChecklistSettings invoked before the event emitter was initialized — ignoring.',
+    );
+    return;
+  }
+  openSettingsEventEmitter.emit(undefined);
 }
 
 async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
@@ -239,6 +256,14 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
 
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('platformScripture is activating!');
+
+  // Register the Markers Checklist "open settings" network event emitter BEFORE the backing
+  // command handler is exposed. The web-view subscribes to this event (via `useEvent`) and flips
+  // its local `isSettingsOpen` state when it fires. The emitter is disposed through
+  // `context.registrations` below so re-activation gets a fresh channel.
+  openSettingsEventEmitter = papi.network.createNetworkEventEmitter<undefined>(
+    CHECKLIST_OPEN_SETTINGS_EVENT,
+  );
 
   const scriptureExtenderPdpefPromise =
     papi.projectDataProviders.registerProjectDataProviderEngineFactory(
@@ -549,6 +574,7 @@ export async function activate(context: ExecutionActivationContext) {
     await openMarkersChecklistPromise,
     await openMarkersChecklistSettingsPromise,
     await markersChecklistWebViewProviderPromise,
+    openSettingsEventEmitter,
     await openFindPromise,
     await openFindWebViewProviderPromise,
     await invalidateResultsPromise,

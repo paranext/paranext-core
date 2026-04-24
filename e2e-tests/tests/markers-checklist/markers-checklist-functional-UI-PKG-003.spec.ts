@@ -1,9 +1,9 @@
 /**
  * Feature: markers-checklist Work Package: UI-PKG-003 — Marker Settings Dialog (wiring phase)
  *
- * RED-phase functional tests. All tests use `test.fixme(...)` because the wiring layer that opens
- * the dialog from the tab-menu `Settings…` item and commits the result back to `useWebViewState`
- * does NOT exist yet. The presentational `MarkerSettingsDialog` component is already implemented
+ * RED-phase functional tests. All tests use `test(...)` because the wiring layer that opens the
+ * dialog from the tab-menu `Settings…` item and commits the result back to `useWebViewState` does
+ * NOT exist yet. The presentational `MarkerSettingsDialog` component is already implemented
  * (extensions/src/platform-scripture/src/components/marker-settings-dialog.component.tsx); these
  * tests define the contract the wiring layer (checklist.web-view.tsx + menus.json) must satisfy at
  * runtime.
@@ -167,35 +167,32 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
   // ─────────────────────────────────────────────────────────────────────────
 
   // @behavior BHV-312
-  test.fixme(
-    'opens the Marker Settings dialog via the tab-menu Settings… item',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      await openProjectByName(mainPage, PROJECT_NAME);
-      await openMarkersChecklistTool(mainPage);
+  test('opens the Marker Settings dialog via the tab-menu Settings… item', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
+    await openProjectByName(mainPage, PROJECT_NAME);
+    await openMarkersChecklistTool(mainPage);
 
-      // Sanity — the tab-view menu exists on the active Markers Checklist tab.
-      const tabViewMenuTrigger = mainPage.getByRole('button', { name: /View Info/i });
-      await expect(tabViewMenuTrigger).toBeVisible();
+    // Sanity — the tab-view menu exists on the active Markers Checklist tab.
+    const tabViewMenuTrigger = mainPage.getByRole('button', { name: /View Info/i });
+    await expect(tabViewMenuTrigger).toBeVisible();
 
-      await tabViewMenuTrigger.click();
-      const settingsMenuItem = mainPage.getByRole('menuitem', {
-        name: /Settings…|Settings\.\.\./i,
-      });
-      await expect(settingsMenuItem).toBeVisible();
-      await settingsMenuItem.click();
+    await tabViewMenuTrigger.click();
+    const settingsMenuItem = mainPage.getByRole('menuitem', {
+      name: /Settings…|Settings\.\.\./i,
+    });
+    await expect(settingsMenuItem).toBeVisible();
+    await settingsMenuItem.click();
 
-      // The dialog mounts inside the Markers Checklist web view's iframe.
-      const frame = mainPage.frameLocator(
-        `iframe[title*="${PROJECT_NAME}" i], iframe[title="Marker Settings"]`,
-      );
-      const dialog = frame
-        .getByRole('dialog')
-        .filter({ hasText: /Marker Settings/i })
-        .first();
-      await expect(dialog).toBeVisible({ timeout: 10_000 });
-    },
-  );
+    // The dialog mounts inside the Markers Checklist web view's iframe.
+    const frame = mainPage.frameLocator(
+      `iframe[title*="${PROJECT_NAME}" i], iframe[title="Marker Settings"]`,
+    );
+    const dialog = frame
+      .getByRole('dialog')
+      .filter({ hasText: /Marker Settings/i })
+      .first();
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Category 2: Render
@@ -203,33 +200,32 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
 
   // EVD-009 — dialog opens empty with both fields + OK/Cancel buttons.
   // @behavior BHV-312
-  test.fixme(
-    'renders both labeled inputs, OK and Cancel buttons in a modal dialog',
-    async ({ mainPage }) => {
-      const frame = await bootstrapDialogOpen(mainPage);
+  test('renders both labeled inputs, OK and Cancel buttons in a modal dialog', async ({
+    mainPage,
+  }) => {
+    const frame = await bootstrapDialogOpen(mainPage);
 
-      // Programmatic label→input association (spec Acc row 3): getByLabel() only resolves when the
-      // shadcn `Label htmlFor` → `Input id` wiring is correct.
-      const equivalentMarkersInput = frame.getByLabel(/Equivalent marker mappings/i);
-      const markerFilterInput = frame.getByLabel(/Markers to be displayed \(blank for all\)/i);
-      const okButton = frame.getByRole('button', { name: /^OK$/ });
-      const cancelButton = frame.getByRole('button', { name: /^Cancel$/ });
+    // Programmatic label→input association (spec Acc row 3): getByLabel() only resolves when the
+    // shadcn `Label htmlFor` → `Input id` wiring is correct.
+    const equivalentMarkersInput = frame.getByLabel(/Equivalent marker mappings/i);
+    const markerFilterInput = frame.getByLabel(/Markers to be displayed \(blank for all\)/i);
+    const okButton = frame.getByRole('button', { name: /^OK$/ });
+    const cancelButton = frame.getByRole('button', { name: /^Cancel$/ });
 
-      await expect(equivalentMarkersInput).toBeVisible();
-      await expect(markerFilterInput).toBeVisible();
-      await expect(okButton).toBeVisible();
-      await expect(cancelButton).toBeVisible();
+    await expect(equivalentMarkersInput).toBeVisible();
+    await expect(markerFilterInput).toBeVisible();
+    await expect(okButton).toBeVisible();
+    await expect(cancelButton).toBeVisible();
 
-      // Dialog is modal — an overlay is present above the tab content.
-      await expect(frame.getByRole('dialog').first()).toBeVisible();
+    // Dialog is modal — an overlay is present above the tab content.
+    await expect(frame.getByRole('dialog').first()).toBeVisible();
 
-      // Spec acceptance: on a fresh open (no prior persisted values) both fields are empty.
-      await expect(equivalentMarkersInput).toHaveValue('');
-      await expect(markerFilterInput).toHaveValue('');
+    // Spec acceptance: on a fresh open (no prior persisted values) both fields are empty.
+    await expect(equivalentMarkersInput).toHaveValue('');
+    await expect(markerFilterInput).toHaveValue('');
 
-      await mainPage.screenshot({ path: `${EVIDENCE_DIR}/EVD-009-settings-empty.png` });
-    },
-  );
+    await mainPage.screenshot({ path: `${EVIDENCE_DIR}/EVD-009-settings-empty.png` });
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Category 3: Seeding (data wiring from useWebViewState via parent props)
@@ -237,36 +233,35 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
 
   // @behavior BHV-312
   // @behavior BHV-603
-  test.fixme(
-    'seeds both inputs from the parent useWebViewState slots when reopened with persisted values',
-    async ({ mainPage }) => {
-      const firstOpen = await bootstrapDialogOpen(mainPage);
+  test('seeds both inputs from the parent useWebViewState slots when reopened with persisted values', async ({
+    mainPage,
+  }) => {
+    const firstOpen = await bootstrapDialogOpen(mainPage);
 
-      // Enter values, submit (commit to parent's useWebViewState), then reopen the dialog.
-      const equivalentSeed = 'p/q q1/q2';
-      const filterSeed = 'id ide toc1';
+    // Enter values, submit (commit to parent's useWebViewState), then reopen the dialog.
+    const equivalentSeed = 'p/q q1/q2';
+    const filterSeed = 'id ide toc1';
 
-      const firstEquivalent = firstOpen.getByLabel(/Equivalent marker mappings/i);
-      const firstFilter = firstOpen.getByLabel(/Markers to be displayed \(blank for all\)/i);
-      await firstEquivalent.fill(equivalentSeed);
-      await firstFilter.fill(filterSeed);
-      await firstOpen.getByRole('button', { name: /^OK$/ }).click();
+    const firstEquivalent = firstOpen.getByLabel(/Equivalent marker mappings/i);
+    const firstFilter = firstOpen.getByLabel(/Markers to be displayed \(blank for all\)/i);
+    await firstEquivalent.fill(equivalentSeed);
+    await firstFilter.fill(filterSeed);
+    await firstOpen.getByRole('button', { name: /^OK$/ }).click();
 
-      // Dialog closes after valid submit.
-      await expect(firstOpen.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
+    // Dialog closes after valid submit.
+    await expect(firstOpen.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
 
-      // Reopen via the tab-menu.
-      const reopened = await openMarkerSettingsDialog(mainPage);
+    // Reopen via the tab-menu.
+    const reopened = await openMarkerSettingsDialog(mainPage);
 
-      // Fields pre-populated from the slots parent committed on the previous OK.
-      await expect(reopened.getByLabel(/Equivalent marker mappings/i)).toHaveValue(equivalentSeed);
-      await expect(reopened.getByLabel(/Markers to be displayed \(blank for all\)/i)).toHaveValue(
-        filterSeed,
-      );
+    // Fields pre-populated from the slots parent committed on the previous OK.
+    await expect(reopened.getByLabel(/Equivalent marker mappings/i)).toHaveValue(equivalentSeed);
+    await expect(reopened.getByLabel(/Markers to be displayed \(blank for all\)/i)).toHaveValue(
+      filterSeed,
+    );
 
-      await mainPage.screenshot({ path: `${EVIDENCE_DIR}/EVD-010-settings-filled.png` });
-    },
-  );
+    await mainPage.screenshot({ path: `${EVIDENCE_DIR}/EVD-010-settings-filled.png` });
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Category 4: Validation — VAL-100 invalid equivalent markers
@@ -274,47 +269,45 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
 
   // EVD-011 — "p" without a `/` separator → blocking AlertDialog.
   // @behavior BHV-602 (VAL-100)
-  test.fixme(
-    'shows a blocking validation AlertDialog when equivalentMarkers is missing the `/` separator',
-    async ({ mainPage }) => {
-      const frame = await bootstrapDialogOpen(mainPage);
+  test('shows a blocking validation AlertDialog when equivalentMarkers is missing the `/` separator', async ({
+    mainPage,
+  }) => {
+    const frame = await bootstrapDialogOpen(mainPage);
 
-      await frame.getByLabel(/Equivalent marker mappings/i).fill('p');
-      await frame.getByRole('button', { name: /^OK$/ }).click();
+    await frame.getByLabel(/Equivalent marker mappings/i).fill('p');
+    await frame.getByRole('button', { name: /^OK$/ }).click();
 
-      // The validation alert is a nested dialog with role="alertdialog" (component uses a Dialog
-      // with `role="alertdialog"` annotation since AlertDialog primitive isn't exported yet).
-      const alert = frame.getByRole('alertdialog');
-      await expect(alert).toBeVisible({ timeout: 5_000 });
-      await expect(alert).toContainText(/Invalid equivalent markers/i);
-      await expect(alert).toContainText(/Equivalent markers need to be entered in the form: p\/q/i);
+    // The validation alert is a nested dialog with role="alertdialog" (component uses a Dialog
+    // with `role="alertdialog"` annotation since AlertDialog primitive isn't exported yet).
+    const alert = frame.getByRole('alertdialog');
+    await expect(alert).toBeVisible({ timeout: 5_000 });
+    await expect(alert).toContainText(/Invalid equivalent markers/i);
+    await expect(alert).toContainText(/Equivalent markers need to be entered in the form: p\/q/i);
 
-      // Parent dialog is still open (blocking behavior — PT9 parity).
-      await expect(frame.getByRole('dialog').filter({ hasText: /Marker Settings/i })).toBeVisible();
+    // Parent dialog is still open (blocking behavior — PT9 parity).
+    await expect(frame.getByRole('dialog').filter({ hasText: /Marker Settings/i })).toBeVisible();
 
-      await mainPage.screenshot({
-        path: `${EVIDENCE_DIR}/EVD-011-settings-validation-error.png`,
-      });
-    },
-  );
-
-  // @behavior BHV-602 (VAL-100)
-  test.fixme(
-    'rejects equivalentMarkers with more than one `/` in a single token (e.g. "p/q/r")',
-    async ({ mainPage }) => {
-      const frame = await bootstrapDialogOpen(mainPage);
-
-      await frame.getByLabel(/Equivalent marker mappings/i).fill('p/q/r');
-      await frame.getByRole('button', { name: /^OK$/ }).click();
-
-      await expect(frame.getByRole('alertdialog')).toBeVisible({ timeout: 5_000 });
-      // Parent dialog still open — user must correct and retry.
-      await expect(frame.getByRole('dialog').filter({ hasText: /Marker Settings/i })).toBeVisible();
-    },
-  );
+    await mainPage.screenshot({
+      path: `${EVIDENCE_DIR}/EVD-011-settings-validation-error.png`,
+    });
+  });
 
   // @behavior BHV-602 (VAL-100)
-  test.fixme('rejects equivalentMarkers with an empty side (e.g. "/q")', async ({ mainPage }) => {
+  test('rejects equivalentMarkers with more than one `/` in a single token (e.g. "p/q/r")', async ({
+    mainPage,
+  }) => {
+    const frame = await bootstrapDialogOpen(mainPage);
+
+    await frame.getByLabel(/Equivalent marker mappings/i).fill('p/q/r');
+    await frame.getByRole('button', { name: /^OK$/ }).click();
+
+    await expect(frame.getByRole('alertdialog')).toBeVisible({ timeout: 5_000 });
+    // Parent dialog still open — user must correct and retry.
+    await expect(frame.getByRole('dialog').filter({ hasText: /Marker Settings/i })).toBeVisible();
+  });
+
+  // @behavior BHV-602 (VAL-100)
+  test('rejects equivalentMarkers with an empty side (e.g. "/q")', async ({ mainPage }) => {
     const frame = await bootstrapDialogOpen(mainPage);
 
     await frame.getByLabel(/Equivalent marker mappings/i).fill('/q');
@@ -329,36 +322,35 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
   // ─────────────────────────────────────────────────────────────────────────
 
   // @behavior BHV-602
-  test.fixme(
-    'dismissing the validation alert returns focus to equivalentMarkers and leaves the parent dialog open',
-    async ({ mainPage }) => {
-      const frame = await bootstrapDialogOpen(mainPage);
+  test('dismissing the validation alert returns focus to equivalentMarkers and leaves the parent dialog open', async ({
+    mainPage,
+  }) => {
+    const frame = await bootstrapDialogOpen(mainPage);
 
-      await frame.getByLabel(/Equivalent marker mappings/i).fill('p');
-      await frame.getByRole('button', { name: /^OK$/ }).click();
+    await frame.getByLabel(/Equivalent marker mappings/i).fill('p');
+    await frame.getByRole('button', { name: /^OK$/ }).click();
 
-      const alert = frame.getByRole('alertdialog');
-      await expect(alert).toBeVisible({ timeout: 5_000 });
+    const alert = frame.getByRole('alertdialog');
+    await expect(alert).toBeVisible({ timeout: 5_000 });
 
-      // Click the alert's OK — autoFocus is on this button (spec Acc row 4), so Enter would also
-      // dismiss. Click is used for deterministic behavior.
-      await alert.getByRole('button', { name: /^OK$/ }).click();
+    // Click the alert's OK — autoFocus is on this button (spec Acc row 4), so Enter would also
+    // dismiss. Click is used for deterministic behavior.
+    await alert.getByRole('button', { name: /^OK$/ }).click();
 
-      await expect(alert).not.toBeVisible({ timeout: 5_000 });
+    await expect(alert).not.toBeVisible({ timeout: 5_000 });
 
-      // Parent dialog still open.
-      const parentDialog = frame.getByRole('dialog').filter({ hasText: /Marker Settings/i });
-      await expect(parentDialog).toBeVisible();
+    // Parent dialog still open.
+    const parentDialog = frame.getByRole('dialog').filter({ hasText: /Marker Settings/i });
+    await expect(parentDialog).toBeVisible();
 
-      // Focus returned to the equivalentMarkers input (spec Acc row 5).
-      await expect(frame.getByLabel(/Equivalent marker mappings/i)).toBeFocused();
+    // Focus returned to the equivalentMarkers input (spec Acc row 5).
+    await expect(frame.getByLabel(/Equivalent marker mappings/i)).toBeFocused();
 
-      // User can correct and retry successfully.
-      await frame.getByLabel(/Equivalent marker mappings/i).fill('p/q');
-      await frame.getByRole('button', { name: /^OK$/ }).click();
-      await expect(parentDialog).not.toBeVisible({ timeout: 5_000 });
-    },
-  );
+    // User can correct and retry successfully.
+    await frame.getByLabel(/Equivalent marker mappings/i).fill('p/q');
+    await frame.getByRole('button', { name: /^OK$/ }).click();
+    await expect(parentDialog).not.toBeVisible({ timeout: 5_000 });
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Category 6: Successful submit — normalization + parent slot commit
@@ -367,70 +359,68 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
   // EVD-012 — valid submit closes the dialog and persisted values round-trip through the slots.
   // @behavior BHV-312
   // @behavior BHV-602
-  test.fixme(
-    'valid submit closes the dialog and normalizes values (collapse spaces + trim filter)',
-    async ({ mainPage }) => {
-      const frame = await bootstrapDialogOpen(mainPage);
+  test('valid submit closes the dialog and normalizes values (collapse spaces + trim filter)', async ({
+    mainPage,
+  }) => {
+    const frame = await bootstrapDialogOpen(mainPage);
 
-      // Extra whitespace in equivalentMarkers should be collapsed; leading/trailing whitespace in
-      // markerFilter should be trimmed (VAL-100.3 + VAL-101.1).
-      await frame.getByLabel(/Equivalent marker mappings/i).fill('p/q    rq/g');
-      await frame.getByLabel(/Markers to be displayed \(blank for all\)/i).fill('  id ide toc1  ');
+    // Extra whitespace in equivalentMarkers should be collapsed; leading/trailing whitespace in
+    // markerFilter should be trimmed (VAL-100.3 + VAL-101.1).
+    await frame.getByLabel(/Equivalent marker mappings/i).fill('p/q    rq/g');
+    await frame.getByLabel(/Markers to be displayed \(blank for all\)/i).fill('  id ide toc1  ');
 
-      await frame.getByRole('button', { name: /^OK$/ }).click();
+    await frame.getByRole('button', { name: /^OK$/ }).click();
 
-      // Dialog closes (parent accepted the submit).
-      await expect(frame.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
+    // Dialog closes (parent accepted the submit).
+    await expect(frame.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
 
-      await mainPage.screenshot({ path: `${EVIDENCE_DIR}/EVD-012-settings-applied.png` });
+    await mainPage.screenshot({ path: `${EVIDENCE_DIR}/EVD-012-settings-applied.png` });
 
-      // Reopen — parent committed the NORMALIZED values back to useWebViewState and they round-trip.
-      const reopened = await openMarkerSettingsDialog(mainPage);
-      await expect(reopened.getByLabel(/Equivalent marker mappings/i)).toHaveValue('p/q rq/g');
-      await expect(reopened.getByLabel(/Markers to be displayed \(blank for all\)/i)).toHaveValue(
-        'id ide toc1',
-      );
-    },
-  );
+    // Reopen — parent committed the NORMALIZED values back to useWebViewState and they round-trip.
+    const reopened = await openMarkerSettingsDialog(mainPage);
+    await expect(reopened.getByLabel(/Equivalent marker mappings/i)).toHaveValue('p/q rq/g');
+    await expect(reopened.getByLabel(/Markers to be displayed \(blank for all\)/i)).toHaveValue(
+      'id ide toc1',
+    );
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Category 7: Cancel — no commit
   // ─────────────────────────────────────────────────────────────────────────
 
   // @behavior BHV-312
-  test.fixme(
-    'Cancel closes the dialog and does NOT update the parent useWebViewState slots',
-    async ({ mainPage }) => {
-      // First open — commit a known baseline.
-      const first = await bootstrapDialogOpen(mainPage);
-      await first.getByLabel(/Equivalent marker mappings/i).fill('p/q');
-      await first.getByLabel(/Markers to be displayed \(blank for all\)/i).fill('p');
-      await first.getByRole('button', { name: /^OK$/ }).click();
-      await expect(first.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
+  test('Cancel closes the dialog and does NOT update the parent useWebViewState slots', async ({
+    mainPage,
+  }) => {
+    // First open — commit a known baseline.
+    const first = await bootstrapDialogOpen(mainPage);
+    await first.getByLabel(/Equivalent marker mappings/i).fill('p/q');
+    await first.getByLabel(/Markers to be displayed \(blank for all\)/i).fill('p');
+    await first.getByRole('button', { name: /^OK$/ }).click();
+    await expect(first.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
 
-      // Second open — change fields, then Cancel.
-      const second = await openMarkerSettingsDialog(mainPage);
-      await second.getByLabel(/Equivalent marker mappings/i).fill('SHOULD_NOT_PERSIST/x');
-      await second
-        .getByLabel(/Markers to be displayed \(blank for all\)/i)
-        .fill('SHOULD_NOT_PERSIST');
-      await second.getByRole('button', { name: /^Cancel$/ }).click();
+    // Second open — change fields, then Cancel.
+    const second = await openMarkerSettingsDialog(mainPage);
+    await second.getByLabel(/Equivalent marker mappings/i).fill('SHOULD_NOT_PERSIST/x');
+    await second
+      .getByLabel(/Markers to be displayed \(blank for all\)/i)
+      .fill('SHOULD_NOT_PERSIST');
+    await second.getByRole('button', { name: /^Cancel$/ }).click();
 
-      await expect(second.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
+    await expect(second.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
 
-      // Third open — baseline values are still there (Cancel did not commit).
-      const third = await openMarkerSettingsDialog(mainPage);
-      await expect(third.getByLabel(/Equivalent marker mappings/i)).toHaveValue('p/q');
-      await expect(third.getByLabel(/Markers to be displayed \(blank for all\)/i)).toHaveValue('p');
-    },
-  );
+    // Third open — baseline values are still there (Cancel did not commit).
+    const third = await openMarkerSettingsDialog(mainPage);
+    await expect(third.getByLabel(/Equivalent marker mappings/i)).toHaveValue('p/q');
+    await expect(third.getByLabel(/Markers to be displayed \(blank for all\)/i)).toHaveValue('p');
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Category 8: Keyboard
   // ─────────────────────────────────────────────────────────────────────────
 
   // @behavior BHV-312
-  test.fixme('Enter inside an input triggers OK (form submit)', async ({ mainPage }) => {
+  test('Enter inside an input triggers OK (form submit)', async ({ mainPage }) => {
     const frame = await bootstrapDialogOpen(mainPage);
 
     await frame.getByLabel(/Equivalent marker mappings/i).fill('p/q');
@@ -441,7 +431,7 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
   });
 
   // @behavior BHV-312
-  test.fixme('Escape triggers Cancel (does not commit changes)', async ({ mainPage }) => {
+  test('Escape triggers Cancel (does not commit changes)', async ({ mainPage }) => {
     const frame = await bootstrapDialogOpen(mainPage);
 
     await frame.getByLabel(/Equivalent marker mappings/i).fill('never/committed');
@@ -463,7 +453,7 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
 
   // @behavior BHV-602 (VAL-100: empty string is valid)
   // @behavior BHV-603 (VAL-101: empty marker filter = show all)
-  test.fixme('both inputs empty is valid — OK closes the dialog', async ({ mainPage }) => {
+  test('both inputs empty is valid — OK closes the dialog', async ({ mainPage }) => {
     const frame = await bootstrapDialogOpen(mainPage);
 
     await frame.getByLabel(/Equivalent marker mappings/i).fill('');
@@ -488,19 +478,18 @@ test.describe('markers-checklist UI-PKG-003: Marker Settings Dialog', () => {
   // a parsing concern. This test documents the UI-layer expectation: the dialog MUST accept
   // backslash-prefixed markers without showing a validation error (since only equivalentMarkers
   // is validated for format).
-  test.fixme(
-    'markerFilter accepts backslash-prefixed markers without validation error',
-    async ({ mainPage }) => {
-      const frame = await bootstrapDialogOpen(mainPage);
+  test('markerFilter accepts backslash-prefixed markers without validation error', async ({
+    mainPage,
+  }) => {
+    const frame = await bootstrapDialogOpen(mainPage);
 
-      await frame.getByLabel(/Equivalent marker mappings/i).fill('');
-      await frame.getByLabel(/Markers to be displayed \(blank for all\)/i).fill('\\p \\q1 \\q2');
+    await frame.getByLabel(/Equivalent marker mappings/i).fill('');
+    await frame.getByLabel(/Markers to be displayed \(blank for all\)/i).fill('\\p \\q1 \\q2');
 
-      await frame.getByRole('button', { name: /^OK$/ }).click();
+    await frame.getByRole('button', { name: /^OK$/ }).click();
 
-      // No validation alert — markerFilter has no format rules.
-      await expect(frame.getByRole('alertdialog')).not.toBeVisible();
-      await expect(frame.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
-    },
-  );
+    // No validation alert — markerFilter has no format rules.
+    await expect(frame.getByRole('alertdialog')).not.toBeVisible();
+    await expect(frame.getByRole('dialog').first()).not.toBeVisible({ timeout: 5_000 });
+  });
 });
