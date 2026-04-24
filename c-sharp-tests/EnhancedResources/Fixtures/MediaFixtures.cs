@@ -5,12 +5,10 @@ using SIL.Scripture;
 namespace TestParanextDataProvider.EnhancedResources.Fixtures;
 
 /// <summary>
-/// Test fixtures for MediaService. Holds canned image data and the known-resources
-/// set previously embedded in MediaService.cs. Tests populate MediaService overrides
-/// from this class in [SetUp] and clear them in [TearDown].
-///
-/// Precedent: DictionaryFixtures, EncyclopediaFixtures. Enforced by N3 policy
-/// (patterns.csharp.testScaffoldingLocation).
+/// Builds the <see cref="MediaData"/> record for MediaService tests. Replaces the
+/// prior static ImagesOverride / ApplyDefaults+Clear pattern; each test constructs
+/// its own service instance with either <see cref="BuildMediaData"/> or a record-`with`
+/// expression derived from it.
 /// </summary>
 [ExcludeFromCodeCoverage]
 internal static class MediaFixtures
@@ -24,10 +22,8 @@ internal static class MediaFixtures
     };
 
     /// <summary>
-    /// Canned Media images: mixed collection with both General and SBA items
-    /// for Matthew 1 (book 40). Includes both General and SBA to exercise the
-    /// SatelliteBibleAtlas filter in InvalidImageForTab. DisplayIndex is 0 as
-    /// a placeholder; MediaService.LoadResources reassigns it during filtering.
+    /// Canned Media images: mixed collection with both General and SBA items for
+    /// Matthew 1 (book 40). Exercises the SatelliteBibleAtlas filter.
     /// </summary>
     internal static IReadOnlyList<MediaDisplayItem> BuildDefaultImages() =>
         [
@@ -66,17 +62,14 @@ internal static class MediaFixtures
             ),
         ];
 
-    /// <summary>Populate MediaService overrides with the default fixtures.</summary>
-    internal static void ApplyDefaults()
-    {
-        MediaService.ImagesOverride = BuildDefaultImages();
-        MediaService.KnownResourcesOverride = KnownResources;
-    }
-
-    /// <summary>Clear MediaService overrides to avoid leaking state between tests.</summary>
-    internal static void Clear()
-    {
-        MediaService.ImagesOverride = null;
-        MediaService.KnownResourcesOverride = null;
-    }
+    /// <summary>
+    /// Builds a <see cref="MediaData"/> with the default images, no image-binary
+    /// packages, and the canonical known-resources set.
+    /// </summary>
+    internal static MediaData BuildMediaData() =>
+        new(
+            Images: BuildDefaultImages(),
+            ImageProjects: new Dictionary<string, IMarblePackage>(StringComparer.OrdinalIgnoreCase),
+            KnownResourceIds: new HashSet<string>(KnownResources, StringComparer.OrdinalIgnoreCase)
+        );
 }

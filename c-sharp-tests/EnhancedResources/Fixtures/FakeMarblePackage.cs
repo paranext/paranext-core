@@ -6,12 +6,14 @@ namespace TestParanextDataProvider.EnhancedResources.Fixtures;
 
 /// <summary>
 /// In-memory IMarblePackage implementation for loader unit tests.
-/// Holds a dict of internal-path -> string content.
+/// Holds a dict of internal-path -> file content. Text files are stored via
+/// <see cref="WithFile"/>; binary files (image bytes) via <see cref="WithBinaryFile"/>
+/// for byte-faithful round-trips through <see cref="ResolveAccessiblePath"/>.
 /// </summary>
 [ExcludeFromCodeCoverage]
 internal sealed class FakeMarblePackage : IMarblePackage
 {
-    private readonly Dictionary<string, string> _files = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, byte[]> _files = new(StringComparer.OrdinalIgnoreCase);
 
     public FakeMarblePackage(string shortName, bool isResearchData)
     {
@@ -24,7 +26,13 @@ internal sealed class FakeMarblePackage : IMarblePackage
 
     public FakeMarblePackage WithFile(string internalPath, string content)
     {
-        _files[internalPath] = content;
+        _files[internalPath] = System.Text.Encoding.UTF8.GetBytes(content);
+        return this;
+    }
+
+    public FakeMarblePackage WithBinaryFile(string internalPath, byte[] bytes)
+    {
+        _files[internalPath] = bytes;
         return this;
     }
 
@@ -32,9 +40,9 @@ internal sealed class FakeMarblePackage : IMarblePackage
 
     public string ReadAllText(string internalPath)
     {
-        if (!_files.TryGetValue(internalPath, out var content))
+        if (!_files.TryGetValue(internalPath, out var bytes))
             throw new FileNotFoundException($"FakeMarblePackage: no file '{internalPath}'");
-        return content;
+        return System.Text.Encoding.UTF8.GetString(bytes);
     }
 
     public IEnumerable<string> EnumerateFiles(string searchPattern)
@@ -55,14 +63,15 @@ internal sealed class FakeMarblePackage : IMarblePackage
 
     public string? ResolveAccessiblePath(string internalPath)
     {
-        if (!_files.TryGetValue(internalPath, out var content))
+        if (!_files.TryGetValue(internalPath, out var bytes))
             return null;
-        // Write to a temp file and return its path.
+        // Write to a temp file and return its path. Writing the raw bytes preserves
+        // both text (UTF-8 round-trip) and binary content for image-binary tests.
         var tempPath = Path.Combine(
             Path.GetTempPath(),
             $"fmp-{Guid.NewGuid():N}-{Path.GetFileName(internalPath)}"
         );
-        File.WriteAllText(tempPath, content);
+        File.WriteAllBytes(tempPath, bytes);
         return tempPath;
     }
 }

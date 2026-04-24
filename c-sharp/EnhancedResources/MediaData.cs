@@ -8,8 +8,8 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// ImageProjects: installed image-binary packages (IMG_THMB, IMG_LD, IMG_SD, IMG_HD)
 /// used by FetchImageBytes for binary extraction. Stored as IMarblePackage so loaders
 /// and tests can populate the map without constructing real ResourceScrText instances;
-/// production wraps ResourceScrText via MarblePackage. Task 8 may further refine this
-/// to an IImageProject abstraction.
+/// production wraps ResourceScrText via MarblePackage. Task 8 deviation: kept IMarblePackage
+/// rather than introducing a parallel IImageProject seam.
 /// </summary>
 internal sealed record MediaData(
     IReadOnlyList<MediaDisplayItem> Images,

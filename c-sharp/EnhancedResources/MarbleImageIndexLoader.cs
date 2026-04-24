@@ -165,6 +165,7 @@ internal static class MarbleImageIndexLoader
                 continue;
 
             var collection = (string?)image.Element("Collection") ?? string.Empty;
+            var path = (string?)image.Element("Path") ?? string.Empty;
             var fileName = (string?)image.Element("FileName") ?? string.Empty;
             var caption =
                 (string?)image.Element("Caption") ?? Path.GetFileNameWithoutExtension(fileName);
@@ -182,7 +183,9 @@ internal static class MarbleImageIndexLoader
                 EndRef: endRef,
                 Collection: collection,
                 LanguageCode: languageCode,
-                DisplayIndex: displayIndex++
+                DisplayIndex: displayIndex++,
+                Path: path,
+                FileName: fileName
             );
         }
     }
