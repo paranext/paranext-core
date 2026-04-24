@@ -35,6 +35,7 @@ import {
   WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS,
   WebViewDefinition,
   WebViewDefinitionReact,
+  isWebViewDefinition,
   WebViewDefinitionUpdateInfo,
   WebViewId,
   WebViewType,
@@ -963,11 +964,10 @@ async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>
     if (!('data' in item)) return false;
 
     // Skip tabs whose data doesn't have webViewType (i.e. not a web view)
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const tabData = item.data as WebViewDefinition;
-    if (!tabData?.webViewType) return false;
+    if (!isWebViewDefinition(item.data)) return false;
+    const webviewData = item.data;
 
-    const savedWebViewDefinition = convertWebViewDefinitionToSaved(tabData);
+    const savedWebViewDefinition = convertWebViewDefinitionToSaved(webviewData);
 
     // Load the WebView state so the WebViewState service doesn't delete this entry
     getFullWebViewStateById(savedWebViewDefinition.id);
@@ -1577,9 +1577,8 @@ export const openWebView = async (
             // This is not a webview
             if (!('data' in item)) return false;
 
-            // Find any webview with the specified webViewType. Type assert the unknown `data`.
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            return (item.data as WebViewDefinition).webViewType === webViewType;
+            // Find any webview with the specified webViewType
+            return isWebViewDefinition(item.data) && item.data.webViewType === webViewType;
           }
         : // If they provided any other string, look for a webview with that ID
           optionsDefaulted.existingId,

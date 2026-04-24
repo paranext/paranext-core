@@ -15,7 +15,11 @@ import {
   TabSaver,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
-import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
+import {
+  WebViewDefinition,
+  WebViewDefinitionUpdateInfo,
+  isWebViewDefinition,
+} from '@shared/models/web-view.model';
 import { getErrorMessage } from 'platform-bible-utils';
 
 import { DIALOGS } from '@renderer/components/dialogs';
@@ -590,11 +594,12 @@ function getWebViewTabInfoById(
       }' is not a WebView tab`,
     );
 
-  // Type assert the webview data in the web view tab
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const targetTabWebViewData = targetTabInfo.data as WebViewDefinition;
+  if (!isWebViewDefinition(targetTabInfo.data))
+    throw new Error(
+      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTabInfo.id}' has invalid WebView data`,
+    );
 
-  return [targetTabInfo, targetTabWebViewData];
+  return [targetTabInfo, targetTabInfo.data];
 }
 
 /**
