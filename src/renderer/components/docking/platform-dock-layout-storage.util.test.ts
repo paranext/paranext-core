@@ -81,8 +81,10 @@ describe('Dock Layout Component', () => {
     });
 
     it('returns definitions for all WebView tabs including floated ones', () => {
+      // Intentionally constructing partial test fixtures that only include fields relevant to this test.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const docked = { id: 'docked', webViewType: 'Type1' } as unknown as WebViewDefinition;
+      // Intentionally constructing partial test fixture that only includes fields relevant to this test.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const floated = { id: 'floated', webViewType: 'Type2' } as unknown as WebViewDefinition;
       when(localMockDockLayout.find(anything(), anything())).thenCall(
