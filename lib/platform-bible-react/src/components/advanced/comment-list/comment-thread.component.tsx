@@ -159,68 +159,48 @@ export function CommentThread({
   // value when the thread collapses, and also clears any auto-populated value if `canAssign`
   // later flips back to false so stale pending assignments can't leak into submissions.
   //
-  // The three refs below implement a small state machine with four states:
-  //
-  //   IDLE (thread collapsed):
-  //     prevIsSelectedRef = false, pendingAssigneeIsAutoPopulatedRef = false,
-  //     userMadeManualSelectionRef = false
-  //     → PENDING when isSelected becomes true
-  //
-  //   PENDING (thread open, canAssign not yet resolved or conditions not yet met):
-  //     prevIsSelectedRef = true, pendingAssigneeIsAutoPopulatedRef = false,
-  //     userMadeManualSelectionRef = false
-  //     → AUTO_POPULATED when canAssign=true and initialAssignedUser is set and ≠ assignedUser
-  //     → IDLE on deselect
-  //
-  //   AUTO_POPULATED (pre-filled from parent's lastAssignedUser, not yet overridden):
-  //     pendingAssigneeIsAutoPopulatedRef = true, userMadeManualSelectionRef = false
-  //     → USER_SELECTED when user picks from popover (onSelect sets userMadeManualSelectionRef)
-  //     → IDLE on deselect or if canAssign is revoked (stale pre-population is cleared)
-  //
-  //   USER_SELECTED (user explicitly chose an assignee from the popover):
-  //     pendingAssigneeIsAutoPopulatedRef = false, userMadeManualSelectionRef = true
-  //     → IDLE on deselect
-  //     (further initialAssignedUser changes are ignored in this state)
-  const prevIsSelectedRef = useRef(isSelected);
-  const pendingAssigneeIsAutoPopulatedRef = useRef(false);
-  // Tracks whether the user has explicitly chosen an assignee from the popover. Once set, auto-
-  // population is suppressed so that a subsequent `initialAssignedUser` change (triggered by
-  // another thread's submission updating `lastAssignedUser`) does not overwrite the choice.
-  // Reset when the thread collapses or when `canAssign` is revoked.
-  const userMadeManualSelectionRef = useRef(false);
+  // Four states:
+  //   IDLE         → thread collapsed; transitions to PENDING when isSelected becomes true
+  //   PENDING      → thread open, waiting for canAssign or conditions not yet met;
+  //                  transitions to AUTO_POPULATED or back to IDLE on deselect
+  //   AUTO_POPULATED → pre-filled from parent's lastAssignedUser, not yet overridden;
+  //                  transitions to USER_SELECTED on popover pick, PENDING if canAssign revoked,
+  //                  or IDLE on deselect
+  //   USER_SELECTED → user explicitly chose an assignee; further initialAssignedUser changes are
+  //                  ignored; transitions to IDLE on deselect
+  type AssigneeSelectionState = 'idle' | 'pending' | 'auto-populated' | 'user-selected';
+  const assigneeSelectionStateRef = useRef<AssigneeSelectionState>('idle');
   useEffect(() => {
-    const justDeselected = prevIsSelectedRef.current && !isSelected;
-    prevIsSelectedRef.current = isSelected;
-
     if (!isSelected) {
-      if (justDeselected) {
+      if (assigneeSelectionStateRef.current !== 'idle') {
         setPendingCommentAssignedUser(undefined);
         setLastSubmittedAssignedUser(undefined);
+        assigneeSelectionStateRef.current = 'idle';
       }
-      pendingAssigneeIsAutoPopulatedRef.current = false;
-      userMadeManualSelectionRef.current = false;
       return;
+    }
+
+    if (assigneeSelectionStateRef.current === 'idle') {
+      assigneeSelectionStateRef.current = 'pending';
     }
 
     if (canAssign) {
       if (
-        !pendingAssigneeIsAutoPopulatedRef.current &&
-        !userMadeManualSelectionRef.current &&
+        assigneeSelectionStateRef.current === 'pending' &&
         initialAssignedUser !== undefined &&
         // Skip pre-population if the thread is already assigned to this user — doing so
         // would show "Assigning to: Alice" and enable the submit button for a no-op call.
         initialAssignedUser !== assignedUser
       ) {
         setPendingCommentAssignedUser(initialAssignedUser);
-        pendingAssigneeIsAutoPopulatedRef.current = true;
+        assigneeSelectionStateRef.current = 'auto-populated';
       }
-    } else if (pendingAssigneeIsAutoPopulatedRef.current) {
+    } else if (assigneeSelectionStateRef.current === 'auto-populated') {
       // Permission was granted long enough to pre-populate but has now been revoked (for example,
       // the async check resolved to false, or the thread-specific permission changed). Clear the
       // stale value so the submit handler doesn't send an unauthorized assignment.
       setPendingCommentAssignedUser(undefined);
-      pendingAssigneeIsAutoPopulatedRef.current = false;
-      userMadeManualSelectionRef.current = false;
+      assigneeSelectionStateRef.current = 'pending';
     }
   }, [isSelected, initialAssignedUser, canAssign, assignedUser]);
 
@@ -734,8 +714,7 @@ export function CommentThread({
                                     // don't overwrite it if `initialAssignedUser` later changes.
                                     // Also clear last-submitted tracking so a re-selection always
                                     // re-enables the submit button.
-                                    pendingAssigneeIsAutoPopulatedRef.current = false;
-                                    userMadeManualSelectionRef.current = true;
+                                    assigneeSelectionStateRef.current = 'user-selected';
                                     setLastSubmittedAssignedUser(undefined);
                                     setIsAssignPopoverOpen(false);
                                   }}

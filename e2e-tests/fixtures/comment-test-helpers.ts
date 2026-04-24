@@ -10,8 +10,8 @@
  * ## Test project setup
  *
  * `createCommentTestProject` copies the bundled WEB project into a temp directory under the
- * Platform.Bible projects folder, gives it a unique random hex GUID, and adds synthetic test users
- * so the "Assign to" dropdown is populated. Call `cleanupCommentTestProject` in `afterAll` to
+ * Platform.Bible projects folder, gives it a unique random hex "Guid", and adds synthetic test
+ * users so the "Assign to" dropdown is populated. Call `cleanupCommentTestProject` in `afterAll` to
  * remove the copy.
  *
  * ## Seeding comment threads
@@ -31,6 +31,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { expect, type FrameLocator, type Page } from '@playwright/test';
 import { addUsersToProject, sendPapiRequestOnce, waitForPapiMethodRegistered } from './helpers';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,7 +63,7 @@ export interface CommentTestProject {
   shortName: string;
   /** Absolute path to the copied project directory */
   projectDir: string;
-  /** 40-char hex GUID written into Settings.xml — used as the project ID in PAPI calls */
+  /** 40-char hex "Guid" written into Settings.xml — used as the project ID in PAPI calls */
   projectId: string;
   /** Usernames added as team members (used to re-write ProjectUserAccess.xml after app start) */
   users: string[];
@@ -76,8 +77,8 @@ export interface CommentTestProject {
  * Creates a disposable copy of the WEB project in the Platform.Bible projects folder and adds the
  * given users as team members so they appear in the "Assign to" dropdown.
  *
- * The copy receives a randomly generated 40-character hex GUID so Paratext Data can look it up via
- * `HexId.FromStr`. This avoids collisions with the real WEB project (or other test copies).
+ * The copy receives a randomly generated 40-character hex "Guid" so Paratext Data can look it up
+ * via `HexId.FromStr`. This avoids collisions with the real WEB project (or other test copies).
  *
  * @param users Usernames to add as project team members (e.g. ['Alice', 'Bob', 'Charlie'])
  * @returns Metadata about the created project
@@ -89,12 +90,12 @@ export async function createCommentTestProject(users: string[]): Promise<Comment
   // 1. Copy the WEB project directory
   fs.cpSync(WEB_PROJECT_ASSETS_DIR, projectDir, { recursive: true });
 
-  // 2. Generate a valid 40-char hex GUID so Paratext Data can look it up via HexId.FromStr.
+  // 2. Generate a valid 40-char hex "Guid" so Paratext Data can look it up via HexId.FromStr.
   //    Using crypto.randomBytes(20) gives us 20 bytes → 40 hex chars, matching the SHA1-style
   //    format that Paratext projects use (e.g. "32664dc3288a28df2e2bb75ded887fc8f17a15fb").
   const projectId = crypto.randomBytes(20).toString('hex');
 
-  // 3. Give the copy a unique short name and new GUID so it does not collide with existing projects
+  // 3. Give the copy a unique short name and new "Guid" so it does not collide with existing projects
   const settingsXml = fs.readFileSync(path.join(projectDir, 'Settings.xml'), 'utf8');
   const updatedSettings = settingsXml
     .replace(/<Name>[^<]*<\/Name>/, `<Name>${shortName}</Name>`)
@@ -199,4 +200,238 @@ export async function createCommentThreads(
   }
 
   return threadIds;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Navigation helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Opens the comment list for a project using PAPI commands directly.
+ *
+ * This bypasses the slow Platform menu → Home view → editor UI navigation path. Instead it:
+ *
+ * 1. Waits for the dock layout's `loadLayout()` to complete (signalled by the first iframe — the Home
+ *    webview — appearing). This prevents a race where `addWebViewToDock` runs before
+ *    `loadLayout(testLayout)`, causing `loadLayout` to wipe the newly added editor tab.
+ * 2. Calls `platformScriptureEditor.openResourceViewer` to open the scripture editor and get its
+ *    webViewId, then immediately calls `legacyCommentManager.openCommentList` with that webViewId.
+ *    Both calls are retried together up to 5 times.
+ *
+ *    We do NOT wait for the editor _iframe_ to appear before opening the comment list. The editor
+ *    webview is in rc-dock's `tempLayout` as soon as `openWebView` returns its ID, so
+ *    `openCommentList` can usually find the editor and anchor its right-panel there. When a timing
+ *    race causes `loadLayout(testLayout)` to win (see file TSDoc), `openCommentList` throws
+ *    "unknown target tab"; the catch block returns `undefined` and the loop retries immediately on
+ *    the next attempt, which succeeds once the race is resolved.
+ * 3. Waits for the comment list iframe to appear in the UI before returning.
+ */
+export async function openCommentList(mainPage: Page, project: CommentTestProject): Promise<void> {
+  // 1. Wait for the dock layout's initial loadLayout() to complete before opening any new webviews.
+  //
+  //    Why: `registerDockLayout` (called from the PlatformDockLayout `useEffect`) calls
+  //    `loadLayout()` asynchronously. `loadLayout` calls `getDockLayout()` (an already-resolved
+  //    promise), so its continuation is queued as a *microtask*. If `openResourceViewer` also
+  //    resolves `getDockLayout()` around the same time — which happens when the PDP is cached and
+  //    the extension-host round-trip is fast — `addWebViewToDock` can run *before* `loadLayout`'s
+  //    `dockLayout.loadLayout(testLayout)` does. Then `loadLayout` wipes the newly added editor
+  //    tab, leaving only the Home tab in the layout.
+  //
+  //    After `loadLayout` completes, at least one iframe (the Home webview) is attached to the DOM.
+  //    Waiting for that iframe guarantees `loadLayout` has finished and won't overwrite our tab.
+  await mainPage.waitForSelector('iframe', { state: 'attached', timeout: 30_000 });
+
+  // 2. Pre-register both commands so individual PAPI calls don't time out while waiting.
+  await waitForPapiMethodRegistered(
+    'command:platformScriptureEditor.openResourceViewer',
+    DEFAULT_WEBSOCKET_PORT,
+    30_000,
+  );
+  await waitForPapiMethodRegistered(
+    'command:legacyCommentManager.openCommentList',
+    DEFAULT_WEBSOCKET_PORT,
+    30_000,
+  );
+
+  // 3. Open the editor, wait for its iframe, then open the comment list.
+  //
+  //    Phase A — open editor, wait for editor iframe in DOM.
+  //    Phase B — open comment list anchored to editor, wait for comment list iframe in DOM.
+  //
+  //    Retries both phases together; if the editor iframe doesn't appear, a fresh editor is
+  //    requested. The main.ts cache-invalidation fix ensures each retry creates a fresh comment
+  //    list webview when the previous one is gone.
+  let finalEditorWebViewId: string | undefined;
+
+  // Sequential retry loop: each attempt must await PAPI responses and iframe appearance before
+  // deciding whether to retry, so awaits in the loop body are intentional. `continue` skips to the
+  // next retry attempt on transient failures (race conditions with dock layout, missing iframes).
+  /* eslint-disable no-await-in-loop, no-continue */
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (attempt > 0) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 1_000);
+      });
+    }
+
+    // ── Phase A: open the editor and wait for its iframe ──────────────────────
+
+    const editorId = await sendPapiRequestOnce<string | undefined>(
+      'command:platformScriptureEditor.openResourceViewer',
+      [project.projectId],
+      DEFAULT_WEBSOCKET_PORT,
+      60_000,
+    );
+
+    if (!editorId) {
+      console.warn(
+        `[openCommentList] Attempt ${attempt + 1}: openResourceViewer returned no webViewId`,
+      );
+      continue;
+    }
+
+    finalEditorWebViewId = editorId;
+
+    const editorTimeout = attempt < 4 ? 8_000 : 20_000;
+    const editorIframeFound = await mainPage
+      .locator(`iframe[data-web-view-id="${finalEditorWebViewId}"]`)
+      .waitFor({ state: 'attached', timeout: editorTimeout })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!editorIframeFound) {
+      const allIframes = await mainPage.locator('iframe').evaluateAll((iframes) =>
+        iframes.map((f) => ({
+          id: f.getAttribute('data-web-view-id'),
+          title: f.getAttribute('title'),
+        })),
+      );
+      console.warn(
+        `[openCommentList] Attempt ${attempt + 1}: editor iframe ` +
+          `(data-web-view-id="${finalEditorWebViewId}") did not appear within ` +
+          `${editorTimeout}ms. Iframes in DOM: ${JSON.stringify(allIframes)}`,
+      );
+      continue;
+    }
+
+    // ── Phase B: open the comment list and wait for its iframe ────────────────
+
+    const commentListWebViewId = await sendPapiRequestOnce<string | undefined>(
+      'command:legacyCommentManager.openCommentList',
+      [finalEditorWebViewId],
+      DEFAULT_WEBSOCKET_PORT,
+      30_000,
+    ).catch((e: unknown) => {
+      console.warn(`[openCommentList] Attempt ${attempt + 1}: openCommentList threw: ${e}`);
+      return undefined;
+    });
+
+    if (!commentListWebViewId) {
+      console.warn(
+        `[openCommentList] Attempt ${attempt + 1}: openCommentList returned no webViewId for ` +
+          `editor ${finalEditorWebViewId}`,
+      );
+      continue;
+    }
+
+    const clTimeout = attempt < 4 ? 8_000 : 20_000;
+    const iframeFound = await mainPage
+      .locator(`iframe[data-web-view-id="${commentListWebViewId}"]`)
+      .waitFor({ state: 'attached', timeout: clTimeout })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!iframeFound) {
+      const allIframes = await mainPage.locator('iframe').evaluateAll((iframes) =>
+        iframes.map((f) => ({
+          id: f.getAttribute('data-web-view-id'),
+          title: f.getAttribute('title'),
+        })),
+      );
+      console.warn(
+        `[openCommentList] Attempt ${attempt + 1}: comment list iframe ` +
+          `(data-web-view-id="${commentListWebViewId}") did not appear within ${clTimeout}ms. ` +
+          `Iframes in DOM: ${JSON.stringify(allIframes)}`,
+      );
+      continue;
+    }
+
+    // iframe found — now also wait for its body to be visible (fully loaded).
+    await mainPage
+      .frameLocator(`iframe[data-web-view-id="${commentListWebViewId}"]`)
+      .locator('body')
+      .waitFor({ timeout: 10_000 });
+    return;
+  }
+  /* eslint-enable no-await-in-loop, no-continue */
+
+  throw new Error(`Failed to open comment list after 5 attempts for project ${project.shortName}`);
+}
+
+/** Returns the frame locator for the comment list web view iframe. */
+export function getCommentListFrame(mainPage: Page): FrameLocator {
+  // The comment list iframe has title "Comments: {shortName}"; the scripture editor iframe has
+  // title "{shortName} " (trailing space). Use title^="Comments:" to match only the comment list.
+  return mainPage.frameLocator('iframe[title^="Comments:"]');
+}
+
+/** Expands (or collapses) a comment thread by clicking its container element. */
+export async function expandThread(frame: FrameLocator, threadId: string): Promise<void> {
+  // Use role="option" to match the CommentThread Card, not the wrapper div (both share the id).
+  await frame.locator(`[role="option"][id="${threadId}"]`).click();
+}
+
+/**
+ * Asserts that the pending-assignment indicator for a thread shows the expected user name. The
+ * component renders a `<span>` containing "Assigning to: {user}" when an assignee is pre-selected.
+ */
+export async function expectAssigningTo(
+  frame: FrameLocator,
+  threadId: string,
+  username: string,
+): Promise<void> {
+  // Use role="option" to match the CommentThread Card, not the wrapper div (both share the id).
+  const threadLocator = frame.locator(`[role="option"][id="${threadId}"]`);
+  // CommentThread renders <span>"Assigning to: {user}"</span> when pendingCommentAssignedUser is
+  // set. The built-in retry in toContainText gives the React effect time to fire.
+  const assignSpan = threadLocator.locator('span').filter({ hasText: /Assigning to:/i });
+  await expect(assignSpan).toContainText(username);
+}
+
+/** Selects a user from the "Assign to" popover and submits the reply. */
+export async function assignUserAndSubmit(
+  frame: FrameLocator,
+  threadId: string,
+  username: string,
+): Promise<void> {
+  // Use role="option" to match the CommentThread Card, not the wrapper div (both share the id).
+  const threadLocator = frame.locator(`[role="option"][id="${threadId}"]`);
+
+  // The assign button contains an AtSign SVG icon — locate by aria-label, not text content.
+  const assignButton = threadLocator.locator('button[aria-label="Assign user"]');
+  await assignButton.click();
+
+  // Select the user from the command list popover. Use [cmdk-item] to avoid matching
+  // CommentThread cards (which also have role="option" and may contain the username text
+  // if the user was previously assigned to another thread).
+  await frame.locator('[cmdk-item][role="option"]', { hasText: username }).click();
+
+  // Wait for the "Assigning to:" span to appear — confirms setPendingCommentAssignedUser(user)
+  // ran synchronously from the popover click. Without this, not.toBeVisible below passes
+  // immediately (the span is conditionally rendered and may never have existed), which means
+  // submit fires before the async PAPI call completes and setLastAssignedUser is never called.
+  const assignSpan = threadLocator.locator('span').filter({ hasText: /Assigning to:/i });
+  await expect(assignSpan).toBeVisible({ timeout: 5_000 });
+
+  // Submit (assignment only — no comment text required).
+  await threadLocator.locator('button[aria-label="Submit comment"]').click();
+
+  // Wait for the "Assigning to:" span to disappear. This confirms that:
+  // 1. handleAddCommentToThread (an async PAPI call) has completed.
+  // 2. setPendingCommentAssignedUser(undefined) was called in CommentThread.
+  // 3. setLastAssignedUser(assignedUser) was called in CommentList.
+  // 4. All threads have re-rendered with the updated initialAssignedUser.
+  // Without this wait, the next expandThread call races against the async submission
+  // and the pre-selection effect may fire before lastAssignedUser is updated.
+  await expect(assignSpan).not.toBeVisible({ timeout: 15_000 });
 }
