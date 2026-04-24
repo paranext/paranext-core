@@ -63,7 +63,7 @@ jobs:
       - name: Run Chromatic
         uses: chromaui/action@v16
         with:
-          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN_10_POWER }}
           buildScriptName: storybook:build
           # onlyStoryFiles and onlyChanged are mutually exclusive in Chromatic CLI v16.
           # The story filter (from .chromatic-story-filter or the default) is what scopes
