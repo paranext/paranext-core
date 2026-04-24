@@ -71,11 +71,16 @@ async function openMarkersChecklistTool(page: Page): Promise<void> {
     return;
   }
 
-  // The main-menu entry fires `platformScripture.openMarkersChecklist` (UI-PKG-001 wiring). The
-  // exact top-level column is owned by that work package's menu contribution, so match on the
-  // command label rather than a brittle path.
-  const menuTrigger = page.getByRole('menuitem', { name: /Open Markers Checklist/i });
-  await menuTrigger.click();
+  // Navigate via the scripture editor's hamburger menu. The menu item is declared in
+  // platform-scripture-editor/contributions/menus.json under the inventory group, firing
+  // `platformScripture.openMarkersChecklist` with the editor's webViewId as context (which is
+  // how the handler resolves the active projectId).
+  const editorFrame = page.frameLocator(`iframe[title*="${PROJECT_NAME}" i][title*="Editable" i]`);
+  await editorFrame.locator("button[aria-label='Project']").first().click();
+  await editorFrame
+    .getByRole('menuitem', { name: /Markers Checklist/i })
+    .first()
+    .click();
 
   await expect(page.locator('.dock-tab', { hasText: CHECKLIST_TAB_TITLE_PATTERN })).toBeVisible({
     timeout: 30_000,
