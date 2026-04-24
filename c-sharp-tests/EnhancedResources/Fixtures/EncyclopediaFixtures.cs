@@ -4,45 +4,16 @@ using Paranext.DataProvider.EnhancedResources;
 namespace TestParanextDataProvider.EnhancedResources.Fixtures;
 
 /// <summary>
-/// Test fixtures for EncyclopediaService. Holds the V1/V2 XML fixture documents, the
-/// catalog of test articles, the known-resource set, and the abbreviation map previously
-/// embedded in EncyclopediaService.cs. N3 policy
-/// (patterns.csharp.testScaffoldingLocation).
+/// Builds an <see cref="EncyclopediaData"/> record for EncyclopediaService tests.
+/// Replaces the prior static *Override / ApplyDefaults+Clear pattern; each test
+/// constructs its own service instance with either <see cref="BuildEncyclopediaData"/>
+/// or a record-`with` expression derived from it.
 /// </summary>
 [ExcludeFromCodeCoverage]
 internal static class EncyclopediaFixtures
 {
-    internal static readonly HashSet<string> KnownResources =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            "test-fauna-resource",
-            "test-fauna-resource-v2",
-            "test-empty-resource",
-        };
-
-    internal static readonly Dictionary<string, string> Abbreviations =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            { "NIV", "New International Version" },
-            { "NRSV", "New Revised Standard Version" },
-            { "ESV", "English Standard Version" },
-        };
-
-    // V1 format test data (matching test XML constants in EncyclopediaServiceTests).
-    internal const string V1Xml =
-        @"<?xml version=""1.0""?>
-<Thematic_Lexicon xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"">
-  <ThemLex_Entry Key=""0"">
-    <Title>Contents and Introduction</Title>
-    <Intro />
-    <Index>
-      <IndexItem Number=""0.1"" Description=""Introduction"" Target=""FAUNA:0.1"" />
-      <IndexItem Number=""1"" Description=""Animals, General"" Target=""FAUNA:1"" />
-      <IndexItem Number=""2"" Description=""Mammals"" Target=""FAUNA:2"" />
-    </Index>
-    <Sections />
-  </ThemLex_Entry>
-  <ThemLex_Entry Key=""2.8"">
+    internal const string V1CamelEntryXml =
+        @"<ThemLex_Entry Key=""2.8"">
     <Title>Camel, dromedary</Title>
     <Intro />
     <Index />
@@ -70,21 +41,10 @@ internal static class EncyclopediaFixtures
         </Paragraphs>
       </Section>
     </Sections>
-  </ThemLex_Entry>
-</Thematic_Lexicon>";
+  </ThemLex_Entry>";
 
-    internal const string V2Xml =
-        @"<?xml version=""1.0""?>
-<Thematic_Lexicon xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"">
-  <ThemLex_Entry Key=""0"">
-    <Title>Contents and Introduction</Title>
-    <Intro />
-    <Index>
-      <IndexItem Number=""0.1"" Description=""Introduction"" Target=""FAUNA:0.1"" />
-    </Index>
-    <Sections />
-  </ThemLex_Entry>
-  <ThemLex_Entry Key=""2.8"">
+    internal const string V2CamelEntryXml =
+        @"<ThemLex_Entry Key=""2.8"">
     <Title>Camel, dromedary</Title>
     <Intro />
     <Index />
@@ -122,12 +82,47 @@ internal static class EncyclopediaFixtures
         </BibleImages>
       </Section>
     </Sections>
-  </ThemLex_Entry>
-</Thematic_Lexicon>";
+  </ThemLex_Entry>";
+
+    internal const string V1FaunaXml =
+        @"<?xml version=""1.0""?>
+<Thematic_Lexicon xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"">
+  <ThemLex_Entry Key=""0"">
+    <Title>Contents and Introduction</Title>
+    <Intro />
+    <Index>
+      <IndexItem Number=""0.1"" Description=""Introduction"" Target=""FAUNA:0.1"" />
+      <IndexItem Number=""1"" Description=""Animals, General"" Target=""FAUNA:1"" />
+    </Index>
+    <Sections />
+  </ThemLex_Entry>"
+        + V1CamelEntryXml
+        + "</Thematic_Lexicon>";
+
+    internal const string V2FaunaXml =
+        @"<?xml version=""1.0""?>
+<Thematic_Lexicon xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"">
+  <ThemLex_Entry Key=""0"">
+    <Title>Contents and Introduction</Title>
+    <Intro />
+    <Index>
+      <IndexItem Number=""0.1"" Description=""Introduction"" Target=""FAUNA:0.1"" />
+    </Index>
+    <Sections />
+  </ThemLex_Entry>"
+        + V2CamelEntryXml
+        + "</Thematic_Lexicon>";
+
+    internal static readonly Dictionary<string, string> Abbreviations =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "NIV", "New International Version" },
+            { "NRSV", "New Revised Standard Version" },
+            { "ESV", "English Standard Version" },
+        };
 
     /// <summary>
     /// Catalog of test articles consumed by EncyclopediaService.GetArticle tests.
-    /// Each value is (title, raw paragraphs, image IDs, isV2).
     /// </summary>
     internal static Dictionary<string, ArticleContent> BuildTestArticles() =>
         new(StringComparer.OrdinalIgnoreCase)
@@ -256,29 +251,45 @@ internal static class EncyclopediaFixtures
             ),
         };
 
-    /// <summary>Applies default fixture data to the EncyclopediaService overrides.</summary>
-    internal static void ApplyDefaults()
+    /// <summary>
+    /// Builds the default EncyclopediaData record used by tests. Populates Fauna under
+    /// "en" with a V1 and a V2 entry (single entry each) so both format-version code
+    /// paths produce data. Known resources include the V1 and V2 IDs plus an empty
+    /// resource used by the empty-state tests.
+    /// </summary>
+    internal static EncyclopediaData BuildEncyclopediaData()
     {
-        EncyclopediaService.KnownResourcesOverride = new HashSet<string>(
-            KnownResources,
-            StringComparer.OrdinalIgnoreCase
-        );
-        EncyclopediaService.AbbreviationsOverride = new Dictionary<string, string>(
-            Abbreviations,
-            StringComparer.OrdinalIgnoreCase
-        );
-        EncyclopediaService.V1XmlOverride = V1Xml;
-        EncyclopediaService.V2XmlOverride = V2Xml;
-        EncyclopediaService.TestArticlesOverride = BuildTestArticles();
-    }
+        var v1CamelEntry = new MarbleEncyclopediaEntry(V1CamelEntryXml);
+        var v2CamelEntry = new MarbleEncyclopediaEntry(V2CamelEntryXml);
 
-    /// <summary>Clears every EncyclopediaService override.</summary>
-    internal static void Clear()
-    {
-        EncyclopediaService.KnownResourcesOverride = null;
-        EncyclopediaService.AbbreviationsOverride = null;
-        EncyclopediaService.V1XmlOverride = null;
-        EncyclopediaService.V2XmlOverride = null;
-        EncyclopediaService.TestArticlesOverride = null;
+        var faunaByLanguage = new Dictionary<string, IReadOnlyList<MarbleEncyclopediaEntry>>(
+            StringComparer.OrdinalIgnoreCase
+        )
+        {
+            ["en"] = new List<MarbleEncyclopediaEntry> { v1CamelEntry, v2CamelEntry },
+        };
+
+        var entriesByTypeAndLanguage = new Dictionary<
+            EncyclopediaEntryType,
+            IReadOnlyDictionary<string, IReadOnlyList<MarbleEncyclopediaEntry>>
+        >
+        {
+            [EncyclopediaEntryType.Fauna] = faunaByLanguage,
+        };
+
+        return new EncyclopediaData(
+            EntriesByTypeAndLanguage: entriesByTypeAndLanguage,
+            ArticlesById: BuildTestArticles(),
+            Abbreviations: new Dictionary<string, string>(
+                Abbreviations,
+                StringComparer.OrdinalIgnoreCase
+            ),
+            KnownResourceIds: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "test-fauna-resource",
+                "test-fauna-resource-v2",
+                "test-empty-resource",
+            }
+        );
     }
 }

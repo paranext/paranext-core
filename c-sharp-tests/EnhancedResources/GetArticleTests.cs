@@ -26,11 +26,8 @@ namespace TestParanextDataProvider.EnhancedResources;
 [ExcludeFromCodeCoverage]
 internal class GetArticleTests
 {
-    [SetUp]
-    public void SetUp() => EncyclopediaFixtures.ApplyDefaults();
-
-    [TearDown]
-    public void TearDown() => EncyclopediaFixtures.Clear();
+    private static EncyclopediaService NewService() =>
+        new(EncyclopediaFixtures.BuildEncyclopediaData());
 
     #region Acceptance Tests
 
@@ -63,7 +60,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: ArticleData returned with structured content
         Assert.That(result, Is.Not.Null, "gm-010: Must return ArticleData");
@@ -110,7 +108,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Verse links parsed into structured data
         Assert.That(result, Is.Not.Null, "gm-011: Must return ArticleData");
@@ -164,7 +163,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Plain text preserved in paragraph
         Assert.That(result.Paragraphs, Is.Not.Null.And.Not.Empty);
@@ -211,7 +211,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Cross-reference converted to structured data
         Assert.That(result.CrossReferences, Is.Not.Null.And.Not.Empty);
@@ -259,7 +260,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Verse reference parsed into structured link
         var paragraphsWithLinks = result.Paragraphs.Where(p => p.VerseLinks.Count > 0).ToList();
@@ -308,7 +310,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Verse range formatted correctly
         var paragraphsWithLinks = result.Paragraphs.Where(p => p.VerseLinks.Count > 0).ToList();
@@ -347,7 +350,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Cross-chapter range formatted correctly
         var paragraphsWithLinks = result.Paragraphs.Where(p => p.VerseLinks.Count > 0).ToList();
@@ -387,7 +391,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Abbreviation data populated
         Assert.That(result.Paragraphs, Is.Not.Null.And.Not.Empty);
@@ -434,7 +439,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Text content preserved (bold/italic are inline formatting)
         Assert.That(result.Paragraphs, Is.Not.Null.And.Not.Empty);
@@ -478,7 +484,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Exact match to gm-011 expected output
         var allVerseLinks = result.Paragraphs.SelectMany(p => p.VerseLinks).ToList();
@@ -524,7 +531,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Any verse links found have the correct structure
         var allVerseLinks = result.Paragraphs.SelectMany(p => p.VerseLinks).ToList();
@@ -575,7 +583,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Cross-references populated from <l target="..."> elements
         Assert.That(
@@ -627,7 +636,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: ImageIds populated (not base64 data - just IDs for frontend)
         Assert.That(result.ImageIds, Is.Not.Null, "BHV-606: ImageIds must not be null");
@@ -656,7 +666,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Paragraph-level inline image IDs populated
         Assert.That(result.Paragraphs, Is.Not.Null.And.Not.Empty);
@@ -693,7 +704,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Verse links have goto semantics via SerializedVerseRef
         var verseLinks = result.Paragraphs.SelectMany(p => p.VerseLinks).ToList();
@@ -732,7 +744,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: RawReference preserved from source XML
         var verseLinks = result.Paragraphs.SelectMany(p => p.VerseLinks).ToList();
@@ -771,7 +784,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Abbreviations resolved with full text
         var allAbbrevs = result.Paragraphs.SelectMany(p => p.Abbreviations).ToList();
@@ -813,7 +827,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Unknown abbreviation still included with abbrev text
         // Full text may be empty if not resolvable
@@ -847,7 +862,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Navigation data present in structured output
         // goto: verse links in paragraphs
@@ -893,7 +909,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: launchViewer links present as cross-references
         Assert.That(result.CrossReferences, Is.Not.Null);
@@ -930,7 +947,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Image IDs extracted from BibleImages section
         Assert.That(result.ImageIds, Is.Not.Null);
@@ -959,7 +977,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: ImageIds should still be populated (empty list is valid for V1)
         Assert.That(result.ImageIds, Is.Not.Null, "EXT-059: ImageIds must not be null even for V1");
@@ -987,9 +1006,8 @@ internal class GetArticleTests
         );
 
         // Act & Assert: NOT_FOUND error
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => EncyclopediaService.GetArticle(input)
-        );
+        var service = NewService();
+        var ex = Assert.Throws<InvalidOperationException>(() => service.GetArticle(input));
         Assert.That(
             ex!.Message,
             Does.Contain("not found").IgnoreCase,
@@ -1024,9 +1042,10 @@ internal class GetArticleTests
         );
 
         // Act: Should NOT throw - partial result returned
+        var service = NewService();
         ArticleData result = null!;
         Assert.DoesNotThrow(
-            () => result = EncyclopediaService.GetArticle(input),
+            () => result = service.GetArticle(input),
             "Missing image data must not throw - return partial result"
         );
 
@@ -1053,9 +1072,8 @@ internal class GetArticleTests
         );
 
         // Act & Assert
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => EncyclopediaService.GetArticle(input)
-        );
+        var service = NewService();
+        var ex = Assert.Throws<InvalidOperationException>(() => service.GetArticle(input));
         Assert.That(
             ex!.Message,
             Does.Contain("not found").IgnoreCase,
@@ -1083,7 +1101,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: All contract-defined fields present
         Assert.That(result.ArticleId, Is.Not.Null.And.Not.Empty, "articleId must be set");
@@ -1109,7 +1128,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Each paragraph has required structure
         Assert.That(result.Paragraphs, Is.Not.Null.And.Not.Empty);
@@ -1150,7 +1170,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Verse links have all contract-defined fields
         var verseLinks = result.Paragraphs.SelectMany(p => p.VerseLinks).ToList();
@@ -1191,7 +1212,8 @@ internal class GetArticleTests
         );
 
         // Act
-        var result = EncyclopediaService.GetArticle(input);
+        var service = NewService();
+        var result = service.GetArticle(input);
 
         // Assert: Cross-refs have all contract-defined fields
         Assert.That(result.CrossReferences, Is.Not.Null.And.Not.Empty);

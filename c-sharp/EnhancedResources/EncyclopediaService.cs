@@ -4,55 +4,28 @@ using SIL.Scripture;
 
 namespace Paranext.DataProvider.EnhancedResources;
 
-/// <summary>
-/// Encyclopedia entry loading, image ID extraction. Returns structured
-/// EncyclopediaLoadResult with display items for the Encyclopedia Tab.
-/// Source: CAP-009, EXT-057, BHV-604
-/// </summary>
-internal static partial class EncyclopediaService
+// === PORTED FROM PT9 ===
+// Source: PT9/Paratext/Marble/EncyclopediaTab.cs (LoadResources, FormatParagraph, GetArticle)
+// Maps to: CAP-009 (LoadEncyclopediaResources), CAP-010 (GetArticle),
+//          EXT-057, EXT-058, EXT-059, BHV-604, BHV-606, BHV-607, BHV-608, BHV-457, BHV-352
+//
+// Refactor 2026-04-24: Converted from static class with *Override test seams to
+// instance class with primary-constructor-injected EncyclopediaData record. See
+// ADR patterns.csharp.serviceComposition. Data arrives pre-split by
+// (EncyclopediaEntryType, languageCode) from MarbleEncyclopediaLoader.
+internal sealed partial class EncyclopediaService(EncyclopediaData data)
 {
     // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs
-    // Method: EncyclopediaTab.LoadResources (~200 lines)
-    // Maps to: EXT-057, BHV-604
-
-    // Test-fixture injection seams (N3: patterns.csharp.testScaffoldingLocation).
-    // Production code treats null overrides as "no data". Tests populate these in [SetUp]
-    // from EncyclopediaFixtures and clear them in [TearDown].
-    internal static IReadOnlyCollection<string>? KnownResourcesOverride { get; set; }
-    internal static IReadOnlyDictionary<string, string>? AbbreviationsOverride { get; set; }
-    internal static string? V1XmlOverride { get; set; }
-    internal static string? V2XmlOverride { get; set; }
-    internal static IReadOnlyDictionary<string, ArticleContent>? TestArticlesOverride { get; set; }
-
-    private static IReadOnlyCollection<string> KnownResources =>
-        KnownResourcesOverride ?? s_emptyStringSet;
-
-    private static IReadOnlyDictionary<string, string> Abbreviations =>
-        AbbreviationsOverride ?? s_emptyStringMap;
-
-    private static IReadOnlyDictionary<string, ArticleContent> TestArticles =>
-        TestArticlesOverride ?? s_emptyArticleMap;
-
-    private static readonly HashSet<string> s_emptyStringSet =
-        new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, string> s_emptyStringMap =
-        new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, ArticleContent> s_emptyArticleMap =
-        new(StringComparer.OrdinalIgnoreCase);
-
-    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:LoadResources
-    // Method: EncyclopediaTab.LoadResources
-    // Maps to: EXT-057, BHV-604, BHV-352
     /// <summary>
-    /// Loads encyclopedia entries for the current scope. Handles V1/V2 format differences.
-    /// Multi-language article selection with fallback chain (user > English > any).
+    /// Loads encyclopedia entries for the current scope, filtered by entry type
+    /// (Flora/Fauna/Realia) and user language. Resolves the per-(type, language) slice
+    /// of <see cref="EncyclopediaData.EntriesByTypeAndLanguage"/>, applies the optional
+    /// word filter, and returns display items for the Encyclopedia Tab.
     /// </summary>
-    public static EncyclopediaLoadResult LoadResources(EncyclopediaLoadInput input)
+    public EncyclopediaLoadResult LoadResources(EncyclopediaLoadInput input)
     {
-        // Validate resource existence
-        if (!KnownResources.Contains(input.ResourceId))
+        if (!data.KnownResourceIds.Contains(input.ResourceId))
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.NotFound,
@@ -60,33 +33,10 @@ internal static partial class EncyclopediaService
             );
         }
 
-        // BHV-352: Empty resource returns empty state message
-        if (
-            string.Equals(
-                input.ResourceId,
-                "test-empty-resource",
-                StringComparison.OrdinalIgnoreCase
-            )
-        )
-        {
-            return new EncyclopediaLoadResult(
-                Items: [],
-                EmptyStateMessage: "No encyclopedia data available for the current scope."
-            );
-        }
+        var entries = SelectEntriesForLanguage(input.UserLanguage);
 
-        // Determine format version based on resource
-        bool isV2 = input.ResourceId.Contains("v2", StringComparison.OrdinalIgnoreCase);
-        string xmlData = (isV2 ? V2XmlOverride : V1XmlOverride) ?? string.Empty;
+        var items = entries.Where(e => e.Key != "0").Select(BuildDisplayItem).ToList();
 
-        // Parse entries and build display items (skip key=0 contents entry)
-        var items = MarbleEncyclopediaEntry
-            .ParseAll(xmlData)
-            .Where(e => e.Key != "0")
-            .Select(BuildDisplayItem)
-            .ToList();
-
-        // Apply word filter (BHV-352)
         if (input.Filter != null)
         {
             items = items
@@ -97,8 +47,37 @@ internal static partial class EncyclopediaService
         }
 
         string? emptyStateMessage = items.Count == 0 ? GetEmptyStateMessage(input) : null;
-
         return new EncyclopediaLoadResult(Items: items, EmptyStateMessage: emptyStateMessage);
+    }
+
+    // Selects the union of Flora/Fauna/Realia entries for the requested language,
+    // falling back to English when the requested language has no slice.
+    private IReadOnlyList<MarbleEncyclopediaEntry> SelectEntriesForLanguage(string userLanguage)
+    {
+        var result = new List<MarbleEncyclopediaEntry>();
+        foreach (
+            var entryType in new[]
+            {
+                EncyclopediaEntryType.Flora,
+                EncyclopediaEntryType.Fauna,
+                EncyclopediaEntryType.Realia,
+            }
+        )
+        {
+            if (!data.EntriesByTypeAndLanguage.TryGetValue(entryType, out var byLanguage))
+                continue;
+
+            if (byLanguage.TryGetValue(userLanguage, out var entries) && entries.Count > 0)
+            {
+                result.AddRange(entries);
+                continue;
+            }
+            if (byLanguage.TryGetValue("en", out var fallback) && fallback.Count > 0)
+            {
+                result.AddRange(fallback);
+            }
+        }
+        return result;
     }
 
     private static EncyclopediaDisplayItem BuildDisplayItem(MarbleEncyclopediaEntry entry)
@@ -126,34 +105,21 @@ internal static partial class EncyclopediaService
         );
     }
 
-    // BHV-352: Generate empty state message based on input context
-    private static string GetEmptyStateMessage(EncyclopediaLoadInput input)
-    {
-        if (input.Filter != null)
-        {
-            return $"The word '{input.Filter.Lemma}' does not occur in this range.";
-        }
+    private static string GetEmptyStateMessage(EncyclopediaLoadInput input) =>
+        input.Filter != null
+            ? $"The word '{input.Filter.Lemma}' does not occur in this range."
+            : "No encyclopedia data available for the current scope.";
 
-        return "No encyclopedia data available for the current scope.";
-    }
-
-    // Truncate teaser text to a reasonable preview length
     private static string TruncateTeaser(string text)
     {
         const int maxLength = 100;
-        if (text.Length <= maxLength)
-            return text;
-
-        return text[..maxLength] + "...";
+        return text.Length <= maxLength ? text : text[..maxLength] + "...";
     }
 
-    // === CAP-010: GetArticle ===
-    // Source: EXT-058 (Encyclopedia Article HTML), EXT-082 (ArticleViewer Navigation),
-    //         EXT-059 (Image ID Extraction)
-    // Behaviors: BHV-606, BHV-607, BHV-608, BHV-457
-    // Contract: Section 4.10 M-010 GetArticle (ArticleInput -> ArticleData)
+    // ========================================================================
+    // CAP-010: GetArticle
+    // ========================================================================
 
-    // Compiled regex patterns for article paragraph parsing (BHV-606, BHV-607, BHV-608, EXT-059)
     [GeneratedRegex(@"<s>(G\d{3}\d{3}\d{3}\d{5}(?:-(G\d{3}\d{3}\d{3}\d{5}))?)</s>")]
     private static partial Regex VerseRefPattern();
 
@@ -171,17 +137,14 @@ internal static partial class EncyclopediaService
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:FormatParagraph
-    // Method: EncyclopediaTab.FormatParagraph (~150 lines)
-    // Maps to: EXT-058, BHV-606, BHV-607, BHV-608, BHV-457
     /// <summary>
     /// Returns structured article data for a single encyclopedia article with
-    /// cross-references (seealso), verse links (goto), abbreviation data, and image references.
-    /// [Revised: Theme 2] Returns ArticleData, not HTML.
+    /// cross-references (seealso), verse links (goto), abbreviation data, and
+    /// image references. Theme 2: returns ArticleData, not HTML.
     /// </summary>
-    public static ArticleData GetArticle(ArticleInput input)
+    public ArticleData GetArticle(ArticleInput input)
     {
-        // Validate resource existence
-        if (!KnownResources.Contains(input.ResourceId))
+        if (!data.KnownResourceIds.Contains(input.ResourceId))
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.NotFound,
@@ -189,8 +152,7 @@ internal static partial class EncyclopediaService
             );
         }
 
-        // Validate article existence
-        if (!TestArticles.TryGetValue(input.ArticleId, out var articleContent))
+        if (!data.ArticlesById.TryGetValue(input.ArticleId, out var articleContent))
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.NotFound,
@@ -214,11 +176,7 @@ internal static partial class EncyclopediaService
         );
     }
 
-    /// <summary>
-    /// Processes a single raw paragraph: extracts verse links, cross-references,
-    /// abbreviations, inline images, and generates launchViewer cross-refs for images.
-    /// </summary>
-    private static ArticleParagraph ProcessParagraph(
+    private ArticleParagraph ProcessParagraph(
         string rawParagraph,
         List<ArticleCrossRef> allCrossRefs,
         List<string> allImageIds
@@ -234,7 +192,6 @@ internal static partial class EncyclopediaService
         text = ParseAbbreviations(text, abbreviations);
         text = ParseInlineImages(text, inlineImageIds, allImageIds);
 
-        // BHV-457: Image references also appear as launchViewer cross-refs
         foreach (string imageId in inlineImageIds)
         {
             allCrossRefs.Add(
@@ -254,16 +211,6 @@ internal static partial class EncyclopediaService
         );
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:FormatParagraph
-    // Method: EncyclopediaTab.FormatParagraph (verse reference section)
-    // Maps to: BHV-607, EXT-058
-
-    // EXPLANATION:
-    // Parses <s>G04300301600000</s> patterns and verse ranges <s>G...-G...</s>.
-    // The G-pattern structure: G + NNN(book) + NNN(chapter) + NNN(verse) + NNNNN(offset)
-    // Verse ranges can be within a chapter (John 3:16-17) or cross chapters (John 3:16-4:17).
-    // Returns the text with <s>...</s> tags removed and verse link data extracted.
     private static string ParseVerseReferences(string text, List<ArticleVerseLink> verseLinks)
     {
         return VerseRefPattern()
@@ -287,21 +234,13 @@ internal static partial class EncyclopediaService
                     {
                         int endChapter = int.Parse(endRef.Substring(4, 3));
                         int endVerse = int.Parse(endRef.Substring(7, 3));
-
-                        if (endChapter == chapter)
-                        {
-                            // Same chapter range: "John 3:16-17"
-                            displayText = $"{bookName} {chapter}:{verse}-{endVerse}";
-                        }
-                        else
-                        {
-                            // Cross-chapter range: "John 3:16-4:17"
-                            displayText = $"{bookName} {chapter}:{verse}-{endChapter}:{endVerse}";
-                        }
+                        displayText =
+                            endChapter == chapter
+                                ? $"{bookName} {chapter}:{verse}-{endVerse}"
+                                : $"{bookName} {chapter}:{verse}-{endChapter}:{endVerse}";
                     }
                     else
                     {
-                        // Single verse: "John 3:16"
                         displayText = $"{bookName} {chapter}:{verse}";
                     }
 
@@ -312,16 +251,11 @@ internal static partial class EncyclopediaService
                             RawReference: startRef
                         )
                     );
-
                     return displayText;
                 }
             );
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:FormatParagraph
-    // Method: EncyclopediaTab.FormatParagraph (cross-reference section)
-    // Maps to: BHV-606, EXT-058
     private static string ParseCrossReferences(string text, List<ArticleCrossRef> crossReferences)
     {
         return LinkPattern()
@@ -331,8 +265,6 @@ internal static partial class EncyclopediaService
                 {
                     string target = match.Groups[1].Value;
                     string rawText = match.Groups[2].Value;
-
-                    // PT9 strips the number prefix (e.g., "1.1.8.3 ") from the display text
                     string displayText = NumberPrefixPattern().Replace(rawText, "");
 
                     crossReferences.Add(
@@ -342,17 +274,12 @@ internal static partial class EncyclopediaService
                             Type: "seealso"
                         )
                     );
-
                     return displayText;
                 }
             );
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:FormatParagraph
-    // Method: EncyclopediaTab.FormatParagraph (abbreviation section)
-    // Maps to: BHV-608, EXT-058
-    private static string ParseAbbreviations(string text, List<ArticleAbbreviation> abbreviations)
+    private string ParseAbbreviations(string text, List<ArticleAbbreviation> abbreviations)
     {
         return AbbrevPattern()
             .Replace(
@@ -360,19 +287,16 @@ internal static partial class EncyclopediaService
                 match =>
                 {
                     string abbrev = match.Groups[1].Value;
-                    string fullText = Abbreviations.TryGetValue(abbrev, out string? ft) ? ft : "";
+                    string fullText = data.Abbreviations.TryGetValue(abbrev, out string? ft)
+                        ? ft
+                        : "";
 
                     abbreviations.Add(new ArticleAbbreviation(Abbrev: abbrev, FullText: fullText));
-
                     return abbrev;
                 }
             );
     }
 
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:FormatParagraph
-    // Method: EncyclopediaTab.FormatParagraph (image section)
-    // Maps to: EXT-059, BHV-606
     private static string ParseInlineImages(
         string text,
         List<string> inlineImageIds,
