@@ -64,9 +64,6 @@ internal class EnhancedResourceFactory : NetworkObject
     /// FAILED_PRECONDITION when no marble data is installed;
     /// NOT_FOUND when resource ID is unknown.
     /// </exception>
-    /// <exception cref="ArgumentException">
-    /// When the resource is not a MarbleResource type.
-    /// </exception>
     public string GetResourceObjectId(string resourceId)
     {
         ValidateResourceId(resourceId);
@@ -85,14 +82,6 @@ internal class EnhancedResourceFactory : NetworkObject
 
         if (_availableResources.Contains(resourceId))
             return;
-
-        if (IsKnownNonMarbleResource(resourceId))
-        {
-            throw new ArgumentException(
-                $"Resource '{resourceId}' is not a MarbleResource type",
-                nameof(resourceId)
-            );
-        }
 
         throw PlatformErrorCodes.WithCode(
             PlatformErrorCodes.NotFound,
@@ -150,15 +139,5 @@ internal class EnhancedResourceFactory : NetworkObject
             [.. _dataAccessService.AvailableGlossLanguages],
             false
         );
-    }
-
-    private static bool IsKnownNonMarbleResource(string resourceId)
-    {
-        // In production, this would check if the resource ID corresponds to a
-        // standard translation project. For now, any ID that doesn't match
-        // our marble resources and isn't clearly random is treated as a
-        // non-marble resource if it contains "standard" or "translation".
-        return resourceId.Contains("standard", StringComparison.OrdinalIgnoreCase)
-            || resourceId.Contains("translation", StringComparison.OrdinalIgnoreCase);
     }
 }

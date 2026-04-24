@@ -250,19 +250,22 @@ namespace TestParanextDataProvider.EnhancedResources
         [Category("Contract")]
         [Property("ScenarioId", "TS-043")]
         [Property("BehaviorId", "BHV-616")]
-        [Description("Factory rejects non-MarbleResource types")]
-        public async Task GetResourceObjectId_NonMarbleResource_ThrowsArgumentException()
+        [Description(
+            "Non-MarbleResource IDs throw PlatformError NOT_FOUND rather than the test-only "
+                + "ArgumentException heuristic. ArgumentException branch removed per design "
+                + "doc 2026-04-24-backend-cleanup-design.md Section 2."
+        )]
+        public async Task GetResourceObjectId_NonMarbleResource_ThrowsNotFound()
         {
             // Arrange: Factory initialized with test data
             var factory = CreateFactoryWithTestData();
             await factory.InitializeAsync();
 
-            // Act & Assert: Attempting to create an object for a non-MarbleResource should fail
-            // The factory should validate that the resource is actually a MarbleResource
-            var ex = Assert.Throws<ArgumentException>(
-                () => factory.GetResourceObjectId("standard-translation-id")
+            // Act & Assert: Non-marble / unknown resource IDs surface as NOT_FOUND
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => factory.GetResourceObjectId("SomeStandardTranslation")
             );
-            Assert.That(ex, Is.Not.Null);
+            Assert.That(ex!.Data["platformErrorCode"], Is.EqualTo(PlatformErrorCodes.NotFound));
         }
 
         #endregion

@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.EnhancedResources;
+using Paranext.DataProvider.Errors;
 using Paratext.Data;
 
 namespace TestParanextDataProvider.EnhancedResources
@@ -277,19 +278,21 @@ namespace TestParanextDataProvider.EnhancedResources
         [Property("InvariantId", "INV-C10")]
         [Property("BehaviorId", "BHV-616")]
         [Property("ScenarioId", "TS-043")]
-        [Description("INV-C10: Non-MarbleResource type rejected with ArgumentException")]
-        public async Task GetResourceObjectId_NonMarbleResource_ThrowsArgumentException()
+        [Description(
+            "INV-C10: Non-MarbleResource IDs return NOT_FOUND (ArgumentException heuristic removed)"
+        )]
+        public async Task GetResourceObjectId_NonMarbleResource_ThrowsNotFound()
         {
             // Arrange
             var factory = new EnhancedResourceFactory(Client, ParatextProjects);
             MarbleTestHelper.InitializeFactoryWithTestData(factory);
             await factory.InitializeAsync();
 
-            // Act & Assert: OpenER(s) requires s.Settings.IsMarbleResource == true
-            Assert.Throws<ArgumentException>(
-                () => factory.GetResourceObjectId("standard-translation-id"),
-                "INV-C10: Non-MarbleResource must be rejected"
+            // Act & Assert: Non-marble / unknown IDs surface as NOT_FOUND
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => factory.GetResourceObjectId("SomeStandardTranslation")
             );
+            Assert.That(ex!.Data["platformErrorCode"], Is.EqualTo(PlatformErrorCodes.NotFound));
         }
 
         #endregion
