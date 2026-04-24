@@ -23,10 +23,7 @@ internal static partial class EncyclopediaService
     internal static IReadOnlyDictionary<string, string>? AbbreviationsOverride { get; set; }
     internal static string? V1XmlOverride { get; set; }
     internal static string? V2XmlOverride { get; set; }
-    internal static IReadOnlyDictionary<
-        string,
-        TestArticleContent
-    >? TestArticlesOverride { get; set; }
+    internal static IReadOnlyDictionary<string, ArticleContent>? TestArticlesOverride { get; set; }
 
     private static IReadOnlyCollection<string> KnownResources =>
         KnownResourcesOverride ?? s_emptyStringSet;
@@ -34,14 +31,14 @@ internal static partial class EncyclopediaService
     private static IReadOnlyDictionary<string, string> Abbreviations =>
         AbbreviationsOverride ?? s_emptyStringMap;
 
-    private static IReadOnlyDictionary<string, TestArticleContent> TestArticles =>
+    private static IReadOnlyDictionary<string, ArticleContent> TestArticles =>
         TestArticlesOverride ?? s_emptyArticleMap;
 
     private static readonly HashSet<string> s_emptyStringSet =
         new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string> s_emptyStringMap =
         new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, TestArticleContent> s_emptyArticleMap =
+    private static readonly Dictionary<string, ArticleContent> s_emptyArticleMap =
         new(StringComparer.OrdinalIgnoreCase);
 
     // === PORTED FROM PT9 ===

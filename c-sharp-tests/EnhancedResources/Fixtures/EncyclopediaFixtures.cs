@@ -129,10 +129,10 @@ internal static class EncyclopediaFixtures
     /// Catalog of test articles consumed by EncyclopediaService.GetArticle tests.
     /// Each value is (title, raw paragraphs, image IDs, isV2).
     /// </summary>
-    internal static Dictionary<string, TestArticleContent> BuildTestArticles() =>
+    internal static Dictionary<string, ArticleContent> BuildTestArticles() =>
         new(StringComparer.OrdinalIgnoreCase)
         {
-            ["REALIA:1.1.8.3"] = new TestArticleContent(
+            ["REALIA:1.1.8.3"] = new ArticleContent(
                 "Winnowing fork",
                 [
                     "The winnowing fork was used for threshing grain.",
@@ -142,79 +142,79 @@ internal static class EncyclopediaFixtures
                 ["WinnowingFork"],
                 true
             ),
-            ["test-article-with-verses"] = new TestArticleContent(
+            ["test-article-with-verses"] = new ArticleContent(
                 "Article with verses",
                 ["see verse: <s>G04300301600000</s>"],
                 [],
                 false
             ),
-            ["test-plain-text"] = new TestArticleContent(
+            ["test-plain-text"] = new ArticleContent(
                 "Plain text article",
                 ["plain text"],
                 [],
                 false
             ),
-            ["test-crossref-article"] = new TestArticleContent(
+            ["test-crossref-article"] = new ArticleContent(
                 "Cross-reference article",
                 ["see this article: <l target=\"REALIA:1.1.8.3\">1.1.8.3 Winnowing fork</l>"],
                 [],
                 false
             ),
-            ["test-verse-ref-article"] = new TestArticleContent(
+            ["test-verse-ref-article"] = new ArticleContent(
                 "Verse reference article",
                 ["see verse: <s>G04300301600000</s>"],
                 [],
                 false
             ),
-            ["test-verse-range-article"] = new TestArticleContent(
+            ["test-verse-range-article"] = new ArticleContent(
                 "Verse range article",
                 ["see verse: <s>G04300301600000-G04300301700000</s>"],
                 [],
                 false
             ),
-            ["test-verse-range-crosschapter-article"] = new TestArticleContent(
+            ["test-verse-range-crosschapter-article"] = new ArticleContent(
                 "Verse range cross-chapter article",
                 ["see verse: <s>G04300301600000-G04300401700000</s>"],
                 [],
                 false
             ),
-            ["test-abbreviation-article"] = new TestArticleContent(
+            ["test-abbreviation-article"] = new ArticleContent(
                 "Abbreviation article",
                 ["read the <a>NIV</a>"],
                 [],
                 false
             ),
-            ["test-formatted-text-article"] = new TestArticleContent(
+            ["test-formatted-text-article"] = new ArticleContent(
                 "Formatted text article",
                 ["text <b>with bold</b>", "text <i>with italic</i>"],
                 [],
                 false
             ),
-            ["test-gm011-verse-link"] = new TestArticleContent(
+            ["test-gm011-verse-link"] = new ArticleContent(
                 "GM-011 verse link",
                 ["see verse: <s>G04300301600000</s>"],
                 [],
                 false
             ),
-            ["test-pattern-parsing"] = new TestArticleContent(
+            ["test-pattern-parsing"] = new ArticleContent(
                 "Pattern parsing test",
                 ["see verse: <s>G04300301600000</s>"],
                 [],
                 false
             ),
-            ["test-article-with-images"] = new TestArticleContent(
+            ["test-article-with-images"] = new ArticleContent(
                 "Article with images",
                 ["<image Id=\"Dromedary\"/>See the dromedary."],
                 ["Dromedary"],
                 true
             ),
-            ["test-article-with-inline-images"] = new TestArticleContent(
+            ["test-article-with-inline-images"] = new ArticleContent(
                 "Article with inline images",
                 ["<image Id=\"Dromedary\"/>See the dromedary."],
                 ["Dromedary"],
                 true
             ),
-            ["test-navigation-article"] = new TestArticleContent(
+            ["test-navigation-article"] = new ArticleContent(
                 "Navigation article",
                 [
                     "see verse: <s>G04300301600000</s>",
@@ -224,31 +224,31 @@ internal static class EncyclopediaFixtures
                 ["Camel"],
                 true
             ),
-            ["test-launchviewer-article"] = new TestArticleContent(
+            ["test-launchviewer-article"] = new ArticleContent(
                 "Launch viewer article",
                 ["<image Id=\"Dromedary\"/>See the dromedary."],
                 ["Dromedary"],
                 true
             ),
-            ["test-v2-article-with-images"] = new TestArticleContent(
+            ["test-v2-article-with-images"] = new ArticleContent(
                 "V2 article with images",
                 ["<image Id=\"Dromedary\"/>See the dromedary."],
                 ["Dromedary"],
                 true
             ),
-            ["test-v1-article"] = new TestArticleContent(
+            ["test-v1-article"] = new ArticleContent(
                 "V1 article",
                 ["While there is no doubt about the identity of the animal."],
                 [],
                 false
             ),
-            ["test-article-missing-images"] = new TestArticleContent(
+            ["test-article-missing-images"] = new ArticleContent(
                 "Article with missing images",
                 ["The animal is described here."],
                 [],
                 false
             ),
-            ["test-unknown-abbreviation-article"] = new TestArticleContent(
+            ["test-unknown-abbreviation-article"] = new ArticleContent(
                 "Unknown abbreviation article",
                 ["read the <a>XYZ</a>"],
                 [],
