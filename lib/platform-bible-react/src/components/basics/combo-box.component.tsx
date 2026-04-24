@@ -1,4 +1,4 @@
-import { type CSSProperties, ReactNode, useState } from 'react';
+import { type CSSProperties, type ComponentProps, ReactNode, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
@@ -11,7 +11,6 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/shadcn-ui/command';
-import { PopoverProps } from '@radix-ui/react-popover';
 
 export type ComboBoxLabelOption = { label: string; secondaryLabel?: string };
 export type ComboBoxOption = string | number | ComboBoxLabelOption;
@@ -75,7 +74,7 @@ export type ComboBoxProps<T> = {
   isDisabled?: boolean;
   /** Optional aria-label for the trigger button for accessibility */
   ariaLabel?: string;
-} & PopoverProps;
+} & ComponentProps<typeof Popover>;
 
 function getOptionLabelDefault(option: ComboBoxOption): string {
   if (typeof option === 'string') {

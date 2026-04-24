@@ -58,19 +58,115 @@ function removeLightSelector(css: string): string {
   return result.join('\n');
 }
 
-/** Puts `.light,` back immediately above the first `:root {` */
+/**
+ * Puts `.light,` back immediately above the first `:root {` (opening brace on the same line).
+ *
+ * Skips `:root,` lines (where `:root` is followed by a comma, not a brace) to avoid prepending
+ * `.light,` to multi-selector rules like `:root, html { ... }`.
+ */
 function addLightSelector(css: string): string {
   let added = false;
   return css
     .split('\n')
     .flatMap((line) => {
-      if (!added && /^\s*:root\b/.test(line)) {
+      if (!added && /^\s*:root\s*\{/.test(line)) {
         added = true;
         return ['.light,', line];
       }
       return [line];
     })
     .join('\n');
+}
+
+// ---- CSS variable rewriting helpers ----
+
+/**
+ * Blanks out all `@theme { ... }` blocks in a CSS string (replaces their characters with spaces to
+ * preserve string length and offsets). This prevents Tailwind theme variable declarations — like
+ * `--radius-md` inside `@theme inline { }` — from being treated as protected raw CSS vars.
+ */
+function removeAtThemeBlocks(css: string): string {
+  const regions: Array<[number, number]> = [];
+  let i = 0;
+
+  while (i < css.length) {
+    const atIdx = css.indexOf('@theme', i);
+    if (atIdx === -1) break;
+
+    const openBrace = css.indexOf('{', atIdx);
+    if (openBrace === -1) break;
+
+    let depth = 0;
+    let end = -1;
+    for (let j = openBrace; j < css.length; j++) {
+      if (css[j] === '{') depth += 1;
+      else if (css[j] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          end = j;
+          break;
+        }
+      }
+    }
+    if (end === -1) break;
+
+    regions.push([atIdx, end + 1]);
+    i = end + 1;
+  }
+
+  // Replace from end to start so earlier indices remain valid
+  let result = css;
+  for (let r = regions.length - 1; r >= 0; r--) {
+    const [start, end] = regions[r];
+    result = result.slice(0, start) + ' '.repeat(end - start) + result.slice(end);
+  }
+
+  return result;
+}
+
+/**
+ * Returns the set of CSS custom property names declared in raw CSS selector blocks of index.css
+ * (e.g. `:root`, `.dark`, `.paratext-light`), excluding `@theme` blocks.
+ *
+ * These variables exist at runtime without any Tailwind prefix, so `var(--foo)` is correct for them
+ * and must not be rewritten to `var(--tw-foo)`.
+ */
+function parseProtectedVarsFromIndexCss(css: string): Set<string> {
+  const vars = new Set<string>();
+  const withoutTheme = removeAtThemeBlocks(css);
+  const varPattern = /--([\w-]+)\s*:/g;
+  let match: RegExpExecArray | null;
+  while ((match = varPattern.exec(withoutTheme)) !== null) vars.add(`--${match[1]}`);
+  return vars;
+}
+
+/**
+ * Returns the set of CSS custom property names declared within a TSX component file via inline
+ * style object keys (`'--varname': ...`) or `setProperty('--varname', ...)` calls. These
+ * component-level vars must not be rewritten.
+ */
+function parseComponentDeclaredVars(content: string): Set<string> {
+  const vars = new Set<string>();
+  let match: RegExpExecArray | null;
+
+  const objKeyPattern = /['"](--[\w-]+)['"]\s*:/g;
+  while ((match = objKeyPattern.exec(content)) !== null) vars.add(match[1]);
+
+  const setPropPattern = /\.setProperty\(\s*['"](--[\w-]+)['"]/g;
+  while ((match = setPropPattern.exec(content)) !== null) vars.add(match[1]);
+
+  return vars;
+}
+
+/**
+ * Replaces `var(--xxx)` with `var(--tw-xxx)` in content for any variable not in protectedVars and
+ * not already prefixed with `tw-`.
+ */
+function rewriteCssVarReferences(content: string, protectedVars: Set<string>): string {
+  return content.replace(/var\(--([\w-]+)\)/g, (match, varName: string) => {
+    if (varName.startsWith('tw-') || protectedVars.has(`--${varName}`)) return match;
+    return `var(--tw-${varName})`;
+  });
 }
 
 // ---- @layer base processing ----
@@ -357,12 +453,16 @@ function main(): void {
 
   // Step 13: Apply fixes to changed .ts/.tsx files (always runs)
   const changedFilesRetryNote =
-    "Manually fix changed .ts/.tsx files: replace 'import * as React from \"react\"' with 'import React from \\'react\\'' and replace 'rtl:tw:' with 'tw:rtl:'.";
+    "Manually fix changed .ts/.tsx files: replace 'import * as React from \"react\"' with 'import React from \\'react\\'', replace 'rtl:tw:' with 'tw:rtl:', and rewrite var(--xxx) to var(--tw-xxx) for Tailwind theme vars.";
 
   interface FileTransformation {
     description: string;
     apply: (content: string) => string;
   }
+
+  // Pre-compute protected CSS vars from index.css (vars in :root / theme selectors that must NOT
+  // get the --tw- prefix). Done once here; component-declared vars are detected per file below.
+  const rootVars = parseProtectedVarsFromIndexCss(css);
 
   const fileTransformations: FileTransformation[] = [
     {
@@ -373,6 +473,13 @@ function main(): void {
     {
       description: 'rtl:tw: → tw:rtl:',
       apply: (content) => content.replaceAll('rtl:tw:', 'tw:rtl:'),
+    },
+    {
+      description: 'var(--xxx) → var(--tw-xxx) for Tailwind theme vars',
+      apply: (content) => {
+        const protectedVars = new Set([...rootVars, ...parseComponentDeclaredVars(content)]);
+        return rewriteCssVarReferences(content, protectedVars);
+      },
     },
   ];
 
