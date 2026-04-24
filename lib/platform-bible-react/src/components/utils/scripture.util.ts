@@ -1,1 +1,1 @@
-export type Scope = 'selectedText' | 'verse' | 'chapter' | 'book' | 'selectedBooks';
+export type Scope = 'selectedText' | 'verse' | 'chapter' | 'book' | 'selectedBooks' | 'range';

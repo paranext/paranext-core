@@ -799,6 +799,35 @@ declare module 'platform-scripture' {
 
   // #endregion Marker Types
 
+  // #region Versification Types
+
+  /**
+   * Read-only lookups for a project's versification — final chapter per book, final verse per
+   * chapter. Consumers (e.g. reference pickers) use these to constrain selection to valid
+   * references for a given project. This is a network object (not a project data provider):
+   * versification is fixed at project open and does not change at runtime, so there is no
+   * subscription semantics.
+   *
+   * Obtain via
+   * `papi.networkObjects.get<IVersificationService>('platformScripture.versificationService')`.
+   */
+  export type IVersificationService = {
+    /**
+     * Returns the final verse number in the specified book and chapter using the project's
+     * versification.
+     */
+    lookupFinalVerseNumber(projectId: string, bookNum: number, chapterNum: number): Promise<number>;
+    /** Returns the final chapter number in the specified book using the project's versification. */
+    lookupFinalChapter(projectId: string, bookNum: number): Promise<number>;
+    /**
+     * Returns an array where index `n` is the last verse number in chapter `n` (1-based). Index 0
+     * is unused. Useful for pre-fetching all verse counts for a book in a single round trip.
+     */
+    lookupFinalVerseNumbersInBook(projectId: string, bookNum: number): Promise<number[]>;
+  };
+
+  // #endregion Versification Types
+
   // #region Check Types
 
   /** Details about a check provided by the check itself */

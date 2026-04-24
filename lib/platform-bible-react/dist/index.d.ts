@@ -25,11 +25,49 @@ import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { Toaster, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
 
+type ClassValue$1 = ClassValue;
+type ClassProp = {
+	class: ClassValue$1;
+	className?: never;
+} | {
+	class?: never;
+	className: ClassValue$1;
+} | {
+	class?: never;
+	className?: never;
+};
+type OmitUndefined<T> = T extends undefined ? never : T;
+type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
+/**
+ * Style variants for the Button component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const buttonVariants: (props?: ({
+	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
+	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+} & ClassProp) | undefined) => string;
+/**
+ * Props for Button component
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+	asChild?: boolean;
+}
+/**
+ * The Button component displays a button or a component that looks like a button. The component is
+ * built and styled by Shadcn UI.
+ *
+ * @param ButtonProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 /**
  * Object containing all keys used for localization in the BookChapterControl component. If you're
  * using this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -41,7 +79,9 @@ export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
 	"%scripture_section_dc_long%",
 	"%scripture_section_extra_long%",
 	"%history_recent%",
-	"%history_recentSearches_ariaLabel%"
+	"%history_recentSearches_ariaLabel%",
+	"%webView_bookChapterControl_selectChapter%",
+	"%webView_bookChapterControl_selectVerse%"
 ];
 /** Type definition for the localized strings used in the BookChapterControl component */
 export type BookChapterControlLocalizedStrings = {
@@ -73,6 +113,73 @@ export type BookChapterControlProps = {
 	onAddRecentSearch?: (scrRef: SerializedVerseRef) => void;
 	/** Optional ID for the popover content for accessibility */
 	id?: string;
+	/**
+	 * Optional callback returning the number of verses for a given book and chapter. When provided,
+	 * the control enables verse selection: clicking a chapter transitions to a verse selection
+	 * sub-screen, and typing a reference with a chapter:verse separator shows a verse grid. When
+	 * omitted, the control selects `verseNum: 1` after a chapter is chosen (current behavior).
+	 */
+	getEndVerse?: (bookId: string, chapterNum: number) => number;
+	/**
+	 * Optional lower bound. When provided, any reference that comes strictly before this one in canon
+	 * order is disabled in the UI (books, chapters, and verses). Used to prevent selecting an "end"
+	 * reference that precedes a "start" reference (e.g., in a range picker).
+	 */
+	disableReferencesUpTo?: SerializedVerseRef;
+	/**
+	 * Optional list of extra keys that submit the currently-matched reference from the search input
+	 * (in addition to `Enter`, which always submits). When one of these keys is pressed while the
+	 * typed input resolves to a valid top-match reference, that match is submitted and the key is
+	 * consumed (not inserted into the input). Intended for flows where a "separator" keystroke
+	 * implies completion — e.g. a range picker that uses space or `-` to confirm the start of a range
+	 * and advance to the end.
+	 */
+	submitKeys?: readonly string[];
+	/**
+	 * Optional override for the contents of the trigger button. When provided, this replaces the
+	 * default current-reference label (`"MAT 5:3"`) rendered inside the button — useful when the
+	 * current reference is already shown elsewhere and the trigger only needs an icon (e.g. an inline
+	 * "change reference" affordance). The Button itself is still the PopoverTrigger; only its inner
+	 * content is swapped.
+	 */
+	triggerContent?: React$1.ReactNode;
+	/**
+	 * Optional Button variant applied to the trigger. Defaults to `"outline"` (the standard inline
+	 * picker look); pass `"ghost"` when the control is embedded in a menu / list where a bordered
+	 * button would feel out of place.
+	 */
+	triggerVariant?: ButtonProps["variant"];
+	/**
+	 * Optional callback fired whenever the control's popover open state changes. Useful when the
+	 * parent needs to react to the picker opening or closing — e.g. dimming a sibling control while
+	 * this one is active. Internal back-navigation within the popover (verses → chapters → books)
+	 * does not toggle this: only true open/close transitions do.
+	 */
+	onOpenChange?: (open: boolean) => void;
+	/**
+	 * Optional handler forwarded to the underlying Radix `Popover.Content`. Fires as the popover
+	 * closes and decides where focus should land next — by default Radix returns focus to the trigger
+	 * button. Call `event.preventDefault()` and focus a different element when the trigger isn't the
+	 * right landing spot (e.g. the picker is nested inside a DropdownMenuItem and focus should return
+	 * to the menu item so arrow-key navigation continues to work).
+	 */
+	onCloseAutoFocus?: React$1.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>["onCloseAutoFocus"];
+	/**
+	 * Optional flag forwarded to the underlying Radix `Popover.Root`. Defaults to `false`. Set to
+	 * `true` when the control is opened from inside another focus-trapping primitive (a Radix Dialog
+	 * or DropdownMenu) — the transient focus blip that happens when the picker transitions between
+	 * book/chapter/verse views would otherwise collide with the outer scope's focus trap and dismiss
+	 * the popover. Modal mode gives the popover its own FocusScope that pauses the outer scope while
+	 * it's open, avoiding the collision.
+	 */
+	modal?: boolean;
+	/**
+	 * Optional alignment for the popover relative to its trigger along the cross-axis. Forwarded to
+	 * the underlying Radix `Popover.Content`. Defaults to `"center"`. Use `"start"` when the control
+	 * sits on the right edge of a constrained container (e.g. the second picker in a range dialog) to
+	 * keep the popover anchored to the trigger's leading edge rather than spilling off-screen.
+	 */
+	align?: React$1.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>["align"];
 };
 /**
  * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
@@ -82,7 +189,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, onOpenChange, onCloseAutoFocus, modal, align, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -524,44 +631,6 @@ interface FooterProps {
  * @returns The rendered Footer component
  */
 export declare function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, currentVersion, }: FooterProps): import("react/jsx-runtime").JSX.Element;
-type ClassValue$1 = ClassValue;
-type ClassProp = {
-	class: ClassValue$1;
-	className?: never;
-} | {
-	class?: never;
-	className: ClassValue$1;
-} | {
-	class?: never;
-	className?: never;
-};
-type OmitUndefined<T> = T extends undefined ? never : T;
-type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
-/**
- * Style variants for the Button component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
-} & ClassProp) | undefined) => string;
-/**
- * Props for Button component
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
-	asChild?: boolean;
-}
-/**
- * The Button component displays a button or a component that looks like a button. The component is
- * built and styled by Shadcn UI.
- *
- * @param ButtonProps
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type MultiSelectComboBoxEntry = {
 	value: string;
 	label: string;
@@ -768,7 +837,7 @@ export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose,
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
-export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
+export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks" | "range";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
@@ -1037,9 +1106,9 @@ export type OpenProjectTab = {
 	projectId: string;
 	scrollGroupId: ScrollGroupId;
 	/**
-	 * Optional, pre-formatted "current scripture reference" for this scroll group
-	 * (e.g. `"MAT 3:16"`). Surfaced in the row tooltip. Caller decides the format — the selector
-	 * does no scripture-ref formatting of its own.
+	 * Optional, pre-formatted "current scripture reference" for this scroll group (e.g. `"MAT
+	 * 3:16"`). Surfaced in the row tooltip. Caller decides the format — the selector does no
+	 * scripture-ref formatting of its own.
 	 */
 	scrollGroupScrRefLabel?: string;
 };
@@ -1056,9 +1125,9 @@ export type ProjectSelection = {
 	projectId?: string;
 };
 /**
- * Selection shape for `project-multi` mode. Each entry is a `(projectId, scrollGroupId)` pair;
- * the same project open in two scroll groups is two distinct pairs. `scrollGroupId` is undefined
- * when a project that is not currently open anywhere is selected.
+ * Selection shape for `project-multi` mode. Each entry is a `(projectId, scrollGroupId)` pair; the
+ * same project open in two scroll groups is two distinct pairs. `scrollGroupId` is undefined when a
+ * project that is not currently open anywhere is selected.
  */
 export type ProjectMultiSelection = {
 	pairs: readonly ProjectPair[];
@@ -1078,8 +1147,8 @@ export type ProjectRow = {
 	language?: string;
 	languageCode?: string;
 	/**
-	 * The scroll group this row represents. `undefined` means the row is a project-level row
-	 * (no chip, or `project` mode chips aggregated in `openGroups`).
+	 * The scroll group this row represents. `undefined` means the row is a project-level row (no
+	 * chip, or `project` mode chips aggregated in `openGroups`).
 	 */
 	scrollGroupId?: ScrollGroupId;
 	/**
@@ -1088,21 +1157,20 @@ export type ProjectRow = {
 	 */
 	scrollGroupScrRefLabel?: string;
 	/**
-	 * `project` mode: scroll groups the project is open in (one chip each). Always empty in the
-	 * other modes.
+	 * `project` mode: scroll groups the project is open in (one chip each). Always empty in the other
+	 * modes.
 	 */
 	openGroups: readonly ScrollGroupId[];
 	isSelected: boolean;
 	/**
-	 * `project` mode: true when the project isn't open in any scroll group.
-	 * `project-multi` / `projectScrollGroup`: true for the not-open-project row (no chip). Drives
-	 * muted row styling.
+	 * `project` mode: true when the project isn't open in any scroll group. `project-multi` /
+	 * `projectScrollGroup`: true for the not-open-project row (no chip). Drives muted row styling.
 	 */
 	isMuted: boolean;
 	/**
 	 * True for a synthetic row representing a currently-selected (projectId, scrollGroupId) pair
-	 * whose tab is not currently open. Rendered with a struck-through chip and an "Open" button
-	 * that reopens the tab via `onOpenProjectInGroup`.
+	 * whose tab is not currently open. Rendered with a struck-through chip and an "Open" button that
+	 * reopens the tab via `onOpenProjectInGroup`.
 	 */
 	isBoundButClosed: boolean;
 };
@@ -1123,9 +1191,9 @@ export type ComputeRowsArgs = {
 	selection: ProjectScrollGroupSelection;
 };
 /**
- * Build the selector's row list from the current inputs. Pure: same inputs produce the same
- * output in the same order. Consumers render these rows in the order returned unless they sort
- * further (see {@link partitionAndSort}).
+ * Build the selector's row list from the current inputs. Pure: same inputs produce the same output
+ * in the same order. Consumers render these rows in the order returned unless they sort further
+ * (see {@link partitionAndSort}).
  */
 export declare function computeRows(args: ComputeRowsArgs): ProjectRow[];
 export type RowSection = {
@@ -1134,13 +1202,13 @@ export type RowSection = {
 	rows: ProjectRow[];
 };
 /**
- * Split rows into the Open tabs / Other projects sections (when `groupByOpenTabs`) or a single
- * flat section (otherwise). Within each section, selected rows float to the top, then
- * alphabetical by `shortName`, tie-broken by `scrollGroupId`.
+ * Split rows into the Open tabs / Other projects sections (when `groupByOpenTabs`) or a single flat
+ * section (otherwise). Within each section, selected rows float to the top, then alphabetical by
+ * `shortName`, tie-broken by `scrollGroupId`.
  *
  * "Open tabs" rows are: open-group rows (project-multi / projectScrollGroup modes) and
- * `project`-mode rows whose project is open somewhere. Bound-but-closed synthetic rows and
- * not-open project rows land in "Other projects".
+ * `project`-mode rows whose project is open somewhere. Bound-but-closed synthetic rows and not-open
+ * project rows land in "Other projects".
  */
 export declare function partitionAndSort(rows: readonly ProjectRow[], groupByOpenTabs: boolean): RowSection[];
 export type ProjectSelectorLocalizedStrings = {
@@ -1209,7 +1277,8 @@ export type ProjectSelectorProps = (CommonProps & {
 	onOpenProjectInGroup?: (projectId: string, scrollGroupId: ScrollGroupId) => void;
 	/**
 	 * Optional custom trigger label when at least one pair is selected. Receives the list of
-	 * selected `(project, scrollGroupId)` tuples. Defaults to `"N: short1 (A), short2 (B), ..."`.
+	 * selected `(project, scrollGroupId)` tuples. Defaults to `"N: short1 (A), short2 (B),
+	 * ..."`.
 	 */
 	getSelectedText?: (selected: ReadonlyArray<{
 		project: ProjectSelectorProject;
@@ -1231,11 +1300,12 @@ export type ProjectSelectorProps = (CommonProps & {
 });
 /**
  * Combo-box project picker with three modes:
- * - `project` — single-select, one row per project; chips list every open scroll group as
- *   metadata (non-interactive, the whole row is the click target).
- * - `project-multi` — multi-select over `(projectId, scrollGroupId)` pairs. Same project open in
- *   two scroll groups renders as two independently-selectable rows. Projects not open anywhere
- *   render as a single row with no chip.
+ *
+ * - `project` — single-select, one row per project; chips list every open scroll group as metadata
+ *   (non-interactive, the whole row is the click target).
+ * - `project-multi` — multi-select over `(projectId, scrollGroupId)` pairs. Same project open in two
+ *   scroll groups renders as two independently-selectable rows. Projects not open anywhere render
+ *   as a single row with no chip.
  * - `projectScrollGroup` — single-select of one `(projectId, scrollGroupId)` pair. Clicking a
  *   not-open-project row selects the project in Group A and calls `onOpenProjectInGroup`.
  *
@@ -1393,12 +1463,21 @@ export declare function ScriptureResultsViewer({ sources, showColumnHeaders, sho
  */
 export declare const SCOPE_SELECTOR_STRING_KEYS: readonly [
 	"%webView_scope_selector_selected_text%",
+	"%webView_scope_selector_verse%",
+	"%webView_scope_selector_chapter%",
+	"%webView_scope_selector_book%",
 	"%webView_scope_selector_current_verse%",
 	"%webView_scope_selector_current_chapter%",
 	"%webView_scope_selector_current_book%",
 	"%webView_scope_selector_choose_books%",
 	"%webView_scope_selector_scope%",
 	"%webView_scope_selector_select_books%",
+	"%webView_scope_selector_range%",
+	"%webView_scope_selector_select_range%",
+	"%webView_scope_selector_range_start%",
+	"%webView_scope_selector_range_end%",
+	"%webView_scope_selector_ok%",
+	"%webView_scope_selector_navigate%",
 	"%webView_book_selector_books_selected%",
 	"%webView_book_selector_select_books%",
 	"%webView_book_selector_search_books%",
@@ -1419,6 +1498,8 @@ export declare const SCOPE_SELECTOR_STRING_KEYS: readonly [
 export type ScopeSelectorLocalizedStrings = {
 	[localizedInventoryKey in (typeof SCOPE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
+/** Visual layout variant for the scope options. */
+export type ScopeSelectorVariant = "radio" | "dropdown";
 interface ScopeSelectorProps {
 	/** The current scope selection */
 	scope: Scope;
@@ -1455,13 +1536,59 @@ interface ScopeSelectorProps {
 	}>;
 	/** Optional ID that is applied to the root element of this component */
 	id?: string;
+	/**
+	 * Controls how the scope options are presented. `'radio'` (default) renders a vertical list of
+	 * radio buttons. `'dropdown'` renders a single Select trigger whose popover contains the
+	 * options.
+	 */
+	variant?: ScopeSelectorVariant;
+	/**
+	 * The start of the verse range. Only used when `scope === 'range'`. Defaults to `defaultScrRef`
+	 * (GEN 1:1) if neither this nor `currentScrRef` is provided.
+	 */
+	rangeStart?: SerializedVerseRef;
+	/**
+	 * The end of the verse range. Only used when `scope === 'range'`. Every time the user submits a
+	 * new `rangeStart`, `onRangeEndChange` is also fired with that same reference so the end mirrors
+	 * the start; the user is free to narrow the end afterward. Defaults to `defaultScrRef` (GEN 1:1)
+	 * if neither this nor `currentScrRef` is provided.
+	 */
+	rangeEnd?: SerializedVerseRef;
+	/** Callback when the range start reference changes. Required to make the range UI functional. */
+	onRangeStartChange?: (scrRef: SerializedVerseRef) => void;
+	/** Callback when the range end reference changes. Required to make the range UI functional. */
+	onRangeEndChange?: (scrRef: SerializedVerseRef) => void;
+	/**
+	 * Optional current scripture reference. When provided and no explicit `rangeStart` or `rangeEnd`
+	 * is supplied, it is used as the initial value for the range controls.
+	 */
+	currentScrRef?: SerializedVerseRef;
+	/**
+	 * Optional callback fired when the user picks a new scripture reference from the "Navigate"
+	 * footer entry at the bottom of the dropdown variant. Provide this alongside `currentScrRef` (and
+	 * using `variant="dropdown"`) to surface the footer button — a BookChapterControl picker prefixed
+	 * with a "Navigate" headline and the current reference. Without this callback the footer is not
+	 * rendered.
+	 */
+	onCurrentScrRefChange?: (scrRef: SerializedVerseRef) => void;
+	/**
+	 * Optional localized strings passed to the range BCV controls. When omitted, the BCV controls
+	 * will fall back to their internal defaults.
+	 */
+	bookChapterControlLocalizedStrings?: BookChapterControlLocalizedStrings;
+	/**
+	 * Optional callback returning the number of verses for a given book and chapter. When provided,
+	 * the range BCV controls enable verse selection. See `BookChapterControlProps.getEndVerse`.
+	 */
+	getEndVerse?: (bookId: string, chapterNum: number) => number;
 }
 /**
  * A component that allows users to select the scope of their search or operation. Available scopes
  * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a BookSelector
- * component is displayed to allow users to choose specific books.
+ * component is displayed to allow users to choose specific books. When 'range' is chosen, two
+ * BookChapterControl pickers are displayed for selecting the start and end verse of the range.
  */
-export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, id, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
@@ -2522,6 +2649,15 @@ export declare const Popover: React$1.FC<PopoverPrimitive.PopoverProps>;
 export declare const PopoverTrigger: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Popover */
 export declare const PopoverAnchor: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverAnchorProps & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Override the container that descendant `PopoverContent` components portal to. Render this inside
+ * a modal Radix `DialogContent` (with its element as `container`) so that nested popovers remain
+ * within the dialog's focus scope and keep working normally.
+ */
+export declare function PopoverPortalContainerProvider({ container, children, }: {
+	container: HTMLElement | null;
+	children: React$1.ReactNode;
+}): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
 export declare const PopoverContent: React$1.ForwardRefExoticComponent<Omit<PopoverPrimitive.PopoverContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /**
@@ -2592,7 +2728,7 @@ export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<Sel
  */
 export declare function ResizablePanelGroup({ className, ...props }: React$1.ComponentProps<typeof ResizablePrimitive.PanelGroup>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc ResizablePanelGroup */
-export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLElement | HTMLCanvasElement | HTMLImageElement | HTMLVideoElement | HTMLAnchorElement | HTMLScriptElement | HTMLEmbedElement | HTMLFormElement | HTMLHeadElement | HTMLAreaElement | HTMLObjectElement | HTMLLinkElement | HTMLMapElement | HTMLInputElement | HTMLBaseElement | HTMLTimeElement | HTMLDataElement | HTMLProgressElement | HTMLTrackElement | HTMLSourceElement | HTMLButtonElement | HTMLAudioElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLTableCaptionElement | HTMLTableColElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDivElement | HTMLDListElement | HTMLFieldSetElement | HTMLHeadingElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLabelElement | HTMLLegendElement | HTMLLIElement | HTMLMenuElement | HTMLMetaElement | HTMLMeterElement | HTMLOListElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLParagraphElement | HTMLPictureElement | HTMLPreElement | HTMLSelectElement | HTMLSlotElement | HTMLSpanElement | HTMLStyleElement | HTMLTableElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTemplateElement | HTMLTextAreaElement | HTMLTitleElement | HTMLTableRowElement | HTMLUListElement>, "id" | "onResize"> & {
+export declare const ResizablePanel: React$1.ForwardRefExoticComponent<Omit<React$1.HTMLAttributes<HTMLImageElement | HTMLElement | HTMLVideoElement | HTMLCanvasElement | HTMLAnchorElement | HTMLScriptElement | HTMLEmbedElement | HTMLFormElement | HTMLHeadElement | HTMLAreaElement | HTMLObjectElement | HTMLLinkElement | HTMLMapElement | HTMLInputElement | HTMLBaseElement | HTMLDataElement | HTMLTimeElement | HTMLSourceElement | HTMLProgressElement | HTMLTrackElement | HTMLButtonElement | HTMLAudioElement | HTMLQuoteElement | HTMLBodyElement | HTMLBRElement | HTMLTableCaptionElement | HTMLTableColElement | HTMLDataListElement | HTMLModElement | HTMLDetailsElement | HTMLDialogElement | HTMLDivElement | HTMLDListElement | HTMLFieldSetElement | HTMLHeadingElement | HTMLHRElement | HTMLHtmlElement | HTMLIFrameElement | HTMLLabelElement | HTMLLegendElement | HTMLLIElement | HTMLMenuElement | HTMLMetaElement | HTMLMeterElement | HTMLOListElement | HTMLOptGroupElement | HTMLOptionElement | HTMLOutputElement | HTMLParagraphElement | HTMLPictureElement | HTMLPreElement | HTMLSelectElement | HTMLSlotElement | HTMLSpanElement | HTMLStyleElement | HTMLTableElement | HTMLTableSectionElement | HTMLTableCellElement | HTMLTemplateElement | HTMLTextAreaElement | HTMLTitleElement | HTMLTableRowElement | HTMLUListElement>, "id" | "onResize"> & {
 	className?: string;
 	collapsedSize?: number | undefined;
 	collapsible?: boolean | undefined;

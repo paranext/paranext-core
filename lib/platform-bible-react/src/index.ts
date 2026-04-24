@@ -143,7 +143,10 @@ export type {
 } from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 export { default as ScopeSelector } from './components/advanced/scope-selector/scope-selector.component';
 export { SCOPE_SELECTOR_STRING_KEYS } from './components/advanced/scope-selector/scope-selector.component';
-export type { ScopeSelectorLocalizedStrings } from './components/advanced/scope-selector/scope-selector.component';
+export type {
+  ScopeSelectorLocalizedStrings,
+  ScopeSelectorVariant,
+} from './components/advanced/scope-selector/scope-selector.component';
 export {
   default as ScrollGroupSelector,
   type ScrollGroupSelectorProps,

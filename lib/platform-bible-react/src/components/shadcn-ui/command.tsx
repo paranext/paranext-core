@@ -46,8 +46,29 @@ function CommandDialog({ children, ...props }: CommandDialogProps) {
 const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, ...props }, ref) => {
+>(({ className, onKeyDown, ...props }, ref) => {
   const dir: Direction = readDirection();
+  // When the filter is empty, a leading space is almost never what the user wants — they're
+  // looking at a highlighted item and expect Space to pick it (the Enter UX). Intercept Space
+  // in that state, find cmdk's current `data-selected` item, and click it. cmdk auto-highlights
+  // the first non-disabled item so the target always exists when the list is non-empty.
+  const handleKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      onKeyDown?.(event);
+      if (event.defaultPrevented) return;
+      if (event.key !== ' ') return;
+      if (event.currentTarget.value !== '') return;
+      const commandRoot = event.currentTarget.closest('[cmdk-root]');
+      const highlighted = commandRoot?.querySelector<HTMLElement>(
+        '[cmdk-item][data-selected="true"]:not([data-disabled="true"])',
+      );
+      if (!highlighted) return;
+      event.preventDefault();
+      event.stopPropagation();
+      highlighted.click();
+    },
+    [onKeyDown],
+  );
   return (
     <div className="tw-flex tw-items-center tw-border-b tw-px-3" dir={dir}>
       <Search className="tw-me-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
@@ -57,6 +78,7 @@ const CommandInput = React.forwardRef<
           'tw-flex tw-h-11 tw-w-full tw-rounded-md tw-bg-transparent tw-py-3 tw-text-sm tw-outline-none placeholder:tw-text-muted-foreground disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
           className,
         )}
+        onKeyDown={handleKeyDown}
         {...props}
       />
     </div>
