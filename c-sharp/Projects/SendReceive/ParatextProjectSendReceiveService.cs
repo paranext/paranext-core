@@ -15,16 +15,21 @@ internal class ParatextProjectSendReceiveService(
     {
         // Set up commands on the PAPI
         await Task.WhenAll(
-            papiClient.RegisterRequestHandlerAsync(
+            PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.commitChanges",
                 CommitChanges
             ),
-            papiClient.RegisterRequestHandlerAsync(
+            PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.commitDaily",
                 CommitDaily
             )
         );
     }
+
+    #endregion
+
+    #region Protected properties and methods
+    protected PapiClient PapiClient { get; } = papiClient;
 
     #endregion
 

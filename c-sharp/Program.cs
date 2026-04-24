@@ -64,6 +64,9 @@ public static class Program
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
             PtxUtilsDataSettings.Initialize(new PersistedPtxUtilsSettings(papi));
 
+            // Initializes the versioning manager
+            VersioningManager.Initialize();
+
             SettingsService.Initialize(papi);
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var paratextSendReceiveService = new ParatextProjectSendReceiveService(
