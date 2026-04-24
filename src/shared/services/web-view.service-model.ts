@@ -117,7 +117,9 @@ export interface WebViewServiceType {
    * view definitions themselves. Changing properties on the returned definitions does not affect
    * the actual WebView definitions.
    *
-   * @returns Array of saved properties for all open WebView definitions
+   * @returns Promise that resolves to an array of saved properties for all open WebView
+   *   definitions. The promise will not resolve until the Platform.Bible dock layout UI has been
+   *   initialized.
    */
   getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
 

@@ -254,6 +254,12 @@ export type PapiDockLayout = {
    */
   floatTabById: (tabId: string) => void;
   /**
+   * Gets all WebView definitions for all currently open web view tabs
+   *
+   * @returns Array of WebView definitions for all open web view tabs
+   */
+  getAllWebViewDefinitions: () => WebViewDefinition[];
+  /**
    * Gets the WebView definition for the web view with the specified ID
    *
    * @param webViewId The ID of the WebView whose web view definition to get

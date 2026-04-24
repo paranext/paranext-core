@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  WEB_VIEW_CONTENT_TYPE,
-  WebViewDefinition,
-  isWebViewDefinition,
-} from '@shared/models/web-view.model';
+import { WEB_VIEW_CONTENT_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
   convertWebViewDefinitionToSaved,
@@ -621,11 +617,11 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
 }
 
 export function saveWebViewTab(tabInfo: TabInfo): SavedTabInfo {
-  if (!isWebViewDefinition(tabInfo.data))
-    throw new Error(`saveWebViewTab: tabInfo.data is not a WebViewDefinition`);
   return {
     ...saveTabInfoBase(tabInfo),
-    data: convertWebViewDefinitionToSaved(tabInfo.data),
+    // Assert what the unknown `data` type is.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    data: convertWebViewDefinitionToSaved(tabInfo.data as WebViewDefinition),
   };
 }
 

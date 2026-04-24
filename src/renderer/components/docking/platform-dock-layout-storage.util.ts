@@ -15,11 +15,7 @@ import {
   TabSaver,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
-import {
-  WebViewDefinition,
-  WebViewDefinitionUpdateInfo,
-  isWebViewDefinition,
-} from '@shared/models/web-view.model';
+import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
 import { getErrorMessage } from 'platform-bible-utils';
 
 import { DIALOGS } from '@renderer/components/dialogs';
@@ -594,12 +590,36 @@ function getWebViewTabInfoById(
       }' is not a WebView tab`,
     );
 
-  if (!isWebViewDefinition(targetTabInfo.data))
-    throw new Error(
-      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTabInfo.id}' has invalid WebView data`,
-    );
+  // Type assert the webview data in the web view tab
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const targetTabWebViewData = targetTabInfo.data as WebViewDefinition;
 
-  return [targetTabInfo, targetTabInfo.data];
+  return [targetTabInfo, targetTabWebViewData];
+}
+
+/**
+ * Gets all WebView definitions for all currently open web view tabs in the dock layout
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @returns Array of WebView definitions for all open web view tabs
+ */
+export function getAllWebViewDefinitions(dockLayout: DockLayout): WebViewDefinition[] {
+  const webViewDefinitions: WebViewDefinition[] = [];
+
+  // Always return false from the callback so rc-dock visits every tab instead of stopping at the
+  // first match. Filter.AnyTab traverses both docked and floated panels.
+  dockLayout.find((item) => {
+    if (!('data' in item)) return false;
+    // rc-dock's find callback types `item.data` as `unknown`; we check webViewType before use
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const webViewData = item.data as WebViewDefinition;
+    if (!webViewData?.webViewType) return false;
+    webViewDefinitions.push(webViewData);
+    return false;
+  }, Filter.AnyTab);
+
+  return webViewDefinitions;
 }
 
 /**

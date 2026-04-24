@@ -35,7 +35,6 @@ import {
   WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS,
   WebViewDefinition,
   WebViewDefinitionReact,
-  isWebViewDefinition,
   WebViewDefinitionUpdateInfo,
   WebViewId,
   WebViewType,
@@ -77,7 +76,6 @@ import {
   Unsubscriber,
 } from 'platform-bible-utils';
 import { LayoutBase } from 'rc-dock';
-import { Filter } from 'rc-dock/lib/Algorithm';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -957,28 +955,14 @@ export function getSavedWebViewDefinitionSync(
 /** See {@link WebViewServiceType.getAllOpenWebViewDefinitions} */
 async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]> {
   const dockLayout = await getDockLayout();
-  const webViewDefinitions: SavedWebViewDefinition[] = [];
-
-  dockLayout.dockLayout.find((item) => {
-    // Skip anything that isn't a tab with data
-    if (!('data' in item)) return false;
-
-    // Skip tabs whose data doesn't have webViewType (i.e. not a web view)
-    if (!isWebViewDefinition(item.data)) return false;
-    const webviewData = item.data;
-
-    const savedWebViewDefinition = convertWebViewDefinitionToSaved(webviewData);
-
-    // Load the WebView state so the WebViewState service doesn't delete this entry
+  // Strip runtime-only properties (content, styles, security flags) from each definition before
+  // returning — providers re-supply these when the view is loaded. Touch each view's state so the
+  // WebViewState service doesn't garbage-collect it.
+  return dockLayout.getAllWebViewDefinitions().map((webViewData) => {
+    const savedWebViewDefinition = convertWebViewDefinitionToSaved(webViewData);
     getFullWebViewStateById(savedWebViewDefinition.id);
-
-    webViewDefinitions.push(savedWebViewDefinition);
-
-    // Always return false — we want to collect ALL webviews, not stop at the first
-    return false;
-  }, Filter.AnyTab);
-
-  return webViewDefinitions;
+    return savedWebViewDefinition;
+  });
 }
 
 // #endregion WebView definitions
@@ -1577,8 +1561,9 @@ export const openWebView = async (
             // This is not a webview
             if (!('data' in item)) return false;
 
-            // Find any webview with the specified webViewType
-            return isWebViewDefinition(item.data) && item.data.webViewType === webViewType;
+            // Find any webview with the specified webViewType. Type assert the unknown `data`.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            return (item.data as WebViewDefinition).webViewType === webViewType;
           }
         : // If they provided any other string, look for a webview with that ID
           optionsDefaulted.existingId,
