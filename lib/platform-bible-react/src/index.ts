@@ -104,6 +104,26 @@ export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
+export {
+  default as ProjectSelector,
+  scrollGroupLetter,
+  type ProjectSelectorProps,
+  type ProjectSelectorLocalizedStrings,
+  type ProjectSelectorMode,
+  type ProjectSelectorProject,
+  type OpenProjectTab,
+  type ProjectPair,
+  type ProjectSelection,
+  type ProjectMultiSelection,
+  type ProjectScrollGroupSelection,
+  type ProjectRow,
+} from './components/advanced/project-selector.component';
+export {
+  computeRows,
+  partitionAndSort,
+  type RowSection,
+  type ComputeRowsArgs,
+} from './components/advanced/project-selector.rows';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
   default as SettingsSidebar,
