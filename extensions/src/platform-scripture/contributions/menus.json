@@ -1,8 +1,22 @@
 {
   "mainMenu": {
     "columns": {},
-    "groups": {},
-    "items": []
+    "groups": {
+      "platformScripture.checklists": {
+        "column": "platform.app",
+        "order": 3.5,
+        "isExtensible": true
+      }
+    },
+    "items": [
+      {
+        "label": "%markersChecklist_menu_openTool%",
+        "localizeNotes": "Application main menu > Project > Markers Checklist...",
+        "group": "platformScripture.checklists",
+        "order": 1,
+        "command": "platformScripture.openMarkersChecklist"
+      }
+    ]
   },
   "webViewMenus": {
     "platformScripture.configureChecks": {
@@ -31,6 +45,35 @@
     "platformScripture.characterInventory": {},
     "platformScripture.repeatedWordsInventory": {},
     "platformScripture.punctuationInventory": {},
-    "platformScripture.markersInventory": {}
+    "platformScripture.markersInventory": {},
+    "platformScripture.markersChecklist": {
+      "includeDefaults": true,
+      "topMenu": {
+        "columns": {
+          "platformScripture.markersChecklist.view": {
+            "label": "%webView_platformScripture_markersChecklist_viewColumn%",
+            "order": 1
+          }
+        },
+        "groups": {
+          "platformScripture.markersChecklist.export": {
+            "column": "platformScripture.markersChecklist.view",
+            "order": 1
+          }
+        },
+        "items": [
+          {
+            "label": "%markersChecklist_menu_settings%",
+            "group": "platformScripture.markersChecklist.export",
+            "order": 1,
+            "command": "platformScripture.openMarkersChecklistSettings"
+          }
+        ]
+      },
+      "contextMenu": {
+        "groups": {},
+        "items": []
+      }
+    }
   }
 }

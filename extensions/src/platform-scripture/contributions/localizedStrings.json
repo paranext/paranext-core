@@ -305,7 +305,12 @@
       "%markersChecklist_edit_aria%": "Edit {ref}",
       "%markersChecklist_goto_aria%": "Goto {ref}",
       "%markersChecklist_edit_disabled_tooltip%": "Coming in a future release",
-      "%markersChecklist_columnHeader_aria%": "Project: {name}"
+      "%markersChecklist_columnHeader_aria%": "Project: {name}",
+      "%markersChecklist_windowTitle%": "Markers Checklist - {projectName}",
+      "%markersChecklist_menu_openTool%": "Markers Checklist...",
+      "%markersChecklist_menu_settings%": "Settings...",
+      "%webView_platformScripture_markersChecklist_viewColumn%": "View",
+      "%webView_platformScripture_markersChecklist_settings%": "Settings..."
     },
     "es": {
       "%inventoryName_Character%": "Inventario de caracteres",

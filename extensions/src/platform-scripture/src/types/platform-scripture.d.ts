@@ -957,7 +957,7 @@ declare module 'platform-scripture' {
      *
      * @example Not a known name "{name}"
      *
-     * @example %extensionName.unknownName%
+     * @example %tab_title_unknown% (illustrative — any `LocalizeKey` is valid here)
      */
     messageFormatString: LocalizeKey | string;
     /**
@@ -1578,6 +1578,110 @@ declare module 'platform-scripture' {
   };
 
   // #endregion ChecksSetup Types
+
+  // #region Markers Checklist Types
+  //
+  // Surface mirrors `data-contracts.md` §§2.1/2.2/2.4/4.1/4.2/4.5. `IChecklistService` is a plain
+  // NetworkObject interface — NOT added to `papi-shared-types` `DataProviders` (see
+  // `.context/features/markers-checklist/implementation/ui-alignment.md` §"Network Object
+  // Connection"). The web view acquires a typed proxy via
+  // `papi.networkObjects.get<IChecklistService>('platformScripture.checklistService')`.
+
+  /** A 3-letter book code + chapter + verse, matching the platform's `SerializedVerseRef`. */
+  export type ChecklistScriptureVerseRef = {
+    book: string;
+    chapterNum: number;
+    verseNum: number;
+  };
+
+  /**
+   * Inclusive Scripture range used by {@link ChecklistRequest}. Mirrors the platform's
+   * `ScriptureRange`.
+   */
+  export type ChecklistScriptureRange = {
+    start: ChecklistScriptureVerseRef;
+    end: ChecklistScriptureVerseRef;
+  };
+
+  /** Configuration for equivalent marker pairs and marker filter (data-contracts.md §2.2). */
+  export type ChecklistMarkerSettings = {
+    /** Space-separated marker pairs in "marker1/marker2" format. */
+    equivalentMarkers: string;
+    /** Space-separated marker names to include; empty means all paragraph markers. */
+    markerFilter: string;
+  };
+
+  /** Identifies a comparative text for resolution (data-contracts.md §2.4). */
+  export type ChecklistComparativeTextRef = {
+    /** GUID of the comparative text (preferred resolution method). */
+    id: string;
+    /** Display name of the comparative text (fallback resolution method). */
+    name: string;
+  };
+
+  /** Primary input for `buildChecklistData` (data-contracts.md §2.1). */
+  export type ChecklistRequest = {
+    projectId: string;
+    comparativeTextIds: string[];
+    markerSettings: ChecklistMarkerSettings;
+    verseRange: ChecklistScriptureRange | undefined;
+    hideMatches: boolean;
+    showVerseText: boolean;
+  };
+
+  /** Discriminated-union response wrapper for `buildChecklistData` (data-contracts.md §3.1). */
+  export type ChecklistResultResponse =
+    | {
+        success: true;
+        rows: unknown[];
+        columnHeaders: string[];
+        columnProjectIds: string[];
+        excludedCount: number;
+        helpText: string | undefined;
+        truncated: boolean;
+        emptyResultMessage: unknown | undefined;
+      }
+    | {
+        success: false;
+        code: string;
+        message: string;
+      };
+
+  /** Parsed/validated equivalent-marker settings (data-contracts.md §4.2). */
+  export type MarkerSettingsValidationResult = {
+    valid: boolean;
+    parsedPairs: { marker1: string; marker2: string }[] | undefined;
+    errorMessage: string | undefined;
+  };
+
+  /** Resolved comparative-text payload (data-contracts.md §4.5). */
+  export type ResolvedComparativeTexts = {
+    texts: {
+      id: string;
+      name: string;
+      fullName: string;
+      available: boolean;
+    }[];
+  };
+
+  /**
+   * Typed proxy for the `platformScripture.checklistService` NetworkObject. Methods mirror
+   * data-contracts.md §§4.1 / 4.2 / 4.5. Acquired via
+   * `papi.networkObjects.get<IChecklistService>(...)`.
+   */
+  export interface IChecklistService {
+    /** Generate checklist data for the supplied request (data-contracts.md §4.1). */
+    buildChecklistData(request: ChecklistRequest): Promise<ChecklistResultResponse>;
+    /** Validate an equivalent-markers string (data-contracts.md §4.2). */
+    validateMarkerSettings(equivalentMarkers: string): Promise<MarkerSettingsValidationResult>;
+    /** Resolve comparative-text references (data-contracts.md §4.5). */
+    resolveComparativeTexts(
+      activeProjectId: string,
+      requestedTexts: ChecklistComparativeTextRef[],
+    ): Promise<ResolvedComparativeTexts>;
+  }
+
+  // #endregion Markers Checklist Types
 }
 
 declare module 'papi-shared-types' {
@@ -1674,6 +1778,20 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+
+    /**
+     * Open the Markers Checklist web view. Resolves the target project from the supplied
+     * `webViewId` (of an editor tab) when provided.
+     */
+    'platformScripture.openMarkersChecklist': (
+      webViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the Marker Settings dialog for the Markers Checklist. Wired as a stub in UI-PKG-001 and
+     * replaced with the real dialog launcher in UI-PKG-003.
+     */
+    'platformScripture.openMarkersChecklistSettings': () => Promise<void>;
   }
 
   export interface ProjectSettingTypes {

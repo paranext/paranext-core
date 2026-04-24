@@ -6,6 +6,11 @@ import {
   ChecksSidePanelWebViewProvider,
   checksSidePanelWebViewType,
 } from './checks-side-panel.web-view-provider';
+import {
+  ChecklistWebViewOptions,
+  ChecklistWebViewProvider,
+  markersChecklistWebViewType,
+} from './checklist.web-view-provider';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import {
   checkAggregatorService,
@@ -152,6 +157,33 @@ async function openChecksSidePanel(
   return sidePanelWebViewId;
 }
 
+async function openMarkersChecklist(webViewId: string | undefined): Promise<string | undefined> {
+  let projectId: string | undefined;
+
+  if (webViewId) {
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+    projectId = webViewDefinition?.projectId;
+  }
+
+  const options: ChecklistWebViewOptions = { projectId };
+  return papi.webViews.openWebView(
+    markersChecklistWebViewType,
+    { type: 'float', floatSize: { width: 1000, height: 700 } },
+    options,
+  );
+}
+
+/**
+ * Stub handler for the "Settings…" tab-menu item. Replaced in UI-PKG-003 when the
+ * `marker-settings-dialog` is wired. Registering the command up-front lets the tab-menu
+ * contribution in `menus.json` reference a real command without a broken-command warning.
+ */
+async function openMarkersChecklistSettings(): Promise<void> {
+  logger.debug(
+    'platformScripture.openMarkersChecklistSettings invoked — stub (wired in UI-PKG-003).',
+  );
+}
+
 async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
   let projectId: FindWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
@@ -240,6 +272,7 @@ export async function activate(context: ExecutionActivationContext) {
   );
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
   const findWebViewProvider = new FindWebViewProvider();
+  const markersChecklistWebViewProvider = new ChecklistWebViewProvider();
 
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
@@ -395,6 +428,48 @@ export async function activate(context: ExecutionActivationContext) {
     checksSidePanelWebViewProvider,
   );
 
+  const openMarkersChecklistPromise = papi.commands.registerCommand(
+    'platformScripture.openMarkersChecklist',
+    openMarkersChecklist,
+    {
+      method: {
+        summary: 'Open the Markers Checklist tool',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that the checklist is for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened markers checklist web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const openMarkersChecklistSettingsPromise = papi.commands.registerCommand(
+    'platformScripture.openMarkersChecklistSettings',
+    openMarkersChecklistSettings,
+    {
+      method: {
+        summary: 'Open the Marker Settings dialog for the Markers Checklist',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'Void',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+  const markersChecklistWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    markersChecklistWebViewType,
+    markersChecklistWebViewProvider,
+  );
+
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
       summary: 'Open the find UI',
@@ -471,6 +546,9 @@ export async function activate(context: ExecutionActivationContext) {
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
     await showChecksSidePanelWebViewProviderPromise,
+    await openMarkersChecklistPromise,
+    await openMarkersChecklistSettingsPromise,
+    await markersChecklistWebViewProviderPromise,
     await openFindPromise,
     await openFindWebViewProviderPromise,
     await invalidateResultsPromise,
