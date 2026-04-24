@@ -433,7 +433,9 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
   const [allProjects] = usePromise(
     useCallback(async () => {
       const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+        // Scripture + Paratext project interfaces — mirrors checks-side-panel's filter so we pick
+        // up the same project set that the scripture editor shows.
+        includeProjectInterfaces: ['platformScripture.USJ_Chapter', 'platformScripture.USFM_Book'],
       });
       const results: ProjectSelectorProject[] = [];
       await Promise.all(
