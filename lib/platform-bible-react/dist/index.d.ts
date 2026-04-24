@@ -2,17 +2,15 @@
 
 import { DeltaOpInsertNoteEmbed, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
-import { PopoverProps } from '@radix-ui/react-popover';
-import * as RadixTabs from '@radix-ui/react-tabs';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
 import { CommentStatus, LanguageStrings, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
-import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
+import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -1628,6 +1626,26 @@ export type ChecklistProps = {
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
 export declare function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Popover component displays rich content in a portal, triggered by a button. This component is
+ * built on Radix UI's Popover component and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/popover}
+ */
+export declare function Popover({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverTrigger({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverContent({ className, align, sideOffset, style, ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverAnchor({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Anchor>): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverTitle({ className, ...props }: React$1.ComponentProps<"h2">): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Popover */
+export declare function PopoverDescription({ className, ...props }: React$1.ComponentProps<"p">): import("react/jsx-runtime").JSX.Element;
 export type ComboBoxLabelOption = {
 	label: string;
 	secondaryLabel?: string;
@@ -1691,7 +1709,7 @@ export type ComboBoxProps<T> = {
 	isDisabled?: boolean;
 	/** Optional aria-label for the trigger button for accessibility */
 	ariaLabel?: string;
-} & PopoverProps;
+} & React$1.ComponentProps<typeof Popover>;
 /**
  * Autocomplete input and command palette with a list of suggestions.
  *
@@ -2211,26 +2229,6 @@ export declare function Input({ className, type, ...props }: React$1.ComponentPr
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
  */
 export declare function Label({ className, ...props }: React$1.ComponentProps<typeof LabelPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
-/**
- * The Popover component displays rich content in a portal, triggered by a button. This component is
- * built on Radix UI's Popover component and styled by Shadcn UI.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/popover}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/popover}
- */
-export declare function Popover({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Popover */
-export declare function PopoverTrigger({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Popover */
-export declare function PopoverContent({ className, align, sideOffset, style, ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Popover */
-export declare function PopoverAnchor({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Anchor>): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Popover */
-export declare function PopoverHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Popover */
-export declare function PopoverTitle({ className, ...props }: React$1.ComponentProps<"h2">): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Popover */
-export declare function PopoverDescription({ className, ...props }: React$1.ComponentProps<"p">): import("react/jsx-runtime").JSX.Element;
 /**
  * Displays an indicator showing the completion progress of a task, typically displayed as a
  * progress bar. This component is built on Radix UI primitives and styled with Shadcn UI.

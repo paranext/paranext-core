@@ -7,7 +7,7 @@
  * connects to the overlay store.
  */
 
-import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import {

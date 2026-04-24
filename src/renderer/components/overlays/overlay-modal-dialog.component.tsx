@@ -4,7 +4,7 @@
  * directly - the shell only provides the modal wrapper.
  */
 
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { VisuallyHidden } from 'radix-ui';
 import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
 import { OverlayEntry } from '@renderer/services/overlays/overlay.service-model';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from 'platform-bible-react';
@@ -53,12 +53,12 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
         {/* Radix requires DialogTitle and DialogDescription inside DialogContent for
             accessibility. The inner dialog component may render its own visible versions;
             these hidden ones satisfy Radix for dialogs that don't. */}
-        <VisuallyHidden asChild>
+        <VisuallyHidden.Root asChild>
           <DialogTitle>
             {typeof overlay.props.title === 'string' ? overlay.props.title : 'Dialog'}
           </DialogTitle>
-        </VisuallyHidden>
-        <VisuallyHidden asChild>
+        </VisuallyHidden.Root>
+        <VisuallyHidden.Root asChild>
           <DialogDescription>
             {(() => {
               if (typeof overlay.props.prompt === 'string') return overlay.props.prompt;
@@ -66,7 +66,7 @@ export function OverlayModalDialog({ overlay }: OverlayModalShellProps) {
               return 'Dialog';
             })()}
           </DialogDescription>
-        </VisuallyHidden>
+        </VisuallyHidden.Root>
         {/* Flex-1 + min-h-0 + overflow-hidden fills the modal shell; each dialog body scrolls its
             own region. An outer overflow-y here scrolls the whole body and can push action buttons
             off-screen for tall dialogs (e.g. select books), breaking hit-testing in E2E. */}

@@ -5,7 +5,7 @@
 import { TabsContentProps, TabsListProps, TabsTriggerProps } from '@/components/shadcn-ui/tabs';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
-import * as RadixTabs from '@radix-ui/react-tabs';
+import { Tabs as RadixTabs } from 'radix-ui';
 import React from 'react';
 
 export type VerticalTabsProps = React.ComponentPropsWithoutRef<typeof RadixTabs.Root> & {

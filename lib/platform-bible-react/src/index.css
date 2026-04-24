@@ -77,26 +77,8 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-heading: var(--font-sans);
   --font-sans: 'IBM Plex Sans Variable', sans-serif;
-}
-
-/*
- * CUSTOM: Expose radius scale as CSS custom properties so they can be referenced in arbitrary
- * Tailwind values like rounded-[min(var(--radius-md),12px)]. @theme inline does not emit these as
- * CSS variables, so they must be defined here explicitly. They recompute automatically when any
- * theme overrides --radius.
- *
- * Added `html` to prevent `shadcn apply` from putting new theme colors in this block instead of in
- * the following `:root` where they belong.
- */
-:root,
-html {
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* CUSTOM: allow spacing scale to be overridden by --spacing CSS variable */
+  --spacing: calc(var(--spacing));
 }
 
 /*
@@ -115,6 +97,8 @@ html {
 .light,
 :root {
   --radius: 0.625rem;
+  /* CUSTOM: variable that controls all Tailwind spacing utilities. 0.25rem in tailwind@4.2.2 */
+  --spacing: 0.25rem;
   --background: oklch(1 0 0); /* white */
   --foreground: oklch(0.153 0.006 107.1); /* slate-950 */
   --card: oklch(1 0 0); /* white */

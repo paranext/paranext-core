@@ -139,6 +139,7 @@
     "node-localstorage": "^3.0.5",
     "platform-bible-react": "file:./lib/platform-bible-react",
     "platform-bible-utils": "file:./lib/platform-bible-utils",
+    "radix-ui": "^1.4.3",
     "rc-dock": "^3.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

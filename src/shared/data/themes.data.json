@@ -4,6 +4,7 @@
       "label": "%theme_label_light%",
       "cssVariables": {
         "radius": "0.625rem",
+        "spacing": "0.25rem",
         "background": "oklch(1 0 0)",
         "foreground": "oklch(0.153 0.006 107.1)",
         "card": "oklch(1 0 0)",

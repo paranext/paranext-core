@@ -54,6 +54,8 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-heading: var(--font-sans);
   --font-sans: 'IBM Plex Sans Variable', sans-serif;
+  /* CUSTOM: allow spacing scale to be overridden by --spacing CSS variable */
+  --spacing: calc(var(--spacing));
 }
 
 /*
@@ -72,6 +74,8 @@
 .light,
 :root {
   --radius: 0.625rem;
+  /* CUSTOM: variable that controls all Tailwind spacing utilities. 0.25rem in tailwind@4.2.2 */
+  --spacing: 0.25rem;
   --background: oklch(1 0 0); /* white */
   --foreground: oklch(0.153 0.006 107.1); /* slate-950 */
   --card: oklch(1 0 0); /* white */
