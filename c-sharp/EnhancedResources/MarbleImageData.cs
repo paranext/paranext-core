@@ -16,25 +16,14 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// </summary>
 internal class MarbleImageData
 {
-    /// <summary>Multiplier for the book component of BBBCCCVVV encoding.</summary>
-    private const int BookMultiplier = 1_000_000;
-
-    /// <summary>Multiplier for the chapter component of BBBCCCVVV encoding.</summary>
-    private const int ChapterMultiplier = 1_000;
-
-    /// <summary>
-    /// Sentinel max value for chapter/verse in BBBCCCVVV encoding.
-    /// Used in place of versification-dependent LastChapter/LastVerse.
-    /// </summary>
-    private const int MaxChapterOrVerse = 999;
-
     public string ImageId { get; }
     public VerseRef StartRef { get; }
     public VerseRef EndRef { get; }
     private readonly string[] _availableLanguages;
 
     // Precomputed BBBCCCVVV values for efficient range overlap checks.
-    // Expanded for book-level (chapter=0) and chapter-level (verse=0) images.
+    // Expanded for book-level (chapter=0) and chapter-level (verse=0) images
+    // using the VerseRef's real versification-backed LastChapter/LastVerse.
     private readonly int _effectiveStartBbbcccvvv;
     private readonly int _effectiveEndBbbcccvvv;
 
@@ -103,27 +92,34 @@ internal class MarbleImageData
 
     /// <summary>
     /// Expands the end BBBCCCVVV value for image reference ranges at initialization.
-    /// PT9 expands stored image ranges:
-    /// - Book-level (chapter=0): expand to last chapter + last verse of book
-    /// - Chapter-level (verse=0): expand to last verse of chapter
-    /// Since versification info may be unavailable, uses 999 as max sentinel.
+    /// Mirrors PT9:
+    /// - Book-level (startRef.ChapterNum == 0): cover entire book via LastChapter/LastVerse.
+    /// - Chapter-level (endRef.VerseNum == 0, endRef.ChapterNum > 0): cover through
+    ///   LastVerse of end chapter.
+    /// Versification is always available on a VerseRef - uses its LastChapter/LastVerse.
     /// </summary>
     private static int ExpandEndBbbcccvvv(VerseRef startRef, VerseRef endRef)
     {
         if (startRef.ChapterNum == 0)
         {
             // Book-level: cover entire book
-            return endRef.BookNum * BookMultiplier
-                + MaxChapterOrVerse * ChapterMultiplier
-                + MaxChapterOrVerse;
+            var lastChapterRef = new VerseRef(
+                endRef.BookNum,
+                endRef.LastChapter,
+                1,
+                endRef.Versification
+            );
+            return VerseRef.GetBBBCCCVVV(
+                endRef.BookNum,
+                endRef.LastChapter,
+                lastChapterRef.LastVerse
+            );
         }
 
         if (endRef.VerseNum == 0 && endRef.ChapterNum > 0)
         {
-            // Chapter-level: cover through last verse of end chapter
-            return endRef.BookNum * BookMultiplier
-                + endRef.ChapterNum * ChapterMultiplier
-                + MaxChapterOrVerse;
+            // Chapter-level: cover through LastVerse of end chapter
+            return VerseRef.GetBBBCCCVVV(endRef.BookNum, endRef.ChapterNum, endRef.LastVerse);
         }
 
         return endRef.BBBCCCVVV;
@@ -137,9 +133,7 @@ internal class MarbleImageData
     {
         if (endRef.VerseNum == 0 && endRef.ChapterNum > 0)
         {
-            return endRef.BookNum * BookMultiplier
-                + endRef.ChapterNum * ChapterMultiplier
-                + MaxChapterOrVerse;
+            return VerseRef.GetBBBCCCVVV(endRef.BookNum, endRef.ChapterNum, endRef.LastVerse);
         }
 
         return endRef.BBBCCCVVV;
