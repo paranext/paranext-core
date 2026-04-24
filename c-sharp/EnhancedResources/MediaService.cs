@@ -22,12 +22,22 @@ internal static class MediaService
     /// </summary>
     private const string SatelliteBibleAtlasCollection = "Satellite Bible Atlas";
 
-    // Known resource IDs for test scaffolding (follows DictionaryService/EncyclopediaService pattern)
-    private static readonly HashSet<string> s_knownResources =
-        new(StringComparer.OrdinalIgnoreCase) { "SDBG", "SDBH" };
+    // Test-fixture injection seams (N3: patterns.csharp.testScaffoldingLocation).
+    // Production treats null overrides as "no data". Tests populate these in [SetUp]
+    // from MediaFixtures and clear them in [TearDown]. Real package-backed data will
+    // be wired up by the deferred marble-discovery work.
+    internal static IReadOnlyList<MediaDisplayItem>? ImagesOverride { get; set; }
+    internal static IReadOnlySet<string>? KnownResourcesOverride { get; set; }
 
-    // Pre-built test image data: mixed collection with both General and SBA images
-    private static readonly List<MediaDisplayItem> s_testImages = BuildTestImages();
+    private static IReadOnlyList<MediaDisplayItem> Images => ImagesOverride ?? s_emptyImages;
+
+    private static IReadOnlySet<string> KnownResources =>
+        KnownResourcesOverride ?? s_emptyKnownResources;
+
+    private static readonly IReadOnlyList<MediaDisplayItem> s_emptyImages = [];
+    private static readonly IReadOnlySet<string> s_emptyKnownResources = new HashSet<string>(
+        StringComparer.OrdinalIgnoreCase
+    );
 
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/MediaTab.cs
@@ -65,7 +75,7 @@ internal static class MediaService
     public static MediaLoadResult LoadResources(MediaLoadInput input)
     {
         // Validate resource existence
-        if (!s_knownResources.Contains(input.ResourceId))
+        if (!KnownResources.Contains(input.ResourceId))
         {
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.NotFound,
@@ -108,57 +118,13 @@ internal static class MediaService
 
     private static List<MediaDisplayItem> GetImagesForScope(MediaLoadInput input)
     {
-        // Filter test images by reference range overlap
         int queryBbbcccvvv = input.CurrentReference.BBBCCCVVV;
 
-        return s_testImages
+        return Images
             .Where(image =>
                 queryBbbcccvvv >= image.StartRef.BBBCCCVVV
                 && queryBbbcccvvv <= image.EndRef.BBBCCCVVV
             )
             .ToList();
-    }
-
-    private static List<MediaDisplayItem> BuildTestImages()
-    {
-        // Test data: mixed collection for Matthew 1:1 (book 40, chapter 1, verse 1)
-        // Includes both General and SBA images to exercise the filter
-        // DisplayIndex is 0 as placeholder; reassigned during LoadResources filtering
-        return
-        [
-            new MediaDisplayItem(
-                ImageId: "img-001",
-                ImageSource: "images/genesis-creation.jpg",
-                Title: "Creation Scene",
-                ThumbnailSource: "thumbs/genesis-creation.jpg",
-                StartRef: new VerseRef(40, 1, 1),
-                EndRef: new VerseRef(40, 1, 25),
-                Collection: "General",
-                LanguageCode: "en",
-                DisplayIndex: 0
-            ),
-            new MediaDisplayItem(
-                ImageId: "img-002",
-                ImageSource: "images/holy-land-map.jpg",
-                Title: "Holy Land Map",
-                ThumbnailSource: "thumbs/holy-land-map.jpg",
-                StartRef: new VerseRef(40, 1, 1),
-                EndRef: new VerseRef(40, 28, 20),
-                Collection: "Satellite Bible Atlas",
-                LanguageCode: "en",
-                DisplayIndex: 0
-            ),
-            new MediaDisplayItem(
-                ImageId: "img-003",
-                ImageSource: "images/bethlehem-scene.jpg",
-                Title: "Bethlehem Scene",
-                ThumbnailSource: "thumbs/bethlehem-scene.jpg",
-                StartRef: new VerseRef(40, 1, 1),
-                EndRef: new VerseRef(40, 2, 23),
-                Collection: "General",
-                LanguageCode: "en",
-                DisplayIndex: 0
-            ),
-        ];
     }
 }

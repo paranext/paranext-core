@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.EnhancedResources;
 using SIL.Scripture;
+using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
@@ -24,6 +25,20 @@ namespace TestParanextDataProvider.EnhancedResources;
 [ExcludeFromCodeCoverage]
 internal class MediaServiceTests
 {
+    [SetUp]
+    public void SetUp()
+    {
+        // N3 policy: fixture data lives in c-sharp-tests. Populate MediaService's
+        // test-override seams from MediaFixtures before every test.
+        MediaFixtures.ApplyDefaults();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        MediaFixtures.Clear();
+    }
+
     #region Test Data Constants
 
     /// <summary>
