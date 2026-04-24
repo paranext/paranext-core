@@ -270,6 +270,10 @@ test.describe('markers-checklist Journey Tests (cross-WP)', () => {
     await expect(matchCount).toHaveAttribute('aria-live', 'polite');
     await expect(matchCount).toHaveAttribute('aria-atomic', 'true');
 
+    // Wait for the backend refetch triggered by hideMatches to settle. Without this wait the
+    // next click races the re-render and Playwright sees the View button detach from the DOM.
+    await waitForDataTableSettled(frame);
+
     // ── Step 4 (UI-PKG-002): Toggle Show Verse Text. ──
     await frame.getByTestId('checklist-view-button').click();
     await frame.getByTestId('checklist-show-verse-text-item').click();
