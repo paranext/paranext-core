@@ -74,6 +74,6 @@ internal static class SourceLanguageSearchFixtures
     internal static void Clear()
     {
         SourceLanguageSearchService.LexiconOverride = null;
-        SourceLanguageSearchService.SetHaveMarbleData(true);
+        SourceLanguageSearchService.SetHaveMarbleData(false);
     }
 }

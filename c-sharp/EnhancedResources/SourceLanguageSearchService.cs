@@ -25,9 +25,11 @@ internal static class SourceLanguageSearchService
     // Non-numeric suffixes like "a:b:c" are NOT stripped (":c" is not numeric).
     private static readonly Regex s_trailingNotation = new(@":\d+$", RegexOptions.Compiled);
 
-    // Flag to control marble data availability (for testing).
-    // Defaults to true so built-in lexicon behavior remains the norm in tests.
-    private static bool s_haveMarbleData = true;
+    // Reflects whether marble data has been loaded. Defaults to false because
+    // no data is loaded at startup; deferred marble-discovery work will flip
+    // this to true when MarbleDataAccessService.HaveMarbleData becomes true.
+    // Tests flip this explicitly via SetHaveMarbleData in [SetUp]/[TearDown].
+    private static bool s_haveMarbleData;
 
     // Test-fixture injection seam (N3: patterns.csharp.testScaffoldingLocation).
     // Tests populate this from SourceLanguageSearchFixtures in [SetUp] and clear it in [TearDown].
