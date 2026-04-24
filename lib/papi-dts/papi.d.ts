@@ -3501,6 +3501,10 @@ declare module 'papi-shared-types' {
      *   instead. See `platform.zoomIn` for details.
      */
     'platform.zoomOut': () => Promise<void>;
+    /** Zoom in the entire application UI by one step. Keyboard shortcut: Ctrl+Shift+= */
+    'platform.appZoomIn': () => Promise<void>;
+    /** Zoom out the entire application UI by one step. Keyboard shortcut: Ctrl+Shift+- */
+    'platform.appZoomOut': () => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
@@ -3607,6 +3611,11 @@ declare module 'papi-shared-types' {
      * MAX_ZOOM_FACTOR]. Keys absent from this object render at 1.0.
      */
     'platform.viewZooms': Record<string, number>;
+    /**
+     * Global application zoom factor. Values are in the range [MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR].
+     * Default is 1.0 (no zoom).
+     */
+    'platform.appZoom': number;
     /**
      * The interface mode for the application. `simple` provides a streamlined experience, while
      * `power` exposes advanced features.

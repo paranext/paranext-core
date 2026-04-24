@@ -84,8 +84,7 @@ declare module 'papi-shared-types' {
     'platform.appZoomIn': () => Promise<void>;
     /** Zoom out the entire application UI by one step. Keyboard shortcut: Ctrl+Shift+- */
     'platform.appZoomOut': () => Promise<void>;
-    /** Reset the entire application UI zoom to 1.0. Keyboard shortcut: Ctrl+Shift+0 */
-    'platform.appZoomReset': () => Promise<void>;
+
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**

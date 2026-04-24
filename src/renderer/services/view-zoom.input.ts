@@ -74,12 +74,12 @@ export function installViewZoomInput(opts: InstallOptions): () => void {
   function onKeyDown(e: KeyboardEvent) {
     if (e.repeat) return;
     if (!isModifier(e)) return;
-    if (e.key === '=' || e.key === '+') {
+    if (!e.shiftKey && (e.key === '=' || e.key === '+')) {
       e.preventDefault();
       const key = resolveFocusedKey();
       if (!key) return;
       service.adjustZoom(key, +1);
-    } else if (e.key === '-') {
+    } else if (!e.shiftKey && e.key === '-') {
       e.preventDefault();
       const key = resolveFocusedKey();
       if (!key) return;

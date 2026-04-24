@@ -146,6 +146,16 @@ describe('view-zoom.input', () => {
     uninstall();
   });
 
+  it('Ctrl+Shift+= does not trigger per-view zoom (reserved for global zoom)', () => {
+    const svc = mockService();
+    const uninstall = installViewZoomInput({ service: svc, resolveFocusedKey: () => 'k' });
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: '+', ctrlKey: true, shiftKey: true, cancelable: true }),
+    );
+    expect(svc.adjustZoom).not.toHaveBeenCalled();
+    uninstall();
+  });
+
   it('uninstall removes listeners', () => {
     const svc = mockService();
     const uninstall = installViewZoomInput({

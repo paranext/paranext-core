@@ -495,7 +495,7 @@ function removeForbiddenElements(mutationList: MutationRecord[]) {
 // #region Dock layouts
 
 /** `localstorage` key for saving and loading the dock layout */
-const DOCK_LAYOUT_KEY = 'dock-saved-layout';
+export const DOCK_LAYOUT_KEY = 'dock-saved-layout';
 
 /** Create a new dock layout promise variable */
 function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
@@ -1249,7 +1249,7 @@ async function openOrReloadWebView(
   window.WebSocket = papi.WebSocket;
   window.XMLHttpRequest = papi.XMLHttpRequest;
 
-  // Forward Ctrl+/-/0 and Ctrl+wheel events to the parent so per-view zoom shortcuts work
+  // Forward Ctrl+/-/0/wheel and Ctrl+Shift+=/- events to the parent so zoom shortcuts work
   // when keyboard focus or the mouse pointer is inside the iframe. Captures the parent
   // reference before \`delete window.parent\` below so the listeners survive the obfuscation.
   (() => {
@@ -1270,12 +1270,29 @@ async function openOrReloadWebView(
         // Parent may be cross-origin or torn down; nothing to do.
       }
     }
+    function postAppZoom(action, delta) {
+      try {
+        parentWindow.postMessage({ type: 'app-zoom', action: action, delta: delta }, '*');
+      } catch (e) {
+        // Parent may be cross-origin or torn down; nothing to do.
+      }
+    }
     window.addEventListener(
       'keydown',
       (e) => {
         if (e.repeat) return;
         if (!e.ctrlKey && !e.metaKey) return;
-        if (e.key === '=' || e.key === '+') {
+        if (e.shiftKey) {
+          // Ctrl+Shift+= → global zoom in; Ctrl+Shift+- → global zoom out.
+          // Use e.code (physical key) so layout differences don't matter.
+          if (e.code === 'Equal') {
+            e.preventDefault();
+            postAppZoom('adjust', 0.1);
+          } else if (e.code === 'Minus') {
+            e.preventDefault();
+            postAppZoom('adjust', -0.1);
+          }
+        } else if (e.key === '=' || e.key === '+') {
           e.preventDefault();
           postZoom('adjust', 1);
         } else if (e.key === '-') {

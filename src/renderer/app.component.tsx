@@ -20,12 +20,8 @@ function Main() {
   const [zoomReady, setZoomReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    // Temporary: measure pre-paint zoom loading cost — remove after verifying <50ms on hardware
-    performance.mark('zoom-load-start');
     Promise.all([appZoomService.ready, viewZoomService.ready])
       .then(() => {
-        performance.mark('zoom-load-end');
-        performance.measure('zoom-load', 'zoom-load-start', 'zoom-load-end');
         if (!cancelled) setZoomReady(true);
         return undefined;
       })
@@ -127,15 +123,6 @@ function Main() {
           return;
         }
         zoomCommandUnsubs.push(unsubAppOut);
-
-        const unsubAppReset = await registerCommand('platform.appZoomReset', async () => {
-          appZoomService.reset();
-        });
-        if (zoomCommandsCancelled) {
-          unsubAppReset().catch(() => undefined);
-          return;
-        }
-        zoomCommandUnsubs.push(unsubAppReset);
       } catch {
         // Non-fatal; the commands just won't be available.
       }
@@ -152,9 +139,9 @@ function Main() {
     })();
 
     // Flush any debounced zoom changes before the window unloads so a quick zoom-then-quit
-    // doesn't lose the user's last adjustment. Note: flush() is async and beforeunload is
-    // synchronous, so the settings write is fire-and-forget; Electron usually allows enough
-    // time for the IPC to complete before teardown.
+    // doesn't lose the user's last adjustment. flush() is async and beforeunload is
+    // synchronous, so this is fire-and-forget; changes made in the last debounce window
+    // (~250 ms) before an abrupt quit may not be persisted.
     const onBeforeUnload = () => {
       viewZoomService.flush();
       appZoomService.flush();

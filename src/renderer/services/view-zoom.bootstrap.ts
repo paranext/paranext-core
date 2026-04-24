@@ -1,13 +1,8 @@
 import { deserialize, getErrorMessage } from 'platform-bible-utils';
 import { LayoutBase, BoxBase, PanelBase, TabBase } from 'rc-dock';
 import { logger } from '@shared/services/logger.service';
+import { DOCK_LAYOUT_KEY } from './web-view.service-host';
 import { viewZoomService } from './view-zoom.service';
-
-/**
- * LocalStorage key where the dock layout is persisted. Must match the value in
- * `web-view.service-host.ts` (`DOCK_LAYOUT_KEY`).
- */
-const DOCK_LAYOUT_KEY = 'dock-saved-layout';
 
 function isPanelBase(node: BoxBase | PanelBase): node is PanelBase {
   // `PanelBase` has a `tabs: TabBase[]` field; `BoxBase` does not. Read via `Reflect.get` to
