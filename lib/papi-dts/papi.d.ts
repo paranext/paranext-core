@@ -3129,6 +3129,16 @@ declare module 'shared/services/web-view.service-model' {
      */
     getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
     /**
+     * Gets the saved properties on all currently open WebView definitions
+     *
+     * Note: this only returns a representation of the current WebView definitions, not the actual web
+     * view definitions themselves. Changing properties on the returned definitions does not affect
+     * the actual WebView definitions.
+     *
+     * @returns Array of saved properties for all open WebView definitions
+     */
+    getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
+    /**
      * Get an existing web view controller for an open web view.
      *
      * A Web View Controller is a network object that represents a web view and whose methods
