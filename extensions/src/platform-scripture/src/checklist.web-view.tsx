@@ -255,8 +255,12 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
       try {
         const response = await service.buildChecklistData(request);
         if (cancelled || !isMountedRef.current) return;
-        if (response.success) {
-          setData(toChecklistData(response));
+        // `ChecklistResultResponse` is a TS-only discriminated union; the C# side never sends
+        // a `success` field — narrowing is on the presence of `rows` (success shape) vs `code`
+        // (ChecklistResultError shape). See data-contracts.md §3.1.
+        if ('rows' in response) {
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          setData(toChecklistData(response as Extract<ChecklistResultResponse, { success: true }>));
           setError(undefined);
         } else {
           setData(undefined);
