@@ -120,9 +120,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
     .filter((item) => !!item),
   '%paragraphMenu_misc_markerDescription%',
   '%versionHistoryCommit_beforeInsertFootnote%',
-  '%versionHistoryCommit_afterInsertFootnote%',
   '%versionHistoryCommit_beforeInsertCrossReference%',
-  '%versionHistoryCommit_afterInsertCrossReference%',
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_error_permissions_format%',
@@ -257,9 +255,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [canRedo, setCanRedo] = useState(false);
   const [blockMarker, setBlockMarker] = useState<string | undefined>();
   const [contextMarker, setContextMarker] = useState<string | undefined>();
-
-  const isInsertingCrossReference = useRef(false);
-  const isInsertingFootnote = useRef(false);
 
   const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
 
@@ -711,8 +706,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             }
 
           editorRef.current?.insertMarker('f');
-          // Updates ref to indicate that the next PDP save is for inserting a footnote
-          isInsertingFootnote.current = true;
           break;
         }
         case 'insertCrossReferenceAtSelection': {
@@ -741,8 +734,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             }
 
           editorRef.current?.insertMarker('x');
-          // Updates ref to indicate that the next PDP save is for inserting a cross-reference
-          isInsertingCrossReference.current = true;
           break;
         }
         case 'insertCommentAtSelection': {
@@ -1146,12 +1137,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editorRef.current?.selectNote(index);
   }, []);
 
-  const resetInsertingNoteStatusRefs = useCallback(() => {
-    // Resets the status refs for inserting a footnote or cross-reference
-    if (isInsertingFootnote.current) isInsertingFootnote.current = false;
-    if (isInsertingCrossReference.current) isInsertingCrossReference.current = false;
-  }, []);
-
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
     function saveUsjToPdpIfUpdatedInternal(usjFromEditor = editorRef.current?.getUsj()) {
@@ -1180,27 +1165,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // Prompts the PDP to commit changes to the version history once a day if the save was successfully
         if (saveResult && projectId) {
           try {
-            if (isInsertingFootnote.current) {
-              isInsertingFootnote.current = false;
-              // Commits the changes including the inserted footnote to the version history
-              await papi.commands.sendCommand(
-                'paratextBibleSendReceive.commitChanges',
-                projectId,
-                localizedStrings['%versionHistoryCommit_afterInsertFootnote%'],
-                true,
-              );
-            } else if (isInsertingCrossReference.current) {
-              isInsertingCrossReference.current = false;
-              // Commits the changes including the inserted cross-reference to the version history
-              await papi.commands.sendCommand(
-                'paratextBibleSendReceive.commitChanges',
-                projectId,
-                localizedStrings['%versionHistoryCommit_afterInsertCrossReference%'],
-                true,
-              );
-            } else {
-              await papi.commands.sendCommand('paratextBibleSendReceive.commitDaily', projectId);
-            }
+            await papi.commands.sendCommand('paratextBibleSendReceive.commitDaily', projectId);
           } catch (err: unknown) {
             const errMessage = getErrorMessage(err);
             // Requires the `commitChanges` command handler to throw
@@ -1223,14 +1188,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           let editorUsj = editorRef.current?.getUsj();
           if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
           if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
-          else {
-            resetInsertingNoteStatusRefs();
-          }
-        } else if (!saveResult || !projectId) {
-          resetInsertingNoteStatusRefs();
         }
       } catch (e) {
-        resetInsertingNoteStatusRefs();
         const errorMessage = getErrorMessage(e);
         logger.error(`Error saving USJ to PDP: ${errorMessage}`);
         currentlyWritingUsjToPdp.current = false;
@@ -1262,7 +1221,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [usjFromPdp, projectName, localizedStrings, projectId, resetInsertingNoteStatusRefs]);
+  }, [usjFromPdp, projectName, localizedStrings, projectId]);
 
   /**
    * Close the footnote editor, optionally deleting the note from the main editor first. Pass
