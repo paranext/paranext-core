@@ -2,15 +2,7 @@
   "mainMenu": {
     "columns": {},
     "groups": {},
-    "items": [
-      {
-        "label": "%markersChecklist_menu_openTool%",
-        "localizeNotes": "Application main menu > Project > Markers Checklist...",
-        "group": "platform.projectResources",
-        "order": 200,
-        "command": "platformScripture.openMarkersChecklist"
-      }
-    ]
+    "items": []
   },
   "webViewMenus": {
     "platformScripture.configureChecks": {
@@ -44,21 +36,21 @@
       "includeDefaults": true,
       "topMenu": {
         "columns": {
-          "platformScripture.markersChecklist.view": {
+          "platformScripture.markersChecklistView": {
             "label": "%webView_platformScripture_markersChecklist_viewColumn%",
-            "order": 1
+            "order": 2
           }
         },
         "groups": {
-          "platformScripture.markersChecklist.export": {
-            "column": "platformScripture.markersChecklist.view",
+          "platformScripture.markersChecklistExport": {
+            "column": "platformScripture.markersChecklistView",
             "order": 1
           }
         },
         "items": [
           {
             "label": "%markersChecklist_menu_settings%",
-            "group": "platformScripture.markersChecklist.export",
+            "group": "platformScripture.markersChecklistExport",
             "order": 1,
             "command": "platformScripture.openMarkersChecklistSettings"
           }
