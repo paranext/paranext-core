@@ -14,5 +14,6 @@ internal sealed record MarbleData(
     EncyclopediaData EncyclopediaData,
     MediaData MediaData,
     SourceLanguageData SourceLanguageData,
-    IReadOnlyList<string> MissingRequiredPackages
+    IReadOnlyList<string> MissingRequiredPackages,
+    IReadOnlyDictionary<string, IMarblePackage> BiblePackagesByName
 );

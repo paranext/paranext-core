@@ -125,6 +125,14 @@ internal class MarbleDataLoader : IMarbleDataLoader
         foreach (var (shortName, scrText) in discovery.ResearchPackages)
             researchPackages[shortName] = WrapResearchPackage(scrText);
 
+        // Wrap bible packages as IMarblePackage so the xml source can look up
+        // by resource id without re-touching ScrText collection state.
+        var biblePackagesByName = new Dictionary<string, IMarblePackage>(
+            StringComparer.OrdinalIgnoreCase
+        );
+        foreach (var scrText in discovery.BiblePackages)
+            biblePackagesByName[scrText.Name] = new MarblePackage(scrText);
+
         // Phase 3: Per-domain loaders. Each is individually try-catched so one
         // domain failure doesn't fell the rest.
         var knownBibleIds = new HashSet<string>(
@@ -176,7 +184,8 @@ internal class MarbleDataLoader : IMarbleDataLoader
             EncyclopediaData: encyclopediaData,
             MediaData: mediaData,
             SourceLanguageData: sourceLanguageData,
-            MissingRequiredPackages: missingRequired
+            MissingRequiredPackages: missingRequired,
+            BiblePackagesByName: biblePackagesByName
         );
     }
 
