@@ -61,6 +61,7 @@
     "csharp:tool:restore": "cd c-sharp && dotnet tool restore",
     "editor:link": "yalc link @eten-tech-foundation/platform-editor --no-pure",
     "editor:unlink": "yalc remove @eten-tech-foundation/platform-editor && npm i --ignore-scripts",
+    "er:smoke": "tsx scripts/enhanced-resources-smoke.ts",
     "format": "npm run format:core && npm run format --workspaces --if-present",
     "format:check": "prettier --check --ignore-path .prettierignorerun . && npm run format:check --workspaces --if-present",
     "format:core": "prettier --write --ignore-path .prettierignorerun . && remark \"./src/**/*.mdx\" -o",
