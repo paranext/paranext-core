@@ -13,7 +13,7 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// &lt;s&gt;H...&lt;/s&gt; verse references, and structured &lt;BibleImages&gt; sections.
 /// V2 does NOT add new information - it restructures the XML format.
 /// </summary>
-public class MarbleEncyclopediaEntry
+internal sealed class MarbleEncyclopediaEntry
 {
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/MarbleEncyclopediaEntry.cs:1-476

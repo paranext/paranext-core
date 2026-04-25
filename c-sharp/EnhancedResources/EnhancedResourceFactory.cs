@@ -88,7 +88,10 @@ internal sealed class EnhancedResourceFactory : NetworkObject
 
     private List<(string functionName, Delegate function)> BuildFunctionList() =>
         [
-            ("readInitializeResult", new Func<InitializeResult>(() => _initializeResult)),
+            (
+                "readInitializeResult",
+                new Func<InitializeResult>(() => Volatile.Read(ref _initializeResult))
+            ),
             ("resolveResourceObjectId", new Func<string, string>(ResolveResourceObjectId)),
             (
                 "findLinksForScope",
@@ -226,12 +229,15 @@ internal sealed class EnhancedResourceFactory : NetworkObject
             var sourceLang = new SourceLanguageSearchService(data.SourceLanguageData, marbleData);
             var tooltip = new TooltipService(marbleData, bookTokenProvider);
 
-            _initializeResult = new InitializeResult(
-                HaveMarbleData: marbleData.HaveMarbleData,
-                AvailableResources: [.. data.BiblePackages.Select(b => b.Name)],
-                AvailableGlossLanguages: [.. marbleData.AvailableGlossLanguages],
-                RequiredProjectsMissing: data.MissingRequiredPackages.Count > 0,
-                MissingRequiredPackages: [.. data.MissingRequiredPackages]
+            Volatile.Write(
+                ref _initializeResult,
+                new InitializeResult(
+                    HaveMarbleData: marbleData.HaveMarbleData,
+                    AvailableResources: [.. data.BiblePackages.Select(b => b.Name)],
+                    AvailableGlossLanguages: [.. marbleData.AvailableGlossLanguages],
+                    RequiredProjectsMissing: data.MissingRequiredPackages.Count > 0,
+                    MissingRequiredPackages: [.. data.MissingRequiredPackages]
+                )
             );
 
             // Publish in dependency order. _bookTokens must be visible before
