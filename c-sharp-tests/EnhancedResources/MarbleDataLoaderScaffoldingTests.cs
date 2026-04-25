@@ -8,11 +8,23 @@ namespace TestParanextDataProvider.EnhancedResources;
 internal class MarbleDataLoaderScaffoldingTests
 {
     [Test]
-    public async Task LoadAsync_Stub_ReturnsNull()
+    public async Task LoadAsync_DefaultConstructor_DoesNotThrow()
     {
+        // Default constructor reads ScrTextCollection.ResourcesDirectory; in CI,
+        // that directory may or may not exist. Either way, LoadAsync should
+        // complete without throwing.
         var loader = new MarbleDataLoader();
+
         var result = await loader.LoadAsync();
-        Assert.That(result, Is.Null);
+
+        // Result may be null (ScrTextCollection not initialized on a bare CI box)
+        // or a MarbleData with empty contents. Both are acceptable. The invariant
+        // is "no unhandled exception escapes".
+        Assert.Pass(
+            result is null
+                ? "LoadAsync returned null (expected when ScrTextCollection is uninitialized)"
+                : "LoadAsync returned a MarbleData record"
+        );
     }
 
     [Test]
