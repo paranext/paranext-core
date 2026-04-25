@@ -27,7 +27,11 @@ namespace TestParanextDataProvider.EnhancedResources;
 internal class GetArticleTests
 {
     private static EncyclopediaService NewService() =>
-        new(EncyclopediaFixtures.BuildEncyclopediaData());
+        new(
+            EncyclopediaFixtures.BuildEncyclopediaData(),
+            new FakeMarbleBookTokenProvider(),
+            EncyclopediaFixtures.BuildMarbleDataAccessService()
+        );
 
     #region Acceptance Tests
 

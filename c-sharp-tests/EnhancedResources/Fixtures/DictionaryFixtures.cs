@@ -44,76 +44,11 @@ internal static class DictionaryFixtures
             ["kai"] = (["and"], []),
         };
 
-    /// <summary>NT display items with a deliberate duplicate TokenId to exercise BHV-353.</summary>
-    internal static List<DictionaryDisplayItem> BuildNtDisplayItems() =>
-        [
-            new DictionaryDisplayItem(
-                TokenId: "nt-token-001",
-                Term: "logos",
-                SourceText: "λόγος",
-                Translit: "logos",
-                Glosses: ["word", "message"],
-                PartOfSpeech: "N",
-                OccurrenceCount: 1
-            ),
-            new DictionaryDisplayItem(
-                TokenId: "nt-token-002",
-                Term: "theos",
-                SourceText: "θεός",
-                Translit: "theos",
-                Glosses: ["God", "god"],
-                PartOfSpeech: "N",
-                OccurrenceCount: 1
-            ),
-            new DictionaryDisplayItem(
-                TokenId: "nt-token-003",
-                Term: "kurios",
-                SourceText: "κύριος",
-                Translit: "kurios",
-                Glosses: ["Lord", "master"],
-                PartOfSpeech: "N",
-                OccurrenceCount: 1
-            ),
-            // Duplicate of logos for deduplication testing (BHV-353)
-            new DictionaryDisplayItem(
-                TokenId: "nt-token-001",
-                Term: "logos",
-                SourceText: "λόγος",
-                Translit: "logos",
-                Glosses: ["word", "message"],
-                PartOfSpeech: "N",
-                OccurrenceCount: 1
-            ),
-        ];
-
-    internal static List<DictionaryDisplayItem> BuildOtDisplayItems() =>
-        [
-            new DictionaryDisplayItem(
-                TokenId: "ot-token-001",
-                Term: "elohim",
-                SourceText: "אלהים",
-                Translit: "elohim",
-                Glosses: ["God", "gods"],
-                PartOfSpeech: "N",
-                OccurrenceCount: 1
-            ),
-            new DictionaryDisplayItem(
-                TokenId: "ot-token-002",
-                Term: "bara",
-                SourceText: "ברא",
-                Translit: "bara",
-                Glosses: ["create"],
-                PartOfSpeech: "V",
-                OccurrenceCount: 1
-            ),
-        ];
-
     /// <summary>
     /// Builds the full DictionaryData record used by the DI'd DictionaryService.
-    /// Routes the OT display items under SDBH, NT display items under SDBG, and
-    /// (for now) an empty slice under DCLEX so three-way routing tests can target it.
-    /// Entry data is duplicated across packages so GetDictionaryEntry works
-    /// regardless of which dictionary the caller's book number routes to.
+    /// Display items are now produced from tokens via IMarbleBookTokenProvider, not
+    /// pre-baked into DictionaryPerPackage. DCLEX has no entries so three-way routing
+    /// tests can target it; SDBH/SDBG share the default entry+lexicon data.
     /// </summary>
     internal static DictionaryData BuildDictionaryData()
     {
@@ -127,20 +62,16 @@ internal static class DictionaryFixtures
 
         var entries = BuildDefaultEntryData();
 
-        var sdbh = new DictionaryPerPackage(
-            EntriesById: entries,
-            Lexicon: lexiconAsReadOnly,
-            DisplayItems: BuildOtDisplayItems()
-        );
-        var sdbg = new DictionaryPerPackage(
-            EntriesById: entries,
-            Lexicon: lexiconAsReadOnly,
-            DisplayItems: BuildNtDisplayItems()
-        );
+        var sdbh = new DictionaryPerPackage(EntriesById: entries, Lexicon: lexiconAsReadOnly);
+        var sdbg = new DictionaryPerPackage(EntriesById: entries, Lexicon: lexiconAsReadOnly);
         var dclex = new DictionaryPerPackage(
-            EntriesById: entries,
-            Lexicon: lexiconAsReadOnly,
-            DisplayItems: []
+            EntriesById: new Dictionary<string, DictionaryEntryRecord>(
+                StringComparer.OrdinalIgnoreCase
+            ),
+            Lexicon: new Dictionary<
+                string,
+                (IReadOnlyList<string> Glosses, IReadOnlyList<string> Domains)
+            >(StringComparer.OrdinalIgnoreCase)
         );
 
         return new DictionaryData(
@@ -158,6 +89,62 @@ internal static class DictionaryFixtures
                 StringComparer.OrdinalIgnoreCase
             )
         );
+    }
+
+    /// <summary>
+    /// Builds a token provider with a single OT (Genesis 1:1) book scenario whose
+    /// lexical-link token resolves to entry "logos-001" in the default entry data.
+    /// </summary>
+    internal static FakeMarbleBookTokenProvider BuildBookTokenProviderForOtTokens(string resourceId)
+    {
+        var tokens = new[]
+        {
+            new MarbleToken(MarbleTokenType.Book, "GEN", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "1", 1),
+            new MarbleToken(MarbleTokenType.Verse, "1", 2),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "logos",
+                3,
+                LexicalLinks: ["logos-001:logos:logos-001-s1"]
+            ),
+        };
+        return new FakeMarbleBookTokenProvider().With(resourceId, bookNum: 1, tokens);
+    }
+
+    /// <summary>
+    /// Builds a token provider with an NT (Matthew 1:1) book scenario whose
+    /// lexical-link tokens resolve to "logos-001" and "kai-001" in the default
+    /// entry data. Includes a deliberate duplicate Index for BHV-353 dedup tests.
+    /// </summary>
+    internal static FakeMarbleBookTokenProvider BuildBookTokenProviderForNtTokens(string resourceId)
+    {
+        var tokens = new[]
+        {
+            new MarbleToken(MarbleTokenType.Book, "MAT", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "1", 1),
+            new MarbleToken(MarbleTokenType.Verse, "1", 2),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "logos",
+                3,
+                LexicalLinks: ["logos-001:logos:logos-001-s1"]
+            ),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "kai",
+                4,
+                LexicalLinks: ["kai-001:kai:kai-001-s1"]
+            ),
+            // Duplicate of logos token (same Index = 3) for BHV-353 dedup testing.
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "logos",
+                3,
+                LexicalLinks: ["logos-001:logos:logos-001-s1"]
+            ),
+        };
+        return new FakeMarbleBookTokenProvider().With(resourceId, bookNum: 40, tokens);
     }
 
     internal static Dictionary<string, DictionaryEntryRecord> BuildDefaultEntryData() =>

@@ -253,14 +253,22 @@ internal static class EncyclopediaFixtures
 
     /// <summary>
     /// Builds the default EncyclopediaData record used by tests. Populates Fauna under
-    /// "en" with a V1 and a V2 entry (single entry each) so both format-version code
-    /// paths produce data. Known resources include the V1 and V2 IDs plus an empty
-    /// resource used by the empty-state tests.
+    /// "en" with a V1 entry keyed "camel_001" and a V2 entry keyed "camel_002" so the
+    /// token-driven service can disambiguate format-version code paths via thematic
+    /// links (FAUNA:camel_001 vs FAUNA:camel_002). Known resources include the V1 and
+    /// V2 IDs plus an empty resource used by the empty-state tests.
     /// </summary>
     internal static EncyclopediaData BuildEncyclopediaData()
     {
-        var v1CamelEntry = new MarbleEncyclopediaEntry(V1CamelEntryXml);
-        var v2CamelEntry = new MarbleEncyclopediaEntry(V2CamelEntryXml);
+        // Distinct keys per format so a token's thematic link can target a specific
+        // entry. The parser-level golden master tests still use V1CamelEntryXml /
+        // V2CamelEntryXml directly (Key="2.8") and are unaffected.
+        var v1CamelEntry = new MarbleEncyclopediaEntry(
+            V1CamelEntryXml.Replace("Key=\"2.8\"", "Key=\"camel_001\"")
+        );
+        var v2CamelEntry = new MarbleEncyclopediaEntry(
+            V2CamelEntryXml.Replace("Key=\"2.8\"", "Key=\"camel_002\"")
+        );
 
         var faunaByLanguage = new Dictionary<string, IReadOnlyList<MarbleEncyclopediaEntry>>(
             StringComparer.OrdinalIgnoreCase
@@ -290,6 +298,97 @@ internal static class EncyclopediaFixtures
                 "test-fauna-resource-v2",
                 "test-empty-resource",
             }
+        );
+    }
+
+    /// <summary>
+    /// Builds a single-token book token fixture targeting Genesis 1:1 with a thematic
+    /// link to "FAUNA:camel_001" - the V1 entry produced by <see cref="BuildEncyclopediaData"/>.
+    /// Used by the FU-CR2 regression test to verify token-driven Lemma/SourceText/Collection.
+    /// </summary>
+    internal static FakeMarbleBookTokenProvider BuildBookTokenProviderWithFaunaCamel(
+        string resourceId,
+        int bookNum
+    )
+    {
+        var tokens = new[]
+        {
+            new MarbleToken(MarbleTokenType.Book, "GEN", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "1", 1),
+            new MarbleToken(MarbleTokenType.Verse, "1", 2),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "gamal",
+                3,
+                LexicalLinks: ["SDBH:gamal:001"],
+                ThematicLinks: ["FAUNA:camel_001"]
+            ),
+        };
+        return new FakeMarbleBookTokenProvider().With(resourceId, bookNum, tokens);
+    }
+
+    /// <summary>
+    /// Builds the default token provider for EncyclopediaService tests using the V1/V2
+    /// fauna fixture. Registers a token sequence at GEN 12:16 for both
+    /// "test-fauna-resource" (linking FAUNA:camel_001 -> V1 entry, no images) and
+    /// "test-fauna-resource-v2" (linking FAUNA:camel_002 -> V2 entry, with image).
+    /// Matches the verse used by the existing acceptance/contract tests.
+    /// </summary>
+    internal static FakeMarbleBookTokenProvider BuildDefaultEncyclopediaBookTokens()
+    {
+        var v1Tokens = new[]
+        {
+            new MarbleToken(MarbleTokenType.Book, "GEN", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "12", 1),
+            new MarbleToken(MarbleTokenType.Verse, "16", 2),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "gamal",
+                3,
+                LexicalLinks: ["SDBH:gamal:001"],
+                ThematicLinks: ["FAUNA:camel_001"]
+            ),
+        };
+        var v2Tokens = new[]
+        {
+            new MarbleToken(MarbleTokenType.Book, "GEN", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "12", 1),
+            new MarbleToken(MarbleTokenType.Verse, "16", 2),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "gamal",
+                3,
+                LexicalLinks: ["SDBH:gamal:001"],
+                ThematicLinks: ["FAUNA:camel_002"]
+            ),
+        };
+        return new FakeMarbleBookTokenProvider()
+            .With("test-fauna-resource", 1, v1Tokens)
+            .With("test-fauna-resource-v2", 1, v2Tokens);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="MarbleDataAccessService"/> with a minimal English gloss map:
+    /// "gamal" -> ["camel"]. HaveMarbleData returns true via a sentinel ResourceScrText
+    /// so FindLocalizedGlossesForTerm bypasses the early-return guard.
+    /// </summary>
+    internal static MarbleDataAccessService BuildMarbleDataAccessService()
+    {
+        var glossByLanguage = new Dictionary<
+            string,
+            IReadOnlyDictionary<string, IReadOnlyList<string>>
+        >(StringComparer.OrdinalIgnoreCase)
+        {
+            ["en"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+            {
+                ["gamal"] = new List<string> { "camel" },
+            },
+        };
+        var glossData = new GlossData(glossByLanguage, ["en"]);
+        return new MarbleDataAccessService(
+            glossData,
+            LanguageMapping.Empty,
+            [MarbleTestHelper.CreateFakeMarbleScrText("test-fauna-resource")]
         );
     }
 }

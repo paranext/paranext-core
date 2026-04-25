@@ -9,7 +9,7 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// (port of PT9's GetDictionaryProject using Canon.IsBookOT / Canon.IsBookNT).
 /// Source: CAP-007, EXT-053, EXT-055, EXT-056, BHV-364
 /// </summary>
-internal sealed class DictionaryService(DictionaryData data)
+internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenProvider bookTokens)
 {
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/DictionaryTab.cs (GetDefinitionHtml, LoadResources)
@@ -28,8 +28,7 @@ internal sealed class DictionaryService(DictionaryData data)
             Lexicon: new Dictionary<
                 string,
                 (IReadOnlyList<string> Glosses, IReadOnlyList<string> Domains)
-            >(StringComparer.OrdinalIgnoreCase),
-            DisplayItems: []
+            >(StringComparer.OrdinalIgnoreCase)
         );
 
     /// <summary>
@@ -210,35 +209,72 @@ internal sealed class DictionaryService(DictionaryData data)
         string activeDictionary = DictionaryForBook(input.CurrentReference.BookNum);
         var pkg = PackageFor(activeDictionary);
 
-        var items = new List<DictionaryDisplayItem>(pkg.DisplayItems);
+        var bookTokensList = bookTokens.GetTokens(input.ResourceId, input.CurrentReference.BookNum);
+        var scopeInput = new ScopeFilterInput(
+            CurrentRef: input.CurrentReference,
+            Scope: input.Scope,
+            LinkType: MarbleLinkType.Lexical,
+            FilterText: input.Filter?.Lemma ?? "",
+            FilterSenses: input.Filter?.Senses ?? "",
+            FilterClickOrigin: input.Filter?.ClickOrigin ?? FilterClickOrigin.ScripturePane,
+            ResourceId: input.ResourceId
+        );
+        var scopedTokens = ScopeFilterService.GetScopedTokens(scopeInput, bookTokensList.ToArray());
 
-        if (input.Filter != null)
+        var items = new List<DictionaryDisplayItem>();
+        foreach (var token in scopedTokens)
         {
-            items = items
-                .Where(i =>
-                    string.Equals(i.Term, input.Filter.Lemma, StringComparison.OrdinalIgnoreCase)
+            var firstLink = token.LexicalLinks?.FirstOrDefault();
+            if (string.IsNullOrEmpty(firstLink))
+                continue;
+            var (lemma, _, entryRef) = ParseLinkEntry(firstLink);
+
+            pkg.EntriesById.TryGetValue(entryRef, out var entry);
+
+            items.Add(
+                new DictionaryDisplayItem(
+                    TokenId: token.Index.ToString(),
+                    Term: lemma,
+                    SourceText: token.Text ?? "",
+                    Translit: "",
+                    Glosses: BuildGlossesForLanguage(entry, input.GlossLanguage),
+                    PartOfSpeech: entry?.Morphology ?? "",
+                    OccurrenceCount: 1
                 )
-                .ToList();
+            );
         }
 
         items = DeduplicateItems(items);
-
         if (!string.IsNullOrEmpty(input.GlossLanguage))
-        {
             items = PopulateRelatedLexemes(items, input.GlossLanguage);
-        }
 
-        string? emptyStateMessage = null;
-        if (items.Count == 0)
-        {
-            emptyStateMessage = GetEmptyStateMessage(input);
-        }
+        var emptyStateMessage = items.Count == 0 ? GetEmptyStateMessage(input) : null;
+        return new DictionaryLoadResult(items, activeDictionary, emptyStateMessage);
+    }
 
-        return new DictionaryLoadResult(
-            Items: items,
-            ActiveDictionary: activeDictionary,
-            EmptyStateMessage: emptyStateMessage
-        );
+    private static (string Lemma, string SenseId, string EntryRef) ParseLinkEntry(string entry)
+    {
+        var parts = entry.Split(':');
+        var lemma = parts.Length >= 2 ? parts[1] : "";
+        var senseId = parts.Length >= 3 ? parts[2] : "";
+        return (lemma, senseId, entry);
+    }
+
+    private static IList<string> BuildGlossesForLanguage(
+        DictionaryEntryRecord? entry,
+        string glossLanguage
+    )
+    {
+        if (entry == null)
+            return [];
+        return entry
+            .Senses.SelectMany(s => s.Glosses)
+            .Where(g =>
+                string.Equals(g.Language, glossLanguage, StringComparison.OrdinalIgnoreCase)
+            )
+            .Select(g => g.Text)
+            .Distinct()
+            .ToList();
     }
 
     // === PORTED FROM PT9 ===

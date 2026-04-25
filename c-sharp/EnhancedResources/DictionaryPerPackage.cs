@@ -10,6 +10,5 @@ internal sealed record DictionaryPerPackage(
     IReadOnlyDictionary<
         string,
         (IReadOnlyList<string> Glosses, IReadOnlyList<string> Domains)
-    > Lexicon,
-    IReadOnlyList<DictionaryDisplayItem> DisplayItems
+    > Lexicon
 );

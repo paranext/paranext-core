@@ -16,7 +16,7 @@ namespace Paranext.DataProvider.EnhancedResources;
 ///
 /// Publication safety: every per-service field is published with Volatile.Write; the
 /// _marbleDataAccess field is written LAST so readers that see it non-null are
-/// guaranteed to observe the earlier writes (spec Section 11).
+/// guaranteed to observe the earlier writes (including _bookTokens) per spec Section 11.
 /// </summary>
 internal sealed class EnhancedResourceFactory : NetworkObject
 {
@@ -34,6 +34,7 @@ internal sealed class EnhancedResourceFactory : NetworkObject
     private MediaService? _media;
     private SourceLanguageSearchService? _sourceLanguageSearch;
     private TooltipService? _tooltip;
+    private IMarbleBookTokenProvider? _bookTokens;
 
     public EnhancedResourceFactory(
         PapiClient papiClient,
@@ -81,15 +82,22 @@ internal sealed class EnhancedResourceFactory : NetworkObject
     internal string InvokeResolveResourceObjectIdForTest(string resourceId) =>
         ResolveResourceObjectId(resourceId);
 
+    /// <summary>Test-only accessor - production callers go through PAPI registration.</summary>
+    internal IReadOnlyList<string> GetRegisteredFunctionNamesForTest() =>
+        [.. BuildFunctionList().Select(f => f.functionName)];
+
     private List<(string functionName, Delegate function)> BuildFunctionList() =>
         [
             ("readInitializeResult", new Func<InitializeResult>(() => _initializeResult)),
             ("resolveResourceObjectId", new Func<string, string>(ResolveResourceObjectId)),
             (
                 "findLinksForScope",
-                new Func<ScopeFilterInput, MarbleToken[], ScopeFilterResult>(
-                    (input, tokens) =>
-                        RouteMarbleData(_ => ScopeFilterService.GetLinksForScope(input, tokens))
+                new Func<ScopeFilterInput, ScopeFilterResult>(input =>
+                    RouteWithBookTokens(
+                        input.ResourceId,
+                        input.CurrentRef.BookNum,
+                        tokens => ScopeFilterService.GetLinksForScope(input, tokens)
+                    )
                 )
             ),
             (
@@ -112,8 +120,8 @@ internal sealed class EnhancedResourceFactory : NetworkObject
             ),
             (
                 "buildTooltipData",
-                new Func<TooltipInput, MarbleToken[], TooltipData>(
-                    (input, tokens) => RouteTooltip(s => s.GetTooltipData(input, tokens))
+                new Func<TooltipInput, TooltipData>(input =>
+                    RouteTooltip(s => s.GetTooltipData(input))
                 )
             ),
             ("buildNoteData", new Func<NoteInput, NoteData>(NoteService.GetNoteData)),
@@ -145,13 +153,6 @@ internal sealed class EnhancedResourceFactory : NetworkObject
                 "translatePartOfSpeech",
                 new Func<string, string, string, PosTranslateResult>(
                     (tag, language, form) => PartOfSpeechTranslator.Translate(tag, language, form)
-                )
-            ),
-            (
-                "parseMarbleTokens",
-                new Func<string, string, int, int, MarbleToken[]>(
-                    (marbleXml, resourceId, bookNumber, chapterNumber) =>
-                        MarbleTokenParser.Parse(marbleXml, resourceId, bookNumber, chapterNumber)
                 )
             ),
             (
@@ -206,16 +207,24 @@ internal sealed class EnhancedResourceFactory : NetworkObject
                 return;
             }
 
+            // Single shared token provider so its LRU cache is hit across services.
+            var bookXmlSource = new MarbleBookXmlSource(data.BiblePackagesByName);
+            var bookTokenProvider = new MarbleBookTokenProvider(bookXmlSource);
+
             var marbleData = new MarbleDataAccessService(
                 data.GlossData,
                 data.LanguageMapping,
                 data.BiblePackages
             );
-            var dictionary = new DictionaryService(data.DictionaryData);
-            var encyclopedia = new EncyclopediaService(data.EncyclopediaData);
+            var dictionary = new DictionaryService(data.DictionaryData, bookTokenProvider);
+            var encyclopedia = new EncyclopediaService(
+                data.EncyclopediaData,
+                bookTokenProvider,
+                marbleData
+            );
             var media = new MediaService(data.MediaData);
             var sourceLang = new SourceLanguageSearchService(data.SourceLanguageData, marbleData);
-            var tooltip = new TooltipService(marbleData);
+            var tooltip = new TooltipService(marbleData, bookTokenProvider);
 
             _initializeResult = new InitializeResult(
                 HaveMarbleData: marbleData.HaveMarbleData,
@@ -225,12 +234,14 @@ internal sealed class EnhancedResourceFactory : NetworkObject
                 MissingRequiredPackages: [.. data.MissingRequiredPackages]
             );
 
-            // Publish in dependency order. _marbleDataAccess must be LAST.
+            // Publish in dependency order. _bookTokens must be visible before
+            // _marbleDataAccess so any reader that sees marble data also sees tokens.
             Volatile.Write(ref _dictionary, dictionary);
             Volatile.Write(ref _encyclopedia, encyclopedia);
             Volatile.Write(ref _media, media);
             Volatile.Write(ref _sourceLanguageSearch, sourceLang);
             Volatile.Write(ref _tooltip, tooltip);
+            Volatile.Write(ref _bookTokens, bookTokenProvider);
             Volatile.Write(ref _marbleDataAccess, marbleData);
 
             Console.WriteLine(
@@ -260,6 +271,19 @@ internal sealed class EnhancedResourceFactory : NetworkObject
 
     private T RouteTooltip<T>(Func<TooltipService, T> call) =>
         Route(Volatile.Read(ref _tooltip), call);
+
+    private T RouteWithBookTokens<T>(string resourceId, int bookNum, Func<MarbleToken[], T> call)
+    {
+        var provider = Volatile.Read(ref _bookTokens);
+        if (provider is null)
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.FailedPrecondition,
+                "Enhanced Resources not yet loaded"
+            );
+        }
+        return call(provider.GetTokens(resourceId, bookNum).ToArray());
+    }
 
     private static T Route<TService, T>(TService? service, Func<TService, T> call)
         where TService : class

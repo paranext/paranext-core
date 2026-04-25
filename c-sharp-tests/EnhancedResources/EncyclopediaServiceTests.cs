@@ -17,8 +17,29 @@ namespace TestParanextDataProvider.EnhancedResources;
 [ExcludeFromCodeCoverage]
 internal class EncyclopediaServiceTests
 {
+    /// <summary>
+    /// Default service builder for the existing acceptance/contract suite. Uses the
+    /// default fixture's EncyclopediaData (FAUNA: camel_001 V1 + camel_002 V2), the
+    /// default book token provider (registers tokens at GEN 12:16 for both fauna
+    /// resources), and the default marble data access service (gamal -> ["camel"]).
+    /// </summary>
     private static EncyclopediaService NewService() =>
-        new(EncyclopediaFixtures.BuildEncyclopediaData());
+        BuildService(
+            data: EncyclopediaFixtures.BuildEncyclopediaData(),
+            bookTokens: EncyclopediaFixtures.BuildDefaultEncyclopediaBookTokens(),
+            marbleData: EncyclopediaFixtures.BuildMarbleDataAccessService()
+        );
+
+    private static EncyclopediaService BuildService(
+        EncyclopediaData? data = null,
+        IMarbleBookTokenProvider? bookTokens = null,
+        MarbleDataAccessService? marbleData = null
+    ) =>
+        new(
+            data ?? EncyclopediaFixtures.BuildEncyclopediaData(),
+            bookTokens ?? new FakeMarbleBookTokenProvider(),
+            marbleData ?? EncyclopediaFixtures.BuildMarbleDataAccessService()
+        );
 
     [Test]
     public void Constructor_AcceptsEncyclopediaData_CanInvokeLoadResources()
@@ -28,7 +49,7 @@ internal class EncyclopediaServiceTests
             KnownResourceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "probe" },
         };
 
-        var service = new EncyclopediaService(data);
+        var service = BuildService(data: data);
 
         // With no entries for "probe", LoadResources should return an empty result with
         // an empty-state message (not throw NOT_FOUND).
@@ -44,6 +65,80 @@ internal class EncyclopediaServiceTests
 
         Assert.That(result.Items, Is.Empty);
         Assert.That(result.EmptyStateMessage, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    [Description(
+        "FU-CR2 regression: token with FAUNA thematic link drives Lemma/SourceText/Collection from token, not hardcoded values"
+    )]
+    public void LoadResources_TokenWithFaunaThematicLink_BuildsDisplayItemFromTokenAndEntryType()
+    {
+        var data = EncyclopediaFixtures.BuildEncyclopediaData();
+        var tokens = EncyclopediaFixtures.BuildBookTokenProviderWithFaunaCamel(
+            "test-fauna-resource",
+            bookNum: 1
+        );
+        var marbleData = EncyclopediaFixtures.BuildMarbleDataAccessService();
+        var service = new EncyclopediaService(data, tokens, marbleData);
+        var input = new EncyclopediaLoadInput(
+            CurrentReference: new VerseRef(1, 1, 1),
+            Scope: ScopeEnum.CurrentVerse,
+            Filter: null,
+            UserLanguage: "en",
+            ResourceId: "test-fauna-resource"
+        );
+
+        var result = service.LoadResources(input);
+
+        Assert.That(result.Items, Has.Count.EqualTo(1));
+        var item = result.Items[0];
+        Assert.That(item.Lemma, Is.EqualTo("gamal"), "Lemma must come from token's LexicalLinks");
+        Assert.That(item.SourceText, Is.EqualTo("gamal"));
+        Assert.That(
+            item.Collection,
+            Is.EqualTo("FAUNA"),
+            "Collection must come from thematic_links prefix"
+        );
+        Assert.That(item.Glosses, Has.Member("camel"));
+        Assert.That(item.Entries, Has.Count.EqualTo(1));
+        Assert.That(item.Entries[0].Key, Is.EqualTo("camel_001"));
+    }
+
+    [Test]
+    [Description(
+        "Unknown thematic ID emits a stub EncyclopediaEntryRef with 'does not exist' title"
+    )]
+    public void LoadResources_TokenWithUnknownThematicId_EmitsStubEntryRef()
+    {
+        var data = EncyclopediaFixtures.BuildEncyclopediaData();
+        var tokens = new FakeMarbleBookTokenProvider().With(
+            "test-fauna-resource",
+            1,
+            new MarbleToken(MarbleTokenType.Book, "GEN", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "1", 1),
+            new MarbleToken(MarbleTokenType.Verse, "1", 2),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "x",
+                3,
+                LexicalLinks: ["SDBH:x:001"],
+                ThematicLinks: ["REALIA:unknown_999"]
+            )
+        );
+        var marbleData = EncyclopediaFixtures.BuildMarbleDataAccessService();
+        var service = new EncyclopediaService(data, tokens, marbleData);
+        var input = new EncyclopediaLoadInput(
+            new VerseRef(1, 1, 1),
+            ScopeEnum.CurrentVerse,
+            null,
+            "en",
+            "test-fauna-resource"
+        );
+
+        var result = service.LoadResources(input);
+
+        Assert.That(result.Items, Has.Count.EqualTo(1));
+        Assert.That(result.Items[0].Entries[0].Title, Does.Contain("does not exist"));
     }
 
     #region Acceptance Tests
@@ -219,7 +314,7 @@ internal class EncyclopediaServiceTests
                     IReadOnlyDictionary<string, IReadOnlyList<MarbleEncyclopediaEntry>>
                 >(),
         };
-        var emptyService = new EncyclopediaService(emptyData);
+        var emptyService = BuildService(data: emptyData);
 
         var result = emptyService.LoadResources(input);
 

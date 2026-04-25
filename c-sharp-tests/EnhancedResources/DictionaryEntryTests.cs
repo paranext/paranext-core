@@ -31,7 +31,7 @@ namespace TestParanextDataProvider.EnhancedResources;
 internal class DictionaryEntryTests
 {
     private static DictionaryService BuildService() =>
-        new(DictionaryFixtures.BuildDictionaryData());
+        new(DictionaryFixtures.BuildDictionaryData(), new FakeMarbleBookTokenProvider());
 
     #region Acceptance Tests
 

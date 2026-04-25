@@ -13,15 +13,26 @@ namespace Paranext.DataProvider.EnhancedResources;
 // instance class with primary-constructor-injected EncyclopediaData record. See
 // ADR patterns.csharp.serviceComposition. Data arrives pre-split by
 // (EncyclopediaEntryType, languageCode) from MarbleEncyclopediaLoader.
-internal sealed partial class EncyclopediaService(EncyclopediaData data)
+//
+// Refactor 2026-04-24 (FU-CR2 fix): LoadResources is now token-driven. The service
+// walks marble tokens for the current resource+book, applies scope filtering for
+// thematic links, and joins each token's thematic IDs to encyclopedia entries via
+// "{TYPE}:{Key}" keys. Replaces the prior placeholder that emitted hardcoded
+// "gamal"/"camel"/"FAUNA" values for every entry.
+internal sealed partial class EncyclopediaService(
+    EncyclopediaData data,
+    IMarbleBookTokenProvider bookTokens,
+    MarbleDataAccessService marbleData
+)
 {
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/EncyclopediaTab.cs:LoadResources
     /// <summary>
-    /// Loads encyclopedia entries for the current scope, filtered by entry type
-    /// (Flora/Fauna/Realia) and user language. Resolves the per-(type, language) slice
-    /// of <see cref="EncyclopediaData.EntriesByTypeAndLanguage"/>, applies the optional
-    /// word filter, and returns display items for the Encyclopedia Tab.
+    /// Loads encyclopedia entries for the current scope, joining marble tokens with
+    /// thematic links to encyclopedia articles. Tokens are obtained from the book
+    /// token provider, scope-filtered (BHV-601), and then matched against the
+    /// per-(type, language) slice of <see cref="EncyclopediaData.EntriesByTypeAndLanguage"/>.
+    /// Returns one display item per scoped token that has a thematic link.
     /// </summary>
     public EncyclopediaLoadResult LoadResources(EncyclopediaLoadInput input)
     {
@@ -33,9 +44,100 @@ internal sealed partial class EncyclopediaService(EncyclopediaData data)
             );
         }
 
-        var entries = SelectEntriesForLanguage(input.UserLanguage);
+        var bookTokensList = bookTokens.GetTokens(input.ResourceId, input.CurrentReference.BookNum);
+        var scopeInput = new ScopeFilterInput(
+            CurrentRef: input.CurrentReference,
+            Scope: input.Scope,
+            LinkType: MarbleLinkType.Thematic,
+            FilterText: input.Filter?.Lemma ?? "",
+            FilterSenses: input.Filter?.Senses ?? "",
+            FilterClickOrigin: input.Filter?.ClickOrigin ?? FilterClickOrigin.ScripturePane,
+            ResourceId: input.ResourceId
+        );
+        var scopedTokens = ScopeFilterService.GetScopedTokens(scopeInput, bookTokensList.ToArray());
 
-        var items = entries.Where(e => e.Key != "0").Select(BuildDisplayItem).ToList();
+        var typedEntries = SelectEntriesForLanguage(input.UserLanguage);
+        var entryByArticleKey = new Dictionary<
+            string,
+            (EncyclopediaEntryType Type, MarbleEncyclopediaEntry Entry)
+        >(StringComparer.OrdinalIgnoreCase);
+        foreach (var (type, entry) in typedEntries)
+        {
+            var key = $"{type.ToString().ToUpperInvariant()}:{entry.Key}";
+            if (!entryByArticleKey.ContainsKey(key))
+                entryByArticleKey[key] = (type, entry);
+        }
+
+        var items = new List<EncyclopediaDisplayItem>();
+        foreach (var token in scopedTokens)
+        {
+            var firstLexicalLink = token.LexicalLinks?.FirstOrDefault();
+            if (string.IsNullOrEmpty(firstLexicalLink))
+                continue;
+            var (lemma, _, _) = ParseLexLinkEntry(firstLexicalLink);
+
+            var thematicIds = token.ThematicLinks ?? [];
+            if (thematicIds.Count == 0)
+                continue;
+
+            var firstThematicId = thematicIds[0];
+            var colonIndex = firstThematicId.IndexOf(':');
+            if (colonIndex <= 0)
+                continue;
+            var collection = firstThematicId.Substring(0, colonIndex);
+
+            var entryRefs = new List<EncyclopediaEntryRef>();
+            var imageIds = new List<string>();
+            foreach (var id in thematicIds)
+            {
+                if (entryByArticleKey.TryGetValue(id, out var match))
+                {
+                    var teaser =
+                        match.Entry.Paragraphs.Count > 0
+                            ? TruncateTeaser(match.Entry.Paragraphs[0])
+                            : "";
+                    var formatVersion = match.Entry.BibleImageIds.Count > 0 ? 2 : 1;
+                    entryRefs.Add(
+                        new EncyclopediaEntryRef(
+                            Key: match.Entry.Key,
+                            Title: match.Entry.Title,
+                            TeaserText: teaser,
+                            FormatVersion: formatVersion,
+                            InlineImageIds: match.Entry.BibleImageIds.Count > 0
+                                ? match.Entry.BibleImageIds
+                                : null
+                        )
+                    );
+                    foreach (var img in match.Entry.BibleImageIds)
+                        if (!imageIds.Contains(img))
+                            imageIds.Add(img);
+                }
+                else
+                {
+                    entryRefs.Add(
+                        new EncyclopediaEntryRef(
+                            Key: id,
+                            Title: $"Encyclopedia article {id} does not exist.",
+                            TeaserText: "",
+                            FormatVersion: 1
+                        )
+                    );
+                }
+            }
+
+            items.Add(
+                new EncyclopediaDisplayItem(
+                    TokenId: token.Index.ToString(),
+                    Lemma: lemma,
+                    SourceText: token.Text ?? "",
+                    Translit: "",
+                    Glosses: marbleData.FindLocalizedGlossesForTerm(lemma, input.UserLanguage),
+                    Entries: entryRefs,
+                    ImageIds: imageIds,
+                    Collection: collection
+                )
+            );
+        }
 
         if (input.Filter != null)
         {
@@ -51,10 +153,15 @@ internal sealed partial class EncyclopediaService(EncyclopediaData data)
     }
 
     // Selects the union of Flora/Fauna/Realia entries for the requested language,
-    // falling back to English when the requested language has no slice.
-    private IReadOnlyList<MarbleEncyclopediaEntry> SelectEntriesForLanguage(string userLanguage)
+    // falling back to English when the requested language has no slice. Each result
+    // is paired with its EncyclopediaEntryType so callers can build the
+    // "{TYPE}:{Key}" lookup key without losing type information.
+    private IReadOnlyList<(
+        EncyclopediaEntryType Type,
+        MarbleEncyclopediaEntry Entry
+    )> SelectEntriesForLanguage(string userLanguage)
     {
-        var result = new List<MarbleEncyclopediaEntry>();
+        var result = new List<(EncyclopediaEntryType, MarbleEncyclopediaEntry)>();
         foreach (
             var entryType in new[]
             {
@@ -66,43 +173,27 @@ internal sealed partial class EncyclopediaService(EncyclopediaData data)
         {
             if (!data.EntriesByTypeAndLanguage.TryGetValue(entryType, out var byLanguage))
                 continue;
-
             if (byLanguage.TryGetValue(userLanguage, out var entries) && entries.Count > 0)
             {
-                result.AddRange(entries);
+                foreach (var e in entries)
+                    result.Add((entryType, e));
                 continue;
             }
             if (byLanguage.TryGetValue("en", out var fallback) && fallback.Count > 0)
             {
-                result.AddRange(fallback);
+                foreach (var e in fallback)
+                    result.Add((entryType, e));
             }
         }
         return result;
     }
 
-    private static EncyclopediaDisplayItem BuildDisplayItem(MarbleEncyclopediaEntry entry)
+    private static (string Lemma, string SenseId, string EntryRef) ParseLexLinkEntry(string entry)
     {
-        int formatVersion = entry.BibleImageIds.Count > 0 ? 2 : 1;
-        string teaserText = entry.Paragraphs.Count > 0 ? TruncateTeaser(entry.Paragraphs[0]) : "";
-
-        var entryRef = new EncyclopediaEntryRef(
-            Key: entry.Key,
-            Title: entry.Title,
-            TeaserText: teaserText,
-            FormatVersion: formatVersion,
-            InlineImageIds: entry.BibleImageIds.Count > 0 ? entry.BibleImageIds : null
-        );
-
-        return new EncyclopediaDisplayItem(
-            TokenId: $"enc-{entry.Key}",
-            Lemma: "gamal",
-            SourceText: "gamal",
-            Translit: "gamal",
-            Glosses: ["camel"],
-            Entries: [entryRef],
-            ImageIds: entry.BibleImageIds.ToList(),
-            Collection: "FAUNA"
-        );
+        var parts = entry.Split(':');
+        var lemma = parts.Length >= 2 ? parts[1] : "";
+        var senseId = parts.Length >= 3 ? parts[2] : "";
+        return (lemma, senseId, entry);
     }
 
     private static string GetEmptyStateMessage(EncyclopediaLoadInput input) =>

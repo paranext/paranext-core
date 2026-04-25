@@ -162,11 +162,7 @@ internal static class MarbleLexiconLoader
             );
         }
 
-        return new DictionaryPerPackage(
-            EntriesById: entriesById,
-            Lexicon: lexicon,
-            DisplayItems: []
-        );
+        return new DictionaryPerPackage(EntriesById: entriesById, Lexicon: lexicon);
     }
 
     private static void MergePackageIntoGlosses(

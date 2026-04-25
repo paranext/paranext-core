@@ -1,3 +1,5 @@
+using SIL.Scripture;
+
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
@@ -5,4 +7,9 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// chapter data and specifies the preferred gloss language.
 /// Source: Section 4.14 M-014, EXT-002
 /// </summary>
-public record TooltipInput(string TokenId, string ResourceId, string GlossLanguage);
+public record TooltipInput(
+    string TokenId,
+    string ResourceId,
+    string GlossLanguage,
+    VerseRef CurrentReference
+);

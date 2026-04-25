@@ -14,10 +14,12 @@ namespace Paranext.DataProvider.EnhancedResources;
 internal sealed class TooltipService
 {
     private readonly MarbleDataAccessService _marbleData;
+    private readonly IMarbleBookTokenProvider _bookTokens;
 
-    public TooltipService(MarbleDataAccessService marbleData)
+    public TooltipService(MarbleDataAccessService marbleData, IMarbleBookTokenProvider bookTokens)
     {
         _marbleData = marbleData ?? throw new ArgumentNullException(nameof(marbleData));
+        _bookTokens = bookTokens ?? throw new ArgumentNullException(nameof(bookTokens));
     }
 
     /// <summary>
@@ -25,9 +27,10 @@ internal sealed class TooltipService
     /// Token not found: throws PlatformError with NOT_FOUND.
     /// No gloss available: returns partial TooltipData with null Gloss.
     /// </summary>
-    public TooltipData GetTooltipData(TooltipInput input, MarbleToken[] parsedTokens)
+    public TooltipData GetTooltipData(TooltipInput input)
     {
-        MarbleToken token = FindTokenOrThrow(input.TokenId, parsedTokens);
+        var tokens = _bookTokens.GetTokens(input.ResourceId, input.CurrentReference.BookNum);
+        MarbleToken token = FindTokenOrThrow(input.TokenId, tokens.ToArray());
 
         string lemma = token.Text;
         string? strongNumber = token.StrongNumber;

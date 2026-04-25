@@ -228,6 +228,48 @@ internal class EnhancedResourceFactoryTests : PapiTestBase
 
     #endregion
 
+    #region Contract Tests - PAPI Surface
+
+    [Test]
+    [Category("Contract")]
+    [Property("BehaviorId", "BHV-105")]
+    [Description(
+        "parseMarbleTokens is not part of the PAPI surface - tokens are server-owned and "
+            + "fetched internally via IMarbleBookTokenProvider (FU-CR1, FU-CR2)"
+    )]
+    public void BuildFunctionList_DoesNotIncludeParseMarbleTokens()
+    {
+        var factory = new EnhancedResourceFactory(
+            Client,
+            ParatextProjects,
+            StubMarbleDataLoader.Empty()
+        );
+
+        var names = factory.GetRegisteredFunctionNamesForTest();
+
+        Assert.That(names, Does.Not.Contain("parseMarbleTokens"));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("BehaviorId", "BHV-105")]
+    [Description("findLinksForScope and buildTooltipData are registered (token-driven)")]
+    public void BuildFunctionList_IncludesTokenDrivenCommands()
+    {
+        var factory = new EnhancedResourceFactory(
+            Client,
+            ParatextProjects,
+            StubMarbleDataLoader.Empty()
+        );
+
+        var names = factory.GetRegisteredFunctionNamesForTest();
+
+        Assert.That(names, Does.Contain("findLinksForScope"));
+        Assert.That(names, Does.Contain("buildTooltipData"));
+    }
+
+    #endregion
+
     #region Error Tests
 
     [Test]
