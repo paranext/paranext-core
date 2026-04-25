@@ -1,75 +1,92 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.EnhancedResources;
 using Paratext.Data;
+using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
 /// <summary>
-/// Test helper for setting up MarbleDataAccessService with test data.
-/// Provides canned gloss data matching the golden master expectations.
+/// Test helper for constructing MarbleDataAccessService / related services from
+/// fixture records. No static seams; services are immutable.
 /// </summary>
 [ExcludeFromCodeCoverage]
 internal static class MarbleTestHelper
 {
-    // Hebrew Elohim lemma used across golden masters gm-020, gm-021, gm-022
-    internal const string Elohim = "\u05D0\u05B1\u05DC\u05B9\u05D4\u05B4\u05D9\u05DD";
+    // Hebrew Elohim lemma used across golden masters gm-020, gm-021, gm-022.
+    internal const string Elohim = "אֱלֹהִים";
 
-    // Chinese gloss for Elohim (gm-022)
-    internal const string ElohimChineseGloss = "\u4E0A\u5E1D\uFF1B\u795E"; // 上帝；神
+    // Chinese gloss for Elohim (gm-022).
+    internal const string ElohimChineseGloss = "上帝；神"; // 上帝；神
 
-    /// <summary>
-    /// Initializes a MarbleDataAccessService with test data that simulates
-    /// installed marble packages with English and Chinese gloss data.
-    /// </summary>
-    internal static void InitializeWithTestData(MarbleDataAccessService service)
-    {
-        var glossData = new Dictionary<string, Dictionary<string, List<string>>>
-        {
-            ["en"] = new Dictionary<string, List<string>>
-            {
-                [Elohim] = ["God"],
-                ["sampleTerm"] = ["sample gloss"],
-                ["\u03BB\u03CC\u03B3\u03BF\u03C2"] = ["word", "speech", "reason"],
-            },
-            ["zh-Hans"] = new Dictionary<string, List<string>>
-            {
-                [Elohim] = [ElohimChineseGloss],
-                ["sampleTerm"] = ["样本"],
-            },
-        };
-
-        var languageMapping = new Dictionary<string, string>
-        {
-            ["zh-Hant"] = "zh-Hans",
-            ["zh"] = "zh-Hans",
-        };
-
-        service.SetTestData(
-            haveMarbleData: true,
-            glossLanguages: ["en", "zh-Hans"],
-            glossData: glossData,
-            languageMapping: languageMapping
-        );
-    }
-
-    /// <summary>
-    /// Initializes a MarbleDataAccessService with no data (simulates no packages installed).
-    /// </summary>
-    internal static void InitializeWithNoData(MarbleDataAccessService service)
-    {
-        service.SetTestData(haveMarbleData: false, glossLanguages: []);
-    }
-
-    // Test resource IDs for factory tests
+    // Test resource IDs used by factory tests.
     internal static readonly string[] TestResourceIds = ["SDBG", "SDBH"];
 
     /// <summary>
-    /// Initializes the factory with test data by configuring its underlying service
-    /// and setting test resource IDs.
+    /// Builds a GlossData record matching the pre-refactor MarbleTestHelper test data.
+    /// </summary>
+    internal static GlossData BuildTestGlossData()
+    {
+        var byLanguage = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(
+            StringComparer.OrdinalIgnoreCase
+        )
+        {
+            ["en"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+            {
+                [Elohim] = new List<string> { "God" },
+                ["sampleTerm"] = new List<string> { "sample gloss" },
+                ["λόγος"] = new List<string> { "word", "speech", "reason", },
+            },
+            ["zh-Hans"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+            {
+                [Elohim] = new List<string> { ElohimChineseGloss },
+                ["sampleTerm"] = new List<string> { "样本" },
+            },
+        };
+
+        return new GlossData(byLanguage, ["en", "zh-Hans"]);
+    }
+
+    /// <summary>
+    /// LanguageMapping matching pre-refactor MarbleTestHelper defaults: zh-Hant -> zh-Hans, zh -> zh-Hans.
+    /// </summary>
+    internal static LanguageMapping BuildTestLanguageMapping() =>
+        new(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["zh-Hant"] = "zh-Hans",
+                ["zh"] = "zh-Hans",
+            }
+        );
+
+    /// <summary>
+    /// Builds a service with gloss data and the supplied bible list. Pass a non-empty
+    /// list for HaveMarbleData=true; pass [] for the "no data" case.
+    /// </summary>
+    internal static MarbleDataAccessService BuildServiceWithBibles(
+        IReadOnlyList<ResourceScrText> bibles
+    ) => new(BuildTestGlossData(), BuildTestLanguageMapping(), bibles);
+
+    /// <summary>Builds a service with empty gloss data and no bibles (HaveMarbleData=false).</summary>
+    internal static MarbleDataAccessService BuildServiceWithNoData() =>
+        new(GlossData.Empty, LanguageMapping.Empty, []);
+
+    /// <summary>
+    /// Builds a service whose HaveMarbleData is true via a sentinel ResourceScrText.
+    /// For tests that only need HaveMarbleData=true without inspecting AvailableBibles
+    /// contents. Tests that need to read bible properties should construct the service
+    /// directly with real ResourceScrText instances loaded from a fixture zip.
+    /// </summary>
+    internal static MarbleDataAccessService BuildServiceWithTestData() =>
+        BuildServiceWithBibles([FakeResourceScrText.Instance]);
+
+    /// <summary>
+    /// Initializes a factory with test data: replaces its data access service with one
+    /// pre-populated from <see cref="BuildServiceWithTestData"/> and sets the test
+    /// resource IDs. Task 12 will replace this with MarbleData constructor injection.
     /// </summary>
     internal static void InitializeFactoryWithTestData(EnhancedResourceFactory factory)
     {
-        InitializeWithTestData(factory.DataAccessService);
+        factory.SetTestDataAccessService(BuildServiceWithTestData());
         factory.SetTestResourceIds(TestResourceIds);
     }
 }

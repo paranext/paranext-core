@@ -15,26 +15,11 @@ namespace TestParanextDataProvider.EnhancedResources
     [ExcludeFromCodeCoverage]
     internal class FindLocalizedGlossesTests : PapiTestBase
     {
-        /// <summary>
-        /// Creates a MarbleDataAccessService pre-populated with test data.
-        /// Reuses MarbleTestHelper for consistent golden master data.
-        /// </summary>
-        private static MarbleDataAccessService CreateServiceWithTestData()
-        {
-            var service = new MarbleDataAccessService();
-            MarbleTestHelper.InitializeWithTestData(service);
-            return service;
-        }
+        private static MarbleDataAccessService CreateServiceWithTestData() =>
+            MarbleTestHelper.BuildServiceWithTestData();
 
-        /// <summary>
-        /// Creates a MarbleDataAccessService with no data (simulates no packages installed).
-        /// </summary>
-        private static MarbleDataAccessService CreateServiceWithNoData()
-        {
-            var service = new MarbleDataAccessService();
-            MarbleTestHelper.InitializeWithNoData(service);
-            return service;
-        }
+        private static MarbleDataAccessService CreateServiceWithNoData() =>
+            MarbleTestHelper.BuildServiceWithNoData();
 
         /// <summary>
         /// Invokes the FindLocalizedGlosses contract: maps GlossLookupInput to

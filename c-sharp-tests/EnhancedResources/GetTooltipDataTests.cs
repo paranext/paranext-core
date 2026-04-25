@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.EnhancedResources;
 using Paranext.DataProvider.Errors;
 using SIL.Scripture;
+using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
@@ -127,8 +128,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_FullTokenData_ReturnsCompleteTooltipData()
     {
         // Arrange: A token with all annotations, marble data initialized with gloss data
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
 
         // The token collection represents parsed chapter data (CAP-002 dependency)
         MarbleToken[] parsedTokens = [s_greekNounToken];
@@ -140,7 +141,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert: all fields populated for a fully-annotated token
         Assert.That(result, Is.Not.Null, "TooltipData must not be null for a valid token");
@@ -178,8 +179,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_NoGlossAvailable_ReturnsPartialTooltipWithoutGloss()
     {
         // Arrange: Token has a strong number and lemma but no gloss entry in marble data
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
 
         MarbleToken[] parsedTokens = [s_tokenWithNoGloss];
 
@@ -190,7 +191,7 @@ internal class GetTooltipDataTests
         );
 
         // Act: This should NOT throw - missing gloss is not an error
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert: Tooltip returned with partial data
         Assert.That(result, Is.Not.Null, "Partial tooltip must be returned, not null");
@@ -224,8 +225,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_ValidToken_LemmaMatchesTokenText()
     {
         // Arrange
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_greekNounToken];
 
         var input = new TooltipInput(
@@ -235,7 +236,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert
         Assert.That(
@@ -254,8 +255,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_ValidToken_StrongNumberFromToken()
     {
         // Arrange
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_greekNounToken];
 
         var input = new TooltipInput(
@@ -265,7 +266,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert
         Assert.That(result.StrongNumber, Is.EqualTo("G3056"));
@@ -279,16 +280,23 @@ internal class GetTooltipDataTests
     [Description("TooltipData.Gloss contains the localized gloss from MarbleDataAccessService")]
     public void GetTooltipData_GlossAvailable_GlossFromMarbleData()
     {
-        // Arrange: Configure marble data with a known gloss for the token's lemma
-        var dataAccess = new MarbleDataAccessService();
-        var glossData = new Dictionary<string, Dictionary<string, List<string>>>
+        // Arrange: Configure marble data with a known gloss for the token's lemma.
+        // Build a custom MarbleDataAccessService with the specific test gloss inline.
+        var byLanguage = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(
+            StringComparer.OrdinalIgnoreCase
+        )
         {
-            ["en"] = new Dictionary<string, List<string>>
+            ["en"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
             {
-                [s_greekNounToken.Text] = ["word", "speech", "reason"],
+                [s_greekNounToken.Text] = new List<string> { "word", "speech", "reason" },
             },
         };
-        dataAccess.SetTestData(haveMarbleData: true, glossLanguages: ["en"], glossData: glossData);
+        var dataAccess = new MarbleDataAccessService(
+            new GlossData(byLanguage, ["en"]),
+            LanguageMapping.Empty,
+            [FakeResourceScrText.Instance]
+        );
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_greekNounToken];
 
         var input = new TooltipInput(
@@ -298,7 +306,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert: Gloss should contain data from marble data access
         Assert.That(result.Gloss, Is.Not.Null.And.Not.Empty, "Gloss should be populated");
@@ -313,8 +321,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_NoNotes_NotesArrayEmpty()
     {
         // Arrange: Token without note data
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_greekNounToken];
 
         var input = new TooltipInput(
@@ -324,7 +332,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert
         Assert.That(result.Notes, Is.Not.Null);
@@ -340,12 +348,21 @@ internal class GetTooltipDataTests
     public void GetTooltipData_ValidToken_NoHtmlInAnyField()
     {
         // Arrange
-        var dataAccess = new MarbleDataAccessService();
-        var glossData = new Dictionary<string, Dictionary<string, List<string>>>
+        var byLanguage = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(
+            StringComparer.OrdinalIgnoreCase
+        )
         {
-            ["en"] = new Dictionary<string, List<string>> { [s_greekNounToken.Text] = ["word"], },
+            ["en"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+            {
+                [s_greekNounToken.Text] = new List<string> { "word" },
+            },
         };
-        dataAccess.SetTestData(haveMarbleData: true, glossLanguages: ["en"], glossData: glossData);
+        var dataAccess = new MarbleDataAccessService(
+            new GlossData(byLanguage, ["en"]),
+            LanguageMapping.Empty,
+            [FakeResourceScrText.Instance]
+        );
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_greekNounToken];
 
         var input = new TooltipInput(
@@ -355,7 +372,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert: No HTML tags anywhere - Theme 2 mandates structured data, not HTML
         Assert.That(result.Lemma, Does.Not.Contain("<"), "Lemma must not contain HTML");
@@ -392,8 +409,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_HebrewToken_ReturnsHebrewLemmaAndStrong()
     {
         // Arrange
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_hebrewNounToken];
 
         var input = new TooltipInput(
@@ -403,7 +420,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert
         Assert.That(result.Lemma, Is.EqualTo(MarbleTestHelper.Elohim));
@@ -419,8 +436,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_HebrewTokenWithEnglishGloss_ReturnsGloss()
     {
         // Arrange: MarbleTestHelper sets up "God" as the English gloss for Elohim
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_hebrewNounToken];
 
         var input = new TooltipInput(
@@ -430,7 +447,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert: MarbleTestHelper has "God" as gloss for Elohim in English
         Assert.That(result.Gloss, Is.Not.Null, "Gloss should be present for Elohim in English");
@@ -456,8 +473,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_TokenNotFound_ThrowsNotFoundError()
     {
         // Arrange: Empty token array - no tokens parsed
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [];
 
         var input = new TooltipInput(
@@ -468,7 +485,7 @@ internal class GetTooltipDataTests
 
         // Act & Assert
         var ex = Assert.Throws<InvalidOperationException>(
-            () => TooltipService.GetTooltipData(input, parsedTokens, dataAccess)
+            () => tooltipService.GetTooltipData(input, parsedTokens)
         );
 
         Assert.That(ex, Is.Not.Null);
@@ -493,8 +510,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_TokenIdNotInParsedTokens_ThrowsNotFoundError()
     {
         // Arrange: Tokens exist but requested ID does not match any token index
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_greekNounToken]; // Index is 5
 
         var input = new TooltipInput(
@@ -505,7 +522,7 @@ internal class GetTooltipDataTests
 
         // Act & Assert
         var ex = Assert.Throws<InvalidOperationException>(
-            () => TooltipService.GetTooltipData(input, parsedTokens, dataAccess)
+            () => tooltipService.GetTooltipData(input, parsedTokens)
         );
 
         Assert.That(ex, Is.Not.Null);
@@ -524,8 +541,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_TokenNotFound_ErrorMessageMatchesContractPattern()
     {
         // Arrange
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [];
 
         var input = new TooltipInput(
@@ -536,7 +553,7 @@ internal class GetTooltipDataTests
 
         // Act & Assert
         var ex = Assert.Throws<InvalidOperationException>(
-            () => TooltipService.GetTooltipData(input, parsedTokens, dataAccess)
+            () => tooltipService.GetTooltipData(input, parsedTokens)
         );
 
         // Contract Section 4.14: Message = "Token '{tokenId}' not found"
@@ -578,8 +595,8 @@ internal class GetTooltipDataTests
             ImageLinks: [],
             MapLinks: []
         );
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [tokenNoStrong];
 
         var input = new TooltipInput(
@@ -589,7 +606,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert
         Assert.That(result, Is.Not.Null, "Tooltip must be returned even without strong number");
@@ -617,8 +634,8 @@ internal class GetTooltipDataTests
             ImageLinks: [],
             MapLinks: []
         );
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [tokenNoLinks];
 
         var input = new TooltipInput(
@@ -628,7 +645,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert
         Assert.That(result, Is.Not.Null, "Tooltip must be returned even without lexical links");
@@ -650,8 +667,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_NoMarbleData_ReturnsTooltipWithNullGloss()
     {
         // Arrange: MarbleDataAccessService with no data
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithNoData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithNoData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_greekNounToken];
 
         var input = new TooltipInput(
@@ -661,7 +678,7 @@ internal class GetTooltipDataTests
         );
 
         // Act: Should not throw - missing marble data means no gloss, not an error
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert
         Assert.That(result, Is.Not.Null, "Tooltip must be returned even without marble data");
@@ -697,8 +714,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_TokenWithPosTag_ReturnsPosDisplayString()
     {
         // Arrange: Token with POS info (compound Greek tag)
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_tokenWithPos];
 
         var input = new TooltipInput(
@@ -708,7 +725,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert: POS should be a human-readable string from PartOfSpeechTranslator
         Assert.That(
@@ -733,8 +750,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_NoPosTag_ReturnsNullPartOfSpeech()
     {
         // Arrange: Token without POS data (no style attribute)
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_greekNounToken]; // Has no Style set
 
         var input = new TooltipInput(
@@ -744,7 +761,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert: No POS data available
         Assert.That(
@@ -773,8 +790,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_MultipleTokens_ResolvesCorrectTokenById()
     {
         // Arrange: Multiple tokens - we request the Hebrew one (index 3)
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_greekNounToken, s_hebrewNounToken, s_tokenWithNoGloss];
 
         var input = new TooltipInput(
@@ -784,7 +801,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert: Should return data for the Hebrew token, not the Greek one
         Assert.That(
@@ -808,8 +825,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_SameInput_AlwaysReturnsSameResult()
     {
         // Arrange
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_greekNounToken];
 
         var input = new TooltipInput(
@@ -819,8 +836,8 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result1 = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
-        TooltipData result2 = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result1 = tooltipService.GetTooltipData(input, parsedTokens);
+        TooltipData result2 = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert
         Assert.That(result1.Lemma, Is.EqualTo(result2.Lemma));
@@ -841,8 +858,8 @@ internal class GetTooltipDataTests
     public void GetTooltipData_ValidToken_TooltipDataHasAllContractFields()
     {
         // Arrange
-        var dataAccess = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(dataAccess);
+        var dataAccess = MarbleTestHelper.BuildServiceWithTestData();
+        var tooltipService = new TooltipService(dataAccess);
         MarbleToken[] parsedTokens = [s_greekNounToken];
 
         var input = new TooltipInput(
@@ -852,7 +869,7 @@ internal class GetTooltipDataTests
         );
 
         // Act
-        TooltipData result = TooltipService.GetTooltipData(input, parsedTokens, dataAccess);
+        TooltipData result = tooltipService.GetTooltipData(input, parsedTokens);
 
         // Assert: Verify TooltipData has the 6 fields per Section 4.14 Result Type:
         // lemma, gloss, partOfSpeech, strongNumber, notes, morphology

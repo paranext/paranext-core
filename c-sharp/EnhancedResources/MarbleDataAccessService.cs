@@ -1,63 +1,49 @@
 // === PORTED FROM PT9 ===
-// Source: PT9/Paratext/Marble/MarbleDataAccess.cs:1-1998
-// Method: MarbleDataAccess (singleton lifecycle, package discovery, gloss lookup)
-// Maps to: EXT-051, CAP-001
+// Source: PT9/Paratext/Marble/MarbleDataAccess.cs (FindLocalizedGlossesForTerm,
+// GetEncyclopediaLanguage, AvailableBibles)
+// Reason: Immutable accessor over loaded marble data. Constructor injection only;
+// no Initialize/SetTestData lifecycle.
 using Paratext.Data;
 
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
-/// Core data access service for Enhanced Resources. Implements
-/// IEnhancedResourceProvider and IMarbleDataAccess contracts.
-/// Manages marble package discovery, lexicon loading (SDBG/SDBH),
-/// reference-to-meaning cache (~600K entries), gloss language mapping.
+/// Read-only view over loaded marble data. Exposes:
+///   - HaveMarbleData (derived from availableBibles presence)
+///   - AvailableGlossLanguages
+///   - AvailableBibles
+///   - FindLocalizedGlossesForTerm / FindGlossesWithLanguage / ResolveLanguage
+/// All state is injected via primary constructor; nothing mutates at runtime.
 ///
 /// Source: CAP-001, EXT-051, data-contracts.md Section 4.1
 /// </summary>
-internal class MarbleDataAccessService
+internal sealed class MarbleDataAccessService
 {
-    private bool _initialized;
-    private bool _haveMarbleData;
-    private readonly List<string> _availableGlossLanguages = [];
-    private readonly List<ScrText> _availableBibles = [];
+    private readonly GlossData _glossData;
+    private readonly LanguageMapping _languageMapping;
+    private readonly IReadOnlyList<ResourceScrText> _availableBibles;
 
-    // Gloss data: maps (language, termLemma) -> glosses
-    private readonly Dictionary<string, Dictionary<string, List<string>>> _glossData = new();
-
-    // Chinese variant mapping: zh-Hant -> zh-Hans (or whichever variant is available)
-    private readonly Dictionary<string, string> _languageMapping = new();
-
-    /// <summary>
-    /// Whether marble package data has been discovered and loaded.
-    /// </summary>
-    public bool HaveMarbleData => _haveMarbleData;
-
-    /// <summary>
-    /// Languages available for gloss lookup. Returns a defensive copy.
-    /// </summary>
-    public List<string> AvailableGlossLanguages => [.. _availableGlossLanguages];
-
-    /// <summary>
-    /// Installed marble Bible resources as read-only ScrText instances.
-    /// </summary>
-    public IEnumerable<ScrText> AvailableBibles => _availableBibles.AsReadOnly();
-
-    /// <summary>
-    /// Discovers installed marble packages and loads lexicon data.
-    /// Idempotent - subsequent calls are no-ops.
-    /// </summary>
-    public void Initialize()
+    public MarbleDataAccessService(
+        GlossData glossData,
+        LanguageMapping languageMapping,
+        IReadOnlyList<ResourceScrText> availableBibles
+    )
     {
-        if (_initialized)
-            return;
-
-        _initialized = true;
-
-        // Discover marble packages from file system
-        // In production, this scans the file system for installed marble packages.
-        // When no packages are found, HaveMarbleData stays false and lists stay empty.
-        DiscoverPackages();
+        _glossData = glossData ?? throw new ArgumentNullException(nameof(glossData));
+        _languageMapping =
+            languageMapping ?? throw new ArgumentNullException(nameof(languageMapping));
+        _availableBibles =
+            availableBibles ?? throw new ArgumentNullException(nameof(availableBibles));
     }
+
+    /// <summary>True iff at least one bible package was loaded.</summary>
+    public bool HaveMarbleData => _availableBibles.Count > 0;
+
+    /// <summary>Languages meeting the gloss-coverage threshold.</summary>
+    public IReadOnlyList<string> AvailableGlossLanguages => _glossData.AvailableLanguages;
+
+    /// <summary>Installed marble Bible resources as read-only ScrText instances.</summary>
+    public IEnumerable<ScrText> AvailableBibles => _availableBibles;
 
     /// <summary>
     /// Looks up localized glosses for a term lemma with language fallback:
@@ -69,71 +55,7 @@ internal class MarbleDataAccessService
     }
 
     /// <summary>
-    /// Returns a snapshot list of all enhanced resources. New list each call (INV-C09).
-    /// </summary>
-    public List<ScrText> GetAllEnhancedResources()
-    {
-        return [.. _availableBibles];
-    }
-
-    /// <summary>
-    /// Null-safe delegation for Host.AllEnhancedResources pattern.
-    /// Returns empty list when provider is null.
-    /// </summary>
-    public static List<ScrText> GetAllEnhancedResourcesNullSafe(MarbleDataAccessService? provider)
-    {
-        if (provider == null)
-            return [];
-
-        return provider.GetAllEnhancedResources();
-    }
-
-    /// <summary>
-    /// Internal method for test support: allows injecting gloss data without real marble packages.
-    /// </summary>
-    internal void SetTestData(
-        bool haveMarbleData,
-        IEnumerable<string> glossLanguages,
-        Dictionary<string, Dictionary<string, List<string>>>? glossData = null,
-        Dictionary<string, string>? languageMapping = null,
-        IEnumerable<ScrText>? bibles = null
-    )
-    {
-        _haveMarbleData = haveMarbleData;
-        _availableGlossLanguages.Clear();
-        _availableGlossLanguages.AddRange(glossLanguages);
-        _glossData.Clear();
-        if (glossData != null)
-        {
-            foreach (var kvp in glossData)
-                _glossData[kvp.Key] = kvp.Value;
-        }
-        _languageMapping.Clear();
-        if (languageMapping != null)
-        {
-            foreach (var kvp in languageMapping)
-                _languageMapping[kvp.Key] = kvp.Value;
-        }
-        _availableBibles.Clear();
-        if (bibles != null)
-            _availableBibles.AddRange(bibles);
-        _initialized = true;
-    }
-
-    private void DiscoverPackages()
-    {
-        // In production, this would scan for installed marble packages.
-        // When no packages are found, state remains as initialized (empty/false).
-        // Real implementation will use ParatextData APIs to discover installed packages.
-    }
-
-    // === PORTED FROM PT9 ===
-    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:1-1998
-    // Method: MarbleDataAccess.FindLocalizedGlossesForTerm (language resolution logic)
-    // Maps to: EXT-051, CAP-006
-    /// <summary>
-    /// Resolves the actual language used in gloss lookup by following the fallback chain:
-    /// requested language -> mapped variant (e.g. zh-Hant -> zh-Hans) -> English -> empty.
+    /// Resolves the actual language used in gloss lookup by following the fallback chain.
     /// Returns the language code that would yield glosses, or empty string if none found.
     /// </summary>
     internal string ResolveLanguage(string termLemma, string language)
@@ -144,30 +66,29 @@ internal class MarbleDataAccessService
     /// <summary>
     /// Core fallback logic: walks the language chain once and returns both glosses and
     /// the resolved language. Single source of truth for the fallback chain:
-    /// requested language -> mapped variant (e.g. zh-Hant -> zh-Hans) -> English.
-    /// Used by GlossLookupFunction to avoid walking the fallback chain twice.
+    /// requested language -> mapped variant -> English.
     /// </summary>
     internal (IList<string> Glosses, string ResolvedLanguage) FindGlossesWithLanguage(
         string termLemma,
         string language
     )
     {
-        if (!_haveMarbleData)
+        if (!HaveMarbleData)
             return ([], string.Empty);
 
-        // Try the requested language directly
         if (TryGetGlosses(termLemma, language, out var glosses))
             return (glosses, language);
 
-        // Try Chinese/Portuguese variant mapping
         if (
-            _languageMapping.TryGetValue(language, out var mappedLanguage)
+            _languageMapping.Variants.TryGetValue(language, out var mappedLanguage)
             && TryGetGlosses(termLemma, mappedLanguage, out glosses)
         )
             return (glosses, mappedLanguage);
 
-        // Fall back to English
-        if (language != "en" && TryGetGlosses(termLemma, "en", out glosses))
+        if (
+            !string.Equals(language, "en", StringComparison.OrdinalIgnoreCase)
+            && TryGetGlosses(termLemma, "en", out glosses)
+        )
             return (glosses, "en");
 
         return ([], string.Empty);
@@ -176,8 +97,8 @@ internal class MarbleDataAccessService
     private bool TryGetGlosses(string termLemma, string language, out IList<string> glosses)
     {
         if (
-            _glossData.TryGetValue(language, out var langData)
-            && langData.TryGetValue(termLemma, out var glossList)
+            _glossData.ByLanguage.TryGetValue(language, out var byLemma)
+            && byLemma.TryGetValue(termLemma, out var glossList)
         )
         {
             glosses = [.. glossList];

@@ -26,9 +26,8 @@ namespace TestParanextDataProvider.EnhancedResources
         )]
         public void FindLocalizedGlosses_HebrewElohimEnglish_ReturnsGod()
         {
-            // Arrange: Initialize marble data access with test data
-            var service = new MarbleDataAccessService();
-            MarbleTestHelper.InitializeWithTestData(service);
+            // Arrange: Build marble data access with test data
+            var service = MarbleTestHelper.BuildServiceWithTestData();
 
             // Golden master input:
             //   termLemma: "אֱלֹהִים" (Elohim)
@@ -63,8 +62,7 @@ namespace TestParanextDataProvider.EnhancedResources
         public void FindLocalizedGlosses_UnavailableLanguage_FallsBackToEnglishGod()
         {
             // Arrange
-            var service = new MarbleDataAccessService();
-            MarbleTestHelper.InitializeWithTestData(service);
+            var service = MarbleTestHelper.BuildServiceWithTestData();
 
             // Golden master input:
             //   termLemma: "אֱלֹהִים" (Elohim)
@@ -105,8 +103,7 @@ namespace TestParanextDataProvider.EnhancedResources
         public void FindLocalizedGlosses_ChineseTraditional_ReturnsMappedChineseGloss()
         {
             // Arrange
-            var service = new MarbleDataAccessService();
-            MarbleTestHelper.InitializeWithTestData(service);
+            var service = MarbleTestHelper.BuildServiceWithTestData();
 
             // Golden master input:
             //   termLemma: "אֱלֹהִים" (Elohim)

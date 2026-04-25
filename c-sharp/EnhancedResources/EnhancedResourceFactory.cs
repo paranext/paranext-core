@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using Paranext.DataProvider.Errors;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
+using Paratext.Data;
 
 namespace Paranext.DataProvider.EnhancedResources;
 
@@ -18,7 +19,7 @@ namespace Paranext.DataProvider.EnhancedResources;
 internal class EnhancedResourceFactory : NetworkObject
 {
     private readonly LocalParatextProjects _paratextProjects;
-    private readonly MarbleDataAccessService _dataAccessService;
+    private MarbleDataAccessService _dataAccessService;
     private readonly ConcurrentDictionary<string, string> _networkObjectIds = new();
     private readonly object _creationLock = new();
     private readonly Random _random = new((int)DateTime.Now.Ticks);
@@ -29,7 +30,13 @@ internal class EnhancedResourceFactory : NetworkObject
         : base(papiClient)
     {
         _paratextProjects = paratextProjects;
-        _dataAccessService = new MarbleDataAccessService();
+        // Empty service until InitializeAsync wires real data (Task 12 will replace this
+        // with a proper construction path through MarbleDataLoader + MarbleLanguageMapBuilder).
+        _dataAccessService = new MarbleDataAccessService(
+            GlossData.Empty,
+            LanguageMapping.Empty,
+            []
+        );
     }
 
     /// <summary>
@@ -38,9 +45,8 @@ internal class EnhancedResourceFactory : NetworkObject
     /// </summary>
     public Task InitializeAsync()
     {
-        _dataAccessService.Initialize();
-
-        // Only populate from AvailableBibles if no test data was pre-set
+        // No-op stub until Task 12 wires MarbleDataLoader -> MarbleLanguageMapBuilder.
+        // The factory currently relies on test code injecting state via SetTestService.
         if (_availableResources.Length == 0)
         {
             _availableResources = _dataAccessService.AvailableBibles.Select(b => b.Name).ToArray();
@@ -121,6 +127,16 @@ internal class EnhancedResourceFactory : NetworkObject
     /// Provides access to the underlying data access service for testing.
     /// </summary>
     internal MarbleDataAccessService DataAccessService => _dataAccessService;
+
+    /// <summary>
+    /// Replaces the underlying data access service for testing. Task 12 will rework
+    /// the factory to take MarbleData via constructor injection.
+    /// </summary>
+    internal void SetTestDataAccessService(MarbleDataAccessService service)
+    {
+        _dataAccessService = service ?? throw new ArgumentNullException(nameof(service));
+        _initializeResult = BuildInitializeResult();
+    }
 
     /// <summary>
     /// Sets available resource IDs directly for testing purposes.

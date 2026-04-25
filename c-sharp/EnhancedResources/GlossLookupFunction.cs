@@ -40,7 +40,7 @@ internal static class GlossLookupFunction
         return new GlossLookupResult(
             Glosses: glosses,
             ActualLanguage: actualLanguage,
-            AvailableLanguages: dataAccess.AvailableGlossLanguages,
+            AvailableLanguages: [.. dataAccess.AvailableGlossLanguages],
             HaveMarbleData: true
         );
     }

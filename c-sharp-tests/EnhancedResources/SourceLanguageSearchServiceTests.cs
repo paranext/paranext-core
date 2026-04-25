@@ -22,16 +22,14 @@ internal class SourceLanguageSearchServiceTests
     private static SourceLanguageSearchService BuildServiceWithData()
     {
         var data = SourceLanguageSearchFixtures.BuildSourceLanguageData();
-        var marbleData = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithTestData(marbleData);
+        var marbleData = MarbleTestHelper.BuildServiceWithTestData();
         return new SourceLanguageSearchService(data, marbleData);
     }
 
     private static SourceLanguageSearchService BuildServiceWithNoMarbleData()
     {
         var data = SourceLanguageSearchFixtures.BuildSourceLanguageData();
-        var marbleData = new MarbleDataAccessService();
-        MarbleTestHelper.InitializeWithNoData(marbleData);
+        var marbleData = MarbleTestHelper.BuildServiceWithNoData();
         return new SourceLanguageSearchService(data, marbleData);
     }
 
