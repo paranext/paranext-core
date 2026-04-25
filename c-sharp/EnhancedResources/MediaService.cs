@@ -114,6 +114,42 @@ internal sealed class MediaService(MediaData data)
     }
 
     // === PORTED FROM PT9 ===
+    // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (ImageRefRange matching)
+    /// <summary>
+    /// Finds all images whose reference range overlaps the input's single verse reference
+    /// and returns them as <see cref="ImageEntry"/> records with papi-er:// image sources.
+    /// Used by the media viewer to locate images relevant to the current scripture reference.
+    /// Source: EXT-009, BHV-612, M-004.
+    /// </summary>
+    public ImageReferenceResult FindImagesForReference(ImageReferenceInput input)
+    {
+        int queryBbbcccvvv = input.Reference.BBBCCCVVV;
+
+        var matches = data
+            .Images.Where(image =>
+                queryBbbcccvvv >= image.StartRef.BBBCCCVVV
+                && queryBbbcccvvv <= image.EndRef.BBBCCCVVV
+            )
+            .ToList();
+
+        var entries = matches
+            .Select(image => new ImageEntry(
+                ImageId: image.ImageId,
+                ImageSource: image.ImageSource,
+                Title: image.Title,
+                StartRef: image.StartRef,
+                EndRef: image.EndRef,
+                Collection: image.Collection,
+                LanguageCode: string.IsNullOrEmpty(image.LanguageCode)
+                    ? input.UserLanguage
+                    : image.LanguageCode
+            ))
+            .ToList<ImageEntry>();
+
+        return new ImageReferenceResult(entries, data.Images.Count);
+    }
+
+    // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:854-897 (GetImageProject, FindImageFile)
     /// <summary>
     /// Resolves an image binary by ID and size. Walks the PT9 search order of

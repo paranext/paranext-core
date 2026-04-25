@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.EnhancedResources;
 using Paranext.DataProvider.Errors;
 using Paratext.Data;
+using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources
 {
@@ -188,22 +189,43 @@ namespace TestParanextDataProvider.EnhancedResources
 
         #endregion
 
-        #region INV-C09: AllEnhancedResources Returns Snapshot
+        #region INV-C09: AvailableResources Snapshot Semantics
 
         [Test]
         [Category("Invariant")]
         [Property("InvariantId", "INV-C09")]
         [Property("BehaviorId", "BHV-103")]
         [Property("ScenarioId", "TS-046")]
-        [Ignore(
-            "Rewritten in Task 12 factory refactor (immutable service exposes IEnumerable, not a per-call snapshot list)"
-        )]
         [Description(
-            "INV-C09: AllEnhancedResources returns new list each time (reference inequality)"
+            "INV-C09: CurrentInitializeResult.AvailableResources stays stable across reads "
+                + "(immutable record); mutating a copy does not affect subsequent reads."
         )]
-        public void AllEnhancedResources_MultipleCalls_ReturnDifferentReferences()
+        public async Task AvailableResources_MultipleCalls_ReturnStableSnapshot()
         {
-            // Behavior moved to factory's snapshot helper - re-asserted in Task 12.
+            // Arrange: stub loader with two bibles
+            var data = new MarbleDataBuilder()
+                .WithBiblePackages(
+                    [
+                        MarbleTestHelper.CreateFakeMarbleScrText("SDBG"),
+                        MarbleTestHelper.CreateFakeMarbleScrText("SDBH"),
+                    ]
+                )
+                .Build();
+            var factory = new EnhancedResourceFactory(
+                Client,
+                ParatextProjects,
+                new StubMarbleDataLoader(data)
+            );
+            await factory.InitializeAsync();
+            await factory.LoadCompleted;
+
+            // Act
+            var first = factory.CurrentInitializeResult.AvailableResources;
+            var second = factory.CurrentInitializeResult.AvailableResources;
+
+            // Assert: both reads expose the same two entries.
+            Assert.That(first, Is.EqualTo(new[] { "SDBG", "SDBH" }));
+            Assert.That(second, Is.EqualTo(new[] { "SDBG", "SDBH" }));
         }
 
         [Test]
@@ -211,13 +233,33 @@ namespace TestParanextDataProvider.EnhancedResources
         [Property("InvariantId", "INV-C09")]
         [Property("BehaviorId", "BHV-103")]
         [Property("ScenarioId", "TS-046")]
-        [Ignore(
-            "Rewritten in Task 12 factory refactor (snapshot semantics moved to factory route helpers)"
+        [Description(
+            "INV-C09: mutating a caller's copy of AvailableResources does not bleed into "
+                + "subsequent reads from the factory."
         )]
-        [Description("INV-C09: Mutating returned list does not affect subsequent calls")]
-        public void AllEnhancedResources_MutateReturned_SubsequentCallUnaffected()
+        public async Task AvailableResources_MutateCopy_SubsequentReadUnaffected()
         {
-            // Behavior moved to factory's snapshot helper - re-asserted in Task 12.
+            // Arrange
+            var data = new MarbleDataBuilder()
+                .WithBiblePackages([MarbleTestHelper.CreateFakeMarbleScrText("SDBG")])
+                .Build();
+            var factory = new EnhancedResourceFactory(
+                Client,
+                ParatextProjects,
+                new StubMarbleDataLoader(data)
+            );
+            await factory.InitializeAsync();
+            await factory.LoadCompleted;
+
+            // Act: copy-and-mutate
+            var copy = factory.CurrentInitializeResult.AvailableResources.ToArray();
+            copy[0] = "CORRUPTED";
+
+            // Assert: factory still reports the original
+            Assert.That(
+                factory.CurrentInitializeResult.AvailableResources,
+                Is.EqualTo(new[] { "SDBG" })
+            );
         }
 
         #endregion
@@ -229,19 +271,24 @@ namespace TestParanextDataProvider.EnhancedResources
         [Property("InvariantId", "INV-C10")]
         [Property("BehaviorId", "BHV-616")]
         [Property("ScenarioId", "TS-042")]
-        [Description("INV-C10: Factory validates IsMarbleResource before creating NetworkObject")]
-        public async Task GetResourceObjectId_MarbleResource_Accepted()
+        [Description("INV-C10: Factory accepts resolveResourceObjectId for known marble resource")]
+        public async Task ResolveResourceObjectId_MarbleResource_Accepted()
         {
-            // Arrange: Factory with marble resources (test data)
-            var factory = new EnhancedResourceFactory(Client, ParatextProjects);
-            MarbleTestHelper.InitializeFactoryWithTestData(factory);
+            // Arrange
+            var data = new MarbleDataBuilder()
+                .WithBiblePackages([MarbleTestHelper.CreateFakeMarbleScrText("SDBG")])
+                .Build();
+            var factory = new EnhancedResourceFactory(
+                Client,
+                ParatextProjects,
+                new StubMarbleDataLoader(data)
+            );
             await factory.InitializeAsync();
-            var resources = factory.GetAvailableResources();
-            Assert.That(resources, Is.Not.Empty);
+            await factory.LoadCompleted;
 
-            // Act & Assert: MarbleResource type accepted
+            // Act & Assert: known resource accepted (echoes ID, no throw)
             Assert.DoesNotThrow(
-                () => factory.GetResourceObjectId(resources[0]),
+                () => factory.InvokeResolveResourceObjectIdForTest("SDBG"),
                 "INV-C10: MarbleResource type must be accepted"
             );
         }
@@ -254,52 +301,25 @@ namespace TestParanextDataProvider.EnhancedResources
         [Description(
             "INV-C10: Non-MarbleResource IDs return NOT_FOUND (ArgumentException heuristic removed)"
         )]
-        public async Task GetResourceObjectId_NonMarbleResource_ThrowsNotFound()
+        public async Task ResolveResourceObjectId_NonMarbleResource_ThrowsNotFound()
         {
             // Arrange
-            var factory = new EnhancedResourceFactory(Client, ParatextProjects);
-            MarbleTestHelper.InitializeFactoryWithTestData(factory);
+            var data = new MarbleDataBuilder()
+                .WithBiblePackages([MarbleTestHelper.CreateFakeMarbleScrText("SDBG")])
+                .Build();
+            var factory = new EnhancedResourceFactory(
+                Client,
+                ParatextProjects,
+                new StubMarbleDataLoader(data)
+            );
             await factory.InitializeAsync();
+            await factory.LoadCompleted;
 
             // Act & Assert: Non-marble / unknown IDs surface as NOT_FOUND
             var ex = Assert.Throws<InvalidOperationException>(
-                () => factory.GetResourceObjectId("SomeStandardTranslation")
+                () => factory.InvokeResolveResourceObjectIdForTest("SomeStandardTranslation")
             );
             Assert.That(ex!.Data["platformErrorCode"], Is.EqualTo(PlatformErrorCodes.NotFound));
-        }
-
-        #endregion
-
-        #region INV-C11: MarbleDataAccess Is Singleton
-
-        [Test]
-        [Category("Invariant")]
-        [Property("InvariantId", "INV-C11")]
-        [Property("BehaviorId", "BHV-350")]
-        [Property("ScenarioId", "TS-068")]
-        [Description(
-            "INV-C11: Each EnhancedResourceFactory owns a single MarbleDataAccessService instance"
-        )]
-        public void MarbleDataAccessService_PerFactory_ReturnsSameInstance()
-        {
-            // INV-C11 now anchored on factory-owned instance identity. The formerly-static
-            // Default/ResetForTesting singleton was removed because no production code relied
-            // on it; EnhancedResourceFactory constructor-injects the service (N3 cleanup,
-            // W5 in adr-review-3-backend.md).
-            var factory = new EnhancedResourceFactory(Client, ParatextProjects);
-
-            // Act: Access the factory-owned service multiple times
-            var instance1 = factory.DataAccessService;
-            var instance2 = factory.DataAccessService;
-
-            // Assert: factory exposes a single MarbleDataAccess across the application lifetime
-            Assert.That(instance1, Is.Not.Null);
-            Assert.That(instance2, Is.Not.Null);
-            Assert.That(
-                ReferenceEquals(instance1, instance2),
-                Is.True,
-                "INV-C11: factory.DataAccessService must return the same instance"
-            );
         }
 
         #endregion

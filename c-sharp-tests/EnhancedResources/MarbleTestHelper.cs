@@ -1,7 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Paranext.DataProvider.EnhancedResources;
 using Paratext.Data;
-using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
@@ -18,9 +19,6 @@ internal static class MarbleTestHelper
     // Chinese gloss for Elohim (gm-022).
     internal const string ElohimChineseGloss = "上帝；神"; // 上帝；神
 
-    // Test resource IDs used by factory tests.
-    internal static readonly string[] TestResourceIds = ["SDBG", "SDBH"];
-
     /// <summary>
     /// Builds a GlossData record matching the pre-refactor MarbleTestHelper test data.
     /// </summary>
@@ -34,7 +32,7 @@ internal static class MarbleTestHelper
             {
                 [Elohim] = new List<string> { "God" },
                 ["sampleTerm"] = new List<string> { "sample gloss" },
-                ["λόγος"] = new List<string> { "word", "speech", "reason", },
+                ["λόγος"] = new List<string> { "word", "speech", "reason" },
             },
             ["zh-Hans"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
             {
@@ -77,16 +75,26 @@ internal static class MarbleTestHelper
     /// directly with real ResourceScrText instances loaded from a fixture zip.
     /// </summary>
     internal static MarbleDataAccessService BuildServiceWithTestData() =>
-        BuildServiceWithBibles([FakeResourceScrText.Instance]);
+        BuildServiceWithBibles([Fixtures.FakeResourceScrText.Instance]);
 
     /// <summary>
-    /// Initializes a factory with test data: replaces its data access service with one
-    /// pre-populated from <see cref="BuildServiceWithTestData"/> and sets the test
-    /// resource IDs. Task 12 will replace this with MarbleData constructor injection.
+    /// Creates an uninitialized ResourceScrText and reflectively sets its ProjectName
+    /// so that .Name returns the requested short name. Used by factory tests that need
+    /// AvailableBibles to contain a specific ID. No other members are safe to touch.
     /// </summary>
-    internal static void InitializeFactoryWithTestData(EnhancedResourceFactory factory)
+    internal static ResourceScrText CreateFakeMarbleScrText(string shortName)
     {
-        factory.SetTestDataAccessService(BuildServiceWithTestData());
-        factory.SetTestResourceIds(TestResourceIds);
+        var instance = (ResourceScrText)
+            RuntimeHelpers.GetUninitializedObject(typeof(ResourceScrText));
+
+        var projectName = new ProjectName { ShortName = shortName, ProjectPath = string.Empty };
+        var projectNameField =
+            typeof(ScrText).GetField("projectName", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new InvalidOperationException(
+                "ScrText.projectName field not found - ParatextData layout changed"
+            );
+        projectNameField.SetValue(instance, projectName);
+
+        return instance;
     }
 }
