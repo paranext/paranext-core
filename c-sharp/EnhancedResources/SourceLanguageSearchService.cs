@@ -68,7 +68,7 @@ internal sealed class SourceLanguageSearchService
         }
 
         var strippedText = StripTrailingNotation(input.SearchText);
-        var matchedEntries = FindMatchingEntries(strippedText);
+        var matchedEntries = FindMatchingEntries(strippedText, input.UseTransliteration);
 
         if (matchedEntries.Count == 0)
             return Task.FromResult(NoMatchingLemmaResult());
@@ -112,9 +112,10 @@ internal sealed class SourceLanguageSearchService
     private static string StripTrailingNotation(string searchText) =>
         s_trailingNotation.Replace(searchText, string.Empty);
 
-    private List<LexiconEntry> FindMatchingEntries(string searchText)
+    private List<LexiconEntry> FindMatchingEntries(string searchText, bool useTransliteration)
     {
-        return _data.ByLemma.TryGetValue(searchText, out var entries) ? [.. entries] : [];
+        var index = useTransliteration ? _data.ByTranslit : _data.ByLemma;
+        return index.TryGetValue(searchText, out var entries) ? [.. entries] : [];
     }
 
     private static IList<VerseRef> FilterByBookRange(

@@ -107,6 +107,17 @@ internal class MarbleDataLoader : IMarbleDataLoader
                 $"Enhanced Resources: skipped {discovery.SkippedFileCount} files due to load errors"
             );
 
+        return CreateMarbleData(discovery);
+    }
+
+    /// <summary>
+    /// Post-discovery composition path. Wraps research packages, runs per-domain loaders,
+    /// computes the missing-required-projects list, emits summary logs, and assembles
+    /// the <see cref="MarbleData"/> record. Protected so test doubles can drive it with
+    /// a synthetic <see cref="DiscoveryResult"/>.
+    /// </summary>
+    protected MarbleData CreateMarbleData(DiscoveryResult discovery)
+    {
         // Phase 2: Wrap research packages as IMarblePackage for per-domain loaders.
         var researchPackages = new Dictionary<string, IMarblePackage>(
             StringComparer.OrdinalIgnoreCase
@@ -164,7 +175,8 @@ internal class MarbleDataLoader : IMarbleDataLoader
             DictionaryData: dictionaryData,
             EncyclopediaData: encyclopediaData,
             MediaData: mediaData,
-            SourceLanguageData: sourceLanguageData
+            SourceLanguageData: sourceLanguageData,
+            MissingRequiredPackages: missingRequired
         );
     }
 

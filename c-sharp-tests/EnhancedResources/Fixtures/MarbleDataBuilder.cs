@@ -22,6 +22,7 @@ internal sealed class MarbleDataBuilder
     private EncyclopediaData _encyclopedia = EncyclopediaData.Empty;
     private MediaData _media = MediaData.Empty;
     private SourceLanguageData _sourceLanguage = SourceLanguageData.Empty;
+    private IReadOnlyList<string> _missingRequiredPackages = [];
 
     public MarbleDataBuilder WithBiblePackages(IReadOnlyList<ResourceScrText> bibles)
     {
@@ -71,6 +72,12 @@ internal sealed class MarbleDataBuilder
         return this;
     }
 
+    public MarbleDataBuilder WithMissingRequiredPackages(IReadOnlyList<string> packages)
+    {
+        _missingRequiredPackages = packages;
+        return this;
+    }
+
     public MarbleData Build() =>
         new(
             BiblePackages: _biblePackages,
@@ -80,6 +87,7 @@ internal sealed class MarbleDataBuilder
             DictionaryData: _dictionary,
             EncyclopediaData: _encyclopedia,
             MediaData: _media,
-            SourceLanguageData: _sourceLanguage
+            SourceLanguageData: _sourceLanguage,
+            MissingRequiredPackages: _missingRequiredPackages
         );
 }

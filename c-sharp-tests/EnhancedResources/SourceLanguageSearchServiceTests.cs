@@ -36,13 +36,15 @@ internal class SourceLanguageSearchServiceTests
     private static SourceLanguageSearchInput CreateInput(
         string searchText,
         BookRange? bookRange = null,
-        int showInContextLimit = ContextLimit
+        int showInContextLimit = ContextLimit,
+        bool useTransliteration = true
     ) =>
         new(
             SearchText: searchText,
             BookRange: bookRange,
             ResourceId: TestResourceId,
-            ShowInContextLimit: showInContextLimit
+            ShowInContextLimit: showInContextLimit,
+            UseTransliteration: useTransliteration
         );
 
     [Test]
@@ -191,4 +193,95 @@ internal class SourceLanguageSearchServiceTests
         Assert.That(result.Results, Is.Empty);
         Assert.That(result.ErrorMessage, Is.EqualTo("No matching lemma"));
     }
+
+    [Test]
+    public async Task ExecuteSearchAsync_WithUseTransliterationTrue_SearchesByTranslitIndex()
+    {
+        var data = new SourceLanguageData(
+            ByLemma: new Dictionary<string, IReadOnlyList<LexiconEntry>>(
+                StringComparer.OrdinalIgnoreCase
+            )
+            {
+                ["λόγος"] = new[] { MakeEntry(lemma: "λόγος", translit: "logos") },
+            },
+            ByTranslit: new Dictionary<string, IReadOnlyList<LexiconEntry>>(
+                StringComparer.OrdinalIgnoreCase
+            )
+            {
+                ["logos"] = new[] { MakeEntry(lemma: "λόγος", translit: "logos") },
+            }
+        );
+        var service = new SourceLanguageSearchService(
+            data,
+            MarbleTestHelper.BuildServiceWithTestData()
+        );
+        var translitInput = new SourceLanguageSearchInput(
+            "logos",
+            null,
+            TestResourceId,
+            100,
+            UseTransliteration: true
+        );
+        var nativeInput = new SourceLanguageSearchInput(
+            "λόγος",
+            null,
+            TestResourceId,
+            100,
+            UseTransliteration: false
+        );
+
+        var translitResult = await service.ExecuteSearchAsync(
+            translitInput,
+            CancellationToken.None
+        );
+        var nativeResult = await service.ExecuteSearchAsync(nativeInput, CancellationToken.None);
+
+        Assert.That(translitResult.Results, Has.Count.EqualTo(1));
+        Assert.That(nativeResult.Results, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task ExecuteSearchAsync_TranslitTextWithUseTransliterationFalse_FindsNothing()
+    {
+        var data = new SourceLanguageData(
+            ByLemma: new Dictionary<string, IReadOnlyList<LexiconEntry>>(
+                StringComparer.OrdinalIgnoreCase
+            )
+            {
+                ["λόγος"] = new[] { MakeEntry(lemma: "λόγος", translit: "logos") },
+            },
+            ByTranslit: new Dictionary<string, IReadOnlyList<LexiconEntry>>(
+                StringComparer.OrdinalIgnoreCase
+            )
+            {
+                ["logos"] = new[] { MakeEntry(lemma: "λόγος", translit: "logos") },
+            }
+        );
+        var service = new SourceLanguageSearchService(
+            data,
+            MarbleTestHelper.BuildServiceWithTestData()
+        );
+        var input = new SourceLanguageSearchInput(
+            "logos",
+            null,
+            TestResourceId,
+            100,
+            UseTransliteration: false
+        );
+
+        var result = await service.ExecuteSearchAsync(input, CancellationToken.None);
+
+        Assert.That(result.Results, Is.Empty);
+        Assert.That(result.ErrorMessage, Is.EqualTo("No matching lemma"));
+    }
+
+    private static LexiconEntry MakeEntry(string lemma, string translit) =>
+        new(
+            Lemma: lemma,
+            Translit: translit,
+            StrongNumber: "G0000",
+            Gloss: "test",
+            PartOfSpeech: "Noun",
+            Occurrences: [new VerseRef(43, 1, 1)]
+        );
 }

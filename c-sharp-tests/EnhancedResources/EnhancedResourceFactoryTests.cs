@@ -102,6 +102,29 @@ internal class EnhancedResourceFactoryTests : PapiTestBase
     [Test]
     [Category("Contract")]
     [Property("BehaviorId", "BHV-105")]
+    [Description(
+        "Factory surfaces MissingRequiredPackages and sets RequiredProjectsMissing when the loader reports missing packages"
+    )]
+    public async Task CompleteLoadAsync_WithMissingPackages_SetsRequiredProjectsMissingTrue()
+    {
+        var data = new MarbleDataBuilder().WithMissingRequiredPackages(["DCLEX", "GNT"]).Build();
+        var factory = new EnhancedResourceFactory(
+            Client,
+            ParatextProjects,
+            new StubMarbleDataLoader(data)
+        );
+
+        await factory.InitializeAsync();
+        await factory.LoadCompleted;
+
+        var result = factory.CurrentInitializeResult;
+        Assert.That(result.RequiredProjectsMissing, Is.True);
+        Assert.That(result.MissingRequiredPackages, Is.EquivalentTo(new[] { "DCLEX", "GNT" }));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("BehaviorId", "BHV-105")]
     [Description("Loader throwing produces HaveMarbleData=false with no rethrow")]
     public async Task InitializeAsync_LoaderThrows_DoesNotPropagate_HaveMarbleDataStaysFalse()
     {

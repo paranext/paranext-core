@@ -3,12 +3,17 @@
 namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
-/// Lemma-indexed lexicon entries drawn from GNT / BHS / LXXDC source-language packages.
+/// Lexicon entries drawn from GNT / BHS / LXXDC source-language packages, indexed
+/// by both native lemma (e.g. "λόγος") and Latin transliteration (e.g. "logos").
 /// </summary>
 internal sealed record SourceLanguageData(
-    IReadOnlyDictionary<string, IReadOnlyList<LexiconEntry>> ByLemma
+    IReadOnlyDictionary<string, IReadOnlyList<LexiconEntry>> ByLemma,
+    IReadOnlyDictionary<string, IReadOnlyList<LexiconEntry>> ByTranslit
 )
 {
     public static SourceLanguageData Empty { get; } =
-        new(new Dictionary<string, IReadOnlyList<LexiconEntry>>(StringComparer.OrdinalIgnoreCase));
+        new(
+            new Dictionary<string, IReadOnlyList<LexiconEntry>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyList<LexiconEntry>>(StringComparer.OrdinalIgnoreCase)
+        );
 }

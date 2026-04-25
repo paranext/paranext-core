@@ -57,6 +57,7 @@ internal class MarbleSourceLanguageLoaderTests
 
         Assert.That(data, Is.Not.Null);
         Assert.That(data.ByLemma, Is.Empty);
+        Assert.That(data.ByTranslit, Is.Empty);
     }
 
     [Test]
@@ -73,9 +74,14 @@ internal class MarbleSourceLanguageLoaderTests
 
         var data = MarbleSourceLanguageLoader.Load(research);
 
-        Assert.That(data.ByLemma.ContainsKey("logos"), Is.True);
-        var entries = data.ByLemma["logos"];
+        // GNT XML provides both <Lemma>logos</Lemma> (translit) and
+        // <NativeLemma>λόγος</NativeLemma> (native script). Native script lands
+        // in ByLemma; transliteration lands in ByTranslit.
+        Assert.That(data.ByLemma.ContainsKey("λόγος"), Is.True);
+        Assert.That(data.ByTranslit.ContainsKey("logos"), Is.True);
+        var entries = data.ByLemma["λόγος"];
         Assert.That(entries, Has.Count.EqualTo(1));
+        Assert.That(entries[0].Lemma, Is.EqualTo("λόγος"));
         Assert.That(entries[0].Translit, Is.EqualTo("logos"));
         Assert.That(entries[0].StrongNumber, Is.EqualTo("G3056"));
         Assert.That(entries[0].Gloss, Is.EqualTo("word"));
@@ -103,8 +109,10 @@ internal class MarbleSourceLanguageLoaderTests
 
         var data = MarbleSourceLanguageLoader.Load(research);
 
-        Assert.That(data.ByLemma.Keys, Is.EquivalentTo(new[] { "logos", "elohim" }));
-        Assert.That(data.ByLemma["elohim"][0].StrongNumber, Is.EqualTo("H0430"));
+        Assert.That(data.ByLemma.Keys, Is.EquivalentTo(new[] { "λόγος", "אֱלֹהִים" }));
+        Assert.That(data.ByTranslit.Keys, Is.EquivalentTo(new[] { "logos", "elohim" }));
+        Assert.That(data.ByLemma["אֱלֹהִים"][0].StrongNumber, Is.EqualTo("H0430"));
+        Assert.That(data.ByTranslit["elohim"][0].StrongNumber, Is.EqualTo("H0430"));
     }
 
     [Test]
@@ -119,5 +127,73 @@ internal class MarbleSourceLanguageLoaderTests
         var data = MarbleSourceLanguageLoader.Load(research);
 
         Assert.That(data.ByLemma, Is.Empty);
+        Assert.That(data.ByTranslit, Is.Empty);
+    }
+
+    [Test]
+    public void Load_GntPackageWithNativeAndTranslitDifferent_PopulatesBothIndexes()
+    {
+        const string xml =
+            @"<?xml version=""1.0""?>
+<Lexicon_Main>
+  <Lexicon_Entry>
+    <Lemma>logos</Lemma>
+    <NativeLemma>λόγος</NativeLemma>
+    <StrongNumber>G3056</StrongNumber>
+    <PartOfSpeech>N</PartOfSpeech>
+  </Lexicon_Entry>
+</Lexicon_Main>";
+        var package = new FakeMarblePackage("GNT", isResearchData: true).WithFile(
+            "Lexicon.xml",
+            xml
+        );
+        var research = new Dictionary<string, IMarblePackage>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["GNT"] = package,
+        };
+
+        var data = MarbleSourceLanguageLoader.Load(research);
+
+        Assert.That(data.ByLemma.ContainsKey("λόγος"), Is.True, "Native-lemma index missing entry");
+        Assert.That(data.ByTranslit.ContainsKey("logos"), Is.True, "Translit index missing entry");
+        Assert.That(data.ByLemma["λόγος"][0].Lemma, Is.EqualTo("λόγος"));
+        Assert.That(data.ByLemma["λόγος"][0].Translit, Is.EqualTo("logos"));
+    }
+
+    [Test]
+    public void Load_LexiconEntryMissingNativeLemma_AddsToBothIndexesUnderTranslitKey()
+    {
+        // When <NativeLemma> is absent, nativeLemma falls back to translit (the
+        // <Lemma> element). The same entry then lands in both indexes under the
+        // same key (the translit string).
+        const string xml =
+            @"<?xml version=""1.0""?>
+<Lexicon_Main>
+  <Lexicon_Entry>
+    <Lemma>logos</Lemma>
+    <StrongNumber>G3056</StrongNumber>
+    <PartOfSpeech>N</PartOfSpeech>
+  </Lexicon_Entry>
+</Lexicon_Main>";
+        var package = new FakeMarblePackage("GNT", isResearchData: true).WithFile(
+            "Lexicon.xml",
+            xml
+        );
+        var research = new Dictionary<string, IMarblePackage>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["GNT"] = package,
+        };
+
+        var data = MarbleSourceLanguageLoader.Load(research);
+
+        Assert.That(data.ByLemma.ContainsKey("logos"), Is.True, "ByLemma should contain translit");
+        Assert.That(
+            data.ByTranslit.ContainsKey("logos"),
+            Is.True,
+            "ByTranslit should contain translit"
+        );
+        Assert.That(data.ByLemma["logos"][0].Lemma, Is.EqualTo("logos"));
+        Assert.That(data.ByLemma["logos"][0].Translit, Is.EqualTo("logos"));
+        Assert.That(data.ByTranslit["logos"][0], Is.SameAs(data.ByLemma["logos"][0]));
     }
 }

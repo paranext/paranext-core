@@ -8,5 +8,6 @@ public record InitializeResult(
     bool HaveMarbleData,
     string[] AvailableResources,
     string[] AvailableGlossLanguages,
-    bool RequiredProjectsMissing
+    bool RequiredProjectsMissing,
+    string[] MissingRequiredPackages
 );

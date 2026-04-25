@@ -25,7 +25,7 @@ internal sealed class EnhancedResourceFactory : NetworkObject
     private readonly LocalParatextProjects _paratextProjects;
     private readonly IMarbleDataLoader _loader;
     private Task? _loadTask;
-    private InitializeResult _initializeResult = new(false, [], [], false);
+    private InitializeResult _initializeResult = new(false, [], [], false, []);
 
     // Volatile-published service fields. All null until CompleteLoadAsync finishes.
     private MarbleDataAccessService? _marbleDataAccess;
@@ -221,7 +221,8 @@ internal sealed class EnhancedResourceFactory : NetworkObject
                 HaveMarbleData: marbleData.HaveMarbleData,
                 AvailableResources: [.. data.BiblePackages.Select(b => b.Name)],
                 AvailableGlossLanguages: [.. marbleData.AvailableGlossLanguages],
-                RequiredProjectsMissing: false
+                RequiredProjectsMissing: data.MissingRequiredPackages.Count > 0,
+                MissingRequiredPackages: [.. data.MissingRequiredPackages]
             );
 
             // Publish in dependency order. _marbleDataAccess must be LAST.

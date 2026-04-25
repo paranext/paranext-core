@@ -1,7 +1,7 @@
 // === PORTED FROM PT9 ===
 // Source: PT9/Paratext/Marble/MarbleDataAccess.cs (source-language lexicon load for GNT/BHS/LXXDC)
-// Reason: Parses .msv1z source-language research packages into a lemma-indexed
-// LexiconEntry map consumed by SourceLanguageSearchService.
+// Reason: Parses .msv1z source-language research packages into a dual-indexed
+// LexiconEntry map (native lemma + Latin translit) consumed by SourceLanguageSearchService.
 using System.Xml.Linq;
 using SIL.Scripture;
 
@@ -9,10 +9,11 @@ namespace Paranext.DataProvider.EnhancedResources;
 
 /// <summary>
 /// Reads GNT / BHS / LXXDC source-language research packages and produces a
-/// SourceLanguageData record (lemma -> list of LexiconEntry). Each package is
-/// an .msv1z zip whose Lexicon.xml has the same &lt;Lexicon_Main&gt; shape as the
-/// dictionary packages (SDBG/SDBH/DCLEX), but with source-language-specific
-/// content: Greek/Hebrew lemma text, transliteration, Strong number, occurrences.
+/// SourceLanguageData record with two indexes (ByLemma keyed on native script,
+/// ByTranslit keyed on Latin transliteration). Each package is an .msv1z zip
+/// whose Lexicon.xml has the same &lt;Lexicon_Main&gt; shape as the dictionary
+/// packages (SDBG/SDBH/DCLEX), but with source-language-specific content:
+/// Greek/Hebrew lemma text, transliteration, Strong number, occurrences.
 /// </summary>
 internal static class MarbleSourceLanguageLoader
 {
@@ -28,6 +29,9 @@ internal static class MarbleSourceLanguageLoader
     )
     {
         var byLemma = new Dictionary<string, List<LexiconEntry>>(StringComparer.OrdinalIgnoreCase);
+        var byTranslit = new Dictionary<string, List<LexiconEntry>>(
+            StringComparer.OrdinalIgnoreCase
+        );
 
         foreach (var name in SourceLanguagePackageNames)
         {
@@ -35,7 +39,7 @@ internal static class MarbleSourceLanguageLoader
                 continue;
             try
             {
-                ParsePackageInto(name, package, byLemma);
+                ParsePackageInto(name, package, byLemma, byTranslit);
             }
             catch (Exception e)
             {
@@ -45,22 +49,29 @@ internal static class MarbleSourceLanguageLoader
             }
         }
 
-        if (byLemma.Count == 0)
+        if (byLemma.Count == 0 && byTranslit.Count == 0)
             return SourceLanguageData.Empty;
 
+        return new SourceLanguageData(Freeze(byLemma), Freeze(byTranslit));
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<LexiconEntry>> Freeze(
+        Dictionary<string, List<LexiconEntry>> source
+    )
+    {
         var frozen = new Dictionary<string, IReadOnlyList<LexiconEntry>>(
             StringComparer.OrdinalIgnoreCase
         );
-        foreach (var (lemma, entries) in byLemma)
-            frozen[lemma] = entries.AsReadOnly();
-
-        return new SourceLanguageData(frozen);
+        foreach (var (key, entries) in source)
+            frozen[key] = entries.AsReadOnly();
+        return frozen;
     }
 
     private static void ParsePackageInto(
         string packageName,
         IMarblePackage package,
-        Dictionary<string, List<LexiconEntry>> byLemma
+        Dictionary<string, List<LexiconEntry>> byLemma,
+        Dictionary<string, List<LexiconEntry>> byTranslit
     )
     {
         if (!package.Exists(LexiconFileName))
@@ -118,12 +129,22 @@ internal static class MarbleSourceLanguageLoader
                 Occurrences: occurrences
             );
 
-            if (!byLemma.TryGetValue(translit, out var bucket))
-            {
-                bucket = [];
-                byLemma[translit] = bucket;
-            }
-            bucket.Add(record);
+            AddToBucket(byLemma, nativeLemma, record);
+            AddToBucket(byTranslit, translit, record);
         }
+    }
+
+    private static void AddToBucket(
+        Dictionary<string, List<LexiconEntry>> dict,
+        string key,
+        LexiconEntry record
+    )
+    {
+        if (!dict.TryGetValue(key, out var bucket))
+        {
+            bucket = [];
+            dict[key] = bucket;
+        }
+        bucket.Add(record);
     }
 }

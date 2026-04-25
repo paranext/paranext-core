@@ -9,7 +9,8 @@ public record SourceLanguageSearchInput(
     string SearchText,
     BookRange? BookRange,
     string ResourceId,
-    int ShowInContextLimit
+    int ShowInContextLimit,
+    bool UseTransliteration
 );
 
 public record BookRange(int Start, int End);

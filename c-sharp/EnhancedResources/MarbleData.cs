@@ -13,5 +13,6 @@ internal sealed record MarbleData(
     DictionaryData DictionaryData,
     EncyclopediaData EncyclopediaData,
     MediaData MediaData,
-    SourceLanguageData SourceLanguageData
+    SourceLanguageData SourceLanguageData,
+    IReadOnlyList<string> MissingRequiredPackages
 );

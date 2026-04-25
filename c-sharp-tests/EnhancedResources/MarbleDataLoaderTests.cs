@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using Paranext.DataProvider.EnhancedResources;
+using Paratext.Data;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
@@ -120,6 +121,52 @@ internal class MarbleDataLoaderTests
 
         protected override MarbleData LoadCore() =>
             throw new InvalidOperationException("forced failure for test");
+    }
+
+    [Test]
+    public void LoadCore_MissingRequiredResearchPackages_PopulatesMissingRequiredPackages()
+    {
+        // Arrange: discoverer with no research packages installed
+        var loader = new TestableMarbleDataLoader(
+            new DiscoveryResult(
+                BiblePackages: [],
+                ResearchPackages: new Dictionary<string, ResourceScrText>(
+                    StringComparer.OrdinalIgnoreCase
+                ),
+                HaveVersion2Resources: false,
+                SkippedFileCount: 0
+            )
+        );
+
+        // Act
+        var data = loader.LoadAsync().GetAwaiter().GetResult();
+
+        // Assert: every required research package missing
+        Assert.That(data, Is.Not.Null);
+        Assert.That(
+            data!.MissingRequiredPackages,
+            Is.EquivalentTo(
+                new[] { "MBL_ENC", "IMG_INDX", "IMG_THMB", "SDBG", "SDBH", "GNT", "BHS" }
+            )
+        );
+    }
+
+    /// <summary>
+    /// Test-only subclass that overrides <see cref="MarbleDataLoader.LoadCore"/> to use a
+    /// caller-supplied <see cref="DiscoveryResult"/> instead of scanning disk. Lets tests
+    /// drive the post-discovery composition path deterministically.
+    /// </summary>
+    private sealed class TestableMarbleDataLoader : MarbleDataLoader
+    {
+        private readonly DiscoveryResult _discovery;
+
+        public TestableMarbleDataLoader(DiscoveryResult discovery)
+            : base("/", "/", skipV1Deletion: true)
+        {
+            _discovery = discovery;
+        }
+
+        protected override MarbleData LoadCore() => CreateMarbleData(_discovery);
     }
 
     [Test]
