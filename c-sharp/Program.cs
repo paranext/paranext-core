@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Paranext.DataProvider.Checks;
+using Paranext.DataProvider.EnhancedResources;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
@@ -25,11 +26,16 @@ public static class Program
             // Ignore trace for every S/R-able project https://github.com/ubsicap/Paratext/blob/master/ParatextData/Repository/SharingLogic.cs#L450
             Filter = new TraceExclusionFilter("CreateSharedProject for {0} ({1})"),
         };
+        // PNX001 ban on Trace is intentionally suppressed here: the bootstrap deliberately
+        // routes ParatextData's internal Trace output to the console listener. Replacing
+        // these with Console.WriteLine would silently drop ParatextData diagnostics.
+#pragma warning disable PNX001
         // Clear the default listeners to stop Debug.Assert from crashing the app
         Trace.Listeners.Clear();
         // Log all trace messages to the console
         Trace.Listeners.Add(listener);
         Trace.AutoFlush = true;
+#pragma warning restore PNX001
 
         // Tell `ProgressUtils` to run "UI" code and "run later" code immediately as a simple
         // implementation so we don't miss `ParatextData` code that needs to run.
@@ -68,12 +74,18 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
+            var enhancedResourceFactory = new EnhancedResourceFactory(
+                papi,
+                paratextProjects,
+                new MarbleDataLoader()
+            );
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
                 checkRunner.RegisterDataProviderAsync(),
                 dblResources.RegisterDataProviderAsync(),
-                paratextRegistrationService.InitializeAsync()
+                paratextRegistrationService.InitializeAsync(),
+                enhancedResourceFactory.InitializeAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here
