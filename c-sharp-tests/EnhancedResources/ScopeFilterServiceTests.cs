@@ -1109,4 +1109,235 @@ internal class ScopeFilterServiceTests
     }
 
     #endregion
+
+    #region Book-scoped Tokens (Phase B Tasks 4-5)
+
+    [Test]
+    public void GetLinksForScope_BookScopedTokens_CurrentChapterScope_ExcludesOtherChapters()
+    {
+        // Tokens cover Genesis ch.1 (verse 1) and ch.2 (verse 1).
+        // Each chapter has one in-verse TextLink token with a lexical link.
+        var tokens = new[]
+        {
+            new MarbleToken(MarbleTokenType.Book, "GEN", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "1", 1),
+            new MarbleToken(MarbleTokenType.Verse, "1", 2),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "elohim",
+                3,
+                LexicalLinks: ["SDBH:elohim:001"]
+            ),
+            new MarbleToken(MarbleTokenType.Chapter, "2", 4),
+            new MarbleToken(MarbleTokenType.Verse, "1", 5),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "shamayim",
+                6,
+                LexicalLinks: ["SDBH:shamayim:001"]
+            ),
+        };
+        var input = new ScopeFilterInput(
+            CurrentRef: new VerseRef(1, 1, 1),
+            Scope: ScopeEnum.CurrentChapter,
+            LinkType: MarbleLinkType.Lexical,
+            FilterText: "",
+            FilterSenses: "",
+            FilterClickOrigin: FilterClickOrigin.ScripturePane,
+            ResourceId: "TestRes"
+        );
+
+        var result = ScopeFilterService.GetLinksForScope(input, tokens);
+
+        Assert.That(result.Links, Has.Count.EqualTo(1));
+        Assert.That(result.Links[0].Lemma, Is.EqualTo("elohim"));
+    }
+
+    [Test]
+    public void GetLinksForScope_BookScopedTokens_CurrentVerseScope_DistinguishesSameVerseAcrossChapters()
+    {
+        // Both chapters have a verse 1 with a lexical link.
+        var tokens = new[]
+        {
+            new MarbleToken(MarbleTokenType.Book, "GEN", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "1", 1),
+            new MarbleToken(MarbleTokenType.Verse, "1", 2),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "ch1word",
+                3,
+                LexicalLinks: ["SDBH:ch1word:001"]
+            ),
+            new MarbleToken(MarbleTokenType.Chapter, "2", 4),
+            new MarbleToken(MarbleTokenType.Verse, "1", 5),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "ch2word",
+                6,
+                LexicalLinks: ["SDBH:ch2word:001"]
+            ),
+        };
+        var input = new ScopeFilterInput(
+            CurrentRef: new VerseRef(1, 2, 1),
+            Scope: ScopeEnum.CurrentVerse,
+            LinkType: MarbleLinkType.Lexical,
+            FilterText: "",
+            FilterSenses: "",
+            FilterClickOrigin: FilterClickOrigin.ScripturePane,
+            ResourceId: "TestRes"
+        );
+
+        var result = ScopeFilterService.GetLinksForScope(input, tokens);
+
+        Assert.That(result.Links, Has.Count.EqualTo(1));
+        Assert.That(result.Links[0].Lemma, Is.EqualTo("ch2word"));
+    }
+
+    [Test]
+    public void GetLinksForScope_BookScopedTokens_CurrentSectionScope_BoundaryDoesNotCrossChapterMarker()
+    {
+        // Section marker (s1) only in chapter 1; chapter 2 has no markers.
+        // Current ref is chapter 2 verse 1 - section should be bounded to chapter 2 alone,
+        // not stretch back to chapter 1's marker.
+        var tokens = new[]
+        {
+            new MarbleToken(MarbleTokenType.Book, "GEN", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "1", 1),
+            new MarbleToken(MarbleTokenType.ParagraphStart, "s1", 2, Style: "s1"),
+            new MarbleToken(MarbleTokenType.Verse, "1", 3),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "ch1word",
+                4,
+                LexicalLinks: ["SDBH:ch1word:001"]
+            ),
+            new MarbleToken(MarbleTokenType.Chapter, "2", 5),
+            new MarbleToken(MarbleTokenType.Verse, "1", 6),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "ch2word",
+                7,
+                LexicalLinks: ["SDBH:ch2word:001"]
+            ),
+        };
+        var input = new ScopeFilterInput(
+            CurrentRef: new VerseRef(1, 2, 1),
+            Scope: ScopeEnum.CurrentSection,
+            LinkType: MarbleLinkType.Lexical,
+            FilterText: "",
+            FilterSenses: "",
+            FilterClickOrigin: FilterClickOrigin.ScripturePane,
+            ResourceId: "TestRes"
+        );
+
+        var result = ScopeFilterService.GetLinksForScope(input, tokens);
+
+        Assert.That(
+            result.Links.Select(l => l.Lemma),
+            Is.EquivalentTo(new[] { "ch2word" }),
+            "Section detection must not walk backward past a Chapter marker"
+        );
+    }
+
+    [Test]
+    public void GetLinksForScope_BookScopedTokens_CurrentVerseScope_ResetsVerseAtChapterBoundary()
+    {
+        // Token stream has Verse 1 in ch.1 (followed by alpha), then a Chapter 2 with
+        // beta token but NO Verse token before beta. If currentVerse weren't reset on
+        // chapter change, beta would inherit currentVerse=1 from ch.1 and incorrectly
+        // match a CurrentVerse(ch.1, v.1) query.
+        var tokens = new[]
+        {
+            new MarbleToken(MarbleTokenType.Book, "GEN", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "1", 1),
+            new MarbleToken(MarbleTokenType.Verse, "1", 2),
+            new MarbleToken(MarbleTokenType.TextLink, "alpha", 3, LexicalLinks: ["SDBH:alpha:001"]),
+            new MarbleToken(MarbleTokenType.Chapter, "2", 4),
+            new MarbleToken(MarbleTokenType.TextLink, "beta", 5, LexicalLinks: ["SDBH:beta:001"]),
+        };
+        var input = new ScopeFilterInput(
+            CurrentRef: new VerseRef(1, 1, 1),
+            Scope: ScopeEnum.CurrentVerse,
+            LinkType: MarbleLinkType.Lexical,
+            FilterText: "",
+            FilterSenses: "",
+            FilterClickOrigin: FilterClickOrigin.ScripturePane,
+            ResourceId: "TestRes"
+        );
+
+        var result = ScopeFilterService.GetLinksForScope(input, tokens);
+
+        Assert.That(
+            result.Links.Select(l => l.Lemma),
+            Is.EquivalentTo(new[] { "alpha" }),
+            "currentVerse must reset to 0 on chapter change so cross-chapter verse-number bleed is impossible"
+        );
+    }
+
+    [Test]
+    public void GetScopedTokens_LexicalScope_ReturnsRawInScopeTokensWithLexicalLinks()
+    {
+        var tokens = new[]
+        {
+            new MarbleToken(MarbleTokenType.Book, "GEN", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "1", 1),
+            new MarbleToken(MarbleTokenType.Verse, "1", 2),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "elohim",
+                3,
+                LexicalLinks: ["SDBH:elohim:001"]
+            ),
+            new MarbleToken(MarbleTokenType.TextLink, "noLinks", 4),
+            new MarbleToken(MarbleTokenType.TextLink, "shamayim", 5, ThematicLinks: ["FAUNA:x"]),
+        };
+        var input = new ScopeFilterInput(
+            CurrentRef: new VerseRef(1, 1, 1),
+            Scope: ScopeEnum.CurrentVerse,
+            LinkType: MarbleLinkType.Lexical,
+            FilterText: "",
+            FilterSenses: "",
+            FilterClickOrigin: FilterClickOrigin.ScripturePane,
+            ResourceId: "TestRes"
+        );
+
+        var scoped = ScopeFilterService.GetScopedTokens(input, tokens);
+
+        Assert.That(scoped, Has.Count.EqualTo(1));
+        Assert.That(scoped[0].Text, Is.EqualTo("elohim"));
+    }
+
+    [Test]
+    public void GetScopedTokens_ThematicScope_ReturnsTokensWithThematicLinks()
+    {
+        var tokens = new[]
+        {
+            new MarbleToken(MarbleTokenType.Book, "GEN", 0),
+            new MarbleToken(MarbleTokenType.Chapter, "1", 1),
+            new MarbleToken(MarbleTokenType.Verse, "1", 2),
+            new MarbleToken(
+                MarbleTokenType.TextLink,
+                "camel",
+                3,
+                LexicalLinks: ["SDBH:gamal:001"],
+                ThematicLinks: ["FAUNA:camel_001"]
+            ),
+        };
+        var input = new ScopeFilterInput(
+            CurrentRef: new VerseRef(1, 1, 1),
+            Scope: ScopeEnum.CurrentVerse,
+            LinkType: MarbleLinkType.Thematic,
+            FilterText: "",
+            FilterSenses: "",
+            FilterClickOrigin: FilterClickOrigin.ScripturePane,
+            ResourceId: "TestRes"
+        );
+
+        var scoped = ScopeFilterService.GetScopedTokens(input, tokens);
+
+        Assert.That(scoped, Has.Count.EqualTo(1));
+        Assert.That(scoped[0].ThematicLinks?[0], Is.EqualTo("FAUNA:camel_001"));
+    }
+
+    #endregion
 }

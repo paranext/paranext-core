@@ -45,8 +45,13 @@ internal static class ScopeFilterService
                 ? DetectSectionBoundary(tokens, input.CurrentRef)
                 : null;
 
-        // Single pass: track verse, filter by scope, extract matching links
-        var scopedLinks = CollectScopedLinks(tokens, input, sectionBoundary);
+        // Single pass: track verse, filter by scope, extract matching tokens, then map to outputs
+        var scopedTokens = CollectScopedTokens(tokens, input, sectionBoundary);
+        var scopedLinks = scopedTokens
+            .Select(t => BuildLinkOutput(t, input.LinkType, GetLinksForType(t, input.LinkType)!))
+            .Where(o => o != null)
+            .Cast<MarbleLexicalLinkOutput>()
+            .ToList();
 
         return new ScopeFilterResult(
             Links: scopedLinks,
@@ -57,17 +62,48 @@ internal static class ScopeFilterService
     }
 
     /// <summary>
-    /// Single-pass collection of in-scope links. Tracks current verse from Verse tokens,
-    /// applies scope filtering, link type matching, and optional text filter.
+    /// Public entry point returning the raw in-scope TextLink tokens for the given input.
+    /// Used by service-internal display-item building that needs the full token (e.g., for
+    /// thematic/image link processing) rather than the projected MarbleLexicalLinkOutput.
+    /// Source: EXT-005, EXT-006, BHV-305, BHV-601
     /// </summary>
-    private static List<MarbleLexicalLinkOutput> CollectScopedLinks(
+    public static IReadOnlyList<MarbleToken> GetScopedTokens(
+        ScopeFilterInput input,
+        MarbleToken[] tokens
+    )
+    {
+        if (tokens == null || tokens.Length == 0)
+            return Array.Empty<MarbleToken>();
+
+        if (!Enum.IsDefined(typeof(ScopeEnum), input.Scope))
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.InvalidArgument,
+                $"Unknown scope value: {input.Scope}"
+            );
+        }
+
+        SectionBoundary? sectionBoundary =
+            input.Scope == ScopeEnum.CurrentSection
+                ? DetectSectionBoundary(tokens, input.CurrentRef)
+                : null;
+
+        return CollectScopedTokens(tokens, input, sectionBoundary);
+    }
+
+    /// <summary>
+    /// Single-pass collection of in-scope TextLink tokens. Tracks current chapter/verse,
+    /// applies scope filtering, link-type matching, and optional text filter.
+    /// </summary>
+    private static IReadOnlyList<MarbleToken> CollectScopedTokens(
         MarbleToken[] tokens,
         ScopeFilterInput input,
         SectionBoundary? sectionBoundary
     )
     {
-        var result = new List<MarbleLexicalLinkOutput>();
+        var result = new List<MarbleToken>();
         int currentVerse = 0;
+        int currentChapter = 0;
 
         int sectionStart = sectionBoundary?.StartIndex ?? 0;
         int sectionEnd = sectionBoundary?.EndIndex ?? tokens.Length - 1;
@@ -75,6 +111,14 @@ internal static class ScopeFilterService
         for (int i = 0; i < tokens.Length; i++)
         {
             MarbleToken token = tokens[i];
+
+            // Track current chapter from Chapter tokens; reset verse on chapter change
+            if (token.Type == MarbleTokenType.Chapter && int.TryParse(token.Text, out int chapNum))
+            {
+                currentChapter = chapNum;
+                currentVerse = 0;
+                continue;
+            }
 
             // Track current verse from Verse tokens
             if (token.Type == MarbleTokenType.Verse && int.TryParse(token.Text, out int verseNum))
@@ -85,7 +129,9 @@ internal static class ScopeFilterService
                 !IsInScope(
                     input.Scope,
                     i,
+                    currentChapter,
                     currentVerse,
+                    input.CurrentRef.ChapterNum,
                     input.CurrentRef.VerseNum,
                     sectionStart,
                     sectionEnd
@@ -100,10 +146,6 @@ internal static class ScopeFilterService
             if (linkList == null || linkList.Count == 0)
                 continue;
 
-            var linkOutput = BuildLinkOutput(token, input.LinkType, linkList);
-            if (linkOutput == null)
-                continue;
-
             // Apply text filter (BHV-602)
             if (
                 !string.IsNullOrEmpty(input.FilterText)
@@ -111,7 +153,7 @@ internal static class ScopeFilterService
             )
                 continue;
 
-            result.Add(linkOutput);
+            result.Add(token);
         }
 
         return result;
@@ -123,17 +165,20 @@ internal static class ScopeFilterService
     private static bool IsInScope(
         ScopeEnum scope,
         int tokenIndex,
+        int currentChapter,
         int currentVerse,
+        int targetChapter,
         int targetVerse,
         int sectionStart,
         int sectionEnd
     )
     {
+        bool sameChapter = currentChapter == targetChapter;
         return scope switch
         {
-            ScopeEnum.CurrentVerse => currentVerse == targetVerse,
+            ScopeEnum.CurrentVerse => sameChapter && currentVerse == targetVerse,
             ScopeEnum.CurrentSection => tokenIndex >= sectionStart && tokenIndex <= sectionEnd,
-            ScopeEnum.CurrentChapter => true,
+            ScopeEnum.CurrentChapter => sameChapter,
             _ => false,
         };
     }
@@ -144,41 +189,56 @@ internal static class ScopeFilterService
     // Maps to: EXT-006
     /// <summary>
     /// Detects section boundaries from ParagraphStart markers with section styles (s1, s2, etc.).
-    /// Returns the boundary containing the given verse reference.
+    /// Returns the boundary containing the given verse reference. The search is bounded to
+    /// the current chapter so section detection cannot walk across a Chapter marker.
     /// </summary>
     private static SectionBoundary DetectSectionBoundary(
         MarbleToken[] tokens,
         SIL.Scripture.VerseRef currentRef
     )
     {
-        // Find all section marker positions (ParagraphStart with s1/s2/s3/s4 styles)
-        var sectionMarkerIndices = new List<int>();
+        // Find chapter-token indices to bound the search.
+        var chapterIndicesByNum = new Dictionary<int, int>();
         for (int i = 0; i < tokens.Length; i++)
+        {
+            if (
+                tokens[i].Type == MarbleTokenType.Chapter
+                && int.TryParse(tokens[i].Text, out int n)
+            )
+                chapterIndicesByNum[n] = i;
+        }
+
+        int currentVerseTokenIndex = FindVerseTokenIndex(
+            tokens,
+            currentRef.ChapterNum,
+            currentRef.VerseNum
+        );
+
+        // Determine chapter bounds [chapStart, chapEnd] for the current chapter.
+        int chapStart = chapterIndicesByNum.TryGetValue(currentRef.ChapterNum, out var cs) ? cs : 0;
+        int chapEnd = tokens.Length - 1;
+        if (chapterIndicesByNum.TryGetValue(currentRef.ChapterNum + 1, out var nextCs))
+            chapEnd = nextCs - 1;
+
+        if (currentVerseTokenIndex < 0)
+            return new SectionBoundary(chapStart, chapEnd);
+
+        // Section markers within the current chapter only.
+        var sectionMarkerIndices = new List<int>();
+        for (int i = chapStart; i <= chapEnd; i++)
         {
             if (tokens[i].Type == MarbleTokenType.ParagraphStart && IsSectionStyle(tokens[i].Style))
                 sectionMarkerIndices.Add(i);
         }
 
-        // Find which section contains the current verse
-        int currentVerseTokenIndex = FindVerseTokenIndex(tokens, currentRef.VerseNum);
-
-        if (currentVerseTokenIndex < 0)
-        {
-            // Verse not found - return boundary covering entire chapter
-            return new SectionBoundary(0, tokens.Length - 1);
-        }
-
-        // Find the section boundary that contains this verse
-        int sectionStart = 0;
-        int sectionEnd = tokens.Length - 1;
+        int sectionStart = chapStart;
+        int sectionEnd = chapEnd;
 
         for (int i = 0; i < sectionMarkerIndices.Count; i++)
         {
             int markerIdx = sectionMarkerIndices[i];
             if (markerIdx <= currentVerseTokenIndex)
-            {
                 sectionStart = markerIdx;
-            }
             else
             {
                 sectionEnd = markerIdx - 1;
@@ -267,16 +327,29 @@ internal static class ScopeFilterService
     }
 
     /// <summary>
-    /// Find the token index of a Verse token with the given verse number.
+    /// Find the token index of a Verse token with the given verse number, scoped
+    /// to the given chapter. Walks the token stream tracking the current chapter
+    /// from Chapter tokens so verse-number collisions across chapters are resolved
+    /// to the requested chapter's verse.
     /// </summary>
-    private static int FindVerseTokenIndex(MarbleToken[] tokens, int verseNum)
+    private static int FindVerseTokenIndex(MarbleToken[] tokens, int targetChapter, int verseNum)
     {
+        int currentChapter = 0;
         for (int i = 0; i < tokens.Length; i++)
         {
             if (
-                tokens[i].Type == MarbleTokenType.Verse
-                && int.TryParse(tokens[i].Text, out int num)
-                && num == verseNum
+                tokens[i].Type == MarbleTokenType.Chapter
+                && int.TryParse(tokens[i].Text, out int c)
+            )
+            {
+                currentChapter = c;
+                continue;
+            }
+            if (
+                currentChapter == targetChapter
+                && tokens[i].Type == MarbleTokenType.Verse
+                && int.TryParse(tokens[i].Text, out int v)
+                && v == verseNum
             )
             {
                 return i;
