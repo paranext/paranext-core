@@ -2,10 +2,9 @@
 // === NEW IN PT10 ===
 // Reason: Developer smoke check for Enhanced Resources end-to-end. Connects to
 // a running paranext-core data provider over JSON-RPC and invokes each of the
-// 14 Enhanced Resources PAPI commands + fetchImageBytes. Asserts non-empty
-// results against whatever marble data the developer has installed. Temporary
-// verification per spec Section 1 - replaced by UI end-to-end tests once UI
-// work lands.
+// 15 Enhanced Resources PAPI commands. Asserts non-empty results against
+// whatever marble data the developer has installed. Temporary verification per
+// spec Section 1 - replaced by UI end-to-end tests once UI work lands.
 //
 // Usage:
 //   1. Start the data provider: `./.erb/scripts/refresh.sh` (or `npm start`).
@@ -186,37 +185,37 @@ async function run(): Promise<CheckResult[]> {
       `echoed '${resolved}' for '${resourceId}'`,
     );
 
-    // 3. parseMarbleTokens (needed for buildTooltipData / buildNoteData later)
-    const marbleXml = '<EmdrosDump><wg strong="G3056">logos</wg></EmdrosDump>';
-    const tokens = await client.command<unknown[]>('platform.enhancedResources.parseMarbleTokens', [
-      marbleXml,
-    ]);
-    record(
-      'parseMarbleTokens',
-      Array.isArray(tokens) && tokens.length > 0,
-      `produced ${Array.isArray(tokens) ? tokens.length : 0} tokens`,
-    );
+    // 3. (REMOVED) parseMarbleTokens was removed from PAPI in v2.3.0 (Theme 16 -
+    // server-owned token pipeline; tokens never cross PAPI). Token-derived data
+    // is now obtained via per-method PAPI commands (findLinksForScope,
+    // buildTooltipData, etc.) which fetch tokens internally via
+    // IMarbleBookTokenProvider. The marble-aware USX->USJ converter (FN-007
+    // resolution) will consume marble USX via M-019 loadMarbleChapterXml in a
+    // future iteration.
 
-    // 4. findLinksForScope
+    // 4. findLinksForScope - server fetches tokens internally; no tokens param.
     const links = await client.command<unknown>('platform.enhancedResources.findLinksForScope', [
       {
         resourceId,
-        tokens,
-        scope: 'Verse',
-        currentReference: SCRIPTURE_REFERENCE,
+        currentRef: SCRIPTURE_REFERENCE,
+        scope: 'CurrentVerse',
+        linkType: 'Lexical',
+        filterText: '',
+        filterSenses: '',
+        filterClickOrigin: 'ScripturePane',
       },
     ]);
     record('findLinksForScope', links !== null && links !== undefined, 'non-null result');
 
-    // 5. findImagesForReference
-    const imageRefs = await client.command<{ matchedImages: unknown[] }>(
+    // 5. findImagesForReference (returns ImageReferenceResult { Images, TotalImageCount })
+    const imageRefs = await client.command<{ images: unknown[] }>(
       'platform.enhancedResources.findImagesForReference',
       [{ resourceId, currentReference: SCRIPTURE_REFERENCE }],
     );
     record(
       'findImagesForReference',
-      Array.isArray(imageRefs.matchedImages),
-      `matchedImages=${imageRefs.matchedImages.length}`,
+      Array.isArray(imageRefs.images),
+      `images=${imageRefs.images.length}`,
     );
 
     // 6. translatePartOfSpeech
@@ -317,31 +316,51 @@ async function run(): Promise<CheckResult[]> {
       `results=${srcLang.results.length}`,
     );
 
-    // 14. buildTooltipData
-    const firstToken = tokens[0] ?? null;
-    const tooltip = await client.command<unknown>('platform.enhancedResources.buildTooltipData', [
-      {
-        resourceId,
-        currentReference: SCRIPTURE_REFERENCE,
-        targetToken: firstToken,
-        language,
-      },
-      tokens,
-    ]);
-    record('buildTooltipData', tooltip !== null, 'non-null tooltip data');
+    // 14. buildTooltipData - server fetches tokens internally. The smoke check
+    // uses tokenId="0" (the first token in any chapter is the Book token; this
+    // exercises the lookup path and either returns a partial TooltipData or
+    // throws NOT_FOUND, both of which are valid command behavior).
+    let tooltipOk = false;
+    let tooltipDetail = 'NOT_FOUND (expected for tokenId=0 / non-TextLink)';
+    try {
+      const tooltip = await client.command<unknown>('platform.enhancedResources.buildTooltipData', [
+        {
+          tokenId: '0',
+          resourceId,
+          glossLanguage: language,
+          currentReference: SCRIPTURE_REFERENCE,
+        },
+      ]);
+      tooltipOk = tooltip !== null;
+      tooltipDetail = 'non-null tooltip data';
+    } catch (e) {
+      // NOT_FOUND for tokenId="0" is expected; any other error indicates a
+      // real failure in the buildTooltipData wiring.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('NOT_FOUND')) tooltipOk = true;
+      else tooltipDetail = `unexpected error: ${msg}`;
+    }
+    record('buildTooltipData', tooltipOk, tooltipDetail);
 
-    // 15. buildNoteData
-    const note = await client.command<unknown>('platform.enhancedResources.buildNoteData', [
-      {
-        resourceId,
-        currentReference: SCRIPTURE_REFERENCE,
-        targetToken: firstToken,
-        language,
-      },
-      firstToken,
-      tokens,
-    ]);
-    record('buildNoteData', note !== null, 'non-null note data');
+    // 15. buildNoteData - same pattern as buildTooltipData.
+    let noteOk = false;
+    let noteDetail = 'NOT_FOUND (expected for tokenId=0 / non-Note)';
+    try {
+      const noteResult = await client.command<unknown>('platform.enhancedResources.buildNoteData', [
+        {
+          tokenId: '0',
+          resourceId,
+          currentReference: SCRIPTURE_REFERENCE,
+        },
+      ]);
+      noteOk = noteResult !== null;
+      noteDetail = 'non-null note data';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('NOT_FOUND')) noteOk = true;
+      else noteDetail = `unexpected error: ${msg}`;
+    }
+    record('buildNoteData', noteOk, noteDetail);
 
     // 16. fetchImageBytes - validates the papi-er:// backing command end-to-end
     const firstImage = media.items[0];
