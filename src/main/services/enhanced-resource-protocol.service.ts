@@ -56,6 +56,8 @@ const defaultFetchImageBytesInvoker: FetchImageBytesInvoker = (input) => {
   // (Task 12 backend); follow up post-merge to regenerate types and remove the casts.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const commandName = 'platform.enhancedResources.fetchImageBytes' as CommandNames;
+  // Same temporary bridge as the cast above: command name and parameter shape only become typed
+  // once papi.d.ts is regenerated post-merge.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return commandService.sendCommand(commandName, input as never) as Promise<
     FetchImageBytesResult | undefined
