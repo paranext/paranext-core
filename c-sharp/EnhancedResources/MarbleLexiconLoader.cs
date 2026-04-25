@@ -19,7 +19,8 @@ internal static class MarbleLexiconLoader
     private static readonly string[] GlossMergeOrder = [SdbhName, SdbgName, DclexName];
 
     public static (DictionaryData Dictionary, GlossData Gloss) Load(
-        IReadOnlyDictionary<string, IMarblePackage> researchPackages
+        IReadOnlyDictionary<string, IMarblePackage> researchPackages,
+        IReadOnlySet<string> knownBibleIds
     )
     {
         var byDictionary = new Dictionary<string, DictionaryPerPackage>(
@@ -64,9 +65,16 @@ internal static class MarbleLexiconLoader
             );
         }
 
+        // KnownResourceIds = knownBibleIds IFF at least one dictionary slice loaded;
+        // empty otherwise (no dictionaries means no enhanced-resource lookup is meaningful).
+        var hasAnyDict = byDictionary.Count > 0;
+        var knownResourceIds = hasAnyDict
+            ? new HashSet<string>(knownBibleIds, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         var dict = new DictionaryData(
             ByDictionary: byDictionary,
-            KnownResourceIds: new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            KnownResourceIds: knownResourceIds,
             UninitializedResourceIds: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         );
 
@@ -103,20 +111,28 @@ internal static class MarbleLexiconLoader
             if (string.IsNullOrWhiteSpace(lemma))
                 continue;
 
+            // Entry id: Code attribute when present, else lemma (PT9 fallback parity).
+            var entryId = (string?)entry.Attribute("Code") ?? lemma;
+
             var enGlosses = new List<string>();
             var domains = new List<string>();
+            var senses = new List<SenseRecord>();
 
             foreach (var meaning in entry.Descendants("LEXMeaning"))
             {
+                var senseId =
+                    (string?)meaning.Attribute("Code") ?? $"{entryId}-s{senses.Count + 1}";
+                var senseGlosses = new List<GlossEntry>();
+
                 foreach (var sense in meaning.Descendants("LEXSense"))
                 {
-                    var lang = (string?)sense.Element("LanguageCode");
-                    var gloss = (string?)sense.Element("Gloss");
-                    if (
-                        string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase)
-                        && !string.IsNullOrEmpty(gloss)
-                    )
-                        enGlosses.Add(gloss);
+                    var lang = (string?)sense.Element("LanguageCode") ?? "";
+                    var glossText = (string?)sense.Element("Gloss") ?? "";
+                    if (string.IsNullOrEmpty(glossText))
+                        continue;
+                    senseGlosses.Add(new GlossEntry(lang, glossText));
+                    if (string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase))
+                        enGlosses.Add(glossText);
                 }
                 foreach (var domain in meaning.Descendants("LEXDomain"))
                 {
@@ -124,12 +140,26 @@ internal static class MarbleLexiconLoader
                     if (!string.IsNullOrEmpty(text))
                         domains.Add(text);
                 }
+
+                var definition =
+                    (string?)meaning.Element("DefinitionShort")
+                    ?? (string?)meaning.Element("DefinitionLong")
+                    ?? "";
+
+                senses.Add(new SenseRecord(senseId, senseGlosses, definition));
             }
 
+            var morphology = (string?)entry.Descendants("PartOfSpeech").FirstOrDefault() ?? "";
+            var subItemIds = senses.Select(s => s.SenseId).ToList();
+
             lexicon[lemma] = (enGlosses, domains);
-            // TODO(Task 4): DictionaryEntryRecord population deferred - DictionaryService
-            // consumption pattern not yet verified. The record type is fully defined in
-            // DictionaryEntryRecord.cs; only population from lexicon XML is deferred.
+            entriesById[entryId] = new DictionaryEntryRecord(
+                Lemma: lemma,
+                Senses: senses,
+                SemanticDomains: domains,
+                Morphology: morphology,
+                SubItemIds: subItemIds
+            );
         }
 
         return new DictionaryPerPackage(

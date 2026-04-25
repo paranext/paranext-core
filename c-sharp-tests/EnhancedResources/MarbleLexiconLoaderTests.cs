@@ -8,12 +8,16 @@ namespace TestParanextDataProvider.EnhancedResources;
 [ExcludeFromCodeCoverage]
 internal class MarbleLexiconLoaderTests
 {
+    private static readonly IReadOnlySet<string> EmptyKnownBibleIds = new HashSet<string>(
+        StringComparer.OrdinalIgnoreCase
+    );
+
     [Test]
     public void Load_NoDictionaries_ReturnsEmptyData()
     {
         var research = new Dictionary<string, IMarblePackage>(StringComparer.OrdinalIgnoreCase);
 
-        var (dict, gloss) = MarbleLexiconLoader.Load(research);
+        var (dict, gloss) = MarbleLexiconLoader.Load(research, EmptyKnownBibleIds);
 
         Assert.That(dict.ByDictionary, Is.Empty);
         Assert.That(gloss.ByLanguage, Is.Empty);
@@ -70,7 +74,7 @@ internal class MarbleLexiconLoaderTests
             ["SDBG"] = sdbg,
         };
 
-        var (dict, gloss) = MarbleLexiconLoader.Load(research);
+        var (dict, gloss) = MarbleLexiconLoader.Load(research, EmptyKnownBibleIds);
 
         Assert.That(dict.ByDictionary.ContainsKey("SDBG"), Is.True);
         var sdbgData = dict.ByDictionary["SDBG"];
@@ -107,7 +111,7 @@ internal class MarbleLexiconLoaderTests
             ["DCLEX"] = dclex,
         };
 
-        var (_, gloss) = MarbleLexiconLoader.Load(research);
+        var (_, gloss) = MarbleLexiconLoader.Load(research, EmptyKnownBibleIds);
 
         Assert.That(
             gloss.ByLanguage["en"]["gamal"],
@@ -127,4 +131,57 @@ internal class MarbleLexiconLoaderTests
     </LEXMeaning></LEXMeanings></BaseForm></BaseForms>
   </Lexicon_Entry>
 </Lexicon_Main>";
+
+    [Test]
+    public void Load_SdbgPackage_PopulatesEntriesByIdWithRecord()
+    {
+        const string xml =
+            @"<?xml version=""1.0""?>
+<Lexicon_Main>
+  <Lexicon_Entry Code=""logos-001"">
+    <Lemma>logos</Lemma>
+    <BaseForms>
+      <BaseForm>
+        <PartOfSpeech>N</PartOfSpeech>
+        <LEXMeanings>
+          <LEXMeaning Code=""logos-001-s1"">
+            <LEXSenses>
+              <LEXSense><LanguageCode>en</LanguageCode><Gloss>word</Gloss></LEXSense>
+              <LEXSense><LanguageCode>fr</LanguageCode><Gloss>parole</Gloss></LEXSense>
+            </LEXSenses>
+            <DefinitionShort>a word</DefinitionShort>
+            <LEXDomains><LEXDomain>Communication</LEXDomain></LEXDomains>
+          </LEXMeaning>
+        </LEXMeanings>
+      </BaseForm>
+    </BaseForms>
+  </Lexicon_Entry>
+</Lexicon_Main>";
+        var package = new FakeMarblePackage("SDBG", isResearchData: true).WithFile(
+            "Lexicon.xml",
+            xml
+        );
+        var research = new Dictionary<string, IMarblePackage>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SDBG"] = package,
+        };
+
+        var (dict, _) = MarbleLexiconLoader.Load(research, EmptyKnownBibleIds);
+
+        Assert.That(dict.ByDictionary.ContainsKey("SDBG"), Is.True);
+        var pkg = dict.ByDictionary["SDBG"];
+        Assert.That(pkg.EntriesById.ContainsKey("logos-001"), Is.True, "Entry not populated by id");
+        var entry = pkg.EntriesById["logos-001"];
+        Assert.That(entry.Lemma, Is.EqualTo("logos"));
+        Assert.That(entry.Senses, Has.Count.EqualTo(1));
+        Assert.That(entry.Senses[0].SenseId, Is.EqualTo("logos-001-s1"));
+        Assert.That(entry.Senses[0].Glosses, Has.Count.EqualTo(2));
+        Assert.That(
+            entry.Senses[0].Glosses.Any(g => g.Language == "en" && g.Text == "word"),
+            Is.True
+        );
+        Assert.That(entry.SemanticDomains, Is.EquivalentTo(new[] { "Communication" }));
+        Assert.That(entry.Morphology, Is.EqualTo("N"));
+        Assert.That(entry.SubItemIds, Is.EquivalentTo(new[] { "logos-001-s1" }));
+    }
 }

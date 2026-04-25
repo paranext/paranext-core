@@ -123,7 +123,7 @@ internal class MarbleDataLoader : IMarbleDataLoader
             StringComparer.OrdinalIgnoreCase
         );
         foreach (var (shortName, scrText) in discovery.ResearchPackages)
-            researchPackages[shortName] = new MarblePackage(scrText);
+            researchPackages[shortName] = WrapResearchPackage(scrText);
 
         // Phase 3: Per-domain loaders. Each is individually try-catched so one
         // domain failure doesn't fell the rest.
@@ -131,7 +131,7 @@ internal class MarbleDataLoader : IMarbleDataLoader
             discovery.BiblePackages.Select(b => b.Name),
             StringComparer.OrdinalIgnoreCase
         );
-        var (dictionaryData, glossData) = SafeLoadLexicon(researchPackages);
+        var (dictionaryData, glossData) = SafeLoadLexicon(researchPackages, knownBibleIds);
         var encyclopediaData = SafeLoadEncyclopedia(researchPackages, discovery, knownBibleIds);
         var mediaData = SafeLoadMediaIndex(researchPackages, discovery);
         var sourceLanguageData = SafeLoadSourceLanguages(researchPackages);
@@ -180,13 +180,22 @@ internal class MarbleDataLoader : IMarbleDataLoader
         );
     }
 
+    /// <summary>
+    /// Wraps a discovery <see cref="ResourceScrText"/> as an <see cref="IMarblePackage"/>.
+    /// Virtual so test doubles can substitute in-memory packages without constructing
+    /// real ParatextData ScrText instances.
+    /// </summary>
+    protected virtual IMarblePackage WrapResearchPackage(ResourceScrText scrText) =>
+        new MarblePackage(scrText);
+
     private static (DictionaryData, GlossData) SafeLoadLexicon(
-        IReadOnlyDictionary<string, IMarblePackage> research
+        IReadOnlyDictionary<string, IMarblePackage> research,
+        IReadOnlySet<string> knownBibleIds
     )
     {
         try
         {
-            return MarbleLexiconLoader.Load(research);
+            return MarbleLexiconLoader.Load(research, knownBibleIds);
         }
         catch (Exception e)
         {

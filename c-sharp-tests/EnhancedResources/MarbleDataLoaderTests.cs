@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using Paranext.DataProvider.EnhancedResources;
 using Paratext.Data;
+using TestParanextDataProvider.EnhancedResources.Fixtures;
 
 namespace TestParanextDataProvider.EnhancedResources;
 
@@ -154,19 +155,38 @@ internal class MarbleDataLoaderTests
     /// <summary>
     /// Test-only subclass that overrides <see cref="MarbleDataLoader.LoadCore"/> to use a
     /// caller-supplied <see cref="DiscoveryResult"/> instead of scanning disk. Lets tests
-    /// drive the post-discovery composition path deterministically.
+    /// drive the post-discovery composition path deterministically. Optionally accepts a
+    /// short-name -> <see cref="IMarblePackage"/> map so tests can substitute in-memory
+    /// fakes for the research-package wrapping step (production wraps via
+    /// <c>new MarblePackage(scrText)</c>, which would NPE on uninitialized
+    /// <see cref="ResourceScrText"/> sentinels used by tests).
     /// </summary>
     private sealed class TestableMarbleDataLoader : MarbleDataLoader
     {
         private readonly DiscoveryResult _discovery;
+        private readonly IReadOnlyDictionary<string, IMarblePackage>? _researchOverrides;
 
-        public TestableMarbleDataLoader(DiscoveryResult discovery)
+        public TestableMarbleDataLoader(
+            DiscoveryResult discovery,
+            IReadOnlyDictionary<string, IMarblePackage>? researchOverrides = null
+        )
             : base("/", "/", skipV1Deletion: true)
         {
             _discovery = discovery;
+            _researchOverrides = researchOverrides;
         }
 
         protected override MarbleData LoadCore() => CreateMarbleData(_discovery);
+
+        protected override IMarblePackage WrapResearchPackage(ResourceScrText scrText)
+        {
+            if (
+                _researchOverrides is not null
+                && _researchOverrides.TryGetValue(scrText.Name, out var fake)
+            )
+                return fake;
+            return base.WrapResearchPackage(scrText);
+        }
     }
 
     [Test]
@@ -206,4 +226,56 @@ internal class MarbleDataLoaderTests
         Assert.That(output, Does.Contain("BHS"));
         Assert.That(output, Does.Contain("IMG_THMB"));
     }
+
+    [Test]
+    public void LoadCore_BiblePackagesAndDictionaryAvailable_PopulatesKnownResourceIds()
+    {
+        // Arrange: two bible packages plus an SDBH research package with a minimal
+        // valid Lexicon.xml. Inject a FakeMarblePackage for SDBH via the research
+        // override map so MarbleLexiconLoader.Load sees a working IMarblePackage
+        // (production's MarblePackage wrapper would NPE on uninitialized ScrText).
+        var teclot = MarbleTestHelper.CreateFakeMarbleScrText("TECLOT");
+        var nets = MarbleTestHelper.CreateFakeMarbleScrText("NETS");
+        var sdbhScrText = MarbleTestHelper.CreateFakeMarbleScrText("SDBH");
+        var sdbhPackage = new FakeMarblePackage("SDBH", isResearchData: true).WithFile(
+            "Lexicon.xml",
+            MinimalLexiconXml()
+        );
+
+        var discovery = new DiscoveryResult(
+            BiblePackages: [teclot, nets],
+            ResearchPackages: new Dictionary<string, ResourceScrText>(
+                StringComparer.OrdinalIgnoreCase
+            )
+            {
+                ["SDBH"] = sdbhScrText,
+            },
+            HaveVersion2Resources: false,
+            SkippedFileCount: 0
+        );
+        var researchOverrides = new Dictionary<string, IMarblePackage>(
+            StringComparer.OrdinalIgnoreCase
+        )
+        {
+            ["SDBH"] = sdbhPackage,
+        };
+        var loader = new TestableMarbleDataLoader(discovery, researchOverrides);
+
+        // Act
+        var data = loader.LoadAsync().GetAwaiter().GetResult();
+
+        // Assert: KnownResourceIds populated from bible-package short names
+        // because at least one dictionary slice (SDBH) loaded.
+        Assert.That(data, Is.Not.Null);
+        Assert.That(
+            data!.DictionaryData.KnownResourceIds,
+            Is.EquivalentTo(new[] { "TECLOT", "NETS" })
+        );
+    }
+
+    private static string MinimalLexiconXml() =>
+        @"<?xml version=""1.0""?>
+<Lexicon_Main>
+  <Lexicon_Entry Code=""x""><Lemma>x</Lemma></Lexicon_Entry>
+</Lexicon_Main>";
 }
