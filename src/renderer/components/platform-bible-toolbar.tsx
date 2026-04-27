@@ -68,6 +68,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_theme_change_to_dark%',
   '%toolbar_theme_loading%',
   '%toolbar_theme_loading_error%',
+  '%toolbar_sync%',
 ];
 
 export function PlatformBibleToolbar() {
@@ -145,6 +146,11 @@ export function PlatformBibleToolbar() {
     'Marketing Version',
   );
 
+  const [isSendReceiveAvailable] = usePromise(
+    useCallback(async () => sendCommand('platformGetResources.isSendReceiveAvailable'), []),
+    undefined,
+  );
+
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);
 
   /** Get the theme on first load so we can show the right symbol on the toolbar */
@@ -192,6 +198,19 @@ export function PlatformBibleToolbar() {
       appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
       configAreaChildren={
         <>
+          {isSendReceiveAvailable && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="pr-twp tw-h-8 tw-flex-shrink-0"
+              aria-label={localizedStrings['%toolbar_sync%']}
+              onClick={() => {
+                // TODO: implement sync action
+              }}
+            >
+              {localizedStrings['%toolbar_sync%']}
+            </Button>
+          )}
           {marketingVersion !== '' && (
             <TooltipProvider delayDuration={TOOLTIP_DELAY}>
               <Tooltip>
