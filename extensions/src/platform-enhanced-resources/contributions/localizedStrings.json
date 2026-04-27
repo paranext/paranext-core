@@ -96,9 +96,6 @@
     "%enhancedResources_shell_title%": {},
     "%enhancedResources_shell_emptyTitle%": {},
     "%enhancedResources_shell_emptyDescription%": {},
-    "%enhancedResources_shell_tabPlaceholder%": {
-      "notes": ["{tab} is replaced with the active tab name (dictionary/encyclopedia/media/maps)."]
-    },
     "%enhancedResources_resourceList_expand%": {
       "notes": ["ARIA label / tooltip for the per-row expand toggle in resource lists."]
     },
@@ -267,6 +264,52 @@
       "notes": [
         "Inline notice shown at the end of a preview-mode article when paragraphs were omitted."
       ]
+    },
+    "%enhancedResources_media_thumbnailLabel%": {
+      "notes": [
+        "ARIA label / alt text for a media thumbnail. {title} is replaced with the entry title."
+      ]
+    },
+    "%enhancedResources_media_thumbnailLoading%": {
+      "notes": [
+        "ARIA label for a media thumbnail Skeleton placeholder shown while the bytes are still being fetched (BHV-359 deferred loading)."
+      ]
+    },
+    "%enhancedResources_media_images_tabLabel%": {
+      "notes": ["Heading and ARIA label for the Media Images research tab."]
+    },
+    "%enhancedResources_media_images_emptyState_noData%": {
+      "notes": [
+        "Empty state message for the Media Images tab when no images match the current scope. {scope} is the localized scope label."
+      ]
+    },
+    "%enhancedResources_media_images_countLabel_singular%": {
+      "notes": [
+        "Singular media-files count label shown in the Media Images tab header. {count} is replaced with the integer count (always 1 here)."
+      ]
+    },
+    "%enhancedResources_media_images_countLabel_plural%": {
+      "notes": [
+        "Plural media-files count label shown in the Media Images tab header. {count} is the integer count."
+      ]
+    },
+    "%enhancedResources_media_maps_tabLabel%": {
+      "notes": ["Heading and ARIA label for the Media Maps research tab (Satellite Bible Atlas)."]
+    },
+    "%enhancedResources_media_maps_emptyState_noData%": {
+      "notes": [
+        "Empty state message for the Media Maps tab when no Satellite Bible Atlas entries match the current scope. {scope} is the localized scope label."
+      ]
+    },
+    "%enhancedResources_media_maps_countLabel_singular%": {
+      "notes": [
+        "Singular map-files count label shown in the Media Maps tab header. {count} is replaced with the integer count (always 1 here)."
+      ]
+    },
+    "%enhancedResources_media_maps_countLabel_plural%": {
+      "notes": [
+        "Plural map-files count label shown in the Media Maps tab header. {count} is the integer count."
+      ]
     }
   },
   "localizedStrings": {
@@ -325,7 +368,6 @@
       "%enhancedResources_shell_title%": "Enhanced resource",
       "%enhancedResources_shell_emptyTitle%": "No resource selected",
       "%enhancedResources_shell_emptyDescription%": "Open an Enhanced Resource from the Paratext menu to begin.",
-      "%enhancedResources_shell_tabPlaceholder%": "{tab} tab content (UI-PKG-002+ implements this).",
       "%enhancedResources_resourceList_expand%": "Expand",
       "%enhancedResources_resourceList_collapse%": "Collapse",
       "%enhancedResources_resourceList_loading%": "Loading entries",
@@ -384,7 +426,17 @@
       "%enhancedResources_article_crossReferenceOpenLabel%": "Open related article",
       "%enhancedResources_article_verseLinkOpenLabel%": "Go to verse",
       "%enhancedResources_article_emptyArticle%": "Article content is not available.",
-      "%enhancedResources_article_truncatedNotice%": "(Preview - additional paragraphs available in full view.)"
+      "%enhancedResources_article_truncatedNotice%": "(Preview - additional paragraphs available in full view.)",
+      "%enhancedResources_media_thumbnailLabel%": "Image: {title}",
+      "%enhancedResources_media_thumbnailLoading%": "Loading thumbnail",
+      "%enhancedResources_media_images_tabLabel%": "Media",
+      "%enhancedResources_media_images_emptyState_noData%": "No images for {scope}.",
+      "%enhancedResources_media_images_countLabel_singular%": "{count} media file",
+      "%enhancedResources_media_images_countLabel_plural%": "{count} media files",
+      "%enhancedResources_media_maps_tabLabel%": "Maps",
+      "%enhancedResources_media_maps_emptyState_noData%": "No maps for {scope}.",
+      "%enhancedResources_media_maps_countLabel_singular%": "{count} map file",
+      "%enhancedResources_media_maps_countLabel_plural%": "{count} map files"
     }
   }
 }

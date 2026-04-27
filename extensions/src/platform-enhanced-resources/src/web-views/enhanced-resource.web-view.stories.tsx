@@ -25,6 +25,13 @@ import {
   mockImageUrlResolver,
   mockThumbnailUrlResolver,
 } from '../data/encyclopedia-tab.story-data';
+import { MEDIA_IMAGES_TAB_STRING_KEYS } from '../components/media-tab/media-images-tab.component';
+import { MEDIA_MAPS_TAB_STRING_KEYS } from '../components/media-tab/media-maps-tab.component';
+import {
+  MOCK_MEDIA_IMAGES,
+  MOCK_MEDIA_MAPS,
+  mockMediaThumbnailUrlResolver,
+} from '../data/media-tab.story-data';
 import {
   EnhancedResourceWebView,
   ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS,
@@ -38,6 +45,8 @@ const allKeys = [
   ...COPYRIGHT_OVERLAY_STRING_KEYS,
   ...DICTIONARY_TAB_STRING_KEYS,
   ...ENCYCLOPEDIA_TAB_STRING_KEYS,
+  ...MEDIA_IMAGES_TAB_STRING_KEYS,
+  ...MEDIA_MAPS_TAB_STRING_KEYS,
 ];
 const localizedStrings = getLocalizedStrings(allKeys);
 
@@ -79,6 +88,12 @@ const meta: Meta<typeof EnhancedResourceWebView> = {
     encyclopediaArticleDataMap: MOCK_ARTICLE_DATA_MAP,
     encyclopediaImageUrlResolver: mockImageUrlResolver,
     encyclopediaThumbnailUrlResolver: mockThumbnailUrlResolver,
+    mediaImagesItems: MOCK_MEDIA_IMAGES,
+    mediaImagesScopeLabel: 'current verse',
+    mediaImagesThumbnailUrlResolver: mockMediaThumbnailUrlResolver,
+    mediaMapsItems: MOCK_MEDIA_MAPS,
+    mediaMapsScopeLabel: 'current verse',
+    mediaMapsThumbnailUrlResolver: mockMediaThumbnailUrlResolver,
   },
   decorators: [
     (Story) => (
@@ -153,5 +168,47 @@ export const EncyclopediaTabExpanded: Story = {
     encyclopediaItems: MOCK_ENC_ENTRIES_HEBREW,
     encyclopediaExpandedTokenIds: new Set([MOCK_ENC_ENTRY_GAMAL.tokenId]),
     encyclopediaScopeLabel: 'current verse',
+  },
+};
+
+export const MediaTab: Story = {
+  args: {
+    activeTab: 'media',
+    mediaImagesItems: MOCK_MEDIA_IMAGES,
+    mediaImagesScopeLabel: 'current verse',
+  },
+};
+
+export const MediaTabDeferredNotYetLoaded: Story = {
+  // BHV-359: rows present, thumbnails not yet fetched.
+  args: {
+    activeTab: 'media',
+    mediaImagesItems: MOCK_MEDIA_IMAGES,
+    mediaImagesLoaded: false,
+    mediaImagesScopeLabel: 'current verse',
+  },
+};
+
+export const MediaTabEmpty: Story = {
+  args: {
+    activeTab: 'media',
+    mediaImagesItems: [],
+    mediaImagesScopeLabel: 'current verse',
+  },
+};
+
+export const MapsTab: Story = {
+  args: {
+    activeTab: 'maps',
+    mediaMapsItems: MOCK_MEDIA_MAPS,
+    mediaMapsScopeLabel: 'current verse',
+  },
+};
+
+export const MapsTabEmpty: Story = {
+  args: {
+    activeTab: 'maps',
+    mediaMapsItems: [],
+    mediaMapsScopeLabel: 'current verse',
   },
 };

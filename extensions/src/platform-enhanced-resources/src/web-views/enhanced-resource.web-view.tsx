@@ -44,13 +44,15 @@ import type {
   ArticleRendererData,
   ArticleVerseLinkData,
 } from '../components/shared/article-renderer.component';
+import { MediaImagesTab } from '../components/media-tab/media-images-tab.component';
+import { MediaMapsTab } from '../components/media-tab/media-maps-tab.component';
+import type { MediaEntryRowData } from '../components/media-tab/media-entry-row.component';
 
 /** Object containing all keys used for localization in this component. */
 export const ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS = Object.freeze([
   '%enhancedResources_shell_title%',
   '%enhancedResources_shell_emptyTitle%',
   '%enhancedResources_shell_emptyDescription%',
-  '%enhancedResources_shell_tabPlaceholder%',
 ] as const);
 
 type EnhancedResourceWebViewLocalizedStringKey =
@@ -154,6 +156,23 @@ export type EnhancedResourceWebViewProps = {
   onEncyclopediaImageClick?: (imageId: string) => void;
   onEncyclopediaViewFullArticle?: (entry: EncyclopediaEntryRefData) => void;
 
+  // Media (Images) tab
+  mediaImagesItems?: MediaEntryRowData[];
+  mediaImagesIsLoading?: boolean;
+  /** Per BHV-359: false until the tab becomes visible and thumbnail bytes are fetched. */
+  mediaImagesLoaded?: boolean;
+  mediaImagesScopeLabel?: string;
+  mediaImagesThumbnailUrlResolver?: (imageId: string) => string;
+  onMediaImagesThumbnailClick?: (imageId: string, displayIndex: number) => void;
+
+  // Media (Maps) tab
+  mediaMapsItems?: MediaEntryRowData[];
+  mediaMapsIsLoading?: boolean;
+  mediaMapsLoaded?: boolean;
+  mediaMapsScopeLabel?: string;
+  mediaMapsThumbnailUrlResolver?: (imageId: string) => string;
+  onMediaMapsThumbnailClick?: (imageId: string, displayIndex: number) => void;
+
   /**
    * All localized strings used by the shell + nested components, keyed by the union of every
    * STRING_KEYS const each child exports. The wiring layer fetches them in one batch.
@@ -255,11 +274,24 @@ export function EnhancedResourceWebView({
   onEncyclopediaImageClick = () => {},
   onEncyclopediaViewFullArticle = () => {},
 
+  mediaImagesItems = [],
+  mediaImagesIsLoading = false,
+  mediaImagesLoaded = true,
+  mediaImagesScopeLabel = '',
+  mediaImagesThumbnailUrlResolver,
+  onMediaImagesThumbnailClick = () => {},
+
+  mediaMapsItems = [],
+  mediaMapsIsLoading = false,
+  mediaMapsLoaded = true,
+  mediaMapsScopeLabel = '',
+  mediaMapsThumbnailUrlResolver,
+  onMediaMapsThumbnailClick = () => {},
+
   localizedStringsWithLoadingState = [{}, false],
 }: EnhancedResourceWebViewProps) {
   const [stringsBag, isLoadingStrings] = localizedStringsWithLoadingState;
   const getString = (key: EnhancedResourceWebViewLocalizedStringKey) => stringsBag[key] ?? key;
-  const tabPlaceholder = String(getString('%enhancedResources_shell_tabPlaceholder%'));
   const emptyTitle = String(getString('%enhancedResources_shell_emptyTitle%'));
   const emptyDescription = String(getString('%enhancedResources_shell_emptyDescription%'));
 
@@ -416,21 +448,34 @@ export function EnhancedResourceWebView({
                     localizedStringsWithLoadingState={childStrings}
                   />
                 </TabsContent>
-                {(['media', 'maps'] as const).map((tab) => (
-                  <TabsContent
-                    key={tab}
-                    value={tab}
-                    className="tw-flex tw-flex-1 tw-flex-col tw-gap-2 tw-p-3 data-[state=inactive]:tw-hidden"
-                  >
-                    {/* Media/Maps still placeholder until UI-PKG-004 */}
-                    <span className="tw-text-xs tw-italic tw-text-muted-foreground">
-                      {tabPlaceholder.replace('{tab}', tab)}
-                    </span>
-                    <Skeleton className="tw-h-12 tw-w-full" />
-                    <Skeleton className="tw-h-12 tw-w-full" />
-                    <Skeleton className="tw-h-12 tw-w-full" />
-                  </TabsContent>
-                ))}
+                <TabsContent
+                  value="media"
+                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                >
+                  <MediaImagesTab
+                    items={mediaImagesItems}
+                    isLoading={mediaImagesIsLoading}
+                    loaded={mediaImagesLoaded}
+                    scopeLabel={mediaImagesScopeLabel}
+                    thumbnailUrlResolver={mediaImagesThumbnailUrlResolver}
+                    onThumbnailClick={onMediaImagesThumbnailClick}
+                    localizedStringsWithLoadingState={childStrings}
+                  />
+                </TabsContent>
+                <TabsContent
+                  value="maps"
+                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                >
+                  <MediaMapsTab
+                    items={mediaMapsItems}
+                    isLoading={mediaMapsIsLoading}
+                    loaded={mediaMapsLoaded}
+                    scopeLabel={mediaMapsScopeLabel}
+                    thumbnailUrlResolver={mediaMapsThumbnailUrlResolver}
+                    onThumbnailClick={onMediaMapsThumbnailClick}
+                    localizedStringsWithLoadingState={childStrings}
+                  />
+                </TabsContent>
               </Tabs>
             </ResizablePanel>
           </ResizablePanelGroup>
