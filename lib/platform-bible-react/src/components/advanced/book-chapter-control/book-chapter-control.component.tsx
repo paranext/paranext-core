@@ -21,7 +21,15 @@ import {
   ALL_ENGLISH_BOOK_NAMES,
   doesBookMatchQuery,
 } from '@/components/shared/book.utils';
-import { KeyboardEvent, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  KeyboardEvent,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { generateCommandValue } from '@/components/shared/book-item.utils';
 import RecentSearches from '../recent-searches.component';
 import { useQuickNavButtons } from './book-chapter-control.navigation';
@@ -550,22 +558,27 @@ export function BookChapterControl({
               </div>
               {/* Navigation buttons for previous/next chapter/book */}
               <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:pe-2">
-                {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }) => (
-                  <Button
-                    key={title}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setIsCommandListHidden(true);
-                      onClick();
-                    }}
-                    disabled={disabled}
-                    className="tw:h-10 tw:w-4 tw:p-0"
-                    title={title}
-                    onKeyDown={handleQuickNavButtonKeyDown}
-                  >
-                    <Icon />
-                  </Button>
+                <div className="tw:h-5 tw:w-px tw:bg-border" aria-hidden="true" />
+                {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }, index) => (
+                  <Fragment key={title}>
+                    {index === 2 && (
+                      <div className="tw:h-5 tw:w-px tw:bg-border" aria-hidden="true" />
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setIsCommandListHidden(true);
+                        onClick();
+                      }}
+                      disabled={disabled}
+                      className="tw:h-10 tw:w-6 tw:p-0"
+                      title={title}
+                      onKeyDown={handleQuickNavButtonKeyDown}
+                    >
+                      <Icon />
+                    </Button>
+                  </Fragment>
                 ))}
               </div>
             </div>
