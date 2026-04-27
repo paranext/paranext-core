@@ -12,6 +12,11 @@ import { SCRIPTURE_PANE_STRING_KEYS } from '../components/scripture-pane/scriptu
 import { TOOLBAR_STRING_KEYS } from '../components/toolbar/toolbar.component';
 import { WARNING_RIBBONS_STRING_KEYS } from '../components/warning-ribbons/warning-ribbons.component';
 import { COPYRIGHT_OVERLAY_STRING_KEYS } from '../components/warning-ribbons/copyright-overlay.component';
+import { DICTIONARY_TAB_STRING_KEYS } from '../components/dictionary-tab/dictionary-tab.component';
+import {
+  MOCK_DICT_ENTRIES_HEBREW,
+  MOCK_DICT_ENTRY_ELOHIM,
+} from '../data/dictionary-tab.story-data';
 import {
   EnhancedResourceWebView,
   ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS,
@@ -23,6 +28,7 @@ const allKeys = [
   ...TOOLBAR_STRING_KEYS,
   ...WARNING_RIBBONS_STRING_KEYS,
   ...COPYRIGHT_OVERLAY_STRING_KEYS,
+  ...DICTIONARY_TAB_STRING_KEYS,
 ];
 const localizedStrings = getLocalizedStrings(allKeys);
 
@@ -56,6 +62,9 @@ const meta: Meta<typeof EnhancedResourceWebView> = {
     splitterPercentage: 60,
     ribbons: MOCK_RIBBONS_NONE,
     tokens: MOCK_GEN_1_TOKENS,
+    dictionaryItems: MOCK_DICT_ENTRIES_HEBREW,
+    dictionaryActiveDictionary: 'SDBH',
+    dictionaryScopeLabel: 'current verse',
   },
   decorators: [
     (Story) => (
@@ -103,5 +112,23 @@ export const CopyrightOverlayVisible: Story = {
   args: {
     copyrightOverlayVisible: true,
     ribbons: { ...MOCK_RIBBONS_NONE, copyright: { visible: true, dismissed: false } },
+  },
+};
+
+export const DictionaryTabExpanded: Story = {
+  args: {
+    activeTab: 'dictionary',
+    dictionaryItems: MOCK_DICT_ENTRIES_HEBREW,
+    dictionaryExpandedTokenIds: new Set([MOCK_DICT_ENTRY_ELOHIM.tokenId]),
+    dictionaryScopeLabel: 'current verse',
+  },
+};
+
+export const DictionaryTabEmpty: Story = {
+  args: {
+    activeTab: 'dictionary',
+    dictionaryItems: [],
+    dictionaryEmptyState: 'no-data',
+    dictionaryScopeLabel: 'current verse',
   },
 };

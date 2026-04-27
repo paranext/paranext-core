@@ -25,6 +25,12 @@ import {
   type RibbonStates,
 } from '../components/warning-ribbons/warning-ribbons.component';
 import { CopyrightOverlay } from '../components/warning-ribbons/copyright-overlay.component';
+import {
+  DictionaryTab,
+  type DictionaryEmptyStateVariant,
+} from '../components/dictionary-tab/dictionary-tab.component';
+import type { DictionaryDisplayItemData } from '../components/dictionary-tab/dictionary-display-item.component';
+import type { VerseOccurrenceLink } from '../components/dictionary-tab/dictionary-entry-detail.component';
 
 /** Object containing all keys used for localization in this component. */
 export const ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS = Object.freeze([
@@ -88,6 +94,30 @@ export type EnhancedResourceWebViewProps = {
   /** Splitter percentage between scripture pane and research pane. Defaults to 60. */
   splitterPercentage?: number;
 
+  // Dictionary tab
+  dictionaryItems?: DictionaryDisplayItemData[];
+  dictionaryExpandedTokenIds?: Set<string>;
+  dictionaryAllExpanded?: boolean;
+  dictionaryIsLoading?: boolean;
+  dictionaryEmptyState?: DictionaryEmptyStateVariant;
+  dictionaryFilterWord?: string;
+  dictionaryScopeLabel?: string;
+  dictionaryShowTranslations?: boolean;
+  dictionaryActiveDictionary?: 'SDBH' | 'SDBG';
+  dictionaryHideNonRelevantSenses?: boolean;
+  onDictionaryExpandToggle?: (tokenId: string) => void;
+  onDictionaryExpandAll?: () => void;
+  onDictionaryCollapseAll?: () => void;
+  onDictionarySourceTextClick?: (tokenId: string) => void;
+  onDictionaryOccurrenceCountClick?: (tokenId: string) => void;
+  onDictionarySemanticDomainClick?: (domainId: string) => void;
+  onDictionaryRelatedLexemeClick?: (lemma: string) => void;
+  onDictionaryEncyclopediaLinkClick?: (articleId: string) => void;
+  onDictionaryVerseOccurrenceClick?: (verse: VerseOccurrenceLink) => void;
+  onDictionaryToggleHideNonRelevantSenses?: (hide: boolean) => void;
+  onDictionaryCopySurfaceForm?: (item: DictionaryDisplayItemData) => void;
+  onDictionaryCopyLemma?: (item: DictionaryDisplayItemData) => void;
+
   /**
    * All localized strings used by the shell + nested components, keyed by the union of every
    * STRING_KEYS const each child exports. The wiring layer fetches them in one batch.
@@ -143,6 +173,30 @@ export function EnhancedResourceWebView({
   onMetadataUpdate = () => {},
 
   splitterPercentage = 60,
+
+  dictionaryItems = [],
+  dictionaryExpandedTokenIds,
+  dictionaryAllExpanded = false,
+  dictionaryIsLoading = false,
+  dictionaryEmptyState = 'none',
+  dictionaryFilterWord,
+  dictionaryScopeLabel = '',
+  dictionaryShowTranslations = false,
+  dictionaryActiveDictionary = 'SDBH',
+  dictionaryHideNonRelevantSenses = false,
+  onDictionaryExpandToggle = () => {},
+  onDictionaryExpandAll = () => {},
+  onDictionaryCollapseAll = () => {},
+  onDictionarySourceTextClick = () => {},
+  onDictionaryOccurrenceCountClick = () => {},
+  onDictionarySemanticDomainClick = () => {},
+  onDictionaryRelatedLexemeClick = () => {},
+  onDictionaryEncyclopediaLinkClick = () => {},
+  onDictionaryVerseOccurrenceClick = () => {},
+  onDictionaryToggleHideNonRelevantSenses = () => {},
+  onDictionaryCopySurfaceForm = () => {},
+  onDictionaryCopyLemma = () => {},
+
   localizedStringsWithLoadingState = [{}, false],
 }: EnhancedResourceWebViewProps) {
   const [stringsBag, isLoadingStrings] = localizedStringsWithLoadingState;
@@ -245,13 +299,43 @@ export function EnhancedResourceWebView({
               className="tw-flex tw-flex-col"
             >
               <Tabs value={activeTab} className="tw-flex tw-h-full tw-flex-col">
-                {(['dictionary', 'encyclopedia', 'media', 'maps'] as const).map((tab) => (
+                <TabsContent
+                  value="dictionary"
+                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                >
+                  <DictionaryTab
+                    items={dictionaryItems}
+                    expandedTokenIds={dictionaryExpandedTokenIds}
+                    allExpanded={dictionaryAllExpanded}
+                    isLoading={dictionaryIsLoading}
+                    emptyState={dictionaryEmptyState}
+                    filterWord={dictionaryFilterWord}
+                    scopeLabel={dictionaryScopeLabel}
+                    showTranslations={dictionaryShowTranslations}
+                    activeDictionary={dictionaryActiveDictionary}
+                    hideNonRelevantSenses={dictionaryHideNonRelevantSenses}
+                    onExpandToggle={onDictionaryExpandToggle}
+                    onExpandAll={onDictionaryExpandAll}
+                    onCollapseAll={onDictionaryCollapseAll}
+                    onSourceTextClick={onDictionarySourceTextClick}
+                    onOccurrenceCountClick={onDictionaryOccurrenceCountClick}
+                    onSemanticDomainClick={onDictionarySemanticDomainClick}
+                    onRelatedLexemeClick={onDictionaryRelatedLexemeClick}
+                    onEncyclopediaLinkClick={onDictionaryEncyclopediaLinkClick}
+                    onVerseOccurrenceClick={onDictionaryVerseOccurrenceClick}
+                    onToggleHideNonRelevantSenses={onDictionaryToggleHideNonRelevantSenses}
+                    onCopySurfaceForm={onDictionaryCopySurfaceForm}
+                    onCopyLemma={onDictionaryCopyLemma}
+                    localizedStringsWithLoadingState={childStrings}
+                  />
+                </TabsContent>
+                {(['encyclopedia', 'media', 'maps'] as const).map((tab) => (
                   <TabsContent
                     key={tab}
                     value={tab}
                     className="tw-flex tw-flex-1 tw-flex-col tw-gap-2 tw-p-3 data-[state=inactive]:tw-hidden"
                   >
-                    {/* Per A11Y-002, the tab body is a Skeleton placeholder until UI-PKG-002+ build the real tabs */}
+                    {/* Encyclopedia/Media/Maps still placeholder until UI-PKG-003/004 */}
                     <span className="tw-text-xs tw-italic tw-text-muted-foreground">
                       {tabPlaceholder.replace('{tab}', tab)}
                     </span>

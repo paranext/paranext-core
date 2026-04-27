@@ -98,6 +98,91 @@
     "%enhancedResources_shell_emptyDescription%": {},
     "%enhancedResources_shell_tabPlaceholder%": {
       "notes": ["{tab} is replaced with the active tab name (dictionary/encyclopedia/media/maps)."]
+    },
+    "%enhancedResources_resourceList_expand%": {
+      "notes": ["ARIA label / tooltip for the per-row expand toggle in resource lists."]
+    },
+    "%enhancedResources_resourceList_collapse%": {
+      "notes": ["ARIA label / tooltip for the per-row collapse toggle in resource lists."]
+    },
+    "%enhancedResources_resourceList_loading%": {
+      "notes": ["ARIA label for a resource list while it is loading."]
+    },
+    "%enhancedResources_sense_definitionLabel%": {
+      "notes": ["Inline label preceding a sense definition."]
+    },
+    "%enhancedResources_sense_glossesLabel%": {
+      "notes": ["Inline label preceding the gloss list of a sense."]
+    },
+    "%enhancedResources_sense_partOfSpeechLabel%": {
+      "notes": ["Inline label preceding the part of speech of a sense."]
+    },
+    "%enhancedResources_sense_nonRelevantLabel%": {
+      "notes": ["ARIA label for a sense flagged as non-relevant for the current verse."]
+    },
+    "%enhancedResources_dictionary_columnHeader_translations%": {},
+    "%enhancedResources_dictionary_columnHeader_sourceLanguage%": {},
+    "%enhancedResources_dictionary_columnHeader_definitions%": {},
+    "%enhancedResources_dictionary_columnHeader_count%": {},
+    "%enhancedResources_dictionary_expandAll%": {
+      "notes": ["ARIA label for the Expand all entries action."]
+    },
+    "%enhancedResources_dictionary_collapseAll%": {
+      "notes": ["ARIA label for the Collapse all entries action."]
+    },
+    "%enhancedResources_dictionary_emptyState_noData%": {
+      "notes": [
+        "Empty state when there is no data for the current scope. {scope} is the localized scope label."
+      ]
+    },
+    "%enhancedResources_dictionary_emptyState_noMatch%": {
+      "notes": [
+        "Empty state when the filter word matches no entries in scope. {word} and {scope} are replaced."
+      ]
+    },
+    "%enhancedResources_dictionary_emptyState_wordNotInScope%": {
+      "notes": [
+        "Empty state when the filter word does not occur in the current scope. {word} and {scope} are replaced."
+      ]
+    },
+    "%enhancedResources_dictionary_dictionaryLabel_sdbh%": {
+      "notes": ["Heading shown when the active dictionary is SDBH (Hebrew)."]
+    },
+    "%enhancedResources_dictionary_dictionaryLabel_sdbg%": {
+      "notes": ["Heading shown when the active dictionary is SDBG (Greek)."]
+    },
+    "%enhancedResources_dictionary_occurrenceCountTooltip%": {
+      "notes": ["Tooltip / ARIA label for the per-entry occurrence count badge."]
+    },
+    "%enhancedResources_dictionary_sourceTextTooltip%": {
+      "notes": ["ARIA label for clicking a source text link to filter the form."]
+    },
+    "%enhancedResources_dictionary_copySurfaceForm%": {
+      "notes": ["Context menu item: Copy the surface form (Hebrew/Greek + transliteration)."]
+    },
+    "%enhancedResources_dictionary_copyLemma%": {
+      "notes": ["Context menu item: Copy the lemma (Hebrew/Greek + transliteration)."]
+    },
+    "%enhancedResources_dictionary_definitionHeader%": {},
+    "%enhancedResources_dictionary_sensesHeader%": {},
+    "%enhancedResources_dictionary_hideNonRelevantToggle%": {
+      "notes": ["Switch label: hide senses flagged as non-relevant in the current verse."]
+    },
+    "%enhancedResources_dictionary_semanticDomainsHeader%": {},
+    "%enhancedResources_dictionary_relatedLexemesHeader%": {},
+    "%enhancedResources_dictionary_relatedLexemes_byGloss%": {
+      "notes": ["Group label inside related lexemes: lexemes related by shared gloss."]
+    },
+    "%enhancedResources_dictionary_relatedLexemes_byDomain%": {
+      "notes": ["Group label inside related lexemes: lexemes related by shared semantic domain."]
+    },
+    "%enhancedResources_dictionary_relatedLexemes_byLexical%": {
+      "notes": ["Group label inside related lexemes: lexemes related by lexical relation."]
+    },
+    "%enhancedResources_dictionary_seeAlsoHeader%": {},
+    "%enhancedResources_dictionary_occurrencesHeader%": {},
+    "%enhancedResources_dictionary_emptyDetail%": {
+      "notes": ["Placeholder when an expanded entry has no detail data to display."]
     }
   },
   "localizedStrings": {
@@ -156,7 +241,40 @@
       "%enhancedResources_shell_title%": "Enhanced resource",
       "%enhancedResources_shell_emptyTitle%": "No resource selected",
       "%enhancedResources_shell_emptyDescription%": "Open an Enhanced Resource from the Paratext menu to begin.",
-      "%enhancedResources_shell_tabPlaceholder%": "{tab} tab content (UI-PKG-002+ implements this)."
+      "%enhancedResources_shell_tabPlaceholder%": "{tab} tab content (UI-PKG-002+ implements this).",
+      "%enhancedResources_resourceList_expand%": "Expand",
+      "%enhancedResources_resourceList_collapse%": "Collapse",
+      "%enhancedResources_resourceList_loading%": "Loading entries",
+      "%enhancedResources_sense_definitionLabel%": "Definition:",
+      "%enhancedResources_sense_glossesLabel%": "Glosses:",
+      "%enhancedResources_sense_partOfSpeechLabel%": "Part of speech:",
+      "%enhancedResources_sense_nonRelevantLabel%": "Non-relevant sense",
+      "%enhancedResources_dictionary_columnHeader_translations%": "Translations",
+      "%enhancedResources_dictionary_columnHeader_sourceLanguage%": "Source language",
+      "%enhancedResources_dictionary_columnHeader_definitions%": "Definitions",
+      "%enhancedResources_dictionary_columnHeader_count%": "Count",
+      "%enhancedResources_dictionary_expandAll%": "Expand all entries",
+      "%enhancedResources_dictionary_collapseAll%": "Collapse all entries",
+      "%enhancedResources_dictionary_emptyState_noData%": "No data found for {scope}.",
+      "%enhancedResources_dictionary_emptyState_noMatch%": "No data found for \"{word}\" in {scope}.",
+      "%enhancedResources_dictionary_emptyState_wordNotInScope%": "\"{word}\" does not occur in {scope}.",
+      "%enhancedResources_dictionary_dictionaryLabel_sdbh%": "SDBH (Hebrew)",
+      "%enhancedResources_dictionary_dictionaryLabel_sdbg%": "SDBG (Greek)",
+      "%enhancedResources_dictionary_occurrenceCountTooltip%": "Occurrences in current scope (click to navigate)",
+      "%enhancedResources_dictionary_sourceTextTooltip%": "Filter on this word",
+      "%enhancedResources_dictionary_copySurfaceForm%": "Copy surface form",
+      "%enhancedResources_dictionary_copyLemma%": "Copy lemma",
+      "%enhancedResources_dictionary_definitionHeader%": "Definition",
+      "%enhancedResources_dictionary_sensesHeader%": "Senses",
+      "%enhancedResources_dictionary_hideNonRelevantToggle%": "Hide non-relevant senses",
+      "%enhancedResources_dictionary_semanticDomainsHeader%": "Semantic domains",
+      "%enhancedResources_dictionary_relatedLexemesHeader%": "Related lexemes",
+      "%enhancedResources_dictionary_relatedLexemes_byGloss%": "By gloss",
+      "%enhancedResources_dictionary_relatedLexemes_byDomain%": "By domain",
+      "%enhancedResources_dictionary_relatedLexemes_byLexical%": "By lexical relation",
+      "%enhancedResources_dictionary_seeAlsoHeader%": "See also",
+      "%enhancedResources_dictionary_occurrencesHeader%": "Occurrences",
+      "%enhancedResources_dictionary_emptyDetail%": "No additional detail available."
     }
   }
 }
