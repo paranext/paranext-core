@@ -1315,6 +1315,123 @@ internal class GetArticleTests
         Assert.That(data.ImageIds, Has.Count.EqualTo(1));
     }
 
+    // =========================================================================
+    // Real PT9 V2 schema regression tests
+    // -------------------------------------------------------------------------
+    // Harvested from MBL_ENC FAUNA:2.31 (Sheep, lamb) at JHN 1:29. The original
+    // PT10 port assumed `<s>G\d{14}</s>` and lowercase `<image>`; real V2 data
+    // uses (a) optional 1-char alpha prefix that may be absent, G, or H,
+    // (b) multiple space-separated refs in one <s>, and (c) capital <Image>
+    // tags. See PT9 Paratext/Marble/EncyclopediaTab.cs:FormatBCVRefs (line 537)
+    // and ProcessParagraphImages (line 441) for the source-of-truth shapes.
+    // =========================================================================
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("BehaviorId", "BHV-607")]
+    [Description("Real V2: <s>00103101901000</s> (no alpha prefix) parses to GEN 31:19")]
+    public void GetArticle_RealNoPrefixVerseRef_ParsesToCorrectBookChapterVerse()
+    {
+        var input = new ArticleInput(
+            ArticleId: "test-real-noprefix-verse",
+            ResourceId: "test-fauna-resource",
+            UserLanguage: "en"
+        );
+
+        var result = NewService().GetArticle(input);
+
+        var link = result.Paragraphs.SelectMany(p => p.VerseLinks).SingleOrDefault();
+        Assert.That(link, Is.Not.Null, "no-prefix 14-digit verse ref must parse");
+        Assert.That(link!.Reference.BookNum, Is.EqualTo(1), "book = 1 (Genesis)");
+        Assert.That(link.Reference.ChapterNum, Is.EqualTo(31));
+        Assert.That(link.Reference.VerseNum, Is.EqualTo(19));
+        Assert.That(link.DisplayText, Is.EqualTo("Genesis 31:19"));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("BehaviorId", "BHV-607")]
+    [Description(
+        "Real V2: <s>...space-separated refs...</s> emits one verse link per ref, "
+            + "supporting mixed alpha prefixes (none / H / G)"
+    )]
+    public void GetArticle_RealMultipleRefsInOneSBlock_EmitsOneLinkPerRef()
+    {
+        var input = new ArticleInput(
+            ArticleId: "test-real-multiref-verse",
+            ResourceId: "test-fauna-resource",
+            UserLanguage: "en"
+        );
+
+        var result = NewService().GetArticle(input);
+
+        var links = result.Paragraphs.SelectMany(p => p.VerseLinks).ToList();
+        Assert.That(links, Has.Count.EqualTo(4), "one link per space-separated ref");
+
+        // Psalm 119:176 (no prefix), Isa 53:6 (H), Isa 50:6 (H), 1Pe 2:25 (G)
+        Assert.That(
+            links.Select(l => (l.Reference.BookNum, l.Reference.ChapterNum, l.Reference.VerseNum)),
+            Is.EquivalentTo(new[] { (19, 119, 176), (23, 53, 6), (24, 50, 6), (60, 2, 25) })
+        );
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("BehaviorId", "BHV-607")]
+    [Description("Real V2: replaced text shows space-separated display refs, not raw markup")]
+    public void GetArticle_RealMultipleRefs_ReplacedTextNoLongerContainsSElement()
+    {
+        var input = new ArticleInput(
+            ArticleId: "test-real-multiref-verse",
+            ResourceId: "test-fauna-resource",
+            UserLanguage: "en"
+        );
+
+        var result = NewService().GetArticle(input);
+
+        var paragraphText = result.Paragraphs[0].Text;
+        Assert.That(
+            paragraphText,
+            Does.Not.Contain("<s>"),
+            "raw <s> markup must not leak through to UI text"
+        );
+        // Canon.BookNumberToEnglishName: 19 -> "Psalms", 23 -> "Isaiah".
+        Assert.That(paragraphText, Does.Contain("Psalms 119:176"));
+        Assert.That(paragraphText, Does.Contain("Isaiah 53:6"));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-010")]
+    [Property("BehaviorId", "BHV-606")]
+    [Property("ExtractionId", "EXT-058")]
+    [Description("Real V2: capital <Image Id=\"...\" /> tag extracts inline image id")]
+    public void GetArticle_RealCapitalImageTag_ExtractsInlineImageId()
+    {
+        var input = new ArticleInput(
+            ArticleId: "test-real-image-capital",
+            ResourceId: "test-fauna-resource",
+            UserLanguage: "en"
+        );
+
+        var result = NewService().GetArticle(input);
+
+        Assert.That(result.Paragraphs, Has.Count.EqualTo(1));
+        Assert.That(
+            result.Paragraphs[0].InlineImageIds,
+            Is.EqualTo(new[] { "PTZ-0119_ewe_with_lamb" }),
+            "capital <Image> tag must produce inlineImageId, not leak as raw markup"
+        );
+        Assert.That(
+            result.Paragraphs[0].Text,
+            Does.Not.Contain("<Image"),
+            "raw <Image> markup must not leak through to UI text"
+        );
+    }
+
     [Test]
     [Category("Contract")]
     [Property("CapabilityId", "CAP-010")]

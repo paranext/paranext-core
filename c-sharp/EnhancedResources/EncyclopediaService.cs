@@ -97,8 +97,13 @@ internal sealed partial class EncyclopediaService(
                             ? TruncateTeaser(match.Entry.Paragraphs[0])
                             : "";
                     var formatVersion = match.Entry.BibleImageIds.Count > 0 ? 2 : 1;
+                    // The composite "TYPE:KEY" id is what readArticle (and
+                    // EncyclopediaData.ArticlesById) looks up. Built the same
+                    // way the lookup map was populated above.
+                    var articleId = $"{match.Type.ToString().ToUpperInvariant()}:{match.Entry.Key}";
                     entryRefs.Add(
                         new EncyclopediaEntryRef(
+                            ArticleId: articleId,
                             Key: match.Entry.Key,
                             Title: match.Entry.Title,
                             TeaserText: teaser,
@@ -114,8 +119,11 @@ internal sealed partial class EncyclopediaService(
                 }
                 else
                 {
+                    // Unknown thematic link - the original id IS the article id
+                    // the caller would pass to readArticle (where it would 404).
                     entryRefs.Add(
                         new EncyclopediaEntryRef(
+                            ArticleId: id,
                             Key: id,
                             Title: $"Encyclopedia article {id} does not exist.",
                             TeaserText: "",
@@ -211,8 +219,14 @@ internal sealed partial class EncyclopediaService(
     // CAP-010: GetArticle
     // ========================================================================
 
-    [GeneratedRegex(@"<s>(G\d{3}\d{3}\d{3}\d{5}(?:-(G\d{3}\d{3}\d{3}\d{5}))?)</s>")]
-    private static partial Regex VerseRefPattern();
+    // Verse-ref envelope: <s>...</s> can contain ONE OR MORE space-separated refs.
+    // Each ref is a 9- or 14-digit BCV string optionally prefixed with a single
+    // non-digit character (commonly G/H, never required); ranges use 'a-b'.
+    // PT9 source-of-truth: EncyclopediaTab.cs:FormatBCVRefs (line 537). The
+    // original PT10 port assumed `G\d{14}` literally, which silently dropped
+    // every Old Testament ref (no prefix) and every multi-ref block.
+    [GeneratedRegex(@"<s>([^<]+)</s>")]
+    private static partial Regex VerseRefEnvelopePattern();
 
     [GeneratedRegex(@"<l\s+target=""([^""]+)"">([^<]+)</l>")]
     private static partial Regex LinkPattern();
@@ -223,7 +237,9 @@ internal sealed partial class EncyclopediaService(
     [GeneratedRegex(@"<a>([^<]+)</a>")]
     private static partial Regex AbbrevPattern();
 
-    [GeneratedRegex(@"<image\s+Id=""([^""]+)""\s*/>")]
+    // PT9 ProcessParagraphImages (line 441) accepts both <image> and <Image>
+    // with either Id or id attribute - real V2 data is mixed-case.
+    [GeneratedRegex(@"<image\s+id=""([^""]+)""\s*/?>", RegexOptions.IgnoreCase)]
     private static partial Regex ImagePattern();
 
     // === PORTED FROM PT9 ===
@@ -302,49 +318,104 @@ internal sealed partial class EncyclopediaService(
         );
     }
 
+    /// <summary>
+    /// Parses verse-reference markup. Mirrors PT9 EncyclopediaTab.FormatBCVRefs:
+    ///   * `<s>` content is split on whitespace and each token is processed
+    ///     independently - one verse link per token, joined back with spaces.
+    ///   * Each token may optionally start with one non-digit (G/H/etc.) which
+    ///     is metadata only and stripped before parsing.
+    ///   * Stripped form must be exactly 9 or 14 digits; first 9 digits encode
+    ///     BBBCCCVVV; trailing 5 are an in-verse character offset (ignored here).
+    ///   * Range form is `start-end`; both halves follow the same rules.
+    ///
+    /// Tokens that fail validation are dropped silently (matches PT9's
+    /// `continue` on length mismatch). The returned text contains the
+    /// space-separated display strings replacing the original `<s>...</s>`.
+    /// </summary>
     private static string ParseVerseReferences(string text, List<ArticleVerseLink> verseLinks)
     {
-        return VerseRefPattern()
+        return VerseRefEnvelopePattern()
             .Replace(
                 text,
                 match =>
                 {
-                    string fullRef = match.Groups[1].Value;
-                    string startRef = fullRef.Split('-')[0];
-                    string? endRef = match.Groups[2].Success ? match.Groups[2].Value : null;
-
-                    int bookNum = int.Parse(startRef.Substring(1, 3));
-                    int chapter = int.Parse(startRef.Substring(4, 3));
-                    int verse = int.Parse(startRef.Substring(7, 3));
-
-                    var verseRef = new VerseRef(bookNum, chapter, verse);
-                    string bookName = Canon.BookNumberToEnglishName(bookNum);
-                    string displayText;
-
-                    if (endRef != null)
+                    var inner = match.Groups[1].Value;
+                    var displays = new List<string>();
+                    foreach (
+                        var rawToken in inner.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    )
                     {
-                        int endChapter = int.Parse(endRef.Substring(4, 3));
-                        int endVerse = int.Parse(endRef.Substring(7, 3));
-                        displayText =
-                            endChapter == chapter
-                                ? $"{bookName} {chapter}:{verse}-{endVerse}"
-                                : $"{bookName} {chapter}:{verse}-{endChapter}:{endVerse}";
+                        if (TryParseSingleVerseRef(rawToken, out var verseLink))
+                        {
+                            verseLinks.Add(verseLink);
+                            displays.Add(verseLink.DisplayText);
+                        }
                     }
-                    else
-                    {
-                        displayText = $"{bookName} {chapter}:{verse}";
-                    }
-
-                    verseLinks.Add(
-                        new ArticleVerseLink(
-                            Reference: verseRef,
-                            DisplayText: displayText,
-                            RawReference: startRef
-                        )
-                    );
-                    return displayText;
+                    return displays.Count > 0 ? string.Join(" ", displays) : match.Value;
                 }
             );
+    }
+
+    private static bool TryParseSingleVerseRef(string rawToken, out ArticleVerseLink verseLink)
+    {
+        verseLink = default!;
+
+        var hyphenIdx = rawToken.IndexOf('-');
+        var startRaw = hyphenIdx > 0 ? rawToken[..hyphenIdx] : rawToken;
+        var endRaw = hyphenIdx > 0 ? rawToken[(hyphenIdx + 1)..] : null;
+
+        if (!TryDecodeBcv(startRaw, out var startBcv))
+            return false;
+        var (bookNum, chapter, verse) = startBcv;
+        if (bookNum is < 1 or > 99)
+            return false;
+
+        var bookName = Canon.BookNumberToEnglishName(bookNum);
+        string displayText;
+        if (endRaw is not null && TryDecodeBcv(endRaw, out var endBcv))
+        {
+            displayText =
+                endBcv.Chapter == chapter
+                    ? $"{bookName} {chapter}:{verse}-{endBcv.Verse}"
+                    : $"{bookName} {chapter}:{verse}-{endBcv.Chapter}:{endBcv.Verse}";
+        }
+        else
+        {
+            displayText = $"{bookName} {chapter}:{verse}";
+        }
+
+        verseLink = new ArticleVerseLink(
+            Reference: new VerseRef(bookNum, chapter, verse),
+            DisplayText: displayText,
+            // Preserve the original token (including any alpha prefix) so the
+            // FE can correlate the link back to its source markup.
+            RawReference: startRaw
+        );
+        return true;
+    }
+
+    /// <summary>
+    /// Decode the leading 9 digits of a BCV-style ref into (book, chapter, verse).
+    /// Strips an optional 1-char non-digit prefix when length > 9. Accepts only
+    /// the 9- or 14-digit forms PT9 produces.
+    /// </summary>
+    private static bool TryDecodeBcv(string raw, out (int Book, int Chapter, int Verse) bcv)
+    {
+        bcv = default;
+        if (string.IsNullOrEmpty(raw))
+            return false;
+
+        var s = raw.Length > 9 && !char.IsDigit(raw[0]) ? raw[1..] : raw;
+        if (s.Length != 9 && s.Length != 14)
+            return false;
+        if (!int.TryParse(s[..9], out var packed))
+            return false;
+
+        var book = packed / 1_000_000;
+        var chapter = packed / 1_000 % 1_000;
+        var verse = packed % 1_000;
+        bcv = (book, chapter, verse);
+        return true;
     }
 
     private static string ParseCrossReferences(string text, List<ArticleCrossRef> crossReferences)

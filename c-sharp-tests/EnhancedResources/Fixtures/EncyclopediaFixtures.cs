@@ -249,6 +249,33 @@ internal static class EncyclopediaFixtures
                 [],
                 false
             ),
+            // Real PT9 V2 shapes harvested from MBL_ENC FAUNA_en.xml at JHN 1:29 ("Lamb").
+            // The original port assumed a single G-prefixed 14-digit ref per <s> and
+            // lowercase <image>; real data uses multiple space-separated refs, optional
+            // 1-char alpha prefix (G/H/none), and capital <Image>. See PT9 EncyclopediaTab
+            // FormatBCVRefs / ProcessParagraphImages.
+            ["test-real-noprefix-verse"] = new ArticleContent(
+                "Real shape: no-prefix Old Testament reference",
+                ["see <s>00103101901000</s>"], // GEN 31:19, no alpha prefix
+                [],
+                true
+            ),
+            ["test-real-multiref-verse"] = new ArticleContent(
+                "Real shape: multiple space-separated refs in one <s> block",
+                // Psalm 119:176, Isa 53:6, Isa 50:6, 1Pe 2:25 - exactly as JHN 1:29
+                // article delivers them.
+                [
+                    "going astray (<s>01911917601000 H02305300601000 H02405000601000 G06000202500008</s>).",
+                ],
+                [],
+                true
+            ),
+            ["test-real-image-capital"] = new ArticleContent(
+                "Real shape: capital <Image> tag with self-close",
+                ["<Image Id=\"PTZ-0119_ewe_with_lamb\" />Sheep grazing."],
+                ["PTZ-0119_ewe_with_lamb"],
+                true
+            ),
         };
 
     /// <summary>
