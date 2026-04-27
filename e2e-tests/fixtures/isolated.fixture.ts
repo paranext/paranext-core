@@ -9,16 +9,33 @@ import { launchElectronApp, teardownElectronApp } from './helpers';
 
 export { expect } from '@playwright/test';
 
-/** Test-scoped fixtures — each test gets a fresh Electron instance. */
+/**
+ * Isolated test fixtures — each **test** gets its own Electron instance.
+ *
+ * ## One instance per test
+ *
+ * Every `test()` block launches and tears down its own Electron process. This gives full isolation
+ * between tests at the cost of startup time (30+ seconds per test).
+ *
+ * Use these fixtures when tests mutate application state in ways that would affect subsequent
+ * tests, or when you need a guaranteed clean slate. For tests that can tolerate shared state,
+ * consider a worker-scoped fixture instead — in that case all tests assigned to the same Playwright
+ * worker share one Electron instance. By default Playwright assigns one worker per spec file, so
+ * tests within a single file typically share an instance, but this is a side effect of Playwright's
+ * default parallelism settings, not a guarantee of the fixture itself.
+ *
+ * The renderer connects to a shared webpack dev server (`localhost:1212`), and ES module state
+ * (initialization guards, dock layout singletons, etc.) persists across navigations within the same
+ * renderer process. A second Electron instance launched against the same dev-server renderer will
+ * inherit stale module state, which prevents dock tabs from rendering correctly.
+ */
 export interface IsolatedFixtures {
   electronApp: ElectronApplication;
   mainPage: Page;
 }
 
 export const test = base.extend<IsolatedFixtures>({
-  // Test-scoped: a fresh Electron process is launched for every test, then torn
-  // down afterward. Use this for tests that mutate state in ways that are hard
-  // to clean up (e.g. creating/deleting projects, changing settings).
+  // Test-scoped fixture: Playwright launches one Electron instance per test() block.
   // Playwright fixtures require destructured parameter even when no dependencies are needed
   // eslint-disable-next-line no-empty-pattern
   electronApp: async ({}, use) => {
@@ -32,7 +49,7 @@ export const test = base.extend<IsolatedFixtures>({
   },
 
   mainPage: async ({ electronApp }, use, testInfo: TestInfo) => {
-    const page = await electronApp.firstWindow();
+    const page = await electronApp.firstWindow({ timeout: 90_000 });
 
     // Ensure the window is large enough for WebView content to be visible.
     // On headless Linux (xvfb) or WSL2 the default window can be very small,

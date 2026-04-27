@@ -251,11 +251,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             .Select(t => new PlatformCommentThreadWrapper(t))
             .ToList();
 
-        // Deduplicate threads with the same ID: combine unique comments, use the thread
-        // with the latest ModifiedDate as the metadata base, and drop all-deleted threads.
+        // Deduplicate threads with the same ID: combine unique comments and use the thread
+        // with the latest ModifiedDate as the metadata base.
         // Done after wrapping to avoid mutating ParatextData's internal CommentThread objects.
         if (selector.DeduplicateThreads)
             results = DeduplicateCommentThreads(results);
+
+        // Always drop threads where all comments are deleted, even when deduplication is off.
+        // External API consumers should not receive all-deleted threads regardless of DeduplicateThreads.
+        results = results.Where(t => t.HasNonDeletedComments).ToList();
 
         return results;
     }
@@ -875,7 +879,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <summary>
     /// Merges threads with duplicate IDs: combines unique comments and uses the thread with the
     /// latest <see cref="PlatformCommentThreadWrapper.ModifiedDate"/> as the metadata base.
-    /// Drops threads where all comments are deleted.
     /// Works on wrappers to avoid mutating ParatextData's internal CommentThread objects.
     /// </summary>
     internal static List<PlatformCommentThreadWrapper> DeduplicateCommentThreads(
@@ -906,8 +909,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             }
         }
 
-        // Drop threads where all comments are deleted
-        return threadMap.Values.Where(t => t.HasNonDeletedComments).ToList();
+        return threadMap.Values.ToList();
     }
 
     private static IEnumerable<CommentThread> FilterByDate(

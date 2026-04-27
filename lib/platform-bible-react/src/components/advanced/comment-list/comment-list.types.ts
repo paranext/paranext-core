@@ -39,6 +39,11 @@ export const COMMENT_LIST_STRING_KEYS: LocalizeKey[] = [
   '%comment_status_todo%',
   '%comment_thread_multiple_replies%',
   '%comment_thread_single_reply%',
+  '%comment_aria_assign_user%',
+  '%comment_aria_submit_comment%',
+  '%comment_aria_mark_as_read%',
+  '%comment_aria_mark_as_unread%',
+  '%comment_aria_resolve_thread%',
 ];
 
 /** Type definition for the localized strings used in the CommentList component */
@@ -138,6 +143,11 @@ export interface CommentThreadProps {
   currentUser: string;
   /** User assigned to the thread */
   assignedUser?: string;
+  /**
+   * User to pre-select in the reply "Assign to" dropdown when the thread is expanded. Used to
+   * persist the last chosen assignee across consecutive replies within a session.
+   */
+  initialAssignedUser?: string;
   /** Handler for selecting the thread */
   handleSelectThread: (threadId: string) => void;
   /** ID of the thread */
