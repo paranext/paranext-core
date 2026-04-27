@@ -85,6 +85,17 @@ declare module 'papi-shared-types' {
      * @param projectId Id of the project
      */
     'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
+
+    /**
+     * Syncs each project in `projectIds`: Send/Receive for translation projects, DBL update for
+     * resources. The caller is responsible for deduplicating IDs.
+     *
+     * @param projectIds IDs of the projects/resources to sync
+     */
+    'paratextBibleSendReceive.syncProjects': (projectIds: string[]) => Promise<void>;
+
+    /** Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjects`. */
+    'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
   }
 
   export interface SettingTypes {

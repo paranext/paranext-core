@@ -204,9 +204,7 @@ export function PlatformBibleToolbar() {
               size="sm"
               className="pr-twp tw-h-8 tw-flex-shrink-0"
               aria-label={localizedStrings['%toolbar_sync%']}
-              onClick={() => {
-                // TODO: implement sync action
-              }}
+              onClick={() => sendCommand('paratextBibleSendReceive.syncOpenProjects')}
             >
               {localizedStrings['%toolbar_sync%']}
             </Button>

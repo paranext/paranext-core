@@ -22,6 +22,10 @@ internal class ParatextProjectSendReceiveService(
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.commitDaily",
                 CommitDaily
+            ),
+            PapiClient.RegisterRequestHandlerAsync(
+                "command:paratextBibleSendReceive.syncProjects",
+                SyncProjects
             )
         );
     }
@@ -55,6 +59,20 @@ internal class ParatextProjectSendReceiveService(
     /// error was encountered committing.
     /// </summary>
     protected void CommitDaily(String projectId)
+    {
+        throw new PlatformUnimplementedException(
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+        );
+    }
+
+    /// <summary>
+    /// Syncs each project in <paramref name="projectIds"/>: Send/Receive for translation projects,
+    /// DBL update for resources.
+    /// Exception is thrown if this function is not implemented in the current application or if
+    /// an error was encountered syncing.
+    /// </summary>
+    /// <param name="projectIds">IDs of the projects/resources to sync</param>
+    protected void SyncProjects(String[] projectIds)
     {
         throw new PlatformUnimplementedException(
             "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
