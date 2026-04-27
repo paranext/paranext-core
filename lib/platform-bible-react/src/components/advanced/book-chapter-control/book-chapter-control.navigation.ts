@@ -1,6 +1,6 @@
 import { Direction } from '@/utils/dir-helper.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronUp } from 'lucide-react';
 import { ComponentType, useCallback, useMemo } from 'react';
 import { fetchEndChapter } from './book-chapter-control.utils';
 
@@ -88,18 +88,6 @@ export function useQuickNavButtons(
         icon: direction === 'ltr' ? ChevronsLeft : ChevronsRight,
       },
       {
-        onClick: handlePreviousVerse,
-        disabled: availableBooks.length === 0 || scrRef.verseNum === 0,
-        title: 'Previous verse',
-        icon: direction === 'ltr' ? ChevronLeft : ChevronRight,
-      },
-      {
-        onClick: handleNextVerse,
-        disabled: availableBooks.length === 0,
-        title: 'Next verse',
-        icon: direction === 'ltr' ? ChevronRight : ChevronLeft,
-      },
-      {
         onClick: handleNextChapter,
         disabled:
           availableBooks.length === 0 ||
@@ -108,6 +96,18 @@ export function useQuickNavButtons(
             availableBooks.indexOf(scrRef.book) === availableBooks.length - 1),
         title: 'Next chapter',
         icon: direction === 'ltr' ? ChevronsRight : ChevronsLeft,
+      },
+      {
+        onClick: handlePreviousVerse,
+        disabled: availableBooks.length === 0 || scrRef.verseNum === 0,
+        title: 'Previous verse',
+        icon: ChevronUp,
+      },
+      {
+        onClick: handleNextVerse,
+        disabled: availableBooks.length === 0,
+        title: 'Next verse',
+        icon: ChevronDown,
       },
     ];
   }, [
