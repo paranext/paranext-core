@@ -310,6 +310,46 @@
       "notes": [
         "Plural map-files count label shown in the Media Maps tab header. {count} is the integer count."
       ]
+    },
+    "%enhancedResources_mediaViewer_title%": {
+      "notes": ["Drawer title for the in-tab MediaViewer (image overlay)."]
+    },
+    "%enhancedResources_mediaViewer_close%": {
+      "notes": ["ARIA label for the MediaViewer close button (X icon)."]
+    },
+    "%enhancedResources_mediaViewer_previous%": {
+      "notes": [
+        "ARIA label for the MediaViewer previous-image button. Hidden when there is only one image."
+      ]
+    },
+    "%enhancedResources_mediaViewer_next%": {
+      "notes": [
+        "ARIA label for the MediaViewer next-image button. Hidden when there is only one image."
+      ]
+    },
+    "%enhancedResources_mediaViewer_zoomIn%": {
+      "notes": ["ARIA label for the MediaViewer zoom-in button (+ icon)."]
+    },
+    "%enhancedResources_mediaViewer_zoomOut%": {
+      "notes": ["ARIA label for the MediaViewer zoom-out button (- icon). Disabled at 1x zoom."]
+    },
+    "%enhancedResources_mediaViewer_loading%": {
+      "notes": ["Status text shown over the MediaViewer canvas while the image bytes are loading."]
+    },
+    "%enhancedResources_mediaViewer_imageAlt%": {
+      "notes": [
+        "Alt text template for the MediaViewer image. {title} is replaced with the image title."
+      ]
+    },
+    "%enhancedResources_mediaViewer_imageCounter%": {
+      "notes": [
+        "ARIA-live counter announcing the displayed image position. {current} and {total} are integers."
+      ]
+    },
+    "%enhancedResources_mediaViewer_zoomLevelAnnouncement%": {
+      "notes": [
+        "ARIA-live announcement of the current zoom level. {percent} is the zoom percentage (100 = 1x)."
+      ]
     }
   },
   "localizedStrings": {
@@ -436,7 +476,17 @@
       "%enhancedResources_media_maps_tabLabel%": "Maps",
       "%enhancedResources_media_maps_emptyState_noData%": "No maps for {scope}.",
       "%enhancedResources_media_maps_countLabel_singular%": "{count} map file",
-      "%enhancedResources_media_maps_countLabel_plural%": "{count} map files"
+      "%enhancedResources_media_maps_countLabel_plural%": "{count} map files",
+      "%enhancedResources_mediaViewer_title%": "Image viewer",
+      "%enhancedResources_mediaViewer_close%": "Close",
+      "%enhancedResources_mediaViewer_previous%": "Previous image",
+      "%enhancedResources_mediaViewer_next%": "Next image",
+      "%enhancedResources_mediaViewer_zoomIn%": "Zoom in",
+      "%enhancedResources_mediaViewer_zoomOut%": "Zoom out",
+      "%enhancedResources_mediaViewer_loading%": "Loading image",
+      "%enhancedResources_mediaViewer_imageAlt%": "Image: {title}",
+      "%enhancedResources_mediaViewer_imageCounter%": "Image {current} of {total}",
+      "%enhancedResources_mediaViewer_zoomLevelAnnouncement%": "Zoom: {percent}%"
     }
   }
 }
