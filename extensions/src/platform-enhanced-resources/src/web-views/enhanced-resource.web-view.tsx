@@ -31,6 +31,19 @@ import {
 } from '../components/dictionary-tab/dictionary-tab.component';
 import type { DictionaryDisplayItemData } from '../components/dictionary-tab/dictionary-display-item.component';
 import type { VerseOccurrenceLink } from '../components/dictionary-tab/dictionary-entry-detail.component';
+import {
+  EncyclopediaTab,
+  type EncyclopediaEmptyStateVariant,
+} from '../components/encyclopedia-tab/encyclopedia-tab.component';
+import type {
+  EncyclopediaDisplayItemData,
+  EncyclopediaEntryRefData,
+} from '../components/encyclopedia-tab/encyclopedia-display-item.component';
+import type {
+  ArticleCrossRefData,
+  ArticleRendererData,
+  ArticleVerseLinkData,
+} from '../components/shared/article-renderer.component';
 
 /** Object containing all keys used for localization in this component. */
 export const ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS = Object.freeze([
@@ -118,6 +131,29 @@ export type EnhancedResourceWebViewProps = {
   onDictionaryCopySurfaceForm?: (item: DictionaryDisplayItemData) => void;
   onDictionaryCopyLemma?: (item: DictionaryDisplayItemData) => void;
 
+  // Encyclopedia tab
+  encyclopediaItems?: EncyclopediaDisplayItemData[];
+  encyclopediaExpandedTokenIds?: Set<string>;
+  encyclopediaAllExpanded?: boolean;
+  encyclopediaIsLoading?: boolean;
+  encyclopediaEmptyState?: EncyclopediaEmptyStateVariant;
+  encyclopediaFilterWord?: string;
+  encyclopediaScopeLabel?: string;
+  encyclopediaArticleDataMap?: Record<string, ArticleRendererData | undefined>;
+  encyclopediaImageUrlResolver?: (imageId: string) => string;
+  encyclopediaThumbnailUrlResolver?: (imageId: string) => string;
+  onEncyclopediaExpandToggle?: (tokenId: string) => void;
+  onEncyclopediaExpandAll?: () => void;
+  onEncyclopediaCollapseAll?: () => void;
+  onEncyclopediaSourceTextClick?: (tokenId: string) => void;
+  onEncyclopediaArticleTitleClick?: (articleId: string) => void;
+  onEncyclopediaCopySurfaceForm?: (item: EncyclopediaDisplayItemData) => void;
+  onEncyclopediaCopyLemma?: (item: EncyclopediaDisplayItemData) => void;
+  onEncyclopediaVerseLinkClick?: (link: ArticleVerseLinkData) => void;
+  onEncyclopediaCrossReferenceClick?: (ref: ArticleCrossRefData) => void;
+  onEncyclopediaImageClick?: (imageId: string) => void;
+  onEncyclopediaViewFullArticle?: (entry: EncyclopediaEntryRefData) => void;
+
   /**
    * All localized strings used by the shell + nested components, keyed by the union of every
    * STRING_KEYS const each child exports. The wiring layer fetches them in one batch.
@@ -196,6 +232,28 @@ export function EnhancedResourceWebView({
   onDictionaryToggleHideNonRelevantSenses = () => {},
   onDictionaryCopySurfaceForm = () => {},
   onDictionaryCopyLemma = () => {},
+
+  encyclopediaItems = [],
+  encyclopediaExpandedTokenIds,
+  encyclopediaAllExpanded = false,
+  encyclopediaIsLoading = false,
+  encyclopediaEmptyState = 'none',
+  encyclopediaFilterWord,
+  encyclopediaScopeLabel = '',
+  encyclopediaArticleDataMap = {},
+  encyclopediaImageUrlResolver,
+  encyclopediaThumbnailUrlResolver,
+  onEncyclopediaExpandToggle = () => {},
+  onEncyclopediaExpandAll = () => {},
+  onEncyclopediaCollapseAll = () => {},
+  onEncyclopediaSourceTextClick = () => {},
+  onEncyclopediaArticleTitleClick = () => {},
+  onEncyclopediaCopySurfaceForm = () => {},
+  onEncyclopediaCopyLemma = () => {},
+  onEncyclopediaVerseLinkClick = () => {},
+  onEncyclopediaCrossReferenceClick = () => {},
+  onEncyclopediaImageClick = () => {},
+  onEncyclopediaViewFullArticle = () => {},
 
   localizedStringsWithLoadingState = [{}, false],
 }: EnhancedResourceWebViewProps) {
@@ -329,13 +387,42 @@ export function EnhancedResourceWebView({
                     localizedStringsWithLoadingState={childStrings}
                   />
                 </TabsContent>
-                {(['encyclopedia', 'media', 'maps'] as const).map((tab) => (
+                <TabsContent
+                  value="encyclopedia"
+                  className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
+                >
+                  <EncyclopediaTab
+                    items={encyclopediaItems}
+                    expandedTokenIds={encyclopediaExpandedTokenIds}
+                    allExpanded={encyclopediaAllExpanded}
+                    isLoading={encyclopediaIsLoading}
+                    emptyState={encyclopediaEmptyState}
+                    filterWord={encyclopediaFilterWord}
+                    scopeLabel={encyclopediaScopeLabel}
+                    articleDataMap={encyclopediaArticleDataMap}
+                    imageUrlResolver={encyclopediaImageUrlResolver}
+                    thumbnailUrlResolver={encyclopediaThumbnailUrlResolver}
+                    onExpandToggle={onEncyclopediaExpandToggle}
+                    onExpandAll={onEncyclopediaExpandAll}
+                    onCollapseAll={onEncyclopediaCollapseAll}
+                    onSourceTextClick={onEncyclopediaSourceTextClick}
+                    onArticleTitleClick={onEncyclopediaArticleTitleClick}
+                    onCopySurfaceForm={onEncyclopediaCopySurfaceForm}
+                    onCopyLemma={onEncyclopediaCopyLemma}
+                    onVerseLinkClick={onEncyclopediaVerseLinkClick}
+                    onCrossReferenceClick={onEncyclopediaCrossReferenceClick}
+                    onImageClick={onEncyclopediaImageClick}
+                    onViewFullArticle={onEncyclopediaViewFullArticle}
+                    localizedStringsWithLoadingState={childStrings}
+                  />
+                </TabsContent>
+                {(['media', 'maps'] as const).map((tab) => (
                   <TabsContent
                     key={tab}
                     value={tab}
                     className="tw-flex tw-flex-1 tw-flex-col tw-gap-2 tw-p-3 data-[state=inactive]:tw-hidden"
                   >
-                    {/* Encyclopedia/Media/Maps still placeholder until UI-PKG-003/004 */}
+                    {/* Media/Maps still placeholder until UI-PKG-004 */}
                     <span className="tw-text-xs tw-italic tw-text-muted-foreground">
                       {tabPlaceholder.replace('{tab}', tab)}
                     </span>

@@ -17,6 +17,14 @@ import {
   MOCK_DICT_ENTRIES_HEBREW,
   MOCK_DICT_ENTRY_ELOHIM,
 } from '../data/dictionary-tab.story-data';
+import { ENCYCLOPEDIA_TAB_STRING_KEYS } from '../components/encyclopedia-tab/encyclopedia-tab.component';
+import {
+  MOCK_ARTICLE_DATA_MAP,
+  MOCK_ENC_ENTRIES_HEBREW,
+  MOCK_ENC_ENTRY_GAMAL,
+  mockImageUrlResolver,
+  mockThumbnailUrlResolver,
+} from '../data/encyclopedia-tab.story-data';
 import {
   EnhancedResourceWebView,
   ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS,
@@ -29,6 +37,7 @@ const allKeys = [
   ...WARNING_RIBBONS_STRING_KEYS,
   ...COPYRIGHT_OVERLAY_STRING_KEYS,
   ...DICTIONARY_TAB_STRING_KEYS,
+  ...ENCYCLOPEDIA_TAB_STRING_KEYS,
 ];
 const localizedStrings = getLocalizedStrings(allKeys);
 
@@ -65,6 +74,11 @@ const meta: Meta<typeof EnhancedResourceWebView> = {
     dictionaryItems: MOCK_DICT_ENTRIES_HEBREW,
     dictionaryActiveDictionary: 'SDBH',
     dictionaryScopeLabel: 'current verse',
+    encyclopediaItems: MOCK_ENC_ENTRIES_HEBREW,
+    encyclopediaScopeLabel: 'current verse',
+    encyclopediaArticleDataMap: MOCK_ARTICLE_DATA_MAP,
+    encyclopediaImageUrlResolver: mockImageUrlResolver,
+    encyclopediaThumbnailUrlResolver: mockThumbnailUrlResolver,
   },
   decorators: [
     (Story) => (
@@ -130,5 +144,14 @@ export const DictionaryTabEmpty: Story = {
     dictionaryItems: [],
     dictionaryEmptyState: 'no-data',
     dictionaryScopeLabel: 'current verse',
+  },
+};
+
+export const EncyclopediaTabExpanded: Story = {
+  args: {
+    activeTab: 'encyclopedia',
+    encyclopediaItems: MOCK_ENC_ENTRIES_HEBREW,
+    encyclopediaExpandedTokenIds: new Set([MOCK_ENC_ENTRY_GAMAL.tokenId]),
+    encyclopediaScopeLabel: 'current verse',
   },
 };

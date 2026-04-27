@@ -183,6 +183,90 @@
     "%enhancedResources_dictionary_occurrencesHeader%": {},
     "%enhancedResources_dictionary_emptyDetail%": {
       "notes": ["Placeholder when an expanded entry has no detail data to display."]
+    },
+    "%enhancedResources_encyclopedia_tabLabel%": {
+      "notes": ["Heading and ARIA label for the Encyclopedia research tab."]
+    },
+    "%enhancedResources_encyclopedia_columnHeader_sourceLanguage%": {},
+    "%enhancedResources_encyclopedia_columnHeader_articles%": {},
+    "%enhancedResources_encyclopedia_columnHeader_count%": {},
+    "%enhancedResources_encyclopedia_expandAll%": {
+      "notes": ["ARIA label for the Expand all entries action in EncyclopediaTab."]
+    },
+    "%enhancedResources_encyclopedia_collapseAll%": {
+      "notes": ["ARIA label for the Collapse all entries action in EncyclopediaTab."]
+    },
+    "%enhancedResources_encyclopedia_emptyState_noData%": {
+      "notes": [
+        "Empty state when no encyclopedia entries match the current scope. {scope} is the localized scope label."
+      ]
+    },
+    "%enhancedResources_encyclopedia_emptyState_noMatch%": {
+      "notes": [
+        "Empty state when the filter word matches no encyclopedia entries in scope. {word} and {scope} are replaced."
+      ]
+    },
+    "%enhancedResources_encyclopedia_emptyState_wordNotInScope%": {
+      "notes": [
+        "Empty state when the filter word does not occur in the current scope. {word} and {scope} are replaced."
+      ]
+    },
+    "%enhancedResources_encyclopedia_copySurfaceForm%": {
+      "notes": ["Encyclopedia context menu item: Copy the surface form."]
+    },
+    "%enhancedResources_encyclopedia_copyLemma%": {
+      "notes": ["Encyclopedia context menu item: Copy the lemma."]
+    },
+    "%enhancedResources_encyclopedia_sourceTextTooltip%": {
+      "notes": ["ARIA label for clicking a source-text link in the encyclopedia entry row."]
+    },
+    "%enhancedResources_encyclopedia_articleTitleTooltip%": {
+      "notes": ["ARIA label for clicking an article title link in the encyclopedia entry row."]
+    },
+    "%enhancedResources_encyclopedia_thumbnailLabel%": {
+      "notes": ["ARIA label / alt text prefix for inline thumbnail images on an encyclopedia row."]
+    },
+    "%enhancedResources_encyclopedia_viewFullArticle%": {
+      "notes": [
+        "Footer link in expanded encyclopedia detail that opens the full ArticleViewer drawer."
+      ]
+    },
+    "%enhancedResources_encyclopedia_articleLoading%": {
+      "notes": ["ARIA label for the article loading skeleton in the expanded encyclopedia detail."]
+    },
+    "%enhancedResources_encyclopedia_emptyDetail%": {
+      "notes": ["Placeholder when an expanded encyclopedia entry has no article data to display."]
+    },
+    "%enhancedResources_encyclopedia_formatVersionLabel%": {
+      "notes": [
+        "Reserved label for V1/V2 format indicator (currently unused; backend abstracts the difference)."
+      ]
+    },
+    "%enhancedResources_article_seeAlsoHeader%": {
+      "notes": ["Section heading above the cross-references list inside an encyclopedia article."]
+    },
+    "%enhancedResources_article_referencesHeader%": {
+      "notes": ["Section heading above the verse-reference list inside an encyclopedia article."]
+    },
+    "%enhancedResources_article_imageAltLabel%": {
+      "notes": ["Alt-text prefix for inline images inside an encyclopedia article."]
+    },
+    "%enhancedResources_article_inlineImageOpenLabel%": {
+      "notes": ["ARIA label for clicking an inline article image to open the MediaViewer."]
+    },
+    "%enhancedResources_article_crossReferenceOpenLabel%": {
+      "notes": ["ARIA label for clicking a See also cross-reference link in an article."]
+    },
+    "%enhancedResources_article_verseLinkOpenLabel%": {
+      "notes": ["ARIA label for clicking a verse reference link inside an article."]
+    },
+    "%enhancedResources_article_emptyArticle%": {
+      "notes": ["Placeholder shown when ArticleRenderer receives no article data."]
+    },
+    "%enhancedResources_article_truncatedNotice%": {
+      "notes": [
+        "Inline notice shown at the end of a preview-mode article when paragraphs were omitted."
+      ]
     }
   },
   "localizedStrings": {
@@ -274,7 +358,33 @@
       "%enhancedResources_dictionary_relatedLexemes_byLexical%": "By lexical relation",
       "%enhancedResources_dictionary_seeAlsoHeader%": "See also",
       "%enhancedResources_dictionary_occurrencesHeader%": "Occurrences",
-      "%enhancedResources_dictionary_emptyDetail%": "No additional detail available."
+      "%enhancedResources_dictionary_emptyDetail%": "No additional detail available.",
+      "%enhancedResources_encyclopedia_tabLabel%": "Encyclopedia",
+      "%enhancedResources_encyclopedia_columnHeader_sourceLanguage%": "Source language",
+      "%enhancedResources_encyclopedia_columnHeader_articles%": "Articles",
+      "%enhancedResources_encyclopedia_columnHeader_count%": "Count",
+      "%enhancedResources_encyclopedia_expandAll%": "Expand all entries",
+      "%enhancedResources_encyclopedia_collapseAll%": "Collapse all entries",
+      "%enhancedResources_encyclopedia_emptyState_noData%": "No data found for {scope}.",
+      "%enhancedResources_encyclopedia_emptyState_noMatch%": "No data found for \"{word}\" in {scope}.",
+      "%enhancedResources_encyclopedia_emptyState_wordNotInScope%": "\"{word}\" does not occur in {scope}.",
+      "%enhancedResources_encyclopedia_copySurfaceForm%": "Copy surface form",
+      "%enhancedResources_encyclopedia_copyLemma%": "Copy lemma",
+      "%enhancedResources_encyclopedia_sourceTextTooltip%": "Filter on this word",
+      "%enhancedResources_encyclopedia_articleTitleTooltip%": "Open article",
+      "%enhancedResources_encyclopedia_thumbnailLabel%": "Article image",
+      "%enhancedResources_encyclopedia_viewFullArticle%": "View full article",
+      "%enhancedResources_encyclopedia_articleLoading%": "Loading article",
+      "%enhancedResources_encyclopedia_emptyDetail%": "No article content available.",
+      "%enhancedResources_encyclopedia_formatVersionLabel%": "Format",
+      "%enhancedResources_article_seeAlsoHeader%": "See also",
+      "%enhancedResources_article_referencesHeader%": "References",
+      "%enhancedResources_article_imageAltLabel%": "Article image",
+      "%enhancedResources_article_inlineImageOpenLabel%": "Open image",
+      "%enhancedResources_article_crossReferenceOpenLabel%": "Open related article",
+      "%enhancedResources_article_verseLinkOpenLabel%": "Go to verse",
+      "%enhancedResources_article_emptyArticle%": "Article content is not available.",
+      "%enhancedResources_article_truncatedNotice%": "(Preview - additional paragraphs available in full view.)"
     }
   }
 }
