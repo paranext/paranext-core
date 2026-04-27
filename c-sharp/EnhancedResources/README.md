@@ -49,6 +49,7 @@ ScrTextCollection.ResourcesDirectory + {SettingsDirectory}/_resourcesById/
 The composition root is `EnhancedResourceFactory`. Only it knows how all the
 pieces fit together; no other class wires services. Every loader is stateless
 and XML-direct (XDocument / XPath over text from `IMarblePackage.ReadAllText`)
+
 - no `XmlSerializer`, no PT9 type hierarchy.
 
 The factory's `InitializeAsync` returns as soon as the NetworkObject is
@@ -162,14 +163,14 @@ returns false and the loader treats the marble directory as empty -
 
 PT9's V1/V2 coexistence rules are ported verbatim. Summary:
 
-| Kind            | V1 ext   | V2 ext                      | Rule                                                                            |
-| --------------- | -------- | --------------------------- | ------------------------------------------------------------------------------- |
-| Bible           | `.mbv1z` | `.mbv2z`                    | V2 preferred; V1 loaded only when no matching V2                                |
-| Image package   | `.miv1z` | `.miv2z`                    | V2 preferred; V1 deleted when V2 exists                                         |
-| Image index     | `.mxv1z` | (internal `IMAGES_V2.XML`)  | Single extension; loader picks `IMAGES_V2.XML` over `IMAGES.XML` when both present |
-| Dictionary      | `.mdv1z` | (none)                      | V1 only                                                                         |
-| Source language | `.msv1z` | (none)                      | V1 only                                                                         |
-| Encyclopedia    | `.mev1z` | (none)                      | V1 only                                                                         |
+| Kind            | V1 ext   | V2 ext                     | Rule                                                                               |
+| --------------- | -------- | -------------------------- | ---------------------------------------------------------------------------------- |
+| Bible           | `.mbv1z` | `.mbv2z`                   | V2 preferred; V1 loaded only when no matching V2                                   |
+| Image package   | `.miv1z` | `.miv2z`                   | V2 preferred; V1 deleted when V2 exists                                            |
+| Image index     | `.mxv1z` | (internal `IMAGES_V2.XML`) | Single extension; loader picks `IMAGES_V2.XML` over `IMAGES.XML` when both present |
+| Dictionary      | `.mdv1z` | (none)                     | V1 only                                                                            |
+| Source language | `.msv1z` | (none)                     | V1 only                                                                            |
+| Encyclopedia    | `.mev1z` | (none)                     | V1 only                                                                            |
 
 `MarblePackageDiscoverer` deletes V1 bible/image files that have a V2
 companion (`File.Delete`). This is the only filesystem mutation in the
