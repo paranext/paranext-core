@@ -62,17 +62,19 @@ If you want your whole app to match the styles of these components, you can appl
 <!-- This is the post-tailwind-conversion version of the @layer base styles at the bottom of the shadcn/ui styles file https://ui.shadcn.com/docs/installation/manual#configure-styles -->
 
 ```css
-* {
-  border-color: var(--border);
-  outline-color: var(--ring);
-}
-@supports (color: color-mix(in lab, red, red)) {
+@layer base {
   * {
-    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+    border-color: var(--border);
+    outline-color: var(--ring);
   }
-}
-body {
-  background-color: var(--background);
-  color: var(--foreground);
+  @supports (color: color-mix(in lab, red, red)) {
+    * {
+      outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+    }
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
 }
 ```

@@ -144,7 +144,6 @@ export const WithButton: Story = {
 
 export const SearchWithClear: Story = {
   render: () => {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [value, setValue] = useState('');
     return (
       <InputGroup className="tw:max-w-sm">
@@ -178,7 +177,6 @@ export const SearchWithClear: Story = {
 
 export const PasswordToggle: Story = {
   render: () => {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [visible, setVisible] = useState(false);
     return (
       <InputGroup className="tw:max-w-sm">

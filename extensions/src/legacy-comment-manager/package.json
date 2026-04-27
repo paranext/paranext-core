@@ -32,16 +32,16 @@
   },
   "browserslist": [],
   "peerDependencies": {
-    "react": ">=18.3.1",
-    "react-dom": ">=18.3.1"
+    "react": ">=19.0.0",
+    "react-dom": ">=19.0.0"
   },
   "dependencies": {
-    "@fontsource-variable/ibm-plex-sans": "^5.2.8",
     "@sillsdev/scripture": "^2.0.5",
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
     "@dreamsicle.io/stylelint-config-tailwindcss": "^1.2.2",
+    "@fontsource-variable/ibm-plex-sans": "^5.2.8",
     "@eten-tech-foundation/scripture-utilities": "~0.1.6",
     "@stylistic/eslint-plugin-ts": "^2.13.0",
     "@swc/core": "1.13.3",

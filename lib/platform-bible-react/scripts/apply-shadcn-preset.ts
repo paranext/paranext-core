@@ -135,8 +135,11 @@ function parseProtectedVarsFromIndexCss(css: string): Set<string> {
   const vars = new Set<string>();
   const withoutTheme = removeAtThemeBlocks(css);
   const varPattern = /--([\w-]+)\s*:/g;
-  let match: RegExpExecArray | null;
-  while ((match = varPattern.exec(withoutTheme)) !== null) vars.add(`--${match[1]}`);
+  let match = varPattern.exec(withoutTheme);
+  while (match) {
+    vars.add(`--${match[1]}`);
+    match = varPattern.exec(withoutTheme);
+  }
   return vars;
 }
 
@@ -147,13 +150,19 @@ function parseProtectedVarsFromIndexCss(css: string): Set<string> {
  */
 function parseComponentDeclaredVars(content: string): Set<string> {
   const vars = new Set<string>();
-  let match: RegExpExecArray | null;
-
   const objKeyPattern = /['"](--[\w-]+)['"]\s*:/g;
-  while ((match = objKeyPattern.exec(content)) !== null) vars.add(match[1]);
+  let match = objKeyPattern.exec(content);
+  while (match) {
+    vars.add(match[1]);
+    match = objKeyPattern.exec(content);
+  }
 
   const setPropPattern = /\.setProperty\(\s*['"](--[\w-]+)['"]/g;
-  while ((match = setPropPattern.exec(content)) !== null) vars.add(match[1]);
+  let setPropMatch = setPropPattern.exec(content);
+  while (setPropMatch) {
+    vars.add(setPropMatch[1]);
+    setPropMatch = setPropPattern.exec(content);
+  }
 
   return vars;
 }

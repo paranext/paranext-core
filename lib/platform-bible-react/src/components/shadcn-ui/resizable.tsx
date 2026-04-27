@@ -49,10 +49,10 @@ function ResizablePanelGroup({
 type PanelSizeProp = ResizablePrimitive.PanelProps['defaultSize'];
 
 // CUSTOM: Convert number size props to strings for the underlying panel component
-/** Converts a size prop: numbers become percentage strings (e.g. 39 → "39"), strings pass through. */
+/** Converts a size prop: numbers become percentage strings (e.g. 39 → "39%"), strings pass through. */
 function toSizeString(value: PanelSizeProp): string | undefined {
   if (value === undefined) return undefined;
-  return typeof value === 'number' ? String(value) : value;
+  return typeof value === 'number' ? `${value}%` : value;
 }
 
 /** @inheritdoc ResizablePanelGroup */
