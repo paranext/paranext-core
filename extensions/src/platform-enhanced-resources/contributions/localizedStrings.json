@@ -350,6 +350,45 @@
       "notes": [
         "ARIA-live announcement of the current zoom level. {percent} is the zoom percentage (100 = 1x)."
       ]
+    },
+    "%enhancedResources_articleViewer_title%": {
+      "notes": [
+        "DrawerTitle text for the ArticleViewer overlay (also the screen-reader fallback when no article is loaded)."
+      ]
+    },
+    "%enhancedResources_articleViewer_back%": {
+      "notes": ["ARIA label for the ArticleViewer back button (arrow-left icon, closes drawer)."]
+    },
+    "%enhancedResources_articleViewer_close%": {
+      "notes": ["ARIA label for the ArticleViewer close button (X icon)."]
+    },
+    "%enhancedResources_articleViewer_previousArticle%": {
+      "notes": [
+        "ARIA label for the ArticleViewer previous-article button. Hidden when no sequence is available."
+      ]
+    },
+    "%enhancedResources_articleViewer_nextArticle%": {
+      "notes": [
+        "ARIA label for the ArticleViewer next-article button. Hidden when no sequence is available."
+      ]
+    },
+    "%enhancedResources_articleViewer_loading%": {
+      "notes": ["Status text shown while the ArticleViewer is fetching article content."]
+    },
+    "%enhancedResources_articleViewer_empty%": {
+      "notes": [
+        "Placeholder shown when the ArticleViewer is open but no article data is available."
+      ]
+    },
+    "%enhancedResources_articleViewer_abbreviationsHeader%": {
+      "notes": [
+        "Section heading above the list of abbreviations (with hover tooltips) inside the ArticleViewer."
+      ]
+    },
+    "%enhancedResources_articleViewer_abbreviationTooltipLabel%": {
+      "notes": [
+        "ARIA label for the ArticleViewer abbreviation hover surface. Activating reveals the full text via tooltip."
+      ]
     }
   },
   "localizedStrings": {
@@ -486,7 +525,16 @@
       "%enhancedResources_mediaViewer_loading%": "Loading image",
       "%enhancedResources_mediaViewer_imageAlt%": "Image: {title}",
       "%enhancedResources_mediaViewer_imageCounter%": "Image {current} of {total}",
-      "%enhancedResources_mediaViewer_zoomLevelAnnouncement%": "Zoom: {percent}%"
+      "%enhancedResources_mediaViewer_zoomLevelAnnouncement%": "Zoom: {percent}%",
+      "%enhancedResources_articleViewer_title%": "Article",
+      "%enhancedResources_articleViewer_back%": "Back",
+      "%enhancedResources_articleViewer_close%": "Close",
+      "%enhancedResources_articleViewer_previousArticle%": "Previous article",
+      "%enhancedResources_articleViewer_nextArticle%": "Next article",
+      "%enhancedResources_articleViewer_loading%": "Loading article",
+      "%enhancedResources_articleViewer_empty%": "Article content is not available.",
+      "%enhancedResources_articleViewer_abbreviationsHeader%": "Abbreviations",
+      "%enhancedResources_articleViewer_abbreviationTooltipLabel%": "Show full text"
     }
   }
 }
