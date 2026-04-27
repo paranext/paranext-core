@@ -389,6 +389,81 @@
       "notes": [
         "ARIA label for the ArticleViewer abbreviation hover surface. Activating reveals the full text via tooltip."
       ]
+    },
+    "%enhancedResources_semanticDomain_title%": {
+      "notes": ["DrawerTitle text for the SemanticDomainViewer overlay."]
+    },
+    "%enhancedResources_semanticDomain_description%": {
+      "notes": [
+        "Screen-reader description for the SemanticDomainViewer drawer. Announces the drawer's purpose."
+      ]
+    },
+    "%enhancedResources_semanticDomain_back%": {
+      "notes": [
+        "ARIA label for the SemanticDomainViewer back button (arrow-left icon, closes drawer)."
+      ]
+    },
+    "%enhancedResources_semanticDomain_close%": {
+      "notes": ["ARIA label for the SemanticDomainViewer close button (X icon)."]
+    },
+    "%enhancedResources_semanticDomain_treeAriaLabel%": {
+      "notes": ["ARIA label announced for the semantic-domain hierarchy tree (role=tree)."]
+    },
+    "%enhancedResources_semanticDomain_breadcrumbAriaLabel%": {
+      "notes": ["ARIA label for the breadcrumb navigation landmark."]
+    },
+    "%enhancedResources_semanticDomain_breadcrumbRoot%": {
+      "notes": ["Root-level label rendered as the first breadcrumb item (e.g. 'All')."]
+    },
+    "%enhancedResources_semanticDomain_breadcrumbSeparator%": {
+      "notes": [
+        "Visible separator string between breadcrumb items (e.g. '>'). Decorative; aria-hidden."
+      ]
+    },
+    "%enhancedResources_semanticDomain_expand%": {
+      "notes": ["ARIA label / tooltip for the per-node expand toggle in the semantic domain tree."]
+    },
+    "%enhancedResources_semanticDomain_collapse%": {
+      "notes": [
+        "ARIA label / tooltip for the per-node collapse toggle in the semantic domain tree."
+      ]
+    },
+    "%enhancedResources_semanticDomain_openArticleLabel%": {
+      "notes": [
+        "ARIA label for a domain entry whose hasArticle is true. Activating closes the drawer and opens the ArticleViewer."
+      ]
+    },
+    "%enhancedResources_semanticDomain_focusCategoryLabel%": {
+      "notes": [
+        "ARIA label for a domain category whose hasArticle is false. Activating focuses the tree on that category."
+      ]
+    },
+    "%enhancedResources_semanticDomain_filteredEntriesHeader%": {
+      "notes": [
+        "Section heading above the dictionary entries filtered by the currently focused semantic domain. {domainLabel} is the current domain label."
+      ]
+    },
+    "%enhancedResources_semanticDomain_filteredEntriesAriaLabel%": {
+      "notes": ["ARIA label for the filtered-entries ResourceList inside SemanticDomainViewer."]
+    },
+    "%enhancedResources_semanticDomain_filteredEntriesEmpty%": {
+      "notes": ["Empty-state message when the focused domain has no associated dictionary entries."]
+    },
+    "%enhancedResources_semanticDomain_filteredEntriesLoading%": {
+      "notes": ["ARIA label for the filtered entries list while loading."]
+    },
+    "%enhancedResources_semanticDomain_treeLoading%": {
+      "notes": ["Status text shown while the SemanticDomainViewer is fetching the domain tree."]
+    },
+    "%enhancedResources_semanticDomain_treeEmpty%": {
+      "notes": [
+        "Placeholder shown when the SemanticDomainViewer is open but no domain tree data is available."
+      ]
+    },
+    "%enhancedResources_semanticDomain_glossesLabel%": {
+      "notes": [
+        "Inline label preceding the gloss list of a dictionary entry inside the SemanticDomainViewer."
+      ]
     }
   },
   "localizedStrings": {
@@ -534,7 +609,26 @@
       "%enhancedResources_articleViewer_loading%": "Loading article",
       "%enhancedResources_articleViewer_empty%": "Article content is not available.",
       "%enhancedResources_articleViewer_abbreviationsHeader%": "Abbreviations",
-      "%enhancedResources_articleViewer_abbreviationTooltipLabel%": "Show full text"
+      "%enhancedResources_articleViewer_abbreviationTooltipLabel%": "Show full text",
+      "%enhancedResources_semanticDomain_title%": "Semantic domains",
+      "%enhancedResources_semanticDomain_description%": "Browse the semantic-domain hierarchy and the dictionary entries that belong to the focused domain.",
+      "%enhancedResources_semanticDomain_back%": "Back",
+      "%enhancedResources_semanticDomain_close%": "Close",
+      "%enhancedResources_semanticDomain_treeAriaLabel%": "Semantic domain hierarchy",
+      "%enhancedResources_semanticDomain_breadcrumbAriaLabel%": "Domain path",
+      "%enhancedResources_semanticDomain_breadcrumbRoot%": "All",
+      "%enhancedResources_semanticDomain_breadcrumbSeparator%": ">",
+      "%enhancedResources_semanticDomain_expand%": "Expand",
+      "%enhancedResources_semanticDomain_collapse%": "Collapse",
+      "%enhancedResources_semanticDomain_openArticleLabel%": "Open article for this domain",
+      "%enhancedResources_semanticDomain_focusCategoryLabel%": "Focus tree on this category",
+      "%enhancedResources_semanticDomain_filteredEntriesHeader%": "Words in domain \"{domainLabel}\"",
+      "%enhancedResources_semanticDomain_filteredEntriesAriaLabel%": "Dictionary entries for the current domain",
+      "%enhancedResources_semanticDomain_filteredEntriesEmpty%": "No dictionary entries are associated with this domain.",
+      "%enhancedResources_semanticDomain_filteredEntriesLoading%": "Loading dictionary entries",
+      "%enhancedResources_semanticDomain_treeLoading%": "Loading domain tree",
+      "%enhancedResources_semanticDomain_treeEmpty%": "No semantic domains are available.",
+      "%enhancedResources_semanticDomain_glossesLabel%": "Glosses:"
     }
   }
 }
