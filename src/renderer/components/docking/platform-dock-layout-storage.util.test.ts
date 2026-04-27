@@ -58,8 +58,13 @@ describe('Dock Layout Component', () => {
     it('returns empty array when no tabs have WebView data', () => {
       when(localMockDockLayout.find(anything(), anything())).thenCall(
         (callback: (item: unknown) => boolean) => {
-          callback({ id: 'panel1' }); // no 'data' property
-          callback({ id: 'settings', data: { settingsType: 'general' } }); // data without webViewType
+          callback({ id: 'panel1', title: 'Panel 1', tabType: 'settings' }); // non-WebView tab
+          callback({
+            id: 'settings',
+            title: 'Settings',
+            tabType: 'settings',
+            data: { settingsType: 'general' },
+          }); // non-WebView tab
           return undefined;
         },
       );
@@ -72,8 +77,13 @@ describe('Dock Layout Component', () => {
       const webViewDef = { id: 'wv1', webViewType: 'TestWebView' } as unknown as WebViewDefinition;
       when(localMockDockLayout.find(anything(), anything())).thenCall(
         (callback: (item: unknown) => boolean) => {
-          callback({ id: 'settings', data: { settingsType: 'general' } });
-          callback({ id: 'wv1', data: webViewDef });
+          callback({
+            id: 'settings',
+            title: 'Settings',
+            tabType: 'settings',
+            data: { settingsType: 'general' },
+          });
+          callback({ id: 'wv1', title: 'WebView 1', tabType: 'webView', data: webViewDef });
           return undefined;
         },
       );
@@ -89,8 +99,8 @@ describe('Dock Layout Component', () => {
       const floated = { id: 'floated', webViewType: 'Type2' } as unknown as WebViewDefinition;
       when(localMockDockLayout.find(anything(), anything())).thenCall(
         (callback: (item: unknown) => boolean) => {
-          callback({ id: 'docked', data: docked });
-          callback({ id: 'floated', data: floated });
+          callback({ id: 'docked', title: 'Docked', tabType: 'webView', data: docked });
+          callback({ id: 'floated', title: 'Floated', tabType: 'webView', data: floated });
           return undefined;
         },
       );
