@@ -88,19 +88,23 @@ single `logger.debug` entry containing:
 - WebView ID
 - Per-string section (`styles` / `content`), each unique `{ original, replacement }` pair and
   its occurrence count
+- Per-pass timing (how long each of the three regex passes took, in ms)
+- Total transformation time across both strings (in ms)
 
 Example:
 
 ```
-[web-view] Legacy color var replacements in WebView abc123:
+[web-view] Legacy color var replacements in WebView abc123 (total: 2.4ms):
   styles (2 replacements):
     hsl(var(--background)) → var(--background)  ×2
+    pass 1: 0.1ms, pass 2: 0.1ms, pass 3: 0.3ms
   content (3 replacements):
     hsl(var(--ring) / 0.5) → color-mix(in oklab, var(--ring) 50%, transparent)  ×1
     hsl(var(--foreground)) → var(--foreground)  ×2
+    pass 1: 0.2ms, pass 2: 0.4ms, pass 3: 1.3ms
 ```
 
-If zero replacements total, nothing is logged.
+Timing uses `performance.now()`. If zero replacements total, nothing is logged.
 
 ## Known Gaps
 
