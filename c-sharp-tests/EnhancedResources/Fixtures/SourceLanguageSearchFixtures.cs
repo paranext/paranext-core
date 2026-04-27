@@ -17,7 +17,15 @@ internal static class SourceLanguageSearchFixtures
     /// Builds a SourceLanguageData record with proper dual indexing:
     /// ByLemma keyed by native script (e.g. "λόγος"), ByTranslit keyed by
     /// Latin transliteration (e.g. "logos"). The same LexiconEntry instances
-    /// appear in both indexes (mirrors what MarbleSourceLanguageLoader produces).
+    /// appear in both indexes.
+    /// <para>
+    /// Production currently populates only ByLemma (NFD-normalized) via
+    /// MarbleLexiconLoader; ByTranslit is empty until PT9's GreekTrans /
+    /// HebrewTrans utilities (PT9 modTransliteration, consumed at
+    /// MarbleDataAccess.cs:1459-1479) are ported. These fixtures still
+    /// populate both so SourceLanguageSearchService can be unit-tested in
+    /// isolation against the full ByLemma-or-ByTranslit selection logic.
+    /// </para>
     /// Entries:
     /// "λόγος" / "logos" - Greek word appearing in multiple NT books.
     /// "ἀγάπη" / "agape" - Greek word for love.

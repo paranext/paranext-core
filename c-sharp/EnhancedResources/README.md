@@ -28,10 +28,11 @@ ScrTextCollection.ResourcesDirectory + {SettingsDirectory}/_resourcesById/
         MarbleDataLoader.LoadAsync
                   |
                   +--> MarblePackageDiscoverer        --> (BiblePackages, ResearchPackages)
-                  +--> MarbleLexiconLoader            --> (DictionaryData, GlossData)  [SDBG/SDBH/DCLEX]
+                  +--> MarbleLexiconLoader            --> LexiconLoadResult            [SDBG/SDBH/DCLEX]
+                  |                                       (DictionaryData + GlossData
+                  |                                        + SourceLanguageData via <LEXReferences>)
                   +--> MarbleEncyclopediaLoader       --> EncyclopediaData             [MBL_ENC]
                   +--> MarbleImageIndexLoader         --> MediaData                    [IMG_INDX]
-                  +--> MarbleSourceLanguageLoader     --> SourceLanguageData           [GNT/BHS/LXXDC]
                   +--> MarbleLanguageMapBuilder       --> LanguageMapping
                   v
             MarbleData record

@@ -238,7 +238,7 @@ internal class MarbleDataLoaderTests
         var nets = MarbleTestHelper.CreateFakeMarbleScrText("NETS");
         var sdbhScrText = MarbleTestHelper.CreateFakeMarbleScrText("SDBH");
         var sdbhPackage = new FakeMarblePackage("SDBH", isResearchData: true).WithFile(
-            "Lexicon.xml",
+            "SDBH.XML",
             MinimalLexiconXml()
         );
 
@@ -276,6 +276,6 @@ internal class MarbleDataLoaderTests
     private static string MinimalLexiconXml() =>
         @"<?xml version=""1.0""?>
 <Lexicon_Main>
-  <Lexicon_Entry Code=""x""><Lemma>x</Lemma></Lexicon_Entry>
+  <Lexicon_Entry Id=""x"" Lemma=""x"" />
 </Lexicon_Main>";
 }

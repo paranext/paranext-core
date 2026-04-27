@@ -860,4 +860,68 @@ internal class MarbleTokenParserTests
     }
 
     #endregion
+
+    #region Standard-USX Attribute Fallback
+
+    // PT9 marble bibles emit `<chapter chapter="N">` (and the verse element
+    // carries `pubnumber`). Real .usx files in the user's marble bible packages
+    // use the standard USX attribute names instead - `<chapter number="N">` and
+    // `<verse number="N">`. PT9 MarbleDataParser.cs:75-79 falls back from
+    // `chapter` to `number` for chapter tokens; we mirror that and additionally
+    // accept `number` for verse so non-marble USX still produces verse tokens.
+    //
+    // Without this fallback, currentChapter/currentVerse trackers stay 0 in
+    // ScopeFilterService and dictionary/encyclopedia lookups never match the
+    // requested verse - the regression that landed dictionary/encyclopedia
+    // smoke results at items=0.
+
+    [Test]
+    [Category("Regression")]
+    [Property("CapabilityId", "CAP-002")]
+    public void Parse_ChapterUsesUsxNumberAttribute_ProducesChapterText()
+    {
+        // Chapter / verse / etc. live as children of <usx_book>, matching the
+        // shape produced by real .usx packages.
+        const string xml =
+            @"<usx version=""2.6"">
+  <usx_book code=""JHN"" style=""id"">
+    <chapter number=""1"" style=""c"" />
+    <verse number=""1"" style=""v"" />
+  </usx_book>
+</usx>";
+
+        MarbleToken[] tokens = MarbleTokenParser.Parse(xml, "TEST", 43, 1);
+
+        MarbleToken chapter = tokens.First(t => t.Type == MarbleTokenType.Chapter);
+        Assert.That(
+            chapter.Text,
+            Is.EqualTo("1"),
+            "USX `number` attribute must populate Chapter.Text"
+        );
+        MarbleToken verse = tokens.First(t => t.Type == MarbleTokenType.Verse);
+        Assert.That(verse.Text, Is.EqualTo("1"), "USX `number` attribute must populate Verse.Text");
+    }
+
+    [Test]
+    [Category("Regression")]
+    [Property("CapabilityId", "CAP-002")]
+    public void Parse_ChapterPrefersMarbleAttributeOverUsxNumber_WhenBothPresent()
+    {
+        // Real PT9 marble files include both attributes (the `chapter="N"` form
+        // is marble-specific). The marble form must win so existing behavior
+        // doesn't regress on packages that carry both.
+        const string xml =
+            @"<usx version=""2.6"">
+  <usx_book code=""GEN"" style=""id"">
+    <chapter chapter=""5"" number=""99"" style=""c"" />
+  </usx_book>
+</usx>";
+
+        MarbleToken[] tokens = MarbleTokenParser.Parse(xml, "TEST", 1, 5);
+
+        MarbleToken chapter = tokens.First(t => t.Type == MarbleTokenType.Chapter);
+        Assert.That(chapter.Text, Is.EqualTo("5"), "Marble `chapter` attribute must take priority");
+    }
+
+    #endregion
 }

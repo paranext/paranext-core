@@ -93,7 +93,9 @@ internal static class DictionaryFixtures
 
     /// <summary>
     /// Builds a token provider with a single OT (Genesis 1:1) book scenario whose
-    /// lexical-link token resolves to entry "logos-001" in the default entry data.
+    /// lexical-link token resolves to entry "logos" in the default entry data.
+    /// LexicalLinks shape mirrors real PT9 marble bibles
+    /// (PT9 MarbleLexicalLink.cs:37-47 - "{Dict}:{Lemma}:{BaseFormIdx}{MeaningIdx}").
     /// </summary>
     internal static FakeMarbleBookTokenProvider BuildBookTokenProviderForOtTokens(string resourceId)
     {
@@ -106,7 +108,7 @@ internal static class DictionaryFixtures
                 MarbleTokenType.TextLink,
                 "logos",
                 3,
-                LexicalLinks: ["logos-001:logos:logos-001-s1"]
+                LexicalLinks: ["SDBH:logos:000000"]
             ),
         };
         return new FakeMarbleBookTokenProvider().With(resourceId, bookNum: 1, tokens);
@@ -114,8 +116,8 @@ internal static class DictionaryFixtures
 
     /// <summary>
     /// Builds a token provider with an NT (Matthew 1:1) book scenario whose
-    /// lexical-link tokens resolve to "logos-001" and "kai-001" in the default
-    /// entry data. Includes a deliberate duplicate Index for BHV-353 dedup tests.
+    /// lexical-link tokens resolve to "logos" and "kai" in the default entry
+    /// data. Includes a deliberate duplicate Index for BHV-353 dedup tests.
     /// </summary>
     internal static FakeMarbleBookTokenProvider BuildBookTokenProviderForNtTokens(string resourceId)
     {
@@ -128,29 +130,31 @@ internal static class DictionaryFixtures
                 MarbleTokenType.TextLink,
                 "logos",
                 3,
-                LexicalLinks: ["logos-001:logos:logos-001-s1"]
+                LexicalLinks: ["SDBG:logos:000000"]
             ),
-            new MarbleToken(
-                MarbleTokenType.TextLink,
-                "kai",
-                4,
-                LexicalLinks: ["kai-001:kai:kai-001-s1"]
-            ),
+            new MarbleToken(MarbleTokenType.TextLink, "kai", 4, LexicalLinks: ["SDBG:kai:000000"]),
             // Duplicate of logos token (same Index = 3) for BHV-353 dedup testing.
             new MarbleToken(
                 MarbleTokenType.TextLink,
                 "logos",
                 3,
-                LexicalLinks: ["logos-001:logos:logos-001-s1"]
+                LexicalLinks: ["SDBG:logos:000000"]
             ),
         };
         return new FakeMarbleBookTokenProvider().With(resourceId, bookNum: 40, tokens);
     }
 
+    /// <summary>
+    /// Default entry data keyed by NFD-normalized lemma to match production
+    /// (PT9 MarbleDataAccess.cs:1444 keys cachedLemmaToEntry on the FormD lemma;
+    /// MarbleLexiconLoader does the same). Sense ids retain their PT9 form
+    /// ("logos-001-s1") because senses are still identified by EntryCode
+    /// inside the entry, not by the entry-level numeric Id.
+    /// </summary>
     internal static Dictionary<string, DictionaryEntryRecord> BuildDefaultEntryData() =>
         new()
         {
-            ["logos-001"] = new DictionaryEntryRecord(
+            ["logos"] = new DictionaryEntryRecord(
                 Lemma: "logos",
                 Senses:
                 [
@@ -177,7 +181,7 @@ internal static class DictionaryFixtures
                 Morphology: "Noun",
                 SubItemIds: ["logos-001-s1", "logos-001-s2"]
             ),
-            ["kai-001"] = new DictionaryEntryRecord(
+            ["kai"] = new DictionaryEntryRecord(
                 Lemma: "kai",
                 Senses:
                 [

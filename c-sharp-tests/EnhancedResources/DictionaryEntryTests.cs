@@ -53,7 +53,7 @@ internal class DictionaryEntryTests
     public void GetDictionaryEntry_ValidEntry_ReturnsStructuredDto()
     {
         // Arrange: Request a known dictionary entry
-        var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -113,7 +113,7 @@ internal class DictionaryEntryTests
     {
         // Arrange: Valid entry but non-existent sub-item
         var input = new DictionaryEntryInput(
-            EntryId: "logos-001",
+            EntryId: "logos",
             GlossLanguage: "en",
             SubItemId: "nonexistent-sub-item"
         );
@@ -134,7 +134,7 @@ internal class DictionaryEntryTests
         );
         Assert.That(
             ex.Message,
-            Does.Contain("logos-001"),
+            Does.Contain("logos"),
             "Error message must contain the parent entryId for context"
         );
     }
@@ -152,7 +152,7 @@ internal class DictionaryEntryTests
     public void GetDictionaryEntry_Senses_HaveRequiredFields()
     {
         // Arrange
-        var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -184,7 +184,7 @@ internal class DictionaryEntryTests
     public void GetDictionaryEntry_Glosses_HaveLanguageAndText()
     {
         // Arrange
-        var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -213,7 +213,7 @@ internal class DictionaryEntryTests
     {
         // Arrange: Request an entry known to have multiple senses
         // (logos has senses: "word" and "message" per the test lexicon)
-        var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -239,7 +239,7 @@ internal class DictionaryEntryTests
     public void GetDictionaryEntry_SemanticDomains_Populated()
     {
         // Arrange: Entry with known semantic domain associations
-        var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -269,7 +269,7 @@ internal class DictionaryEntryTests
     public void GetDictionaryEntry_NoSemanticDomains_ReturnsEmptyList()
     {
         // Arrange: Entry without semantic domain associations (e.g., a conjunction)
-        var input = new DictionaryEntryInput(EntryId: "kai-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "kai", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -296,7 +296,7 @@ internal class DictionaryEntryTests
     public void GetDictionaryEntry_RelatedLexemes_HaveRequiredFields()
     {
         // Arrange: Entry with known related lexemes
-        var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -341,7 +341,7 @@ internal class DictionaryEntryTests
     public void GetDictionaryEntry_RelatedLexemes_ExcludesSelf()
     {
         // Arrange
-        var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -366,7 +366,7 @@ internal class DictionaryEntryTests
     {
         // Arrange: Entry with no shared glosses or semantic domains
         // (kai has unique gloss "and" and no domains)
-        var input = new DictionaryEntryInput(EntryId: "kai-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "kai", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -393,7 +393,7 @@ internal class DictionaryEntryTests
     public void GetDictionaryEntry_Morphology_IsPopulated()
     {
         // Arrange
-        var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -419,7 +419,7 @@ internal class DictionaryEntryTests
     public void GetDictionaryEntry_NoHtmlInOutput()
     {
         // Arrange
-        var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -520,7 +520,7 @@ internal class DictionaryEntryTests
     {
         // Arrange: Valid entry, invalid sub-item
         var input = new DictionaryEntryInput(
-            EntryId: "logos-001",
+            EntryId: "logos",
             GlossLanguage: "en",
             SubItemId: "bad-sub-item"
         );
@@ -536,7 +536,7 @@ internal class DictionaryEntryTests
         );
         Assert.That(
             ex.Message,
-            Is.EqualTo("Dictionary sub-item 'bad-sub-item' not found in entry 'logos-001'"),
+            Is.EqualTo("Dictionary sub-item 'bad-sub-item' not found in entry 'logos'"),
             "Error message must match the specified format exactly"
         );
     }
@@ -594,7 +594,7 @@ internal class DictionaryEntryTests
     public void GetDictionaryEntry_ReturnedEntryId_MatchesInput()
     {
         // Arrange
-        var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);
@@ -602,7 +602,7 @@ internal class DictionaryEntryTests
         // Assert
         Assert.That(
             result.EntryId,
-            Is.EqualTo("logos-001"),
+            Is.EqualTo("logos"),
             "Returned EntryId must match the requested EntryId"
         );
     }
@@ -620,7 +620,7 @@ internal class DictionaryEntryTests
     public void GetDictionaryEntry_GlossLanguage_AffectsGlossContent()
     {
         // Arrange: Request with English glosses
-        var input = new DictionaryEntryInput(EntryId: "logos-001", GlossLanguage: "en");
+        var input = new DictionaryEntryInput(EntryId: "logos", GlossLanguage: "en");
 
         // Act
         var result = BuildService().GetDictionaryEntry(input);

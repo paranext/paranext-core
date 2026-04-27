@@ -57,6 +57,18 @@ internal sealed class MarblePackageDiscoverer
             filesToLoad.AddRange(EnumerateMarbleFiles(ext));
         filesToLoad.AddRange(EnumerateFilteredV1Bibles(v2BibleShortNames));
 
+        // Note: matches PT9 behavior in skipping .miv1z image binaries when V2
+        // mode is on. We considered loading orphaned .miv1z image packages
+        // (e.g. user has IMG_HD.miv1z + IMG_THMB.miv2z) so that "full" image
+        // fetches could pull from IMG_HD instead of falling back to IMG_THMB,
+        // but V1 image packages use the legacy descriptive-filename scheme
+        // ("Bolen/Aaron - Jebel Haroun, ... tb053008887.jpg") while V2
+        // IMAGES_V2.XML metadata carries only the new ID-based names
+        // ("BOLEN/BOL-0328_fox.jpg"). Without parsing OriginalFileName /
+        // OriginalPath from IMAGES_V2.XML and translating collection-name
+        // case ("BOLEN" -> "Bolen") at fetch time, V1 files stay orphaned
+        // even when loaded - so we leave them out for now.
+
         // Phase 4: delete V1 files that have V2 counterparts (guarded by skipV1Deletion).
         if (!_skipV1Deletion)
         {

@@ -34,19 +34,30 @@ internal class MarbleDataLoader : IMarbleDataLoader
         "BHS",
     ];
 
-    private readonly string _resourcesDirectory;
-    private readonly string _resourcesByIdDirectory;
+    // Null in the default-constructor case = "resolve from ScrTextCollection at
+    // LoadCore time". The Program.cs startup constructs MarbleDataLoader before
+    // LocalParatextProjects.Initialize() runs (Task.WhenAll on InitializeAsync),
+    // so reading ScrTextCollection at construction time throws NullReferenceException
+    // out of Path.Combine. The background load task in EnhancedResourceFactory
+    // runs after Task.WhenAll completes, so deferring the read is safe.
+    private readonly string? _resourcesDirectory;
+    private readonly string? _resourcesByIdDirectory;
     private readonly bool _skipV1Deletion;
 
     /// <summary>
-    /// Default production constructor. Reads directories from ScrTextCollection.
+    /// Default production constructor. Defers reading
+    /// <see cref="ScrTextCollection.ResourcesDirectory"/> /
+    /// <see cref="ScrTextCollection.SettingsDirectory"/> until
+    /// <see cref="LoadCore"/> runs - construction must succeed before
+    /// <see cref="ParatextGlobals"/>.<c>Initialize</c> has populated the
+    /// ScrTextCollection statics.
     /// </summary>
     public MarbleDataLoader()
-        : this(
-            ScrTextCollection.ResourcesDirectory,
-            Path.Combine(ScrTextCollection.SettingsDirectory, "_resourcesById"),
-            skipV1Deletion: false
-        ) { }
+    {
+        _resourcesDirectory = null;
+        _resourcesByIdDirectory = null;
+        _skipV1Deletion = false;
+    }
 
     /// <summary>
     /// Test / smoke-check constructor. Accepts explicit directory paths and the
@@ -86,12 +97,17 @@ internal class MarbleDataLoader : IMarbleDataLoader
     /// </summary>
     protected virtual MarbleData LoadCore()
     {
-        Console.WriteLine($"Enhanced Resources: scanning {_resourcesDirectory}");
+        var resourcesDirectory = _resourcesDirectory ?? ScrTextCollection.ResourcesDirectory;
+        var resourcesByIdDirectory =
+            _resourcesByIdDirectory
+            ?? Path.Combine(ScrTextCollection.SettingsDirectory, "_resourcesById");
+
+        Console.WriteLine($"Enhanced Resources: scanning {resourcesDirectory}");
 
         // Phase 1: Discover packages.
         var discoverer = new MarblePackageDiscoverer(
-            _resourcesDirectory,
-            _resourcesByIdDirectory,
+            resourcesDirectory,
+            resourcesByIdDirectory,
             _skipV1Deletion
         );
         var discovery = discoverer.Discover();
@@ -139,10 +155,12 @@ internal class MarbleDataLoader : IMarbleDataLoader
             discovery.BiblePackages.Select(b => b.Name),
             StringComparer.OrdinalIgnoreCase
         );
-        var (dictionaryData, glossData) = SafeLoadLexicon(researchPackages, knownBibleIds);
+        var lexiconResult = SafeLoadLexicon(researchPackages, knownBibleIds);
+        var dictionaryData = lexiconResult.Dictionary;
+        var glossData = lexiconResult.Gloss;
+        var sourceLanguageData = lexiconResult.SourceLanguage;
         var encyclopediaData = SafeLoadEncyclopedia(researchPackages, discovery, knownBibleIds);
-        var mediaData = SafeLoadMediaIndex(researchPackages, discovery);
-        var sourceLanguageData = SafeLoadSourceLanguages(researchPackages);
+        var mediaData = SafeLoadMediaIndex(researchPackages, discovery, knownBibleIds);
         var languageMapping = MarbleLanguageMapBuilder.Build(glossData);
 
         // Phase 4: Required-projects check (PT9 parity).
@@ -197,7 +215,7 @@ internal class MarbleDataLoader : IMarbleDataLoader
     protected virtual IMarblePackage WrapResearchPackage(ResourceScrText scrText) =>
         new MarblePackage(scrText);
 
-    private static (DictionaryData, GlossData) SafeLoadLexicon(
+    private static LexiconLoadResult SafeLoadLexicon(
         IReadOnlyDictionary<string, IMarblePackage> research,
         IReadOnlySet<string> knownBibleIds
     )
@@ -209,7 +227,11 @@ internal class MarbleDataLoader : IMarbleDataLoader
         catch (Exception e)
         {
             Console.WriteLine($"Enhanced Resources: lexicon load failed - {e.Message}");
-            return (DictionaryData.Empty, GlossData.Empty);
+            return new LexiconLoadResult(
+                DictionaryData.Empty,
+                GlossData.Empty,
+                SourceLanguageData.Empty
+            );
         }
     }
 
@@ -236,14 +258,20 @@ internal class MarbleDataLoader : IMarbleDataLoader
 
     private static MediaData SafeLoadMediaIndex(
         IReadOnlyDictionary<string, IMarblePackage> research,
-        DiscoveryResult discovery
+        DiscoveryResult discovery,
+        IReadOnlySet<string> knownBibleIds
     )
     {
         try
         {
             // MarbleImageIndexLoader filters the passed-in map to image-binary project
             // names internally, so we can forward the full research-package map.
-            return MarbleImageIndexLoader.Load(research, research, discovery.HaveVersion2Resources);
+            return MarbleImageIndexLoader.Load(
+                research,
+                research,
+                discovery.HaveVersion2Resources,
+                knownBibleIds
+            );
         }
         catch (Exception e)
         {
@@ -252,18 +280,12 @@ internal class MarbleDataLoader : IMarbleDataLoader
         }
     }
 
-    private static SourceLanguageData SafeLoadSourceLanguages(
-        IReadOnlyDictionary<string, IMarblePackage> research
-    )
-    {
-        try
-        {
-            return MarbleSourceLanguageLoader.Load(research);
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"Enhanced Resources: source-language load failed - {e.Message}");
-            return SourceLanguageData.Empty;
-        }
-    }
+    // Source-language data was previously produced by MarbleSourceLanguageLoader,
+    // which assumed GNT/BHS/LXXDC packages contain a single Lexicon.xml with
+    // <Lexicon_Entry> elements. They don't - those packages are per-book Word XML
+    // files, and the lemma+occurrences index actually lives in the SDBH/SDBG/DCLEX
+    // dictionaries via <LEXReferences> (PT9 MarbleDataAccess.cs:1338-1351 +
+    // MarbleLexiconEntry.cs schema). MarbleLexiconLoader now produces
+    // SourceLanguageData as part of its single-pass dictionary parse, so this
+    // helper is gone.
 }

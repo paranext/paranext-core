@@ -547,6 +547,11 @@ internal class DictionaryServiceTests
             Assert.That(item.Glosses, Is.Not.Null);
             Assert.That(item.PartOfSpeech, Is.Not.Null);
             Assert.That(item.OccurrenceCount, Is.GreaterThanOrEqualTo(1));
+            // EntryId is the NFD-normalized lemma, the same key that
+            // GetDictionaryEntry accepts. ASCII fixture lemmas (e.g. "logos",
+            // "kai") round-trip unchanged through NFD; assert the lookup key
+            // matches the term so consumers can drill down via readDictionaryEntry.
+            Assert.That(item.EntryId, Is.EqualTo(item.Term).IgnoreCase);
         }
     }
 

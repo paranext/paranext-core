@@ -47,10 +47,16 @@ internal static class MarbleImageIndexLoader
     /// <c>MediaService.FetchImageBytes</c> can later resolve binary files.</param>
     /// <param name="haveVersion2Resources">V2-presence flag from the discoverer.
     /// Drives the V1 vs V2 index-file selection.</param>
+    /// <param name="knownBibleIds">Bible-package short names from the discoverer
+    /// (e.g. "ESV16UK+", "UBSGNT5+"). Marble images aren't packaged per-bible -
+    /// the IMG_INDX index covers all installed bibles - so MediaService accepts
+    /// any installed bible as a valid resourceId, mirroring DictionaryData's
+    /// model. Without this set, callers would have to pass "IMG_INDX" verbatim.</param>
     public static MediaData Load(
         IReadOnlyDictionary<string, IMarblePackage> researchPackages,
         IReadOnlyDictionary<string, IMarblePackage> imageProjects,
-        bool haveVersion2Resources
+        bool haveVersion2Resources,
+        IReadOnlySet<string> knownBibleIds
     )
     {
         if (!researchPackages.TryGetValue(ImageIndexName, out var indexPackage))
@@ -64,13 +70,7 @@ internal static class MarbleImageIndexLoader
             Console.WriteLine(
                 "Enhanced Resources: warning - IMG_INDX has neither IMAGES.XML nor IMAGES_V2.XML; producing empty MediaData"
             );
-            return MediaData.Empty with
-            {
-                KnownResourceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ImageIndexName,
-                },
-            };
+            return MediaData.Empty with { KnownResourceIds = BuildKnownIds([], knownBibleIds) };
         }
 
         List<MediaDisplayItem> images;
@@ -86,13 +86,7 @@ internal static class MarbleImageIndexLoader
             Console.WriteLine(
                 $"Enhanced Resources: warning - failed to parse {indexFileName} from IMG_INDX: {e.Message}"
             );
-            return MediaData.Empty with
-            {
-                KnownResourceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ImageIndexName,
-                },
-            };
+            return MediaData.Empty with { KnownResourceIds = BuildKnownIds([], knownBibleIds) };
         }
 
         // Preserve only image-binary project entries in MediaData.ImageProjects.
@@ -108,17 +102,24 @@ internal static class MarbleImageIndexLoader
             }
         }
 
-        var knownIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ImageIndexName };
-        foreach (var key in imageBinaryFiltered.Keys)
-        {
-            knownIds.Add(key);
-        }
-
         return new MediaData(
             Images: images,
             ImageProjects: imageBinaryFiltered,
-            KnownResourceIds: knownIds
+            KnownResourceIds: BuildKnownIds(imageBinaryFiltered.Keys, knownBibleIds)
         );
+    }
+
+    private static HashSet<string> BuildKnownIds(
+        IEnumerable<string> imageBinaryNames,
+        IReadOnlySet<string> bibleIds
+    )
+    {
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ImageIndexName };
+        foreach (var name in imageBinaryNames)
+            ids.Add(name);
+        foreach (var bibleId in bibleIds)
+            ids.Add(bibleId);
+        return ids;
     }
 
     private static string? SelectIndexFileName(IMarblePackage package, bool haveVersion2Resources)
@@ -171,50 +172,149 @@ internal static class MarbleImageIndexLoader
                 (string?)image.Element("Caption") ?? Path.GetFileNameWithoutExtension(fileName);
             var languageCode = (string?)image.Element("LanguageCode") ?? "en";
 
-            var startRef = ParseVerseRef((string?)image.Element("StartRef"));
-            var endRef = ParseVerseRef((string?)image.Element("EndRef"));
+            // Extract every <References>/<Reference> string. A single image can carry
+            // multiple ranges; emit one MediaDisplayItem per range so the per-verse
+            // filter naturally handles overlap-with-current-verse matching.
+            // PT9 schema: MarbleImageData.cs:231-232 (XmlArrayItem("Reference") on
+            // List<string> References). Format is "BBBCCCVVV<5-digit word offset>"
+            // optionally with "-BBBCCCVVV<5-digit word offset>" suffix for ranges
+            // (PT9 MarbleImageData.cs:44-67).
+            var referencesEl = image.Element("References");
+            if (referencesEl is null)
+                continue;
 
-            yield return new MediaDisplayItem(
-                ImageId: id,
-                ImageSource: $"papi-er://images/{id}?size=full",
-                Title: caption,
-                ThumbnailSource: $"papi-er://images/{id}",
-                StartRef: startRef,
-                EndRef: endRef,
-                Collection: collection,
-                LanguageCode: languageCode,
-                DisplayIndex: displayIndex++,
-                Path: path,
-                FileName: fileName
-            );
+            foreach (var refStr in referencesEl.Elements("Reference").Select(e => e.Value))
+            {
+                if (string.IsNullOrWhiteSpace(refStr))
+                    continue;
+                var range = ParseReferenceRange(refStr);
+                if (range is null)
+                    continue;
+
+                yield return new MediaDisplayItem(
+                    ImageId: id,
+                    ImageSource: $"papi-er://images/{id}?size=full",
+                    Title: caption,
+                    ThumbnailSource: $"papi-er://images/{id}",
+                    StartRef: range.Value.Start,
+                    EndRef: range.Value.End,
+                    Collection: collection,
+                    LanguageCode: languageCode,
+                    DisplayIndex: displayIndex++,
+                    Path: path,
+                    FileName: fileName
+                );
+            }
         }
     }
 
-    // PT9 reference format: BBBCCCVVV + 5-digit word offset (14 chars total).
-    private static VerseRef ParseVerseRef(string? reference)
+    // PT9 reference range format (MarbleImageData.cs:44-67):
+    //   "BBBCCCVVV<word>"            - single ref (start = end)
+    //   "BBBCCCVVV<word>-BBBCCCVVV<word>" - explicit range
+    // The 5-digit "word" suffix is a token offset; divide the parsed long by
+    // 100000 to drop it (matches PT9: `(int)(long.Parse(part) / 100000L)`).
+    //
+    // Whole-book / whole-chapter expansion: if the start ref has ChapterNum=0
+    // (whole book) or VerseNum=0 (whole chapter), extend the end ref to the
+    // last verse of its chapter / book so range queries against a single verse
+    // match correctly.
+    private static (VerseRef Start, VerseRef End)? ParseReferenceRange(string refStr)
     {
-        if (string.IsNullOrWhiteSpace(reference) || reference.Length < 9)
-            return new VerseRef(1, 1, 1);
+        var parts = refStr.Split('-');
+        var startBbbcccvvv = ParseRefPart(parts[0]);
+        if (startBbbcccvvv is null)
+            return null;
+        var endBbbcccvvv = parts.Length > 1 ? ParseRefPart(parts[1]) : startBbbcccvvv;
+        if (endBbbcccvvv is null)
+            return null;
 
-        // Parse only BBBCCCVVV; ignore the 5-digit word offset if present.
-        var trimmed = reference.Length > 9 ? reference[..9] : reference;
+        var startRef = ToVerseRef(startBbbcccvvv.Value);
+        var endRef = ToVerseRef(endBbbcccvvv.Value);
+        if (startRef is null || endRef is null)
+            return null;
+
+        var expandedEnd = ExpandEndForPartialRefs(startRef.Value, endRef.Value);
+        return (startRef.Value, expandedEnd);
+    }
+
+    private static int? ParseRefPart(string part)
+    {
+        if (string.IsNullOrWhiteSpace(part))
+            return null;
         if (
-            !int.TryParse(
-                trimmed,
+            !long.TryParse(
+                part,
                 NumberStyles.Integer,
                 CultureInfo.InvariantCulture,
-                out var bbbcccvvv
+                out var withWord
             )
         )
-        {
-            return new VerseRef(1, 1, 1);
-        }
+            return null;
+        return (int)(withWord / 100_000L);
+    }
 
+    private static VerseRef? ToVerseRef(int bbbcccvvv)
+    {
         int book = bbbcccvvv / 1_000_000;
         int chapter = (bbbcccvvv / 1_000) % 1_000;
         int verse = bbbcccvvv % 1_000;
         if (book < 1 || book > Canon.LastBook)
-            return new VerseRef(1, 1, 1);
-        return new VerseRef(book, chapter, verse);
+            return null;
+        try
+        {
+            return new VerseRef(book, chapter, verse);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static VerseRef ExpandEndForPartialRefs(VerseRef startRef, VerseRef endRef)
+    {
+        // Whole book: start.ChapterNum == 0 implies "every chapter". Promote end
+        // to the last verse of the book's last chapter.
+        if (startRef.ChapterNum == 0)
+        {
+            try
+            {
+                var expanded = new VerseRef(
+                    endRef.BookNum,
+                    endRef.LastChapter,
+                    1,
+                    endRef.Versification
+                );
+                return new VerseRef(
+                    expanded.BookNum,
+                    expanded.ChapterNum,
+                    expanded.LastVerse,
+                    expanded.Versification
+                );
+            }
+            catch
+            {
+                return endRef;
+            }
+        }
+        // Whole chapter (or chapter span): start.VerseNum == 0 implies the
+        // entire start chapter. Promote end verse to the last verse of the end
+        // chapter so range queries against a specific verse still match.
+        if (startRef.VerseNum == 0)
+        {
+            try
+            {
+                return new VerseRef(
+                    endRef.BookNum,
+                    endRef.ChapterNum,
+                    endRef.LastVerse,
+                    endRef.Versification
+                );
+            }
+            catch
+            {
+                return endRef;
+            }
+        }
+        return endRef;
     }
 }

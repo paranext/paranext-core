@@ -65,10 +65,15 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
                 $"Lexicon entry '{input.EntryId}' not found"
             );
 
+        // EntryId is treated as a lemma; NFD-normalize to match the loader's
+        // canonical key (PT9 MarbleDataAccess.cs:1444). Accept both NFC and NFD
+        // input - clients that echo back our DictionaryDisplayItem.EntryId pass
+        // NFD already; clients that hand-construct a lemma may pass NFC.
+        var entryKey = input.EntryId.Normalize(System.Text.NormalizationForm.FormD);
         DictionaryEntryRecord? entry = null;
         foreach (var pkg in data.ByDictionary.Values)
         {
-            if (pkg.EntriesById.TryGetValue(input.EntryId, out var found))
+            if (pkg.EntriesById.TryGetValue(entryKey, out var found))
             {
                 entry = found;
                 break;
@@ -120,6 +125,9 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
     {
         // Walk every loaded dictionary, deduping across packages so the same
         // lemma in multiple slices isn't reported repeatedly.
+        // Lexicon is keyed by NFD-normalized lemma (PT9 MarbleDataAccess.cs:1444);
+        // normalize the source so the lookup hits.
+        var sourceKey = sourceLemma.Normalize(System.Text.NormalizationForm.FormD);
         var results = new List<RelatedLexemeData>();
         // Dedup across packages (fixture may share the same lexicon under multiple
         // dictionary ShortNames, and in production DCLEX may overlap SDBG/SDBH).
@@ -128,12 +136,12 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
         var seen = new HashSet<(string Lemma, string Relationship)>();
         foreach (var pkg in data.ByDictionary.Values)
         {
-            if (!pkg.Lexicon.TryGetValue(sourceLemma, out var sourceInfo))
+            if (!pkg.Lexicon.TryGetValue(sourceKey, out var sourceInfo))
                 continue;
 
             foreach (var (lemma, otherInfo) in pkg.Lexicon)
             {
-                if (lemma == sourceLemma)
+                if (lemma == sourceKey)
                     continue;
 
                 var sharedGlosses = sourceInfo.Glosses.Intersect(otherInfo.Glosses).ToList();
@@ -168,11 +176,13 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
 
     private string? FindEntryIdForLemma(string lemma)
     {
+        // EntryId is the NFD-normalized lemma; the dict key already matches
+        // that. Direct lookup beats the previous full-table scan.
+        var lemmaKey = lemma.Normalize(System.Text.NormalizationForm.FormD);
         foreach (var pkg in data.ByDictionary.Values)
         {
-            var match = pkg.EntriesById.FirstOrDefault(kvp => kvp.Value.Lemma == lemma);
-            if (match.Key != null)
-                return match.Key;
+            if (pkg.EntriesById.ContainsKey(lemmaKey))
+                return lemmaKey;
         }
         return null;
     }
@@ -227,13 +237,19 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
             var firstLink = token.LexicalLinks?.FirstOrDefault();
             if (string.IsNullOrEmpty(firstLink))
                 continue;
-            var (lemma, _, entryRef) = ParseLinkEntry(firstLink);
+            var (lemma, _, _) = ParseLinkEntry(firstLink);
 
-            pkg.EntriesById.TryGetValue(entryRef, out var entry);
+            // PT9 keys lexicon entries by NFD-normalized lemma
+            // (MarbleDataAccess.cs:1444). Lemmas in lexical_links carry
+            // whatever normalization the package author chose, so we NFD
+            // here to land on the same key the lexicon loader writes.
+            var lemmaKey = lemma.Normalize(System.Text.NormalizationForm.FormD);
+            pkg.EntriesById.TryGetValue(lemmaKey, out var entry);
 
             items.Add(
                 new DictionaryDisplayItem(
                     TokenId: token.Index.ToString(),
+                    EntryId: lemmaKey,
                     Term: lemma,
                     SourceText: token.Text ?? "",
                     Translit: "",
@@ -291,18 +307,19 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
 
         // Walk every loaded dictionary, but dedupe across packages: if the same
         // lemma appears in SDBG and DCLEX (or any combination), report each
-        // (lemma, RelationType) at most once.
+        // (lemma, RelationType) at most once. Lexicon is NFD-keyed.
+        var sourceKey = sourceLexeme.Normalize(System.Text.NormalizationForm.FormD);
         var results = new List<RelatedLexemeRef>();
         // Same dedup rationale as BuildRelatedLexemes above.
         var seen = new HashSet<(string Lemma, string RelationType)>();
         foreach (var pkg in data.ByDictionary.Values)
         {
-            if (!pkg.Lexicon.TryGetValue(sourceLexeme, out var sourceEntry))
+            if (!pkg.Lexicon.TryGetValue(sourceKey, out var sourceEntry))
                 continue;
 
             foreach (var (lemma, entry) in pkg.Lexicon)
             {
-                if (lemma == sourceLexeme)
+                if (lemma == sourceKey)
                     continue;
 
                 var sharedGlosses = sourceEntry.Glosses.Intersect(entry.Glosses).ToList();

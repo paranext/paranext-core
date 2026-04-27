@@ -14,6 +14,15 @@ internal class MarbleImageIndexLoaderTests
     private static readonly IReadOnlyDictionary<string, IMarblePackage> NoImageProjects =
         new Dictionary<string, IMarblePackage>(StringComparer.OrdinalIgnoreCase);
 
+    private static readonly IReadOnlySet<string> EmptyKnownBibleIds = new HashSet<string>(
+        StringComparer.OrdinalIgnoreCase
+    );
+
+    // Real PT9 IMAGES.XML schema (PT9 MarbleImageData.cs:231-232 - References is
+    // a List<string> with XmlArrayItem("Reference")). Each <Reference> is either
+    // a single 14-char "BBBCCCVVV<5-digit word offset>" or a "start-end" of two
+    // such strings. The loader divides by 100000 to drop the word offset
+    // (PT9 MarbleImageData.cs:47-48).
     private const string ImageIndexV1Xml =
         @"<?xml version=""1.0""?>
 <BibleImages Version=""1.42"">
@@ -23,8 +32,9 @@ internal class MarbleImageIndexLoaderTests
     <FileName>Dromedary.jpg</FileName>
     <Caption>Dromedary</Caption>
     <LanguageCode>en</LanguageCode>
-    <StartRef>00101201600000</StartRef>
-    <EndRef>00101201600000</EndRef>
+    <References>
+      <Reference>00101201600000</Reference>
+    </References>
   </BibleImage>
   <BibleImage Id=""HolyLandMap"">
     <Collection>Satellite Bible Atlas</Collection>
@@ -32,8 +42,9 @@ internal class MarbleImageIndexLoaderTests
     <FileName>HolyLand.jpg</FileName>
     <Caption>Holy Land Map</Caption>
     <LanguageCode>en</LanguageCode>
-    <StartRef>04000100100000</StartRef>
-    <EndRef>04002802000000</EndRef>
+    <References>
+      <Reference>04000100100000-04002802000000</Reference>
+    </References>
   </BibleImage>
 </BibleImages>";
 
@@ -46,8 +57,9 @@ internal class MarbleImageIndexLoaderTests
     <FileName>Dromedary.jpg</FileName>
     <Caption>Dromedary (v2)</Caption>
     <LanguageCode>en</LanguageCode>
-    <StartRef>00101201600000</StartRef>
-    <EndRef>00101201600000</EndRef>
+    <References>
+      <Reference>00101201600000</Reference>
+    </References>
   </BibleImage>
 </BibleImages>";
 
@@ -60,8 +72,9 @@ internal class MarbleImageIndexLoaderTests
     <FileName>Dromedary.jpg</FileName>
     <Caption>Dromedary</Caption>
     <LanguageCode>en</LanguageCode>
-    <StartRef>00101201600000</StartRef>
-    <EndRef>00101201600000</EndRef>
+    <References>
+      <Reference>00101201600000</Reference>
+    </References>
   </BibleImage>
 </BibleImages>";
 
@@ -73,7 +86,8 @@ internal class MarbleImageIndexLoaderTests
         var result = MarbleImageIndexLoader.Load(
             researchPackages: research,
             imageProjects: NoImageProjects,
-            haveVersion2Resources: false
+            haveVersion2Resources: false,
+            knownBibleIds: EmptyKnownBibleIds
         );
 
         Assert.That(result.Images, Is.Empty);
@@ -96,7 +110,8 @@ internal class MarbleImageIndexLoaderTests
         var result = MarbleImageIndexLoader.Load(
             research,
             NoImageProjects,
-            haveVersion2Resources: false
+            haveVersion2Resources: false,
+            knownBibleIds: EmptyKnownBibleIds
         );
 
         Assert.That(result.Images.Count, Is.EqualTo(2));
@@ -126,7 +141,8 @@ internal class MarbleImageIndexLoaderTests
         var result = MarbleImageIndexLoader.Load(
             research,
             NoImageProjects,
-            haveVersion2Resources: true
+            haveVersion2Resources: true,
+            knownBibleIds: EmptyKnownBibleIds
         );
 
         Assert.That(
@@ -153,7 +169,8 @@ internal class MarbleImageIndexLoaderTests
         var result = MarbleImageIndexLoader.Load(
             research,
             NoImageProjects,
-            haveVersion2Resources: true
+            haveVersion2Resources: true,
+            knownBibleIds: EmptyKnownBibleIds
         );
 
         Assert.That(
@@ -183,7 +200,8 @@ internal class MarbleImageIndexLoaderTests
                 MarbleImageIndexLoader.Load(
                     research,
                     NoImageProjects,
-                    haveVersion2Resources: false
+                    haveVersion2Resources: false,
+                    knownBibleIds: EmptyKnownBibleIds
                 ),
             "Loader must not attempt to read video files."
         );
@@ -204,7 +222,8 @@ internal class MarbleImageIndexLoaderTests
         var result = MarbleImageIndexLoader.Load(
             research,
             NoImageProjects,
-            haveVersion2Resources: false
+            haveVersion2Resources: false,
+            knownBibleIds: EmptyKnownBibleIds
         );
 
         Assert.That(
@@ -239,7 +258,8 @@ internal class MarbleImageIndexLoaderTests
         var result = MarbleImageIndexLoader.Load(
             research,
             imageProjects,
-            haveVersion2Resources: false
+            haveVersion2Resources: false,
+            knownBibleIds: EmptyKnownBibleIds
         );
 
         Assert.That(
@@ -268,7 +288,8 @@ internal class MarbleImageIndexLoaderTests
         var result = MarbleImageIndexLoader.Load(
             research,
             NoImageProjects,
-            haveVersion2Resources: false
+            haveVersion2Resources: false,
+            knownBibleIds: EmptyKnownBibleIds
         );
 
         Assert.That(

@@ -108,12 +108,25 @@ internal static class MarbleTokenParser
         switch (element.Name.LocalName)
         {
             case "chapter":
-                string chapterNum = element.Attribute("chapter")?.Value ?? "";
+                // PT9 MarbleDataParser.cs:75-79: prefer the marble-specific
+                // `chapter` attribute, fall back to standard USX `number`.
+                // Without this fallback, chapter tokens carry empty text and
+                // ScopeFilterService.CurrentVerse never matches anything (the
+                // currentChapter tracker stays 0).
+                string chapterNum =
+                    element.Attribute("chapter")?.Value ?? element.Attribute("number")?.Value ?? "";
                 tokens.Add(new MarbleToken(MarbleTokenType.Chapter, chapterNum, index++));
                 break;
 
             case "verse":
-                string verseNum = element.Attribute("pubnumber")?.Value ?? "";
+                // PT9 MarbleDataParser.cs:90-92 reads only `pubnumber`. Marble
+                // bibles emit pubnumber explicitly; standard USX uses `number`,
+                // which we accept as a fallback so non-marble bibles still
+                // produce verse tokens.
+                string verseNum =
+                    element.Attribute("pubnumber")?.Value
+                    ?? element.Attribute("number")?.Value
+                    ?? "";
                 tokens.Add(new MarbleToken(MarbleTokenType.Verse, verseNum, index++));
                 break;
 
