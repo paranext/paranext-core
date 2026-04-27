@@ -48,10 +48,33 @@ internal sealed class MarbleDataAccessService
     /// <summary>
     /// Looks up localized glosses for a term lemma with language fallback:
     /// requested language -> mapped variant (e.g. zh-Hant -> zh-Hans) -> English.
+    /// Searches the union of all dictionaries; callers with dictionary context
+    /// should use the <paramref name="dictionary"/> overload to avoid surfacing
+    /// senses authored by the wrong dictionary.
     /// </summary>
     public IList<string> FindLocalizedGlossesForTerm(string termLemma, string language)
     {
         return FindGlossesWithLanguage(termLemma, language).Glosses;
+    }
+
+    /// <summary>
+    /// Dictionary-scoped gloss lookup. PT9's <c>FindLocalizedGlossesForTerm</c>
+    /// is reference-driven and routes lemma fallback through
+    /// <c>GetDictionaryProject(bookNum)</c> so a Greek lemma in deuterocanonical
+    /// text resolves against DCLEX, not SDBG (MarbleDataAccess.cs:373-376,
+    /// 387-430). PT10 callers that know the source dictionary - typically from
+    /// a token's <c>lexical_links</c> attribute carrying
+    /// <c>"Dict:Lemma:Indices"</c> - pass it here so the resolved gloss matches
+    /// the authoring dictionary. Falls back to the union view if the dictionary
+    /// is empty or unknown so unqualified callers continue to get a result.
+    /// </summary>
+    public IList<string> FindLocalizedGlossesForTerm(
+        string termLemma,
+        string language,
+        string? dictionary
+    )
+    {
+        return FindGlossesWithLanguage(termLemma, language, dictionary).Glosses;
     }
 
     /// <summary>
@@ -71,33 +94,73 @@ internal sealed class MarbleDataAccessService
     internal (IList<string> Glosses, string ResolvedLanguage) FindGlossesWithLanguage(
         string termLemma,
         string language
+    ) => FindGlossesWithLanguage(termLemma, language, dictionary: null);
+
+    /// <summary>
+    /// Dictionary-scoped variant of <see cref="FindGlossesWithLanguage(string, string)"/>.
+    /// When <paramref name="dictionary"/> is non-null and that dictionary has
+    /// loaded gloss data, the language fallback chain (requested -> mapped ->
+    /// English) is walked against the per-dictionary table. If the dictionary
+    /// is null, unknown, or has no entry for this lemma at any language in the
+    /// chain, the search falls back to the cross-dictionary union view so
+    /// callers without precise dictionary context still get a result.
+    /// </summary>
+    internal (IList<string> Glosses, string ResolvedLanguage) FindGlossesWithLanguage(
+        string termLemma,
+        string language,
+        string? dictionary
     )
     {
         if (!HaveMarbleData)
             return ([], string.Empty);
 
-        if (TryGetGlosses(termLemma, language, out var glosses))
+        if (
+            !string.IsNullOrEmpty(dictionary)
+            && _glossData.ByDictionary is { } byDict
+            && byDict.TryGetValue(dictionary, out var dictView)
+        )
+        {
+            var dictResult = FindInView(dictView, termLemma, language);
+            if (dictResult.Glosses.Count > 0)
+                return dictResult;
+        }
+
+        return FindInView(_glossData.ByLanguage, termLemma, language);
+    }
+
+    private (IList<string> Glosses, string ResolvedLanguage) FindInView(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> view,
+        string termLemma,
+        string language
+    )
+    {
+        if (TryGetGlosses(view, termLemma, language, out var glosses))
             return (glosses, language);
 
         if (
             _languageMapping.Variants.TryGetValue(language, out var mappedLanguage)
-            && TryGetGlosses(termLemma, mappedLanguage, out glosses)
+            && TryGetGlosses(view, termLemma, mappedLanguage, out glosses)
         )
             return (glosses, mappedLanguage);
 
         if (
             !string.Equals(language, "en", StringComparison.OrdinalIgnoreCase)
-            && TryGetGlosses(termLemma, "en", out glosses)
+            && TryGetGlosses(view, termLemma, "en", out glosses)
         )
             return (glosses, "en");
 
         return ([], string.Empty);
     }
 
-    private bool TryGetGlosses(string termLemma, string language, out IList<string> glosses)
+    private static bool TryGetGlosses(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> view,
+        string termLemma,
+        string language,
+        out IList<string> glosses
+    )
     {
         if (
-            _glossData.ByLanguage.TryGetValue(language, out var byLemma)
+            view.TryGetValue(language, out var byLemma)
             && byLemma.TryGetValue(termLemma, out var glossList)
         )
         {

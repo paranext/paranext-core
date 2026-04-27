@@ -74,7 +74,7 @@ internal sealed partial class EncyclopediaService(
             var firstLexicalLink = token.LexicalLinks?.FirstOrDefault();
             if (string.IsNullOrEmpty(firstLexicalLink))
                 continue;
-            var (lemma, _, _) = ParseLexLinkEntry(firstLexicalLink);
+            var (lemma, _, _, dictionary) = ParseLexLinkEntry(firstLexicalLink);
 
             var thematicIds = token.ThematicLinks ?? [];
             if (thematicIds.Count == 0)
@@ -139,7 +139,11 @@ internal sealed partial class EncyclopediaService(
                     Lemma: lemma,
                     SourceText: token.Text ?? "",
                     Translit: "",
-                    Glosses: marbleData.FindLocalizedGlossesForTerm(lemma, input.UserLanguage),
+                    Glosses: marbleData.FindLocalizedGlossesForTerm(
+                        lemma,
+                        input.UserLanguage,
+                        dictionary
+                    ),
                     Entries: entryRefs,
                     ImageIds: imageIds,
                     Collection: collection
@@ -196,12 +200,21 @@ internal sealed partial class EncyclopediaService(
         return result;
     }
 
-    private static (string Lemma, string SenseId, string EntryRef) ParseLexLinkEntry(string entry)
+    // PT9 lexical_links carry "Dict:Lemma:Indices" (PT9 MarbleLexicalLink.cs:37-47).
+    // The Dictionary slot is the authoring research dictionary (SDBH/SDBG/DCLEX)
+    // used to route gloss lookups; absent for malformed legacy data.
+    private static (
+        string Lemma,
+        string SenseId,
+        string EntryRef,
+        string? Dictionary
+    ) ParseLexLinkEntry(string entry)
     {
         var parts = entry.Split(':');
+        var dictionary = parts.Length >= 1 && parts[0].Length > 0 ? parts[0] : null;
         var lemma = parts.Length >= 2 ? parts[1] : "";
         var senseId = parts.Length >= 3 ? parts[2] : "";
-        return (lemma, senseId, entry);
+        return (lemma, senseId, entry, dictionary);
     }
 
     private static string GetEmptyStateMessage(EncyclopediaLoadInput input) =>

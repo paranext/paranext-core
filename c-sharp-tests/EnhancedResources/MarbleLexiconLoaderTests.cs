@@ -97,8 +97,14 @@ internal class MarbleLexiconLoaderTests
     }
 
     [Test]
-    public void Load_GlossCollision_SdbhWinsOverDclex()
+    public void Load_LemmaInBothDicts_UnionsGlossesAndPreservesPerDictionaryView()
     {
+        // PT9 keeps each MarbleScrText's cachedLemmaToEntry separate
+        // (MarbleDataAccess.cs:1401-1456) so a Greek lemma authored by both
+        // SDBG and DCLEX surfaces the dict-specific sense in each context. PT10
+        // mirrors that with a per-dictionary view; the union view is what
+        // unqualified callers (e.g. findLocalizedGlosses with no dict context)
+        // see, and it must include both dicts' glosses to avoid silent loss.
         var sdbh = new FakeMarblePackage("SDBH", isResearchData: true).WithFile(
             "SDBH.XML",
             BuildLexiconXml("gamal", "camel")
@@ -117,9 +123,41 @@ internal class MarbleLexiconLoaderTests
 
         Assert.That(
             gloss.ByLanguage["en"]["gamal"],
-            Is.EquivalentTo(new[] { "camel" }),
-            "SDBH should win over DCLEX per spec Section 6"
+            Is.EquivalentTo(new[] { "camel", "beast-of-burden" }),
+            "Union view must surface every dictionary's sense - no silent drops"
         );
+        Assert.That(gloss.ByDictionary, Is.Not.Null);
+        Assert.That(gloss.ByDictionary!["SDBH"]["en"]["gamal"], Is.EquivalentTo(new[] { "camel" }));
+        Assert.That(
+            gloss.ByDictionary["DCLEX"]["en"]["gamal"],
+            Is.EquivalentTo(new[] { "beast-of-burden" })
+        );
+    }
+
+    [Test]
+    public void Load_LemmaInOneDict_PerDictViewIsolatesDictionaries()
+    {
+        var sdbg = new FakeMarblePackage("SDBG", isResearchData: true).WithFile(
+            "SDBG.XML",
+            BuildLexiconXml("logos", "word")
+        );
+        var dclex = new FakeMarblePackage("DCLEX", isResearchData: true).WithFile(
+            "DCLEX.XML",
+            BuildLexiconXml("sophia", "wisdom")
+        );
+        var research = new Dictionary<string, IMarblePackage>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SDBG"] = sdbg,
+            ["DCLEX"] = dclex,
+        };
+
+        var gloss = MarbleLexiconLoader.Load(research, EmptyKnownBibleIds).Gloss;
+
+        Assert.That(gloss.ByDictionary, Is.Not.Null);
+        Assert.That(gloss.ByDictionary!["SDBG"]["en"], Does.ContainKey("logos"));
+        Assert.That(gloss.ByDictionary["SDBG"]["en"], Does.Not.ContainKey("sophia"));
+        Assert.That(gloss.ByDictionary["DCLEX"]["en"], Does.ContainKey("sophia"));
+        Assert.That(gloss.ByDictionary["DCLEX"]["en"], Does.Not.ContainKey("logos"));
     }
 
     private static string BuildLexiconXml(string lemma, string glossEn) =>

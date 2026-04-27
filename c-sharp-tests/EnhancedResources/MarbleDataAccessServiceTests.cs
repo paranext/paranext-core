@@ -169,6 +169,89 @@ namespace TestParanextDataProvider.EnhancedResources
             Assert.That(glosses, Is.Empty);
         }
 
+        [Test]
+        [Category("Contract")]
+        [Description(
+            "Dictionary-scoped lookup returns that dictionary's gloss when both dicts have the lemma"
+        )]
+        public void FindLocalizedGlossesForTerm_WithDictionary_RoutesToThatDictionary()
+        {
+            // PT9 routes lemma fallback per dictionary via GetDictionaryProject
+            // (MarbleDataAccess.cs:373-376); a Greek lemma in a deuterocanonical
+            // book resolves against DCLEX, not SDBG. PT10 mirrors that when the
+            // caller passes the dictionary qualifier from a token's lexical_links.
+            const string sharedLemma = "logos";
+            var byDictionary = new Dictionary<
+                string,
+                IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>
+            >(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SDBG"] = OneEntry("en", sharedLemma, "word"),
+                ["DCLEX"] = OneEntry("en", sharedLemma, "saying"),
+            };
+            var byLanguage = OneEntry("en", sharedLemma, "word", "saying");
+            var glossData = new GlossData(byLanguage, ["en"], byDictionary);
+            var service = new MarbleDataAccessService(
+                glossData,
+                LanguageMapping.Empty,
+                [Fixtures.FakeResourceScrText.Instance]
+            );
+
+            var sdbgResult = service.FindLocalizedGlossesForTerm(sharedLemma, "en", "SDBG");
+            var dclexResult = service.FindLocalizedGlossesForTerm(sharedLemma, "en", "DCLEX");
+            var unionResult = service.FindLocalizedGlossesForTerm(sharedLemma, "en");
+
+            Assert.That(sdbgResult, Is.EquivalentTo(new[] { "word" }));
+            Assert.That(dclexResult, Is.EquivalentTo(new[] { "saying" }));
+            Assert.That(unionResult, Is.EquivalentTo(new[] { "word", "saying" }));
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Description("Unknown dictionary or lemma not in dict view falls back to the union view")]
+        public void FindLocalizedGlossesForTerm_UnknownDictionary_FallsBackToUnionView()
+        {
+            const string lemma = "logos";
+            var byDictionary = new Dictionary<
+                string,
+                IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>
+            >(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SDBG"] = OneEntry("en", lemma, "word"),
+            };
+            var byLanguage = OneEntry("en", lemma, "word");
+            var glossData = new GlossData(byLanguage, ["en"], byDictionary);
+            var service = new MarbleDataAccessService(
+                glossData,
+                LanguageMapping.Empty,
+                [Fixtures.FakeResourceScrText.Instance]
+            );
+
+            var result = service.FindLocalizedGlossesForTerm(lemma, "en", "BOGUS");
+
+            Assert.That(
+                result,
+                Is.EquivalentTo(new[] { "word" }),
+                "Unknown dict should not return empty - fall back to union"
+            );
+        }
+
+        private static IReadOnlyDictionary<
+            string,
+            IReadOnlyDictionary<string, IReadOnlyList<string>>
+        > OneEntry(string language, string lemma, params string[] glosses)
+        {
+            return new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(
+                StringComparer.OrdinalIgnoreCase
+            )
+            {
+                [language] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+                {
+                    [lemma] = glosses,
+                },
+            };
+        }
+
         #endregion
 
         #region ResolveLanguage Tests

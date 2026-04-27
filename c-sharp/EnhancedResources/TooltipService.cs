@@ -49,11 +49,30 @@ internal sealed class TooltipService
 
     private string? ResolveGloss(MarbleToken token, string glossLanguage)
     {
-        if (token.LexicalLinks is not { Count: > 0 })
+        if (token.LexicalLinks is not { Count: > 0 } lexicalLinks)
             return null;
 
-        IList<string> glosses = _marbleData.FindLocalizedGlossesForTerm(token.Text, glossLanguage);
+        // PT9 lexical_links carry "Dict:Lemma:Indices" (PT9 MarbleLexicalLink.cs:37-47).
+        // Route through the dictionary that authored the link so a Greek lemma in a
+        // deuterocanonical book resolves against DCLEX rather than SDBG.
+        var (dictionary, _) = ParseLexicalLink(lexicalLinks[0]);
+
+        IList<string> glosses = _marbleData.FindLocalizedGlossesForTerm(
+            token.Text,
+            glossLanguage,
+            dictionary
+        );
         return glosses.Count > 0 ? string.Join(", ", glosses) : null;
+    }
+
+    private static (string? Dictionary, string? Lemma) ParseLexicalLink(string link)
+    {
+        if (string.IsNullOrEmpty(link))
+            return (null, null);
+        var parts = link.Split(':');
+        if (parts.Length < 2)
+            return (null, null);
+        return (parts[0], parts[1]);
     }
 
     private static MarbleToken FindTokenOrThrow(string tokenId, MarbleToken[] parsedTokens)

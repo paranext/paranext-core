@@ -2,6 +2,7 @@
 // Source: PT9/Paratext/Marble/MarbleDataAccess.cs:759-783 (BuildLanguageAndReferenceMapsAsync),
 //         PT9/Paratext/Marble/MarbleDataAccess.cs:683-696 (CreateReferenceMappings),
 //         PT9/Paratext/Marble/MarbleDataAccess.cs:1135-1171 (GetAvailableGlossLanguageIds),
+//         PT9/Paratext/Marble/MarbleDataAccess.cs:1401-1456 (GetLemmaDictionary - per-dict lookup),
 //         PT9/Paratext/Marble/MarbleLexiconEntry.cs (XmlSerializer schema)
 using System.Xml.Linq;
 using SIL.Scripture;
@@ -22,8 +23,12 @@ internal static class MarbleLexiconLoader
     private const int VerseRefStringMinLength = 14;
     private const int VerseRefStringPrefixLength = 9;
 
-    // Precedence for cross-dictionary gloss collision: SDBH > SDBG > DCLEX
-    private static readonly string[] GlossMergeOrder = [SdbhName, SdbgName, DclexName];
+    // PT9 keeps each research dictionary's cachedLemmaToEntry separate
+    // (MarbleDataAccess.cs:1050) and routes lemma lookups per dictionary via
+    // GetDictionaryProject(bookNum). PT10 mirrors that by populating per-dict
+    // gloss tables; the union view is derived after all dicts have loaded so no
+    // dictionary's data is silently dropped.
+    private static readonly string[] DictionaryLoadOrder = [SdbhName, SdbgName, DclexName];
 
     public static LexiconLoadResult Load(
         IReadOnlyDictionary<string, IMarblePackage> researchPackages,
@@ -33,25 +38,28 @@ internal static class MarbleLexiconLoader
         var byDictionary = new Dictionary<string, DictionaryPerPackage>(
             StringComparer.OrdinalIgnoreCase
         );
-        var glossByLanguage = new Dictionary<string, Dictionary<string, List<string>>>(
-            StringComparer.OrdinalIgnoreCase
-        );
-        // Track which dictionary first populated each (lang, lemma) so intra-dictionary
-        // accumulation (multiple senses for one lemma) is distinguished from
-        // cross-dictionary collision (later dictionary loses per GlossMergeOrder).
-        var glossOwnerByLanguage = new Dictionary<string, Dictionary<string, string>>(
-            StringComparer.OrdinalIgnoreCase
-        );
+
+        // Per-dictionary gloss tables. Keyed dictionary -> language -> NFD lemma -> glosses.
+        // The outer dictionary is OrdinalIgnoreCase to match how PT9 looks up
+        // research dictionaries by name (MarbleDataAccess.cs:768-770).
+        var glossByDict = new Dictionary<
+            string,
+            Dictionary<string, Dictionary<string, List<string>>>
+        >(StringComparer.OrdinalIgnoreCase);
+
         var senseCountByLanguage = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         int totalMeaningCount = 0;
 
-        // Lemma -> aggregated LexiconEntry for source-language search. A given
-        // lemma can appear in multiple dictionaries (e.g. SDBH and SDBG); we
-        // accumulate occurrences across all its appearances.
-        var lemmaEntries = new Dictionary<string, LexiconEntry>(StringComparer.Ordinal);
+        // Per-dictionary source-language entries. Index 0 = lemma key (NFD-normalized);
+        // value = per-dict LexiconEntry built from ParsePackage. PT9 stores these
+        // per MarbleScrText (MarbleDataAccess.cs:1401-1456); PT10 keeps the same
+        // separation so SourceLanguageData.ByLemma can return one entry per dict
+        // for shared lemmas (e.g. Greek words in both SDBG and DCLEX).
+        var lemmaEntriesByDict = new Dictionary<string, Dictionary<string, LexiconEntry>>(
+            StringComparer.OrdinalIgnoreCase
+        );
 
-        // Load each dictionary in the precedence order so SDBH-first collisions win.
-        foreach (var dictionaryName in GlossMergeOrder)
+        foreach (var dictionaryName in DictionaryLoadOrder)
         {
             if (!researchPackages.TryGetValue(dictionaryName, out var package))
                 continue;
@@ -69,16 +77,20 @@ internal static class MarbleLexiconLoader
 
             var doc = XDocument.Parse(package.ReadAllText(lexiconFileName));
 
-            byDictionary[dictionaryName] = ParsePackage(doc, lemmaEntries);
+            var perDictLemmaEntries = new Dictionary<string, LexiconEntry>(StringComparer.Ordinal);
+            byDictionary[dictionaryName] = ParsePackage(doc, perDictLemmaEntries);
+            lemmaEntriesByDict[dictionaryName] = perDictLemmaEntries;
 
-            MergePackageIntoGlosses(
-                dictionaryName,
+            var perDictGlosses = new Dictionary<string, Dictionary<string, List<string>>>(
+                StringComparer.OrdinalIgnoreCase
+            );
+            CollectGlossesForPackage(
                 doc,
-                glossByLanguage,
-                glossOwnerByLanguage,
+                perDictGlosses,
                 senseCountByLanguage,
                 ref totalMeaningCount
             );
+            glossByDict[dictionaryName] = perDictGlosses;
         }
 
         // KnownResourceIds = knownBibleIds IFF at least one dictionary slice loaded;
@@ -94,9 +106,11 @@ internal static class MarbleLexiconLoader
             UninitializedResourceIds: new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         );
 
-        var glossImmutable = FreezeGlossData(glossByLanguage);
+        var byDictionaryImmutable = FreezeByDictionary(glossByDict);
+        var unionByLanguage = BuildUnionByLanguage(glossByDict);
+
         // PT9 MarbleDataAccess.cs:1162 uses strict '>' (a language at exactly 50% is excluded).
-        // The sp->es correction already happened upstream in MergePackageIntoGlosses, so the
+        // The sp->es correction already happened upstream in CollectGlossesForPackage, so the
         // language-count keys here are already canonical; no further mapping needed.
         var availableLanguages = senseCountByLanguage
             .Where(kv =>
@@ -107,17 +121,20 @@ internal static class MarbleLexiconLoader
             .OrderBy(s => s)
             .ToList();
 
-        var gloss = new GlossData(glossImmutable, availableLanguages);
+        var gloss = new GlossData(unionByLanguage, availableLanguages, byDictionaryImmutable);
 
-        // Build the source-language by-lemma index. Transliteration index is
-        // intentionally empty here: PT9's GreekTrans / HebrewTrans aren't ported
-        // yet (MarbleDataAccess.cs:1459-1479). UseTransliteration=true searches
-        // simply return no matches until those utilities land.
-        var byLemma = new Dictionary<string, IReadOnlyList<LexiconEntry>>(StringComparer.Ordinal);
-        foreach (var (lemma, entry) in lemmaEntries)
-            byLemma[lemma] = new[] { entry };
+        // Build the source-language by-lemma index. A lemma can be authored by
+        // multiple research dictionaries (e.g. SDBG and DCLEX both have entries
+        // for many Greek words); each dictionary contributes its own
+        // LexiconEntry so the source-language search can surface dict-specific
+        // metadata (gloss/POS/Strong number/occurrences). Transliteration index
+        // is intentionally empty here: PT9's GreekTrans / HebrewTrans aren't
+        // ported yet (MarbleDataAccess.cs:1459-1479); UseTransliteration=true
+        // searches simply return no matches until those utilities land.
+        var byLemma = BuildByLemma(lemmaEntriesByDict);
+        var totalEntryCount = lemmaEntriesByDict.Values.Sum(d => d.Count);
         var sourceLanguage =
-            lemmaEntries.Count == 0
+            totalEntryCount == 0
                 ? SourceLanguageData.Empty
                 : new SourceLanguageData(
                     ByLemma: byLemma,
@@ -160,8 +177,8 @@ internal static class MarbleLexiconLoader
             var domains = new List<string>();
             var senses = new List<SenseRecord>();
 
-            // Aggregated occurrences across all meanings of this entry, fed
-            // into the source-language by-lemma index.
+            // Aggregated occurrences across all meanings of this entry within
+            // THIS dictionary (each dict's entry tracks only its own occurrences).
             var occurrences = new List<VerseRef>();
 
             foreach (var meaning in entry.Descendants("LEXMeaning"))
@@ -217,38 +234,33 @@ internal static class MarbleLexiconLoader
                 SubItemIds: subItemIds
             );
 
-            // Accumulate into the cross-dictionary lemma index. If a later
-            // dictionary contributes more occurrences for the same lemma, fold
-            // them in; first-seen entry's metadata (gloss, POS) wins because
-            // GlossMergeOrder is SDBH>SDBG>DCLEX and SDBH is the most precise.
-            // Use the same NFD key as the per-package entriesById so token
-            // lookups go through one canonical normalization.
-            if (lemmaEntries.TryGetValue(lemmaKey, out var existing))
-            {
-                foreach (var occ in occurrences)
-                    existing.Occurrences.Add(occ);
-            }
-            else
-            {
-                lemmaEntries[lemmaKey] = new LexiconEntry(
-                    Lemma: lemma,
-                    Translit: string.Empty,
-                    StrongNumber: strongNumber,
-                    Gloss: firstEnglishGloss,
-                    PartOfSpeech: morphology,
-                    Occurrences: occurrences
-                );
-            }
+            // One entry per (dict, lemma). PT9 keeps cachedLemmaToEntry per
+            // MarbleScrText so each dictionary's metadata stays independent.
+            // Use the same NFD key as entriesById so token lookups go through
+            // one canonical normalization.
+            lemmaEntries[lemmaKey] = new LexiconEntry(
+                Lemma: lemma,
+                Translit: string.Empty,
+                StrongNumber: strongNumber,
+                Gloss: firstEnglishGloss,
+                PartOfSpeech: morphology,
+                Occurrences: occurrences
+            );
         }
 
         return new DictionaryPerPackage(EntriesById: entriesById, Lexicon: lexicon);
     }
 
-    private static void MergePackageIntoGlosses(
-        string dictionaryName,
+    /// <summary>
+    /// Walks every LEXSense in <paramref name="doc"/> and adds its glosses to
+    /// the per-dictionary <paramref name="perDictGlosses"/> map (lang -> NFD
+    /// lemma -> glosses). Also accumulates per-language sense counts and the
+    /// total meaning count used to compute AvailableLanguages later. The
+    /// "sp -> es" canonicalization mirrors PT9 MarbleDataAccess.cs:1149.
+    /// </summary>
+    private static void CollectGlossesForPackage(
         XDocument doc,
-        Dictionary<string, Dictionary<string, List<string>>> glossByLanguage,
-        Dictionary<string, Dictionary<string, string>> glossOwnerByLanguage,
+        Dictionary<string, Dictionary<string, List<string>>> perDictGlosses,
         Dictionary<string, int> senseCountByLanguage,
         ref int totalMeaningCount
     )
@@ -262,6 +274,7 @@ internal static class MarbleLexiconLoader
             var lemma = ReadLemma(entryEl);
             if (string.IsNullOrWhiteSpace(lemma))
                 continue;
+            var lemmaKey = lemma.Normalize(System.Text.NormalizationForm.FormD);
 
             foreach (var sense in meaning.Descendants("LEXSense"))
             {
@@ -277,50 +290,104 @@ internal static class MarbleLexiconLoader
                     senseCountByLanguage.TryGetValue(lang, out var count);
                     senseCountByLanguage[lang] = count + 1;
 
-                    if (!glossByLanguage.TryGetValue(lang, out var byLemma))
+                    if (!perDictGlosses.TryGetValue(lang, out var byLemma))
                     {
                         byLemma = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-                        glossByLanguage[lang] = byLemma;
+                        perDictGlosses[lang] = byLemma;
                     }
-                    if (!glossOwnerByLanguage.TryGetValue(lang, out var ownerByLemma))
+                    if (!byLemma.TryGetValue(lemmaKey, out var glossList))
                     {
-                        ownerByLemma = new Dictionary<string, string>(StringComparer.Ordinal);
-                        glossOwnerByLanguage[lang] = ownerByLemma;
+                        glossList = new List<string>();
+                        byLemma[lemmaKey] = glossList;
                     }
-
-                    if (ownerByLemma.TryGetValue(lemma, out var owner))
-                    {
-                        if (
-                            !string.Equals(
-                                owner,
-                                dictionaryName,
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                        )
-                        {
-                            // Cross-dictionary collision: first dictionary wins per GlossMergeOrder.
-                            Console.WriteLine(
-                                $"Enhanced Resources: warning - gloss collision: lemma='{lemma}' lang='{lang}' [{dictionaryName}=>{gloss} (skipped); {owner}=>{string.Join(",", byLemma[lemma])} (kept)]"
-                            );
-                            continue;
-                        }
-                        // Same dictionary, additional sense for the same lemma+lang: accumulate.
-                        byLemma[lemma].Add(gloss);
-                    }
-                    else
-                    {
-                        byLemma[lemma] = [gloss];
-                        ownerByLemma[lemma] = dictionaryName;
-                    }
+                    glossList.Add(gloss);
                 }
             }
         }
     }
 
+    /// <summary>
+    /// Builds the union-of-all-dictionaries view: lang -> NFD lemma -> glosses
+    /// drawn from every dictionary that authored a sense for the (lang, lemma)
+    /// pair. Duplicate gloss strings are de-duplicated (case-sensitive ordinal)
+    /// while preserving first-seen order, which matches the PT9 user-visible
+    /// behaviour where a single dictionary list never carries the same gloss
+    /// string twice.
+    /// </summary>
     private static IReadOnlyDictionary<
         string,
         IReadOnlyDictionary<string, IReadOnlyList<string>>
-    > FreezeGlossData(Dictionary<string, Dictionary<string, List<string>>> source)
+    > BuildUnionByLanguage(
+        Dictionary<string, Dictionary<string, Dictionary<string, List<string>>>> perDict
+    )
+    {
+        var union = new Dictionary<string, Dictionary<string, List<string>>>(
+            StringComparer.OrdinalIgnoreCase
+        );
+        var seen = new Dictionary<string, Dictionary<string, HashSet<string>>>(
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        foreach (var dictName in DictionaryLoadOrder)
+        {
+            if (!perDict.TryGetValue(dictName, out var byLanguage))
+                continue;
+            foreach (var (lang, byLemma) in byLanguage)
+            {
+                if (!union.TryGetValue(lang, out var unionByLemma))
+                {
+                    unionByLemma = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+                    union[lang] = unionByLemma;
+                }
+                if (!seen.TryGetValue(lang, out var seenByLemma))
+                {
+                    seenByLemma = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+                    seen[lang] = seenByLemma;
+                }
+                foreach (var (lemma, glosses) in byLemma)
+                {
+                    if (!unionByLemma.TryGetValue(lemma, out var dest))
+                    {
+                        dest = new List<string>();
+                        unionByLemma[lemma] = dest;
+                    }
+                    if (!seenByLemma.TryGetValue(lemma, out var seenSet))
+                    {
+                        seenSet = new HashSet<string>(StringComparer.Ordinal);
+                        seenByLemma[lemma] = seenSet;
+                    }
+                    foreach (var g in glosses)
+                    {
+                        if (seenSet.Add(g))
+                            dest.Add(g);
+                    }
+                }
+            }
+        }
+
+        return Freeze(union);
+    }
+
+    private static IReadOnlyDictionary<
+        string,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>
+    > FreezeByDictionary(
+        Dictionary<string, Dictionary<string, Dictionary<string, List<string>>>> source
+    )
+    {
+        var outer = new Dictionary<
+            string,
+            IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>
+        >(StringComparer.OrdinalIgnoreCase);
+        foreach (var (dict, byLanguage) in source)
+            outer[dict] = Freeze(byLanguage);
+        return outer;
+    }
+
+    private static IReadOnlyDictionary<
+        string,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>
+    > Freeze(Dictionary<string, Dictionary<string, List<string>>> source)
     {
         var outer = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(
             StringComparer.OrdinalIgnoreCase
@@ -333,6 +400,32 @@ internal static class MarbleLexiconLoader
             outer[lang] = inner;
         }
         return outer;
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<LexiconEntry>> BuildByLemma(
+        Dictionary<string, Dictionary<string, LexiconEntry>> lemmaEntriesByDict
+    )
+    {
+        var byLemma = new Dictionary<string, List<LexiconEntry>>(StringComparer.Ordinal);
+        foreach (var dictName in DictionaryLoadOrder)
+        {
+            if (!lemmaEntriesByDict.TryGetValue(dictName, out var perDict))
+                continue;
+            foreach (var (lemma, entry) in perDict)
+            {
+                if (!byLemma.TryGetValue(lemma, out var list))
+                {
+                    list = new List<LexiconEntry>();
+                    byLemma[lemma] = list;
+                }
+                list.Add(entry);
+            }
+        }
+
+        var frozen = new Dictionary<string, IReadOnlyList<LexiconEntry>>(StringComparer.Ordinal);
+        foreach (var (lemma, list) in byLemma)
+            frozen[lemma] = list.AsReadOnly();
+        return frozen;
     }
 
     // ---- Schema helpers ----
