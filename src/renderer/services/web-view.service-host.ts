@@ -83,6 +83,10 @@ import {
   USERSNAP_PROJECT_REPORT_ISSUE_API_KEY,
   USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
 } from './usersnap.service';
+import {
+  transformLegacyColorVars,
+  type TransformLegacyColorVarsResult,
+} from './web-view-legacy-color-vars';
 
 /**
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
@@ -1317,6 +1321,53 @@ async function openOrReloadWebView(
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const reactWebView = webView as WebViewDefinitionReact;
 
+      // Transform legacy hsl(var(--TOKEN)) patterns for extensions that haven't yet updated
+      // to the new oklch color variable format introduced with the shadcn upgrade.
+      const legacyTokenNames = new Set(Object.keys(theme.cssVariables));
+      const legacyTransformStart = performance.now();
+      const legacyStylesTransform: TransformLegacyColorVarsResult | undefined = reactWebView.styles
+        ? transformLegacyColorVars(reactWebView.styles, legacyTokenNames)
+        : undefined;
+      const legacyContentTransform = transformLegacyColorVars(
+        reactWebView.content,
+        legacyTokenNames,
+      );
+      const legacyTransformTotalMs = performance.now() - legacyTransformStart;
+
+      const legacyStyleReplacements = legacyStylesTransform?.replacements ?? [];
+      const legacyContentReplacements = legacyContentTransform.replacements;
+      if (legacyStyleReplacements.length > 0 || legacyContentReplacements.length > 0) {
+        const lines: string[] = [
+          `Legacy color var replacements in WebView ${webView.id} (total: ${legacyTransformTotalMs.toFixed(1)}ms):`,
+        ];
+        if (legacyStylesTransform && legacyStyleReplacements.length > 0) {
+          const total = legacyStyleReplacements.reduce((sum, r) => sum + r.count, 0);
+          lines.push(`  styles (${total} replacements):`);
+          legacyStyleReplacements.forEach(({ original, replacement, count }) =>
+            lines.push(`    ${original} → ${replacement}  ×${count}`),
+          );
+          const [p1, p2, p3] = legacyStylesTransform.passTimesMs;
+          lines.push(
+            `    pass 1: ${p1.toFixed(1)}ms, pass 2: ${p2.toFixed(1)}ms, pass 3: ${p3.toFixed(1)}ms`,
+          );
+        }
+        if (legacyContentReplacements.length > 0) {
+          const total = legacyContentReplacements.reduce((sum, r) => sum + r.count, 0);
+          lines.push(`  content (${total} replacements):`);
+          legacyContentReplacements.forEach(({ original, replacement, count }) =>
+            lines.push(`    ${original} → ${replacement}  ×${count}`),
+          );
+          const [p1, p2, p3] = legacyContentTransform.passTimesMs;
+          lines.push(
+            `    pass 1: ${p1.toFixed(1)}ms, pass 2: ${p2.toFixed(1)}ms, pass 3: ${p3.toFixed(1)}ms`,
+          );
+        }
+        logger.debug(lines.join('\n'));
+      }
+
+      const legacyTransformedStyles = legacyStylesTransform?.text;
+      const legacyTransformedContent = legacyContentTransform.text;
+
       // Add the component as a script
       // WARNING: DO NOT add anything between the closing of the script tag and the insertion of
       // reactWebView.contents. Doing so would mess up debugging web views
@@ -1324,10 +1375,10 @@ async function openOrReloadWebView(
         <html>
           <head>
             ${
-              reactWebView.styles
+              legacyTransformedStyles
                 ? `<style nonce="${srcNonce}">
               /* extension styles */
-              ${reactWebView.styles}
+              ${legacyTransformedStyles}
             </style>`
                 : ''
             }
@@ -1335,7 +1386,7 @@ async function openOrReloadWebView(
           <body>
             <div id="root">
             </div>
-            <script nonce="${srcNonce}">${reactWebView.content}
+            <script nonce="${srcNonce}">${legacyTransformedContent}
 
               function initializeReact() {
                 const container = document.getElementById('root');
