@@ -464,6 +464,102 @@
       "notes": [
         "Inline label preceding the gloss list of a dictionary entry inside the SemanticDomainViewer."
       ]
+    },
+    "%enhancedResources_marbleGuide_title%": {
+      "notes": [
+        "Title of the 'Getting started in Enhanced Resources' guide dialog. Mirrors PT9 string MarbleGuideForm_1."
+      ]
+    },
+    "%enhancedResources_marbleGuide_description%": {
+      "notes": [
+        "Screen-reader description of the MarbleGuide dialog. Not visible on screen; provides context for the Radix Dialog primitive."
+      ]
+    },
+    "%enhancedResources_marbleGuide_overview%": {
+      "notes": [
+        "Opening paragraph of the guide explaining what an Enhanced Resource is. PT9 MarbleGuideForm_2."
+      ]
+    },
+    "%enhancedResources_marbleGuide_chooseMaterial%": {
+      "notes": [
+        "Paragraph instructing the user how to use the colored buttons at the top of the resource. PT9 MarbleGuideForm_3."
+      ]
+    },
+    "%enhancedResources_marbleGuide_aboutBlueHighlight%": {
+      "notes": [
+        "Paragraph describing research-term highlighting. Contains the {colorWord} placeholder which is replaced with a color chip showing the localized 'blue' word. PT9 MarbleGuideForm_4."
+      ]
+    },
+    "%enhancedResources_marbleGuide_blueWordTitle%": {
+      "notes": [
+        "The localized name of the highlight color used for research terms (English: 'blue'). Displayed inside the color chip in the guide. PT9 MarbleGuideForm_5."
+      ]
+    },
+    "%enhancedResources_marbleGuide_aboutBiblicalTerms%": {
+      "notes": [
+        "Paragraph describing how to research Biblical Terms in the user's project. PT9 MarbleGuideForm_6."
+      ]
+    },
+    "%enhancedResources_marbleGuide_aboutGrayHighlight%": {
+      "notes": [
+        "Paragraph describing found-rendering highlighting. Contains the {colorWord} placeholder. PT9 MarbleGuideForm_7."
+      ]
+    },
+    "%enhancedResources_marbleGuide_grayWordTitle%": {
+      "notes": [
+        "The localized name of the highlight color used for found renderings (English: 'gray'). PT9 MarbleGuideForm_8."
+      ]
+    },
+    "%enhancedResources_marbleGuide_aboutOrangeHighlight%": {
+      "notes": [
+        "Paragraph describing needs-rendering highlighting. Contains {colorWord} and {helpLink} placeholders. PT9 MarbleGuideForm_9."
+      ]
+    },
+    "%enhancedResources_marbleGuide_orangeWordTitle%": {
+      "notes": [
+        "The localized name of the highlight color used for needs-rendering attention (English: 'orange'). PT9 MarbleGuideForm_10."
+      ]
+    },
+    "%enhancedResources_marbleGuide_thisHelpTopic%": {
+      "notes": [
+        "Anchor text for the help-topic link inside the orange-highlight paragraph. PT9 MarbleGuideForm_11."
+      ]
+    },
+    "%enhancedResources_marbleGuide_tabsHeader%": {
+      "notes": ["Heading above the research tab icon grid. PT9 MarbleGuideForm_12."]
+    },
+    "%enhancedResources_marbleGuide_tab_dictionary%": {
+      "notes": ["Caption below the dictionary tab icon in the guide. PT9 MarbleGuideForm_13."]
+    },
+    "%enhancedResources_marbleGuide_tab_encyclopedia%": {
+      "notes": ["Caption below the encyclopedia tab icon in the guide. PT9 MarbleGuideForm_14."]
+    },
+    "%enhancedResources_marbleGuide_tab_media%": {
+      "notes": ["Caption below the media tab icon in the guide. PT9 MarbleGuideForm_15."]
+    },
+    "%enhancedResources_marbleGuide_tab_maps%": {
+      "notes": ["Caption below the maps tab icon in the guide. PT9 MarbleGuideForm_16."]
+    },
+    "%enhancedResources_marbleGuide_updateFrequently%": {
+      "notes": [
+        "Reminder paragraph telling users to keep their resources up to date. PT9 MarbleGuideForm_17."
+      ]
+    },
+    "%enhancedResources_marbleGuide_howToOpenGuide%": {
+      "notes": [
+        "Paragraph explaining how to reopen the guide via the info icon. Contains the {infoIcon} placeholder. PT9 MarbleGuideForm_18."
+      ]
+    },
+    "%enhancedResources_marbleGuide_moreHelp%": {
+      "notes": [
+        "Anchor text for the 'More help...' link at the bottom of the guide. PT9 MarbleGuideForm_19."
+      ]
+    },
+    "%enhancedResources_marbleGuide_close%": {
+      "notes": ["Label for the Close button in the MarbleGuide dialog footer."]
+    },
+    "%enhancedResources_marbleGuide_neverShowAgain%": {
+      "notes": ["Label for the 'Don't show this again' checkbox in the MarbleGuide dialog footer."]
     }
   },
   "localizedStrings": {
@@ -628,7 +724,29 @@
       "%enhancedResources_semanticDomain_filteredEntriesLoading%": "Loading dictionary entries",
       "%enhancedResources_semanticDomain_treeLoading%": "Loading domain tree",
       "%enhancedResources_semanticDomain_treeEmpty%": "No semantic domains are available.",
-      "%enhancedResources_semanticDomain_glossesLabel%": "Glosses:"
+      "%enhancedResources_semanticDomain_glossesLabel%": "Glosses:",
+      "%enhancedResources_marbleGuide_title%": "Getting started in enhanced resources",
+      "%enhancedResources_marbleGuide_description%": "Tutorial explaining word highlighting colors, research tab icons, and basic navigation in Enhanced Resources.",
+      "%enhancedResources_marbleGuide_overview%": "An enhanced resource is a resource text in which many words and phrases have been linked, word-by-word, to the original Hebrew and Greek texts. These words and phrases have research material linked to them.",
+      "%enhancedResources_marbleGuide_chooseMaterial%": "Click one or more colored buttons at the top of the enhanced resource to select which words to highlight in the text. Point to or click highlighted words to get more information about them.",
+      "%enhancedResources_marbleGuide_aboutBlueHighlight%": "Research Terms: A word highlighted in {colorWord} indicates that it can be researched. It may or may not also be in the Biblical terms list associated with your project.",
+      "%enhancedResources_marbleGuide_blueWordTitle%": "blue",
+      "%enhancedResources_marbleGuide_aboutBiblicalTerms%": "Biblical Terms: To research Biblical Terms in your project, first open your project and then choose it from the drop-down at the top of the Scripture pane. This enables the Found and Problem buttons. Open a Biblical Terms Renderings window to track and edit renderings.",
+      "%enhancedResources_marbleGuide_aboutGrayHighlight%": "A word highlighted in {colorWord} indicates that a valid rendering for this term has been found in this verse, in your project.",
+      "%enhancedResources_marbleGuide_grayWordTitle%": "gray",
+      "%enhancedResources_marbleGuide_aboutOrangeHighlight%": "A word highlighted in {colorWord} needs your attention because an approved rendering for this term is \"missing\" in this verse (though Paratext may have found a guessed rendering). For details, see {helpLink}.",
+      "%enhancedResources_marbleGuide_orangeWordTitle%": "orange",
+      "%enhancedResources_marbleGuide_thisHelpTopic%": "this help topic",
+      "%enhancedResources_marbleGuide_tabsHeader%": "Tabs: Tabs with black icons in the Research pane contain information about words in the current scope:",
+      "%enhancedResources_marbleGuide_tab_dictionary%": "Dictionary",
+      "%enhancedResources_marbleGuide_tab_encyclopedia%": "Encyclopedia",
+      "%enhancedResources_marbleGuide_tab_media%": "Media",
+      "%enhancedResources_marbleGuide_tab_maps%": "Maps",
+      "%enhancedResources_marbleGuide_updateFrequently%": "Enhanced resources may be updated frequently. Be sure to keep your resources up to date.",
+      "%enhancedResources_marbleGuide_howToOpenGuide%": "You can open this guide at any time using the {infoIcon} icon at the top right.",
+      "%enhancedResources_marbleGuide_moreHelp%": "More help...",
+      "%enhancedResources_marbleGuide_close%": "Close",
+      "%enhancedResources_marbleGuide_neverShowAgain%": "Don't show this again"
     }
   }
 }
