@@ -102,6 +102,12 @@ internal class EncyclopediaServiceTests
         Assert.That(item.Glosses, Has.Member("camel"));
         Assert.That(item.Entries, Has.Count.EqualTo(1));
         Assert.That(item.Entries[0].Key, Is.EqualTo("camel_001"));
+        // ArticleId is the typed lookup key the caller passes back to readArticle.
+        Assert.That(
+            item.Entries[0].ArticleId,
+            Is.EqualTo("FAUNA:camel_001"),
+            "EntryRef.ArticleId must combine the encyclopedia type with the entry key"
+        );
     }
 
     [Test]
@@ -516,6 +522,7 @@ internal class EncyclopediaServiceTests
         var entry = new MarbleEncyclopediaEntry(EncyclopediaFixtures.V1CamelEntryXml);
 
         var entryRef = new EncyclopediaEntryRef(
+            ArticleId: $"FAUNA:{entry.Key}",
             Key: entry.Key,
             Title: entry.Title,
             TeaserText: "Preview text",
@@ -525,7 +532,6 @@ internal class EncyclopediaServiceTests
         Assert.That(entryRef.Key, Is.EqualTo("2.8"));
         Assert.That(entryRef.Title, Is.EqualTo("Camel, dromedary"));
         Assert.That(entryRef.FormatVersion, Is.EqualTo(1));
-        Assert.That(entryRef.SeeAlsoIds, Is.Null);
         Assert.That(entryRef.InlineImageIds, Is.Null);
     }
 
@@ -538,6 +544,7 @@ internal class EncyclopediaServiceTests
         var entry = new MarbleEncyclopediaEntry(EncyclopediaFixtures.V2CamelEntryXml);
 
         var entryRef = new EncyclopediaEntryRef(
+            ArticleId: $"FAUNA:{entry.Key}",
             Key: entry.Key,
             Title: entry.Title,
             TeaserText: "Preview text",
@@ -564,6 +571,7 @@ internal class EncyclopediaServiceTests
             Entries: new List<EncyclopediaEntryRef>
             {
                 new(
+                    ArticleId: "FAUNA:2.8",
                     Key: "2.8",
                     Title: "Camel, dromedary",
                     TeaserText: "The camel...",

@@ -23,7 +23,6 @@ internal sealed class MarbleEncyclopediaEntry
     public string Key { get; }
     public string Title { get; }
     public IList<string> Paragraphs { get; }
-    public IList<string> CrossReferences { get; }
     public IList<string> BibleImageIds { get; }
 
     public MarbleEncyclopediaEntry(string xmlData)
@@ -37,7 +36,6 @@ internal sealed class MarbleEncyclopediaEntry
         var sections = element.Element("Sections")?.Elements("Section");
 
         Paragraphs = ExtractParagraphs(sections);
-        CrossReferences = ExtractCrossReferences(sections);
         BibleImageIds = ExtractBibleImageIds(sections);
     }
 
@@ -73,22 +71,6 @@ internal sealed class MarbleEncyclopediaEntry
             .SelectMany(s => s.Element("Paragraphs")?.Elements("Paragraph") ?? [])
             .Select(GetParagraphContent)
             .Where(c => !string.IsNullOrEmpty(c))
-            .ToList();
-    }
-
-    /// <summary>
-    /// Extracts cross-reference strings from LanguageSet/References elements.
-    /// </summary>
-    private static IList<string> ExtractCrossReferences(IEnumerable<XElement>? sections)
-    {
-        if (sections == null)
-            return [];
-
-        return sections
-            .SelectMany(s => s.Element("LanguageSets")?.Elements("LanguageSet") ?? [])
-            .SelectMany(ls => ls.Element("References")?.Elements("Reference") ?? [])
-            .Select(r => r.Value)
-            .Where(v => !string.IsNullOrEmpty(v))
             .ToList();
     }
 
