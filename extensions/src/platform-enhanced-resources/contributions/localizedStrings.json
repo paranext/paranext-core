@@ -1,6 +1,162 @@
 {
-  "metadata": {},
+  "metadata": {
+    "%enhancedResources_tooltip_lemma%": {
+      "notes": ["Label preceding a Hebrew/Greek lemma in the Enhanced Resource word tooltip."]
+    },
+    "%enhancedResources_tooltip_gloss%": {
+      "notes": ["Label preceding a short gloss in the Enhanced Resource word tooltip."]
+    },
+    "%enhancedResources_tooltip_partOfSpeech%": {
+      "notes": ["Label preceding the part of speech in the Enhanced Resource word tooltip."]
+    },
+    "%enhancedResources_tooltip_strongNumber%": {
+      "notes": ["Label preceding a Strong's number in the Enhanced Resource word tooltip."]
+    },
+    "%enhancedResources_tooltip_morphology%": {
+      "notes": ["Label preceding the morphology code in the Enhanced Resource word tooltip."]
+    },
+    "%enhancedResources_tooltip_notes%": {
+      "notes": ["Label preceding the notes list in the Enhanced Resource word tooltip."]
+    },
+    "%enhancedResources_note_callerType_footnote%": {
+      "notes": ["Label that identifies a footnote in the scripture pane note popup."]
+    },
+    "%enhancedResources_note_callerType_endnote%": {
+      "notes": ["Label that identifies an endnote in the scripture pane note popup."]
+    },
+    "%enhancedResources_note_callerType_crossReference%": {
+      "notes": ["Label that identifies a cross-reference in the scripture pane note popup."]
+    },
+    "%enhancedResources_note_emptyBody%": {
+      "notes": ["Placeholder shown when a note has no body text."]
+    },
+    "%enhancedResources_note_references%": {
+      "notes": ["Heading above the list of verse references inside a note."]
+    },
+    "%enhancedResources_scripturePane_loading%": {
+      "notes": ["ARIA label for the scripture pane while it is loading."]
+    },
+    "%enhancedResources_scripturePane_emptyTitle%": {
+      "notes": ["Title shown when no chapter is loaded in the scripture pane."]
+    },
+    "%enhancedResources_scripturePane_emptyDescription%": {
+      "notes": ["Body shown when no chapter is loaded in the scripture pane."]
+    },
+    "%enhancedResources_scripturePane_errorTitle%": {
+      "notes": ["Title shown when scripture pane fails to load."]
+    },
+    "%enhancedResources_scripturePane_filterActive%": {
+      "notes": ["Status text shown when a word filter is active in the scripture pane."]
+    },
+    "%enhancedResources_scripturePane_editorPlaceholder%": {
+      "notes": [
+        "Placeholder text rendered in place of the real scripture editor during the design phase."
+      ]
+    },
+    "%enhancedResources_scripturePane_footnotesHeader%": {
+      "notes": ["Header above the footnote list in the scripture pane."]
+    },
+    "%enhancedResources_ribbon_missingBook_title%": {},
+    "%enhancedResources_ribbon_missingBook_description%": {
+      "notes": ["{resourceName} is replaced with the resource short name."]
+    },
+    "%enhancedResources_ribbon_reviewStatus_title%": {},
+    "%enhancedResources_ribbon_reviewStatus_description%": {},
+    "%enhancedResources_ribbon_imageWarning_title%": {},
+    "%enhancedResources_ribbon_imageWarning_description%": {},
+    "%enhancedResources_ribbon_copyright_title%": {},
+    "%enhancedResources_ribbon_copyright_description%": {},
+    "%enhancedResources_ribbon_copyright_moreInfo%": {},
+    "%enhancedResources_ribbon_metadata_title%": {},
+    "%enhancedResources_ribbon_metadata_description%": {},
+    "%enhancedResources_ribbon_metadata_actionLink%": {},
+    "%enhancedResources_ribbon_updateAvailable_title%": {},
+    "%enhancedResources_ribbon_updateAvailable_description%": {},
+    "%enhancedResources_ribbon_updateAvailable_downloadDisabled%": {},
+    "%enhancedResources_ribbon_dismiss%": {
+      "notes": ["ARIA label for the close button on a dismissible warning ribbon."]
+    },
+    "%enhancedResources_copyrightOverlay_title%": {},
+    "%enhancedResources_copyrightOverlay_dismiss%": {},
+    "%enhancedResources_copyrightOverlay_emptyMessage%": {},
+    "%enhancedResources_toolbar_tabMenu%": {},
+    "%enhancedResources_toolbar_info%": {},
+    "%enhancedResources_toolbar_highlightAllResearchTerms%": {},
+    "%enhancedResources_toolbar_currentReference%": {},
+    "%enhancedResources_toolbar_searchPlaceholder%": {},
+    "%enhancedResources_toolbar_scopeLabel%": {},
+    "%enhancedResources_toolbar_scope_currentVerse%": {},
+    "%enhancedResources_toolbar_scope_currentSection%": {},
+    "%enhancedResources_toolbar_scope_currentChapter%": {},
+    "%enhancedResources_toolbar_scope_currentSense%": {},
+    "%enhancedResources_toolbar_tab_dictionary%": {},
+    "%enhancedResources_toolbar_tab_encyclopedia%": {},
+    "%enhancedResources_toolbar_tab_media%": {},
+    "%enhancedResources_toolbar_tab_maps%": {},
+    "%enhancedResources_shell_title%": {},
+    "%enhancedResources_shell_emptyTitle%": {},
+    "%enhancedResources_shell_emptyDescription%": {},
+    "%enhancedResources_shell_tabPlaceholder%": {
+      "notes": ["{tab} is replaced with the active tab name (dictionary/encyclopedia/media/maps)."]
+    }
+  },
   "localizedStrings": {
-    "en": {}
+    "en": {
+      "%enhancedResources_tooltip_lemma%": "Lemma",
+      "%enhancedResources_tooltip_gloss%": "Gloss",
+      "%enhancedResources_tooltip_partOfSpeech%": "Part of speech",
+      "%enhancedResources_tooltip_strongNumber%": "Strong's",
+      "%enhancedResources_tooltip_morphology%": "Morphology",
+      "%enhancedResources_tooltip_notes%": "Notes",
+      "%enhancedResources_note_callerType_footnote%": "Footnote",
+      "%enhancedResources_note_callerType_endnote%": "Endnote",
+      "%enhancedResources_note_callerType_crossReference%": "Cross-reference",
+      "%enhancedResources_note_emptyBody%": "(no note body)",
+      "%enhancedResources_note_references%": "References",
+      "%enhancedResources_scripturePane_loading%": "Loading scripture",
+      "%enhancedResources_scripturePane_emptyTitle%": "No chapter loaded",
+      "%enhancedResources_scripturePane_emptyDescription%": "Select a verse reference to begin.",
+      "%enhancedResources_scripturePane_errorTitle%": "Scripture pane error",
+      "%enhancedResources_scripturePane_filterActive%": "Filter active",
+      "%enhancedResources_scripturePane_editorPlaceholder%": "Scripture editor placeholder. The integrated read-only editor will replace this area in a later iteration.",
+      "%enhancedResources_scripturePane_footnotesHeader%": "Footnotes",
+      "%enhancedResources_ribbon_missingBook_title%": "Book not available",
+      "%enhancedResources_ribbon_missingBook_description%": "Book does not exist in {resourceName}.",
+      "%enhancedResources_ribbon_reviewStatus_title%": "Pre-release version",
+      "%enhancedResources_ribbon_reviewStatus_description%": "The text is complete, but research materials and links may contain errors.",
+      "%enhancedResources_ribbon_imageWarning_title%": "Thumbnail images only",
+      "%enhancedResources_ribbon_imageWarning_description%": "Only thumbnail images are installed.",
+      "%enhancedResources_ribbon_copyright_title%": "Copyright notice",
+      "%enhancedResources_ribbon_copyright_description%": "This resource contains copyrighted content.",
+      "%enhancedResources_ribbon_copyright_moreInfo%": "More info...",
+      "%enhancedResources_ribbon_metadata_title%": "Resource metadata update required",
+      "%enhancedResources_ribbon_metadata_description%": "This Enhanced Resource needs a metadata update before it can be used. Click",
+      "%enhancedResources_ribbon_metadata_actionLink%": "here",
+      "%enhancedResources_ribbon_updateAvailable_title%": "Update available",
+      "%enhancedResources_ribbon_updateAvailable_description%": "A newer version of this Enhanced Resource is available.",
+      "%enhancedResources_ribbon_updateAvailable_downloadDisabled%": "Download now (disabled)",
+      "%enhancedResources_ribbon_dismiss%": "Dismiss",
+      "%enhancedResources_copyrightOverlay_title%": "Copyright information",
+      "%enhancedResources_copyrightOverlay_dismiss%": "Close",
+      "%enhancedResources_copyrightOverlay_emptyMessage%": "No copyright information is available for this resource.",
+      "%enhancedResources_toolbar_tabMenu%": "View menu",
+      "%enhancedResources_toolbar_info%": "Show/Hide Enhanced Resource Guide",
+      "%enhancedResources_toolbar_highlightAllResearchTerms%": "All research terms",
+      "%enhancedResources_toolbar_currentReference%": "Current reference",
+      "%enhancedResources_toolbar_searchPlaceholder%": "Search this tab",
+      "%enhancedResources_toolbar_scopeLabel%": "Verses filter",
+      "%enhancedResources_toolbar_scope_currentVerse%": "Current verse",
+      "%enhancedResources_toolbar_scope_currentSection%": "Current section",
+      "%enhancedResources_toolbar_scope_currentChapter%": "Current chapter",
+      "%enhancedResources_toolbar_scope_currentSense%": "Current sense",
+      "%enhancedResources_toolbar_tab_dictionary%": "Dictionary",
+      "%enhancedResources_toolbar_tab_encyclopedia%": "Encyclopedia",
+      "%enhancedResources_toolbar_tab_media%": "Media",
+      "%enhancedResources_toolbar_tab_maps%": "Maps",
+      "%enhancedResources_shell_title%": "Enhanced resource",
+      "%enhancedResources_shell_emptyTitle%": "No resource selected",
+      "%enhancedResources_shell_emptyDescription%": "Open an Enhanced Resource from the Paratext menu to begin.",
+      "%enhancedResources_shell_tabPlaceholder%": "{tab} tab content (UI-PKG-002+ implements this)."
+    }
   }
 }
