@@ -1,0 +1,53 @@
+name: Lint
+
+on:
+  push:
+    branches: ['main', 'release-prep', 'hotfix-*']
+  pull_request:
+    branches: ['main', 'release-prep', 'hotfix-*']
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+      - name: Checkout git repo
+        uses: actions/checkout@v4
+        with:
+          path: extension-repo
+
+      - name: Checkout paranext-core repo to use its sub-packages
+        uses: actions/checkout@v4
+        with:
+          path: paranext-core
+          repository: paranext/paranext-core
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: 'npm'
+          cache-dependency-path: |
+            extension-repo/package-lock.json
+            paranext-core/package-lock.json
+          node-version-file: extension-repo/package.json
+
+      - name: Install extension dependencies
+        working-directory: extension-repo
+        run: npm ci
+
+      - name: Install core dependencies
+        working-directory: paranext-core
+        run: npm ci --ignore-scripts
+
+      - name: Run format checking
+        working-directory: extension-repo
+        run: npm run format:check
+
+      - name: Run all linters
+        working-directory: extension-repo
+        run: npm run lint
