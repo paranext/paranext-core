@@ -1,7 +1,7 @@
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
 import { cn } from '@/utils/shadcn-ui.util';
 import React, { RefObject, useCallback, useEffect, useState } from 'react';
-import { CommentListProps } from './comment-list.types';
+import { AddCommentToThreadOptions, CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 
 /**
@@ -30,6 +30,26 @@ export default function CommentList({
 }: CommentListProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const [lastInteractedThreadId, setLastInteractedThreadId] = useState<string | undefined>();
+  const [lastAssignedUser, setLastAssignedUser] = useState<string | undefined>();
+
+  const handleAddCommentToThreadWithTracking = useCallback(
+    async (options: AddCommentToThreadOptions) => {
+      const result = await handleAddCommentToThread(options);
+      // result === undefined means the submission failed or produced no output; only update the
+      // last assigned user when the submission succeeded and an explicit non-empty assignment was
+      // made. Exclude '' (Unassigned) so that selecting "Unassigned" doesn't become sticky and
+      // silently clear the assignee on other threads via auto-population.
+      if (
+        result !== undefined &&
+        options.assignedUser !== undefined &&
+        options.assignedUser !== ''
+      ) {
+        setLastAssignedUser(options.assignedUser);
+      }
+      return result;
+    },
+    [handleAddCommentToThread],
+  );
 
   // When external selection changes, add it to expanded set
   useEffect(() => {
@@ -136,7 +156,7 @@ export default function CommentList({
             currentUser={currentUser}
             assignedUser={thread.assignedUser}
             threadStatus={thread.status}
-            handleAddCommentToThread={handleAddCommentToThread}
+            handleAddCommentToThread={handleAddCommentToThreadWithTracking}
             handleUpdateComment={handleUpdateComment}
             handleDeleteComment={handleDeleteComment}
             handleReadStatusChange={handleReadStatusChange}
@@ -146,6 +166,7 @@ export default function CommentList({
             canUserResolveThreadCallback={canUserResolveThreadCallback}
             canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
             onVerseRefClick={onVerseRefClick}
+            initialAssignedUser={lastAssignedUser}
           />
         </div>
       ))}

@@ -77,6 +77,11 @@ export interface CommentEditorProps {
   onClose: () => void;
   /** Localized strings to be passed to the comment editor component */
   localizedStrings: CommentEditorLocalizedStrings;
+  /**
+   * The user to pre-select in the "Assign to" dropdown when the editor opens. Used to persist the
+   * last chosen assignee across consecutive comment creations within a session.
+   */
+  initialAssignedUser?: string;
 }
 
 /**
@@ -109,9 +114,10 @@ export default function CommentEditor({
   onSave,
   onClose,
   localizedStrings,
+  initialAssignedUser,
 }: CommentEditorProps) {
   const [editorState, setEditorState] = useState<SerializedEditorState>(initialValue);
-  const [selectedUser, setSelectedUser] = useState<string | undefined>(undefined);
+  const [selectedUser, setSelectedUser] = useState<string | undefined>(initialAssignedUser);
   const [isAssignPopoverOpen, setIsAssignPopoverOpen] = useState<boolean>(false);
   const clearEditorRef = useRef<(() => void) | undefined>(undefined);
 
@@ -219,7 +225,10 @@ export default function CommentEditor({
                   <CommandItem
                     key={user || 'unassigned'}
                     onSelect={() => {
-                      setSelectedUser(user === '' ? undefined : user);
+                      // Normalize '' (Unassigned) to undefined so onSave receives undefined
+                      // rather than '', keeping "Unassigned" as a no-op assignment action that
+                      // won't propagate to setLastAssignedUser in the parent.
+                      setSelectedUser(user || undefined);
                       setIsAssignPopoverOpen(false);
                     }}
                     className="tw-flex tw-items-center"

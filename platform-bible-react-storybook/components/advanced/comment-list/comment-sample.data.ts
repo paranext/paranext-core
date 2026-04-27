@@ -268,7 +268,7 @@ export const sampleComments: LegacyCommentThread[] = [
         id: '4',
         user: 'Eve Fox',
         contents:
-          '<p>I noticed the word "refuge" is translated inconsistently in this chapter. In verse 1 it uses one term, but in verse 7 a different term is used. Should we standardize to one rendering throughout?</p>',
+          '<h1>Translation Workshop Notes</h1><h2>1. Key terms identified:</h2><ul><li>refuge (<span dir="rtl">מַחֲסֶה</span>)</li><li>strength (<span dir="rtl">עֹז</span>)</li><li>trouble (<span dir="rtl">צָרָה</span>)</li></ul><h2>2. Alternative renderings to consider:</h2><ul><li>&ldquo;safe place&rdquo; for &ldquo;refuge&rdquo;</li><li>&ldquo;power&rdquo; for &ldquo;strength&rdquo;</li><li>&ldquo;difficult times&rdquo; for &ldquo;trouble&rdquo;</li></ul><h2>3. Cultural considerations:</h2><ul><li>Military imagery</li><li>Ancient city fortifications</li><li>Divine protection metaphors</li></ul>',
         date: twoDaysAgo.toISOString(),
         deleted: false,
         hideInTextWindow: false,
@@ -278,13 +278,13 @@ export const sampleComments: LegacyCommentThread[] = [
         thread: 'thread-2',
         verse: 'God is our refuge and strength, an ever-present help in trouble.',
         verseRef: 'PSA 46:1',
-        selectedText: 'refuge',
+        selectedText: '',
       },
       {
         id: '5',
         user: 'Charlie Delta',
         contents:
-          "<p>Good catch, Eve! I think we should use the same term in both places. I'll check the glossary to see which rendering is preferred.</p>",
+          '<p>Thanks for the summary, Eve! I think the cultural notes are especially helpful for teams working in different regions.</p>',
         date: twoDaysAgo.toISOString(),
         deleted: false,
         hideInTextWindow: false,
@@ -298,9 +298,9 @@ export const sampleComments: LegacyCommentThread[] = [
       },
       {
         id: '6',
-        user: 'Frank Graham',
+        user: 'Beth Bee',
         contents:
-          '<p>I checked the glossary — the preferred term is "stronghold." I have updated verse 7 to match. Please review when you get a chance.</p>',
+          '<p>One more suggestion: should we add a note about the poetic structure of this Psalms? It might help translators preserve the literary feel.</p>',
         date: today.toISOString(),
         deleted: false,
         hideInTextWindow: false,
