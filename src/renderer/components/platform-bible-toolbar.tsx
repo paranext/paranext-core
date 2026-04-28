@@ -146,6 +146,7 @@ export function PlatformBibleToolbar() {
     'Marketing Version',
   );
 
+  // Default is `undefined` (not yet resolved); the command itself always returns `boolean`.
   const [isSendReceiveAvailable] = usePromise(
     useCallback(async () => sendCommand('platformGetResources.isSendReceiveAvailable'), []),
     undefined,
@@ -198,13 +199,24 @@ export function PlatformBibleToolbar() {
       appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
       configAreaChildren={
         <>
-          {isSendReceiveAvailable && (
+          {isSendReceiveAvailable !== false && (
             <Button
               variant="ghost"
               size="sm"
-              className="pr-twp tw-h-8 tw-flex-shrink-0"
+              className={cn(
+                'pr-twp tw-h-8 tw-flex-shrink-0',
+                isSendReceiveAvailable === undefined && 'tw-invisible',
+              )}
+              aria-hidden={isSendReceiveAvailable === undefined || undefined}
+              tabIndex={isSendReceiveAvailable === undefined ? -1 : undefined}
               aria-label={localizedStrings['%toolbar_sync%']}
-              onClick={() => sendCommand('paratextBibleSendReceive.syncOpenProjects')}
+              onClick={() => {
+                sendCommand('paratextBibleSendReceive.syncOpenProjects').catch((e) =>
+                  logger.warn(
+                    `Toolbar caught an error while trying to sync open projects: ${getErrorMessage(e)}`,
+                  ),
+                );
+              }}
             >
               {localizedStrings['%toolbar_sync%']}
             </Button>

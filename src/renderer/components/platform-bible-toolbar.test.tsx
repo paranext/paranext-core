@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
@@ -113,20 +113,37 @@ const mockSendCommand = (isSendReceiveAvailable: boolean | undefined) => {
 };
 
 describe('PlatformBibleToolbar — Sync button', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('is not rendered when isSendReceiveAvailable returns false', async () => {
     mockSendCommand(false);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeInTheDocument();
+      // Verify absent from DOM entirely (not just hidden like the loading state)
+      expect(document.querySelector('button[aria-label="Sync"]')).not.toBeInTheDocument();
     });
   });
 
-  it('is not rendered when isSendReceiveAvailable returns undefined', async () => {
-    mockSendCommand(undefined);
+  it('is in the DOM but hidden and non-interactive while isSendReceiveAvailable is loading', async () => {
+    vi.mocked(sendCommand).mockImplementation(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (async (commandName: string) => {
+        if (commandName === 'platformGetResources.isSendReceiveAvailable')
+          return new Promise<never>(() => {}); // Never resolves — keeps component in loading state
+        if (commandName === 'platform.getOSPlatform') return 'win32';
+        if (commandName === 'platform.isFullScreen') return false;
+        return undefined;
+      }) as any,
+    );
     render(<PlatformBibleToolbar />);
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeInTheDocument();
-    });
+    // Not reachable via accessibility tree (aria-hidden) or keyboard (tabIndex=-1)
+    expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeInTheDocument();
+    // But physically present in the DOM, reserving layout space (tw-invisible)
+    expect(
+      document.querySelector('button[aria-hidden="true"][aria-label="Sync"]'),
+    ).toBeInTheDocument();
   });
 
   it('is rendered with correct text and aria-label when isSendReceiveAvailable returns true', async () => {
@@ -137,6 +154,41 @@ describe('PlatformBibleToolbar — Sync button', () => {
       expect(btn).toBeInTheDocument();
       expect(btn).toHaveTextContent('Sync');
       expect(btn).toHaveAttribute('aria-label', 'Sync');
+    });
+  });
+
+  it('calls syncOpenProjects command when clicked', async () => {
+    mockSendCommand(true);
+    render(<PlatformBibleToolbar />);
+    const btn = await screen.findByRole('button', { name: 'Sync' });
+    fireEvent.click(btn);
+    await waitFor(() => {
+      expect(vi.mocked(sendCommand)).toHaveBeenLastCalledWith(
+        'paratextBibleSendReceive.syncOpenProjects',
+      );
+    });
+  });
+
+  it('logs a warning when syncOpenProjects command fails', async () => {
+    const { logger } = await import('@shared/services/logger.service');
+    vi.mocked(sendCommand).mockImplementation(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (async (commandName: string) => {
+        if (commandName === 'paratextBibleSendReceive.syncOpenProjects')
+          throw new Error('Sync failed');
+        if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+        if (commandName === 'platform.getOSPlatform') return 'win32';
+        if (commandName === 'platform.isFullScreen') return false;
+        return undefined;
+      }) as any,
+    );
+    render(<PlatformBibleToolbar />);
+    const btn = await screen.findByRole('button', { name: 'Sync' });
+    fireEvent.click(btn);
+    await waitFor(() => {
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        expect.stringContaining('sync open projects'),
+      );
     });
   });
 });

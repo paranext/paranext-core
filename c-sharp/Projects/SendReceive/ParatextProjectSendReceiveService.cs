@@ -26,6 +26,10 @@ internal class ParatextProjectSendReceiveService(
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.syncProjects",
                 SyncProjects
+            ),
+            PapiClient.RegisterRequestHandlerAsync(
+                "command:paratextBibleSendReceive.syncOpenProjects",
+                SyncOpenProjects
             )
         );
     }
@@ -33,11 +37,8 @@ internal class ParatextProjectSendReceiveService(
     #endregion
 
     #region Protected properties and methods
+
     protected PapiClient PapiClient { get; } = papiClient;
-
-    #endregion
-
-    #region Protected properties and methods
 
     /// <summary>
     /// Function to commit a snapshot of the current changes. Without `forceCommit` set to `true`,
@@ -73,6 +74,20 @@ internal class ParatextProjectSendReceiveService(
     /// </summary>
     /// <param name="projectIds">IDs of the projects/resources to sync</param>
     protected void SyncProjects(String[] projectIds)
+    {
+        throw new PlatformUnimplementedException(
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+        );
+    }
+
+    /// <summary>
+    /// Stub handler for the <c>paratextBibleSendReceive.syncOpenProjects</c> PAPI command. The
+    /// real implementation — which gets all open web view project IDs and calls
+    /// <see cref="SyncProjects"/> with them — must be provided by an application-specific override
+    /// (e.g., Paratext 10 Studio). This stub always throws because it is unimplemented in
+    /// Platform.Bible.
+    /// </summary>
+    protected void SyncOpenProjects()
     {
         throw new PlatformUnimplementedException(
             "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
