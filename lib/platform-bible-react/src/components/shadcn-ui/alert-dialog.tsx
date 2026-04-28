@@ -70,7 +70,8 @@ AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 function AlertDialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('tw-flex tw-flex-col tw-space-y-2 tw-text-center sm:tw-text-left', className)}
+      // CUSTOM: Use logical `tw-text-start` (mirrors DialogHeader) so RTL respects dir=rtl
+      className={cn('tw-flex tw-flex-col tw-space-y-2 tw-text-center sm:tw-text-start', className)}
       {...props}
     />
   );
