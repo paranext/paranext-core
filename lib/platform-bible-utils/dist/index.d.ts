@@ -3929,6 +3929,59 @@ export declare function formatRelativeDate(date: Date, todayString: string, yest
  * https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values#modifier_keys
  */
 export declare const MODIFIER_KEYS: Set<string>;
+/**
+ * The Paratext registry-defined project scopes. See the registry's scope picker for the canonical
+ * list. Each scope describes what canonical books the project is expected to contain.
+ */
+export type ProjectScope = {
+	/** Stable identifier suitable for use as an enum value or key. */
+	id: ProjectScopeId;
+	/** Human-readable label, matching the registry's wording. */
+	name: string;
+	/**
+	 * Books guaranteed to be part of the scope. For flexible scopes (`portions`, `selections`,
+	 * `shorterBible`) this is empty because the actual book list is defined per-project.
+	 */
+	requiredBookIds: string[];
+	/**
+	 * Books that may optionally be part of the scope (in addition to `requiredBookIds`). For
+	 * example "New Testament + portions of Old Testament" has the full NT as required and the full
+	 * OT as optional.
+	 */
+	optionalBookIds?: string[];
+	/**
+	 * Optional predicate that further constrains membership — for example, "New Testament + portions
+	 * of Old Testament" requires at least one OT book. The predicate takes the list of book ids in
+	 * the current scope and returns true when the scope is satisfied.
+	 */
+	matchesScope?: (bookIds: string[]) => boolean;
+};
+export type ProjectScopeId = "bibleWithoutDeuterocanon" | "bibleWithDeuterocanon" | "deuterocanon" | "newTestament" | "newTestamentPlusPortionsOfOldTestament" | "oldTestament" | "oldTestamentPlusPortionsOfNewTestament" | "oldTestamentPlusDeuterocanon" | "portions" | "selections" | "shorterBible";
+/** Canonical Old Testament book ids (1–39). */
+export declare const OT_BOOK_IDS: string[];
+/** Canonical New Testament book ids (40–66). */
+export declare const NT_BOOK_IDS: string[];
+/** Deuterocanonical book ids (67+). */
+export declare const DC_BOOK_IDS: string[];
+/**
+ * Short, few-letter abbreviations for each scope, intended for use in tight UI surfaces (icon-only
+ * sidebars, badges, etc.) where the full scope name does not fit.
+ */
+export declare const PROJECT_SCOPE_ABBREVIATIONS: Record<ProjectScopeId, string>;
+/** All Paratext registry project scopes keyed by `ProjectScopeId`. */
+export declare const PROJECT_SCOPES: Record<ProjectScopeId, ProjectScope>;
+/**
+ * Returns the number of books expected for a scope. For scopes with a fixed set of required books
+ * that is the `requiredBookIds` length; for flexible scopes (`portions`, `selections`, `shorterBible`)
+ * we fall back to the number of books currently part of that project's scope.
+ */
+export declare function getExpectedBookCountForScope(scope: ProjectScope, currentBookIds: string[]): number;
+/**
+ * Returns whether a single book fits inside the scope description — i.e. whether it belongs to
+ * `requiredBookIds` or `optionalBookIds`. Books that don't fit are considered "unplanned" and
+ * shouldn't normally be added to the scope.
+ */
+export declare function doesBookFitScope(scope: ProjectScope, bookId: string): boolean;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**
@@ -5770,7 +5823,7 @@ export type LegacyCommentThread = {
 	contextScrTextName?: string;
 	/** Whether this is a spelling note */
 	isSpellingNote: boolean;
-	/** Whether this is a back translation note */
+	/** Whether this is a biblical terms note */
 	isBTNote: boolean;
 	/** Whether this is a consultant note */
 	isConsultantNote: boolean;
