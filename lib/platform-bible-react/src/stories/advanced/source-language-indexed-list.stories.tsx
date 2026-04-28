@@ -1,12 +1,20 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
-import { ArrowLeft } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Maximize2,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button } from '@/components/shadcn-ui/button';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Dialog, DialogContent, DialogTitle } from '@/components/shadcn-ui/dialog';
+import { Drawer, DrawerContent, DrawerTitle } from '@/components/shadcn-ui/drawer';
 import {
   ResizableHandle,
   ResizablePanel,
@@ -618,7 +626,34 @@ function EncyclopediaDetail({ item, onClose }: { item: EncyclopediaTeaser; onClo
   );
 }
 
-function MediaDetail({ item, onClose }: { item: MediaItem; onClose: () => void }) {
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 5;
+const ZOOM_STEP = 0.25;
+
+function MediaDetail({
+  item,
+  onClose,
+  onPrev,
+  onNext,
+}: {
+  item: MediaItem;
+  onClose: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const imageAlt = item.thumbnailAlt ?? item.primaryText;
+
+  // Reset zoom when navigating to a different item so the new image starts
+  // at fit-to-viewport scale.
+  useEffect(() => {
+    setZoom(1);
+  }, [item.id]);
+
+  const zoomIn = useCallback(() => setZoom((z) => Math.min(z + ZOOM_STEP, ZOOM_MAX)), []);
+  const zoomOut = useCallback(() => setZoom((z) => Math.max(z - ZOOM_STEP, ZOOM_MIN)), []);
+
   return (
     <div>
       <Button data-back-to-list onClick={onClose} variant="ghost" size="sm" className="tw-mb-3">
@@ -630,13 +665,116 @@ function MediaDetail({ item, onClose }: { item: MediaItem; onClose: () => void }
         <Badge variant="outline">{item.mediaType}</Badge>
       </div>
       {item.thumbnailUrl && (
-        <img
-          src={item.thumbnailUrl}
-          alt={item.thumbnailAlt ?? item.primaryText}
-          className="tw-mb-3 tw-w-full tw-rounded tw-object-contain"
-        />
+        <div className="tw-relative tw-mb-3">
+          <img
+            src={item.thumbnailUrl}
+            alt={imageAlt}
+            className="tw-w-full tw-rounded tw-object-contain"
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            onClick={() => setExpanded(true)}
+            aria-label="Expand image"
+            className="tw-absolute tw-right-2 tw-top-2 tw-h-8 tw-w-8 tw-bg-background/80 tw-shadow hover:tw-bg-background"
+          >
+            <Maximize2 className="tw-h-4 tw-w-4" />
+          </Button>
+        </div>
       )}
       {item.caption && <p className="tw-text-sm tw-text-muted-foreground">{item.caption}</p>}
+      {item.thumbnailUrl && (
+        <Dialog open={expanded} onOpenChange={setExpanded}>
+          <DialogContent className="tw-flex tw-max-h-[95vh] tw-w-[95vw] tw-max-w-[95vw] tw-flex-col tw-overflow-hidden tw-p-4">
+            <div className="tw-flex tw-items-center tw-gap-2">
+              <DialogTitle className="tw-flex-1 tw-truncate">{item.primaryText}</DialogTitle>
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={onPrev}
+                      disabled={!onPrev}
+                      aria-label="Previous item"
+                      className="tw-h-8 tw-w-8"
+                    >
+                      <ChevronLeftIcon className="tw-h-4 tw-w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Previous item</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={onNext}
+                      disabled={!onNext}
+                      aria-label="Next item"
+                      className="tw-h-8 tw-w-8"
+                    >
+                      <ChevronRightIcon className="tw-h-4 tw-w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Next item</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={zoomOut}
+                      disabled={zoom <= ZOOM_MIN}
+                      aria-label="Zoom out"
+                      className="tw-h-8 tw-w-8"
+                    >
+                      <ZoomOut className="tw-h-4 tw-w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Zoom out</TooltipContent>
+                </Tooltip>
+                <span className="tw-w-12 tw-text-center tw-text-xs tw-tabular-nums tw-text-muted-foreground">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={zoomIn}
+                      disabled={zoom >= ZOOM_MAX}
+                      aria-label="Zoom in"
+                      className="tw-h-8 tw-w-8"
+                    >
+                      <ZoomIn className="tw-h-4 tw-w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Zoom in</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {/* Spacer for the built-in DialogContent close (X) button */}
+              <div className="tw-w-8" />
+            </div>
+            <div className="tw-flex tw-flex-1 tw-items-center tw-justify-center tw-overflow-auto">
+              <img
+                src={item.thumbnailUrl}
+                alt={imageAlt}
+                style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
+                className="tw-max-h-full tw-max-w-full tw-object-contain tw-transition-transform"
+              />
+            </div>
+            {item.caption && (
+              <p className="tw-text-sm tw-text-muted-foreground">{item.caption}</p>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -896,196 +1034,314 @@ export const EmptyState: Story = {
   ),
 };
 
+// ---------------------------------------------------------------------------
+// Shared AllErTabs layout: tabs + per-tab list/detail + pluggable domain overlay
+// ---------------------------------------------------------------------------
+
+type DomainOverlayProps = {
+  domainPath: SemanticDomain[] | undefined;
+  setDomainPath: (path: SemanticDomain[] | undefined) => void;
+  handleDomainClick: (domain: EntryDomain, pathIds?: string[]) => void;
+  tabContentRef: React.RefObject<HTMLDivElement>;
+  isDictionaryTab: boolean;
+};
+
+function AllErTabsLayout({ Overlay }: { Overlay: React.ComponentType<DomainOverlayProps> }) {
+  const [activeTab, setActiveTab] = useState<'dictionary' | 'encyclopedia' | 'media'>('dictionary');
+  const [selectedDict, setSelectedDict] = useState<DictionaryEntryWithSenses | undefined>();
+  const [selectedEnc, setSelectedEnc] = useState<EncyclopediaTeaser | undefined>();
+  const [selectedMedia, setSelectedMedia] = useState<MediaItem | undefined>();
+  const [domainPath, setDomainPath] = useState<SemanticDomain[] | undefined>();
+  // eslint-disable-next-line no-null/no-null
+  const tabContentRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const dictListRef = useRef<HTMLUListElement | null>(null);
+  // eslint-disable-next-line no-null/no-null
+  const encListRef = useRef<HTMLUListElement | null>(null);
+  // eslint-disable-next-line no-null/no-null
+  const mediaListRef = useRef<HTMLUListElement | null>(null);
+
+  const resolveDomainPath = useCallback((pathIds: string[]): SemanticDomain[] => {
+    return pathIds.reduce<SemanticDomain[]>((acc, id) => {
+      const parent = acc.length === 0 ? sampleAllDomains : (acc[acc.length - 1].children ?? []);
+      const found = parent.find((d) => d.id === id);
+      if (found) acc.push(found);
+      return acc;
+    }, []);
+  }, []);
+
+  const handleDomainClick = useCallback(
+    (_domain: EntryDomain, pathIds?: string[]) => {
+      if (pathIds) {
+        const path = resolveDomainPath(pathIds);
+        if (path.length > 0) setDomainPath(path);
+      }
+    },
+    [resolveDomainPath],
+  );
+
+  return (
+    <div className="tw-flex tw-h-[550px] tw-flex-col tw-rounded tw-border">
+      <div className="tw-flex tw-border-b">
+        {(['dictionary', 'encyclopedia', 'media'] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            className={`tw-px-4 tw-py-2 tw-text-sm tw-capitalize ${activeTab === tab ? 'tw-border-b-2 tw-border-primary tw-font-medium' : 'tw-text-muted-foreground hover:tw-text-foreground'}`}
+            onClick={() => {
+              setActiveTab(tab);
+              setSelectedDict(undefined);
+              setSelectedEnc(undefined);
+              setSelectedMedia(undefined);
+              setDomainPath(undefined);
+              requestAnimationFrame(() => {
+                if (tab === 'dictionary') dictListRef.current?.focus();
+                else if (tab === 'encyclopedia') encListRef.current?.focus();
+                else mediaListRef.current?.focus();
+              });
+            }}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+      <div ref={tabContentRef} className="tw-relative tw-flex-1 tw-overflow-hidden">
+        {activeTab === 'dictionary' && (
+          <InlineListDetail
+            items={sampleDictionaryItems}
+            selectedItem={selectedDict}
+            onSelectItem={setSelectedDict}
+            listRef={dictListRef}
+            renderListItem={(item, compact) => <ErDictListItem item={item} compact={compact} />}
+            renderDetail={(item, onClose) => (
+              <ErDictionaryDetail
+                item={item}
+                onClose={onClose}
+                onDomainClick={handleDomainClick}
+              />
+            )}
+          />
+        )}
+        {activeTab === 'encyclopedia' && (
+          <InlineListDetail
+            items={sampleEncyclopediaItems}
+            selectedItem={selectedEnc}
+            onSelectItem={setSelectedEnc}
+            listRef={encListRef}
+            renderListItem={(item) => (
+              <div className="tw-flex tw-flex-col tw-gap-0.5 tw-overflow-hidden">
+                <div className="tw-flex tw-items-baseline tw-gap-2 tw-overflow-hidden">
+                  <span className="tw-shrink-0 tw-text-sm tw-font-medium">{item.primaryText}</span>
+                  <span className="tw-truncate tw-text-sm tw-text-muted-foreground">
+                    {item.sourceLanguageText}
+                    {item.transliteration && (
+                      <span className="tw-ml-1">({item.transliteration})</span>
+                    )}
+                  </span>
+                </div>
+                <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
+                  {item.teaserText}
+                </span>
+              </div>
+            )}
+            renderDetail={(item, onClose) => <EncyclopediaDetail item={item} onClose={onClose} />}
+          />
+        )}
+        {activeTab === 'media' && (
+          <InlineListDetail
+            items={sampleMediaItems}
+            selectedItem={selectedMedia}
+            onSelectItem={setSelectedMedia}
+            listRef={mediaListRef}
+            renderListItem={(item) => (
+              <div className="tw-flex tw-items-center tw-gap-2 tw-overflow-hidden">
+                {item.thumbnailUrl && (
+                  <img
+                    src={item.thumbnailUrl}
+                    alt={item.primaryText}
+                    className="tw-h-10 tw-w-10 tw-shrink-0 tw-rounded tw-object-cover"
+                  />
+                )}
+                <div className="tw-flex tw-flex-col tw-gap-0.5 tw-overflow-hidden">
+                  <span className="tw-truncate tw-text-sm tw-font-medium">{item.primaryText}</span>
+                  <Badge variant="outline" className="tw-w-fit tw-text-xs">
+                    {item.mediaType}
+                  </Badge>
+                </div>
+              </div>
+            )}
+            renderDetail={(item, onClose) => {
+              const idx = sampleMediaItems.findIndex((m) => m.id === item.id);
+              const onPrev =
+                idx > 0 ? () => setSelectedMedia(sampleMediaItems[idx - 1]) : undefined;
+              const onNext =
+                idx >= 0 && idx < sampleMediaItems.length - 1
+                  ? () => setSelectedMedia(sampleMediaItems[idx + 1])
+                  : undefined;
+              return (
+                <MediaDetail item={item} onClose={onClose} onPrev={onPrev} onNext={onNext} />
+              );
+            }}
+          />
+        )}
+        <Overlay
+          domainPath={domainPath}
+          setDomainPath={setDomainPath}
+          handleDomainClick={handleDomainClick}
+          tabContentRef={tabContentRef}
+          isDictionaryTab={activeTab === 'dictionary'}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Domain-overlay variants
+// ---------------------------------------------------------------------------
+
+/** Overlay variant: centered modal Dialog. ESC + close button are built-in. */
+function DialogDomainOverlay({
+  domainPath,
+  setDomainPath,
+  handleDomainClick,
+  isDictionaryTab,
+}: DomainOverlayProps) {
+  return (
+    <Dialog
+      open={isDictionaryTab && domainPath !== undefined}
+      onOpenChange={(open) => {
+        if (!open) setDomainPath(undefined);
+      }}
+    >
+      <DialogContent className="tw-flex tw-h-[80vh] tw-max-h-[600px] tw-w-[90vw] tw-max-w-3xl tw-flex-col tw-overflow-hidden tw-p-0">
+        <DialogTitle className="tw-sr-only">Filtered dictionary</DialogTitle>
+        {domainPath && (
+          <DomainFilteredView
+            domainPath={domainPath}
+            onDomainChange={setDomainPath}
+            onDomainClick={handleDomainClick}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Overlay variant: shadcn (vaul) Drawer scoped to the tab content area. */
+function StandardDrawerDomainOverlay({
+  domainPath,
+  setDomainPath,
+  handleDomainClick,
+  tabContentRef,
+  isDictionaryTab,
+}: DomainOverlayProps) {
+  return (
+    <Drawer
+      open={isDictionaryTab && domainPath !== undefined}
+      onOpenChange={(open) => {
+        if (!open) setDomainPath(undefined);
+      }}
+      direction="bottom"
+    >
+      <DrawerContent
+        container={tabContentRef.current ?? undefined}
+        className="tw-h-[85%]"
+      >
+        <DrawerTitle className="tw-sr-only">Filtered dictionary</DrawerTitle>
+        {domainPath && (
+          <DomainFilteredView
+            domainPath={domainPath}
+            onDomainChange={setDomainPath}
+            onDomainClick={handleDomainClick}
+          />
+        )}
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
 /**
- * All ER tabs with inline panel detail views. Domain links open a bottom Drawer containing the
- * domain-filtered list with breadcrumb navigation. Interaction works while details are shown:
+ * Overlay variant: custom absolute panel (not vaul) so tab switching above the drawer keeps
+ * working while open. Clicking the visible backdrop strip closes the drawer.
+ */
+function CustomDrawerDomainOverlay({
+  domainPath,
+  setDomainPath,
+  handleDomainClick,
+  isDictionaryTab,
+}: DomainOverlayProps) {
+  // Close on ESC. An open popover inside the drawer uses
+  // `e.nativeEvent.stopImmediatePropagation()` in its own ESC handler, so ESC
+  // inside an open popover only closes the popover, not the drawer.
+  useEffect(() => {
+    if (domainPath === undefined) return undefined;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setDomainPath(undefined);
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [domainPath, setDomainPath]);
+
+  if (!isDictionaryTab || domainPath === undefined) return undefined;
+  return (
+    <>
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+      <div
+        className="tw-absolute tw-inset-0 tw-z-40 tw-cursor-pointer tw-bg-black/50"
+        onClick={() => setDomainPath(undefined)}
+        aria-hidden
+      />
+      <div className="tw-absolute tw-bottom-0 tw-left-2 tw-right-2 tw-top-2 tw-z-50 tw-flex tw-flex-col tw-overflow-hidden tw-rounded-t-lg tw-border tw-bg-background tw-shadow-xl">
+        <DomainFilteredView
+          domainPath={domainPath}
+          onDomainChange={setDomainPath}
+          onClose={() => setDomainPath(undefined)}
+          onDomainClick={handleDomainClick}
+        />
+      </div>
+    </>
+  );
+}
+
+/**
+ * All ER tabs with inline panel detail views. Domain links open a centered modal Dialog containing
+ * the domain-filtered list with breadcrumb navigation. Interaction works while details are shown:
  * selecting entries, clicking close, breadcrumbs, and domain links all remain functional.
  */
 export const AllErTabs: Story = {
-  render: () => {
-    const [activeTab, setActiveTab] = useState<'dictionary' | 'encyclopedia' | 'media'>(
-      'dictionary',
-    );
-    const [selectedDict, setSelectedDict] = useState<DictionaryEntryWithSenses | undefined>();
-    const [selectedEnc, setSelectedEnc] = useState<EncyclopediaTeaser | undefined>();
-    const [selectedMedia, setSelectedMedia] = useState<MediaItem | undefined>();
-    const [domainPath, setDomainPath] = useState<SemanticDomain[] | undefined>();
-    // eslint-disable-next-line no-null/no-null
-    const tabContentRef = useRef<HTMLDivElement>(null);
-    // Refs to each tab's listbox so we can programmatically refocus on tab
-    // click (including clicks on the currently active tab where no remount
-    // would otherwise happen).
-    // eslint-disable-next-line no-null/no-null
-    const dictListRef = useRef<HTMLUListElement | null>(null);
-    // eslint-disable-next-line no-null/no-null
-    const encListRef = useRef<HTMLUListElement | null>(null);
-    // eslint-disable-next-line no-null/no-null
-    const mediaListRef = useRef<HTMLUListElement | null>(null);
+  render: () => <AllErTabsLayout Overlay={DialogDomainOverlay} />,
+};
 
-    const resolveDomainPath = useCallback((pathIds: string[]): SemanticDomain[] => {
-      return pathIds.reduce<SemanticDomain[]>((acc, id) => {
-        const parent = acc.length === 0 ? sampleAllDomains : (acc[acc.length - 1].children ?? []);
-        const found = parent.find((d) => d.id === id);
-        if (found) acc.push(found);
-        return acc;
-      }, []);
-    }, []);
-
-    const handleDomainClick = useCallback(
-      (_domain: EntryDomain, pathIds?: string[]) => {
-        if (pathIds) {
-          const path = resolveDomainPath(pathIds);
-          if (path.length > 0) setDomainPath(path);
-        }
+/** Same as AllErTabs but the domain-filtered view appears in a bottom Drawer (shadcn / vaul). */
+export const AllErTabsDrawerVariant: Story = {
+  render: () => <AllErTabsLayout Overlay={StandardDrawerDomainOverlay} />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Variant using the standard shadcn Drawer (vaul-based), scoped to the tab content area via the `container` prop.',
       },
-      [resolveDomainPath],
-    );
+    },
+  },
+};
 
-    // Domain click from inside the filtered detail view reuses the same handler
-    const handleDomainClickInFiltered = handleDomainClick;
-
-    // Close the drawer on ESC. An open popover inside the drawer uses
-    // `e.nativeEvent.stopImmediatePropagation()` in its own ESC handler, which
-    // stops the native event from reaching this document-level listener — so
-    // ESC inside an open popover only closes the popover.
-    useEffect(() => {
-      if (domainPath === undefined) return undefined;
-      const handleEsc = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          setDomainPath(undefined);
-        }
-      };
-      document.addEventListener('keydown', handleEsc);
-      return () => document.removeEventListener('keydown', handleEsc);
-    }, [domainPath]);
-
-    return (
-      <div className="tw-flex tw-h-[550px] tw-flex-col tw-rounded tw-border">
-        <div className="tw-flex tw-border-b">
-          {(['dictionary', 'encyclopedia', 'media'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={`tw-px-4 tw-py-2 tw-text-sm tw-capitalize ${activeTab === tab ? 'tw-border-b-2 tw-border-primary tw-font-medium' : 'tw-text-muted-foreground hover:tw-text-foreground'}`}
-              onClick={() => {
-                setActiveTab(tab);
-                setSelectedDict(undefined);
-                setSelectedEnc(undefined);
-                setSelectedMedia(undefined);
-                setDomainPath(undefined);
-                // Move focus to the active tab's list after the re-render.
-                // Works for both tab-switch (mount focus also handles this)
-                // and same-tab clicks (no remount, so we force focus here).
-                requestAnimationFrame(() => {
-                  if (tab === 'dictionary') dictListRef.current?.focus();
-                  else if (tab === 'encyclopedia') encListRef.current?.focus();
-                  else mediaListRef.current?.focus();
-                });
-              }}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-        <div ref={tabContentRef} className="tw-relative tw-flex-1 tw-overflow-hidden">
-          {activeTab === 'dictionary' && (
-            <InlineListDetail
-              items={sampleDictionaryItems}
-              selectedItem={selectedDict}
-              onSelectItem={setSelectedDict}
-              listRef={dictListRef}
-              renderListItem={(item, compact) => <ErDictListItem item={item} compact={compact} />}
-              renderDetail={(item, onClose) => (
-                <ErDictionaryDetail
-                  item={item}
-                  onClose={onClose}
-                  onDomainClick={handleDomainClick}
-                />
-              )}
-            />
-          )}
-          {activeTab === 'encyclopedia' && (
-            <InlineListDetail
-              items={sampleEncyclopediaItems}
-              selectedItem={selectedEnc}
-              onSelectItem={setSelectedEnc}
-              listRef={encListRef}
-              renderListItem={(item) => (
-                <div className="tw-flex tw-flex-col tw-gap-0.5 tw-overflow-hidden">
-                  <div className="tw-flex tw-items-baseline tw-gap-2 tw-overflow-hidden">
-                    <span className="tw-shrink-0 tw-text-sm tw-font-medium">
-                      {item.primaryText}
-                    </span>
-                    <span className="tw-truncate tw-text-sm tw-text-muted-foreground">
-                      {item.sourceLanguageText}
-                      {item.transliteration && (
-                        <span className="tw-ml-1">({item.transliteration})</span>
-                      )}
-                    </span>
-                  </div>
-                  <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
-                    {item.teaserText}
-                  </span>
-                </div>
-              )}
-              renderDetail={(item, onClose) => <EncyclopediaDetail item={item} onClose={onClose} />}
-            />
-          )}
-          {activeTab === 'media' && (
-            <InlineListDetail
-              items={sampleMediaItems}
-              selectedItem={selectedMedia}
-              onSelectItem={setSelectedMedia}
-              listRef={mediaListRef}
-              renderListItem={(item) => (
-                <div className="tw-flex tw-items-center tw-gap-2 tw-overflow-hidden">
-                  {item.thumbnailUrl && (
-                    <img
-                      src={item.thumbnailUrl}
-                      alt={item.primaryText}
-                      className="tw-h-10 tw-w-10 tw-shrink-0 tw-rounded tw-object-cover"
-                    />
-                  )}
-                  <div className="tw-flex tw-flex-col tw-gap-0.5 tw-overflow-hidden">
-                    <span className="tw-truncate tw-text-sm tw-font-medium">
-                      {item.primaryText}
-                    </span>
-                    <Badge variant="outline" className="tw-w-fit tw-text-xs">
-                      {item.mediaType}
-                    </Badge>
-                  </div>
-                </div>
-              )}
-              renderDetail={(item, onClose) => <MediaDetail item={item} onClose={onClose} />}
-            />
-          )}
-
-          {/* Domain-filtered drawer — a custom absolute panel scoped to the tab
-              content area, with a modal backdrop. Implemented directly (not via
-              vaul) so tab switching above the drawer keeps working while open.
-              Clicking the visible backdrop strip closes the drawer. */}
-          {activeTab === 'dictionary' && domainPath !== undefined && (
-            <>
-              {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-              <div
-                className="tw-absolute tw-inset-0 tw-z-40 tw-cursor-pointer tw-bg-black/50"
-                onClick={() => setDomainPath(undefined)}
-                aria-hidden
-              />
-              <div className="tw-absolute tw-bottom-0 tw-left-2 tw-right-2 tw-top-2 tw-z-50 tw-flex tw-flex-col tw-overflow-hidden tw-rounded-t-lg tw-border tw-bg-background tw-shadow-xl">
-                <DomainFilteredView
-                  domainPath={domainPath}
-                  onDomainChange={setDomainPath}
-                  onClose={() => setDomainPath(undefined)}
-                  onDomainClick={handleDomainClickInFiltered}
-                />
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    );
+/**
+ * Same as AllErTabs but uses a custom absolute panel as the drawer. Implemented directly (not via
+ * vaul) so tab switching above the drawer keeps working while open.
+ */
+export const AllErTabsCustomDrawerVariant: Story = {
+  render: () => <AllErTabsLayout Overlay={CustomDrawerDomainOverlay} />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Variant using a custom absolute panel (not vaul) so tab switching above the drawer keeps working while open.',
+      },
+    },
   },
 };
 

@@ -558,24 +558,13 @@ function TreeKeyboardContainer({
   // eslint-disable-next-line no-null/no-null
   const scrollRef = useRef<HTMLButtonElement>(null);
 
+  // Scroll the selected node into view when the dropdown opens, but do not
+  // move focus there — the user can Tab in when they want to navigate.
   useEffect(() => {
-    const focusTarget = () => {
-      if (!scrollRef.current) return;
-      if (document.activeElement === scrollRef.current) return;
-      scrollRef.current.scrollIntoView({ block: 'center' });
-      scrollRef.current.focus();
-    };
-    // Multiple staggered attempts to win the race against Radix's
-    // RovingFocusGroup, which re-focuses the first menu item asynchronously.
-    // A single rAF isn't enough on subsequent opens when focus was previously
-    // on another SegmentDropdown's trigger.
-    const rafId = requestAnimationFrame(focusTarget);
-    const delays = [0, 50, 120, 220];
-    const timeoutIds = delays.map((delay) => window.setTimeout(focusTarget, delay));
-    return () => {
-      cancelAnimationFrame(rafId);
-      timeoutIds.forEach((id) => window.clearTimeout(id));
-    };
+    const id = requestAnimationFrame(() => {
+      scrollRef.current?.scrollIntoView({ block: 'center' });
+    });
+    return () => cancelAnimationFrame(id);
   }, [expandToId]);
 
   const getFocusableButtons = (): HTMLButtonElement[] => {
@@ -668,12 +657,15 @@ function TreeNodeList({
     <ul className={cn('tw-space-y-0.5', { 'tw-ml-3': parentPath.length > 0 })}>
       {domains.map((domain) => {
         const thisPath = [...parentPath, domain];
-        const isSelected =
-          currentPath.length > 0 && currentPath[currentPath.length - 1].id === domain.id;
+        // The clicked breadcrumb segment is the selected node in the tree —
+        // not the final segment of currentPath, which may be deeper than the
+        // segment the user clicked.
+        const isSelected = domain.id === expandToId;
         const hasChildren = domain.children && domain.children.length > 0;
-        const isOnPath = currentPath.some((d) => d.id === domain.id);
         const containsTarget = isAncestorOf(domain, expandToId);
-        const shouldExpand = isOnPath || containsTarget;
+        // Expand only strict ancestors of the clicked breadcrumb segment so
+        // the segment itself is visible but its children stay collapsed.
+        const shouldExpand = containsTarget && domain.id !== expandToId;
         const isScrollTarget = domain.id === expandToId;
 
         return (
