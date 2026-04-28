@@ -62,6 +62,9 @@ on an already-gone notification is a no-op.
 
 ## Section 2: Auto-Sync Extension (`paratext-bible-internal-extensions`)
 
+Repo path: `../paratext-bible-internal-extensions/src/paratext-bible-send-receive`
+(sibling directory to `paranext-core`)
+
 The auto-sync logic lives inside the existing `paratextBibleSendReceive` extension. A background
 task is fired (not awaited) from `activate()` so extension startup is not blocked.
 
