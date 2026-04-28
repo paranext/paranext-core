@@ -53,7 +53,6 @@ on an already-gone notification is a no-op.
 **Files changed:**
 
 - `src/shared/models/notification.service-model.ts` — add method to interface
-- `src/shared/services/notification.service.ts` — add client call via network object
 - `src/renderer/services/notification.service-host.ts` — call `toast.dismiss(notificationId)`
   from sonner directly
 
