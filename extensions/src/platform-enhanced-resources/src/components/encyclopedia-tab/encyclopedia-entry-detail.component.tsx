@@ -54,7 +54,7 @@ export type EncyclopediaEntryDetailProps = {
  * "View full article" button at the bottom that opens the ArticleViewer drawer (UI-PKG-006).
  *
  * If multiple article references are attached to the same lemma, the parent renders multiple
- * EncyclopediaEntryDetail instances stacked vertically inside the expanded ResourceList row.
+ * EncyclopediaEntryDetail instances stacked vertically inside the expanded entry row.
  */
 export function EncyclopediaEntryDetail({
   entry,

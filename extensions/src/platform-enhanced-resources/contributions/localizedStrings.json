@@ -96,15 +96,6 @@
     "%enhancedResources_shell_title%": {},
     "%enhancedResources_shell_emptyTitle%": {},
     "%enhancedResources_shell_emptyDescription%": {},
-    "%enhancedResources_resourceList_expand%": {
-      "notes": ["ARIA label / tooltip for the per-row expand toggle in resource lists."]
-    },
-    "%enhancedResources_resourceList_collapse%": {
-      "notes": ["ARIA label / tooltip for the per-row collapse toggle in resource lists."]
-    },
-    "%enhancedResources_resourceList_loading%": {
-      "notes": ["ARIA label for a resource list while it is loading."]
-    },
     "%enhancedResources_sense_definitionLabel%": {
       "notes": ["Inline label preceding a sense definition."]
     },
@@ -116,16 +107,6 @@
     },
     "%enhancedResources_sense_nonRelevantLabel%": {
       "notes": ["ARIA label for a sense flagged as non-relevant for the current verse."]
-    },
-    "%enhancedResources_dictionary_columnHeader_translations%": {},
-    "%enhancedResources_dictionary_columnHeader_sourceLanguage%": {},
-    "%enhancedResources_dictionary_columnHeader_definitions%": {},
-    "%enhancedResources_dictionary_columnHeader_count%": {},
-    "%enhancedResources_dictionary_expandAll%": {
-      "notes": ["ARIA label for the Expand all entries action."]
-    },
-    "%enhancedResources_dictionary_collapseAll%": {
-      "notes": ["ARIA label for the Collapse all entries action."]
     },
     "%enhancedResources_dictionary_emptyState_noData%": {
       "notes": [
@@ -189,15 +170,6 @@
     "%enhancedResources_encyclopedia_tabLabel%": {
       "notes": ["Heading and ARIA label for the Encyclopedia research tab."]
     },
-    "%enhancedResources_encyclopedia_columnHeader_sourceLanguage%": {},
-    "%enhancedResources_encyclopedia_columnHeader_articles%": {},
-    "%enhancedResources_encyclopedia_columnHeader_count%": {},
-    "%enhancedResources_encyclopedia_expandAll%": {
-      "notes": ["ARIA label for the Expand all entries action in EncyclopediaTab."]
-    },
-    "%enhancedResources_encyclopedia_collapseAll%": {
-      "notes": ["ARIA label for the Collapse all entries action in EncyclopediaTab."]
-    },
     "%enhancedResources_encyclopedia_emptyState_noData%": {
       "notes": [
         "Empty state when no encyclopedia entries match the current scope. {scope} is the localized scope label."
@@ -221,12 +193,6 @@
     },
     "%enhancedResources_encyclopedia_sourceTextTooltip%": {
       "notes": ["ARIA label for clicking a source-text link in the encyclopedia entry row."]
-    },
-    "%enhancedResources_encyclopedia_articleTitleTooltip%": {
-      "notes": ["ARIA label for clicking an article title link in the encyclopedia entry row."]
-    },
-    "%enhancedResources_encyclopedia_thumbnailLabel%": {
-      "notes": ["ARIA label / alt text prefix for inline thumbnail images on an encyclopedia row."]
     },
     "%enhancedResources_encyclopedia_viewFullArticle%": {
       "notes": [
@@ -321,12 +287,6 @@
         "Plural map-files count label shown in the Media Maps tab header. {count} is the integer count."
       ]
     },
-    "%enhancedResources_mediaViewer_title%": {
-      "notes": ["Drawer title for the in-tab MediaViewer (image overlay)."]
-    },
-    "%enhancedResources_mediaViewer_close%": {
-      "notes": ["ARIA label for the MediaViewer close button (X icon)."]
-    },
     "%enhancedResources_mediaViewer_previous%": {
       "notes": [
         "ARIA label for the MediaViewer previous-image button. Hidden when there is only one image."
@@ -343,17 +303,9 @@
     "%enhancedResources_mediaViewer_zoomOut%": {
       "notes": ["ARIA label for the MediaViewer zoom-out button (- icon). Disabled at 1x zoom."]
     },
-    "%enhancedResources_mediaViewer_loading%": {
-      "notes": ["Status text shown over the MediaViewer canvas while the image bytes are loading."]
-    },
     "%enhancedResources_mediaViewer_imageAlt%": {
       "notes": [
         "Alt text template for the MediaViewer image. {title} is replaced with the image title."
-      ]
-    },
-    "%enhancedResources_mediaViewer_imageCounter%": {
-      "notes": [
-        "ARIA-live counter announcing the displayed image position. {current} and {total} are integers."
       ]
     },
     "%enhancedResources_mediaViewer_zoomLevelAnnouncement%": {
@@ -366,113 +318,12 @@
         "DrawerTitle text for the ArticleViewer overlay (also the screen-reader fallback when no article is loaded)."
       ]
     },
-    "%enhancedResources_articleViewer_back%": {
-      "notes": ["ARIA label for the ArticleViewer back button (arrow-left icon, closes drawer)."]
-    },
-    "%enhancedResources_articleViewer_close%": {
-      "notes": ["ARIA label for the ArticleViewer close button (X icon)."]
-    },
-    "%enhancedResources_articleViewer_previousArticle%": {
-      "notes": [
-        "ARIA label for the ArticleViewer previous-article button. Hidden when no sequence is available."
-      ]
-    },
-    "%enhancedResources_articleViewer_nextArticle%": {
-      "notes": [
-        "ARIA label for the ArticleViewer next-article button. Hidden when no sequence is available."
-      ]
-    },
-    "%enhancedResources_articleViewer_loading%": {
-      "notes": ["Status text shown while the ArticleViewer is fetching article content."]
-    },
-    "%enhancedResources_articleViewer_empty%": {
-      "notes": [
-        "Placeholder shown when the ArticleViewer is open but no article data is available."
-      ]
-    },
-    "%enhancedResources_articleViewer_abbreviationsHeader%": {
-      "notes": [
-        "Section heading above the list of abbreviations (with hover tooltips) inside the ArticleViewer."
-      ]
-    },
-    "%enhancedResources_articleViewer_abbreviationTooltipLabel%": {
-      "notes": [
-        "ARIA label for the ArticleViewer abbreviation hover surface. Activating reveals the full text via tooltip."
-      ]
-    },
     "%enhancedResources_semanticDomain_title%": {
       "notes": ["DrawerTitle text for the SemanticDomainViewer overlay."]
     },
     "%enhancedResources_semanticDomain_description%": {
       "notes": [
         "Screen-reader description for the SemanticDomainViewer drawer. Announces the drawer's purpose."
-      ]
-    },
-    "%enhancedResources_semanticDomain_back%": {
-      "notes": [
-        "ARIA label for the SemanticDomainViewer back button (arrow-left icon, closes drawer)."
-      ]
-    },
-    "%enhancedResources_semanticDomain_close%": {
-      "notes": ["ARIA label for the SemanticDomainViewer close button (X icon)."]
-    },
-    "%enhancedResources_semanticDomain_treeAriaLabel%": {
-      "notes": ["ARIA label announced for the semantic-domain hierarchy tree (role=tree)."]
-    },
-    "%enhancedResources_semanticDomain_breadcrumbAriaLabel%": {
-      "notes": ["ARIA label for the breadcrumb navigation landmark."]
-    },
-    "%enhancedResources_semanticDomain_breadcrumbRoot%": {
-      "notes": ["Root-level label rendered as the first breadcrumb item (e.g. 'All')."]
-    },
-    "%enhancedResources_semanticDomain_breadcrumbSeparator%": {
-      "notes": [
-        "Visible separator string between breadcrumb items (e.g. '>'). Decorative; aria-hidden."
-      ]
-    },
-    "%enhancedResources_semanticDomain_expand%": {
-      "notes": ["ARIA label / tooltip for the per-node expand toggle in the semantic domain tree."]
-    },
-    "%enhancedResources_semanticDomain_collapse%": {
-      "notes": [
-        "ARIA label / tooltip for the per-node collapse toggle in the semantic domain tree."
-      ]
-    },
-    "%enhancedResources_semanticDomain_openArticleLabel%": {
-      "notes": [
-        "ARIA label for a domain entry whose hasArticle is true. Activating closes the drawer and opens the ArticleViewer."
-      ]
-    },
-    "%enhancedResources_semanticDomain_focusCategoryLabel%": {
-      "notes": [
-        "ARIA label for a domain category whose hasArticle is false. Activating focuses the tree on that category."
-      ]
-    },
-    "%enhancedResources_semanticDomain_filteredEntriesHeader%": {
-      "notes": [
-        "Section heading above the dictionary entries filtered by the currently focused semantic domain. {domainLabel} is the current domain label."
-      ]
-    },
-    "%enhancedResources_semanticDomain_filteredEntriesAriaLabel%": {
-      "notes": ["ARIA label for the filtered-entries ResourceList inside SemanticDomainViewer."]
-    },
-    "%enhancedResources_semanticDomain_filteredEntriesEmpty%": {
-      "notes": ["Empty-state message when the focused domain has no associated dictionary entries."]
-    },
-    "%enhancedResources_semanticDomain_filteredEntriesLoading%": {
-      "notes": ["ARIA label for the filtered entries list while loading."]
-    },
-    "%enhancedResources_semanticDomain_treeLoading%": {
-      "notes": ["Status text shown while the SemanticDomainViewer is fetching the domain tree."]
-    },
-    "%enhancedResources_semanticDomain_treeEmpty%": {
-      "notes": [
-        "Placeholder shown when the SemanticDomainViewer is open but no domain tree data is available."
-      ]
-    },
-    "%enhancedResources_semanticDomain_glossesLabel%": {
-      "notes": [
-        "Inline label preceding the gloss list of a dictionary entry inside the SemanticDomainViewer."
       ]
     },
     "%enhancedResources_marbleGuide_title%": {
@@ -628,19 +479,10 @@
       "%enhancedResources_shell_title%": "Enhanced resource",
       "%enhancedResources_shell_emptyTitle%": "No resource selected",
       "%enhancedResources_shell_emptyDescription%": "Open an Enhanced Resource from the Paratext menu to begin.",
-      "%enhancedResources_resourceList_expand%": "Expand",
-      "%enhancedResources_resourceList_collapse%": "Collapse",
-      "%enhancedResources_resourceList_loading%": "Loading entries",
       "%enhancedResources_sense_definitionLabel%": "Definition:",
       "%enhancedResources_sense_glossesLabel%": "Glosses:",
       "%enhancedResources_sense_partOfSpeechLabel%": "Part of speech:",
       "%enhancedResources_sense_nonRelevantLabel%": "Non-relevant sense",
-      "%enhancedResources_dictionary_columnHeader_translations%": "Translations",
-      "%enhancedResources_dictionary_columnHeader_sourceLanguage%": "Source language",
-      "%enhancedResources_dictionary_columnHeader_definitions%": "Definitions",
-      "%enhancedResources_dictionary_columnHeader_count%": "Count",
-      "%enhancedResources_dictionary_expandAll%": "Expand all entries",
-      "%enhancedResources_dictionary_collapseAll%": "Collapse all entries",
       "%enhancedResources_dictionary_emptyState_noData%": "No data found for {scope}.",
       "%enhancedResources_dictionary_emptyState_noMatch%": "No data found for \"{word}\" in {scope}.",
       "%enhancedResources_dictionary_emptyState_wordNotInScope%": "\"{word}\" does not occur in {scope}.",
@@ -663,19 +505,12 @@
       "%enhancedResources_dictionary_emptyDetail%": "No additional detail available.",
       "%enhancedResources_dictionary_backToList%": "Back to list",
       "%enhancedResources_encyclopedia_tabLabel%": "Encyclopedia",
-      "%enhancedResources_encyclopedia_columnHeader_sourceLanguage%": "Source language",
-      "%enhancedResources_encyclopedia_columnHeader_articles%": "Articles",
-      "%enhancedResources_encyclopedia_columnHeader_count%": "Count",
-      "%enhancedResources_encyclopedia_expandAll%": "Expand all entries",
-      "%enhancedResources_encyclopedia_collapseAll%": "Collapse all entries",
       "%enhancedResources_encyclopedia_emptyState_noData%": "No data found for {scope}.",
       "%enhancedResources_encyclopedia_emptyState_noMatch%": "No data found for \"{word}\" in {scope}.",
       "%enhancedResources_encyclopedia_emptyState_wordNotInScope%": "\"{word}\" does not occur in {scope}.",
       "%enhancedResources_encyclopedia_copySurfaceForm%": "Copy surface form",
       "%enhancedResources_encyclopedia_copyLemma%": "Copy lemma",
       "%enhancedResources_encyclopedia_sourceTextTooltip%": "Filter on this word",
-      "%enhancedResources_encyclopedia_articleTitleTooltip%": "Open article",
-      "%enhancedResources_encyclopedia_thumbnailLabel%": "Article image",
       "%enhancedResources_encyclopedia_viewFullArticle%": "View full article",
       "%enhancedResources_encyclopedia_articleLoading%": "Loading article",
       "%enhancedResources_encyclopedia_emptyDetail%": "No article content available.",
@@ -699,44 +534,15 @@
       "%enhancedResources_media_maps_emptyState_noData%": "No maps for {scope}.",
       "%enhancedResources_media_maps_countLabel_singular%": "{count} map file",
       "%enhancedResources_media_maps_countLabel_plural%": "{count} map files",
-      "%enhancedResources_mediaViewer_title%": "Image viewer",
-      "%enhancedResources_mediaViewer_close%": "Close",
       "%enhancedResources_mediaViewer_previous%": "Previous image",
       "%enhancedResources_mediaViewer_next%": "Next image",
       "%enhancedResources_mediaViewer_zoomIn%": "Zoom in",
       "%enhancedResources_mediaViewer_zoomOut%": "Zoom out",
-      "%enhancedResources_mediaViewer_loading%": "Loading image",
       "%enhancedResources_mediaViewer_imageAlt%": "Image: {title}",
-      "%enhancedResources_mediaViewer_imageCounter%": "Image {current} of {total}",
       "%enhancedResources_mediaViewer_zoomLevelAnnouncement%": "Zoom: {percent}%",
       "%enhancedResources_articleViewer_title%": "Article",
-      "%enhancedResources_articleViewer_back%": "Back",
-      "%enhancedResources_articleViewer_close%": "Close",
-      "%enhancedResources_articleViewer_previousArticle%": "Previous article",
-      "%enhancedResources_articleViewer_nextArticle%": "Next article",
-      "%enhancedResources_articleViewer_loading%": "Loading article",
-      "%enhancedResources_articleViewer_empty%": "Article content is not available.",
-      "%enhancedResources_articleViewer_abbreviationsHeader%": "Abbreviations",
-      "%enhancedResources_articleViewer_abbreviationTooltipLabel%": "Show full text",
       "%enhancedResources_semanticDomain_title%": "Semantic domains",
       "%enhancedResources_semanticDomain_description%": "Browse the semantic-domain hierarchy and the dictionary entries that belong to the focused domain.",
-      "%enhancedResources_semanticDomain_back%": "Back",
-      "%enhancedResources_semanticDomain_close%": "Close",
-      "%enhancedResources_semanticDomain_treeAriaLabel%": "Semantic domain hierarchy",
-      "%enhancedResources_semanticDomain_breadcrumbAriaLabel%": "Domain path",
-      "%enhancedResources_semanticDomain_breadcrumbRoot%": "All",
-      "%enhancedResources_semanticDomain_breadcrumbSeparator%": ">",
-      "%enhancedResources_semanticDomain_expand%": "Expand",
-      "%enhancedResources_semanticDomain_collapse%": "Collapse",
-      "%enhancedResources_semanticDomain_openArticleLabel%": "Open article for this domain",
-      "%enhancedResources_semanticDomain_focusCategoryLabel%": "Focus tree on this category",
-      "%enhancedResources_semanticDomain_filteredEntriesHeader%": "Words in domain \"{domainLabel}\"",
-      "%enhancedResources_semanticDomain_filteredEntriesAriaLabel%": "Dictionary entries for the current domain",
-      "%enhancedResources_semanticDomain_filteredEntriesEmpty%": "No dictionary entries are associated with this domain.",
-      "%enhancedResources_semanticDomain_filteredEntriesLoading%": "Loading dictionary entries",
-      "%enhancedResources_semanticDomain_treeLoading%": "Loading domain tree",
-      "%enhancedResources_semanticDomain_treeEmpty%": "No semantic domains are available.",
-      "%enhancedResources_semanticDomain_glossesLabel%": "Glosses:",
       "%enhancedResources_marbleGuide_title%": "Getting started in enhanced resources",
       "%enhancedResources_marbleGuide_description%": "Tutorial explaining word highlighting colors, research tab icons, and basic navigation in Enhanced Resources.",
       "%enhancedResources_marbleGuide_overview%": "An enhanced resource is a resource text in which many words and phrases have been linked, word-by-word, to the original Hebrew and Greek texts. These words and phrases have research material linked to them.",
