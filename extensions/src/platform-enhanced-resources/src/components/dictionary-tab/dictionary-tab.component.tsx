@@ -1,4 +1,5 @@
-import { ErDictionaryList, type IndexedListItem } from 'platform-bible-react';
+import { useMemo } from 'react';
+import { SourceLanguageIndexedList, type IndexedListItem } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatReplacementString } from 'platform-bible-utils';
 import {
@@ -30,7 +31,10 @@ type DictionaryTabLocalizedStrings = {
 
 export type DictionaryEmptyStateVariant = 'none' | 'no-data' | 'no-match' | 'word-not-in-scope';
 
-/** Adapter row item: combines our DictionaryDisplayItemData with ErDictionaryList's IndexedListItem. */
+/**
+ * Adapter row item: combines our DictionaryDisplayItemData with the IndexedListItem shape required
+ * by SourceLanguageIndexedList.
+ */
 type DictionaryRowItem = IndexedListItem & DictionaryDisplayItemData;
 
 const toRowItem = (entry: DictionaryDisplayItemData): DictionaryRowItem => ({
@@ -79,10 +83,14 @@ export type DictionaryTabProps = {
 };
 
 /**
- * Pure presentational DictionaryTab. Renders a small dictionary-label header followed by an
- * `ErDictionaryList` (single-select with side-drawer detail). Each row uses `DictionaryDisplayItem`
- * via the `renderItem` slot; the right-side drawer uses `DictionaryEntryDetail` via
- * `renderDetailContent`.
+ * Pure presentational DictionaryTab. Renders a small dictionary-label header followed by a
+ * `SourceLanguageIndexedList` (single-select with side-drawer detail). Each row uses
+ * `DictionaryDisplayItem` via the `renderItem` slot; the right-side drawer uses
+ * `DictionaryEntryDetail` via `renderDetailContent`.
+ *
+ * Note: We consume `SourceLanguageIndexedList` directly (not the `ErDictionaryList` wrapper)
+ * because that wrapper unconditionally overrides `renderItem`, which would silently drop our custom
+ * row (translations column, ContextMenu, click-routing).
  *
  * Empty state handling (BHV-352):
  *
@@ -144,7 +152,7 @@ export function DictionaryTab({
   // Forward all child localization to row + detail
   const childStrings: [DictionaryTabLocalizedStrings, boolean] = localizedStringsWithLoadingState;
 
-  const rowItems = items.map(toRowItem);
+  const rowItems = useMemo(() => items.map(toRowItem), [items]);
 
   return (
     <div
@@ -158,7 +166,7 @@ export function DictionaryTab({
         </span>
       </div>
       <div className="tw-flex tw-min-h-0 tw-flex-1">
-        <ErDictionaryList
+        <SourceLanguageIndexedList
           items={rowItems}
           selectedItemId={selectedTokenId}
           onItemClick={(item) =>
