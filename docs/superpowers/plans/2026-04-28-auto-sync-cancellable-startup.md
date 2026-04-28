@@ -362,7 +362,9 @@ git commit -m "feat: add dismiss() method to notification service"
 
 ## Task 3: Declare `cancelAutoSync` command and add localized strings
 
-All steps in this task run in the `../paratext-bible-internal-extensions/src/paratext-bible-send-receive` directory.
+> **Working directory for all steps in this task:** > `../paratext-bible-internal-extensions/src/paratext-bible-send-receive`
+>
+> All file paths, `npm` commands, and `git` commands below are relative to / run from this directory.
 
 **Files:**
 
@@ -394,6 +396,8 @@ In `contributions/localizedStrings.json`, add two entries to the `"en"` object (
 
 - [ ] **Step 3: Run typecheck**
 
+Run from `../paratext-bible-internal-extensions/src/paratext-bible-send-receive`:
+
 ```bash
 npm run typecheck
 ```
@@ -401,6 +405,8 @@ npm run typecheck
 Expected: no errors
 
 - [ ] **Step 4: Commit**
+
+Run from `../paratext-bible-internal-extensions/src/paratext-bible-send-receive`:
 
 ```bash
 git add src/types/paratext-bible-send-receive.d.ts contributions/localizedStrings.json
@@ -411,7 +417,9 @@ git commit -m "feat: declare cancelAutoSync command and add auto-sync localized 
 
 ## Task 4: Add Auto-Sync startup logic to `main.ts`
 
-All steps in this task run in the `../paratext-bible-internal-extensions/src/paratext-bible-send-receive` directory.
+> **Working directory for all steps in this task:** > `../paratext-bible-internal-extensions/src/paratext-bible-send-receive`
+>
+> All file paths, `npm` commands, and `git` commands below are relative to / run from this directory.
 
 **Files:**
 
@@ -501,13 +509,17 @@ runAutoSync();
 
 - [ ] **Step 4: Run typecheck**
 
+Run from `../paratext-bible-internal-extensions/src/paratext-bible-send-receive`:
+
 ```bash
 npm run typecheck
 ```
 
-Expected: no errors. If `papi.notifications.dismiss` is not found, ensure `paranext-core` has been built and the local package reference is up to date (`npm install` in the extension directory).
+Expected: no errors. If `papi.notifications.dismiss` is not found, ensure `paranext-core` has been built (see Verification step 1) and run `npm install` in this directory to pick up the updated types.
 
 - [ ] **Step 5: Commit**
+
+Run from `../paratext-bible-internal-extensions/src/paratext-bible-send-receive`:
 
 ```bash
 git add src/main.ts
@@ -518,9 +530,26 @@ git commit -m "feat: add cancellable auto-sync on startup"
 
 ## Verification
 
-After all tasks are complete:
+Run these steps in order after all tasks are complete:
 
-- [ ] Build and run the app: `./.erb/scripts/refresh.sh` (in `paranext-core`)
+- [ ] **Build `paranext-core`** — run from the `paranext-core` directory:
+
+```bash
+npm run build
+```
+
+- [ ] **Build `paratext-bible-internal-extensions`** — run from the `../paratext-bible-internal-extensions` directory:
+
+```bash
+npm run build
+```
+
+- [ ] **Start the app** — run from the `../paratext-bible-internal-extensions` directory:
+
+```bash
+npm run start
+```
+
 - [ ] On startup, confirm a sonar notification appears in the bottom-right corner with a Cancel button
 - [ ] Confirm the sonar disappears when sync completes
 - [ ] Click Cancel during a sync and confirm the sonar is dismissed immediately
