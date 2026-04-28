@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
+import { sendCommand } from '@shared/services/command.service';
+import { PlatformBibleToolbar } from './platform-bible-toolbar';
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
@@ -95,19 +97,18 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   };
 });
 
-import { PlatformBibleToolbar } from './platform-bible-toolbar';
-import { sendCommand } from '@shared/services/command.service';
-
 const mockSendCommand = (isSendReceiveAvailable: boolean | undefined) => {
   vi.mocked(sendCommand).mockImplementation(
     // sendCommand has a complex generic signature; cast is required for the mock implementation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
     (async (commandName: string) => {
       if (commandName === 'platformGetResources.isSendReceiveAvailable')
         return isSendReceiveAvailable;
       if (commandName === 'platform.getOSPlatform') return 'win32';
       if (commandName === 'platform.isFullScreen') return false;
       return undefined;
+      // sendCommand has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
     }) as any,
   );
 };
@@ -128,13 +129,16 @@ describe('PlatformBibleToolbar — Sync button', () => {
 
   it('is in the DOM but hidden and non-interactive while isSendReceiveAvailable is loading', async () => {
     vi.mocked(sendCommand).mockImplementation(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // sendCommand has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
       (async (commandName: string) => {
         if (commandName === 'platformGetResources.isSendReceiveAvailable')
           return new Promise<never>(() => {}); // Never resolves — keeps component in loading state
         if (commandName === 'platform.getOSPlatform') return 'win32';
         if (commandName === 'platform.isFullScreen') return false;
         return undefined;
+        // sendCommand has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
       }) as any,
     );
     render(<PlatformBibleToolbar />);
@@ -172,7 +176,8 @@ describe('PlatformBibleToolbar — Sync button', () => {
   it('logs a warning when syncOpenProjects command fails', async () => {
     const { logger } = await import('@shared/services/logger.service');
     vi.mocked(sendCommand).mockImplementation(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // sendCommand has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
       (async (commandName: string) => {
         if (commandName === 'paratextBibleSendReceive.syncOpenProjects')
           throw new Error('Sync failed');
@@ -180,6 +185,8 @@ describe('PlatformBibleToolbar — Sync button', () => {
         if (commandName === 'platform.getOSPlatform') return 'win32';
         if (commandName === 'platform.isFullScreen') return false;
         return undefined;
+        // sendCommand has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
       }) as any,
     );
     render(<PlatformBibleToolbar />);
