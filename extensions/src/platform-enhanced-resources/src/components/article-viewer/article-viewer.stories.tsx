@@ -17,7 +17,7 @@ const localizedStrings = getLocalizedStrings([...ARTICLE_VIEWER_STRING_KEYS]);
 
 /**
  * Long-article fixture for the scrolling-body story. Repeats the Camel article paragraphs to push
- * the body past the drawer height and force the inner scroll container to scroll. Mirrors the
+ * the body past the dialog height and force the inner scroll container to scroll. Mirrors the
  * ArticleRendererData shape exactly (no story-only fields).
  */
 const MOCK_ARTICLE_LONG: MockArticleData = {
@@ -73,38 +73,25 @@ const ARTICLE_INDEX: Record<string, MockArticleData> = {
   [MOCK_ARTICLE_MINIMAL.articleId]: MOCK_ARTICLE_MINIMAL,
 };
 
-/**
- * Walking sequence used for the prev/next controls in the Interactive story. Hoisted to module
- * scope so the array reference is stable across renders (avoids triggering useCallback dep churn
- * inside the render function).
- */
-const INTERACTIVE_SEQUENCE: MockArticleData[] = [
-  MOCK_ARTICLE_CONTENTS,
-  MOCK_ARTICLE_CAMEL,
-  MOCK_ARTICLE_HEAVEN,
-  MOCK_ARTICLE_MINIMAL,
-];
-
 const meta: Meta<typeof ArticleViewer> = {
   title: 'Bundled Extensions/platform-enhanced-resources/ArticleViewer',
   component: ArticleViewer,
   tags: ['autodocs'],
   args: {
     open: true,
-    currentArticle: MOCK_ARTICLE_CAMEL,
-    isLoading: false,
-    previousArticleAvailable: false,
-    nextArticleAvailable: false,
+    articleId: MOCK_ARTICLE_CAMEL.articleId,
+    articleData: MOCK_ARTICLE_CAMEL,
     imageUrlResolver: mockImageUrlResolver,
+    onOpenChange: () => {},
     localizedStringsWithLoadingState: [localizedStrings, false],
   },
   decorators: [
     (Story) => (
-      // The Drawer renders into a portal at document.body, so the surrounding container exists
+      // The Dialog renders into a portal at document.body, so the surrounding container exists
       // mostly to provide a stable backdrop in the Storybook canvas.
       <div className="tw-relative tw-h-[720px] tw-w-[1024px] tw-border tw-border-border tw-bg-muted/40">
         <div className="tw-p-4 tw-text-sm tw-text-muted-foreground">
-          ArticleViewer Drawer is rendered in a portal - look at the right side of the viewport.
+          ArticleViewer Dialog is rendered in a portal - look at the center of the viewport.
         </div>
         <Story />
       </div>
@@ -118,129 +105,67 @@ type Story = StoryObj<typeof ArticleViewer>;
 /** Default - full article rendered with verse link, inline image, and see-also list. */
 export const Default: Story = {
   args: {
-    currentArticle: MOCK_ARTICLE_CAMEL,
+    articleId: MOCK_ARTICLE_CAMEL.articleId,
+    articleData: MOCK_ARTICLE_CAMEL,
   },
 };
 
 /** Inline images visible inside paragraphs (Camel article has Dromedary inline image). */
 export const WithImages: Story = {
   args: {
-    currentArticle: MOCK_ARTICLE_CAMEL,
+    articleId: MOCK_ARTICLE_CAMEL.articleId,
+    articleData: MOCK_ARTICLE_CAMEL,
   },
 };
 
 /** Multiple see-also links rendered as a list under the article. */
 export const WithSeeAlso: Story = {
   args: {
-    currentArticle: MOCK_ARTICLE_HEAVEN_MULTI_SEEALSO,
-  },
-};
-
-/** Abbreviations footer with hover-revealed full text via shadcn Tooltip. */
-export const WithAbbreviations: Story = {
-  args: {
-    currentArticle: MOCK_ARTICLE_CAMEL,
+    articleId: MOCK_ARTICLE_HEAVEN_MULTI_SEEALSO.articleId,
+    articleData: MOCK_ARTICLE_HEAVEN_MULTI_SEEALSO,
   },
 };
 
 /** Single-paragraph article with no extras (covers minimal-content edge case). */
 export const Minimal: Story = {
   args: {
-    currentArticle: MOCK_ARTICLE_MINIMAL,
+    articleId: MOCK_ARTICLE_MINIMAL.articleId,
+    articleData: MOCK_ARTICLE_MINIMAL,
   },
 };
 
-/** First article in a sequence - Previous control disabled, Next enabled. */
-export const AtSequenceStart: Story = {
-  args: {
-    currentArticle: MOCK_ARTICLE_CAMEL,
-    previousArticleAvailable: false,
-    nextArticleAvailable: true,
-  },
-};
-
-/** Last article in a sequence - Next control disabled, Previous enabled. */
-export const AtSequenceEnd: Story = {
-  args: {
-    currentArticle: MOCK_ARTICLE_HEAVEN,
-    previousArticleAvailable: true,
-    nextArticleAvailable: false,
-  },
-};
-
-/** No sequence available - Previous and Next controls hidden entirely. */
-export const NoSequence: Story = {
-  args: {
-    currentArticle: MOCK_ARTICLE_CAMEL,
-    previousArticleAvailable: false,
-    nextArticleAvailable: false,
-  },
-};
-
-/** Long article body that overflows the drawer height (forces inner scroll). */
+/** Long article body that overflows the dialog height (forces inner scroll). */
 export const LongArticle: Story = {
   args: {
-    currentArticle: MOCK_ARTICLE_LONG,
-    previousArticleAvailable: true,
-    nextArticleAvailable: true,
+    articleId: MOCK_ARTICLE_LONG.articleId,
+    articleData: MOCK_ARTICLE_LONG,
   },
 };
 
 /** Loading state - skeleton lines while the article body is being fetched. */
 export const Loading: Story = {
   args: {
-    currentArticle: undefined,
-    isLoading: true,
-  },
-};
-
-/** Empty state - drawer is open but no article data is available. */
-export const Empty: Story = {
-  args: {
-    currentArticle: undefined,
-    isLoading: false,
+    articleId: 'art-001',
+    articleData: undefined,
   },
 };
 
 /**
- * Interactive variant: parent owns state and reacts to all callbacks. Demonstrates the full
- * UI-PKG-006 acceptance criteria in action - close, sequence prev/next, see-also navigation (parent
- * swaps the article in-place), and verse-link / image clicks (logged to console). The trigger
- * button restores focus per Drawer focus management.
+ * Interactive variant: parent owns state and reacts to all callbacks. Demonstrates open/close,
+ * scrolling, and cross-reference navigation - clicking a "see also" link swaps the article in
+ * place. The trigger button restores focus per Dialog focus management.
  */
 export const Interactive: StoryObj<typeof ArticleViewer> = {
-  args: {
-    open: false,
-  },
-  render: function Render(args) {
-    const [open, setOpen] = useState(args.open ?? false);
-    const [sequenceIndex, setSequenceIndex] = useState(1); // start on Camel
-    const [currentArticle, setCurrentArticle] = useState<MockArticleData>(MOCK_ARTICLE_CAMEL);
+  parameters: { chromatic: { disableSnapshot: true } },
+  render: function Render() {
+    const [open, setOpen] = useState(false);
+    const [activeArticleId, setActiveArticleId] = useState<string>(MOCK_ARTICLE_CAMEL.articleId);
+
+    const currentArticle = ARTICLE_INDEX[activeArticleId];
 
     const handleOpen = useCallback(() => {
-      setSequenceIndex(1);
-      setCurrentArticle(MOCK_ARTICLE_CAMEL);
+      setActiveArticleId(MOCK_ARTICLE_CAMEL.articleId);
       setOpen(true);
-    }, []);
-
-    const handleClose = useCallback(() => {
-      setOpen(false);
-    }, []);
-
-    const handlePrevious = useCallback(() => {
-      setSequenceIndex((i) => {
-        const next = Math.max(0, i - 1);
-        setCurrentArticle(INTERACTIVE_SEQUENCE[next]);
-        return next;
-      });
-    }, []);
-
-    const handleNext = useCallback(() => {
-      setSequenceIndex((i) => {
-        const next = Math.min(INTERACTIVE_SEQUENCE.length - 1, i + 1);
-        setCurrentArticle(INTERACTIVE_SEQUENCE[next]);
-        return next;
-      });
     }, []);
 
     const handleCrossReference = useCallback((ref: ArticleCrossRefData) => {
@@ -250,9 +175,8 @@ export const Interactive: StoryObj<typeof ArticleViewer> = {
         console.log('[ArticleViewer story] launchViewer ->', ref.targetArticleId);
         return;
       }
-      const target = ARTICLE_INDEX[ref.targetArticleId];
-      if (target) {
-        setCurrentArticle(target);
+      if (ARTICLE_INDEX[ref.targetArticleId]) {
+        setActiveArticleId(ref.targetArticleId);
       } else {
         // Storybook-only diagnostic when a see-also target has no fixture in the story map.
         // eslint-disable-next-line no-console
@@ -266,21 +190,16 @@ export const Interactive: StoryObj<typeof ArticleViewer> = {
           Open ArticleViewer
         </Button>
         <p className="tw-text-sm tw-text-muted-foreground">
-          Try ArrowLeft / ArrowRight to step through the sequence, click a See also link to swap
-          articles in place, or click a verse reference / inline image to log the callback. Escape
-          closes.
+          Click a See also link to swap articles in place, or click a verse reference / inline image
+          to log the callback. Escape and click-outside close.
         </p>
         <ArticleViewer
-          {...args}
           open={open}
-          currentArticle={currentArticle}
-          previousArticleAvailable={sequenceIndex > 0}
-          nextArticleAvailable={sequenceIndex < INTERACTIVE_SEQUENCE.length - 1}
+          articleId={activeArticleId}
+          articleData={currentArticle}
           imageUrlResolver={mockImageUrlResolver}
           localizedStringsWithLoadingState={[localizedStrings, false]}
-          onClose={handleClose}
-          onPrevious={handlePrevious}
-          onNext={handleNext}
+          onOpenChange={setOpen}
           onCrossReferenceClick={handleCrossReference}
           // Storybook-only diagnostic: production wires this to scroll-group sync (MarbleForm).
           // eslint-disable-next-line no-console
