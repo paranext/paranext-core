@@ -6,6 +6,7 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { readDirection } from '@/utils/dir-helper.util';
 import { buttonVariants } from '@/components/shadcn-ui/button';
 
+// CUSTOM: JSDoc comments added to all exports for documentation (root JSDoc + @inheritdoc)
 /**
  * AlertDialog components display a modal dialog that interrupts the user with important content and
  * expects a response. These components are built and styled with Shadcn UI. See Shadcn UI
@@ -51,6 +52,7 @@ const AlertDialogContent = React.forwardRef<
       <AlertDialogPrimitive.Content
         ref={ref}
         className={cn(
+          // CUSTOM: Add `pr-twp` to scope tailwind preflight to portalled content
           // CUSTOM: Remove tw-z-50 and replace with shared Z_INDEX_MODAL constant (see style)
           'pr-twp tw-fixed tw-left-[50%] tw-top-[50%] tw-grid tw-w-full tw-max-w-lg tw-translate-x-[-50%] tw-translate-y-[-50%] tw-gap-4 tw-border tw-bg-background tw-p-6 tw-shadow-lg tw-duration-200 data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[state=closed]:tw-slide-out-to-left-1/2 data-[state=closed]:tw-slide-out-to-top-[48%] data-[state=open]:tw-slide-in-from-left-1/2 data-[state=open]:tw-slide-in-from-top-[48%] sm:tw-rounded-lg',
           className,
