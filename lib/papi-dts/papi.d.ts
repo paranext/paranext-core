@@ -4200,6 +4200,13 @@ declare module 'shared/models/notification.service-model' {
     clickCommand?: keyof CommandHandlers;
     /** Optional ID of a previous notification to update instead of showing a new notification */
     notificationId?: string | number;
+    /**
+     * Optional duration in milliseconds for how long the notification is displayed.
+     *
+     * When omitted, duration is computed from message length (minimum 10 seconds, maximum 35
+     * seconds).
+     */
+    duration?: number;
   }
   /**
    * Type signature for a command handler that is called when a user clicks on a notification.
@@ -4223,6 +4230,12 @@ declare module 'shared/models/notification.service-model' {
      * @returns Promise that resolves with the ID of the notification
      */
     send(notification: PlatformNotification): Promise<string | number>;
+    /**
+     * Dismiss a notification by its ID. If the notification is not found, this is a no-op.
+     *
+     * @param notificationId ID of the notification to dismiss, as returned by {@link send}
+     */
+    dismiss(notificationId: string | number): Promise<void>;
   }
   export const NotificationServiceNetworkObjectName = 'NotificationService';
 }
