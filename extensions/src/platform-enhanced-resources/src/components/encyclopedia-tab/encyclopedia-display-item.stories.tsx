@@ -9,7 +9,6 @@ import {
   MOCK_ENC_ENTRY_KAMELOS,
   MOCK_ENC_ENTRY_NO_IMAGES,
   MOCK_ENC_ENTRY_SHAMAYIM,
-  mockThumbnailUrlResolver,
 } from '../../data/encyclopedia-tab.story-data';
 
 const localizedStrings = getLocalizedStrings([...ENCYCLOPEDIA_DISPLAY_ITEM_STRING_KEYS]);
@@ -20,9 +19,7 @@ const meta: Meta<typeof EncyclopediaDisplayItem> = {
   tags: ['autodocs'],
   args: {
     localizedStringsWithLoadingState: [localizedStrings, false],
-    thumbnailUrlResolver: mockThumbnailUrlResolver,
     onSourceTextClick: () => {},
-    onArticleTitleClick: () => {},
     onCopySurfaceForm: () => {},
     onCopyLemma: () => {},
   },

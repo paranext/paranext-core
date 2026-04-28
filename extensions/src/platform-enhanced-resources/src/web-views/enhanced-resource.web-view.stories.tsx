@@ -23,7 +23,6 @@ import {
   MOCK_ENC_ENTRIES_HEBREW,
   MOCK_ENC_ENTRY_GAMAL,
   mockImageUrlResolver,
-  mockThumbnailUrlResolver,
 } from '../data/encyclopedia-tab.story-data';
 import { MEDIA_IMAGES_TAB_STRING_KEYS } from '../components/media-tab/media-images-tab.component';
 import { MEDIA_MAPS_TAB_STRING_KEYS } from '../components/media-tab/media-maps-tab.component';
@@ -87,7 +86,6 @@ const meta: Meta<typeof EnhancedResourceWebView> = {
     encyclopediaScopeLabel: 'current verse',
     encyclopediaArticleDataMap: MOCK_ARTICLE_DATA_MAP,
     encyclopediaImageUrlResolver: mockImageUrlResolver,
-    encyclopediaThumbnailUrlResolver: mockThumbnailUrlResolver,
     mediaImagesItems: MOCK_MEDIA_IMAGES,
     mediaImagesScopeLabel: 'current verse',
     mediaImagesThumbnailUrlResolver: mockMediaThumbnailUrlResolver,
@@ -166,7 +164,7 @@ export const EncyclopediaTabExpanded: Story = {
   args: {
     activeTab: 'encyclopedia',
     encyclopediaItems: MOCK_ENC_ENTRIES_HEBREW,
-    encyclopediaExpandedTokenIds: new Set([MOCK_ENC_ENTRY_GAMAL.tokenId]),
+    encyclopediaSelectedTokenId: MOCK_ENC_ENTRY_GAMAL.tokenId,
     encyclopediaScopeLabel: 'current verse',
   },
 };

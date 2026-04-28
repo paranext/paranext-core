@@ -132,20 +132,15 @@ export type EnhancedResourceWebViewProps = {
 
   // Encyclopedia tab
   encyclopediaItems?: EncyclopediaDisplayItemData[];
-  encyclopediaExpandedTokenIds?: Set<string>;
-  encyclopediaAllExpanded?: boolean;
+  encyclopediaSelectedTokenId?: string;
   encyclopediaIsLoading?: boolean;
   encyclopediaEmptyState?: EncyclopediaEmptyStateVariant;
   encyclopediaFilterWord?: string;
   encyclopediaScopeLabel?: string;
   encyclopediaArticleDataMap?: Record<string, ArticleRendererData | undefined>;
   encyclopediaImageUrlResolver?: (imageId: string) => string;
-  encyclopediaThumbnailUrlResolver?: (imageId: string) => string;
-  onEncyclopediaExpandToggle?: (tokenId: string) => void;
-  onEncyclopediaExpandAll?: () => void;
-  onEncyclopediaCollapseAll?: () => void;
+  onEncyclopediaSelectionChange?: (tokenId: string | undefined) => void;
   onEncyclopediaSourceTextClick?: (tokenId: string) => void;
-  onEncyclopediaArticleTitleClick?: (articleId: string) => void;
   onEncyclopediaCopySurfaceForm?: (item: EncyclopediaDisplayItemData) => void;
   onEncyclopediaCopyLemma?: (item: EncyclopediaDisplayItemData) => void;
   onEncyclopediaVerseLinkClick?: (link: ArticleVerseLinkData) => void;
@@ -247,20 +242,15 @@ export function EnhancedResourceWebView({
   onDictionaryCopyLemma = () => {},
 
   encyclopediaItems = [],
-  encyclopediaExpandedTokenIds,
-  encyclopediaAllExpanded = false,
+  encyclopediaSelectedTokenId,
   encyclopediaIsLoading = false,
   encyclopediaEmptyState = 'none',
   encyclopediaFilterWord,
   encyclopediaScopeLabel = '',
   encyclopediaArticleDataMap = {},
   encyclopediaImageUrlResolver,
-  encyclopediaThumbnailUrlResolver,
-  onEncyclopediaExpandToggle = () => {},
-  onEncyclopediaExpandAll = () => {},
-  onEncyclopediaCollapseAll = () => {},
+  onEncyclopediaSelectionChange = () => {},
   onEncyclopediaSourceTextClick = () => {},
-  onEncyclopediaArticleTitleClick = () => {},
   onEncyclopediaCopySurfaceForm = () => {},
   onEncyclopediaCopyLemma = () => {},
   onEncyclopediaVerseLinkClick = () => {},
@@ -416,20 +406,15 @@ export function EnhancedResourceWebView({
                 >
                   <EncyclopediaTab
                     items={encyclopediaItems}
-                    expandedTokenIds={encyclopediaExpandedTokenIds}
-                    allExpanded={encyclopediaAllExpanded}
+                    selectedTokenId={encyclopediaSelectedTokenId}
                     isLoading={encyclopediaIsLoading}
                     emptyState={encyclopediaEmptyState}
                     filterWord={encyclopediaFilterWord}
                     scopeLabel={encyclopediaScopeLabel}
                     articleDataMap={encyclopediaArticleDataMap}
                     imageUrlResolver={encyclopediaImageUrlResolver}
-                    thumbnailUrlResolver={encyclopediaThumbnailUrlResolver}
-                    onExpandToggle={onEncyclopediaExpandToggle}
-                    onExpandAll={onEncyclopediaExpandAll}
-                    onCollapseAll={onEncyclopediaCollapseAll}
+                    onSelectionChange={onEncyclopediaSelectionChange}
                     onSourceTextClick={onEncyclopediaSourceTextClick}
-                    onArticleTitleClick={onEncyclopediaArticleTitleClick}
                     onCopySurfaceForm={onEncyclopediaCopySurfaceForm}
                     onCopyLemma={onEncyclopediaCopyLemma}
                     onVerseLinkClick={onEncyclopediaVerseLinkClick}
