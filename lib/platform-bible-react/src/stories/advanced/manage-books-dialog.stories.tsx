@@ -15,6 +15,8 @@ import {
   ExternalLink,
   FolderInput,
   FolderOpen,
+  LayoutGrid,
+  List,
   Loader2,
   Pencil,
   Trash2,
@@ -55,6 +57,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuPortal,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
@@ -1681,12 +1686,20 @@ function ImportSubDialog({
   books,
   destProjectId,
   projectsData,
+  prePickedFiles,
   onClose,
   onApply,
 }: {
   books: string[];
   destProjectId: string;
   projectsData: Record<string, ProjectBookState>;
+  /**
+   * Optional per-book file pre-fill. When the caller has already collected files (e.g. via
+   * a native multi-select file dialog opened upstream), pass them here so the comparison
+   * table opens with the File column populated and the Overwrite checkbox auto-ticked
+   * where the destination already has the book — the user only has to review and confirm.
+   */
+  prePickedFiles?: Record<string, { name: string; date: string }>;
   onClose: () => void;
   onApply: (rows: { book: string; overwrite: boolean }[]) => void;
 }) {
@@ -1698,12 +1711,23 @@ function ImportSubDialog({
   useEffect(() => {
     if (!open) return;
     const init: Record<string, ImportRowPick> = {};
+    const destPresent = projectsData[destProjectId]?.present ?? new Set<string>();
     books.forEach((b) => {
-      init[b] = { overwrite: false };
+      const pre = prePickedFiles?.[b];
+      init[b] = pre
+        ? {
+            file: pre.name,
+            fileDate: pre.date,
+            // Auto-tick Overwrite when the destination already has the book — the user
+            // already implied "import this" by picking the file, so requiring a second
+            // explicit click on Overwrite is just friction.
+            overwrite: destPresent.has(b),
+          }
+        : { overwrite: false };
     });
     setPicks(init);
     activeBookRef.current = undefined;
-  }, [open, books]);
+  }, [open, books, prePickedFiles, projectsData, destProjectId]);
 
   if (!open) return undefined;
 
@@ -3195,6 +3219,1545 @@ function SelectionManageBooksDialog() {
 }
 
 // --------------------------------------------------------------------------
+// GROUPED SELECTION-FIRST: variant of SELECTION-FIRST where the All / In
+// project / Missing filter is replaced by the view-list-select group-by
+// toggle (None / Canon / Status), the bulk "Select all visible" affordance
+// is replaced by per-group section headers (each with its own select-all
+// checkbox), and a Show / Copy from / Import-from-files toggle group sits
+// above the list. The chosen workflow drives both what comparison columns
+// the rows expose (Show: project date only; Copy: source/dest date + state
+// badge; Import: per-row file pick + dest date + state badge) and which
+// commit button appears in the footer (Show: Create + Delete; Copy: Copy;
+// Import: Import). Picking Copy from opens a project dropdown; picking
+// Import opens a native multi-select file dialog and matches files to book
+// ids by name. Both happen inline — no comparison sub-dialog.
+// --------------------------------------------------------------------------
+
+type GroupedWorkflow = 'manage' | 'progress' | 'copy' | 'import';
+
+function GroupedSelectionFirstManageBooksDialog() {
+  const [open, setOpen] = useState(true);
+  const [projectId, setProjectId] = useState<string>(MOCK_PROJECTS[0].id);
+  const [projectsData, setProjectsData] = useState<Record<string, ProjectBookState>>(() =>
+    createInitialProjectBooks(),
+  );
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [groupBy, setGroupBy] = useState<BookGridGroupBy>('status');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [filter, setFilter] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [workflow, setWorkflow] = useState<GroupedWorkflow>('manage');
+  const [copySourceId, setCopySourceId] = useState<string | undefined>(undefined);
+  const [importFiles, setImportFiles] = useState<
+    Record<string, { name: string; date: string }>
+  >({});
+  // When a per-row "Pick file…" button triggers the file input, this records the book
+  // the file should be assigned to so the change handler can route it correctly.
+  const importActiveBookRef = useRef<string | undefined>(undefined);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
+
+  const project = MOCK_PROJECTS.find((p) => p.id === projectId) ?? MOCK_PROJECTS[0];
+  const current = projectsData[projectId] ?? { present: new Set<string>(), dates: {} };
+  const allBooks = useMemo(() => [...OT_BOOKS, ...NT_BOOKS, ...DC_BOOKS], []);
+  const knownBookIds = useMemo(() => new Set(Canon.allBookIds), []);
+  const otherProjects = MOCK_PROJECTS.filter((p) => p.id !== projectId);
+  // Tracked-books set powers Progress workflow's grouping, badges, and
+  // mutual-exclusion rule (Start tracking XOR Stop tracking, mirroring
+  // Manage's Create XOR Delete).
+  const tracked = useMemo(
+    () => PROJECT_TRACKED_BOOKS[projectId] ?? new Set<string>(),
+    [projectId],
+  );
+
+  // Selection is per-workflow: the same checked checkboxes mean different things in
+  // each mode (books to act on vs. books to copy vs. books to import), so reset on
+  // workflow change rather than carrying stale picks across.
+  useEffect(() => setSelected(new Set()), [projectId, workflow]);
+
+  // When files are picked for Import, auto-check those rows — the user just declared
+  // intent by attaching files; making them re-check the checkboxes would be redundant.
+  useEffect(() => {
+    if (workflow !== 'import') return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      Object.keys(importFiles).forEach((b) => next.add(b));
+      return next;
+    });
+  }, [workflow, importFiles]);
+
+  const sourceData = copySourceId ? projectsData[copySourceId] : undefined;
+  const sourceProject = copySourceId
+    ? (MOCK_PROJECTS.find((p) => p.id === copySourceId) ?? undefined)
+    : undefined;
+
+  const openImportFileDialog = (book?: string) => {
+    importActiveBookRef.current = book;
+    importFileInputRef.current?.click();
+  };
+
+  const handleImportFilesPicked = async (files: FileList | null) => {
+    const activeBook = importActiveBookRef.current;
+    importActiveBookRef.current = undefined;
+    if (!files || files.length === 0) return;
+    const today = todayISO();
+    if (activeBook) {
+      // Per-row pick: assign the first picked file to the active book regardless of
+      // filename — the user explicitly chose this file for this book.
+      const file = files[0];
+      setImportFiles((prev) => ({
+        ...prev,
+        [activeBook]: { name: file.name, date: today },
+      }));
+      return;
+    }
+    // Bulk pick: each file maps to one book. Two-stage match:
+    //   1. Read the file's first 1KB and look for the USFM `\id <CODE>` marker.
+    //      That's the canonical declaration of which book a USFM file holds and
+    //      is independent of how the file was named.
+    //   2. Fall back to scanning the filename for any 3-char window that
+    //      matches a known book id (handles Paratext-style "01GEN.SFM" /
+    //      "40-MAT.usfm" / plain "GEN.usfm" naming). Earliest match wins.
+    // Files whose inferred book is already imported overwrite the existing
+    // entry — replacing-on-conflict matches the user's expectation that
+    // picking the same book again is a deliberate update — and are surfaced
+    // as a separate Sonner warning so the swap is visible (not silent).
+    const inferred: Record<string, { name: string; date: string }> = {};
+    const skipped: string[] = [];
+    const duplicates: { book: string; oldName: string; newName: string }[] = [];
+    const idFromName = (name: string): string | undefined => {
+      const upper = name.toUpperCase();
+      for (let i = 0; i + 3 <= upper.length; i += 1) {
+        const candidate = upper.slice(i, i + 3);
+        if (/^[A-Z0-9]{3}$/.test(candidate) && knownBookIds.has(candidate)) {
+          return candidate;
+        }
+      }
+      return undefined;
+    };
+    const idFromUsfm = async (file: File): Promise<string | undefined> => {
+      try {
+        const head = await file.slice(0, 1024).text();
+        const m = head.match(/\\id\s+([A-Za-z0-9]{3})\b/);
+        if (!m) return undefined;
+        const code = m[1].toUpperCase();
+        return knownBookIds.has(code) ? code : undefined;
+      } catch {
+        return undefined;
+      }
+    };
+    await Promise.all(
+      Array.from(files).map(async (file) => {
+        const book = (await idFromUsfm(file)) ?? idFromName(file.name);
+        if (!book) {
+          skipped.push(file.name);
+          return;
+        }
+        // If something already maps to this book — either persisted in
+        // importFiles or matched earlier in this same pick — record the
+        // swap and let the new file overwrite. Picking the same book
+        // again is interpreted as a deliberate update.
+        const existingName = inferred[book]?.name ?? importFiles[book]?.name;
+        if (existingName) {
+          duplicates.push({ book, oldName: existingName, newName: file.name });
+        }
+        inferred[book] = { name: file.name, date: today };
+      }),
+    );
+    if (duplicates.length > 0) {
+      sonner.warning(
+        duplicates.length === 1
+          ? `Updated import file for ${duplicates[0].book}`
+          : `Updated import files for ${duplicates.length} books`,
+        {
+          description:
+            duplicates.length <= 3
+              ? duplicates
+                  .map((d) => `${d.book}: "${d.oldName}" → "${d.newName}"`)
+                  .join(', ')
+              : `Including ${duplicates
+                  .slice(0, 2)
+                  .map((d) => d.book)
+                  .join(', ')} and ${duplicates.length - 2} more.`,
+        },
+      );
+    }
+    if (Object.keys(inferred).length === 0) {
+      // Nothing made it into the batch. If duplicates explain that (the
+      // duplicate-files warning already fired), don't pile a second toast
+      // on top — only emit the no-match error when actual unmatched files
+      // were the cause.
+      if (skipped.length > 0 && duplicates.length === 0) {
+        sonner.error('No files could be matched to a book', {
+          description:
+            skipped.length === 1
+              ? `"${skipped[0]}" doesn't contain a recognized book id.`
+              : `${skipped.length} file${skipped.length === 1 ? '' : 's'} couldn't be matched. File names need to contain a 3-letter book id (e.g. GEN, MAT).`,
+        });
+      }
+      return;
+    }
+    if (skipped.length > 0) {
+      // Partial match: still proceed with the recognized files, but warn so the
+      // user knows some of their picks didn't make it into the table.
+      sonner.warning(
+        `Skipped ${skipped.length} file${skipped.length === 1 ? '' : 's'} that couldn't be matched to a book`,
+        {
+          description:
+            skipped.length <= 3
+              ? skipped.map((s) => `"${s}"`).join(', ')
+              : `Including "${skipped.slice(0, 2).join('", "')}" and ${skipped.length - 2} more.`,
+        },
+      );
+    }
+    setImportFiles((prev) => ({ ...prev, ...inferred }));
+    setWorkflow('import');
+  };
+
+  const pickCopySource = (sourceId: string) => {
+    setCopySourceId(sourceId);
+    setWorkflow('copy');
+  };
+
+  const matches = useMemo(() => makeBookMatcher(filter), [filter]);
+  const isFiltered = filter.trim().length > 0;
+  // The row list is workflow-scoped: Manage lists every canonical book; Progress
+  // lists only books that exist in the destination project (only present books
+  // can have progress); Copy lists only books that the chosen source project
+  // actually has (rows the user can copy from); Import lists only books that
+  // have an imported file. The table empties out until the prerequisite is
+  // met, which keeps the visible rows actionable.
+  const visibleBooks = useMemo(() => {
+    let source: string[];
+    if (workflow === 'import') {
+      source = allBooks.filter((b) => importFiles[b]);
+    } else if (workflow === 'copy') {
+      source = sourceData
+        ? allBooks.filter((b) => sourceData.present.has(b))
+        : [];
+    } else if (workflow === 'progress') {
+      source = allBooks.filter((b) => current.present.has(b));
+    } else {
+      source = allBooks;
+    }
+    return source.filter(matches);
+  }, [allBooks, matches, workflow, importFiles, sourceData, current]);
+
+  // Per-book comparison state for the active workflow. Used by both the row rendering
+  // (list view) and the BookGridSelector items (grid view) so the table and the grid
+  // surface the same Newer/Older/Same/New badge for each row.
+  type RowCompare = {
+    state?: ComparisonState;
+    primaryDate?: string;
+    primaryLabel?: string;
+    secondaryDate?: string;
+    secondaryLabel?: string;
+  };
+  const compareForBook = (book: string): RowCompare => {
+    const destHas = current.present.has(book);
+    const destDate = destHas ? current.dates[book] : undefined;
+    if (workflow === 'copy' && sourceData) {
+      const srcHas = sourceData.present.has(book);
+      const srcDate = srcHas ? sourceData.dates[book] : undefined;
+      const state = computeCompareState(srcDate, destDate);
+      return {
+        state,
+        primaryDate: srcDate,
+        primaryLabel: sourceProject ? `From ${sourceProject.shortName}` : 'From source',
+        secondaryDate: destDate,
+        secondaryLabel: `In ${project.shortName}`,
+      };
+    }
+    if (workflow === 'import') {
+      const file = importFiles[book];
+      const state = file ? computeCompareState(file.date, destDate) : undefined;
+      return {
+        state,
+        primaryDate: file?.date,
+        primaryLabel: file ? `File (${file.name})` : 'File',
+        secondaryDate: destDate,
+        secondaryLabel: `In ${project.shortName}`,
+      };
+    }
+    return {
+      primaryDate: destDate,
+      primaryLabel: 'Last modified',
+    };
+  };
+
+  const items = useMemo<BookGridItem[]>(() => {
+    // Type-lock detection — derived from `selected` directly so the useMemo
+    // only depends on `selected`, `current.present`, and `tracked` rather
+    // than the recomputed arrays declared below. The "type" varies by
+    // workflow: Manage uses present/absent; Progress uses tracked/untracked.
+    let hasSelPresent = false;
+    let hasSelAbsent = false;
+    let hasSelTracked = false;
+    let hasSelUntracked = false;
+    selected.forEach((b) => {
+      if (current.present.has(b)) hasSelPresent = true;
+      else hasSelAbsent = true;
+      if (tracked.has(b)) hasSelTracked = true;
+      else hasSelUntracked = true;
+    });
+    return visibleBooks.map((book) => {
+      const isPresent = current.present.has(book);
+      const isTracked = tracked.has(book);
+      const isSelected = selected.has(book);
+      const cmp = compareForBook(book);
+      const tone =
+        cmp.state && cmp.state !== 'Missing'
+          ? (toneForComparisonState(cmp.state) as Exclude<BookGridTone, 'neutral'>)
+          : 'neutral';
+      const statusLabel =
+        workflow === 'manage'
+          ? isPresent
+            ? 'In project'
+            : 'Not in project'
+          : workflow === 'progress'
+            ? isTracked
+              ? 'Tracked'
+              : 'Untracked'
+            : (cmp.state ?? (isPresent ? 'In project' : 'Not in project'));
+      // Disabled rules mirror the list view's rowActionable: in Manage and
+      // Progress the workflow exposes two mutually-exclusive footer
+      // actions, so the row of the "other" type is disabled once a
+      // selection of one type exists. Already-selected rows stay enabled
+      // so the user can uncheck.
+      const manageLocked =
+        workflow === 'manage' &&
+        !isSelected &&
+        (hasSelPresent || hasSelAbsent) &&
+        (isPresent ? !hasSelPresent : !hasSelAbsent);
+      const progressLocked =
+        workflow === 'progress' &&
+        !isSelected &&
+        (hasSelTracked || hasSelUntracked) &&
+        (isTracked ? !hasSelTracked : !hasSelUntracked);
+      const locked = manageLocked || progressLocked;
+      // Progress overrides for the grid view: surface percentage + priority
+      // through the tooltip-data slots (primaryDate / secondaryDate; the
+      // BookGridSelector receives matching labels via primaryDateLabel /
+      // secondaryDateLabel) and pin a small percentage chip onto the pill
+      // itself via the `trailing` slot. Untracked rows leave the slots
+      // empty since there's no progress to show.
+      const progressN = deterministicNumberFromBook(book, 7);
+      const priN = deterministicNumberFromBook(book, 13);
+      const priLabel =
+        priN >= 67 ? 'High' : priN >= 34 ? 'Medium' : 'Low';
+      const progressPrimary =
+        workflow === 'progress' && isTracked
+          ? `${progressN}%`
+          : cmp.primaryDate;
+      const progressSecondary =
+        workflow === 'progress' && isTracked ? priLabel : cmp.secondaryDate;
+      const progressTrailing =
+        workflow === 'progress' && isTracked ? (
+          <span className="tw-ml-auto tw-shrink-0 tw-text-[10px] tw-font-medium tw-tabular-nums tw-text-muted-foreground">
+            {`${progressN}%`}
+          </span>
+        ) : workflow === 'progress' ? (
+          <span className="tw-ml-auto tw-shrink-0 tw-text-[10px] tw-text-muted-foreground">
+            —
+          </span>
+        ) : undefined;
+      return {
+        book,
+        present: isPresent,
+        tone: tone as BookGridTone,
+        statusLabel,
+        primaryDate: progressPrimary,
+        secondaryDate: progressSecondary,
+        trailing: progressTrailing,
+        disabled: locked,
+        disabledReason: locked
+          ? workflow === 'progress'
+            ? 'Cannot mix start and stop tracking in one selection'
+            : 'Cannot mix create and delete in one selection'
+          : undefined,
+      };
+    });
+    // compareForBook depends on workflow + sourceData + importFiles + current
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleBooks, current, workflow, sourceData, importFiles, selected, tracked]);
+
+  const totalsByLabel = useMemo<Record<string, number>>(() => {
+    const totals: Record<string, number> = {};
+    if (groupBy === 'canon') {
+      totals['Old Testament'] = OT_BOOKS.length;
+      totals['New Testament'] = NT_BOOKS.length;
+      totals.Deuterocanon = DC_BOOKS.length;
+    } else if (groupBy === 'status') {
+      if (workflow === 'progress') {
+        const presentBooks = allBooks.filter((b) => current.present.has(b));
+        const trackedCount = presentBooks.filter((b) => tracked.has(b)).length;
+        totals.Tracked = trackedCount;
+        totals.Untracked = presentBooks.length - trackedCount;
+      } else {
+        const presentCount = allBooks.filter((b) => current.present.has(b)).length;
+        totals['In project'] = presentCount;
+        totals['Not in project'] = allBooks.length - presentCount;
+      }
+    }
+    return totals;
+  }, [groupBy, current, allBooks, workflow, tracked]);
+
+  type ListGroup = { label?: string; books: string[] };
+  const listGroups = useMemo<ListGroup[]>(() => {
+    if (groupBy === 'none') {
+      return visibleBooks.length === 0 ? [] : [{ books: visibleBooks }];
+    }
+    if (groupBy === 'canon') {
+      const otSet = new Set(OT_BOOKS);
+      const ntSet = new Set(NT_BOOKS);
+      const dcSet = new Set(DC_BOOKS);
+      const ot: string[] = [];
+      const nt: string[] = [];
+      const dc: string[] = [];
+      visibleBooks.forEach((b) => {
+        if (otSet.has(b)) ot.push(b);
+        else if (ntSet.has(b)) nt.push(b);
+        else if (dcSet.has(b)) dc.push(b);
+      });
+      return [
+        { label: 'Old Testament', books: ot },
+        { label: 'New Testament', books: nt },
+        { label: 'Deuterocanon', books: dc },
+      ].filter((g) => g.books.length > 0);
+    }
+    if (workflow === 'progress') {
+      // Progress mode swaps in tracked/untracked groups for status grouping
+      // — the type axis the workflow's footer actions operate on.
+      const trackedBooks: string[] = [];
+      const untrackedBooks: string[] = [];
+      visibleBooks.forEach((b) => {
+        if (tracked.has(b)) trackedBooks.push(b);
+        else untrackedBooks.push(b);
+      });
+      return [
+        { label: 'Tracked', books: trackedBooks },
+        { label: 'Untracked', books: untrackedBooks },
+      ].filter((g) => g.books.length > 0);
+    }
+    const inProj: string[] = [];
+    const notInProj: string[] = [];
+    visibleBooks.forEach((b) => {
+      if (current.present.has(b)) inProj.push(b);
+      else notInProj.push(b);
+    });
+    return [
+      { label: 'In project', books: inProj },
+      { label: 'Not in project', books: notInProj },
+    ].filter((g) => g.books.length > 0);
+  }, [groupBy, visibleBooks, current, workflow, tracked]);
+
+  const selectedArr = Array.from(selected);
+  const selectedPresent = selectedArr.filter((b) => current.present.has(b));
+  const selectedAbsent = selectedArr.filter((b) => !current.present.has(b));
+
+  const toggleOne = (book: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(book)) {
+        next.delete(book);
+      } else {
+        next.add(book);
+      }
+      return next;
+    });
+
+  const toggleGroupSelectAll = (books: string[]) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allSelected = books.length > 0 && books.every((b) => next.has(b));
+      if (allSelected) {
+        books.forEach((b) => next.delete(b));
+        return next;
+      }
+      let toAdd = books;
+      // Match the per-row mutual-exclusion rule: when a single-type
+      // selection already exists, only add books of that same type. With
+      // no current type, add the whole group as-is — Status groups are
+      // type-pure so this can't create a mixed selection, and the bulk
+      // select-all is hidden for Canon grouping in Manage / Progress so
+      // we don't have to defend against canon groups here.
+      if (workflow === 'manage') {
+        const existing = Array.from(next);
+        const hasPresent = existing.some((b) => current.present.has(b));
+        const hasAbsent = existing.some((b) => !current.present.has(b));
+        if (hasPresent && !hasAbsent) {
+          toAdd = books.filter((b) => current.present.has(b));
+        } else if (hasAbsent && !hasPresent) {
+          toAdd = books.filter((b) => !current.present.has(b));
+        }
+      } else if (workflow === 'progress') {
+        const existing = Array.from(next);
+        const hasTracked = existing.some((b) => tracked.has(b));
+        const hasUntracked = existing.some((b) => !tracked.has(b));
+        if (hasTracked && !hasUntracked) {
+          toAdd = books.filter((b) => tracked.has(b));
+        } else if (hasUntracked && !hasTracked) {
+          toAdd = books.filter((b) => !tracked.has(b));
+        }
+      }
+      toAdd.forEach((b) => next.add(b));
+      return next;
+    });
+
+  const toggleCollapsed = (label: string) =>
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+
+  const applyToCurrent = (mutate: (p: ProjectBookState) => ProjectBookState) =>
+    setProjectsData((prev) => ({ ...prev, [projectId]: mutate(prev[projectId]) }));
+
+  const dropSelected = (books: string[]) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      books.forEach((b) => next.delete(b));
+      return next;
+    });
+
+  const deleteBooks = (books: string[]) => {
+    if (books.length === 0) return;
+    applyToCurrent((p) => {
+      const nextPresent = new Set(p.present);
+      const nextDates = { ...p.dates };
+      books.forEach((b) => {
+        nextPresent.delete(b);
+        delete nextDates[b];
+      });
+      return { present: nextPresent, dates: nextDates };
+    });
+    dropSelected(books);
+  };
+
+  const createBooks = (books: string[], _method: CreateMethod) => {
+    if (books.length === 0) return;
+    applyToCurrent((p) => {
+      const nextPresent = new Set(p.present);
+      const nextDates = { ...p.dates };
+      books.forEach((b) => {
+        nextPresent.add(b);
+        nextDates[b] = todayISO();
+      });
+      return { present: nextPresent, dates: nextDates };
+    });
+    dropSelected(books);
+  };
+
+  const commitCopy = () => {
+    if (!copySourceId || !sourceData) return;
+    const books = selectedArr.filter((b) => sourceData.present.has(b));
+    if (books.length === 0) return;
+    applyToCurrent((p) => {
+      const nextPresent = new Set(p.present);
+      const nextDates = { ...p.dates };
+      books.forEach((b) => {
+        nextPresent.add(b);
+        nextDates[b] = sourceData.dates[b] ?? todayISO();
+      });
+      return { present: nextPresent, dates: nextDates };
+    });
+    dropSelected(books);
+    // Stay in copy mode so the user can chain another copy from the same source if
+    // they want to — the rows just refresh with the new "Same" / "Newer" states.
+  };
+
+  const commitImport = () => {
+    const books = selectedArr.filter((b) => importFiles[b]);
+    if (books.length === 0) return;
+    applyToCurrent((p) => {
+      const nextPresent = new Set(p.present);
+      const nextDates = { ...p.dates };
+      books.forEach((b) => {
+        nextPresent.add(b);
+        nextDates[b] = importFiles[b].date;
+      });
+      return { present: nextPresent, dates: nextDates };
+    });
+    dropSelected(books);
+    setImportFiles((prev) => {
+      const next = { ...prev };
+      books.forEach((b) => delete next[b]);
+      return next;
+    });
+  };
+
+  const totalPresent = allBooks.filter((b) => current.present.has(b)).length;
+
+  const renderGroupCount = (label: string, filteredItems: BookGridItem[]) =>
+    formatGroupCountText(
+      filteredItems.length,
+      totalsByLabel[label] ?? filteredItems.length,
+      isFiltered,
+    );
+
+  return (
+    <>
+      <style>{`
+        [data-radix-popper-content-wrapper],
+        [data-radix-select-content],
+        [data-radix-popover-content],
+        [data-radix-menu-content] {
+          z-index: 600 !important;
+          pointer-events: auto !important;
+        }
+      `}</style>
+      <Button onClick={() => setOpen(true)}>Open Manage Books (Grouped Selection-first)</Button>
+      {/*
+        Hidden file input drives the Import-from-files button: clicking the toolbar
+        button forwards into the OS multi-select dialog and the resulting files are
+        inferred to books by name before the comparison sub-dialog opens. Lives at the
+        component root so it isn't unmounted by toolbar re-renders.
+      */}
+      <input
+        ref={importFileInputRef}
+        type="file"
+        accept=".sfm,.usfm,.usx,.xml"
+        multiple
+        className="tw-hidden"
+        onChange={(e) => {
+          handleImportFilesPicked(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <Dialog open={open} onOpenChange={setOpen} modal={false}>
+        <DialogContent
+          className="tw-h-[80vh] tw-w-[95vw] tw-max-w-4xl tw-gap-0 tw-overflow-hidden tw-p-0"
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => {
+            const wrapper = document.querySelector(
+              '[data-radix-popper-content-wrapper][data-state="open"]',
+            );
+            if (wrapper) e.preventDefault();
+          }}
+        >
+          <TooltipProvider delayDuration={200}>
+            <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col">
+              <header className="tw-flex tw-items-center tw-gap-3 tw-border-b tw-px-6 tw-py-4">
+                <BookOpenCheck
+                  className="tw-h-5 tw-w-5 tw-text-muted-foreground"
+                  aria-hidden
+                />
+                <div className="tw-flex tw-flex-col">
+                  <h2 className="tw-text-lg tw-font-semibold">Manage Books</h2>
+                  <p className="tw-text-xs tw-text-muted-foreground">
+                    {`${totalPresent} of ${allBooks.length} canonical books in ${project.shortName}`}
+                  </p>
+                </div>
+                {/* Right padding (pe-8) keeps the dropdown clear of the
+                  dialog's built-in X close button, which sits in the top-
+                  right corner with its own ~16-20px hit area. Without it,
+                  the dropdown's chevron and the X button visually overlap
+                  at narrow dialog widths. */}
+                <div className="tw-ml-auto tw-flex tw-items-center tw-gap-2 tw-pe-8">
+                  <Label
+                    htmlFor="selection-grouped-project"
+                    className="tw-text-xs tw-text-muted-foreground"
+                  >
+                    Project
+                  </Label>
+                  <Select value={projectId} onValueChange={setProjectId}>
+                    <SelectTrigger id="selection-grouped-project" className="tw-h-8 tw-w-60">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MOCK_PROJECTS.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </header>
+
+              <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2 tw-border-b tw-px-6 tw-py-2">
+                {/*
+                  Workflow buttons sit at the very left as a connected segmented
+                  group: each button is flush to the next, the inner edges are
+                  squared, and only the outer left/right corners are rounded —
+                  the visual reads as a single control with three options. The
+                  active workflow's button uses the primary (default) variant;
+                  the others render as outline. "Copy from" opens a project
+                  picker dropdown via the chevron; "Import…" opens a native
+                  multi-select file dialog and matches files to book ids by name.
+                */}
+                <div className="tw-flex tw-items-center">
+                  <Button
+                    variant={workflow === 'manage' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setWorkflow('manage')}
+                    className="tw-rounded-r-none focus-visible:tw-z-10"
+                  >
+                    <BookOpenCheck
+                      className="tw-mr-1.5 tw-h-3.5 tw-w-3.5"
+                      aria-hidden
+                    />
+                    Manage
+                  </Button>
+                  <Button
+                    variant={workflow === 'progress' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setWorkflow('progress')}
+                    className="tw--ml-px tw-rounded-none focus-visible:tw-z-10"
+                  >
+                    <BarChart3
+                      className="tw-mr-1.5 tw-h-3.5 tw-w-3.5"
+                      aria-hidden
+                    />
+                    Progress
+                  </Button>
+                  {/*
+                    "Copy from" toggles between two button shapes based on
+                    whether a source project has already been picked:
+                    - No source yet: a single button. Clicking it opens the
+                      project dropdown — there's nothing to enter copy mode
+                      with otherwise, so the picker has to come up first.
+                    - Source set: a split button. The main half enters copy
+                      mode using the persisted source (no dropdown opens),
+                      and the chevron half is a dedicated trigger for the
+                      project picker so the user can switch source. Both
+                      halves share the active styling so the split still
+                      reads as a single connected control.
+                  */}
+                  {/*
+                    "Copy from" — chevron-and-dropdown shape only when there's
+                    nothing to commit-with-one-click: either no source has been
+                    picked yet, or copy mode is already active (so clicking is
+                    interpreted as "I want to switch source"). In the
+                    in-between state — source picked, copy mode not active —
+                    drop the chevron and let a single click switch to copy
+                    mode using the persisted source. Same Button instance
+                    either way; only the click handler and the trailing
+                    chevron differ.
+                  */}
+                  {(() => {
+                    const opensDropdown = !sourceProject || workflow === 'copy';
+                    const button = (
+                      <Button
+                        variant={workflow === 'copy' ? 'default' : 'outline'}
+                        size="sm"
+                        className="tw--ml-px tw-rounded-none focus-visible:tw-z-10"
+                        onClick={
+                          opensDropdown ? undefined : () => setWorkflow('copy')
+                        }
+                      >
+                        <Copy
+                          className="tw-mr-1.5 tw-h-3.5 tw-w-3.5"
+                          aria-hidden
+                        />
+                        {sourceProject
+                          ? `Copy from ${sourceProject.shortName}`
+                          : 'Copy from'}
+                        {opensDropdown && (
+                          <ChevronDown
+                            className="tw-ml-1 tw-h-3.5 tw-w-3.5"
+                            aria-hidden
+                          />
+                        )}
+                      </Button>
+                    );
+                    if (!opensDropdown) return button;
+                    return (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
+                        <DropdownMenuPortal>
+                          <DropdownMenuContent align="start">
+                            {otherProjects.map((p) => (
+                              <DropdownMenuItem
+                                key={p.id}
+                                onClick={() => pickCopySource(p.id)}
+                              >
+                                {p.name}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenuPortal>
+                      </DropdownMenu>
+                    );
+                  })()}
+                  {/*
+                    "Import" mirrors the Copy from logic. The button reads
+                    "Import…" (and clicks open the OS file picker) whenever
+                    nothing is imported yet OR import mode is already active.
+                    In the in-between state — files imported but mode not
+                    active — drop the ellipsis and switch to import mode on
+                    click using the persisted file batch.
+                  */}
+                  {(() => {
+                    const opensPicker =
+                      Object.keys(importFiles).length === 0 ||
+                      workflow === 'import';
+                    return (
+                      <Button
+                        variant={workflow === 'import' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={
+                          opensPicker
+                            ? () => openImportFileDialog()
+                            : () => setWorkflow('import')
+                        }
+                        className="tw--ml-px tw-rounded-l-none focus-visible:tw-z-10"
+                      >
+                        <FolderInput
+                          className="tw-mr-1.5 tw-h-3.5 tw-w-3.5"
+                          aria-hidden
+                        />
+                        {opensPicker ? 'Import…' : 'Import'}
+                      </Button>
+                    );
+                  })()}
+                </div>
+                {/* "Clear list" only shows in import mode and dumps the
+                  whole imported file batch (the rows themselves). It's a
+                  separate button from the footer's selection Clear so the
+                  user can wipe the list without first emptying the
+                  selection. Re-adding files is done via Import… (its
+                  trailing ellipsis surfaces that). */}
+                {workflow === 'import' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={Object.keys(importFiles).length === 0}
+                    onClick={() => {
+                      setImportFiles({});
+                      setSelected(new Set());
+                    }}
+                  >
+                    Clear list
+                  </Button>
+                )}
+              </div>
+
+              <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2 tw-border-b tw-px-6 tw-py-2">
+                {/* Clear-only checkbox at the head of the filter row.
+                  Behavior is asymmetric on purpose: it can deselect
+                  everything but never selects — toggling it from any
+                  state always clears the selection. Disabled when
+                  nothing is selected (so it can't fire a no-op). The
+                  indeterminate visual signals the partial-selection
+                  state without implying that clicking would select all.
+                  Tooltip names the action since the checkbox itself
+                  carries no label. */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {/* tw-ps-1 lines the checkbox up with the row
+                      checkboxes / pill checkboxes in the body — 24px
+                      (toolbar px-6) + 4px (ps-1) = 28px from the dialog
+                      edge, matching the list rows' 20px content inset +
+                      li's px-2, and the grid pills' 20px inset + pill's
+                      px-2 border. The Checkbox keeps its disabled state
+                      for accessibility but overrides the default
+                      "forbidden" cursor with a plain default cursor so
+                      hovering it doesn't read as "you can't do anything
+                      here" — the user *can* clear, just not from this
+                      state. */}
+                    <span className="tw-inline-flex tw-shrink-0 tw-items-center tw-ps-1">
+                      <Checkbox
+                        checked={selected.size > 0 ? 'indeterminate' : false}
+                        disabled={selected.size === 0}
+                        onCheckedChange={() => setSelected(new Set())}
+                        aria-label="Clear selection"
+                        className="disabled:!tw-cursor-default"
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>Clear selection</TooltipContent>
+                </Tooltip>
+                <div className="tw-min-w-0 tw-flex-1 [&_input]:tw-h-7">
+                  <SearchBar
+                    value={filter}
+                    onSearch={setFilter}
+                    placeholder="Filter books…"
+                    isFullWidth
+                  />
+                </div>
+                <BookGridGroupByToggle value={groupBy} onChange={setGroupBy} />
+                <ToggleGroup
+                  type="single"
+                  value={viewMode}
+                  onValueChange={(v) => v && setViewMode(v as typeof viewMode)}
+                  className="tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
+                  aria-label="View mode"
+                >
+                  <ToggleGroupItem
+                    value="list"
+                    className="tw-h-6 tw-w-7 tw-px-1 data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
+                    aria-label="List view"
+                  >
+                    <List className="tw-h-3.5 tw-w-3.5" aria-hidden />
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="grid"
+                    className="tw-h-6 tw-w-7 tw-px-1 data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
+                    aria-label="Grid view"
+                  >
+                    <LayoutGrid className="tw-h-3.5 tw-w-3.5" aria-hidden />
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+
+              {viewMode === 'list' ? (
+                // Outer scroll container keeps its px-2 so the vertical
+                // scrollbar stays at the edge of the dialog body where the
+                // user expects it. The inner wrapper adds px-3 — net
+                // 8 + 12 = 20px content inset. Tighter padding inside the
+                // row (li's px-2 below) is what brings the row checkbox
+                // into alignment with the grid pills' inner content.
+                <div className="tw-min-h-0 tw-flex-1 tw-overflow-auto tw-px-2 tw-py-2">
+                 <div className="tw-px-3">
+                  {visibleBooks.length === 0 ? (
+                    <div className="tw-flex tw-min-h-40 tw-items-center tw-justify-center tw-text-sm tw-text-muted-foreground">
+                      {workflow === 'import' && Object.keys(importFiles).length === 0
+                        ? 'No files imported yet — click Import… to pick files.'
+                        : 'No books match the current filter.'}
+                    </div>
+                  ) : (
+                    listGroups.map((group) => {
+                      const collapsed = group.label
+                        ? collapsedGroups.has(group.label)
+                        : false;
+                      const groupSelectedCount = group.books.filter((b) =>
+                        selected.has(b),
+                      ).length;
+                      const allSelected =
+                        group.books.length > 0 &&
+                        groupSelectedCount === group.books.length;
+                      const headerCheckState: boolean | 'indeterminate' =
+                        groupSelectedCount === 0
+                          ? false
+                          : allSelected
+                            ? true
+                            : 'indeterminate';
+                      const Chevron = collapsed ? ChevronRight : ChevronDown;
+                      return (
+                        <section
+                          key={group.label ?? 'all'}
+                          className="tw-flex tw-flex-col"
+                        >
+                          {group.label && (
+                            <div className="tw-sticky tw-top-0 tw-z-10 tw-flex tw-items-center tw-gap-2 tw-bg-background tw-pt-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  group.label && toggleCollapsed(group.label)
+                                }
+                                aria-expanded={!collapsed}
+                                // px-2 lines the collapse chevron up
+                                // with the row checkbox below (rows use
+                                // li's px-2). 24px (toolbar/inner inset)
+                                // + 4px from header's outer = chevron at
+                                // 28px, matching the row checkbox.
+                                className="tw-h-6 tw-flex-1 tw-justify-start tw-gap-1 tw-px-2 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground hover:tw-text-foreground"
+                              >
+                                <Chevron
+                                  className="tw-h-3.5 tw-w-3.5"
+                                  aria-hidden
+                                />
+                                <span>{group.label}</span>
+                                <span className="tw-ml-1 tw-font-normal tw-normal-case tw-tracking-normal tw-text-muted-foreground/70">
+                                  {formatGroupCountText(
+                                    group.books.length,
+                                    totalsByLabel[group.label] ??
+                                      group.books.length,
+                                    isFiltered,
+                                  )}
+                                </span>
+                              </Button>
+                              {(() => {
+                                // Hide rules: in Manage and Progress, Canon
+                                // (and the no-grouping case) mix present and
+                                // absent books, so a bulk select-all would
+                                // create a mixed selection — drop the
+                                // checkbox entirely rather than disable it.
+                                const hideHeaderSelectAll =
+                                  (workflow === 'manage' || workflow === 'progress') &&
+                                  groupBy === 'canon';
+                                if (hideHeaderSelectAll) return undefined;
+                                // Disable rules: in Manage / Progress with
+                                // Status grouping, lock down the "other"
+                                // group's select-all whenever the user has
+                                // picked rows of the matching type — Status
+                                // groups are type-pure but the user could
+                                // still tick across them via the bulk
+                                // checkbox.
+                                let headerDisabled = group.books.length === 0;
+                                if (
+                                  !headerDisabled &&
+                                  groupBy === 'status'
+                                ) {
+                                  if (
+                                    workflow === 'manage' &&
+                                    group.label === 'In project'
+                                  ) {
+                                    headerDisabled = selectedAbsent.length > 0;
+                                  } else if (
+                                    workflow === 'manage' &&
+                                    group.label === 'Not in project'
+                                  ) {
+                                    headerDisabled = selectedPresent.length > 0;
+                                  } else if (workflow === 'progress') {
+                                    const selTracked = selectedArr.some((b) =>
+                                      tracked.has(b),
+                                    );
+                                    const selUntracked = selectedArr.some(
+                                      (b) => !tracked.has(b),
+                                    );
+                                    if (group.label === 'Tracked') {
+                                      headerDisabled = selUntracked && !selTracked;
+                                    } else if (group.label === 'Untracked') {
+                                      headerDisabled = selTracked && !selUntracked;
+                                    }
+                                  }
+                                }
+                                return (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="tw-flex tw-shrink-0 tw-items-center tw-pe-2">
+                                        <Checkbox
+                                          checked={headerCheckState}
+                                          onCheckedChange={() =>
+                                            toggleGroupSelectAll(group.books)
+                                          }
+                                          disabled={headerDisabled}
+                                          aria-label={`Select all ${group.label} books`}
+                                        />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{`Select all ${group.label} books`}</TooltipContent>
+                                  </Tooltip>
+                                );
+                              })()}
+                            </div>
+                          )}
+                          {!collapsed && (
+                            <ul className="tw-flex tw-flex-col tw-gap-0.5">
+                              {group.books.map((book) => {
+                                const isPresent = current.present.has(book);
+                                const destDate = current.dates[book];
+                                const isSelected = selected.has(book);
+                                const cmp = compareForBook(book);
+                                // Row "actionable" rules vary by workflow:
+                                // - Manage: mutual-exclusion on present vs.
+                                //   absent so the footer's Create XOR Delete
+                                //   pair never gets a mixed selection.
+                                // - Progress: mutual-exclusion on tracked vs.
+                                //   untracked so the footer's Start XOR Stop
+                                //   tracking pair never gets a mixed
+                                //   selection.
+                                // - Copy: only books the source has.
+                                // - Import: only books with a picked file
+                                //   (always true here since the row list is
+                                //   already filtered to imported books).
+                                const isTracked = tracked.has(book);
+                                const selTracked = selectedArr.some((b) => tracked.has(b));
+                                const selUntracked = selectedArr.some((b) => !tracked.has(b));
+                                const rowActionable = (() => {
+                                  if (workflow === 'copy') return cmp.state !== 'Missing';
+                                  if (workflow === 'import') return !!importFiles[book];
+                                  if (workflow === 'progress') {
+                                    if (isSelected) return true;
+                                    if (!selTracked && !selUntracked) return true;
+                                    return isTracked ? selTracked : selUntracked;
+                                  }
+                                  // workflow === 'manage'
+                                  if (isSelected) return true;
+                                  if (selectedPresent.length === 0 && selectedAbsent.length === 0) {
+                                    return true;
+                                  }
+                                  return isPresent
+                                    ? selectedPresent.length > 0
+                                    : selectedAbsent.length > 0;
+                                })();
+                                return (
+                                  <li
+                                    key={book}
+                                    // The whole row is the click target — clicking
+                                    // anywhere on it toggles the checkbox. The
+                                    // checkbox itself stops propagation so its own
+                                    // onCheckedChange isn't double-fired by the row
+                                    // handler.
+                                    onClick={() => {
+                                      if (rowActionable) toggleOne(book);
+                                    }}
+                                    className={cn(
+                                      // px-2 here (instead of px-3) lines
+                                      // the row checkbox up exactly with
+                                      // the grid pill's inner checkbox —
+                                      // pills use tw-px-2 inside their
+                                      // border so this matches without
+                                      // pushing the outer list inset
+                                      // around.
+                                      'tw-group tw-flex tw-select-none tw-items-center tw-gap-3 tw-rounded-md tw-px-2 tw-py-1.5 tw-text-sm hover:tw-bg-accent/60',
+                                      isSelected && 'tw-bg-accent',
+                                      !rowActionable && 'tw-opacity-60',
+                                      rowActionable
+                                        ? 'tw-cursor-pointer'
+                                        : 'tw-cursor-not-allowed',
+                                    )}
+                                  >
+                                    <Checkbox
+                                      checked={isSelected}
+                                      onCheckedChange={() => toggleOne(book)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      disabled={!rowActionable}
+                                      aria-label={`Select ${book}`}
+                                    />
+                                    <span
+                                      aria-hidden
+                                      className={cn(
+                                        'tw-inline-block tw-h-2 tw-w-2 tw-rounded-full',
+                                        isPresent
+                                          ? 'tw-bg-primary'
+                                          : 'tw-bg-muted-foreground/30',
+                                      )}
+                                    />
+                                    <div className="tw-flex tw-min-w-0 tw-flex-1 tw-items-baseline tw-gap-2">
+                                      <span className="tw-font-medium">
+                                        {book}
+                                      </span>
+                                      <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
+                                        {Canon.bookIdToEnglishName(book)}
+                                      </span>
+                                    </div>
+                                    {workflow === 'manage' && (
+                                      <div className="tw-flex tw-shrink-0 tw-items-center tw-gap-2">
+                                        {isPresent ? (
+                                          <Badge
+                                            variant="secondary"
+                                            className="tw-font-normal"
+                                          >
+                                            {destDate ?? 'Present'}
+                                          </Badge>
+                                        ) : (
+                                          <Badge
+                                            variant="outline"
+                                            className="tw-font-normal tw-text-muted-foreground"
+                                          >
+                                            Missing
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    )}
+                                    {workflow === 'copy' && (
+                                      <div className="tw-flex tw-shrink-0 tw-items-center tw-gap-3 tw-text-xs">
+                                        <span className="tw-w-24 tw-text-end tw-text-muted-foreground">
+                                          {cmp.primaryDate ?? '—'}
+                                        </span>
+                                        <span
+                                          aria-hidden
+                                          className="tw-text-muted-foreground/50"
+                                        >
+                                          →
+                                        </span>
+                                        <span className="tw-w-24 tw-text-muted-foreground">
+                                          {cmp.secondaryDate ?? '—'}
+                                        </span>
+                                        {cmp.state ? (
+                                          <Badge
+                                            variant={comparisonVariant(cmp.state)}
+                                            className="tw-font-normal"
+                                          >
+                                            {cmp.state}
+                                          </Badge>
+                                        ) : (
+                                          <span className="tw-w-14" />
+                                        )}
+                                      </div>
+                                    )}
+                                    {workflow === 'import' && (
+                                      <div className="tw-flex tw-shrink-0 tw-items-center tw-gap-3 tw-text-xs">
+                                        {importFiles[book] ? (
+                                          <span
+                                            className="tw-inline-flex tw-max-w-[16rem] tw-items-center tw-gap-1 tw-truncate tw-rounded tw-border tw-px-1.5 tw-py-0.5 tw-text-muted-foreground"
+                                            title={`${importFiles[book].name} (${importFiles[book].date})`}
+                                          >
+                                            <FolderInput
+                                              className="tw-h-3 tw-w-3 tw-shrink-0"
+                                              aria-hidden
+                                            />
+                                            <span className="tw-truncate">
+                                              {importFiles[book].name}
+                                            </span>
+                                          </span>
+                                        ) : (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="tw-h-6 tw-px-2 tw-text-xs"
+                                            onClick={() => openImportFileDialog(book)}
+                                          >
+                                            <FolderInput
+                                              className="tw-mr-1 tw-h-3 tw-w-3"
+                                              aria-hidden
+                                            />
+                                            Pick file…
+                                          </Button>
+                                        )}
+                                        <span className="tw-w-24 tw-text-muted-foreground">
+                                          {cmp.secondaryDate ?? '—'}
+                                        </span>
+                                        {cmp.state ? (
+                                          <Badge
+                                            variant={comparisonVariant(cmp.state)}
+                                            className="tw-font-normal"
+                                          >
+                                            {cmp.state}
+                                          </Badge>
+                                        ) : (
+                                          <span className="tw-w-14" />
+                                        )}
+                                      </div>
+                                    )}
+                                    {workflow === 'progress' &&
+                                      (() => {
+                                        // Tracked rows surface a percentage
+                                        // bar + priority badge — the same
+                                        // visual signals the view-list-select
+                                        // progress section uses. Untracked
+                                        // rows render a quiet "Untracked"
+                                        // hint so the user knows why the
+                                        // progress data is empty.
+                                        if (!isTracked) {
+                                          return (
+                                            <span className="tw-shrink-0 tw-text-xs tw-text-muted-foreground">
+                                              Untracked
+                                            </span>
+                                          );
+                                        }
+                                        const progress = deterministicNumberFromBook(
+                                          book,
+                                          7,
+                                        );
+                                        const priN = deterministicNumberFromBook(book, 13);
+                                        const priLabel =
+                                          priN >= 67
+                                            ? { label: 'High', tone: 'newer' as BookGridTone }
+                                            : priN >= 34
+                                              ? { label: 'Medium', tone: 'same' as BookGridTone }
+                                              : { label: 'Low', tone: 'neutral' as BookGridTone };
+                                        return (
+                                          <div className="tw-flex tw-shrink-0 tw-items-center tw-gap-3 tw-text-xs">
+                                            <div className="tw-flex tw-w-24 tw-items-center tw-gap-2">
+                                              <div
+                                                className="tw-hidden tw-h-1.5 tw-flex-1 tw-overflow-hidden tw-rounded tw-bg-muted [@media(min-width:640px)]:tw-block"
+                                                aria-hidden
+                                              >
+                                                <div
+                                                  className="tw-h-full tw-bg-primary"
+                                                  style={{ width: `${progress}%` }}
+                                                />
+                                              </div>
+                                              <span className="tw-shrink-0 tw-w-10 tw-text-end tw-tabular-nums">
+                                                {progress}%
+                                              </span>
+                                            </div>
+                                            <Badge
+                                              variant={STATUS_BADGE_VARIANT[priLabel.tone]}
+                                              // Fixed-width pill so High /
+                                              // Medium / Low align in a
+                                              // single column. tw-w-16 fits
+                                              // the longest label ("Medium")
+                                              // with a small breathing
+                                              // margin.
+                                              className="tw-w-16 tw-justify-center tw-font-normal"
+                                            >
+                                              {priLabel.label}
+                                            </Badge>
+                                          </div>
+                                        );
+                                      })()}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </section>
+                      );
+                    })
+                  )}
+                 </div>
+                </div>
+              ) : (
+                // No horizontal padding on the outer grid wrapper —
+                // BookGridSelector owns the scroll, and we want its
+                // scrollbar to land flush with the dialog body's right
+                // edge (matching the list view's outer scroll). The
+                // pills' 20px content inset is supplied via
+                // contentClassName below.
+                <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-py-2">
+                  {visibleBooks.length === 0 ? (
+                    <div className="tw-flex tw-min-h-40 tw-items-center tw-justify-center tw-text-sm tw-text-muted-foreground">
+                      {workflow === 'import' && Object.keys(importFiles).length === 0
+                        ? 'No files imported yet — click Import… to pick files.'
+                        : 'No books match the current filter.'}
+                    </div>
+                  ) : (
+                    <BookGridSelector
+                      items={items}
+                      selected={selected}
+                      onToggle={toggleOne}
+                      groupBy={groupBy}
+                      // Tooltip lines: Progress puts percentage / priority
+                      // through the date slots. Copy puts "From <src>" /
+                      // "In <dest>" so the row tooltip surfaces both
+                      // modification dates side-by-side. Other workflows
+                      // fall back to "Last modified".
+                      primaryDateLabel={
+                        workflow === 'progress'
+                          ? 'Progress'
+                          : workflow === 'copy' && sourceProject
+                            ? `From ${sourceProject.shortName}`
+                            : 'Last modified'
+                      }
+                      secondaryDateLabel={
+                        workflow === 'progress'
+                          ? 'Priority'
+                          : workflow === 'copy'
+                            ? `In ${project.shortName}`
+                            : undefined
+                      }
+                      renderGroupCount={renderGroupCount}
+                      // Hide group select-all in Manage / Progress + Canon
+                      // (or no grouping): those groups mix the workflow's
+                      // two action types, so a bulk select-all could only
+                      // build a mixed selection.
+                      hideGroupSelectAll={() =>
+                        (workflow === 'manage' || workflow === 'progress') &&
+                        groupBy === 'canon'
+                      }
+                      // Disable group select-all in Manage / Progress +
+                      // Status when the *opposite* type is already
+                      // selected — locks the bulk checkbox so it can't add
+                      // rows that conflict with the existing selection.
+                      disableGroupSelectAll={(label) => {
+                        if (groupBy !== 'status') return false;
+                        if (workflow === 'manage') {
+                          if (label === 'In project') return selectedAbsent.length > 0;
+                          if (label === 'Not in project') return selectedPresent.length > 0;
+                        }
+                        if (workflow === 'progress') {
+                          const selTracked = selectedArr.some((b) => tracked.has(b));
+                          const selUntracked = selectedArr.some(
+                            (b) => !tracked.has(b),
+                          );
+                          if (label === 'Tracked') return selUntracked && !selTracked;
+                          if (label === 'Untracked')
+                            return selTracked && !selUntracked;
+                        }
+                        return false;
+                      }}
+                      // Asymmetric padding: 20px start matches the list
+                      // view's left content inset, 28px end matches the
+                      // list view's effective right inset (the list's
+                      // 20px content-area inset plus the 8px tw-pe-2 on
+                      // its group-header checkbox wrapper). With this,
+                      // the grid's group select-all checkboxes land in
+                      // the same vertical column as the list's. The
+                      // scrollbar still sits flush against the dialog's
+                      // right edge because the outer wrapper itself has
+                      // no horizontal padding.
+                      contentClassName="tw-ps-5 tw-pe-7"
+                      onRangeToggle={(books, select) =>
+                        setSelected((prev) => {
+                          const next = new Set(prev);
+                          books.forEach((b) =>
+                            select ? next.add(b) : next.delete(b),
+                          );
+                          return next;
+                        })
+                      }
+                    />
+                  )}
+                </div>
+              )}
+
+              <footer className="tw-flex tw-items-center tw-gap-2 tw-border-t tw-px-6 tw-py-3">
+                {/*
+                  The footer commit buttons alternate by workflow: Show exposes
+                  Create + Delete (mutually exclusive thanks to the show-mode
+                  selection rule, so only one is enabled at a time), Copy a
+                  single Copy button, Import a single Import button. The active
+                  button always carries the selection count.
+                */}
+                {workflow === 'manage' && (
+                  <>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          disabled={selectedAbsent.length === 0}
+                        >
+                          <BookPlus
+                            className="tw-mr-1.5 tw-h-3.5 tw-w-3.5"
+                            aria-hidden
+                          />
+                          {`Create ${selectedAbsent.length} in ${project.shortName}`}
+                          <ChevronDown
+                            className="tw-ml-1 tw-h-3.5 tw-w-3.5"
+                            aria-hidden
+                          />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuContent align="start">
+                          <DropdownMenuItem
+                            onClick={() => createBooks(selectedAbsent, 'empty')}
+                          >
+                            Create empty
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              createBooks(selectedAbsent, 'chapterVerse')
+                            }
+                          >
+                            Create with all chapter and verse numbers
+                          </DropdownMenuItem>
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              Create based on
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuPortal>
+                              <DropdownMenuSubContent>
+                                {otherProjects.map((p) => (
+                                  <DropdownMenuItem
+                                    key={p.id}
+                                    onClick={() =>
+                                      createBooks(selectedAbsent, 'referenceText')
+                                    }
+                                  >
+                                    {p.name}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuPortal>
+                          </DropdownMenuSub>
+                        </DropdownMenuContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenu>
+
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled={selectedPresent.length === 0}
+                      onClick={() => deleteBooks(selectedPresent)}
+                    >
+                      <Trash2
+                        className="tw-mr-1.5 tw-h-3.5 tw-w-3.5"
+                        aria-hidden
+                      />
+                      {`Delete ${selectedPresent.length} from ${project.shortName}`}
+                    </Button>
+                  </>
+                )}
+
+                {workflow === 'copy' &&
+                  (() => {
+                    const copyableSelected = selectedArr.filter(
+                      (b) => sourceData?.present.has(b),
+                    );
+                    return (
+                      <Button
+                        size="sm"
+                        disabled={copyableSelected.length === 0}
+                        onClick={commitCopy}
+                      >
+                        <Copy
+                          className="tw-mr-1.5 tw-h-3.5 tw-w-3.5"
+                          aria-hidden
+                        />
+                        {`Copy ${copyableSelected.length} into ${project.shortName}`}
+                      </Button>
+                    );
+                  })()}
+
+                {workflow === 'import' &&
+                  (() => {
+                    const importableSelected = selectedArr.filter(
+                      (b) => importFiles[b],
+                    );
+                    return (
+                      <Button
+                        size="sm"
+                        disabled={importableSelected.length === 0}
+                        onClick={commitImport}
+                      >
+                        <Download
+                          className="tw-mr-1.5 tw-h-3.5 tw-w-3.5"
+                          aria-hidden
+                        />
+                        {`Import ${importableSelected.length} into ${project.shortName}`}
+                      </Button>
+                    );
+                  })()}
+
+                {workflow === 'progress' &&
+                  (() => {
+                    // Tracking demo only — start/stop buttons mirror the
+                    // view-list-select progress section's footer pattern.
+                    // The variant doesn't actually mutate
+                    // PROJECT_TRACKED_BOOKS; the buttons exist so the user
+                    // can see the same shape of action.
+                    const projectTracked =
+                      PROJECT_TRACKED_BOOKS[projectId] ?? new Set<string>();
+                    const trackedSelected = selectedArr.filter((b) =>
+                      projectTracked.has(b),
+                    ).length;
+                    const untrackedSelected = selectedArr.filter(
+                      (b) =>
+                        current.present.has(b) && !projectTracked.has(b),
+                    ).length;
+                    return (
+                      <>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={trackedSelected === 0}
+                          onClick={() => setSelected(new Set())}
+                        >
+                          {`Stop tracking ${trackedSelected}`}
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={untrackedSelected === 0}
+                          onClick={() => setSelected(new Set())}
+                        >
+                          {`Start tracking ${untrackedSelected}`}
+                        </Button>
+                      </>
+                    );
+                  })()}
+
+                <Button
+                  variant="outline"
+                  onClick={() => setOpen(false)}
+                  className="tw-ml-auto"
+                >
+                  Close
+                </Button>
+              </footer>
+            </div>
+          </TooltipProvider>
+        </DialogContent>
+      </Dialog>
+      {/* Toaster mount — lives outside the dialog so its z-index isn't trapped
+        in the dialog's stacking context. position="top-center" matches the
+        sibling variants and keeps import-failure toasts visible. */}
+      <Sonner position="top-center" style={{ zIndex: 9999 }} />
+    </>
+  );
+}
+
+// --------------------------------------------------------------------------
 // ACTION-FIRST: inverse of SELECTION-FIRST. The user picks an action first,
 // then the list narrows to only the books valid for that action. Context-
 // specific prerequisites (source project for Copy, method for Create) appear
@@ -3720,16 +5283,16 @@ function BookGridGroupByToggle({
         className="tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
         aria-label="Group books by"
       >
-        {/* "No grouping" is the leading option so the toggle reads "off → Canon → Status"
-            left to right, matching the spec. */}
-        <ToggleGroupItem value="none" className={itemClass} aria-label="Group by none">
-          <Ban className="tw-h-3.5 tw-w-3.5" aria-hidden />
+        {/* Order is Status → Canon → none (icon) so the most informative
+            grouping leads, with the "off" toggle trailing. */}
+        <ToggleGroupItem value="status" className={itemClass}>
+          Status
         </ToggleGroupItem>
         <ToggleGroupItem value="canon" className={itemClass}>
           Canon
         </ToggleGroupItem>
-        <ToggleGroupItem value="status" className={itemClass}>
-          Status
+        <ToggleGroupItem value="none" className={itemClass} aria-label="Group by none">
+          <Ban className="tw-h-3.5 tw-w-3.5" aria-hidden />
         </ToggleGroupItem>
       </ToggleGroup>
     </div>
@@ -3746,13 +5309,24 @@ function BookGridSelector({
   interactive = true,
   showUnplannedTooltip = true,
   hideGroupSelectAll,
+  disableGroupSelectAll,
   onRangeToggle,
   renderGroupCount,
+  contentClassName,
 }: {
   items: BookGridItem[];
   selected: Set<string>;
   onToggle: (book: string) => void;
   groupBy: BookGridGroupBy;
+  /**
+   * Extra classes merged into the scroll container's className. Useful for callers
+   * that need to inset the inner content (pills) without moving the scroll
+   * container's outer position — e.g. aligning pills with surrounding toolbar
+   * buttons while leaving the vertical scrollbar where it is. Tailwind-merge
+   * resolution lets a `tw-px-*` here override the default `tw-p-1`'s horizontal
+   * padding while keeping the vertical padding intact.
+   */
+  contentClassName?: string;
   /** If provided, the status-badge tooltip shows `<primaryDateLabel>: <item.primaryDate ?? '—'>`. */
   primaryDateLabel?: string;
   /** If provided, the status-badge tooltip shows `<secondaryDateLabel>: <item.secondaryDate ?? '—'>`. */
@@ -3771,6 +5345,14 @@ function BookGridSelector({
    * together — there's no useful state for the checkbox to land in).
    */
   hideGroupSelectAll?: (label: string | undefined) => boolean;
+  /**
+   * Predicate run on each group label; returning true keeps the group's select-all
+   * checkbox visible but renders it disabled. Useful when the group select-all would
+   * otherwise build a state the workflow forbids (e.g. mixed-type selection in the
+   * grouped Selection-first variant's Show + Canon mode), but you still want to
+   * show the checkbox for visual consistency with siblings.
+   */
+  disableGroupSelectAll?: (label: string | undefined) => boolean;
   /**
    * Bulk-toggle handler for shift-click range selection. The grid hands the parent the
    * row-major range between the last clicked anchor and the shift-clicked target along
@@ -4011,7 +5593,10 @@ function BookGridSelector({
     // scope" / "New - out of scope" we render just "New" on the badge: the in/out cue is
     // already conveyed by the monochrome warning icon on the pill, so spelling it out on
     // the badge is redundant. The full label is still used as the status group key.
-    const badgeLabel = item.statusLabel.startsWith('New') ? 'New' : item.statusLabel;
+    const badgeLabel =
+      item.statusLabel === 'New' || item.statusLabel.startsWith('New -')
+        ? 'New'
+        : item.statusLabel;
     const badge = showBadge ? (
       <Badge variant={STATUS_BADGE_VARIANT[item.tone]} className={badgeClass}>
         {badgeLabel}
@@ -4190,7 +5775,10 @@ function BookGridSelector({
       // No vertical gap between groups: each group header carries its own `pt-3` so its
       // opaque background extends upward and nothing from the previous group remains
       // visible above the sticky header while scrolling.
-      className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-auto tw-p-1"
+      className={cn(
+        'tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-auto tw-p-1',
+        contentClassName,
+      )}
     >
       {groups.map((group, gi) => {
         const collapsed = isCollapsed(group.label);
@@ -4228,7 +5816,10 @@ function BookGridSelector({
                   size="sm"
                   onClick={() => group.label && toggleCollapsed(group.label)}
                   aria-expanded={!collapsed}
-                  className="tw-h-6 tw-flex-1 tw-justify-start tw-gap-1 tw-px-1 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground hover:tw-text-foreground"
+                  // px-2 lines the collapse chevron up with the pill
+                  // checkboxes (pills use tw-px-2 inside their border) so
+                  // the collapse and row controls share a column.
+                  className="tw-h-6 tw-flex-1 tw-justify-start tw-gap-1 tw-px-2 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground hover:tw-text-foreground"
                 >
                   <Chevron className="tw-h-3.5 tw-w-3.5" aria-hidden />
                   <span>{group.label}</span>
@@ -4258,7 +5849,10 @@ function BookGridSelector({
                         <Checkbox
                           checked={headerCheckState}
                           onCheckedChange={toggleAllInGroup}
-                          disabled={groupBooks.length === 0}
+                          disabled={
+                            groupBooks.length === 0 ||
+                            (disableGroupSelectAll?.(group.label) ?? false)
+                          }
                           aria-label={`Select all ${group.label} books`}
                         />
                       </span>
@@ -6531,6 +8125,19 @@ export const SelectionFirst: Story = {
     },
   },
   render: () => <SelectionManageBooksDialog />,
+};
+
+export const GroupedSelectionFirst: Story = {
+  name: 'Grouped Selection-first (list/grid toggle)',
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Variant of Selection-first that swaps the All / In project / Missing filter for the view-list-select group-by toggle (None / Canon / Status) and replaces the bulk "Select all visible" affordance with collapsible per-group section headers (each carrying its own select-all checkbox). A view-mode toggle switches between the row list and the view-list-select pill grid. A Show / Copy from / Import-from-files toggle button group above the list selects the active workflow: rows then expose the corresponding comparison columns inline (Show: project date; Copy: source date / dest date / state badge; Import: per-row file pick / dest date / state badge) and the footer alternates between Create + Delete (Show), Copy (Copy), and Import (Import). Picking "Copy from" opens a project dropdown via the chevron; picking "Import from files" opens a native multi-select file dialog and matches files to book ids by name. No comparison sub-dialog — every comparison happens directly in the table.',
+      },
+    },
+  },
+  render: () => <GroupedSelectionFirstManageBooksDialog />,
 };
 
 export const FutureOutlook: Story = {
