@@ -5,143 +5,93 @@
  * canonical golden master for semantic-domain-based related-lexeme discovery). The "Communication"
  * branch in the mock tree is anchored on the same lemmas captured in that fixture (logos, rhema,
  * aggelia, euangelion). Surrounding branches ("Physical", "Supernatural", "Psychological") add
- * depth so the tree can demonstrate 4-5 levels of nesting per the ui-spec wireframe; their content
- * is plausible SDBG-style filler and is not asserted by behavioural tests.
+ * depth so the breadcrumb tree popover can demonstrate 4-5 levels of nesting per the ui-spec
+ * wireframe; their content is plausible SDBG-style filler and is not asserted by behavioural
+ * tests.
  */
 
-import type { SemanticDomainNode } from '../components/semantic-domain-viewer/semantic-domain-viewer.component';
-import type { SemanticDomainFilteredEntry } from '../components/semantic-domain-viewer/semantic-domain-display-item.component';
+import type { SemanticDomain } from 'platform-bible-react';
+import type { SemanticDomainFilteredItem } from '../components/semantic-domain-viewer/semantic-domain-viewer.component';
 
 /** Communication branch from gm-024 (logos / rhema / aggelia / euangelion). */
-export const MOCK_DOMAIN_COMMUNICATION_BRANCH: SemanticDomainNode = {
+export const MOCK_DOMAIN_COMMUNICATION_BRANCH: SemanticDomain = {
   id: '5',
   label: '5. Communication',
-  hasArticle: false,
   children: [
     {
       id: '5.1',
       label: '5.1 Speak',
-      hasArticle: true,
       children: [
-        {
-          id: '5.1.1',
-          label: '5.1.1 Word',
-          hasArticle: true,
-          children: [],
-        },
-        {
-          id: '5.1.2',
-          label: '5.1.2 Message',
-          hasArticle: true,
-          children: [],
-        },
-        {
-          id: '5.1.3',
-          label: '5.1.3 Gospel / good news',
-          hasArticle: true,
-          children: [],
-        },
+        { id: '5.1.1', label: '5.1.1 Word', children: [] },
+        { id: '5.1.2', label: '5.1.2 Message', children: [] },
+        { id: '5.1.3', label: '5.1.3 Gospel / good news', children: [] },
       ],
     },
     {
       id: '5.2',
       label: '5.2 Listen',
-      hasArticle: false,
       children: [
-        { id: '5.2.1', label: '5.2.1 Hear', hasArticle: true, children: [] },
-        { id: '5.2.2', label: '5.2.2 Pay attention', hasArticle: true, children: [] },
+        { id: '5.2.1', label: '5.2.1 Hear', children: [] },
+        { id: '5.2.2', label: '5.2.2 Pay attention', children: [] },
       ],
     },
   ],
 };
 
 /** Sacred Texts branch from gm-024 (graphe). */
-export const MOCK_DOMAIN_SACRED_TEXTS_BRANCH: SemanticDomainNode = {
+export const MOCK_DOMAIN_SACRED_TEXTS_BRANCH: SemanticDomain = {
   id: '7',
   label: '7. Sacred texts',
-  hasArticle: false,
-  children: [
-    {
-      id: '7.1',
-      label: '7.1 Scripture',
-      hasArticle: true,
-      children: [],
-    },
-  ],
+  children: [{ id: '7.1', label: '7.1 Scripture', children: [] }],
 };
 
 /** Physical branch with deep (4-5 level) nesting matching the spec wireframe. */
-export const MOCK_DOMAIN_PHYSICAL_BRANCH: SemanticDomainNode = {
+export const MOCK_DOMAIN_PHYSICAL_BRANCH: SemanticDomain = {
   id: '1',
   label: '1. Physical',
-  hasArticle: false,
   children: [
     {
       id: '1.1',
       label: '1.1 Movement',
-      hasArticle: false,
       children: [
-        { id: '1.1.1', label: '1.1.1 Walk', hasArticle: true, children: [] },
-        { id: '1.1.2', label: '1.1.2 Run', hasArticle: true, children: [] },
+        { id: '1.1.1', label: '1.1.1 Walk', children: [] },
+        { id: '1.1.2', label: '1.1.2 Run', children: [] },
         {
           id: '1.1.3',
           label: '1.1.3 Carry',
-          hasArticle: false,
           children: [
-            {
-              id: '1.1.3.1',
-              label: '1.1.3.1 Carry on head',
-              hasArticle: true,
-              children: [],
-            },
-            {
-              id: '1.1.3.2',
-              label: '1.1.3.2 Carry on back',
-              hasArticle: true,
-              children: [],
-            },
-            {
-              id: '1.1.3.3',
-              label: '1.1.3.3 Carry in hand',
-              hasArticle: true,
-              children: [],
-            },
+            { id: '1.1.3.1', label: '1.1.3.1 Carry on head', children: [] },
+            { id: '1.1.3.2', label: '1.1.3.2 Carry on back', children: [] },
+            { id: '1.1.3.3', label: '1.1.3.3 Carry in hand', children: [] },
           ],
         },
-        { id: '1.1.4', label: '1.1.4 Send', hasArticle: true, children: [] },
+        { id: '1.1.4', label: '1.1.4 Send', children: [] },
       ],
     },
-    {
-      id: '1.2',
-      label: '1.2 Rest / settle',
-      hasArticle: true,
-      children: [],
-    },
+    { id: '1.2', label: '1.2 Rest / settle', children: [] },
   ],
 };
 
-export const MOCK_DOMAIN_SUPERNATURAL_BRANCH: SemanticDomainNode = {
+export const MOCK_DOMAIN_SUPERNATURAL_BRANCH: SemanticDomain = {
   id: '2',
   label: '2. Supernatural',
-  hasArticle: false,
   children: [
-    { id: '2.1', label: '2.1 Deity', hasArticle: true, children: [] },
-    { id: '2.2', label: '2.2 Spirits', hasArticle: true, children: [] },
+    { id: '2.1', label: '2.1 Deity', children: [] },
+    { id: '2.2', label: '2.2 Spirits', children: [] },
   ],
 };
 
-export const MOCK_DOMAIN_PSYCHOLOGICAL_BRANCH: SemanticDomainNode = {
+export const MOCK_DOMAIN_PSYCHOLOGICAL_BRANCH: SemanticDomain = {
   id: '3',
   label: '3. Psychological',
-  hasArticle: false,
   children: [
-    { id: '3.1', label: '3.1 Think', hasArticle: true, children: [] },
-    { id: '3.2', label: '3.2 Feel', hasArticle: true, children: [] },
+    { id: '3.1', label: '3.1 Think', children: [] },
+    { id: '3.2', label: '3.2 Feel', children: [] },
   ],
 };
 
 /** Full domain tree used as the default fixture for the viewer stories. */
-export const MOCK_DOMAIN_TREE: SemanticDomainNode[] = [
+export const MOCK_DOMAIN_TREE: SemanticDomain[] = [
   MOCK_DOMAIN_PHYSICAL_BRANCH,
   MOCK_DOMAIN_SUPERNATURAL_BRANCH,
   MOCK_DOMAIN_PSYCHOLOGICAL_BRANCH,
@@ -150,16 +100,41 @@ export const MOCK_DOMAIN_TREE: SemanticDomainNode[] = [
 ];
 
 /**
- * Filtered dictionary entries for the "5.1.1 Word" domain. Lemmas / glosses derived from gm-024:
- * logos and rhema both belong to "Communication" with senses glossed as "word".
+ * A 4-level breadcrumb path - "Physical > Movement > Carry > Carry in hand". Demonstrates the
+ * breadcrumb's collapsing behaviour at narrow widths.
  */
-export const MOCK_FILTERED_ENTRIES_WORD: SemanticDomainFilteredEntry[] = [
+const movement = MOCK_DOMAIN_PHYSICAL_BRANCH.children?.[0];
+const carry = movement?.children?.[2];
+const carryInHand = carry?.children?.[2];
+if (!movement || !carry || !carryInHand) {
+  throw new Error('MOCK_DOMAIN_PHYSICAL_BRANCH is missing the expected nested structure.');
+}
+export const MOCK_DOMAIN_PATH_DEEP: SemanticDomain[] = [
+  MOCK_DOMAIN_PHYSICAL_BRANCH,
+  movement,
+  carry,
+  carryInHand,
+];
+
+/**
+ * Filtered dictionary entries for the deep-path story. Lemmas / glosses reuse the gm-024 logos /
+ * rhema fixtures so the row body and detail panel render representative content. The shape conforms
+ * to the ErDictionaryFilteredList row contract (IndexedListItem & DictionaryDisplayItemData).
+ */
+export const MOCK_DICT_ENTRIES_FILTERED: SemanticDomainFilteredItem[] = [
   {
-    entryId: 'logos',
-    lemma: 'logos',
+    id: 'logos',
+    primaryText: 'word',
+    sourceLanguageText: 'λόγος',
+    transliteration: 'logos',
+    tokenId: 'logos',
+    term: 'word',
     sourceText: 'λόγος',
     translit: 'logos',
-    gloss: 'word, message',
+    glosses: ['word', 'message'],
+    partOfSpeech: 'noun (masc.)',
+    occurrenceCount: 7,
+    definition: 'A word, message, or rational principle.',
     senses: [
       {
         id: 'logos-1',
@@ -176,13 +151,30 @@ export const MOCK_FILTERED_ENTRIES_WORD: SemanticDomainFilteredEntry[] = [
         isRelevant: true,
       },
     ],
+    semanticDomains: [{ id: '5.1', label: '5.1 Speak' }],
+    relatedLexemes: [
+      { lemma: 'ῥῆμα', translit: 'rhema', gloss: 'word', relationType: 'Gloss' },
+      { lemma: 'ἀγγελία', translit: 'aggelia', gloss: 'message', relationType: 'Gloss' },
+    ],
+    encyclopediaLinks: [{ articleId: 'enc-logos', title: 'Logos in Johannine Theology' }],
+    verseOccurrences: [
+      { book: 43, chapter: 1, verse: 1, label: 'John 1:1' },
+      { book: 43, chapter: 1, verse: 14, label: 'John 1:14' },
+    ],
   },
   {
-    entryId: 'rhema',
-    lemma: 'rhema',
+    id: 'rhema',
+    primaryText: 'word',
+    sourceLanguageText: 'ῥῆμα',
+    transliteration: 'rhema',
+    tokenId: 'rhema',
+    term: 'word',
     sourceText: 'ῥῆμα',
     translit: 'rhema',
-    gloss: 'word',
+    glosses: ['word'],
+    partOfSpeech: 'noun (neut.)',
+    occurrenceCount: 3,
+    definition: 'A specific spoken word or utterance.',
     senses: [
       {
         id: 'rhema-1',
@@ -192,17 +184,24 @@ export const MOCK_FILTERED_ENTRIES_WORD: SemanticDomainFilteredEntry[] = [
         isRelevant: true,
       },
     ],
+    semanticDomains: [{ id: '5.1', label: '5.1 Speak' }],
+    relatedLexemes: [{ lemma: 'λόγος', translit: 'logos', gloss: 'word', relationType: 'Gloss' }],
+    encyclopediaLinks: [],
+    verseOccurrences: [{ book: 43, chapter: 6, verse: 63, label: 'John 6:63' }],
   },
-];
-
-/** Filtered entries for "5.1.2 Message" - aggelia. */
-export const MOCK_FILTERED_ENTRIES_MESSAGE: SemanticDomainFilteredEntry[] = [
   {
-    entryId: 'aggelia',
-    lemma: 'aggelia',
+    id: 'aggelia',
+    primaryText: 'message',
+    sourceLanguageText: 'ἀγγελία',
+    transliteration: 'aggelia',
+    tokenId: 'aggelia',
+    term: 'message',
     sourceText: 'ἀγγελία',
     translit: 'aggelia',
-    gloss: 'message',
+    glosses: ['message', 'announcement'],
+    partOfSpeech: 'noun (fem.)',
+    occurrenceCount: 2,
+    definition: 'A message communicated from one party to another.',
     senses: [
       {
         id: 'aggelia-1',
@@ -212,25 +211,9 @@ export const MOCK_FILTERED_ENTRIES_MESSAGE: SemanticDomainFilteredEntry[] = [
         isRelevant: true,
       },
     ],
-  },
-];
-
-/** Filtered entries for "5.1.3 Gospel" - euangelion. */
-export const MOCK_FILTERED_ENTRIES_GOSPEL: SemanticDomainFilteredEntry[] = [
-  {
-    entryId: 'euangelion',
-    lemma: 'euangelion',
-    sourceText: 'εὐαγγέλιον',
-    translit: 'euangelion',
-    gloss: 'gospel, good news',
-    senses: [
-      {
-        id: 'euangelion-1',
-        definition: 'Good news, especially the message about salvation through Jesus Christ.',
-        glosses: ['gospel', 'good news'],
-        partOfSpeech: 'noun',
-        isRelevant: true,
-      },
-    ],
+    semanticDomains: [{ id: '5.1', label: '5.1 Speak' }],
+    relatedLexemes: [],
+    encyclopediaLinks: [],
+    verseOccurrences: [],
   },
 ];
