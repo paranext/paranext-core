@@ -103,6 +103,7 @@ export async function startNotificationService(): Promise<void> {
                   clickCommand: { type: 'string' },
                   clickCommandLabel: { type: 'string' },
                   notificationId: { type: ['string', 'number'] },
+                  duration: { type: 'number' },
                 },
                 required: ['message', 'severity'],
               },
