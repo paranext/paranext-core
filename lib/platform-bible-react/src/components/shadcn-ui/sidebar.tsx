@@ -479,8 +479,10 @@ const sidebarMenuButtonVariants = cva(
     variants: {
       variant: {
         default: 'tw:hover:bg-sidebar-accent tw:hover:text-sidebar-accent-foreground',
+        // CUSTOM: Updated shadow color values from hsl(var(--...)) to var(--...) to use the
+        // updated CSS variable format that includes the color space directly in the variable value
         outline:
-          'tw:bg-background tw:shadow-[0_0_0_1px_hsl(var(--sidebar-border))] tw:hover:bg-sidebar-accent tw:hover:text-sidebar-accent-foreground tw:hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]',
+          'tw:bg-background tw:shadow-[0_0_0_1px_var(--sidebar-border)] tw:hover:bg-sidebar-accent tw:hover:text-sidebar-accent-foreground tw:hover:shadow-[0_0_0_1px_var(--sidebar-accent)]',
       },
       size: {
         default: 'tw:h-8 tw:text-sm',

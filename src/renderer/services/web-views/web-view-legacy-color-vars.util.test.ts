@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { transformLegacyColorVars } from '../web-view-legacy-color-vars';
+import {
+  buildLegacyColorVarsLogMessage,
+  transformLegacyColorVars,
+} from './web-view-legacy-color-vars.util';
 
 const TOKENS = new Set(['background', 'foreground', 'ring', 'card-foreground', 'border']);
 
@@ -143,5 +146,46 @@ describe('transformLegacyColorVars', () => {
       );
       expect(text).toBe("const style = { background: 'var(--background)' };");
     });
+  });
+});
+
+describe('buildLegacyColorVarsLogMessage', () => {
+  const noReplacements = transformLegacyColorVars('color: red;', TOKENS);
+
+  it('returns undefined when neither styles nor content has replacements', () => {
+    expect(
+      buildLegacyColorVarsLogMessage('abc', 'my-ext', undefined, noReplacements, 1.2),
+    ).toBeUndefined();
+    expect(
+      buildLegacyColorVarsLogMessage('abc', 'my-ext', noReplacements, noReplacements, 1.2),
+    ).toBeUndefined();
+  });
+
+  it('includes the webViewId, webViewType, and total time in the message', () => {
+    const content = transformLegacyColorVars('color: hsl(var(--background));', TOKENS);
+    const msg = buildLegacyColorVarsLogMessage(
+      'my-view-id',
+      'my-ext-type',
+      undefined,
+      content,
+      3.7,
+    );
+    expect(msg).toContain('my-view-id');
+    expect(msg).toContain('my-ext-type');
+    expect(msg).toContain('3.7ms');
+  });
+
+  it('includes per-section replacement details', () => {
+    const content = transformLegacyColorVars('color: hsl(var(--background));', TOKENS);
+    const msg = buildLegacyColorVarsLogMessage('x', 'ext', undefined, content, 1);
+    expect(msg).toContain('content (1 replacements):');
+    expect(msg).toContain('hsl(var(--background)) → var(--background)  ×1');
+    expect(msg).toContain('pass 1:');
+  });
+
+  it('includes a styles section when styles has replacements', () => {
+    const styles = transformLegacyColorVars('color: hsl(var(--ring));', TOKENS);
+    const msg = buildLegacyColorVarsLogMessage('x', 'ext', styles, noReplacements, 1);
+    expect(msg).toContain('styles (1 replacements):');
   });
 });

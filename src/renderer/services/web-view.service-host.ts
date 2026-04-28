@@ -84,9 +84,9 @@ import {
   USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
 } from './usersnap.service';
 import {
+  buildLegacyColorVarsLogMessage,
   transformLegacyColorVars,
-  type TransformLegacyColorVarsResult,
-} from './web-view-legacy-color-vars';
+} from './web-views/web-view-legacy-color-vars.util';
 
 /**
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
@@ -1136,6 +1136,34 @@ globalThis.resetWebViewStateById = resetWebViewStateSync;
 // #region openWebView and reloadWebView
 
 /**
+ * Transforms legacy `hsl(var(--TOKEN))` patterns in WebView content and optional styles, and logs a
+ * debug message if any replacements are made.
+ *
+ * @deprecated 28 April 2026 — backwards compatibility shim for extensions that haven't yet updated
+ *   to the new oklch color variable format introduced with the Tailwind 4 / shadcn upgrade.
+ */
+function applyAndLogLegacyColorVarTransforms(
+  webView: { id: string; webViewType: string },
+  content: string,
+  styles: string | undefined,
+  tokenNames: ReadonlySet<string>,
+): { content: string; styles: string | undefined } {
+  const start = performance.now();
+  const stylesResult = styles ? transformLegacyColorVars(styles, tokenNames) : undefined;
+  const contentResult = transformLegacyColorVars(content, tokenNames);
+  const totalMs = performance.now() - start;
+  const logMessage = buildLegacyColorVarsLogMessage(
+    webView.id,
+    webView.webViewType,
+    stylesResult,
+    contentResult,
+    totalMs,
+  );
+  if (logMessage) logger.debug(logMessage);
+  return { content: contentResult.text, styles: stylesResult?.text };
+}
+
+/**
  * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
  * @param savedWebViewDefinition Saved WebView definition to pass to
@@ -1297,19 +1325,30 @@ async function openOrReloadWebView(
   // Or this could solve the problem as well https://github.com/paranext/paranext-core/issues/282
   const srcNonce = newNonce();
 
+  // Deprecated 28 April 2026 - token names for backwards-compatible hsl(var(--TOKEN)) transform.
+  const legacyTokenNames = new Set(Object.keys(theme.cssVariables));
+
   // Build the contents of the iframe
   let webViewContent: string;
   /** CSP for allowing only certain scripts and styles */
   let specificSrcPolicy: string;
   switch (contentType) {
-    case WEB_VIEW_CONTENT_TYPE.HTML:
+    case WEB_VIEW_CONTENT_TYPE.HTML: {
+      const { content: htmlContent } = applyAndLogLegacyColorVarTransforms(
+        webView,
+        webView.content,
+        undefined,
+        legacyTokenNames,
+      );
+
       // Add wrapping to turn a plain string into an iframe
-      webViewContent = webView.content.includes('<html')
-        ? webView.content
-        : `<html><head></head><body>${webView.content}</body></html>`;
+      webViewContent = htmlContent.includes('<html')
+        ? htmlContent
+        : `<html><head></head><body>${htmlContent}</body></html>`;
       // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
       specificSrcPolicy = "'unsafe-inline'";
       break;
+    }
     case WEB_VIEW_CONTENT_TYPE.URL:
       webViewContent = webView.content;
       // CSP does not apply to these webViews. If we ever add a `csp` attribute to WebView iframes,
@@ -1321,52 +1360,13 @@ async function openOrReloadWebView(
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const reactWebView = webView as WebViewDefinitionReact;
 
-      // Transform legacy hsl(var(--TOKEN)) patterns for extensions that haven't yet updated
-      // to the new oklch color variable format introduced with the shadcn upgrade.
-      const legacyTokenNames = new Set(Object.keys(theme.cssVariables));
-      const legacyTransformStart = performance.now();
-      const legacyStylesTransform: TransformLegacyColorVarsResult | undefined = reactWebView.styles
-        ? transformLegacyColorVars(reactWebView.styles, legacyTokenNames)
-        : undefined;
-      const legacyContentTransform = transformLegacyColorVars(
-        reactWebView.content,
-        legacyTokenNames,
-      );
-      const legacyTransformTotalMs = performance.now() - legacyTransformStart;
-
-      const legacyStyleReplacements = legacyStylesTransform?.replacements ?? [];
-      const legacyContentReplacements = legacyContentTransform.replacements;
-      if (legacyStyleReplacements.length > 0 || legacyContentReplacements.length > 0) {
-        const lines: string[] = [
-          `Legacy color var replacements in WebView ${webView.id} (total: ${legacyTransformTotalMs.toFixed(1)}ms):`,
-        ];
-        if (legacyStylesTransform && legacyStyleReplacements.length > 0) {
-          const total = legacyStyleReplacements.reduce((sum, r) => sum + r.count, 0);
-          lines.push(`  styles (${total} replacements):`);
-          legacyStyleReplacements.forEach(({ original, replacement, count }) =>
-            lines.push(`    ${original} → ${replacement}  ×${count}`),
-          );
-          const [p1, p2, p3] = legacyStylesTransform.passTimesMs;
-          lines.push(
-            `    pass 1: ${p1.toFixed(1)}ms, pass 2: ${p2.toFixed(1)}ms, pass 3: ${p3.toFixed(1)}ms`,
-          );
-        }
-        if (legacyContentReplacements.length > 0) {
-          const total = legacyContentReplacements.reduce((sum, r) => sum + r.count, 0);
-          lines.push(`  content (${total} replacements):`);
-          legacyContentReplacements.forEach(({ original, replacement, count }) =>
-            lines.push(`    ${original} → ${replacement}  ×${count}`),
-          );
-          const [p1, p2, p3] = legacyContentTransform.passTimesMs;
-          lines.push(
-            `    pass 1: ${p1.toFixed(1)}ms, pass 2: ${p2.toFixed(1)}ms, pass 3: ${p3.toFixed(1)}ms`,
-          );
-        }
-        logger.debug(lines.join('\n'));
-      }
-
-      const legacyTransformedStyles = legacyStylesTransform?.text;
-      const legacyTransformedContent = legacyContentTransform.text;
+      const { content: legacyTransformedContent, styles: legacyTransformedStyles } =
+        applyAndLogLegacyColorVarTransforms(
+          webView,
+          reactWebView.content,
+          reactWebView.styles,
+          legacyTokenNames,
+        );
 
       // Add the component as a script
       // WARNING: DO NOT add anything between the closing of the script tag and the insertion of

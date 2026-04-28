@@ -107,3 +107,51 @@ export function transformLegacyColorVars(
     passTimesMs,
   };
 }
+
+function formatSection(
+  label: string,
+  result: TransformLegacyColorVarsResult,
+  lines: string[],
+): void {
+  const total = result.replacements.reduce((sum, r) => sum + r.count, 0);
+  lines.push(`  ${label} (${total} replacements):`);
+  result.replacements.forEach(({ original, replacement, count }) =>
+    lines.push(`    ${original} → ${replacement}  ×${count}`),
+  );
+  const [p1, p2, p3] = result.passTimesMs;
+  lines.push(
+    `    pass 1: ${p1.toFixed(1)}ms, pass 2: ${p2.toFixed(1)}ms, pass 3: ${p3.toFixed(1)}ms`,
+  );
+}
+
+/**
+ * Builds a debug log message summarising the legacy color variable replacements made in a WebView.
+ *
+ * Returns `undefined` when no replacements were made in either section, so callers can skip logging
+ * entirely in the common case (up-to-date extensions).
+ */
+export function buildLegacyColorVarsLogMessage(
+  webViewId: string,
+  webViewType: string,
+  stylesResult: TransformLegacyColorVarsResult | undefined,
+  contentResult: TransformLegacyColorVarsResult,
+  totalMs: number,
+): string | undefined {
+  const hasStyleReplacements = (stylesResult?.replacements.length ?? 0) > 0;
+  const hasContentReplacements = contentResult.replacements.length > 0;
+  if (!hasStyleReplacements && !hasContentReplacements) return undefined;
+
+  const lines: string[] = [
+    `Legacy color var replacements in WebView ${webViewId} (type ${webViewType}) (total: ${totalMs.toFixed(1)}ms):`,
+  ];
+  if (stylesResult && hasStyleReplacements) formatSection('styles', stylesResult, lines);
+  if (hasContentReplacements) formatSection('content', contentResult, lines);
+  lines.push(
+    `  Note: this message means ${webViewType} WebViews are using outdated color variable patterns that may cause incorrect colors or other issues. Please update the extension to use the new color variable format.`,
+  );
+  if (hasContentReplacements)
+    lines.push(
+      `  Warning: content replacements detected. This will likely cause debugging problems due to the sourcemap being built for the original source, not the transformed content that is running. Please update the extension to avoid these issues.`,
+    );
+  return lines.join('\n');
+}
