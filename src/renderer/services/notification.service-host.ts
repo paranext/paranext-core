@@ -42,7 +42,8 @@ async function send(notification: PlatformNotification): Promise<string | number
           }
         : undefined,
     // Duration calc from https://paratextstudio.atlassian.net/browse/PT-2196?focusedCommentId=13075
-    duration: Math.min(Math.max(localizedMessage.length * 265, 10000), 35000),
+    duration:
+      notification.duration ?? Math.min(Math.max(localizedMessage.length * 265, 10000), 35000),
   };
   switch (severity) {
     case 'info':
