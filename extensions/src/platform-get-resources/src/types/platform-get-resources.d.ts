@@ -62,7 +62,7 @@ declare module 'papi-shared-types' {
     'platformGetResources.openNewTab': (tabGroupId?: string) => Promise<string | undefined>;
 
     /** @returns True if Send/Receive is available to the user, false if not */
-    'platformGetResources.isSendReceiveAvailable': () => Promise<boolean>;
+    'platformGetResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
 
     /**
      * Commits changes in the specified project to the version history. Unless `forceCommit` is
@@ -91,6 +91,8 @@ declare module 'papi-shared-types' {
      * resources. The caller is responsible for deduplicating IDs.
      *
      * @param projectIds IDs of the projects/resources to sync
+     * @throws `PlatformUnimplementedException` if not running in an application that implements
+     *   this command (e.g., Paratext 10 Studio)
      */
     'paratextBibleSendReceive.syncProjectsByType': (projectIds: string[]) => Promise<void>;
 

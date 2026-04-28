@@ -69,6 +69,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_theme_loading%',
   '%toolbar_theme_loading_error%',
   '%toolbar_sync%',
+  '%toolbar_sync_tooltip%',
 ];
 
 export function PlatformBibleToolbar() {
@@ -204,26 +205,36 @@ export function PlatformBibleToolbar() {
             // is hidden via tw-invisible (visual), aria-hidden (accessibility tree), and tabIndex=-1
             // (keyboard navigation). All three are required: tw-invisible alone is still reachable
             // by AT and keyboard; aria-hidden alone is still tab-focusable.
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                'pr-twp tw-h-8 tw-flex-shrink-0',
-                isSendReceiveAvailable === undefined && 'tw-invisible',
-              )}
-              aria-hidden={isSendReceiveAvailable === undefined || undefined}
-              tabIndex={isSendReceiveAvailable === undefined ? -1 : undefined}
-              aria-label={localizedStrings['%toolbar_sync%']}
-              onClick={() => {
-                sendCommand('paratextBibleSendReceive.syncOpenProjects').catch((e) =>
-                  logger.warn(
-                    `Toolbar caught an error while trying to sync open projects: ${getErrorMessage(e)}`,
-                  ),
-                );
-              }}
-            >
-              {localizedStrings['%toolbar_sync%']}
-            </Button>
+            <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    data-testid="toolbar-sync-button"
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      'pr-twp tw-h-8 tw-flex-shrink-0',
+                      isSendReceiveAvailable === undefined && 'tw-invisible',
+                    )}
+                    // || undefined removes the attribute entirely when visible; aria-hidden="false" has different semantics than omitting it
+                    aria-hidden={isSendReceiveAvailable === undefined || undefined}
+                    tabIndex={isSendReceiveAvailable === undefined ? -1 : undefined}
+                    onClick={() => {
+                      sendCommand('paratextBibleSendReceive.syncOpenProjects').catch((e) =>
+                        logger.warn(
+                          `Toolbar caught an error while trying to sync open projects: ${getErrorMessage(e)}`,
+                        ),
+                      );
+                    }}
+                  >
+                    {localizedStrings['%toolbar_sync%']}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="tw-font-light">{localizedStrings['%toolbar_sync_tooltip%']}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           {marketingVersion !== '' && (
             <TooltipProvider delayDuration={TOOLTIP_DELAY}>

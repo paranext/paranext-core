@@ -16,6 +16,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%toolbar_sync%': 'Sync',
+      '%toolbar_sync_tooltip%': 'Syncs open projects and their linked projects and resources',
       '%mainMenu_openHome%': 'Home',
       '%mainMenu_openParatextRegistration%': 'Registration',
       '%mainMenu_openInternetSettings%': 'Internet Settings',
@@ -97,7 +98,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   };
 });
 
-const mockSendCommand = (isSendReceiveAvailable: boolean | undefined) => {
+const mockSendCommand = (isSendReceiveAvailable: boolean) => {
   vi.mocked(sendCommand).mockImplementation(
     // sendCommand has a complex generic signature; cast is required for the mock implementation
     // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
@@ -123,7 +124,9 @@ describe('PlatformBibleToolbar — Sync button', () => {
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
       // Verify absent from DOM entirely (not just hidden like the loading state)
-      expect(document.querySelector('button[aria-label="Sync"]')).not.toBeInTheDocument();
+      expect(
+        document.querySelector('button[data-testid="toolbar-sync-button"]'),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -146,18 +149,17 @@ describe('PlatformBibleToolbar — Sync button', () => {
     expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeInTheDocument();
     // But physically present in the DOM, reserving layout space (tw-invisible)
     expect(
-      document.querySelector('button[aria-hidden="true"][aria-label="Sync"]'),
+      document.querySelector('button[data-testid="toolbar-sync-button"][aria-hidden="true"]'),
     ).toBeInTheDocument();
   });
 
-  it('is rendered with correct text and aria-label when isSendReceiveAvailable returns true', async () => {
+  it('is rendered with correct text when isSendReceiveAvailable returns true', async () => {
     mockSendCommand(true);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
       const btn = screen.getByRole('button', { name: 'Sync' });
       expect(btn).toBeInTheDocument();
       expect(btn).toHaveTextContent('Sync');
-      expect(btn).toHaveAttribute('aria-label', 'Sync');
     });
   });
 
