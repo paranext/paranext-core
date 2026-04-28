@@ -92,11 +92,11 @@ declare module 'papi-shared-types' {
      *
      * @param projectIds IDs of the projects/resources to sync
      */
-    'paratextBibleSendReceive.syncProjects': (projectIds: string[]) => Promise<void>;
+    'paratextBibleSendReceive.syncProjectsByType': (projectIds: string[]) => Promise<void>;
 
     /**
-     * Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjects` with
-     * them.
+     * Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjectsByType`
+     * with them.
      *
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)

@@ -24,7 +24,7 @@ internal class ParatextProjectSendReceiveService(
                 CommitDaily
             ),
             PapiClient.RegisterRequestHandlerAsync(
-                "command:paratextBibleSendReceive.syncProjects",
+                "command:paratextBibleSendReceive.syncProjectsByType",
                 SyncProjects
             ),
             PapiClient.RegisterRequestHandlerAsync(
