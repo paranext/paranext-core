@@ -26,11 +26,13 @@ import {
 } from '../data/encyclopedia-tab.story-data';
 import { MEDIA_IMAGES_TAB_STRING_KEYS } from '../components/media-tab/media-images-tab.component';
 import { MEDIA_MAPS_TAB_STRING_KEYS } from '../components/media-tab/media-maps-tab.component';
+import { MEDIA_VIEWER_STRING_KEYS } from '../components/media-viewer/media-viewer.component';
 import {
   MOCK_MEDIA_IMAGES,
   MOCK_MEDIA_MAPS,
   mockMediaThumbnailUrlResolver,
 } from '../data/media-tab.story-data';
+import { mockMediaViewerImageUrlResolver } from '../data/media-viewer.story-data';
 import {
   EnhancedResourceWebView,
   ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS,
@@ -46,6 +48,7 @@ const allKeys = [
   ...ENCYCLOPEDIA_TAB_STRING_KEYS,
   ...MEDIA_IMAGES_TAB_STRING_KEYS,
   ...MEDIA_MAPS_TAB_STRING_KEYS,
+  ...MEDIA_VIEWER_STRING_KEYS,
 ];
 const localizedStrings = getLocalizedStrings(allKeys);
 
@@ -92,6 +95,7 @@ const meta: Meta<typeof EnhancedResourceWebView> = {
     mediaMapsItems: MOCK_MEDIA_MAPS,
     mediaMapsScopeLabel: 'current verse',
     mediaMapsThumbnailUrlResolver: mockMediaThumbnailUrlResolver,
+    mediaViewerImageUrlResolver: mockMediaViewerImageUrlResolver,
   },
   decorators: [
     (Story) => (

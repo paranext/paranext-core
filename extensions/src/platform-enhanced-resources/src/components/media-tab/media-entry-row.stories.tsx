@@ -59,6 +59,7 @@ export const LongTitle: Story = {
         'A very long title that should truncate gracefully when the row width is constrained by the parent layout',
       referenceLabel: 'PSA 119:1-176',
       collection: 'General',
+      mediaType: 'image',
     },
   },
 };

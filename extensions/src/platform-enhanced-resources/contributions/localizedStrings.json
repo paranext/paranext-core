@@ -275,6 +275,11 @@
         "ARIA label / alt text for a media thumbnail. {title} is replaced with the entry title."
       ]
     },
+    "%enhancedResources_media_maximize%": {
+      "notes": [
+        "ARIA label for the Maximize button shown over the media-detail thumbnail; opens the centered MediaViewer Dialog with zoom + navigation."
+      ]
+    },
     "%enhancedResources_media_thumbnailLoading%": {
       "notes": [
         "ARIA label for a media thumbnail Skeleton placeholder shown while the bytes are still being fetched (BHV-359 deferred loading)."
@@ -684,6 +689,7 @@
       "%enhancedResources_article_emptyArticle%": "Article content is not available.",
       "%enhancedResources_article_truncatedNotice%": "(Preview - additional paragraphs available in full view.)",
       "%enhancedResources_media_thumbnailLabel%": "Image: {title}",
+      "%enhancedResources_media_maximize%": "Maximize",
       "%enhancedResources_media_thumbnailLoading%": "Loading thumbnail",
       "%enhancedResources_media_images_tabLabel%": "Media",
       "%enhancedResources_media_images_emptyState_noData%": "No images for {scope}.",

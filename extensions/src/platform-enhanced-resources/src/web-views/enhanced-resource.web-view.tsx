@@ -47,6 +47,10 @@ import type {
 import { MediaImagesTab } from '../components/media-tab/media-images-tab.component';
 import { MediaMapsTab } from '../components/media-tab/media-maps-tab.component';
 import type { MediaEntryRowData } from '../components/media-tab/media-entry-row.component';
+import {
+  MediaViewer,
+  type MediaViewerItem,
+} from '../components/media-viewer/media-viewer.component';
 
 /** Object containing all keys used for localization in this component. */
 export const ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS = Object.freeze([
@@ -150,20 +154,36 @@ export type EnhancedResourceWebViewProps = {
 
   // Media (Images) tab
   mediaImagesItems?: MediaEntryRowData[];
+  mediaImagesSelectedItemId?: string;
   mediaImagesIsLoading?: boolean;
   /** Per BHV-359: false until the tab becomes visible and thumbnail bytes are fetched. */
   mediaImagesLoaded?: boolean;
   mediaImagesScopeLabel?: string;
   mediaImagesThumbnailUrlResolver?: (imageId: string) => string;
-  onMediaImagesThumbnailClick?: (imageId: string, displayIndex: number) => void;
+  onMediaImagesSelectionChange?: (id: string | undefined) => void;
+  onMediaImagesMaximize?: (id: string) => void;
 
   // Media (Maps) tab
   mediaMapsItems?: MediaEntryRowData[];
+  mediaMapsSelectedItemId?: string;
   mediaMapsIsLoading?: boolean;
   mediaMapsLoaded?: boolean;
   mediaMapsScopeLabel?: string;
   mediaMapsThumbnailUrlResolver?: (imageId: string) => string;
-  onMediaMapsThumbnailClick?: (imageId: string, displayIndex: number) => void;
+  onMediaMapsSelectionChange?: (id: string | undefined) => void;
+  onMediaMapsMaximize?: (id: string) => void;
+
+  // MediaViewer (centered Dialog) - opened by either tab's Maximize button.
+  /** Currently maximized media item; undefined keeps the Dialog closed. */
+  maximizedMediaItem?: MediaViewerItem;
+  /** FN-009 seam for the full-size image URL inside the Dialog. */
+  mediaViewerImageUrlResolver?: (imageId: string) => string;
+  /** Open-state change handler - called when the Dialog opens or closes. */
+  onMaximizedMediaOpenChange?: (open: boolean) => void;
+  /** Previous-image handler - undefined disables the Previous button. */
+  onMaximizedMediaPrev?: () => void;
+  /** Next-image handler - undefined disables the Next button. */
+  onMaximizedMediaNext?: () => void;
 
   /**
    * All localized strings used by the shell + nested components, keyed by the union of every
@@ -259,18 +279,28 @@ export function EnhancedResourceWebView({
   onEncyclopediaViewFullArticle = () => {},
 
   mediaImagesItems = [],
+  mediaImagesSelectedItemId,
   mediaImagesIsLoading = false,
   mediaImagesLoaded = true,
   mediaImagesScopeLabel = '',
   mediaImagesThumbnailUrlResolver,
-  onMediaImagesThumbnailClick = () => {},
+  onMediaImagesSelectionChange = () => {},
+  onMediaImagesMaximize = () => {},
 
   mediaMapsItems = [],
+  mediaMapsSelectedItemId,
   mediaMapsIsLoading = false,
   mediaMapsLoaded = true,
   mediaMapsScopeLabel = '',
   mediaMapsThumbnailUrlResolver,
-  onMediaMapsThumbnailClick = () => {},
+  onMediaMapsSelectionChange = () => {},
+  onMediaMapsMaximize = () => {},
+
+  maximizedMediaItem,
+  mediaViewerImageUrlResolver,
+  onMaximizedMediaOpenChange = () => {},
+  onMaximizedMediaPrev,
+  onMaximizedMediaNext,
 
   localizedStringsWithLoadingState = [{}, false],
 }: EnhancedResourceWebViewProps) {
@@ -430,11 +460,13 @@ export function EnhancedResourceWebView({
                 >
                   <MediaImagesTab
                     items={mediaImagesItems}
+                    selectedItemId={mediaImagesSelectedItemId}
                     isLoading={mediaImagesIsLoading}
                     loaded={mediaImagesLoaded}
                     scopeLabel={mediaImagesScopeLabel}
                     thumbnailUrlResolver={mediaImagesThumbnailUrlResolver}
-                    onThumbnailClick={onMediaImagesThumbnailClick}
+                    onSelectionChange={onMediaImagesSelectionChange}
+                    onMaximize={onMediaImagesMaximize}
                     localizedStringsWithLoadingState={childStrings}
                   />
                 </TabsContent>
@@ -444,11 +476,13 @@ export function EnhancedResourceWebView({
                 >
                   <MediaMapsTab
                     items={mediaMapsItems}
+                    selectedItemId={mediaMapsSelectedItemId}
                     isLoading={mediaMapsIsLoading}
                     loaded={mediaMapsLoaded}
                     scopeLabel={mediaMapsScopeLabel}
                     thumbnailUrlResolver={mediaMapsThumbnailUrlResolver}
-                    onThumbnailClick={onMediaMapsThumbnailClick}
+                    onSelectionChange={onMediaMapsSelectionChange}
+                    onMaximize={onMediaMapsMaximize}
                     localizedStringsWithLoadingState={childStrings}
                   />
                 </TabsContent>
@@ -457,6 +491,15 @@ export function EnhancedResourceWebView({
           </ResizablePanelGroup>
         )}
       </div>
+      <MediaViewer
+        open={maximizedMediaItem !== undefined}
+        item={maximizedMediaItem}
+        imageUrlResolver={mediaViewerImageUrlResolver}
+        onOpenChange={onMaximizedMediaOpenChange}
+        onPrev={onMaximizedMediaPrev}
+        onNext={onMaximizedMediaNext}
+        localizedStringsWithLoadingState={childStrings}
+      />
     </div>
   );
 }

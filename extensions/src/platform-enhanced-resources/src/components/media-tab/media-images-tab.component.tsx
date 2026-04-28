@@ -1,16 +1,13 @@
+import { useMemo } from 'react';
+import { SourceLanguageIndexedList, type IndexedListItem } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatReplacementString } from 'platform-bible-utils';
-import type { UIEvent } from 'react';
-import {
-  ResourceList,
-  RESOURCE_LIST_STRING_KEYS,
-  type ResourceListItem,
-} from '../shared/resource-list.component';
 import {
   MediaEntryRow,
   MEDIA_ENTRY_ROW_STRING_KEYS,
   type MediaEntryRowData,
 } from './media-entry-row.component';
+import { MediaItemDetail, MEDIA_ITEM_DETAIL_STRING_KEYS } from './media-item-detail.component';
 
 /** Object containing all keys used for localization in this component. */
 export const MEDIA_IMAGES_TAB_STRING_KEYS = Object.freeze([
@@ -18,8 +15,8 @@ export const MEDIA_IMAGES_TAB_STRING_KEYS = Object.freeze([
   '%enhancedResources_media_images_emptyState_noData%',
   '%enhancedResources_media_images_countLabel_singular%',
   '%enhancedResources_media_images_countLabel_plural%',
-  ...RESOURCE_LIST_STRING_KEYS,
   ...MEDIA_ENTRY_ROW_STRING_KEYS,
+  ...MEDIA_ITEM_DETAIL_STRING_KEYS,
 ] as const);
 
 type MediaImagesTabLocalizedStringKey = (typeof MEDIA_IMAGES_TAB_STRING_KEYS)[number];
@@ -27,13 +24,33 @@ type MediaImagesTabLocalizedStrings = {
   [key in MediaImagesTabLocalizedStringKey]?: LocalizedStringValue;
 };
 
+/**
+ * Adapter row item: combines our MediaEntryRowData with the IndexedListItem shape required by
+ * SourceLanguageIndexedList. The list expects `id` and `primaryText`; we map both from the entry.
+ */
+type MediaImagesRowItem = IndexedListItem & MediaEntryRowData;
+
+const toRowItem = (entry: MediaEntryRowData): MediaImagesRowItem => ({
+  ...entry,
+  id: entry.imageId,
+  primaryText: entry.title,
+});
+
 export type MediaImagesTabProps = {
   /**
    * Pre-filtered media items. Per BHV-601 + TS-071 the parent is responsible for filtering out
-   * Satellite Bible Atlas entries; the tab is presentational. Each item must satisfy
-   * `item.collection !== 'Satellite Bible Atlas'`.
+   * Satellite Bible Atlas entries; the tab is presentational.
    */
   items: MediaEntryRowData[];
+
+  /** Currently selected image id (controlled). When set, the side drawer opens to that entry. */
+  selectedItemId?: string;
+
+  /** Selection callback - parent toggles drawer via this. */
+  onSelectionChange?: (id: string | undefined) => void;
+
+  /** Maximize callback - fired from the drawer's Maximize button. Parent opens the MediaViewer. */
+  onMaximize?: (id: string) => void;
 
   /** Shell-level loading flag - shows skeleton rows for the entire list. */
   isLoading?: boolean;
@@ -55,19 +72,17 @@ export type MediaImagesTabProps = {
    */
   thumbnailUrlResolver?: (imageId: string) => string;
 
-  /** Click handler for a thumbnail / row body - parent routes to MediaViewer (UI-PKG-005). */
-  onThumbnailClick?: (imageId: string, displayIndex: number) => void;
-
-  /** Scroll handler forwarded to ResourceList for progressive loading. */
-  onScroll?: (event: UIEvent<HTMLDivElement>) => void;
-
   localizedStringsWithLoadingState?: [MediaImagesTabLocalizedStrings, boolean];
 };
 
 /**
- * Pure presentational MediaImagesTab. Renders a ResourceList (thumbnail variant) of MediaEntryRow
- * bodies. The Maps-tab counterpart (MediaMapsTab) shares this component's structure but filters the
- * opposite way - "Satellite Bible Atlas" only.
+ * Pure presentational MediaImagesTab. Renders a `SourceLanguageIndexedList` (variant=thumbnail) of
+ * `MediaEntryRow` bodies with a side-drawer detail. The drawer's Maximize button fires `onMaximize`
+ * so the parent can open the MediaViewer Dialog.
+ *
+ * Note: We consume `SourceLanguageIndexedList` directly (not the `ErMediaList` wrapper) because
+ * that wrapper unconditionally overrides `renderItem`, which would silently drop our custom row
+ * (badge + verse-range label).
  *
  * Empty state (BHV-352):
  *
@@ -77,20 +92,16 @@ export type MediaImagesTabProps = {
  *
  * - When `loaded === false` rows render with skeleton thumbnails. The wiring layer toggles `loaded`
  *   to `true` when the tab becomes visible and the thumbnail bytes have arrived.
- *
- * Click routing (BHV-354):
- *
- * - Clicking a row fires `onThumbnailClick(imageId, displayIndex)`; the parent opens the MediaViewer
- *   overlay (UI-PKG-005).
  */
 export function MediaImagesTab({
   items,
+  selectedItemId,
+  onSelectionChange = () => {},
+  onMaximize = () => {},
   isLoading = false,
   loaded = true,
   scopeLabel = '',
   thumbnailUrlResolver,
-  onThumbnailClick = () => {},
-  onScroll,
   localizedStringsWithLoadingState = [{}, false],
 }: MediaImagesTabProps) {
   const getLocalizedString = (key: MediaImagesTabLocalizedStringKey) =>
@@ -113,25 +124,7 @@ export function MediaImagesTab({
 
   const childStrings: [MediaImagesTabLocalizedStrings, boolean] = localizedStringsWithLoadingState;
 
-  // Map media entries -> ResourceListItem (thumbnail variant). The display index is computed at
-  // click time via items.findIndex (see onItemClick below); the wiring layer forwards it to
-  // MediaViewer for next/prev navigation.
-  const listItems: ResourceListItem[] = items.map((item) => ({
-    id: item.imageId,
-    primary: (
-      <MediaEntryRow
-        item={item}
-        loaded={loaded}
-        thumbnailUrlResolver={thumbnailUrlResolver}
-        localizedStringsWithLoadingState={childStrings}
-      />
-    ),
-    // Display-index closure is captured per row; ResourceList only forwards `id`, so we build
-    // the full handler here.
-    selectable: true,
-    expanded: undefined,
-    secondary: undefined,
-  }));
+  const rowItems = useMemo(() => items.map(toRowItem), [items]);
 
   return (
     <div
@@ -149,25 +142,34 @@ export function MediaImagesTab({
           </span>
         )}
       </div>
-      <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col">
-        <ResourceList
-          items={listItems}
-          variant="thumbnail"
-          showSecondaryColumn={false}
-          onItemClick={(id) => {
-            const index = items.findIndex((it) => it.imageId === id);
-            if (index >= 0) onThumbnailClick(id, index);
-          }}
-          emptyMessage={
-            <div data-testid="media-images-empty-state" className="tw-text-sm">
-              {emptyMessage}
-            </div>
+      <div className="tw-flex tw-min-h-0 tw-flex-1">
+        <SourceLanguageIndexedList
+          items={rowItems}
+          selectedItemId={selectedItemId}
+          onItemClick={(item) =>
+            onSelectionChange(item.id === selectedItemId ? undefined : item.id)
           }
           isLoading={isLoading}
-          onScroll={onScroll}
-          ariaLabel={tabLabel}
-          testId="media-images-list"
-          localizedStringsWithLoadingState={childStrings}
+          emptyStateMessage={emptyMessage}
+          variant="thumbnail"
+          renderItem={(item) => (
+            <MediaEntryRow
+              item={item}
+              loaded={loaded}
+              thumbnailUrlResolver={thumbnailUrlResolver}
+              localizedStringsWithLoadingState={childStrings}
+            />
+          )}
+          renderDetailContent={(item, onClose) => (
+            <MediaItemDetail
+              item={item}
+              thumbnailUrlResolver={thumbnailUrlResolver}
+              onClose={onClose}
+              onMaximize={() => onMaximize(item.id)}
+              localizedStringsWithLoadingState={childStrings}
+            />
+          )}
+          className="tw-h-full tw-w-full"
         />
       </div>
     </div>

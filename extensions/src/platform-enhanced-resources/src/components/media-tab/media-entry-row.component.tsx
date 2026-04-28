@@ -1,4 +1,4 @@
-import { Skeleton, cn } from 'platform-bible-react';
+import { Badge, Skeleton, cn } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 
 /** Object containing all keys used for localization in this component. */
@@ -26,6 +26,8 @@ export type MediaEntryRowData = {
   referenceLabel: string;
   /** Collection name (e.g., "General", "Satellite Bible Atlas"). */
   collection: string;
+  /** Type of media - drives the badge text shown next to the title. */
+  mediaType: 'image' | 'map';
 };
 
 export type MediaEntryRowProps = {
@@ -51,18 +53,17 @@ export type MediaEntryRowProps = {
 };
 
 /**
- * Pure presentational entry-row body for the Media / Maps tabs. Rendered inside `ResourceList`
- * (thumbnail variant) primary slot - the parent supplies the click target, hover background,
- * trailing slot, and any expansion behavior.
+ * Pure presentational entry-row body for the Media / Maps tabs. Designed to be passed via the
+ * `renderItem` slot of `SourceLanguageIndexedList` (variant=thumbnail). The list owns the
+ * click-target, hover background, and selection styling - this component renders only the body.
  *
  * Layout (left-to-right):
  *
- *      [thumbnail (or skeleton)] [title (line 1) + reference (line 2)]
+ *      [thumbnail (or skeleton)] [title + media-type badge (line 1) + reference (line 2)]
  *
  * Selectors:
  *
  * - `data-testid="media-entry-{imageId}"` (root)
- * - `role="img"` on the thumbnail when rendered (alt text from title)
  */
 export function MediaEntryRow({
   item,
@@ -87,11 +88,11 @@ export function MediaEntryRow({
   return (
     <div
       data-testid={`media-entry-${item.imageId}`}
-      className={cn('tw-flex tw-min-w-0 tw-items-start tw-gap-3')}
+      className={cn('tw-flex tw-w-full tw-items-center tw-gap-3')}
     >
       <div
         className={cn(
-          'tw-flex tw-h-[60px] tw-w-[90px] tw-shrink-0 tw-items-center tw-justify-center',
+          'tw-flex tw-h-14 tw-w-14 tw-shrink-0 tw-items-center tw-justify-center',
           'tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-muted/40',
         )}
       >
@@ -117,8 +118,13 @@ export function MediaEntryRow({
           </span>
         )}
       </div>
-      <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-gap-0.5">
-        <span className="tw-truncate tw-text-sm tw-font-medium">{item.title}</span>
+      <div className="tw-flex tw-flex-1 tw-flex-col tw-gap-0.5 tw-overflow-hidden">
+        <div className="tw-flex tw-items-baseline tw-gap-2">
+          <span className="tw-truncate tw-text-sm tw-font-medium">{item.title}</span>
+          <Badge variant="outline" className="tw-shrink-0 tw-text-xs">
+            {item.mediaType}
+          </Badge>
+        </div>
         <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
           {item.referenceLabel}
         </span>

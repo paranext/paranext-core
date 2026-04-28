@@ -1,16 +1,13 @@
+import { useMemo } from 'react';
+import { SourceLanguageIndexedList, type IndexedListItem } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatReplacementString } from 'platform-bible-utils';
-import type { UIEvent } from 'react';
-import {
-  ResourceList,
-  RESOURCE_LIST_STRING_KEYS,
-  type ResourceListItem,
-} from '../shared/resource-list.component';
 import {
   MediaEntryRow,
   MEDIA_ENTRY_ROW_STRING_KEYS,
   type MediaEntryRowData,
 } from './media-entry-row.component';
+import { MediaItemDetail, MEDIA_ITEM_DETAIL_STRING_KEYS } from './media-item-detail.component';
 
 /** Object containing all keys used for localization in this component. */
 export const MEDIA_MAPS_TAB_STRING_KEYS = Object.freeze([
@@ -18,8 +15,8 @@ export const MEDIA_MAPS_TAB_STRING_KEYS = Object.freeze([
   '%enhancedResources_media_maps_emptyState_noData%',
   '%enhancedResources_media_maps_countLabel_singular%',
   '%enhancedResources_media_maps_countLabel_plural%',
-  ...RESOURCE_LIST_STRING_KEYS,
   ...MEDIA_ENTRY_ROW_STRING_KEYS,
+  ...MEDIA_ITEM_DETAIL_STRING_KEYS,
 ] as const);
 
 type MediaMapsTabLocalizedStringKey = (typeof MEDIA_MAPS_TAB_STRING_KEYS)[number];
@@ -27,13 +24,33 @@ type MediaMapsTabLocalizedStrings = {
   [key in MediaMapsTabLocalizedStringKey]?: LocalizedStringValue;
 };
 
+/**
+ * Adapter row item: combines our MediaEntryRowData with the IndexedListItem shape required by
+ * SourceLanguageIndexedList.
+ */
+type MediaMapsRowItem = IndexedListItem & MediaEntryRowData;
+
+const toRowItem = (entry: MediaEntryRowData): MediaMapsRowItem => ({
+  ...entry,
+  id: entry.imageId,
+  primaryText: entry.title,
+});
+
 export type MediaMapsTabProps = {
   /**
    * Pre-filtered map items. Per BHV-601 + TS-071 the parent is responsible for keeping only
-   * Satellite Bible Atlas entries; the tab is presentational. Each item should satisfy
-   * `item.collection === 'Satellite Bible Atlas'`.
+   * Satellite Bible Atlas entries; the tab is presentational.
    */
   items: MediaEntryRowData[];
+
+  /** Currently selected map id (controlled). When set, the side drawer opens to that entry. */
+  selectedItemId?: string;
+
+  /** Selection callback - parent toggles drawer via this. */
+  onSelectionChange?: (id: string | undefined) => void;
+
+  /** Maximize callback - fired from the drawer's Maximize button. Parent opens the MediaViewer. */
+  onMaximize?: (id: string) => void;
 
   /** Shell-level loading flag - shows skeleton rows for the entire list. */
   isLoading?: boolean;
@@ -50,32 +67,26 @@ export type MediaMapsTabProps = {
   /** FN-009 seam: production papi-er://, stories placehold.co. */
   thumbnailUrlResolver?: (imageId: string) => string;
 
-  /** Click handler - parent routes to MediaViewer (UI-PKG-005). */
-  onThumbnailClick?: (imageId: string, displayIndex: number) => void;
-
-  /** Scroll handler forwarded to ResourceList. */
-  onScroll?: (event: UIEvent<HTMLDivElement>) => void;
-
   localizedStringsWithLoadingState?: [MediaMapsTabLocalizedStrings, boolean];
 };
 
 /**
- * Pure presentational MediaMapsTab. Mirrors MediaImagesTab but with maps-specific labels and
- * "Satellite Bible Atlas" filter convention (TS-071).
+ * Pure presentational MediaMapsTab. Mirrors MediaImagesTab but with maps-specific labels and the
+ * "Satellite Bible Atlas" filter convention (TS-071). Renders a `SourceLanguageIndexedList`
+ * (variant=thumbnail) of `MediaEntryRow` bodies with a shared `MediaItemDetail` drawer.
  *
- * The structural shape is intentionally similar to MediaImagesTab so the wiring layer can swap data
- * sources without re-implementing layout. The two tabs are not collapsed into one because the
- * empty-state copy and tab label differ, and Theme 14 keeps the Storybook hierarchy explicit for UX
- * review.
+ * The two tabs are not collapsed into one because the empty-state copy and tab label differ, and
+ * Theme 14 keeps the Storybook hierarchy explicit for UX review.
  */
 export function MediaMapsTab({
   items,
+  selectedItemId,
+  onSelectionChange = () => {},
+  onMaximize = () => {},
   isLoading = false,
   loaded = true,
   scopeLabel = '',
   thumbnailUrlResolver,
-  onThumbnailClick = () => {},
-  onScroll,
   localizedStringsWithLoadingState = [{}, false],
 }: MediaMapsTabProps) {
   const getLocalizedString = (key: MediaMapsTabLocalizedStringKey) =>
@@ -98,20 +109,7 @@ export function MediaMapsTab({
 
   const childStrings: [MediaMapsTabLocalizedStrings, boolean] = localizedStringsWithLoadingState;
 
-  const listItems: ResourceListItem[] = items.map((item) => ({
-    id: item.imageId,
-    primary: (
-      <MediaEntryRow
-        item={item}
-        loaded={loaded}
-        thumbnailUrlResolver={thumbnailUrlResolver}
-        localizedStringsWithLoadingState={childStrings}
-      />
-    ),
-    selectable: true,
-    expanded: undefined,
-    secondary: undefined,
-  }));
+  const rowItems = useMemo(() => items.map(toRowItem), [items]);
 
   return (
     <div
@@ -129,25 +127,34 @@ export function MediaMapsTab({
           </span>
         )}
       </div>
-      <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col">
-        <ResourceList
-          items={listItems}
-          variant="thumbnail"
-          showSecondaryColumn={false}
-          onItemClick={(id) => {
-            const index = items.findIndex((it) => it.imageId === id);
-            if (index >= 0) onThumbnailClick(id, index);
-          }}
-          emptyMessage={
-            <div data-testid="media-maps-empty-state" className="tw-text-sm">
-              {emptyMessage}
-            </div>
+      <div className="tw-flex tw-min-h-0 tw-flex-1">
+        <SourceLanguageIndexedList
+          items={rowItems}
+          selectedItemId={selectedItemId}
+          onItemClick={(item) =>
+            onSelectionChange(item.id === selectedItemId ? undefined : item.id)
           }
           isLoading={isLoading}
-          onScroll={onScroll}
-          ariaLabel={tabLabel}
-          testId="media-maps-list"
-          localizedStringsWithLoadingState={childStrings}
+          emptyStateMessage={emptyMessage}
+          variant="thumbnail"
+          renderItem={(item) => (
+            <MediaEntryRow
+              item={item}
+              loaded={loaded}
+              thumbnailUrlResolver={thumbnailUrlResolver}
+              localizedStringsWithLoadingState={childStrings}
+            />
+          )}
+          renderDetailContent={(item, onClose) => (
+            <MediaItemDetail
+              item={item}
+              thumbnailUrlResolver={thumbnailUrlResolver}
+              onClose={onClose}
+              onMaximize={() => onMaximize(item.id)}
+              localizedStringsWithLoadingState={childStrings}
+            />
+          )}
+          className="tw-h-full tw-w-full"
         />
       </div>
     </div>

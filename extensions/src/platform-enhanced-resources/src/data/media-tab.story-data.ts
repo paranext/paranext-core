@@ -23,6 +23,7 @@ export const MOCK_MEDIA_ENTRY_CORINTH: MediaEntryRowData = {
   title: 'Ruins of ancient Corinth',
   referenceLabel: '1CO 1:1',
   collection: 'General',
+  mediaType: 'image',
 };
 
 /** Verse-range image (gm-013 ACT 2:0 -> ACT 5:last). Verse-ref-only (no lemma) per BHV-612. */
@@ -31,6 +32,7 @@ export const MOCK_MEDIA_ENTRY_PENTECOST: MediaEntryRowData = {
   title: 'Pentecost gathering in Jerusalem',
   referenceLabel: 'ACT 2:1-5:42',
   collection: 'General',
+  mediaType: 'image',
 };
 
 export const MOCK_MEDIA_ENTRY_TABERNACLE: MediaEntryRowData = {
@@ -38,6 +40,7 @@ export const MOCK_MEDIA_ENTRY_TABERNACLE: MediaEntryRowData = {
   title: 'Tabernacle layout diagram',
   referenceLabel: 'EXO 26:1-30',
   collection: 'General',
+  mediaType: 'image',
 };
 
 export const MOCK_MEDIA_ENTRY_OLIVE_PRESS: MediaEntryRowData = {
@@ -45,6 +48,7 @@ export const MOCK_MEDIA_ENTRY_OLIVE_PRESS: MediaEntryRowData = {
   title: 'First-century olive press',
   referenceLabel: 'MAT 26:36',
   collection: 'General',
+  mediaType: 'image',
 };
 
 /** Images tab: 4 General entries (gm-018 row 1: General valid for Images). */
@@ -64,6 +68,7 @@ export const MOCK_MAP_ENTRY_GALILEE: MediaEntryRowData = {
   title: 'Galilee region (Satellite Bible Atlas)',
   referenceLabel: 'MAT 4:12-25',
   collection: 'Satellite Bible Atlas',
+  mediaType: 'map',
 };
 
 export const MOCK_MAP_ENTRY_ROMAN_EMPIRE: MediaEntryRowData = {
@@ -71,6 +76,7 @@ export const MOCK_MAP_ENTRY_ROMAN_EMPIRE: MediaEntryRowData = {
   title: 'Roman Empire in the 1st century',
   referenceLabel: 'ACT 1:1-28:31',
   collection: 'Satellite Bible Atlas',
+  mediaType: 'map',
 };
 
 export const MOCK_MAP_ENTRY_EXODUS: MediaEntryRowData = {
@@ -78,6 +84,7 @@ export const MOCK_MAP_ENTRY_EXODUS: MediaEntryRowData = {
   title: 'Exodus route from Egypt to Sinai',
   referenceLabel: 'EXO 12:37-19:2',
   collection: 'Satellite Bible Atlas',
+  mediaType: 'map',
 };
 
 /** Maps tab: 3 Satellite Bible Atlas entries (gm-018 row 4: SBA valid for Maps). */
