@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { useState } from 'react';
 import { getLocalizedStrings } from '../../../../../../.storybook/localization.utils';
 import { DictionaryTab, DICTIONARY_TAB_STRING_KEYS } from './dictionary-tab.component';
 import {
@@ -15,17 +16,14 @@ const meta: Meta<typeof DictionaryTab> = {
   tags: ['autodocs'],
   args: {
     localizedStringsWithLoadingState: [localizedStrings, false],
-    expandedTokenIds: new Set(),
-    allExpanded: false,
+    selectedTokenId: undefined,
     isLoading: false,
     emptyState: 'none',
     showTranslations: false,
     activeDictionary: 'SDBH',
     hideNonRelevantSenses: false,
     scopeLabel: 'current verse',
-    onExpandToggle: () => {},
-    onExpandAll: () => {},
-    onCollapseAll: () => {},
+    onSelectionChange: () => {},
     onSourceTextClick: () => {},
     onOccurrenceCountClick: () => {},
     onSemanticDomainClick: () => {},
@@ -55,20 +53,11 @@ export const Default: Story = {
   },
 };
 
-export const WithFirstEntryExpanded: Story = {
+export const WithFirstSelected: Story = {
   args: {
     items: MOCK_DICT_ENTRIES_HEBREW,
     activeDictionary: 'SDBH',
-    expandedTokenIds: new Set([MOCK_DICT_ENTRY_ELOHIM.tokenId]),
-  },
-};
-
-export const AllExpanded: Story = {
-  args: {
-    items: MOCK_DICT_ENTRIES_HEBREW,
-    activeDictionary: 'SDBH',
-    expandedTokenIds: new Set(MOCK_DICT_ENTRIES_HEBREW.map((e) => e.tokenId)),
-    allExpanded: true,
+    selectedTokenId: MOCK_DICT_ENTRY_ELOHIM.tokenId,
   },
 };
 
@@ -76,7 +65,7 @@ export const HideNonRelevantSenses: Story = {
   args: {
     items: MOCK_DICT_ENTRIES_HEBREW,
     activeDictionary: 'SDBH',
-    expandedTokenIds: new Set([MOCK_DICT_ENTRY_ELOHIM.tokenId]),
+    selectedTokenId: MOCK_DICT_ENTRY_ELOHIM.tokenId,
     hideNonRelevantSenses: true,
   },
 };
@@ -126,5 +115,48 @@ export const EmptyWordNotInScope: Story = {
     emptyState: 'word-not-in-scope',
     filterWord: 'bereʼshiyt',
     scopeLabel: 'current verse',
+  },
+};
+
+export const Interactive: Story = {
+  parameters: { chromatic: { disableSnapshot: true } },
+  render: function Render(args) {
+    const [selectedTokenId, setSelectedTokenId] = useState<string | undefined>();
+    const [hideNonRelevant, setHideNonRelevant] = useState(false);
+    return (
+      <DictionaryTab
+        {...args}
+        items={MOCK_DICT_ENTRIES_HEBREW}
+        activeDictionary="SDBH"
+        selectedTokenId={selectedTokenId}
+        onSelectionChange={setSelectedTokenId}
+        hideNonRelevantSenses={hideNonRelevant}
+        onToggleHideNonRelevantSenses={setHideNonRelevant}
+        // Storybook-only diagnostic - production wires these to MarbleForm / drawer handlers.
+        // eslint-disable-next-line no-console
+        onSourceTextClick={(id) => console.log('[DictionaryTab story] source-text-click', id)}
+        // Storybook-only diagnostic - production routes to MarbleForm filtered by occurrences.
+        // eslint-disable-next-line no-console
+        onOccurrenceCountClick={(id) => console.log('[DictionaryTab story] occurrence-click', id)}
+        // Storybook-only diagnostic - production opens SemanticDomainViewer.
+        // eslint-disable-next-line no-console
+        onSemanticDomainClick={(id) => console.log('[DictionaryTab story] semantic-domain', id)}
+        // Storybook-only diagnostic - production navigates to the related lexeme entry.
+        // eslint-disable-next-line no-console
+        onRelatedLexemeClick={(lemma) => console.log('[DictionaryTab story] related-lex', lemma)}
+        // Storybook-only diagnostic - production opens ArticleViewer.
+        // eslint-disable-next-line no-console
+        onEncyclopediaLinkClick={(id) => console.log('[DictionaryTab story] encyclopedia', id)}
+        // Storybook-only diagnostic - production fires goto:{verseRef} to scroll-group sync.
+        // eslint-disable-next-line no-console
+        onVerseOccurrenceClick={(verse) => console.log('[DictionaryTab story] verse', verse)}
+        // Storybook-only diagnostic - production calls clipboard write.
+        // eslint-disable-next-line no-console
+        onCopySurfaceForm={(item) => console.log('[DictionaryTab story] copy-surface', item.term)}
+        // Storybook-only diagnostic - production calls clipboard write.
+        // eslint-disable-next-line no-console
+        onCopyLemma={(item) => console.log('[DictionaryTab story] copy-lemma', item.translit)}
+      />
+    );
   },
 };

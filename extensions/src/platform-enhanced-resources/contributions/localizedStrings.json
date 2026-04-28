@@ -181,6 +181,11 @@
     "%enhancedResources_dictionary_emptyDetail%": {
       "notes": ["Placeholder when an expanded entry has no detail data to display."]
     },
+    "%enhancedResources_dictionary_backToList%": {
+      "notes": [
+        "Label for the 'Back to list' button at the top of the dictionary entry detail drawer."
+      ]
+    },
     "%enhancedResources_encyclopedia_tabLabel%": {
       "notes": ["Heading and ARIA label for the Encyclopedia research tab."]
     },
@@ -651,6 +656,7 @@
       "%enhancedResources_dictionary_seeAlsoHeader%": "See also",
       "%enhancedResources_dictionary_occurrencesHeader%": "Occurrences",
       "%enhancedResources_dictionary_emptyDetail%": "No additional detail available.",
+      "%enhancedResources_dictionary_backToList%": "Back to list",
       "%enhancedResources_encyclopedia_tabLabel%": "Encyclopedia",
       "%enhancedResources_encyclopedia_columnHeader_sourceLanguage%": "Source language",
       "%enhancedResources_encyclopedia_columnHeader_articles%": "Articles",

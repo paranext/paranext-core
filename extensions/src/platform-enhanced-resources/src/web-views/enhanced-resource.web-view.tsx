@@ -111,8 +111,7 @@ export type EnhancedResourceWebViewProps = {
 
   // Dictionary tab
   dictionaryItems?: DictionaryDisplayItemData[];
-  dictionaryExpandedTokenIds?: Set<string>;
-  dictionaryAllExpanded?: boolean;
+  dictionarySelectedTokenId?: string;
   dictionaryIsLoading?: boolean;
   dictionaryEmptyState?: DictionaryEmptyStateVariant;
   dictionaryFilterWord?: string;
@@ -120,9 +119,7 @@ export type EnhancedResourceWebViewProps = {
   dictionaryShowTranslations?: boolean;
   dictionaryActiveDictionary?: 'SDBH' | 'SDBG';
   dictionaryHideNonRelevantSenses?: boolean;
-  onDictionaryExpandToggle?: (tokenId: string) => void;
-  onDictionaryExpandAll?: () => void;
-  onDictionaryCollapseAll?: () => void;
+  onDictionarySelectionChange?: (tokenId: string | undefined) => void;
   onDictionarySourceTextClick?: (tokenId: string) => void;
   onDictionaryOccurrenceCountClick?: (tokenId: string) => void;
   onDictionarySemanticDomainClick?: (domainId: string) => void;
@@ -230,8 +227,7 @@ export function EnhancedResourceWebView({
   splitterPercentage = 60,
 
   dictionaryItems = [],
-  dictionaryExpandedTokenIds,
-  dictionaryAllExpanded = false,
+  dictionarySelectedTokenId,
   dictionaryIsLoading = false,
   dictionaryEmptyState = 'none',
   dictionaryFilterWord,
@@ -239,9 +235,7 @@ export function EnhancedResourceWebView({
   dictionaryShowTranslations = false,
   dictionaryActiveDictionary = 'SDBH',
   dictionaryHideNonRelevantSenses = false,
-  onDictionaryExpandToggle = () => {},
-  onDictionaryExpandAll = () => {},
-  onDictionaryCollapseAll = () => {},
+  onDictionarySelectionChange = () => {},
   onDictionarySourceTextClick = () => {},
   onDictionaryOccurrenceCountClick = () => {},
   onDictionarySemanticDomainClick = () => {},
@@ -395,8 +389,7 @@ export function EnhancedResourceWebView({
                 >
                   <DictionaryTab
                     items={dictionaryItems}
-                    expandedTokenIds={dictionaryExpandedTokenIds}
-                    allExpanded={dictionaryAllExpanded}
+                    selectedTokenId={dictionarySelectedTokenId}
                     isLoading={dictionaryIsLoading}
                     emptyState={dictionaryEmptyState}
                     filterWord={dictionaryFilterWord}
@@ -404,9 +397,7 @@ export function EnhancedResourceWebView({
                     showTranslations={dictionaryShowTranslations}
                     activeDictionary={dictionaryActiveDictionary}
                     hideNonRelevantSenses={dictionaryHideNonRelevantSenses}
-                    onExpandToggle={onDictionaryExpandToggle}
-                    onExpandAll={onDictionaryExpandAll}
-                    onCollapseAll={onDictionaryCollapseAll}
+                    onSelectionChange={onDictionarySelectionChange}
                     onSourceTextClick={onDictionarySourceTextClick}
                     onOccurrenceCountClick={onDictionaryOccurrenceCountClick}
                     onSemanticDomainClick={onDictionarySemanticDomainClick}

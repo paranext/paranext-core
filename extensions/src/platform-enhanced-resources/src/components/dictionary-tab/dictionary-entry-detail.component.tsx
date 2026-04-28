@@ -1,5 +1,6 @@
 import { Button, Switch, cn } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
+import { ArrowLeft } from 'lucide-react';
 import {
   DictionarySenseItem,
   DICTIONARY_SENSE_ITEM_STRING_KEYS,
@@ -19,6 +20,7 @@ export const DICTIONARY_ENTRY_DETAIL_STRING_KEYS = Object.freeze([
   '%enhancedResources_dictionary_seeAlsoHeader%',
   '%enhancedResources_dictionary_occurrencesHeader%',
   '%enhancedResources_dictionary_emptyDetail%',
+  '%enhancedResources_dictionary_backToList%',
   ...DICTIONARY_SENSE_ITEM_STRING_KEYS,
 ] as const);
 
@@ -65,6 +67,8 @@ export type DictionaryEntryDetailProps = {
   onRelatedLexemeClick?: (lemma: string) => void;
   onEncyclopediaLinkClick?: (articleId: string) => void;
   onVerseOccurrenceClick?: (verse: VerseOccurrenceLink) => void;
+  /** When provided, renders a "Back to list" button at the top that calls this. */
+  onClose?: () => void;
   localizedStringsWithLoadingState?: [DictionaryEntryDetailLocalizedStrings, boolean];
 };
 
@@ -95,6 +99,7 @@ export function DictionaryEntryDetail({
   onRelatedLexemeClick = () => {},
   onEncyclopediaLinkClick = () => {},
   onVerseOccurrenceClick = () => {},
+  onClose,
   localizedStringsWithLoadingState = [{}, false],
 }: DictionaryEntryDetailProps) {
   const getLocalizedString = (key: DictionaryEntryDetailLocalizedStringKey) =>
@@ -127,6 +132,20 @@ export function DictionaryEntryDetail({
     getLocalizedString('%enhancedResources_dictionary_occurrencesHeader%'),
   );
   const emptyDetail = String(getLocalizedString('%enhancedResources_dictionary_emptyDetail%'));
+  const backToListLabel = String(getLocalizedString('%enhancedResources_dictionary_backToList%'));
+
+  const backButton = onClose ? (
+    <Button
+      data-back-to-list
+      onClick={onClose}
+      variant="ghost"
+      size="sm"
+      className="tw-mb-3 tw-self-start"
+    >
+      <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+      {backToListLabel}
+    </Button>
+  ) : undefined;
 
   // Forward sense item localization
   const senseStrings: [DictionaryEntryDetailLocalizedStrings, boolean] =
@@ -142,8 +161,11 @@ export function DictionaryEntryDetail({
 
   if (!hasAnyContent) {
     return (
-      <div role="status" className="tw-py-2 tw-text-xs tw-italic tw-text-muted-foreground">
-        {emptyDetail}
+      <div className="tw-flex tw-flex-col">
+        {backButton}
+        <div role="status" className="tw-py-2 tw-text-xs tw-italic tw-text-muted-foreground">
+          {emptyDetail}
+        </div>
       </div>
     );
   }
@@ -165,6 +187,7 @@ export function DictionaryEntryDetail({
 
   return (
     <div className="tw-flex tw-flex-col tw-gap-3 tw-pt-2">
+      {backButton}
       {definition && (
         <section aria-label={definitionHeader}>
           <h4 className="tw-mb-1 tw-text-xs tw-font-semibold tw-uppercase tw-text-muted-foreground">

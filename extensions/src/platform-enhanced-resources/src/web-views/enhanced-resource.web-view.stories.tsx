@@ -144,11 +144,11 @@ export const CopyrightOverlayVisible: Story = {
   },
 };
 
-export const DictionaryTabExpanded: Story = {
+export const DictionaryTabSelected: Story = {
   args: {
     activeTab: 'dictionary',
     dictionaryItems: MOCK_DICT_ENTRIES_HEBREW,
-    dictionaryExpandedTokenIds: new Set([MOCK_DICT_ENTRY_ELOHIM.tokenId]),
+    dictionarySelectedTokenId: MOCK_DICT_ENTRY_ELOHIM.tokenId,
     dictionaryScopeLabel: 'current verse',
   },
 };

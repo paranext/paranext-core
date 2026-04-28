@@ -4,10 +4,8 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  cn,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { DICTIONARY_ENTRY_DETAIL_STRING_KEYS } from './dictionary-entry-detail.component';
 import type {
   SemanticDomainLink,
   RelatedLexemeLink,
@@ -22,7 +20,6 @@ export const DICTIONARY_DISPLAY_ITEM_STRING_KEYS = Object.freeze([
   '%enhancedResources_dictionary_copyLemma%',
   '%enhancedResources_dictionary_occurrenceCountTooltip%',
   '%enhancedResources_dictionary_sourceTextTooltip%',
-  ...DICTIONARY_ENTRY_DETAIL_STRING_KEYS,
 ] as const);
 
 type DictionaryDisplayItemLocalizedStringKey = (typeof DICTIONARY_DISPLAY_ITEM_STRING_KEYS)[number];
@@ -67,6 +64,8 @@ export type DictionaryDisplayItemProps = {
 
   /** Click handlers (parent routes to MarbleForm / drawer). */
   onSourceTextClick?: (tokenId: string) => void;
+  /** Trailing-badge click; routes to MarbleForm filtered by occurrences. */
+  onOccurrenceCountClick?: (tokenId: string) => void;
 
   /** Context menu handlers (BHV-353 - Copy surface form / Copy lemma). */
   onCopySurfaceForm?: (item: DictionaryDisplayItemData) => void;
@@ -76,26 +75,31 @@ export type DictionaryDisplayItemProps = {
 };
 
 /**
- * Pure presentational entry row content used inside ResourceList. This component renders the row
- * body only - expansion, expand toggle, and occurrence-count trailing badge are owned by
- * ResourceList / DictionaryTab.
+ * Pure presentational entry row content used inside `ErDictionaryList`'s `renderItem` slot. The
+ * surrounding `<li>` (selection, focus, keyboard nav) is owned by the list component.
  *
  * Body layout:
  *
  * - Column 1 (when showTranslations): translations from the tracked project
- * - Column 2: source text in original script + transliteration + POS (right-clicks open context menu
- *   with Copy options - BHV-353)
- * - Column 3 (filled by ResourceList.secondary slot): glosses
+ * - Column 2: source text (translit) + script + POS - clickable, routes to MarbleForm
+ * - Column 3: glosses (truncated)
+ * - Column 4: occurrence-count button (when count > 0) - routes to MarbleForm filtered by occurrences
+ *
+ * `e.stopPropagation()` on the source-text and occurrence-count buttons prevents the row's parent
+ * `<li>` selection click from firing when these dedicated handlers are invoked.
+ *
+ * Right-click anywhere on the row opens the ContextMenu (BHV-353: Copy surface form / Copy lemma).
  *
  * Selectors for tests (per ui-spec-dictionary-tab.md test contract):
  *
- * - `data-testid="dictionary-entry-{tokenId}"` (set by ResourceList wrapper using item.id)
+ * - `data-testid="dictionary-entry-{tokenId}"`
  */
 export function DictionaryDisplayItem({
   item,
   showTranslations = false,
 
   onSourceTextClick = () => {},
+  onOccurrenceCountClick = () => {},
 
   onCopySurfaceForm = () => {},
   onCopyLemma = () => {},
@@ -112,32 +116,55 @@ export function DictionaryDisplayItem({
   const sourceTextTooltip = String(
     getLocalizedString('%enhancedResources_dictionary_sourceTextTooltip%'),
   );
+  const occurrenceTooltip = String(
+    getLocalizedString('%enhancedResources_dictionary_occurrenceCountTooltip%'),
+  );
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
           data-testid={`dictionary-entry-${item.tokenId}`}
-          className={cn('tw-flex tw-w-full tw-flex-row tw-items-start tw-gap-3 tw-text-sm')}
+          className="tw-flex tw-w-full tw-items-baseline tw-gap-3"
         >
           {showTranslations && (
             <div className="tw-w-[120px] tw-shrink-0 tw-text-sm tw-text-muted-foreground">
               {(item.translations ?? []).join(', ') || '—'}
             </div>
           )}
-          <div className="tw-flex tw-min-w-0 tw-w-[160px] tw-shrink-0 tw-flex-col">
+          <div className="tw-flex tw-min-w-0 tw-flex-col">
             <Button
               variant="link"
               className="tw-h-auto tw-justify-start tw-p-0 tw-text-start tw-text-sm"
               aria-label={sourceTextTooltip}
-              onClick={() => onSourceTextClick(item.tokenId)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSourceTextClick(item.tokenId);
+              }}
             >
-              <span className="tw-font-semibold tw-truncate">{item.translit}</span>
+              <span className="tw-truncate tw-font-semibold">{item.translit}</span>
             </Button>
-            <span className="tw-text-xs tw-text-muted-foreground tw-truncate">
+            <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
               <span>{item.sourceText}</span> <span className="tw-italic">{item.partOfSpeech}</span>
             </span>
           </div>
+          <span className="tw-ml-auto tw-flex-1 tw-truncate tw-text-sm tw-text-muted-foreground">
+            {item.glosses.join(', ')}
+          </span>
+          {item.occurrenceCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="tw-h-5 tw-min-w-5 tw-shrink-0 tw-rounded tw-bg-accent tw-px-1.5 tw-py-0 tw-text-xs"
+              aria-label={occurrenceTooltip}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOccurrenceCountClick(item.tokenId);
+              }}
+            >
+              {item.occurrenceCount}
+            </Button>
+          )}
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>

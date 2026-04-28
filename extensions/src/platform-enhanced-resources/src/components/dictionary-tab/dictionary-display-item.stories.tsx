@@ -19,6 +19,7 @@ const meta: Meta<typeof DictionaryDisplayItem> = {
   args: {
     localizedStringsWithLoadingState: [localizedStrings, false],
     onSourceTextClick: () => {},
+    onOccurrenceCountClick: () => {},
     onCopySurfaceForm: () => {},
     onCopyLemma: () => {},
   },
