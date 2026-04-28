@@ -200,6 +200,10 @@ export function PlatformBibleToolbar() {
       configAreaChildren={
         <>
           {isSendReceiveAvailable !== false && (
+            // While loading (undefined), the button stays in the DOM so layout doesn't shift, but
+            // is hidden via tw-invisible (visual), aria-hidden (accessibility tree), and tabIndex=-1
+            // (keyboard navigation). All three are required: tw-invisible alone is still reachable
+            // by AT and keyboard; aria-hidden alone is still tab-focusable.
             <Button
               variant="ghost"
               size="sm"

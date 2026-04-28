@@ -3147,7 +3147,8 @@ declare module 'shared/services/web-view.service-model' {
      *
      * @returns Promise that resolves to an array of saved properties for all open WebView
      *   definitions. The promise will not resolve until the Platform.Bible dock layout UI has been
-     *   initialized. The promise only resolves; it never rejects.
+     *   initialized. The promise may reject if dock layout initialization times out or if an error
+     *   occurs while retrieving web view states.
      */
     getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
     /**
