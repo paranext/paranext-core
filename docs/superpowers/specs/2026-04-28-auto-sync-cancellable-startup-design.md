@@ -94,13 +94,14 @@ runAutoSync()
   → finally: if autoSyncNotificationId is set, dismiss it and clear
 ```
 
-### Command declaration
+### Files changed
 
-`paratextBibleSendReceive.cancelAutoSync` is declared in `papi-shared-types` `CommandHandlers`:
-
-```typescript
-'paratextBibleSendReceive.cancelAutoSync': () => Promise<void>;
-```
+- `src/main.ts` — add `runAutoSync()` background task and register `cancelAutoSync` command in
+  `activate()`
+- `src/types/paratext-bible-send-receive.d.ts` — declare
+  `'paratextBibleSendReceive.cancelAutoSync': () => Promise<void>` in `CommandHandlers`
+- `contributions/localizedStrings.json` — add localized strings for the notification message and
+  Cancel button label
 
 ---
 
