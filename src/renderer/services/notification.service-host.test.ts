@@ -81,4 +81,22 @@ describe('notification service host', () => {
       );
     });
   });
+
+  describe('dismiss', () => {
+    it('calls toast.dismiss with the mapped toast id', async () => {
+      mockToastInfo.mockReturnValueOnce('specific-toast-id');
+      const notification: PlatformNotification = { message: 'test', severity: 'info' };
+      const notificationId = await capturedService.send(notification);
+
+      await capturedService.dismiss(notificationId);
+
+      expect(mockToast.dismiss).toHaveBeenCalledWith('specific-toast-id');
+    });
+
+    it('does nothing when the notification id is not found', async () => {
+      await capturedService.dismiss('nonexistent-id');
+
+      expect(mockToast.dismiss).not.toHaveBeenCalled();
+    });
+  });
 });

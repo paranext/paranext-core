@@ -59,6 +59,12 @@ export interface INotificationService {
    * @returns Promise that resolves with the ID of the notification
    */
   send(notification: PlatformNotification): Promise<string | number>;
+  /**
+   * Dismiss a notification by its ID. If the notification is not found, this is a no-op.
+   *
+   * @param notificationId ID of the notification to dismiss, as returned by {@link send}
+   */
+  dismiss(notificationId: string | number): Promise<void>;
 }
 
 export const NotificationServiceNetworkObjectName = 'NotificationService';

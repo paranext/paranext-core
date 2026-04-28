@@ -64,8 +64,17 @@ async function send(notification: PlatformNotification): Promise<string | number
   return effectiveNotificationId;
 }
 
+async function dismiss(notificationId: string | number): Promise<void> {
+  const toastId = mapOfNotificationIdsToToastIds.get(notificationId);
+  if (toastId !== undefined) {
+    toast.dismiss(toastId);
+    mapOfNotificationIdsToToastIds.delete(notificationId);
+  }
+}
+
 const notificationService: INotificationService = {
   send,
+  dismiss,
 };
 
 /** Register the network object that backs the notification service */
@@ -102,6 +111,22 @@ export async function startNotificationService(): Promise<void> {
           result: {
             name: 'return value',
             schema: { type: ['string', 'number'] },
+          },
+        },
+        {
+          name: 'dismiss',
+          summary: "Dismiss a notification from the user's UI",
+          params: [
+            {
+              name: 'notificationId',
+              required: true,
+              summary: 'The ID of the notification to dismiss',
+              schema: { type: ['string', 'number'] },
+            },
+          ],
+          result: {
+            name: 'return value',
+            schema: { type: 'null' },
           },
         },
       ],
