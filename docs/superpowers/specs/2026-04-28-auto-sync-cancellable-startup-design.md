@@ -34,8 +34,8 @@ persisting forever if dismiss is never called.
 
 - `src/shared/models/notification.service-model.ts` — add `duration?: number` to
   `PlatformNotification`
-- `src/renderer/services/notification.service-host.ts` — pass `duration` through to the display
-- `src/renderer/components/notification-display.tsx` — forward `duration` to the sonner component
+- `src/renderer/services/notification.service-host.ts` — pass `duration` through to the sonner
+  toast call
 
 ### New `dismiss()` method on `INotificationService`
 
@@ -54,8 +54,8 @@ on an already-gone notification is a no-op.
 
 - `src/shared/models/notification.service-model.ts` — add method to interface
 - `src/shared/services/notification.service.ts` — add client call via network object
-- `src/renderer/services/notification.service-host.ts` — add host-side handler
-- `src/renderer/components/notification-display.tsx` — remove notification from state on dismiss
+- `src/renderer/services/notification.service-host.ts` — call `toast.dismiss(notificationId)`
+  from sonner directly
 
 `lib/papi-dts/papi.d.ts` is auto-generated and will reflect the new method after a build.
 
