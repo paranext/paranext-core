@@ -30,6 +30,13 @@ export interface PlatformNotification {
   clickCommand?: keyof CommandHandlers;
   /** Optional ID of a previous notification to update instead of showing a new notification */
   notificationId?: string | number;
+  /**
+   * Optional duration in milliseconds for how long the notification is displayed.
+   *
+   * When omitted, duration is computed from message length (minimum 10 seconds, maximum 35
+   * seconds).
+   */
+  duration?: number;
 }
 
 /**
