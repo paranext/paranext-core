@@ -41,6 +41,8 @@ import {
   MARKER_SETTINGS_STRING_KEYS,
 } from './components/marker-settings-dialog.component';
 import { useChecklistService } from './hooks/use-checklist';
+import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { parseScrRef } from './components/parse-scr-ref.utils';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -169,10 +171,9 @@ global.webViewComponent = function ChecklistWebView({
   // ─── Scroll group binding (drives currentScrRef + goto setter) ────────
   const [liveScrRef, setLiveScrRef, scrollGroupId, setScrollGroupId] =
     useWebViewScrollGroupScrRef();
-  // Suppress unused-variable warnings for slots we wire in later steps.
-  void scrollGroupId;
+  // `setScrollGroupId` is reserved for a future scroll-group picker UI (parity with
+  // checks-side-panel Tasks 13/14); suppress unused-variable warning until wired.
   void setScrollGroupId;
-  void setLiveScrRef;
 
   const [equivalentMarkers, setEquivalentMarkers] = useWebViewState<string>(
     'checklistEquivalentMarkers',
@@ -220,8 +221,9 @@ global.webViewComponent = function ChecklistWebView({
 
   // Note: `scope`, `setScope`, `snapshotScrRef`, `rangeStart`, `setRangeStart`, `rangeEnd`,
   // `setRangeEnd`, `selectedBookIds`, and `setSelectedBookIds` are all consumed below by the
-  // ScopeSelector wiring (Task 8). `setLiveScrRef`, `scrollGroupId`, and `setScrollGroupId`
-  // remain `void`-suppressed above pending Task 9 (goto navigation).
+  // ScopeSelector wiring (Task 8). `setLiveScrRef` and `scrollGroupId` are consumed by the
+  // goto handler (Task 9). `setScrollGroupId` stays `void`-suppressed until a scroll-group
+  // picker is wired (parity with checks-side-panel Tasks 13/14).
 
   // ─── Localization ─────────────────────────────────────────────────────────
 
@@ -718,6 +720,17 @@ global.webViewComponent = function ChecklistWebView({
     [comparativeOpenTabsMap],
   );
 
+  // ─── Editor-tab tracking (for goto focus, Q4-C) ───────────────────────────
+  const editorTabsFilter = useCallback(
+    (wv: { webViewType: string }) => wv.webViewType === 'platformScriptureEditor.react',
+    [],
+  );
+  const editorTabs = useOpenProjectTabs(editorTabsFilter);
+  const editorTabsByProject = useMemo(
+    () => new Map(editorTabs.map((t) => [t.projectId, t])),
+    [editorTabs],
+  );
+
   const comparativeSelection = useMemo(
     () => ({ pairs: comparativeTexts.map((ref) => ({ projectId: ref.id })) }),
     [comparativeTexts],
@@ -948,6 +961,32 @@ global.webViewComponent = function ChecklistWebView({
     ],
   );
 
+  // ─── Goto-link click handler (Q4: A scroll-group broadcast + C editor focus) ──
+
+  const handleGotoLinkClick = useCallback(
+    (_row: ChecklistRow, refStr: string) => {
+      const verseRef = parseScrRef(refStr);
+      if (!verseRef) {
+        logger.debug(`ChecklistWebView: failed to parse scrRef: ${refStr}`);
+        return;
+      }
+      setLiveScrRef(verseRef); // A: scroll-group broadcast
+      // C: if an editor tab is open in the same project + same scroll group, raise it.
+      // `projectId` is `string | undefined` from WebViewProps; without one we can't pick an
+      // editor tab, but the broadcast above still serves any other bound web-view.
+      if (!projectId) return;
+      const editorTab = editorTabsByProject.get(projectId);
+      if (editorTab && editorTab.scrollGroupId === scrollGroupId) {
+        papi.window
+          .setFocus({ focusType: 'webView', id: editorTab.webViewId })
+          .catch((err: unknown) =>
+            logger.debug(`ChecklistWebView: setFocus failed: ${getErrorMessage(err)}`),
+          );
+      }
+    },
+    [setLiveScrRef, editorTabsByProject, projectId, scrollGroupId],
+  );
+
   return (
     <>
       <ChecklistTool
@@ -974,15 +1013,10 @@ global.webViewComponent = function ChecklistWebView({
         onRetry={handleRetry}
         projectMenuData={webViewMenu.topMenu}
         onSelectProjectMenuItem={handleSelectProjectMenuItem}
-        // onEditLinkClick / onGotoLinkClick are intentionally not provided yet:
-        //   - onEditLinkClick: scripture-editor edit-link integration is deferred (DEF-UI-003 in
-        //     `deferred-functionality.md`). Per the no-stubs rule + Sebastian's "providing a
-        //     callback should enable them" directive, omitting the prop hides the affordance
-        //     entirely; when the integration lands, the wiring layer supplies the callback and
-        //     the in-row edit button appears automatically.
-        //   - onGotoLinkClick: TODO wire to the platform's scripture-navigation primitive (the
-        //     active `useWebViewScrollGroupScrRef` hook would let us setScrRef on the active
-        //     scroll group). Tracked separately — for now the reference cell renders plain text.
+        onGotoLinkClick={handleGotoLinkClick}
+        // onEditLinkClick: scripture-editor edit-link integration is deferred (DEF-UI-003).
+        // Per the no-stubs rule, omitting the prop hides the affordance entirely until the
+        // integration lands.
       />
       <MarkerSettingsDialog
         open={isSettingsOpen}
