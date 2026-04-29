@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import {
@@ -117,14 +117,23 @@ const baseArgs: Partial<ChecklistToolProps> = {
 };
 
 /**
- * Storybook decorator that wires local state for the three toolbar toggles so controls interact in
- * the playground. We DELIBERATELY do not wire the selector triggers to real popovers — the draft
- * PRs (#2223, #2212) provide those primitives, and the phase-3-ui-design-scope decision is to keep
- * the triggers abstract in this phase.
+ * Storybook decorator that wires the toolbar toggles to live state AND applies the hide-matches
+ * filter to the data so the story is interactive (per Sebastian PR #2219 #3137366113: "The
+ * Checklist Tool story is too static. ... 'hide matches' does unexpectedly not change anything and
+ * does not show/hide the omitted count").
+ *
+ * Project / comparative-text / scope selectors are still stand-ins (the real `ProjectSelector` /
+ * `ScopeSelector` from PRs #2223 / #2212 require their own data wiring that's out of scope for this
+ * presentational storybook). When those are wired in the live web-view, the story will inherit the
+ * same behavior automatically because the component accepts `*Selector` ReactNode props that
+ * override the SelectorTrigger fallbacks.
  */
 function InteractiveChecklistTool({
   hideMatches: initialHideMatches,
   showVerseText: initialShowVerseText,
+  data: incomingData,
+  matchCountLabel: incomingMatchCountLabel,
+  localizedStringsWithLoadingState,
   onHideMatchesChange,
   onShowVerseTextChange,
   ...rest
@@ -132,10 +141,41 @@ function InteractiveChecklistTool({
   const [hideMatches, setHideMatches] = useState(initialHideMatches);
   const [showVerseText, setShowVerseText] = useState(initialShowVerseText);
 
+  // Apply the same hide-matches filter the wiring layer applies — when toggled on, drop rows
+  // marked `isMatch: true` and count them as "omitted". Stories that supply their own
+  // `excludedCount` (e.g. the static HideMatches fixture) get that count added on top so the
+  // demo behaves consistently regardless of which fixture is loaded.
+  const visibleData = useMemo(() => {
+    if (!incomingData) return incomingData;
+    if (!hideMatches) return incomingData;
+    const includedRows = incomingData.rows.filter((r) => !r.isMatch);
+    const filteredOut = incomingData.rows.length - includedRows.length;
+    return {
+      ...incomingData,
+      rows: includedRows,
+      excludedCount: (incomingData.excludedCount ?? 0) + filteredOut,
+    };
+  }, [incomingData, hideMatches]);
+
+  // Compute a live match-count label when hide-matches is on. Use the localized template if
+  // available; fall back to a plain English string so unlocalized story runs are still readable.
+  const liveMatchCountLabel = useMemo(() => {
+    if (!hideMatches) return undefined;
+    const excluded = visibleData?.excludedCount ?? 0;
+    if (excluded <= 0) return undefined;
+    const [stringsMap] = localizedStringsWithLoadingState ?? [{}, false];
+    const template =
+      stringsMap?.['%markersChecklist_matches_omitted%'] ?? '{count} Matches Omitted';
+    return template.replace('{count}', String(excluded));
+  }, [hideMatches, visibleData, localizedStringsWithLoadingState]);
+
   return (
     <div style={{ height: '90vh' }}>
       <ChecklistTool
         {...rest}
+        data={visibleData}
+        localizedStringsWithLoadingState={localizedStringsWithLoadingState}
+        matchCountLabel={liveMatchCountLabel ?? incomingMatchCountLabel}
         hideMatches={hideMatches}
         onHideMatchesChange={(next) => {
           setHideMatches(next);
