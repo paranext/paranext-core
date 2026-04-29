@@ -171,7 +171,6 @@ global.webViewComponent = function ChecklistWebView({
   void scrollGroupId;
   void setScrollGroupId;
   void setLiveScrRef;
-  void updateWebViewDefinition;
 
   const [equivalentMarkers, setEquivalentMarkers] = useWebViewState<string>(
     'checklistEquivalentMarkers',
@@ -805,6 +804,41 @@ global.webViewComponent = function ChecklistWebView({
       : (localizedStrings['%markersChecklist_toolbar_comparativeTexts%'] ?? '');
   const verseRangeLabel = formatScriptureRangeLabel(verseRange, verseRangeAllLabel);
 
+  // ─── Primary-project picker via real ProjectSelector (Theme 5 #2) ─────────
+  //
+  // Single-select picker. On change, retargets the checklist to a new project via
+  // `updateWebViewDefinition`. Reuses `allProjects` and `comparativeOpenTabs` from the
+  // comparative-texts wiring. PT9 confirmed interactive (`ChecklistsTool.cs:179`).
+
+  const primaryProjectSelectorNode = useMemo(
+    () => (
+      <div data-testid="checklist-primary-project-trigger">
+        <ProjectSelector
+          mode="project"
+          projects={allProjects}
+          openTabs={comparativeOpenTabs}
+          selection={{ projectId }}
+          onChangeSelection={(next: { projectId: string }) =>
+            updateWebViewDefinition({ projectId: next.projectId })
+          }
+          buttonClassName="tw-h-8 tw-min-w-32 tw-font-normal"
+          buttonPlaceholder={
+            localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel
+          }
+          ariaLabel={localizedStrings['%markersChecklist_toolbar_primaryProject%']}
+        />
+      </div>
+    ),
+    [
+      allProjects,
+      comparativeOpenTabs,
+      projectId,
+      updateWebViewDefinition,
+      localizedStrings,
+      primaryProjectLabel,
+    ],
+  );
+
   return (
     <>
       <ChecklistTool
@@ -816,6 +850,7 @@ global.webViewComponent = function ChecklistWebView({
         error={error}
         helpText={undefined}
         primaryProjectLabel={primaryProjectLabel}
+        primaryProjectSelector={primaryProjectSelectorNode}
         onPrimaryProjectTriggerClick={handlePrimaryProjectTriggerClick}
         comparativeTextsLabel={comparativeTextsLabel}
         comparativeTextsSelector={comparativeTextsSelectorNode}
