@@ -543,11 +543,10 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         // Not-open-project row: inherit the current selection's scroll group so the newly
         // opened tab lands where the user was already reading. If nothing is selected yet, fall
         // back to Group 0 (A).
-        const targetGroup: ScrollGroupId = (props.selection.scrollGroupId ?? 0) as ScrollGroupId;
+        const targetGroup: ScrollGroupId = props.selection.scrollGroupId ?? 0;
         props.onChangeSelection({ projectId: row.projectId, scrollGroupId: targetGroup });
         props.onOpenProjectInGroup(row.projectId, targetGroup);
         setOpen(false);
-        return;
       }
       // no default
     }
@@ -584,7 +583,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         return { node: text, title: text };
       }
       case 'project-multi': {
-        const pairs = props.selection.pairs;
+        const { pairs } = props.selection;
         if (pairs.length === 0) {
           const text = props.buttonPlaceholder ?? '';
           return { node: text, title: text };

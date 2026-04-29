@@ -6,7 +6,7 @@ import {
   type OpenProjectTab,
   type ProjectPair,
   type ProjectSelectorProject,
-} from '@/components/advanced/project-selector.component';
+} from '@/components/advanced/project-selector/project-selector.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
 
 const sampleProjects: ProjectSelectorProject[] = [
@@ -150,9 +150,7 @@ export const MultiProject: Story = {
         onChangeSelection={({ pairs: next }) => setPairs(next)}
         onOpenProjectInGroup={(projectId, scrollGroupId) => {
           setOpenTabs((tabs) =>
-            tabs.some(
-              (t) => t.projectId === projectId && t.scrollGroupId === scrollGroupId,
-            )
+            tabs.some((t) => t.projectId === projectId && t.scrollGroupId === scrollGroupId)
               ? tabs
               : [...tabs, { projectId, scrollGroupId }],
           );
@@ -194,9 +192,7 @@ export const ScrollGroupBinding: Story = {
           onChangeSelection={setSelection}
           onOpenProjectInGroup={(projectId, scrollGroupId) => {
             setOpenTabs((tabs) =>
-              tabs.some(
-                (t) => t.projectId === projectId && t.scrollGroupId === scrollGroupId,
-              )
+              tabs.some((t) => t.projectId === projectId && t.scrollGroupId === scrollGroupId)
                 ? tabs
                 : [...tabs, { projectId, scrollGroupId }],
             );

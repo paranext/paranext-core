@@ -915,7 +915,7 @@ export function BookChapterControl({
         // `justClosedByTriggerRef` so the trigger's `onClick` can call `preventDefault()`
         // which makes Radix's `composeEventHandlers` skip `onOpenToggle` entirely.
         onPointerDownOutside={(event) => {
-          const target = event.target;
+          const { target } = event;
           if (triggerRef.current && target instanceof Node && triggerRef.current.contains(target)) {
             // Mark that we're closing due to a trigger click so the subsequent `click`
             // event on the button (which would reopen the popover via Radix's

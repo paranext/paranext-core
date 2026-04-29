@@ -116,8 +116,8 @@ export type BookChapterControlProps = {
   /**
    * Optional alignment for the popover relative to its trigger along the cross-axis. Forwarded to
    * the underlying Radix `Popover.Content`. Defaults to `"center"`. Use `"start"` when the control
-   * sits on the right edge of a constrained container (e.g. the second picker in a range dialog)
-   * to keep the popover anchored to the trigger's leading edge rather than spilling off-screen.
+   * sits on the right edge of a constrained container (e.g. the second picker in a range dialog) to
+   * keep the popover anchored to the trigger's leading edge rather than spilling off-screen.
    */
   align?: ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>['align'];
 };

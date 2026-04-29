@@ -101,7 +101,10 @@ describe('computeRows — project-multi mode (per-pair selection)', () => {
       },
     });
     expect(
-      rows.filter((r) => r.isSelected).map((r) => `${r.projectId}:${r.scrollGroupId}`).sort(),
+      rows
+        .filter((r) => r.isSelected)
+        .map((r) => `${r.projectId}:${r.scrollGroupId}`)
+        .sort(),
     ).toEqual(['a:0', 'b:0']);
   });
 

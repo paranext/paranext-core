@@ -19,9 +19,9 @@ export type OpenProjectTab = {
   projectId: string;
   scrollGroupId: ScrollGroupId;
   /**
-   * Optional, pre-formatted "current scripture reference" for this scroll group
-   * (e.g. `"MAT 3:16"`). Surfaced in the row tooltip. Caller decides the format — the selector
-   * does no scripture-ref formatting of its own.
+   * Optional, pre-formatted "current scripture reference" for this scroll group (e.g. `"MAT
+   * 3:16"`). Surfaced in the row tooltip. Caller decides the format — the selector does no
+   * scripture-ref formatting of its own.
    */
   scrollGroupScrRefLabel?: string;
 };
@@ -39,9 +39,9 @@ export type ProjectPair = {
 export type ProjectSelection = { projectId?: string };
 
 /**
- * Selection shape for `project-multi` mode. Each entry is a `(projectId, scrollGroupId)` pair;
- * the same project open in two scroll groups is two distinct pairs. `scrollGroupId` is undefined
- * when a project that is not currently open anywhere is selected.
+ * Selection shape for `project-multi` mode. Each entry is a `(projectId, scrollGroupId)` pair; the
+ * same project open in two scroll groups is two distinct pairs. `scrollGroupId` is undefined when a
+ * project that is not currently open anywhere is selected.
  */
 export type ProjectMultiSelection = { pairs: readonly ProjectPair[] };
 
@@ -61,8 +61,8 @@ export type ProjectRow = {
   language?: string;
   languageCode?: string;
   /**
-   * The scroll group this row represents. `undefined` means the row is a project-level row
-   * (no chip, or `project` mode chips aggregated in `openGroups`).
+   * The scroll group this row represents. `undefined` means the row is a project-level row (no
+   * chip, or `project` mode chips aggregated in `openGroups`).
    */
   scrollGroupId?: ScrollGroupId;
   /**
@@ -71,21 +71,20 @@ export type ProjectRow = {
    */
   scrollGroupScrRefLabel?: string;
   /**
-   * `project` mode: scroll groups the project is open in (one chip each). Always empty in the
-   * other modes.
+   * `project` mode: scroll groups the project is open in (one chip each). Always empty in the other
+   * modes.
    */
   openGroups: readonly ScrollGroupId[];
   isSelected: boolean;
   /**
-   * `project` mode: true when the project isn't open in any scroll group.
-   * `project-multi` / `projectScrollGroup`: true for the not-open-project row (no chip). Drives
-   * muted row styling.
+   * `project` mode: true when the project isn't open in any scroll group. `project-multi` /
+   * `projectScrollGroup`: true for the not-open-project row (no chip). Drives muted row styling.
    */
   isMuted: boolean;
   /**
    * True for a synthetic row representing a currently-selected (projectId, scrollGroupId) pair
-   * whose tab is not currently open. Rendered with a struck-through chip and an "Open" button
-   * that reopens the tab via `onOpenProjectInGroup`.
+   * whose tab is not currently open. Rendered with a struck-through chip and an "Open" button that
+   * reopens the tab via `onOpenProjectInGroup`.
    */
   isBoundButClosed: boolean;
 };
@@ -150,9 +149,9 @@ function pairIsSelected(
 // #region computeRows
 
 /**
- * Build the selector's row list from the current inputs. Pure: same inputs produce the same
- * output in the same order. Consumers render these rows in the order returned unless they sort
- * further (see {@link partitionAndSort}).
+ * Build the selector's row list from the current inputs. Pure: same inputs produce the same output
+ * in the same order. Consumers render these rows in the order returned unless they sort further
+ * (see {@link partitionAndSort}).
  */
 export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   const tabsByProject = collectOpenTabsByProject(args.openTabs);
@@ -237,9 +236,7 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
   selectedPairs.forEach((pair) => {
     if (pair.scrollGroupId === undefined) return;
     if (
-      rows.some(
-        (r) => r.projectId === pair.projectId && r.scrollGroupId === pair.scrollGroupId,
-      )
+      rows.some((r) => r.projectId === pair.projectId && r.scrollGroupId === pair.scrollGroupId)
     ) {
       return;
     }
@@ -293,13 +290,13 @@ function compareRows(a: ProjectRow, b: ProjectRow): number {
 }
 
 /**
- * Split rows into the Open tabs / Other projects sections (when `groupByOpenTabs`) or a single
- * flat section (otherwise). Within each section, selected rows float to the top, then
- * alphabetical by `shortName`, tie-broken by `scrollGroupId`.
+ * Split rows into the Open tabs / Other projects sections (when `groupByOpenTabs`) or a single flat
+ * section (otherwise). Within each section, selected rows float to the top, then alphabetical by
+ * `shortName`, tie-broken by `scrollGroupId`.
  *
  * "Open tabs" rows are: open-group rows (project-multi / projectScrollGroup modes) and
- * `project`-mode rows whose project is open somewhere. Bound-but-closed synthetic rows and
- * not-open project rows land in "Other projects".
+ * `project`-mode rows whose project is open somewhere. Bound-but-closed synthetic rows and not-open
+ * project rows land in "Other projects".
  */
 export function partitionAndSort(
   rows: readonly ProjectRow[],

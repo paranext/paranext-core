@@ -460,17 +460,17 @@ namespace TestParanextDataProvider.Projects
                         {
                             BookNum = 1,
                             ChapterNum = 1,
-                            VerseNum = 1
+                            VerseNum = 1,
                         },
                         End = new VerseRef
                         {
                             BookNum = 1,
                             ChapterNum = 1,
-                            VerseNum = 1
+                            VerseNum = 1,
                         },
-                        Granularity = "verse"
-                    }
-                ]
+                        Granularity = "verse",
+                    },
+                ],
             };
 
             // Act
@@ -665,17 +665,17 @@ namespace TestParanextDataProvider.Projects
                         {
                             BookNum = 1,
                             ChapterNum = 1,
-                            VerseNum = 1
+                            VerseNum = 1,
                         },
                         End = new VerseRef
                         {
                             BookNum = 1,
                             ChapterNum = 1,
-                            VerseNum = 1
+                            VerseNum = 1,
                         },
-                        Granularity = "verse"
-                    }
-                ]
+                        Granularity = "verse",
+                    },
+                ],
             };
 
             // Act
@@ -1093,7 +1093,7 @@ namespace TestParanextDataProvider.Projects
             var resolveComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
-                Status = NoteStatus.Resolved
+                Status = NoteStatus.Resolved,
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
 
@@ -1148,7 +1148,7 @@ namespace TestParanextDataProvider.Projects
             var resolveComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
-                Status = NoteStatus.Resolved
+                Status = NoteStatus.Resolved,
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
 
@@ -1162,7 +1162,7 @@ namespace TestParanextDataProvider.Projects
             var unresolveComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
-                Status = NoteStatus.Todo
+                Status = NoteStatus.Todo,
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(unresolveComment));
             ;
@@ -1218,7 +1218,7 @@ namespace TestParanextDataProvider.Projects
             var resolveComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
-                Status = NoteStatus.Resolved
+                Status = NoteStatus.Resolved,
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment));
 
@@ -1258,7 +1258,7 @@ namespace TestParanextDataProvider.Projects
             var resolveComment1 = new Comment(_scrText.User)
             {
                 Thread = todoThreadId,
-                Status = NoteStatus.Resolved
+                Status = NoteStatus.Resolved,
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment1));
 
@@ -1266,7 +1266,7 @@ namespace TestParanextDataProvider.Projects
             var resolveComment2 = new Comment(_scrText.User)
             {
                 Thread = resolvedThreadId,
-                Status = NoteStatus.Resolved
+                Status = NoteStatus.Resolved,
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(resolveComment2));
 
@@ -1274,7 +1274,7 @@ namespace TestParanextDataProvider.Projects
             var unresolveComment = new Comment(_scrText.User)
             {
                 Thread = todoThreadId,
-                Status = NoteStatus.Todo
+                Status = NoteStatus.Todo,
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(unresolveComment));
 
@@ -1299,7 +1299,7 @@ namespace TestParanextDataProvider.Projects
             var resolveComment = new Comment(_scrText.User)
             {
                 Thread = "nonexistent-thread-id",
-                Status = NoteStatus.Resolved
+                Status = NoteStatus.Resolved,
             };
 
             // Act & Assert - Should throw InvalidDataException
@@ -1430,7 +1430,7 @@ namespace TestParanextDataProvider.Projects
             var assignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
-                AssignedUser = "Team"
+                AssignedUser = "Team",
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment));
 
@@ -1460,7 +1460,7 @@ namespace TestParanextDataProvider.Projects
             var assignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
-                AssignedUser = "Team"
+                AssignedUser = "Team",
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment));
 
@@ -1468,7 +1468,7 @@ namespace TestParanextDataProvider.Projects
             var unassignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
-                AssignedUser = ""
+                AssignedUser = "",
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(unassignComment));
 
@@ -1490,7 +1490,7 @@ namespace TestParanextDataProvider.Projects
             var assignComment = new Comment(_scrText.User)
             {
                 Thread = "nonexistent-thread-id",
-                AssignedUser = "Team"
+                AssignedUser = "Team",
             };
 
             // Act & Assert - Should throw InvalidDataException
@@ -1515,7 +1515,7 @@ namespace TestParanextDataProvider.Projects
             var assignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
-                AssignedUser = "InvalidUserNotInList"
+                AssignedUser = "InvalidUserNotInList",
             };
             Assert.That(
                 () => _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment)),
@@ -1582,7 +1582,7 @@ namespace TestParanextDataProvider.Projects
             var assignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
-                AssignedUser = "Team"
+                AssignedUser = "Team",
             };
             _provider.AddCommentToThread(new PlatformCommentWrapper(assignComment));
             ;
@@ -1613,7 +1613,7 @@ namespace TestParanextDataProvider.Projects
             var assignComment = new Comment(_scrText.User)
             {
                 Thread = threadId,
-                AssignedUser = "Team"
+                AssignedUser = "Team",
             };
             string commentText = "Assigning to team for review";
             assignComment.SetContentsFromHtml(commentText);
@@ -2067,14 +2067,22 @@ namespace TestParanextDataProvider.Projects
             Assert.Multiple(() =>
             {
                 Assert.That(btThreads[0].IsBTNote, Is.True);
-                Assert.That(btThreads[0].IsSpellingNote, Is.False, "BT notes filter should not return spelling notes");
+                Assert.That(
+                    btThreads[0].IsSpellingNote,
+                    Is.False,
+                    "BT notes filter should not return spelling notes"
+                );
             });
 
             Assert.That(spellingThreads, Has.Count.EqualTo(1));
             Assert.Multiple(() =>
             {
                 Assert.That(spellingThreads[0].IsSpellingNote, Is.True);
-                Assert.That(spellingThreads[0].IsBTNote, Is.False, "Spelling notes filter should not return BT notes");
+                Assert.That(
+                    spellingThreads[0].IsBTNote,
+                    Is.False,
+                    "Spelling notes filter should not return BT notes"
+                );
             });
         }
 
