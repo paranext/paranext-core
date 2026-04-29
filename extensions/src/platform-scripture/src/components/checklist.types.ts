@@ -34,6 +34,9 @@ export const CHECKLIST_STRING_KEYS = Object.freeze([
   // Error banner + retry (T-R-2 rendering contract)
   '%markersChecklist_errorTitle%',
   '%markersChecklist_errorRetry%',
+  // Banner dismiss button (shared aria-label for both error + helpText alerts — Sebastian
+  // PR #2219 #3137366113 "be dismiss-able")
+  '%markersChecklist_alert_dismiss%',
   // Per-row edit affordance (rendered when wiring layer supplies onEditLinkClick)
   '%markersChecklist_edit%',
   // Per-row aria-label patterns (spec §Edit/Goto Link Accessible Names); `{ref}` is replaced

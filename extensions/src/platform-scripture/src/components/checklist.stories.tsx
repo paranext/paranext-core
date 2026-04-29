@@ -41,6 +41,7 @@ const englishFallbacks: ChecklistLocalizedStrings = {
   '%markersChecklist_emptyResult_identicalMarkers%': 'Comparative texts have identical markers.',
   '%markersChecklist_errorTitle%': "Couldn't load checklist",
   '%markersChecklist_errorRetry%': 'Retry',
+  '%markersChecklist_alert_dismiss%': 'Dismiss',
   '%markersChecklist_edit%': 'edit',
   '%markersChecklist_edit_aria%': 'Edit {ref}',
   '%markersChecklist_goto_aria%': 'Goto {ref}',

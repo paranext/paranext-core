@@ -14,8 +14,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { AlertTriangle, ChevronDown, ChevronsUpDown, Eye, EyeOff, Pencil } from 'lucide-react';
-import { ReactNode, useCallback, useMemo } from 'react';
+import { AlertTriangle, ChevronDown, ChevronsUpDown, Eye, EyeOff, Pencil, X } from 'lucide-react';
+import { ReactNode, useCallback, useMemo, useState } from 'react';
 import type {
   ChecklistCell,
   ChecklistLocalizedStringKey,
@@ -316,6 +316,26 @@ export function ChecklistTool({
   const columnCount = data?.columnHeaders.length ?? 0;
   const isHideMatchesEnabled = columnCount > 1;
 
+  // ----- Dismissible-banner state (per Sebastian PR #2219 #3137366113) -----
+  //
+  // Per Sebastian: the error banner and the truncated/help-text banner should both be
+  // dismissible, with the rule that they "only reappear when any inputs are changed". We
+  // implement that by keying the dismiss state on the alert's content string — when the parent
+  // sends a new error/helpText (the content changes), the dismiss key no longer matches and the
+  // alert renders again. Same content + dismissed = stays hidden.
+
+  const [dismissedErrorKey, setDismissedErrorKey] = useState<string | undefined>(undefined);
+  const [dismissedHelpTextKey, setDismissedHelpTextKey] = useState<string | undefined>(undefined);
+  const isErrorDismissed = error !== undefined && error !== null && error === dismissedErrorKey;
+  const isHelpTextDismissed =
+    helpText !== undefined && helpText !== null && helpText === dismissedHelpTextKey;
+  const handleDismissError = useCallback(() => {
+    if (typeof error === 'string') setDismissedErrorKey(error);
+  }, [error]);
+  const handleDismissHelpText = useCallback(() => {
+    if (typeof helpText === 'string') setDismissedHelpTextKey(helpText);
+  }, [helpText]);
+
   // ----- Columns (dynamic, 1..N) -----
 
   const columns = useMemo<ColumnDef<ChecklistRow>[]>(() => {
@@ -578,38 +598,88 @@ export function ChecklistTool({
     </>
   );
 
+  // Per Sebastian PR #2219 #3137366113: error and truncated/helpText banners use the SAME
+  // alert component with `tw-bg-background`, do not cause vertical overflow/scrolling, and are
+  // dismissible. Both render in a single styled Alert; the only differences are the leading
+  // icon (AlertTriangle for errors) + the optional Retry action. Mutual exclusion stays per
+  // ui-state-contracts.md T-R-2: a backend failure suppresses helpText until the next
+  // successful refresh.
+
   const renderBanners = () => {
-    if (error) {
+    if (error && !isErrorDismissed) {
       return (
-        <Alert variant="destructive" className="tw-m-2" data-testid="checklist-error-alert">
-          <AlertTriangle className="tw-h-4 tw-w-4" aria-hidden="true" />
-          <AlertTitle>{getLocalizedString('%markersChecklist_errorTitle%')}</AlertTitle>
-          <AlertDescription className="tw-flex tw-flex-col tw-gap-2">
-            <span>{error}</span>
-            {onRetry && (
-              <div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={onRetry}
-                  aria-label={getLocalizedString('%markersChecklist_errorRetry%')}
-                  data-testid="checklist-retry-button"
-                >
-                  {getLocalizedString('%markersChecklist_errorRetry%')}
-                </Button>
-              </div>
-            )}
-          </AlertDescription>
+        <Alert
+          // tw-bg-background per Sebastian (consistent surface across error + help-text);
+          // tw-overflow-hidden + tw-flex-row layout prevents the banner from growing
+          // vertically when the message is long. Inner content scrolls horizontally if needed.
+          className="tw-m-2 tw-flex tw-items-start tw-gap-2 tw-overflow-hidden tw-bg-background"
+          data-testid="checklist-error-alert"
+        >
+          <AlertTriangle
+            className="tw-mt-0.5 tw-h-4 tw-w-4 tw-shrink-0 tw-text-destructive"
+            aria-hidden="true"
+          />
+          <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-gap-2">
+            <AlertTitle className="tw-mb-0">
+              {getLocalizedString('%markersChecklist_errorTitle%')}
+            </AlertTitle>
+            <AlertDescription className="tw-flex tw-min-w-0 tw-flex-col tw-gap-2">
+              <span className="tw-truncate" title={typeof error === 'string' ? error : undefined}>
+                {error}
+              </span>
+              {onRetry && (
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onRetry}
+                    aria-label={getLocalizedString('%markersChecklist_errorRetry%')}
+                    data-testid="checklist-retry-button"
+                  >
+                    {getLocalizedString('%markersChecklist_errorRetry%')}
+                  </Button>
+                </div>
+              )}
+            </AlertDescription>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="tw-h-6 tw-w-6 tw-shrink-0"
+            aria-label={getLocalizedString('%markersChecklist_alert_dismiss%')}
+            onClick={handleDismissError}
+            data-testid="checklist-error-dismiss"
+          >
+            <X className="tw-h-4 tw-w-4" aria-hidden="true" />
+          </Button>
         </Alert>
       );
     }
-    // Mutually exclusive with the error banner per `ui-state-contracts.md` T-R-2 — a backend
-    // failure suppresses helpText until the next successful refresh.
-    if (helpText) {
+    if (helpText && !isHelpTextDismissed) {
       return (
-        <Alert className="tw-m-2" data-testid="checklist-help-text">
-          <AlertDescription>{helpText}</AlertDescription>
+        <Alert
+          className="tw-m-2 tw-flex tw-items-start tw-gap-2 tw-overflow-hidden tw-bg-background"
+          data-testid="checklist-help-text"
+        >
+          <AlertDescription
+            className="tw-flex tw-min-w-0 tw-flex-1 tw-truncate"
+            title={typeof helpText === 'string' ? helpText : undefined}
+          >
+            {helpText}
+          </AlertDescription>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="tw-h-6 tw-w-6 tw-shrink-0"
+            aria-label={getLocalizedString('%markersChecklist_alert_dismiss%')}
+            onClick={handleDismissHelpText}
+            data-testid="checklist-help-text-dismiss"
+          >
+            <X className="tw-h-4 tw-w-4" aria-hidden="true" />
+          </Button>
         </Alert>
       );
     }

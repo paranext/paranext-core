@@ -303,6 +303,7 @@
       "%markersChecklist_helptext%": "Use the toolbar to change the primary project, pick comparative texts, or narrow the verse range.",
       "%markersChecklist_errorTitle%": "Couldn't load checklist",
       "%markersChecklist_errorRetry%": "Retry",
+      "%markersChecklist_alert_dismiss%": "Dismiss",
       "%markersChecklist_edit%": "edit",
       "%markersChecklist_edit_aria%": "Edit {ref}",
       "%markersChecklist_goto_aria%": "Goto {ref}",
