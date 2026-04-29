@@ -45,7 +45,15 @@ export const CHECKLIST_STORY_COLUMN_PROJECT_FULL_NAMES: Record<string, string> =
   [comparativeProjectCId]: 'Reference Bible C',
 };
 
-/** ---------- Default: gm-001-single-project-markers ---------- */
+/**
+ * ---------- Default: gm-001-single-project-markers ----------
+ *
+ * Rows rebuilt for storybook clarity (per Sebastian PR #2219 #3137366113: "Data is unexpected
+ * (showing verse 1 and 2 content inside a verse 1 row, followed by a verse 2 and 3 row)"). Each
+ * row's `firstRef` now matches the verse content inside its cells; paragraphs that span multiple
+ * verses use a range `firstRef` (e.g. `EXO 20:1-2`). Items include real text so the `showVerseText`
+ * toggle has something to reveal.
+ */
 
 export const CHECKLIST_STORY_DATA_DEFAULT: ChecklistData = {
   columnHeaders: ['TSTGM001'],
@@ -53,42 +61,21 @@ export const CHECKLIST_STORY_DATA_DEFAULT: ChecklistData = {
   excludedCount: 0,
   rows: [
     row(
-      'EXO 20:1',
+      'EXO 20:1-2',
       [
         {
           reference: 'EXO 20:1',
-          displayedReference: 'EXO 20:1',
+          displayedReference: 'EXO 20:1-2',
           language: 'en',
           paragraphs: [
             {
               marker: 'p',
               items: [
                 { type: 'verse', verseNumber: '1' },
-                { type: 'text', text: 'one. ' },
+                { type: 'text', text: 'And God spake all these words, saying, ' },
                 { type: 'verse', verseNumber: '2' },
-                { type: 'text', text: 'two, ' },
+                { type: 'text', text: 'I am the Lord thy God, ' },
               ],
-            },
-          ],
-        },
-      ],
-      { isMatch: true, includeEditLink: true },
-    ),
-    row(
-      'EXO 20:2',
-      [
-        {
-          reference: 'EXO 20:2',
-          displayedReference: 'EXO 20:2',
-          language: 'en',
-          paragraphs: [
-            {
-              marker: 'q',
-              items: [{ type: 'text', text: 'poetry ' }],
-            },
-            {
-              marker: 'q2',
-              items: [{ type: 'text', text: 'indented poetry ' }],
             },
           ],
         },
@@ -104,8 +91,35 @@ export const CHECKLIST_STORY_DATA_DEFAULT: ChecklistData = {
           language: 'en',
           paragraphs: [
             {
+              marker: 'q',
+              items: [
+                { type: 'verse', verseNumber: '3' },
+                { type: 'text', text: 'Thou shalt have no other gods ' },
+              ],
+            },
+            {
+              marker: 'q2',
+              items: [{ type: 'text', text: 'before me. ' }],
+            },
+          ],
+        },
+      ],
+      { isMatch: true, includeEditLink: true },
+    ),
+    row(
+      'EXO 20:4',
+      [
+        {
+          reference: 'EXO 20:4',
+          displayedReference: 'EXO 20:4',
+          language: 'en',
+          paragraphs: [
+            {
               marker: 'p',
-              items: [{ type: 'text', text: 'three, ' }],
+              items: [
+                { type: 'verse', verseNumber: '4' },
+                { type: 'text', text: 'Thou shalt not make any graven image. ' },
+              ],
             },
           ],
         },
@@ -123,55 +137,105 @@ export const CHECKLIST_STORY_DATA_MULTI_COLUMN: ChecklistData = {
   excludedCount: 1,
   rows: [
     row(
-      'EXO 20:2',
-      [
-        {
-          reference: 'EXO 20:2',
-          displayedReference: 'EXO 20:2',
-          language: 'en',
-          paragraphs: [
-            { marker: 'q', items: [] },
-            { marker: 'q2', items: [] },
-          ],
-        },
-        {
-          reference: 'EXO 20:2',
-          displayedReference: 'EXO 20:2',
-          language: 'en',
-          paragraphs: [
-            { marker: 'p', items: [] },
-            { marker: 'q', items: [] },
-          ],
-        },
-        {
-          reference: 'EXO 20:2',
-          displayedReference: 'EXO 20:2',
-          language: 'en',
-          paragraphs: [{ marker: 'q1', items: [] }],
-        },
-      ],
-      { isMatch: false, includeEditLink: true },
-    ),
-    row(
       'EXO 20:3',
       [
         {
           reference: 'EXO 20:3',
           displayedReference: 'EXO 20:3',
           language: 'en',
-          paragraphs: [{ marker: 'p', items: [] }],
+          paragraphs: [
+            {
+              marker: 'q',
+              items: [
+                { type: 'verse', verseNumber: '3' },
+                { type: 'text', text: 'Thou shalt have no other gods ' },
+              ],
+            },
+            {
+              marker: 'q2',
+              items: [{ type: 'text', text: 'before me. ' }],
+            },
+          ],
         },
         {
           reference: 'EXO 20:3',
           displayedReference: 'EXO 20:3',
           language: 'en',
-          paragraphs: [{ marker: 'q2', items: [] }],
+          paragraphs: [
+            {
+              marker: 'p',
+              items: [
+                { type: 'verse', verseNumber: '3' },
+                { type: 'text', text: 'You shall have no other gods before Me. ' },
+              ],
+            },
+            {
+              marker: 'q',
+              items: [{ type: 'text', text: '(parallel poetic line) ' }],
+            },
+          ],
         },
         {
           reference: 'EXO 20:3',
           displayedReference: 'EXO 20:3',
           language: 'en',
-          paragraphs: [{ marker: 'p', items: [] }],
+          paragraphs: [
+            {
+              marker: 'q1',
+              items: [
+                { type: 'verse', verseNumber: '3' },
+                { type: 'text', text: 'No tendrás dioses ajenos delante de mí. ' },
+              ],
+            },
+          ],
+        },
+      ],
+      { isMatch: false, includeEditLink: true },
+    ),
+    row(
+      'EXO 20:4',
+      [
+        {
+          reference: 'EXO 20:4',
+          displayedReference: 'EXO 20:4',
+          language: 'en',
+          paragraphs: [
+            {
+              marker: 'p',
+              items: [
+                { type: 'verse', verseNumber: '4' },
+                { type: 'text', text: 'Thou shalt not make any graven image. ' },
+              ],
+            },
+          ],
+        },
+        {
+          reference: 'EXO 20:4',
+          displayedReference: 'EXO 20:4',
+          language: 'en',
+          paragraphs: [
+            {
+              marker: 'q2',
+              items: [
+                { type: 'verse', verseNumber: '4' },
+                { type: 'text', text: 'You shall not make for yourself a carved image. ' },
+              ],
+            },
+          ],
+        },
+        {
+          reference: 'EXO 20:4',
+          displayedReference: 'EXO 20:4',
+          language: 'en',
+          paragraphs: [
+            {
+              marker: 'p',
+              items: [
+                { type: 'verse', verseNumber: '4' },
+                { type: 'text', text: 'No te harás imagen, ni semejanza alguna. ' },
+              ],
+            },
+          ],
         },
       ],
       { isMatch: false, includeEditLink: true },
@@ -187,43 +251,77 @@ export const CHECKLIST_STORY_DATA_HIDE_MATCHES: ChecklistData = {
   excludedCount: 12,
   rows: [
     row(
-      'EXO 20:2',
-      [
-        {
-          reference: 'EXO 20:2',
-          displayedReference: 'EXO 20:2',
-          language: 'en',
-          paragraphs: [
-            { marker: 'q', items: [] },
-            { marker: 'q2', items: [] },
-          ],
-        },
-        {
-          reference: 'EXO 20:2',
-          displayedReference: 'EXO 20:2',
-          language: 'en',
-          paragraphs: [
-            { marker: 'p', items: [] },
-            { marker: 'q', items: [] },
-          ],
-        },
-      ],
-      { isMatch: false, includeEditLink: true },
-    ),
-    row(
       'EXO 20:3',
       [
         {
           reference: 'EXO 20:3',
           displayedReference: 'EXO 20:3',
           language: 'en',
-          paragraphs: [{ marker: 'p', items: [] }],
+          paragraphs: [
+            {
+              marker: 'q',
+              items: [
+                { type: 'verse', verseNumber: '3' },
+                { type: 'text', text: 'Thou shalt have no other gods ' },
+              ],
+            },
+            {
+              marker: 'q2',
+              items: [{ type: 'text', text: 'before me. ' }],
+            },
+          ],
         },
         {
           reference: 'EXO 20:3',
           displayedReference: 'EXO 20:3',
           language: 'en',
-          paragraphs: [{ marker: 'q2', items: [] }],
+          paragraphs: [
+            {
+              marker: 'p',
+              items: [
+                { type: 'verse', verseNumber: '3' },
+                { type: 'text', text: 'You shall have no other gods before Me. ' },
+              ],
+            },
+            {
+              marker: 'q',
+              items: [{ type: 'text', text: '(parallel poetic line) ' }],
+            },
+          ],
+        },
+      ],
+      { isMatch: false, includeEditLink: true },
+    ),
+    row(
+      'EXO 20:4',
+      [
+        {
+          reference: 'EXO 20:4',
+          displayedReference: 'EXO 20:4',
+          language: 'en',
+          paragraphs: [
+            {
+              marker: 'p',
+              items: [
+                { type: 'verse', verseNumber: '4' },
+                { type: 'text', text: 'Thou shalt not make any graven image. ' },
+              ],
+            },
+          ],
+        },
+        {
+          reference: 'EXO 20:4',
+          displayedReference: 'EXO 20:4',
+          language: 'en',
+          paragraphs: [
+            {
+              marker: 'q2',
+              items: [
+                { type: 'verse', verseNumber: '4' },
+                { type: 'text', text: 'You shall not make for yourself a carved image. ' },
+              ],
+            },
+          ],
         },
       ],
       { isMatch: false, includeEditLink: true },
