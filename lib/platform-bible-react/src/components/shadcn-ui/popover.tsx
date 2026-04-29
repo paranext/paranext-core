@@ -20,7 +20,8 @@ const PopoverTrigger = PopoverPrimitive.Trigger;
 /** @inheritdoc Popover */
 const PopoverAnchor = PopoverPrimitive.Anchor;
 
-// CUSTOM: Context to override where `PopoverContent` portals to. By default Radix portals
+/* #region CUSTOM PopoverPortalContainerContext + Provider — let descendant PopoverContent portal into a custom container instead of document.body */
+// Context to override where `PopoverContent` portals to. By default Radix portals
 // popovers to `document.body`, which is fine for top-level UI but breaks Radix Dialog's
 // focus trap when a popover opens from inside a modal dialog — the portal'd content is
 // outside the dialog's DOM subtree, so the trap yanks focus back out of the popover.
@@ -47,14 +48,15 @@ function PopoverPortalContainerProvider({
     </PopoverPortalContainerContext.Provider>
   );
 }
+/* #endregion CUSTOM */
 
 /** @inheritdoc Popover */
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
 >(({ className, align = 'center', sideOffset = 4, style, ...props }, ref) => {
-  const dir: Direction = readDirection();
-  const portalContainer = React.useContext(PopoverPortalContainerContext);
+  const dir: Direction = readDirection(); // CUSTOM RTL support
+  const portalContainer = React.useContext(PopoverPortalContainerContext); // CUSTOM read portal container override (see context above)
   return (
     // CUSTOM: When a PopoverPortalContainerProvider is in scope, portal into its container
     // instead of the default document.body so nested popovers stay inside modal dialogs.
@@ -70,11 +72,12 @@ const PopoverContent = React.forwardRef<
         // CUSTOM z-index uses shared constant instead of default tw-z-50
         style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
         {...props}
-        dir={dir}
+        dir={dir} // CUSTOM RTL support
       />
     </PopoverPrimitive.Portal>
   );
 });
 PopoverContent.displayName = PopoverPrimitive.Content.displayName;
 
+// CUSTOM: export `PopoverPortalContainerProvider` alongside the standard shadcn exports
 export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor, PopoverPortalContainerProvider };

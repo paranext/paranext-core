@@ -46,8 +46,10 @@ function CommandDialog({ children, ...props }: CommandDialogProps) {
 const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
+  // CUSTOM: destructure `onKeyDown` from props so we can compose with our space-to-click handler below
 >(({ className, onKeyDown, ...props }, ref) => {
-  const dir: Direction = readDirection();
+  const dir: Direction = readDirection(); // CUSTOM RTL support
+  /* #region CUSTOM Intercept Space-on-empty-input to click highlighted cmdk item (Enter-style UX) */
   // When the filter is empty, a leading space is almost never what the user wants — they're
   // looking at a highlighted item and expect Space to pick it (the Enter UX). Intercept Space
   // in that state, find cmdk's current `data-selected` item, and click it. cmdk auto-highlights
@@ -69,6 +71,7 @@ const CommandInput = React.forwardRef<
     },
     [onKeyDown],
   );
+  /* #endregion CUSTOM */
   return (
     <div className="tw-flex tw-items-center tw-border-b tw-px-3" dir={dir}>
       <Search className="tw-me-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
@@ -78,7 +81,7 @@ const CommandInput = React.forwardRef<
           'tw-flex tw-h-11 tw-w-full tw-rounded-md tw-bg-transparent tw-py-3 tw-text-sm tw-outline-none placeholder:tw-text-muted-foreground disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
           className,
         )}
-        onKeyDown={handleKeyDown}
+        onKeyDown={handleKeyDown} // CUSTOM space-to-click handler
         {...props}
       />
     </div>

@@ -857,18 +857,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
             ))}
           </SelectContent>
         </Select>
-        {/* Dev-only helper: clears the project / scroll-group binding so the selector falls back
-            to its empty state — useful for exercising the bound-but-closed / not-open flows. */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            updateWebViewDefinition({ projectId: undefined });
-            setScrollGroupId(undefined);
-          }}
-        >
-          Simulate unselect
-        </Button>
         {/* Check Type Filter */}
         <MultiSelectComboBox
           entries={checkTypeEntries}
