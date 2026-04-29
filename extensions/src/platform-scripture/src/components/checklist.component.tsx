@@ -5,17 +5,24 @@ import {
   Button,
   ColumnDef,
   DataTable,
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
   TabToolbar,
+  ToggleGroup,
+  ToggleGroupItem,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { AlertTriangle, ChevronDown, ChevronsUpDown, Copy, Pencil, Navigation } from 'lucide-react';
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronsUpDown,
+  Copy,
+  Eye,
+  EyeOff,
+  Pencil,
+  Navigation,
+} from 'lucide-react';
 import { ReactNode, useCallback, useMemo } from 'react';
 import type {
   ChecklistCell,
@@ -486,37 +493,69 @@ export function ChecklistTool({
         <Copy className="tw-h-4 tw-w-4" aria-hidden="true" />
       </Button>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            className="tw-h-8 tw-gap-2"
-            aria-label={getLocalizedString('%markersChecklist_toolbar_view%')}
-            data-testid="checklist-view-button"
-          >
-            <span>{getLocalizedString('%markersChecklist_toolbar_view%')}</span>
-            <ChevronDown className="tw-h-4 tw-w-4 tw-shrink-0" aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuCheckboxItem
-            checked={isHideMatchesEnabled && hideMatches}
-            onCheckedChange={handleHideMatchesChange}
-            disabled={!isHideMatchesEnabled}
-            data-testid="checklist-hide-matches-item"
-          >
-            {getLocalizedString('%markersChecklist_toolbar_hideMatches%')}
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuCheckboxItem
-            checked={showVerseText}
-            onCheckedChange={handleShowVerseTextChange}
-            data-testid="checklist-show-verse-text-item"
-          >
-            {getLocalizedString('%markersChecklist_toolbar_showVerseText%')}
-          </DropdownMenuCheckboxItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/*
+       * View toggles as inline ToggleGroup (per Sebastian PR #2219 #3137366113: "View menu should
+       * be an eye icon toggle group button"). Each toggle is a single icon button — `EyeOff` for
+       * "Hide Matches" (hiding matching rows = eye crossed out), `Eye` for "Show Verse Text"
+       * (revealing verse content). ToggleGroup's `data-[state=on]` styling handles the active
+       * indicator naturally; tooltips supply the accessible label/description without crowding
+       * the toolbar with text labels.
+       *
+       * `type="multiple"` allows both toggles to be active independently. The
+       * `value` array reflects which toggles are currently on; we map onValueChange to two
+       * distinct handlers so each persisted slot is updated correctly.
+       */}
+      <TooltipProvider delayDuration={0}>
+        <ToggleGroup
+          type="multiple"
+          value={[
+            ...(isHideMatchesEnabled && hideMatches ? ['hideMatches'] : []),
+            ...(showVerseText ? ['showVerseText'] : []),
+          ]}
+          onValueChange={(next) => {
+            const nextHide = isHideMatchesEnabled && next.includes('hideMatches');
+            const nextShow = next.includes('showVerseText');
+            if (nextHide !== hideMatches) handleHideMatchesChange(nextHide);
+            if (nextShow !== showVerseText) handleShowVerseTextChange(nextShow);
+          }}
+          variant="outline"
+          aria-label={getLocalizedString('%markersChecklist_toolbar_view%')}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ToggleGroupItem
+                value="hideMatches"
+                size="sm"
+                className="tw-h-8 tw-w-8 tw-p-0"
+                disabled={!isHideMatchesEnabled}
+                aria-label={getLocalizedString('%markersChecklist_toolbar_hideMatches%')}
+                data-testid="checklist-hide-matches-item"
+              >
+                <EyeOff className="tw-h-4 tw-w-4" aria-hidden="true" />
+              </ToggleGroupItem>
+            </TooltipTrigger>
+            <TooltipContent>
+              {getLocalizedString('%markersChecklist_toolbar_hideMatches%')}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ToggleGroupItem
+                value="showVerseText"
+                size="sm"
+                className="tw-h-8 tw-w-8 tw-p-0"
+                aria-label={getLocalizedString('%markersChecklist_toolbar_showVerseText%')}
+                data-testid="checklist-show-verse-text-item"
+              >
+                <Eye className="tw-h-4 tw-w-4" aria-hidden="true" />
+              </ToggleGroupItem>
+            </TooltipTrigger>
+            <TooltipContent>
+              {getLocalizedString('%markersChecklist_toolbar_showVerseText%')}
+            </TooltipContent>
+          </Tooltip>
+        </ToggleGroup>
+      </TooltipProvider>
 
       {matchCountLabel !== undefined && matchCountLabel !== '' && (
         <span
