@@ -24,12 +24,8 @@ internal class ParatextProjectSendReceiveService(
                 CommitDaily
             ),
             PapiClient.RegisterRequestHandlerAsync(
-                "command:paratextBibleSendReceive.syncProjectsByType",
+                "command:paratextBibleSendReceive.syncProjects",
                 SyncProjects
-            ),
-            PapiClient.RegisterRequestHandlerAsync(
-                "command:paratextBibleSendReceive.syncOpenProjects",
-                SyncOpenProjects
             )
         );
     }
@@ -50,7 +46,7 @@ internal class ParatextProjectSendReceiveService(
     protected Boolean CommitChanges(String projectId, String comment, Boolean forceCommit = false)
     {
         throw new PlatformUnimplementedException(
-            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            $"Command '{nameof(CommitChanges)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
     }
 
@@ -62,35 +58,24 @@ internal class ParatextProjectSendReceiveService(
     protected void CommitDaily(String projectId)
     {
         throw new PlatformUnimplementedException(
-            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            $"Command '{nameof(CommitDaily)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
     }
 
     /// <summary>
-    /// Syncs each project in <paramref name="projectIds"/>: Send/Receive for translation projects,
-    /// DBL update for resources.
-    /// Exception is thrown if this function is not implemented in the current application or if
-    /// an error was encountered syncing.
+    /// Syncs projects from the provided IDs: filters for editable projects and S/Rs them,
+    /// then reads each editable project's connected resources and projects (one level deep —
+    /// connections of connections are not included) and S/Rs connected translation projects
+    /// or DBL-updates connected resources. Non-editable and unknown IDs are skipped.
+    /// Deduplication is handled internally.
+    /// Exception is thrown if this function is not implemented in the current application
+    /// or if an error was encountered syncing.
     /// </summary>
-    /// <param name="projectIds">IDs of the projects/resources to sync</param>
+    /// <param name="projectIds">IDs of the open webview projects to evaluate</param>
     protected void SyncProjects(String[] projectIds)
     {
         throw new PlatformUnimplementedException(
-            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
-        );
-    }
-
-    /// <summary>
-    /// Stub handler for the <c>paratextBibleSendReceive.syncOpenProjects</c> PAPI command. The
-    /// real implementation — which gets all open web view project IDs and calls
-    /// <see cref="SyncProjects"/> with them — must be provided by an application-specific override
-    /// (e.g., Paratext 10 Studio). This stub always throws because it is unimplemented in
-    /// Platform.Bible.
-    /// </summary>
-    protected void SyncOpenProjects()
-    {
-        throw new PlatformUnimplementedException(
-            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            $"Command '{nameof(SyncProjects)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
     }
 
