@@ -155,17 +155,26 @@ export function PlatformBibleToolbar() {
   );
 
   const checkIfSendReceiveAvailable = useCallback(async () => {
-    // This command comes from an extension and is not typed in CommandHandlers.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-    const isAvailable = await (sendCommand as any)('platformGetResources.isSendReceiveAvailable');
-    setIsSendReceiveAvailable(isAvailable);
+    try {
+      // This command comes from an extension and is not typed in CommandHandlers.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      const isAvailable = await (sendCommand as any)('platformGetResources.isSendReceiveAvailable');
+      setIsSendReceiveAvailable(isAvailable);
+    } catch (e) {
+      logger.warn(`Toolbar could not determine send/receive availability: ${getErrorMessage(e)}`);
+      setIsSendReceiveAvailable(false);
+    }
   }, []);
 
   useEffect(() => {
     checkIfSendReceiveAvailable();
   }, [checkIfSendReceiveAvailable]);
 
-  useEvent(getNetworkEvent('platform.onDidReloadExtensions'), checkIfSendReceiveAvailable);
+  const onDidReloadExtensions = useMemo(
+    () => getNetworkEvent('platform.onDidReloadExtensions'),
+    [],
+  );
+  useEvent(onDidReloadExtensions, checkIfSendReceiveAvailable);
 
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);
 

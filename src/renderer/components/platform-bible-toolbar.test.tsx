@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
 import { sendCommand } from '@shared/services/command.service';
+import { getNetworkEvent } from '@shared/services/network.service';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
 
 // Mock asset
@@ -176,6 +177,42 @@ describe('PlatformBibleToolbar — Sync button', () => {
       expect(vi.mocked(sendCommand)).toHaveBeenLastCalledWith(
         'paratextBibleSendReceive.syncOpenProjects',
       );
+    });
+  });
+
+  it('re-checks availability when extensions reload', async () => {
+    let capturedReloadCallback: (() => unknown) | undefined;
+    vi.mocked(getNetworkEvent).mockReturnValue(
+      // PlatformEvent shape: (callback) => unsubscriber
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      vi.fn((cb: () => unknown) => {
+        capturedReloadCallback = cb;
+        return vi.fn();
+      }) as any,
+    );
+
+    mockSendCommand(true);
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    });
+
+    const callsBefore = vi
+      .mocked(sendCommand)
+      .mock.calls.filter(([cmd]) => cmd === 'platformGetResources.isSendReceiveAvailable').length;
+    expect(callsBefore).toBeGreaterThan(0);
+    expect(capturedReloadCallback).toBeDefined();
+
+    await capturedReloadCallback!();
+
+    await waitFor(() => {
+      expect(
+        vi
+          .mocked(sendCommand)
+          .mock.calls.filter(([cmd]) => cmd === 'platformGetResources.isSendReceiveAvailable')
+          .length,
+      ).toBeGreaterThan(callsBefore);
     });
   });
 
