@@ -125,23 +125,6 @@ function cellToText(cell: ChecklistCell): string {
     .join(' | ');
 }
 
-/**
- * Format `ScriptureRange` as a short toolbar trigger label (e.g. `GEN 1:1–GEN 3:24`). The actual
- * verse-range selector popover is a draft-PR dependency (#2212); today we only need to render a
- * stable label string when a range is set. `undefined` → "All" (localize key below).
- */
-function formatScriptureRangeLabel(
-  range: ChecklistScriptureRange | undefined,
-  allLabel: string,
-): string {
-  if (!range) return allLabel;
-  const { start, end } = range;
-  const startStr = `${start.book} ${start.chapterNum}:${start.verseNum}`;
-  if (!end) return startStr;
-  const endStr = `${end.book} ${end.chapterNum}:${end.verseNum}`;
-  return `${startStr}–${endStr}`;
-}
-
 // ─── Component ─────────────────────────────────────────────────────────────
 
 /**
@@ -617,21 +600,6 @@ global.webViewComponent = function ChecklistWebView({
     [visibleData],
   );
 
-  // ─── Toolbar trigger click handlers (stubs for primary-project + verse-range) ────────────
-  //
-  // Primary-project and verse-range still use the stand-in triggers: primary is derived from the
-  // web-view's options (users don't retarget a running checklist to a different project); verse
-  // range integration with the `ScopeSelector` dropdown variant (draft PR #2212) is deferred.
-  // Comparative-texts is wired to the real `ProjectSelector` below.
-
-  const handlePrimaryProjectTriggerClick = useCallback(() => {
-    logger.debug('ChecklistWebView: primary-project trigger clicked (stand-in).');
-  }, []);
-
-  const handleVerseRangeTriggerClick = useCallback(() => {
-    logger.debug('ChecklistWebView: verse-range trigger clicked (stand-in).');
-  }, []);
-
   // ─── Comparative-texts picker via real ProjectSelector (draft PR #2223) ────
   //
   // Fetch all scripture projects on mount; filter the primary out (no self-comparison); track open
@@ -842,15 +810,9 @@ global.webViewComponent = function ChecklistWebView({
     setIsSettingsOpen(false);
   }, []);
 
-  // ─── Derived labels for the toolbar triggers ─────────────────────────────
+  // ─── Derived label for the primary-project selector buttonPlaceholder ────
 
-  const verseRangeAllLabel = localizedStrings['%markersChecklist_toolbar_verseRange%'] ?? 'All';
   const primaryProjectLabel = primaryProjectName;
-  const comparativeTextsLabel =
-    comparativeTexts.length > 0
-      ? comparativeTexts.map((ref) => ref.name).join(', ')
-      : (localizedStrings['%markersChecklist_toolbar_comparativeTexts%'] ?? '');
-  const verseRangeLabel = formatScriptureRangeLabel(verseRange, verseRangeAllLabel);
 
   // ─── Primary-project picker via real ProjectSelector (Theme 5 #2) ─────────
   //
@@ -969,14 +931,9 @@ global.webViewComponent = function ChecklistWebView({
         isLoading={isLoading}
         error={error}
         helpText={undefined}
-        primaryProjectLabel={primaryProjectLabel}
         primaryProjectSelector={primaryProjectSelectorNode}
-        onPrimaryProjectTriggerClick={handlePrimaryProjectTriggerClick}
-        comparativeTextsLabel={comparativeTextsLabel}
         comparativeTextsSelector={comparativeTextsSelectorNode}
-        verseRangeLabel={verseRangeLabel}
         verseRangeSelector={verseRangeSelectorNode}
-        onVerseRangeTriggerClick={handleVerseRangeTriggerClick}
         hideMatches={hideMatches}
         onHideMatchesChange={handleHideMatchesChange}
         showVerseText={showVerseText}

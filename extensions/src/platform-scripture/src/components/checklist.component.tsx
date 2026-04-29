@@ -14,8 +14,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { AlertTriangle, ChevronDown, ChevronsUpDown, Eye, EyeOff, Pencil, X } from 'lucide-react';
-import { ReactNode, useCallback, useMemo, useState } from 'react';
+import { AlertTriangle, Eye, EyeOff, Pencil, X } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import type {
   ChecklistCell,
   ChecklistLocalizedStringKey,
@@ -80,42 +80,6 @@ function getMarkerIndentStyle(marker: string): React.CSSProperties {
 }
 
 // ---------- Small presentational sub-components ----------
-
-/**
- * Outline-button trigger fallback. The wired-up web-view (`checklist.web-view.tsx`) supplies real
- * `ProjectSelector` / `ScopeSelector` nodes via the `*Selector` props, so this fallback only
- * renders when those props are absent (e.g. unwired Storybook stories). Slated for removal once
- * every story passes a real selector node.
- */
-type SelectorTriggerProps = {
-  label: string;
-  ariaLabel: string;
-  icon?: ReactNode;
-  onClick?: () => void;
-  testId: string;
-};
-
-function SelectorTrigger({
-  label,
-  ariaLabel,
-  icon = <ChevronDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0" aria-hidden="true" />,
-  onClick,
-  testId,
-}: SelectorTriggerProps) {
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      className="tw-h-8 tw-justify-between tw-gap-2 tw-overflow-hidden"
-      aria-label={ariaLabel}
-      onClick={onClick}
-      data-testid={testId}
-    >
-      <span className="tw-truncate tw-text-left">{label}</span>
-      {icon}
-    </Button>
-  );
-}
 
 /**
  * Renders a single `ChecklistParagraph` inside a DataTable cell. The paragraph marker is always
@@ -313,14 +277,8 @@ export function ChecklistTool({
   isLoading,
   error,
   helpText,
-  primaryProjectLabel,
-  onPrimaryProjectTriggerClick,
   primaryProjectSelector,
-  comparativeTextsLabel,
-  onComparativeTextsTriggerClick,
   comparativeTextsSelector,
-  verseRangeLabel,
-  onVerseRangeTriggerClick,
   verseRangeSelector,
   hideMatches,
   onHideMatchesChange,
@@ -524,31 +482,9 @@ export function ChecklistTool({
 
   const renderToolbarStart = () => (
     <>
-      {primaryProjectSelector ?? (
-        <SelectorTrigger
-          label={primaryProjectLabel}
-          ariaLabel={getLocalizedString('%markersChecklist_toolbar_primaryProject%')}
-          onClick={onPrimaryProjectTriggerClick}
-          testId="checklist-primary-project-trigger"
-        />
-      )}
-      {comparativeTextsSelector ?? (
-        <SelectorTrigger
-          label={comparativeTextsLabel}
-          ariaLabel={getLocalizedString('%markersChecklist_toolbar_comparativeTexts%')}
-          icon={<ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0" aria-hidden="true" />}
-          onClick={onComparativeTextsTriggerClick}
-          testId="checklist-comparative-texts-trigger"
-        />
-      )}
-      {verseRangeSelector ?? (
-        <SelectorTrigger
-          label={verseRangeLabel}
-          ariaLabel={getLocalizedString('%markersChecklist_toolbar_verseRange%')}
-          onClick={onVerseRangeTriggerClick}
-          testId="checklist-verse-range-trigger"
-        />
-      )}
+      {primaryProjectSelector}
+      {comparativeTextsSelector}
+      {verseRangeSelector}
     </>
   );
 
