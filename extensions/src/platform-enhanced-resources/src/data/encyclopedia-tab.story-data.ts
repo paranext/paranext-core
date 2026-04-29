@@ -59,7 +59,6 @@ export interface MockEncyclopediaEntry {
   lemma: string;
   sourceText: string;
   translit: string;
-  glosses: string[];
   entries: MockEncyclopediaEntryRef[];
   imageIds: string[];
   collection: string;
@@ -197,7 +196,6 @@ export const MOCK_ENC_ENTRY_GAMAL: MockEncyclopediaEntry = {
   lemma: 'גָּמָל',
   sourceText: 'גָּמָל',
   translit: 'gamal',
-  glosses: ['camel'],
   entries: [
     {
       articleId: 'FAUNA:2.8',
@@ -219,7 +217,6 @@ export const MOCK_ENC_ENTRY_BEKER: MockEncyclopediaEntry = {
   lemma: 'בֵּכֶר',
   sourceText: 'בֵּכֶר, בִּכְרָה',
   translit: 'beker, bikrah',
-  glosses: ['young camel', 'female camel'],
   entries: [
     {
       articleId: 'FAUNA:2.8',
@@ -241,7 +238,6 @@ export const MOCK_ENC_ENTRY_KAMELOS: MockEncyclopediaEntry = {
   lemma: 'κάμηλος',
   sourceText: 'κάμηλος',
   translit: 'kamēlos',
-  glosses: ['camel'],
   entries: [
     {
       articleId: 'FAUNA:2.8',
@@ -263,7 +259,6 @@ export const MOCK_ENC_ENTRY_SHAMAYIM: MockEncyclopediaEntry = {
   lemma: 'שָׁמַיִם',
   sourceText: 'שָׁמַיִם',
   translit: 'shamayim',
-  glosses: ['heaven', 'heavens', 'sky'],
   entries: [
     {
       articleId: 'REALIA:5.2',
@@ -294,7 +289,6 @@ export const MOCK_ENC_ENTRY_NO_IMAGES: MockEncyclopediaEntry = {
   lemma: 'בְּרֵאשִׁית',
   sourceText: 'בְּרֵאשִׁית',
   translit: 'bereʼshiyt',
-  glosses: ['in the beginning'],
   entries: [
     {
       articleId: 'FAUNA:9',

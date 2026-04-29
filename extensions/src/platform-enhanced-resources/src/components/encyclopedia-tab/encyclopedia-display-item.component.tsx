@@ -45,8 +45,6 @@ export type EncyclopediaDisplayItemData = {
   sourceText: string;
   /** Transliteration. */
   translit: string;
-  /** Localized glosses for the lemma. */
-  glosses: string[];
   /** Article references (may be multiple per lemma when SDBH/SDBG group articles together). */
   entries: EncyclopediaEntryRefData[];
   /** Image ids referenced by the article(s). */
