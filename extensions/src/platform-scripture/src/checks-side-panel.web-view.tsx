@@ -54,6 +54,7 @@ import {
 } from './checks-side-panel.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import { CheckCard, CheckStates } from './checks/checks-side-panel/check-card.component';
+import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -140,51 +141,14 @@ global.webViewComponent = function ChecksSidePanelWebView({
     editorWebViewId,
   );
 
-  // Track currently open project tabs so the project selector can render the Open tabs section
-  // and the `projectScrollGroup` mode's per-tab rows. The map is keyed by webViewId; only entries
-  // with both a projectId and a numeric scrollGroupScrRef end up in `openTabs`.
-  const [openTabsMap, setOpenTabsMap] = useState<Map<string, OpenProjectTab>>(() => new Map());
-
-  useEffect(() => {
-    const isProjectTab = (
-      webView: { projectId?: string; scrollGroupScrRef?: unknown } | undefined,
-    ): OpenProjectTab | undefined => {
-      if (!webView?.projectId) return undefined;
-      if (typeof webView.scrollGroupScrRef !== 'number') return undefined;
-      return {
-        projectId: webView.projectId,
-        scrollGroupId: webView.scrollGroupScrRef as ScrollGroupId,
-      };
-    };
-
-    const upsert = (webView: { id: string; projectId?: string; scrollGroupScrRef?: unknown }) => {
-      const entry = isProjectTab(webView);
-      setOpenTabsMap((prev) => {
-        const next = new Map(prev);
-        if (entry) next.set(webView.id, entry);
-        else next.delete(webView.id);
-        return next;
-      });
-    };
-
-    const unsubOpen = papi.webViews.onDidOpenWebView(({ webView }) => upsert(webView));
-    const unsubUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => upsert(webView));
-    const unsubClose = papi.webViews.onDidCloseWebView(({ webView }) => {
-      setOpenTabsMap((prev) => {
-        if (!prev.has(webView.id)) return prev;
-        const next = new Map(prev);
-        next.delete(webView.id);
-        return next;
-      });
-    });
-    return () => {
-      unsubOpen();
-      unsubUpdate();
-      unsubClose();
-    };
-  }, []);
-
-  const openTabs = useMemo<OpenProjectTab[]>(() => [...openTabsMap.values()], [openTabsMap]);
+  // Track all project-bound tabs via the shared hook. `openTabsRich` retains webViewId +
+  // webViewType for tab-dedup logic in `handleSelectProject` (Task 14). `openTabs` is the
+  // lighter shape that ProjectSelector's `openTabs` prop expects.
+  const openTabsRich = useOpenProjectTabs();
+  const openTabs = useMemo<OpenProjectTab[]>(
+    () => openTabsRich.map((t) => ({ projectId: t.projectId, scrollGroupId: t.scrollGroupId })),
+    [openTabsRich],
+  );
 
   const invalidateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
