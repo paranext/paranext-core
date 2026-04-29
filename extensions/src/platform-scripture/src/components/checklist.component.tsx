@@ -54,9 +54,10 @@ const localizeString = (strings: ChecklistLocalizedStrings, key: ChecklistLocali
 // ---------- Small presentational sub-components ----------
 
 /**
- * Single stand-in outline-button trigger. Replaces the draft `ProjectSelector` / `ScopeSelector`
- * components (PR #2223, PR #2212) for the design phase — the wiring phase decides whether to swap
- * in the shared components, vendor them, or fall back to the existing radio-style `ScopeSelector`.
+ * Outline-button trigger fallback. The wired-up web-view (`checklist.web-view.tsx`) supplies real
+ * `ProjectSelector` / `ScopeSelector` nodes via the `*Selector` props, so this fallback only
+ * renders when those props are absent (e.g. unwired Storybook stories). Slated for removal once
+ * every story passes a real selector node.
  */
 type SelectorTriggerProps = {
   label: string;
@@ -229,11 +230,14 @@ function ColumnHeaderWithTooltip({
   const displayFullName = fullName ?? shortName;
   const ariaLabel = ariaLabelTemplate.replace('{name}', displayFullName);
   return (
-    <TooltipProvider>
+    // delayDuration={0} → tooltip appears immediately on hover (per Sebastian's PR #2219
+    // #3138170120: "do not use cursor help. show the tooltip immediately"). Mirrors the
+    // sidebar.tsx pattern.
+    <TooltipProvider delayDuration={0}>
       <Tooltip>
         <TooltipTrigger asChild>
           <span
-            className="tw-cursor-help tw-font-semibold"
+            className="tw-font-semibold"
             aria-label={ariaLabel}
             data-testid="checklist-column-header"
           >
@@ -262,8 +266,9 @@ function ColumnHeaderWithTooltip({
  * the menu-data provider.
  *
  * **Deferred functionality**: per DEF-UI-003 the edit/goto link affordances render as disabled
- * stubs by default. Stories pass `isEditLinkEnabled` to illustrate the target state; the wiring
- * phase re-enables them when the scripture editor integration lands.
+ * stubs by default. Stories pass `isEditLinkEnabled` to illustrate the target state. The wired-up
+ * web-view passes `isEditLinkEnabled={false}` until the scripture-editor edit-link integration
+ * lands (tracked under DEF-UI-003 in `deferred-functionality.md`).
  */
 export function ChecklistTool({
   localizedStringsWithLoadingState = [{}, false],
@@ -302,12 +307,14 @@ export function ChecklistTool({
     [localizedStrings],
   );
 
-  // ----- Derived: should we show the Hide Matches checkbox item? (BHV-300 + Conditional UI rules) -----
-  // Spec: "Hide Matches checkbox item visible only when comparativeTexts.length > 0". The component
-  // derives this from the presence of 2+ columns rather than an explicit prop so the UI stays in
-  // lockstep with the data shape.
+  // ----- Derived: is the Hide Matches checkbox item available? (BHV-300 + Conditional UI rules) -----
+  // Spec: "Hide Matches" only makes sense when there's something to compare. The Hide Matches
+  // toggle is always rendered (so it's discoverable) but disabled when there's no comparative
+  // column (columnCount <= 1), per Sebastian's PR #2219 #3138187751 ("do not remove it, but
+  // disable it when columnCount <= 1") and his §1 UX review ("Hide matches entry... should always
+  // be present").
   const columnCount = data?.columnHeaders.length ?? 0;
-  const showHideMatchesItem = columnCount > 1;
+  const isHideMatchesEnabled = columnCount > 1;
 
   // ----- Columns (dynamic, 1..N) -----
 
@@ -493,15 +500,14 @@ export function ChecklistTool({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {showHideMatchesItem && (
-            <DropdownMenuCheckboxItem
-              checked={hideMatches}
-              onCheckedChange={handleHideMatchesChange}
-              data-testid="checklist-hide-matches-item"
-            >
-              {getLocalizedString('%markersChecklist_toolbar_hideMatches%')}
-            </DropdownMenuCheckboxItem>
-          )}
+          <DropdownMenuCheckboxItem
+            checked={isHideMatchesEnabled && hideMatches}
+            onCheckedChange={handleHideMatchesChange}
+            disabled={!isHideMatchesEnabled}
+            data-testid="checklist-hide-matches-item"
+          >
+            {getLocalizedString('%markersChecklist_toolbar_hideMatches%')}
+          </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={showVerseText}
             onCheckedChange={handleShowVerseTextChange}
