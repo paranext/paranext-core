@@ -183,14 +183,14 @@ describe('PlatformBibleToolbar — Sync button', () => {
 
   it('re-checks availability when extensions reload', async () => {
     let capturedReloadCallback: (() => unknown) | undefined;
-    vi.mocked(getNetworkEvent).mockReturnValue(
-      // PlatformEvent shape: (callback) => unsubscriber
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      vi.fn((cb: () => unknown) => {
-        capturedReloadCallback = cb;
-        return vi.fn();
-      }) as any,
-    );
+    // PlatformEvent shape: (callback) => unsubscriber
+    const networkEventImpl = vi.fn((cb: () => unknown) => {
+      capturedReloadCallback = cb;
+      return vi.fn();
+    });
+    // getNetworkEvent returns PlatformEvent which has a complex generic signature incompatible with vi.fn directly
+    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+    vi.mocked(getNetworkEvent).mockReturnValue(networkEventImpl as any);
 
     mockSendCommand(true);
     render(<PlatformBibleToolbar />);
@@ -204,8 +204,9 @@ describe('PlatformBibleToolbar — Sync button', () => {
       .mock.calls.filter(([cmd]) => cmd === 'platformGetResources.isSendReceiveAvailable').length;
     expect(callsBefore).toBeGreaterThan(0);
     expect(capturedReloadCallback).toBeDefined();
+    if (!capturedReloadCallback) throw new Error('capturedReloadCallback was not set by mock');
 
-    await capturedReloadCallback!();
+    await capturedReloadCallback();
 
     await waitFor(() => {
       expect(
