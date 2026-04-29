@@ -167,6 +167,16 @@ export type ChecklistToolProps = {
    */
   columnProjectFullNames?: Record<string, string>;
 
+  /**
+   * Map of projectId → text direction, resolved by the wiring layer from
+   * `pdp.getSetting('platform.textDirection')`. Each cell inherits its column's direction so RTL
+   * projects (Hebrew, Arabic, Persian, Urdu, etc.) render right-to-left. Per `Localization-Guide.md
+   * → Text Direction (RTL/LTR)`, direction comes from the per-project setting (the platform derives
+   * it from the language definition by default; admins can override). Missing entries fall back to
+   * the document direction.
+   */
+  columnDirections?: Record<string, 'ltr' | 'rtl' | undefined>;
+
   /** When true, DataTable renders its built-in Skeleton rows and the wrapper is `aria-busy`. */
   isLoading: boolean;
 

@@ -191,6 +191,9 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
   const [error, setError] = useState<string | undefined>(undefined);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [columnProjectFullNames, setColumnProjectFullNames] = useState<Record<string, string>>({});
+  const [columnDirections, setColumnDirections] = useState<
+    Record<string, 'ltr' | 'rtl' | undefined>
+  >({});
 
   // ─── Primary project short name (for the toolbar trigger label) ──────────
 
@@ -323,6 +326,47 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
       );
       if (cancelled) return;
       setColumnProjectFullNames(Object.fromEntries(entries));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.columnProjectIds]);
+
+  // ─── Resolve per-column text direction (RTL/LTR) ──────────────────────────
+  //
+  // Per Localization-Guide.md → Text Direction (RTL/LTR), per-content text direction comes from
+  // the `platform.textDirection` project setting (admins can override; the platform derives it
+  // from the project's language definition by default). We resolve it once per column projectId
+  // so RTL projects (Hebrew, Arabic, Persian, Urdu, etc.) render right-to-left.
+
+  useEffect(() => {
+    const ids = data?.columnProjectIds ?? [];
+    if (ids.length === 0) {
+      setColumnDirections({});
+      return () => {};
+    }
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        ids.map(async (id): Promise<[string, 'ltr' | 'rtl' | undefined]> => {
+          try {
+            const pdp = await papi.projectDataProviders.get('platform.base', id);
+            const direction = await pdp.getSetting('platform.textDirection');
+            // Setting type is `'ltr' | 'rtl' | '' | undefined`; map empty/undefined to undefined
+            // so the component falls back to document direction.
+            if (direction === 'rtl') return [id, 'rtl'];
+            if (direction === 'ltr') return [id, 'ltr'];
+            return [id, undefined];
+          } catch (err) {
+            logger.warn(
+              `ChecklistWebView: failed to resolve textDirection for ${id}: ${getErrorMessage(err)}`,
+            );
+            return [id, undefined];
+          }
+        }),
+      );
+      if (cancelled) return;
+      setColumnDirections(Object.fromEntries(entries));
     })();
     return () => {
       cancelled = true;
@@ -615,6 +659,7 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
         localizedStringsWithLoadingState={localizedStringsWithLoadingState}
         data={visibleData}
         columnProjectFullNames={columnProjectFullNames}
+        columnDirections={columnDirections}
         isLoading={isLoading}
         error={error}
         helpText={undefined}

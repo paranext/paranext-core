@@ -177,9 +177,16 @@ function ParagraphRow({ paragraph, showVerseText }: ParagraphRowProps) {
 type CellContentProps = {
   cell: ChecklistCell;
   showVerseText: boolean;
+  /**
+   * Text direction for this cell, sourced from the column's project `platform.textDirection`
+   * setting (resolved by the wiring layer). Cells inherit their column's direction. Per
+   * `Localization-Guide.md → Text Direction (RTL/LTR)`, do NOT compute this from `cell.language` —
+   * the project setting is the single source of truth.
+   */
+  dir?: 'ltr' | 'rtl' | undefined;
 };
 
-function CellContent({ cell, showVerseText }: CellContentProps) {
+function CellContent({ cell, showVerseText, dir }: CellContentProps) {
   if (cell.error) {
     return <span className="tw-italic tw-text-destructive">{cell.error}</span>;
   }
@@ -191,10 +198,7 @@ function CellContent({ cell, showVerseText }: CellContentProps) {
     );
   }
   return (
-    <div
-      className="tw-flex tw-flex-col tw-gap-1"
-      dir={cell.language === 'he' || cell.language === 'ar' ? 'rtl' : undefined}
-    >
+    <div className="tw-flex tw-flex-col tw-gap-1" dir={dir}>
       {cell.paragraphs.map((paragraph, paragraphIndex) => (
         <ParagraphRow
           // Paragraph markers may repeat within a single cell (e.g. two consecutive `\p`s), so the
@@ -266,6 +270,7 @@ export function ChecklistTool({
   localizedStringsWithLoadingState = [{}, false],
   data,
   columnProjectFullNames = {},
+  columnDirections = {},
   isLoading,
   error,
   helpText,
@@ -367,7 +372,11 @@ export function ChecklistTool({
             }
             return (
               <div className="tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-py-2">
-                <CellContent cell={cell} showVerseText={showVerseText} />
+                <CellContent
+                  cell={cell}
+                  showVerseText={showVerseText}
+                  dir={columnDirections[projectId]}
+                />
                 {isPrimaryColumn && rowData.includeEditLink && (
                   <EditGotoLinks
                     row={rowData}
@@ -389,6 +398,7 @@ export function ChecklistTool({
   }, [
     data,
     columnProjectFullNames,
+    columnDirections,
     getLocalizedString,
     showVerseText,
     isEditLinkEnabled,
