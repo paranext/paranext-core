@@ -1,6 +1,12 @@
-import { Alert, AlertDescription, AlertTitle, Button } from 'platform-bible-react';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { Copyright as CopyrightIcon } from 'lucide-react';
 
 /** Object containing all keys used for localization in this component. */
 export const COPYRIGHT_OVERLAY_STRING_KEYS = Object.freeze([
@@ -17,26 +23,36 @@ type CopyrightOverlayLocalizedStrings = {
 export type CopyrightOverlayProps = {
   /** Copyright text supplied by the resource. May contain newlines for paragraph separation. */
   copyrightInfo?: string;
-  /** When true, the overlay renders nothing. Caller controls whether to mount/unmount. */
-  dismissed?: boolean;
-  /** Dismiss handler invoked from the close button. */
-  onDismiss?: () => void;
+  /**
+   * Whether the dialog is currently open. Controlled by the parent (shadcn-style controlled
+   * Dialog).
+   */
+  open?: boolean;
+  /**
+   * Open-state change handler — fired by the Dialog when the user clicks the close button, presses
+   * Escape, or clicks outside the dialog. The parent should map `open === false` to whatever clears
+   * its `copyrightOverlayVisible`-equivalent flag.
+   */
+  onOpenChange?: (open: boolean) => void;
   localizedStringsWithLoadingState?: [CopyrightOverlayLocalizedStrings, boolean];
 };
 
 /**
  * Pure presentational copyright overlay shown when the user clicks "More info..." on the copyright
- * ribbon (BHV-310, theme 9). Renders the resource's copyright text in a structured Alert. The
- * actual modal/dialog wrapping happens in the wiring layer.
+ * ribbon (BHV-310, theme 9 in feature spec). Renders the resource's copyright text in a structured
+ * shadcn `Dialog` with title, scrollable body, and dismiss button.
+ *
+ * [Revised: 2026-04-29] Theme 12 — replaced the in-banner `Alert` with a controlled `Dialog`. The
+ * `dismissed` prop was removed in favor of the standard shadcn `open` / `onOpenChange` pair so the
+ * parent always mounts the component (no conditional mounting required) and the Dialog handles
+ * Esc-to-close and overlay-click-to-close automatically.
  */
 export function CopyrightOverlay({
   copyrightInfo,
-  dismissed = false,
-  onDismiss = () => {},
+  open = false,
+  onOpenChange = () => {},
   localizedStringsWithLoadingState = [{}, false],
 }: CopyrightOverlayProps) {
-  if (dismissed) return undefined;
-
   const getLocalizedString = (key: CopyrightOverlayLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
@@ -47,26 +63,29 @@ export function CopyrightOverlay({
   );
 
   return (
-    <Alert role="alertdialog" aria-labelledby="er-copyright-title" className="tw-m-4 tw-max-w-2xl">
-      <CopyrightIcon className="tw-h-4 tw-w-4" />
-      <AlertTitle id="er-copyright-title">{titleText}</AlertTitle>
-      <AlertDescription className="tw-flex tw-flex-col tw-gap-3">
-        {copyrightInfo ? (
-          copyrightInfo.split(/\n+/).map((paragraph) => (
-            <p key={paragraph} className="tw-text-sm tw-leading-relaxed">
-              {paragraph}
-            </p>
-          ))
-        ) : (
-          <p className="tw-text-sm tw-italic tw-text-muted-foreground">{emptyMessage}</p>
-        )}
-        <div className="tw-flex tw-justify-end">
-          <Button variant="outline" onClick={onDismiss}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="tw-max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{titleText}</DialogTitle>
+        </DialogHeader>
+        <div className="tw-flex tw-max-h-[60vh] tw-flex-col tw-gap-3 tw-overflow-y-auto tw-pr-1">
+          {copyrightInfo ? (
+            copyrightInfo.split(/\n+/).map((paragraph) => (
+              <p key={paragraph} className="tw-text-sm tw-leading-relaxed">
+                {paragraph}
+              </p>
+            ))
+          ) : (
+            <p className="tw-text-sm tw-italic tw-text-muted-foreground">{emptyMessage}</p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             {dismissText}
           </Button>
-        </div>
-      </AlertDescription>
-    </Alert>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

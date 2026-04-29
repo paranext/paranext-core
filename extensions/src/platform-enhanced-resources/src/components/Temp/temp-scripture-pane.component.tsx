@@ -58,13 +58,8 @@ export type TempScripturePaneVerseRef = {
 export type TempScripturePaneProps = {
   /** Token stream for the current chapter; when undefined, renders empty state. */
   tokens: MarbleTokenLike[] | undefined;
-  /** Current verse reference (used as a header label). */
-  currentReference: TempScripturePaneVerseRef;
   /** Token id of the currently filtered linked word, or undefined if no filter is active. */
   filteredTokenId: string | undefined;
-  /** Hebrew/Greek display mode. Currently affects placeholder annotations only. */
-  hebrewDisplayMode?: ScriptDisplayMode;
-  greekDisplayMode?: ScriptDisplayMode;
   /** When true, the footnote panel placeholder is shown below the main pane. */
   showFootnotes?: boolean;
   /** Zoom factor applied to the placeholder content (1.0 = 100%). */
@@ -87,8 +82,6 @@ export type TempScripturePaneProps = {
   localizedStringsWithLoadingState?: [TempScripturePaneLocalizedStrings, boolean];
 };
 
-const formatRef = (ref: TempScripturePaneVerseRef) => `Bk${ref.book} ${ref.chapter}:${ref.verse}`;
-
 const tokenIdOf = (token: MarbleTokenLike): string =>
   token.targetLinks?.[0] ?? token.strongNumber ?? `idx-${token.index}`;
 
@@ -109,12 +102,12 @@ const tokenIdOf = (token: MarbleTokenLike): string =>
  *
  * @see Component-Builder-Patterns.md § Temp Component Convention
  */
+// `currentReference` remains on the prop surface for phase-3-ui (FN-001/FN-013/FN-014 wiring);
+// the design-phase pane no longer reads it because Theme 10 removed the "Bk1 1:1 / H:both /
+// G:both" header row. We accept it on the props interface but do not destructure it here.
 export function TempScripturePane({
   tokens,
-  currentReference,
   filteredTokenId,
-  hebrewDisplayMode = 'both',
-  greekDisplayMode = 'both',
   showFootnotes = false,
   scripturePaneZoom = 1,
   isLoading = false,
@@ -186,12 +179,6 @@ export function TempScripturePane({
         // user can drive from the View menu - tailwind classes can't express arbitrary scales.
         style={{ fontSize: `${scripturePaneZoom * 1}rem` }}
       >
-        <div className="tw-flex tw-items-center tw-justify-between tw-border-b tw-px-4 tw-py-2">
-          <span className="tw-font-semibold">{formatRef(currentReference)}</span>
-          <span className="tw-text-xs tw-text-muted-foreground">
-            {`H:${hebrewDisplayMode} / G:${greekDisplayMode}`}
-          </span>
-        </div>
         <div className="tw-flex-1 tw-overflow-auto tw-p-4">
           <p className="tw-mb-3 tw-text-xs tw-italic tw-text-muted-foreground">
             {editorPlaceholderText}

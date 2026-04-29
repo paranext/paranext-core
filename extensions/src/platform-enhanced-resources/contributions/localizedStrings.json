@@ -83,7 +83,14 @@
     "%enhancedResources_toolbar_info%": {},
     "%enhancedResources_toolbar_highlightAllResearchTerms%": {},
     "%enhancedResources_toolbar_currentReference%": {},
-    "%enhancedResources_toolbar_searchPlaceholder%": {},
+    "%enhancedResources_toolbar_filterAriaLabel%": {
+      "notes": [
+        "ARIA label for the filter input that appears in the lower research-pane tab bar after a word is clicked. The input is read-only and shows the transliterated form of the clicked word; aria-label gives screen readers context since there is no placeholder."
+      ]
+    },
+    "%enhancedResources_toolbar_filterClear%": {
+      "notes": ["ARIA label for the X button that clears and hides the filter input."]
+    },
     "%enhancedResources_toolbar_scopeLabel%": {},
     "%enhancedResources_toolbar_scope_currentVerse%": {},
     "%enhancedResources_toolbar_scope_currentSection%": {},
@@ -93,6 +100,27 @@
     "%enhancedResources_toolbar_tab_encyclopedia%": {},
     "%enhancedResources_toolbar_tab_media%": {},
     "%enhancedResources_toolbar_tab_maps%": {},
+    "%enhancedResources_toolbar_menu_showFootnotes%": {
+      "notes": ["View-menu item: toggles the footnote pane below the scripture pane (BHV-302)."]
+    },
+    "%enhancedResources_toolbar_menu_showTranslations%": {
+      "notes": ["View-menu item: toggles the translations column in the research pane (BHV-303)."]
+    },
+    "%enhancedResources_toolbar_menu_hebrewHeader%": {
+      "notes": ["View-menu sub-section header for Hebrew display-mode radio group (BHV-304)."]
+    },
+    "%enhancedResources_toolbar_menu_greekHeader%": {
+      "notes": ["View-menu sub-section header for Greek display-mode radio group (BHV-304)."]
+    },
+    "%enhancedResources_toolbar_menu_originalScript%": {},
+    "%enhancedResources_toolbar_menu_transliteration%": {},
+    "%enhancedResources_toolbar_menu_both%": {},
+    "%enhancedResources_toolbar_menu_copyrightInfo%": {},
+    "%enhancedResources_toolbar_menu_find%": {},
+    "%enhancedResources_toolbar_menu_close%": {},
+    "%enhancedResources_toolbar_menu_zoomIn%": {},
+    "%enhancedResources_toolbar_menu_zoomOut%": {},
+    "%enhancedResources_toolbar_menu_zoomReset%": {},
     "%enhancedResources_shell_title%": {},
     "%enhancedResources_shell_emptyTitle%": {},
     "%enhancedResources_shell_emptyDescription%": {},
@@ -466,7 +494,8 @@
       "%enhancedResources_toolbar_info%": "Show/Hide Enhanced Resource Guide",
       "%enhancedResources_toolbar_highlightAllResearchTerms%": "All research terms",
       "%enhancedResources_toolbar_currentReference%": "Current reference",
-      "%enhancedResources_toolbar_searchPlaceholder%": "Search this tab",
+      "%enhancedResources_toolbar_filterAriaLabel%": "Word/phrase filter",
+      "%enhancedResources_toolbar_filterClear%": "Clear filter",
       "%enhancedResources_toolbar_scopeLabel%": "Verses filter",
       "%enhancedResources_toolbar_scope_currentVerse%": "Current verse",
       "%enhancedResources_toolbar_scope_currentSection%": "Current section",
@@ -476,6 +505,19 @@
       "%enhancedResources_toolbar_tab_encyclopedia%": "Encyclopedia",
       "%enhancedResources_toolbar_tab_media%": "Media",
       "%enhancedResources_toolbar_tab_maps%": "Maps",
+      "%enhancedResources_toolbar_menu_showFootnotes%": "Show footnotes",
+      "%enhancedResources_toolbar_menu_showTranslations%": "Show translations",
+      "%enhancedResources_toolbar_menu_hebrewHeader%": "Hebrew",
+      "%enhancedResources_toolbar_menu_greekHeader%": "Greek",
+      "%enhancedResources_toolbar_menu_originalScript%": "Original script",
+      "%enhancedResources_toolbar_menu_transliteration%": "Transliteration",
+      "%enhancedResources_toolbar_menu_both%": "Both",
+      "%enhancedResources_toolbar_menu_copyrightInfo%": "Copyright information...",
+      "%enhancedResources_toolbar_menu_find%": "Find...",
+      "%enhancedResources_toolbar_menu_close%": "Close",
+      "%enhancedResources_toolbar_menu_zoomIn%": "Zoom in",
+      "%enhancedResources_toolbar_menu_zoomOut%": "Zoom out",
+      "%enhancedResources_toolbar_menu_zoomReset%": "Reset zoom",
       "%enhancedResources_shell_title%": "Enhanced resource",
       "%enhancedResources_shell_emptyTitle%": "No resource selected",
       "%enhancedResources_shell_emptyDescription%": "Open an Enhanced Resource from the Paratext menu to begin.",

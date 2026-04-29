@@ -11,14 +11,16 @@ import type { LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
 import {
   TempScripturePane,
   type MarbleTokenLike,
-  type ScriptDisplayMode,
-  type TempScripturePaneVerseRef,
 } from '../components/Temp/temp-scripture-pane.component';
 import {
-  Toolbar,
+  EnhancedResourceTabBar,
+  EnhancedResourceTopToolbar,
   type HighlightMode,
   type MarbleScope,
   type ResearchTab,
+  type ScriptDisplayMode,
+  type ViewMenuHandlers,
+  type ViewMenuState,
 } from '../components/toolbar/toolbar.component';
 import {
   WarningRibbons,
@@ -77,7 +79,6 @@ export type EnhancedResourceWebViewProps = {
 
   // Scripture pane
   tokens: MarbleTokenLike[] | undefined;
-  currentReference: TempScripturePaneVerseRef;
   filteredTokenId: string | undefined;
   hebrewDisplayMode?: ScriptDisplayMode;
   greekDisplayMode?: ScriptDisplayMode;
@@ -94,13 +95,28 @@ export type EnhancedResourceWebViewProps = {
   hasSenseScope?: boolean;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  /**
+   * Theme 9 — whether the current `searchValue` matched any results in the active research pane.
+   * Drives the green vs orange tint on the filter input. Defaults to true.
+   */
+  hasMatches?: boolean;
   highlightMode?: HighlightMode;
   onHighlightModeChange?: (mode: HighlightMode) => void;
+  /** Info / guide button click handler (FN-016 — opens MarbleGuide Dialog). */
   onInfoClick?: () => void;
-  onTabMenuClick?: () => void;
+  /** BCV reference button click — placeholder until phase-3-ui wires BookChapterControl (FN-015). */
+  onReferenceClick?: () => void;
   scrollGroupId?: ScrollGroupId | undefined;
   onScrollGroupChange?: (newScrollGroupId: ScrollGroupId | undefined) => void;
   currentReferenceLabel?: string;
+  /**
+   * View-menu state surface (Show footnotes, Show translations, H/G display modes). Theme 10 +
+   * forward-note FN-017 — display-mode controls moved from the (now-removed) scripture-pane header
+   * row into the hamburger menu in the top toolbar.
+   */
+  viewMenu?: ViewMenuState;
+  /** View-menu callbacks. */
+  viewMenuHandlers?: ViewMenuHandlers;
 
   // Ribbons
   ribbons: RibbonStates;
@@ -209,7 +225,6 @@ export function EnhancedResourceWebView({
   isLoading = false,
 
   tokens,
-  currentReference,
   filteredTokenId,
   hebrewDisplayMode = 'both',
   greekDisplayMode = 'both',
@@ -225,13 +240,16 @@ export function EnhancedResourceWebView({
   hasSenseScope = false,
   searchValue = '',
   onSearchChange = () => {},
+  hasMatches = true,
   highlightMode = 'none',
   onHighlightModeChange = () => {},
   onInfoClick = () => {},
-  onTabMenuClick = () => {},
+  onReferenceClick = () => {},
   scrollGroupId,
   onScrollGroupChange = () => {},
   currentReferenceLabel,
+  viewMenu,
+  viewMenuHandlers,
 
   ribbons,
   onDismissReviewStatus = () => {},
@@ -346,26 +364,20 @@ export function EnhancedResourceWebView({
         onMetadataUpdate={onMetadataUpdate}
         localizedStringsWithLoadingState={childStrings}
       />
-      {copyrightOverlayVisible && (
-        <CopyrightOverlay
-          copyrightInfo={copyrightInfo}
-          dismissed={false}
-          onDismiss={onCopyrightOverlayDismiss}
-          localizedStringsWithLoadingState={childStrings}
-        />
-      )}
-      <Toolbar
-        activeTab={activeTab}
-        onTabChange={onTabChange}
-        scope={scope}
-        onScopeChange={onScopeChange}
-        hasSenseScope={hasSenseScope}
-        searchValue={searchValue}
-        onSearchChange={onSearchChange}
+      <EnhancedResourceTopToolbar
+        viewMenu={
+          viewMenu ?? {
+            showFootnotes,
+            showTranslations: true,
+            hebrewDisplayMode,
+            greekDisplayMode,
+          }
+        }
+        viewMenuHandlers={viewMenuHandlers}
         highlightMode={highlightMode}
         onHighlightModeChange={onHighlightModeChange}
         onInfoClick={onInfoClick}
-        onTabMenuClick={onTabMenuClick}
+        onReferenceClick={onReferenceClick}
         scrollGroupId={scrollGroupId}
         onScrollGroupChange={onScrollGroupChange}
         currentReferenceLabel={currentReferenceLabel}
@@ -386,10 +398,7 @@ export function EnhancedResourceWebView({
             >
               <TempScripturePane
                 tokens={tokens}
-                currentReference={currentReference}
                 filteredTokenId={filteredTokenId}
-                hebrewDisplayMode={hebrewDisplayMode}
-                greekDisplayMode={greekDisplayMode}
                 showFootnotes={showFootnotes}
                 scripturePaneZoom={scripturePaneZoom}
                 errorMessage={scripturePaneError}
@@ -403,6 +412,18 @@ export function EnhancedResourceWebView({
               minSize={20}
               className="tw-flex tw-flex-col"
             >
+              {/* Theme 8 — tab/filter/scope row sits at the top of the lower split panel. */}
+              <EnhancedResourceTabBar
+                activeTab={activeTab}
+                onTabChange={onTabChange}
+                scope={scope}
+                onScopeChange={onScopeChange}
+                hasSenseScope={hasSenseScope}
+                searchValue={searchValue}
+                onSearchChange={onSearchChange}
+                hasMatches={hasMatches}
+                localizedStringsWithLoadingState={childStrings}
+              />
               <Tabs value={activeTab} className="tw-flex tw-h-full tw-flex-col">
                 <TabsContent
                   value="dictionary"
@@ -499,6 +520,19 @@ export function EnhancedResourceWebView({
         onOpenChange={onMaximizedMediaOpenChange}
         onPrev={onMaximizedMediaPrev}
         onNext={onMaximizedMediaNext}
+        localizedStringsWithLoadingState={childStrings}
+      />
+      {/*
+       * Theme 12 — CopyrightOverlay is always mounted as a sibling-level Dialog (no longer
+       * conditionally rendered, no longer nested next to WarningRibbons). The Dialog manages its
+       * own portal/overlay; visibility is driven by the `open` prop.
+       */}
+      <CopyrightOverlay
+        copyrightInfo={copyrightInfo}
+        open={copyrightOverlayVisible}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) onCopyrightOverlayDismiss();
+        }}
         localizedStringsWithLoadingState={childStrings}
       />
     </div>
