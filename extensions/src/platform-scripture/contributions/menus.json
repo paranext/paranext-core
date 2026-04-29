@@ -49,9 +49,15 @@
         },
         "items": [
           {
-            "label": "%markersChecklist_menu_settings%",
+            "label": "%markersChecklist_menu_copy%",
             "group": "platformScripture.markersChecklistExport",
             "order": 1,
+            "command": "platformScripture.copyMarkersChecklist"
+          },
+          {
+            "label": "%markersChecklist_menu_settings%",
+            "group": "platformScripture.markersChecklistExport",
+            "order": 2,
             "command": "platformScripture.openMarkersChecklistSettings"
           }
         ]

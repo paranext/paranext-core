@@ -17,7 +17,6 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronsUpDown,
-  Copy,
   Eye,
   EyeOff,
   Pencil,
@@ -262,9 +261,10 @@ function ColumnHeaderWithTooltip({
 /**
  * Pure presentational Markers Checklist tool (SCR-001).
  *
- * Composes a `TabToolbar` (with three selector-trigger stand-ins + Copy + View dropdown +
- * match-count live region + tab-menu) above a shared `DataTable` rendered with dynamic columns. A
- * destructive-variant `Alert` replaces the help-text banner when `error` is non-null (T-R-2).
+ * Composes a `TabToolbar` (with three selector-trigger stand-ins, an eye-icon ToggleGroup for the
+ * view toggles, a match-count live region, and the project menu hamburger hosting Copy + Settings)
+ * above a shared `DataTable` rendered with dynamic columns. A destructive-variant `Alert` replaces
+ * the help-text banner when `error` is non-null (T-R-2).
  *
  * **Architecture**: zero PAPI coupling. All data flows through props; the component never touches
  * `useWebViewState`, `useData`, `useDataProvider`, or any `papi.*` API. Visibility, loading, error,
@@ -299,10 +299,9 @@ export function ChecklistTool({
   showVerseText,
   onShowVerseTextChange,
   matchCountLabel,
-  onCopy,
   onRetry,
-  tabViewMenuData,
-  onSelectTabMenuItem,
+  projectMenuData,
+  onSelectProjectMenuItem,
   onEditLinkClick,
   onGotoLinkClick,
   isEditLinkEnabled = false,
@@ -437,14 +436,14 @@ export function ChecklistTool({
     [onShowVerseTextChange],
   );
 
-  const handleTabMenuSelect = useCallback<NonNullable<typeof onSelectTabMenuItem>>(
+  const handleProjectMenuSelect = useCallback<NonNullable<typeof onSelectProjectMenuItem>>(
     (selectedMenuItem) => {
-      if (onSelectTabMenuItem) {
-        return onSelectTabMenuItem(selectedMenuItem);
+      if (onSelectProjectMenuItem) {
+        return onSelectProjectMenuItem(selectedMenuItem);
       }
       return undefined;
     },
-    [onSelectTabMenuItem],
+    [onSelectProjectMenuItem],
   );
 
   // ----- Render helpers -----
@@ -481,18 +480,6 @@ export function ChecklistTool({
 
   const renderToolbarEnd = () => (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className="tw-h-8 tw-w-8"
-        aria-label={getLocalizedString('%markersChecklist_toolbar_copy%')}
-        onClick={onCopy}
-        data-testid="checklist-copy-button"
-      >
-        <Copy className="tw-h-4 tw-w-4" aria-hidden="true" />
-      </Button>
-
       {/*
        * View toggles as inline ToggleGroup (per Sebastian PR #2219 #3137366113: "View menu should
        * be an eye icon toggle group button"). Each toggle is a single icon button — `EyeOff` for
@@ -621,9 +608,13 @@ export function ChecklistTool({
       aria-label={getLocalizedString('%markersChecklist_toolbar_aria%')}
     >
       <TabToolbar
-        onSelectProjectMenuItem={handleTabMenuSelect}
-        onSelectViewInfoMenuItem={handleTabMenuSelect}
-        tabViewMenuData={tabViewMenuData}
+        onSelectProjectMenuItem={handleProjectMenuSelect}
+        // Per Sebastian PR #2219 #3137366113, the tool's menu items (Settings, Copy, etc.) live
+        // on the LEFT-side hamburger (project menu) — the right-side ellipsis (tab view info
+        // menu) is intentionally empty. TabToolbar requires `onSelectViewInfoMenuItem` to be
+        // present even when no view-info menu renders, so pass a no-op.
+        onSelectViewInfoMenuItem={() => undefined}
+        projectMenuData={projectMenuData}
         startAreaChildren={renderToolbarStart()}
         endAreaChildren={renderToolbarEnd()}
       />

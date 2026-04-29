@@ -63,11 +63,12 @@ const localizedStringsForStories: ChecklistLocalizedStrings =
   }, {});
 
 /**
- * A minimal localized `MultiColumnMenu` that shows a single `Settings…` item under an `export`
- * group. Mirrors the production menu contribution documented in `ui-alignment.md` — the real menu
+ * A minimal localized `MultiColumnMenu` that shows the project-menu (left hamburger) items per
+ * Sebastian's PR #2219 #3137366113. Mirrors the production menu contribution in
+ * `extensions/src/platform-scripture/contributions/menus.json` (Copy + Settings) — the real menu
  * data is supplied by the wiring phase via `useData(papi.menuData.dataProviderName).WebViewMenu`.
  */
-const tabViewMenuData: Localized<MultiColumnMenu> = {
+const projectMenuData: Localized<MultiColumnMenu> = {
   columns: {
     'platformScripture.markersChecklist.view': {
       label: 'View',
@@ -85,10 +86,17 @@ const tabViewMenuData: Localized<MultiColumnMenu> = {
   },
   items: [
     {
+      label: 'Copy',
+      localizeNotes: 'Copies the visible checklist rows to the clipboard',
+      group: 'platformScripture.markersChecklist.export',
+      order: 1,
+      command: 'platformScripture.copyMarkersChecklist',
+    },
+    {
       label: 'Settings...',
       localizeNotes: 'Opens the Marker Settings dialog',
       group: 'platformScripture.markersChecklist.export',
-      order: 1,
+      order: 2,
       command: 'platformScripture.openMarkersChecklistSettings',
     },
   ],
@@ -105,7 +113,7 @@ const baseArgs: Partial<ChecklistToolProps> = {
   error: undefined,
   helpText: undefined,
   matchCountLabel: undefined,
-  tabViewMenuData,
+  projectMenuData,
   columnProjectFullNames: CHECKLIST_STORY_COLUMN_PROJECT_FULL_NAMES,
   isEditLinkEnabled: false,
 };

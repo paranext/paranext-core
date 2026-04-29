@@ -423,20 +423,33 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
     handleOpenSettingsEvent,
   );
 
-  // ─── Tab menu item selection handler ──────────────────────────────────────
+  // ─── Project-menu item selection handler ──────────────────────────────────
+  //
+  // Items defined in `extensions/src/platform-scripture/contributions/menus.json` for
+  // `platformScripture.markersChecklist`'s top menu fire here. Most items dispatch via
+  // `papi.commands.sendCommand` (so future contributions from other extensions wire
+  // automatically), but we intercept `platformScripture.copyMarkersChecklist` locally because
+  // the copy action operates on the live web-view's visible data — there's no point in routing
+  // it through PAPI just to send the result back.
 
-  const handleSelectTabMenuItem = useCallback(
+  const handleSelectProjectMenuItem = useCallback(
     (selectedMenuItem: { [key: string]: unknown; command: string }) => {
-      // The tab-menu's "Settings…" item fires `platformScripture.openMarkersChecklistSettings`;
-      // the command handler in main.ts emits `CHECKLIST_OPEN_SETTINGS_EVENT`, which this web view
-      // picks up via `useEvent` above to open the dialog. We still forward the selected command
-      // to papi so future tab-menu contributions (e.g. from other extensions) are wired
-      // correctly.
       const { command } = selectedMenuItem;
       if (!command) return;
-      // Send the command via the generic signature; the registered handler in main.ts validates
-      // and returns void. We pass through the string name without refining the type because the
-      // tab-menu can carry any registered command.
+      // Local intercept: copy operates on the live web-view's visible rows; routing through PAPI
+      // would just round-trip and come back. Build the clipboard text inline here using the
+      // current `visibleData` snapshot.
+      if (command === 'platformScripture.copyMarkersChecklist') {
+        if (!visibleData) return;
+        const clipboardText = buildClipboardText(visibleData.columnHeaders, visibleData.rows);
+        navigator.clipboard.writeText(clipboardText).catch((err) => {
+          logger.warn(`ChecklistWebView: clipboard write failed: ${getErrorMessage(err)}`);
+        });
+        return;
+      }
+      // Other commands (e.g. `platformScripture.openMarkersChecklistSettings`) route via PAPI.
+      // The registered handler in main.ts emits CHECKLIST_OPEN_SETTINGS_EVENT, which this web
+      // view picks up via `useEvent` above to open the dialog.
       papi.commands
         // The PAPI sendCommand type requires a registered command-name literal union. Menu items
         // contain arbitrary registered command names at runtime, so we intentionally widen via a
@@ -446,11 +459,11 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
         .sendCommand(command as Parameters<typeof papi.commands.sendCommand>[0])
         .catch((err) =>
           logger.warn(
-            `ChecklistWebView: tab-menu command "${command}" failed: ${getErrorMessage(err)}`,
+            `ChecklistWebView: project-menu command "${command}" failed: ${getErrorMessage(err)}`,
           ),
         );
     },
-    [],
+    [visibleData],
   );
 
   // ─── Toolbar trigger click handlers (stubs for primary-project + verse-range) ────────────
@@ -587,19 +600,6 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
     [comparativeProjects, comparativeOpenTabs, comparativeSelection, handleComparativeTextsChange],
   );
 
-  // ─── Copy (BHV-313) ───────────────────────────────────────────────────────
-
-  const handleCopy = useCallback(() => {
-    if (!visibleData) return;
-    const clipboardText = buildClipboardText(visibleData.columnHeaders, visibleData.rows);
-    // `navigator.clipboard.writeText` returns a promise that resolves when the write succeeds; we
-    // log failures but do not surface a toast here (spec doesn't mandate one — keep the hot path
-    // quiet so the gesture feels instant).
-    navigator.clipboard.writeText(clipboardText).catch((err) => {
-      logger.warn(`ChecklistWebView: clipboard write failed: ${getErrorMessage(err)}`);
-    });
-  }, [visibleData]);
-
   // ─── Retry handler ────────────────────────────────────────────────────────
 
   const handleRetry = useCallback(() => {
@@ -674,10 +674,9 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
         showVerseText={showVerseText}
         onShowVerseTextChange={handleShowVerseTextChange}
         matchCountLabel={matchCountLabel}
-        onCopy={handleCopy}
         onRetry={handleRetry}
-        tabViewMenuData={webViewMenu.topMenu}
-        onSelectTabMenuItem={handleSelectTabMenuItem}
+        projectMenuData={webViewMenu.topMenu}
+        onSelectProjectMenuItem={handleSelectProjectMenuItem}
         isEditLinkEnabled={false}
       />
       <MarkerSettingsDialog

@@ -257,25 +257,31 @@ export type ChecklistToolProps = {
 
   // ----- Action callbacks -----
 
-  /** Copy button click handler. The wiring layer owns the clipboard implementation (BHV-313). */
-  onCopy?: () => void;
-
   /** Retry button click handler (shown inside the error Alert). */
   onRetry?: () => void;
 
-  // ----- Tab menu -----
+  // ----- Project menu (TabToolbar left hamburger) -----
+  //
+  // Per Sebastian PR #2219 #3137366113 ("Settings should be coming from the hamburger menu of the
+  // TabToolbar, not from ellipsis button"), the menu data flows to the LEFT-side hamburger menu
+  // (`projectMenuData` on TabToolbar) rather than the RIGHT-side ellipsis (`tabViewMenuData`).
+  // The Copy action is also surfaced as a menu item (intercepted by the wiring layer's command
+  // dispatcher) rather than a standalone toolbar button.
 
   /**
-   * Localized menu data for the three-dot tab menu. In the wiring phase this comes from
-   * `useData(papi.menuData.dataProviderName).WebViewMenu(...)`. Stories may pass a minimal stub.
+   * Localized menu data for the TabToolbar's project menu (left hamburger). In the wiring phase
+   * this comes from `useData(papi.menuData.dataProviderName).WebViewMenu(...)`. Stories may pass a
+   * minimal stub. Currently contains: Copy, Settings.
    */
-  tabViewMenuData?: Localized<MultiColumnMenu> | undefined;
+  projectMenuData?: Localized<MultiColumnMenu> | undefined;
 
   /**
-   * Called when the user selects an item in the tab menu. Defaults to a no-op. The wiring layer
-   * forwards the selected command to `papi.commands.sendCommand`.
+   * Called when the user selects an item in the project menu. The wiring layer dispatches the
+   * selected command — typically via `papi.commands.sendCommand`, but it may intercept commands
+   * locally (e.g., `platformScripture.copyMarkersChecklist` triggers the local clipboard handler
+   * without a PAPI roundtrip).
    */
-  onSelectTabMenuItem?: (selectedMenuItem: {
+  onSelectProjectMenuItem?: (selectedMenuItem: {
     [key: string]: unknown;
     command: string;
   }) => void | Promise<void>;

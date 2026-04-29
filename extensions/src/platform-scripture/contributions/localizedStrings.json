@@ -311,6 +311,7 @@
       "%markersChecklist_columnHeader_aria%": "Project: {name}",
       "%markersChecklist_windowTitle%": "Markers Checklist - {projectName}",
       "%markersChecklist_menu_openTool%": "Markers Checklist...",
+      "%markersChecklist_menu_copy%": "Copy",
       "%markersChecklist_menu_settings%": "Settings...",
       "%webView_platformScripture_markersChecklist_viewColumn%": "View",
       "%webView_platformScripture_markersChecklist_settings%": "Settings..."
