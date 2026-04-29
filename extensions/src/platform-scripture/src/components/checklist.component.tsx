@@ -667,17 +667,19 @@ export function ChecklistTool({
       className="pr-twp tw-flex tw-h-full tw-flex-col"
       aria-label={getLocalizedString('%markersChecklist_toolbar_aria%')}
     >
-      <TabToolbar
-        onSelectProjectMenuItem={handleProjectMenuSelect}
-        // Per Sebastian PR #2219 #3137366113, the tool's menu items (Settings, Copy, etc.) live
-        // on the LEFT-side hamburger (project menu) — the right-side ellipsis (tab view info
-        // menu) is intentionally empty. TabToolbar requires `onSelectViewInfoMenuItem` to be
-        // present even when no view-info menu renders, so pass a no-op.
-        onSelectViewInfoMenuItem={() => undefined}
-        projectMenuData={projectMenuData}
-        startAreaChildren={renderToolbarStart()}
-        endAreaChildren={renderToolbarEnd()}
-      />
+      <div className="tw-sticky tw-top-0 tw-z-10 tw-flex tw-items-center tw-bg-background">
+        <TabToolbar
+          onSelectProjectMenuItem={handleProjectMenuSelect}
+          // Per Sebastian PR #2219 #3137366113, the tool's menu items (Settings, Copy, etc.) live
+          // on the LEFT-side hamburger (project menu) — the right-side ellipsis (tab view info
+          // menu) is intentionally empty. TabToolbar requires `onSelectViewInfoMenuItem` to be
+          // present even when no view-info menu renders, so pass a no-op.
+          onSelectViewInfoMenuItem={() => undefined}
+          projectMenuData={projectMenuData}
+          startAreaChildren={renderToolbarStart()}
+          endAreaChildren={renderToolbarEnd()}
+        />
+      </div>
 
       {renderBanners()}
 
