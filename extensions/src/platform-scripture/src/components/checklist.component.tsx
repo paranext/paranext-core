@@ -41,16 +41,15 @@ export type {
 } from './checklist.types';
 
 // ---------- Localization helper ----------
+//
+// Mirrors the `localizeString` pattern used by `book-selector.component.tsx`. Each component using
+// this helper declares its own type listing the localization keys it needs (here:
+// `ChecklistLocalizedStringKey`) — there is no shared/generic type. Returns the localized value or
+// falls back to the key itself so unlocalized Storybook runs surface the raw token.
 
-function resolveLocalizedString(
-  strings: ChecklistLocalizedStrings,
-  key: ChecklistLocalizedStringKey,
-): string {
-  const value = strings[key];
-  // Fall back to the key itself so unlocalized Storybook runs surface the raw token — the same
-  // pattern used by `marker-settings-dialog.component.tsx`.
-  return typeof value === 'string' ? value : key;
-}
+const localizeString = (strings: ChecklistLocalizedStrings, key: ChecklistLocalizedStringKey) => {
+  return strings[key] ?? key;
+};
 
 // ---------- Small presentational sub-components ----------
 
@@ -299,7 +298,7 @@ export function ChecklistTool({
   const [localizedStrings] = localizedStringsWithLoadingState;
 
   const getLocalizedString = useCallback(
-    (key: ChecklistLocalizedStringKey): string => resolveLocalizedString(localizedStrings, key),
+    (key: ChecklistLocalizedStringKey): string => localizeString(localizedStrings, key),
     [localizedStrings],
   );
 
