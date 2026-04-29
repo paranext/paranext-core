@@ -73,6 +73,10 @@ vi.mock('@shared/services/command.service', () => ({
   sendCommand: vi.fn(),
 }));
 
+vi.mock('@shared/services/network.service', () => ({
+  getNetworkEvent: vi.fn(() => vi.fn(() => vi.fn())),
+}));
+
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));

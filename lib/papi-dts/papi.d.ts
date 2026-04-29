@@ -3141,14 +3141,7 @@ declare module 'shared/services/web-view.service-model' {
      * view definitions themselves. Changing properties on the returned definitions does not affect
      * the actual WebView definitions.
      *
-     * Note: as a side effect, this method touches the WebViewState service entry for each returned
-     * web view, preventing those entries from being garbage-collected. This is consistent with
-     * {@link WebViewServiceType.getOpenWebViewDefinition}.
-     *
-     * @returns Promise that resolves to an array of saved properties for all open WebView
-     *   definitions. The promise will not resolve until the Platform.Bible dock layout UI has been
-     *   initialized. The promise may reject if dock layout initialization times out or if an error
-     *   occurs while retrieving web view states.
+     * @returns Promise that resolves to an array of saved properties for all open WebView definitions
      */
     getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
     /**

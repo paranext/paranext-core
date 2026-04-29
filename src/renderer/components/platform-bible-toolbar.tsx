@@ -12,6 +12,7 @@ import { availableScrollGroupIds } from '@renderer/services/scroll-group.service
 import { localThemeService } from '@renderer/services/theme.service-host';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
+import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
@@ -28,6 +29,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useEvent,
   usePromise,
 } from 'platform-bible-react';
 import {
@@ -148,10 +150,22 @@ export function PlatformBibleToolbar() {
   );
 
   // Default is `undefined` (not yet resolved); the command itself always returns `boolean`.
-  const [isSendReceiveAvailable] = usePromise(
-    useCallback(async () => sendCommand('platformGetResources.isSendReceiveAvailable'), []),
+  const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
   );
+
+  const checkIfSendReceiveAvailable = useCallback(async () => {
+    // This command comes from an extension and is not typed in CommandHandlers.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+    const isAvailable = await (sendCommand as any)('platformGetResources.isSendReceiveAvailable');
+    setIsSendReceiveAvailable(isAvailable);
+  }, []);
+
+  useEffect(() => {
+    checkIfSendReceiveAvailable();
+  }, [checkIfSendReceiveAvailable]);
+
+  useEvent(getNetworkEvent('platform.onDidReloadExtensions'), checkIfSendReceiveAvailable);
 
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);
 
@@ -220,10 +234,13 @@ export function PlatformBibleToolbar() {
                     aria-hidden={isSendReceiveAvailable === undefined || undefined}
                     tabIndex={isSendReceiveAvailable === undefined ? -1 : undefined}
                     onClick={() => {
-                      sendCommand('paratextBibleSendReceive.syncOpenProjects').catch((e) =>
-                        logger.warn(
-                          `Toolbar caught an error while trying to sync open projects: ${getErrorMessage(e)}`,
-                        ),
+                      // This command comes from an extension and is not typed in CommandHandlers.
+                      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                      (sendCommand as any)('paratextBibleSendReceive.syncOpenProjects').catch(
+                        (e: unknown) =>
+                          logger.warn(
+                            `Toolbar caught an error while trying to sync open projects: ${getErrorMessage(e)}`,
+                          ),
                       );
                     }}
                   >
@@ -292,7 +309,11 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() => sendCommand('paratextRegistration.showInternetSettings')}
+                  onClick={() => {
+                    // This command comes from an extension and is not typed in CommandHandlers.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                    (sendCommand as any)('paratextRegistration.showInternetSettings');
+                  }}
                 >
                   <Network />
                 </Button>
@@ -313,7 +334,11 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() => sendCommand('paratextRegistration.showParatextRegistration')}
+                  onClick={() => {
+                    // This command comes from an extension and is not typed in CommandHandlers.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                    (sendCommand as any)('paratextRegistration.showParatextRegistration');
+                  }}
                 >
                   <CircleUserRound />
                 </Button>
@@ -337,7 +362,11 @@ export function PlatformBibleToolbar() {
               variant="ghost"
               size="icon"
               className="tw-h-8"
-              onClick={() => sendCommand('platformGetResources.openHome')}
+              onClick={() => {
+                // This command comes from an extension and is not typed in CommandHandlers.
+                // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                (sendCommand as any)('platformGetResources.openHome');
+              }}
             >
               <HomeIcon />
             </Button>
