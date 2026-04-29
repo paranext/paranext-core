@@ -50,6 +50,35 @@ const localizeString = (strings: ChecklistLocalizedStrings, key: ChecklistLocali
   return strings[key] ?? key;
 };
 
+// ---------- Marker-indent helper ----------
+//
+// Per Sebastian PR #2219 #3137366113: "Markers are missing their specific styling (e.g. `q2`
+// needs to be more indented than `q1`). Use the styling that is applied in the footnotes pane;
+// this should be available to shared components, if not move it to `platform-bible-react` or
+// `platform-bible-utils`."
+//
+// The scripture-editor's USFM rendering uses CSS classes (`usfm_q1`, `usfm_q2`, ...) styled in
+// `_usj-nodes.scss` with viewport-relative units (vw) — those don't transfer cleanly to a table
+// cell context. Until a shared marker-indent utility exists in platform-bible-react/-utils, we
+// inline a small helper here that maps "level-numbered" USFM markers (q1, q2, qm1, mt1, pi2, …)
+// to a per-level inline-start margin. Level 1 (q1, mt1, pi1, …) is the base; each subsequent
+// level adds `1rem`. Non-level markers (`p`, `m`, `s`, `q` without a number) get no indent.
+//
+// This is intentionally inline — when a second consumer needs the same logic, extract to
+// `platform-bible-utils`.
+
+const MARKER_INDENT_REM_PER_LEVEL = 1;
+
+function getMarkerIndentStyle(marker: string): React.CSSProperties {
+  // Match a marker family followed by a level number, e.g. `q2`, `qm3`, `mt2`, `pi1`, `ms2`.
+  // Markers without a trailing digit (`p`, `m`, `s`, bare `q`) get no indent.
+  const match = /^[a-zA-Z]+(\d+)$/.exec(marker);
+  if (!match) return {};
+  const level = Number.parseInt(match[1], 10);
+  if (level <= 1) return {};
+  return { marginInlineStart: `${(level - 1) * MARKER_INDENT_REM_PER_LEVEL}rem` };
+}
+
 // ---------- Small presentational sub-components ----------
 
 /**
@@ -100,7 +129,11 @@ type ParagraphRowProps = {
 
 function ParagraphRow({ paragraph, showVerseText }: ParagraphRowProps) {
   return (
-    <div className="tw-flex tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-1">
+    <div
+      className="tw-flex tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-1"
+      style={getMarkerIndentStyle(paragraph.marker)}
+      data-marker={paragraph.marker}
+    >
       <span
         className="tw-font-mono tw-text-xs tw-font-semibold"
         aria-label={`marker ${paragraph.marker}`}
