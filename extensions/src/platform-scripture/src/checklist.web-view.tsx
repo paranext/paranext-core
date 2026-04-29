@@ -677,7 +677,15 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
         onRetry={handleRetry}
         projectMenuData={webViewMenu.topMenu}
         onSelectProjectMenuItem={handleSelectProjectMenuItem}
-        isEditLinkEnabled={false}
+        // onEditLinkClick / onGotoLinkClick are intentionally not provided yet:
+        //   - onEditLinkClick: scripture-editor edit-link integration is deferred (DEF-UI-003 in
+        //     `deferred-functionality.md`). Per the no-stubs rule + Sebastian's "providing a
+        //     callback should enable them" directive, omitting the prop hides the affordance
+        //     entirely; when the integration lands, the wiring layer supplies the callback and
+        //     the in-row edit button appears automatically.
+        //   - onGotoLinkClick: TODO wire to the platform's scripture-navigation primitive (the
+        //     active `useWebViewScrollGroupScrRef` hook would let us setScrRef on the active
+        //     scroll group). Tracked separately — for now the reference cell renders plain text.
       />
       <MarkerSettingsDialog
         open={isSettingsOpen}

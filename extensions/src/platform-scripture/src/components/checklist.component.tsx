@@ -5,6 +5,7 @@ import {
   Button,
   ColumnDef,
   DataTable,
+  LinkedScrRefButton,
   TabToolbar,
   ToggleGroup,
   ToggleGroupItem,
@@ -13,15 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronsUpDown,
-  Eye,
-  EyeOff,
-  Pencil,
-  Navigation,
-} from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronsUpDown, Eye, EyeOff, Pencil } from 'lucide-react';
 import { ReactNode, useCallback, useMemo } from 'react';
 import type {
   ChecklistCell,
@@ -272,10 +265,12 @@ function ColumnHeaderWithTooltip({
  * wires the props to `useChecklistService`, the six `useWebViewState` slots from UI-PKG-004, and
  * the menu-data provider.
  *
- * **Deferred functionality**: per DEF-UI-003 the edit/goto link affordances render as disabled
- * stubs by default. Stories pass `isEditLinkEnabled` to illustrate the target state. The wired-up
- * web-view passes `isEditLinkEnabled={false}` until the scripture-editor edit-link integration
- * lands (tracked under DEF-UI-003 in `deferred-functionality.md`).
+ * **Deferred functionality (DEF-UI-003)**: the edit-link affordance renders only when the wiring
+ * layer supplies an `onEditLinkClick` callback (per Sebastian PR #2219 #3137862427: "Providing a
+ * callback to the checklist component should enable them"). The wired-up web-view does not pass the
+ * callback until the scripture-editor edit-link integration lands. The goto affordance is delivered
+ * by the `LinkedScrRefButton` on the reference cell (per #3137366113); when `onGotoLinkClick` is
+ * absent the cell falls back to plain text (read-only contexts).
  */
 export function ChecklistTool({
   localizedStringsWithLoadingState = [{}, false],
@@ -304,7 +299,6 @@ export function ChecklistTool({
   onSelectProjectMenuItem,
   onEditLinkClick,
   onGotoLinkClick,
-  isEditLinkEnabled = false,
 }: ChecklistToolProps) {
   const [localizedStrings] = localizedStringsWithLoadingState;
 
@@ -344,9 +338,30 @@ export function ChecklistTool({
       // eslint-disable-next-line react/no-unstable-nested-components
       cell: ({ row: tableRow }) => {
         const rowData = tableRow.original;
+        const ref = rowData.firstRef ?? '';
+        // Sebastian PR #2219 #3137366113: "Make the scripture reference in the first column a
+        // link button with the tooltip 'Go to {scrRef}' instead of the goto button". When a
+        // goto callback is provided, render the ref as a `LinkedScrRefButton`; otherwise fall
+        // back to plain text (read-only contexts).
+        if (ref && onGotoLinkClick) {
+          return (
+            <span data-testid="checklist-reference-cell">
+              <LinkedScrRefButton
+                scrRef={ref}
+                onClick={() => onGotoLinkClick(rowData, ref)}
+                tooltipContent={getLocalizedString('%markersChecklist_goto_aria%').replace(
+                  '{ref}',
+                  ref,
+                )}
+                ariaLabel={getLocalizedString('%markersChecklist_goto_aria%').replace('{ref}', ref)}
+                testId="checklist-reference-link"
+              />
+            </span>
+          );
+        }
         return (
           <span className="tw-font-mono tw-text-sm" data-testid="checklist-reference-cell">
-            {rowData.firstRef ?? ''}
+            {ref}
           </span>
         );
       },
@@ -389,14 +404,21 @@ export function ChecklistTool({
                   showVerseText={showVerseText}
                   dir={columnDirections[projectId]}
                 />
-                {isPrimaryColumn && rowData.includeEditLink && (
-                  <EditGotoLinks
+                {/*
+                 * Edit link: per Sebastian PR #2219 #3137862427 ("we are here to design a
+                 * shared component, not a placeholder. Providing a callback to the checklist
+                 * component should enable them"), only render the edit affordance when the
+                 * wiring layer supplies an `onEditLinkClick` callback. No more disabled stubs
+                 * (DEF-UI-003 means the wiring layer simply does NOT pass the callback until
+                 * the scripture-editor edit-link integration lands). The button uses
+                 * `variant="link"` with `tw-text-muted-foreground` per Sebastian's spec.
+                 */}
+                {isPrimaryColumn && rowData.includeEditLink && onEditLinkClick && (
+                  <EditLink
                     row={rowData}
                     cell={cell}
                     getLocalizedString={getLocalizedString}
-                    isEditLinkEnabled={isEditLinkEnabled}
                     onEditLinkClick={onEditLinkClick}
-                    onGotoLinkClick={onGotoLinkClick}
                   />
                 )}
               </div>
@@ -413,7 +435,6 @@ export function ChecklistTool({
     columnDirections,
     getLocalizedString,
     showVerseText,
-    isEditLinkEnabled,
     onEditLinkClick,
     onGotoLinkClick,
   ]);
@@ -639,69 +660,44 @@ export function ChecklistTool({
   );
 }
 
-// ---------- Edit / Goto link stubs (disabled per DEF-UI-003) ----------
+// ---------- Edit link affordance (per DEF-UI-003 — only rendered when wired) ----------
+//
+// Per Sebastian PR #2219 #3137862427 ("Providing a callback to the checklist component should
+// enable them"), the edit affordance is rendered ONLY when the wiring layer supplies an
+// onEditLinkClick callback. No more disabled stubs. The button uses `variant="link"` styling
+// with `tw-text-muted-foreground` so it reads as a subdued in-row affordance (Sebastian: "Make
+// the edit link a ghost or link button with `tw-text-muted-foreground`").
+//
+// Goto is handled by the LinkedScrRefButton on the reference cell — see refColumn above.
 
-type EditGotoLinksProps = {
+type EditLinkProps = {
   row: ChecklistRow;
   cell: ChecklistCell;
   getLocalizedString: (key: ChecklistLocalizedStringKey) => string;
-  isEditLinkEnabled: boolean;
-  onEditLinkClick?: (row: ChecklistRow, verseRef: string) => void;
-  onGotoLinkClick?: (row: ChecklistRow, verseRef: string) => void;
+  onEditLinkClick: (row: ChecklistRow, verseRef: string) => void;
 };
 
-function EditGotoLinks({
-  row,
-  cell,
-  getLocalizedString,
-  isEditLinkEnabled,
-  onEditLinkClick,
-  onGotoLinkClick,
-}: EditGotoLinksProps) {
+function EditLink({ row, cell, getLocalizedString, onEditLinkClick }: EditLinkProps) {
   const firstRef = row.firstRef ?? cell.reference;
-  const editAriaTemplate = getLocalizedString('%markersChecklist_edit_aria%');
-  const gotoAriaTemplate = getLocalizedString('%markersChecklist_goto_aria%');
-  const editAria = editAriaTemplate.replace('{ref}', firstRef);
-  const gotoAria = gotoAriaTemplate.replace('{ref}', firstRef);
-  const disabledTooltip = getLocalizedString('%markersChecklist_edit_disabled_tooltip%');
+  const editAria = getLocalizedString('%markersChecklist_edit_aria%').replace('{ref}', firstRef);
 
   const handleEdit = useCallback(() => {
-    onEditLinkClick?.(row, firstRef);
+    onEditLinkClick(row, firstRef);
   }, [firstRef, onEditLinkClick, row]);
-
-  const handleGoto = useCallback(() => {
-    onGotoLinkClick?.(row, firstRef);
-  }, [firstRef, onGotoLinkClick, row]);
 
   return (
     <div className="tw-flex tw-flex-row tw-gap-2">
       <Button
         type="button"
-        variant="ghost"
+        variant="link"
         size="sm"
-        className="tw-h-6 tw-gap-1 tw-px-2 tw-text-xs"
-        disabled={!isEditLinkEnabled}
-        title={isEditLinkEnabled ? undefined : disabledTooltip}
+        className="tw-h-auto tw-gap-1 tw-p-0 tw-text-xs tw-text-muted-foreground"
         aria-label={editAria}
         onClick={handleEdit}
         data-testid="checklist-edit-link"
       >
         <Pencil className="tw-h-3 tw-w-3" aria-hidden="true" />
         <span>{getLocalizedString('%markersChecklist_edit%')}</span>
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="tw-h-6 tw-gap-1 tw-px-2 tw-text-xs"
-        disabled={!isEditLinkEnabled}
-        title={isEditLinkEnabled ? undefined : disabledTooltip}
-        aria-label={gotoAria}
-        onClick={handleGoto}
-        data-testid="checklist-goto-link"
-      >
-        <Navigation className="tw-h-3 tw-w-3" aria-hidden="true" />
-        <span>{getLocalizedString('%markersChecklist_goto%')}</span>
       </Button>
     </div>
   );

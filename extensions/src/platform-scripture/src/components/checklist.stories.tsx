@@ -42,10 +42,8 @@ const englishFallbacks: ChecklistLocalizedStrings = {
   '%markersChecklist_errorTitle%': "Couldn't load checklist",
   '%markersChecklist_errorRetry%': 'Retry',
   '%markersChecklist_edit%': 'edit',
-  '%markersChecklist_goto%': 'goto',
   '%markersChecklist_edit_aria%': 'Edit {ref}',
   '%markersChecklist_goto_aria%': 'Goto {ref}',
-  '%markersChecklist_edit_disabled_tooltip%': 'Coming in a future release',
   '%markersChecklist_columnHeader_aria%': 'Project: {name}',
 };
 
@@ -115,7 +113,6 @@ const baseArgs: Partial<ChecklistToolProps> = {
   matchCountLabel: undefined,
   projectMenuData,
   columnProjectFullNames: CHECKLIST_STORY_COLUMN_PROJECT_FULL_NAMES,
-  isEditLinkEnabled: false,
 };
 
 /**

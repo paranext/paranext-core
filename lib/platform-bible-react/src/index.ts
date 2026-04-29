@@ -117,13 +117,13 @@ export {
   type ProjectMultiSelection,
   type ProjectScrollGroupSelection,
   type ProjectRow,
-} from './components/advanced/project-selector.component';
+} from './components/advanced/project-selector/project-selector.component';
 export {
   computeRows,
   partitionAndSort,
   type RowSection,
   type ComputeRowsArgs,
-} from './components/advanced/project-selector.rows';
+} from './components/advanced/project-selector/project-selector.rows';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
   default as SettingsSidebar,
@@ -185,6 +185,10 @@ export type {
 } from './components/basics/combo-box.component';
 export { EditorKeyboardShortcuts } from './components/basics/editor-keyboard-shortcuts.component';
 export { ErrorDump } from './components/basics/error-dump.component';
+export {
+  default as LinkedScrRefButton,
+  type LinkedScrRefButtonProps,
+} from './components/basics/linked-scr-ref-button.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
 export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
 export { default as UndoRedoButtons } from './components/basics/undo-redo-buttons.component';

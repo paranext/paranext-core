@@ -34,13 +34,12 @@ export const CHECKLIST_STRING_KEYS = Object.freeze([
   // Error banner + retry (T-R-2 rendering contract)
   '%markersChecklist_errorTitle%',
   '%markersChecklist_errorRetry%',
-  // Per-row edit / goto affordances (disabled stubs per DEF-UI-003)
+  // Per-row edit affordance (rendered when wiring layer supplies onEditLinkClick)
   '%markersChecklist_edit%',
-  '%markersChecklist_goto%',
   // Per-row aria-label patterns (spec §Edit/Goto Link Accessible Names); `{ref}` is replaced
   '%markersChecklist_edit_aria%',
+  // Goto aria-label / tooltip — used by the LinkedScrRefButton on the reference cell
   '%markersChecklist_goto_aria%',
-  '%markersChecklist_edit_disabled_tooltip%',
   // Column-header full-name tooltip (PT10 enhancement #3092235610)
   '%markersChecklist_columnHeader_aria%',
 ] as const);
@@ -286,15 +285,26 @@ export type ChecklistToolProps = {
     command: string;
   }) => void | Promise<void>;
 
-  // ----- Row-level handlers (deferred per DEF-UI-003 — prop contract is stable) -----
-
-  onEditLinkClick?: (row: ChecklistRow, verseRef: string) => void;
-  onGotoLinkClick?: (row: ChecklistRow, verseRef: string) => void;
+  // ----- Row-level handlers -----
+  //
+  // Per Sebastian PR #2219 #3137862427 ("Providing a callback to the checklist component should
+  // enable them"), affordances are rendered ONLY when the wiring layer supplies the callback.
+  // No more disabled stubs (DEF-UI-003 just means the wiring layer doesn't pass `onEditLinkClick`
+  // until scripture-editor integration lands). The goto affordance is the `LinkedScrRefButton`
+  // on the reference cell — providing `onGotoLinkClick` activates the link-button rendering;
+  // omitting it falls back to plain text.
 
   /**
-   * When true, per-row edit/goto affordances are rendered enabled and wired to the handlers. When
-   * false (default, per DEF-UI-003), they render as disabled stubs with a "coming in a future
-   * release" tooltip. Stories flip this to `true` to illustrate the target state.
+   * Edit-link click handler. The component renders an inline ghost/link button (variant="link" with
+   * `tw-text-muted-foreground`) on the primary column's row when this is provided AND the row's
+   * `includeEditLink` flag is true. Receives the row + the row's earliest verse ref.
    */
-  isEditLinkEnabled?: boolean;
+  onEditLinkClick?: (row: ChecklistRow, verseRef: string) => void;
+
+  /**
+   * Goto-link click handler. When provided, the reference column renders the verse ref as a
+   * `LinkedScrRefButton` (link-button + tooltip "Go to {ref}"). When absent, the reference column
+   * falls back to plain mono-text (read-only context).
+   */
+  onGotoLinkClick?: (row: ChecklistRow, verseRef: string) => void;
 };
