@@ -5251,10 +5251,6 @@ type BookGridItem = {
 
 type BookGridGroupBy = 'canon' | 'status' | 'none';
 
-// Lookup of per-project mod dates for books (mock). Reuses the Unified-variant factory so
-// tooltip dates line up with what the other variants display.
-const VIEW_LIST_PROJECT_DATA = createInitialProjectBooks();
-
 function BookGridGroupByToggle({
   value,
   onChange,
@@ -6048,18 +6044,23 @@ function UntrackedIcon({ muted = false }: { muted?: boolean }) {
 }
 
 function ShowBooksViewListSection({
-  projectId,
   projectName,
   projectShortName,
+  present,
+  projectDates,
   tracked,
   scopeId,
   groupBy,
   setGroupBy,
   onClose,
 }: {
-  projectId: string;
   projectName: string;
   projectShortName: string;
+  // Lifted state — read from the parent so optimistic Create/Delete/Copy/Import updates
+  // are reflected here the moment they're dispatched, not only when a real backend call
+  // settles.
+  present: Set<string>;
+  projectDates: Record<string, string>;
   tracked: Set<string>;
   scopeId?: ProjectScopeId;
   groupBy: BookGridGroupBy;
@@ -6067,8 +6068,6 @@ function ShowBooksViewListSection({
   onClose: () => void;
 }) {
   const all = ALL_BOOKS;
-  const present = PROJECT_PRESENT_BOOKS[projectId] ?? new Set<string>();
-  const projectDates = VIEW_LIST_PROJECT_DATA[projectId]?.dates ?? {};
   const scope = scopeId ? PROJECT_SCOPES[scopeId] : undefined;
   const [filterText, setFilterText] = useState('');
   const isFiltered = filterText.trim().length > 0;
@@ -6168,23 +6167,29 @@ function CreateBooksViewListSection({
   projectName,
   projectShortName,
   scopeId,
+  present,
+  projectsData,
   selected,
   setSelected,
   groupBy,
   setGroupBy,
+  onCreate,
 }: {
   projectId: string;
   projectName: string;
   projectShortName: string;
   scopeId?: ProjectScopeId;
+  present: Set<string>;
+  /** Lifted per-project state — used to look up template projects' book inventories. */
+  projectsData: Record<string, ProjectBookState>;
   // Lifted to the parent so the selection survives tab switches.
   selected: Set<string>;
   setSelected: React.Dispatch<React.SetStateAction<Set<string>>>;
   groupBy: BookGridGroupBy;
   setGroupBy: React.Dispatch<React.SetStateAction<BookGridGroupBy>>;
+  onCreate: ViewListSectionHandlers['onCreate'];
 }) {
   const all = ALL_BOOKS;
-  const present = PROJECT_PRESENT_BOOKS[projectId] ?? new Set<string>();
   const scope = scopeId ? PROJECT_SCOPES[scopeId] : undefined;
   const [method, setMethod] = useState<'empty' | 'chapterVerse' | 'fromTemplate'>('empty');
   // When the user picks "Create based on …" + a template project, only books that exist
@@ -6192,8 +6197,8 @@ function CreateBooksViewListSection({
   const [templateProjectId, setTemplateProjectId] = useState<string | undefined>(undefined);
   const templateBooks = useMemo<Set<string> | undefined>(() => {
     if (method !== 'fromTemplate' || !templateProjectId) return undefined;
-    return PROJECT_PRESENT_BOOKS[templateProjectId];
-  }, [method, templateProjectId]);
+    return projectsData[templateProjectId]?.present;
+  }, [method, templateProjectId, projectsData]);
   const [filterText, setFilterText] = useState('');
   const isFiltered = filterText.trim().length > 0;
   const matches = useMemo(() => makeBookMatcher(filterText), [filterText]);
@@ -6274,7 +6279,17 @@ function CreateBooksViewListSection({
         <span>{`${absentBooks.length} book${absentBooks.length === 1 ? '' : 's'} available`}</span>
       }
       footer={
-        <Button disabled={count === 0}>
+        <Button
+          disabled={count === 0}
+          onClick={() => {
+            if (count === 0) return;
+            void onCreate(Array.from(effectiveSelection), {
+              method,
+              templateProjectId:
+                method === 'fromTemplate' ? templateProjectId : undefined,
+            });
+          }}
+        >
           {`Create ${count} book${count === 1 ? '' : 's'} in ${projectShortName}`}
         </Button>
       }
@@ -6344,26 +6359,28 @@ function CreateBooksViewListSection({
 }
 
 function DeleteBooksViewListSection({
-  projectId,
   projectName,
   projectShortName,
+  present,
+  projectDates,
   selected,
   setSelected,
   groupBy,
   setGroupBy,
+  onDelete,
 }: {
-  projectId: string;
   projectName: string;
   projectShortName: string;
+  present: Set<string>;
+  projectDates: Record<string, string>;
   // Lifted to the parent so the selection survives tab switches.
   selected: Set<string>;
   setSelected: React.Dispatch<React.SetStateAction<Set<string>>>;
   groupBy: BookGridGroupBy;
   setGroupBy: React.Dispatch<React.SetStateAction<BookGridGroupBy>>;
+  onDelete: ViewListSectionHandlers['onDelete'];
 }) {
   const all = ALL_BOOKS;
-  const present = PROJECT_PRESENT_BOOKS[projectId] ?? new Set<string>();
-  const projectDates = VIEW_LIST_PROJECT_DATA[projectId]?.dates ?? {};
   const [filterText, setFilterText] = useState('');
   const isFiltered = filterText.trim().length > 0;
   const matches = useMemo(() => makeBookMatcher(filterText), [filterText]);
@@ -6422,7 +6439,14 @@ function DeleteBooksViewListSection({
         <span>{`${presentBooks.length} book${presentBooks.length === 1 ? '' : 's'} in ${projectShortName}`}</span>
       }
       footer={
-        <Button variant="destructive" disabled={count === 0}>
+        <Button
+          variant="destructive"
+          disabled={count === 0}
+          onClick={() => {
+            if (count === 0) return;
+            void onDelete(Array.from(effectiveSelection));
+          }}
+        >
           {`Delete ${count} book${count === 1 ? '' : 's'} from ${projectShortName}`}
         </Button>
       }
@@ -6456,18 +6480,22 @@ function CopyBooksViewListSection({
   projectId,
   projectName,
   scopeId,
+  projectsData,
   state,
   setState,
   groupBy,
   setGroupBy,
+  onCopy,
 }: {
   projectId: string;
   projectName: string;
   scopeId?: ProjectScopeId;
+  projectsData: Record<string, ProjectBookState>;
   state: CopyState;
   setState: React.Dispatch<React.SetStateAction<CopyState>>;
   groupBy: BookGridGroupBy;
   setGroupBy: React.Dispatch<React.SetStateAction<BookGridGroupBy>>;
+  onCopy: ViewListSectionHandlers['onCopy'];
 }) {
   const toProject = MOCK_PROJECTS.find((p) => p.id === projectId) ?? MOCK_PROJECTS[0];
   const scope = scopeId ? PROJECT_SCOPES[scopeId] : undefined;
@@ -6504,11 +6532,11 @@ function CopyBooksViewListSection({
   // source project shows up with its state relative to the destination.
   const copyableItems: BookGridItem[] = useMemo(() => {
     if (!fromProjectId) return [];
-    const sourceData = VIEW_LIST_PROJECT_DATA[fromProjectId] ?? {
+    const sourceData = projectsData[fromProjectId] ?? {
       present: new Set<string>(),
       dates: {},
     };
-    const destData = VIEW_LIST_PROJECT_DATA[toProject.id] ?? {
+    const destData = projectsData[toProject.id] ?? {
       present: new Set<string>(),
       dates: {},
     };
@@ -6546,7 +6574,7 @@ function CopyBooksViewListSection({
       });
     });
     return built;
-  }, [fromProjectId, toProject.id, canonicalOrder, scope]);
+  }, [fromProjectId, toProject.id, canonicalOrder, scope, projectsData]);
 
   const items = useMemo(
     () => copyableItems.filter((item) => matches(item.book)),
@@ -6610,6 +6638,29 @@ function CopyBooksViewListSection({
       return next;
     });
 
+  // Books that already exist in the destination project trigger a confirmation popover
+  // when the Copy button is hit — they'd otherwise overwrite without warning. New books
+  // (i.e. comparison state "New") skip the prompt and dispatch immediately.
+  const destPresentSet =
+    projectsData[toProject.id]?.present ?? new Set<string>();
+  const conflictBooks = useMemo(
+    () => Array.from(selected).filter((b) => destPresentSet.has(b)),
+    [selected, destPresentSet],
+  );
+  const needsConfirm = conflictBooks.length > 0;
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  // Close the popover automatically if the conflict goes away (e.g. the user
+  // unchecks the conflicting books while it's open).
+  useEffect(() => {
+    if (!needsConfirm && confirmOpen) setConfirmOpen(false);
+  }, [needsConfirm, confirmOpen]);
+
+  const dispatchCopy = (mode: OverwriteMode) => {
+    if (!fromProjectId || selected.size === 0) return;
+    setConfirmOpen(false);
+    void onCopy(Array.from(selected), fromProjectId, mode);
+  };
+
   return (
     <SectionFrame
       title={`Copy Books: ${projectName}`}
@@ -6622,9 +6673,29 @@ function CopyBooksViewListSection({
         ) : undefined
       }
       footer={
-        <Button disabled={selected.size === 0}>
-          {`Copy ${selected.size} book${selected.size === 1 ? '' : 's'} into ${toProject.shortName}`}
-        </Button>
+        <>
+          <Button
+            disabled={selected.size === 0 || !fromProjectId}
+            onClick={() => {
+              if (selected.size === 0 || !fromProjectId) return;
+              // Conflicts open the confirmation dialog so the user can pick a strategy;
+              // a clean copy (no books already in the destination) dispatches straight
+              // through with the safe "non-existing chapters" mode.
+              if (needsConfirm) setConfirmOpen(true);
+              else dispatchCopy('nonExisting');
+            }}
+          >
+            {`Copy ${selected.size} book${selected.size === 1 ? '' : 's'} into ${toProject.shortName}`}
+          </Button>
+          <ConfirmOverwriteDialog
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            conflictBooks={conflictBooks}
+            destProjectName={toProject.name}
+            variant="copy"
+            onConfirm={dispatchCopy}
+          />
+        </>
       }
     >
       <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-gap-4">
@@ -6700,28 +6771,29 @@ function CopyBooksViewListSection({
 }
 
 function ImportBooksViewListSection({
-  projectId,
   projectShortName,
   projectName,
   scopeId,
+  present,
   state,
   setState,
   groupBy,
   setGroupBy,
+  onImport,
 }: {
-  projectId: string;
   projectShortName: string;
   projectName: string;
   scopeId?: ProjectScopeId;
+  present: Set<string>;
   state: ImportState;
   setState: React.Dispatch<React.SetStateAction<ImportState>>;
   groupBy: BookGridGroupBy;
   setGroupBy: React.Dispatch<React.SetStateAction<BookGridGroupBy>>;
+  onImport: ViewListSectionHandlers['onImport'];
 }) {
   const { files, selected } = state;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scope = scopeId ? PROJECT_SCOPES[scopeId] : undefined;
-  const present = PROJECT_PRESENT_BOOKS[projectId] ?? new Set<string>();
   const [filterText, setFilterText] = useState('');
   const isFiltered = filterText.trim().length > 0;
   const matches = useMemo(() => makeBookMatcher(filterText), [filterText]);
@@ -6914,6 +6986,25 @@ function ImportBooksViewListSection({
     });
   };
 
+  // Books that already exist in the destination project trigger the overwrite
+  // confirmation popover. New books skip the prompt. The selection lives in `selected`
+  // (file ids), so we map it back through the file list to a unique set of book ids.
+  const conflictBooks = useMemo(
+    () => Array.from(selectedBookSet).filter((b) => present.has(b)),
+    [selectedBookSet, present],
+  );
+  const needsConfirm = conflictBooks.length > 0;
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  useEffect(() => {
+    if (!needsConfirm && confirmOpen) setConfirmOpen(false);
+  }, [needsConfirm, confirmOpen]);
+
+  const dispatchImport = (mode: OverwriteMode) => {
+    if (selectedBookSet.size === 0) return;
+    setConfirmOpen(false);
+    void onImport(Array.from(selectedBookSet), mode);
+  };
+
   return (
     <SectionFrame
       title={`Import Books: ${projectName}`}
@@ -6924,9 +7015,26 @@ function ImportBooksViewListSection({
         ) : undefined
       }
       footer={
-        <Button disabled={selectedBookSet.size === 0}>
-          {`Import ${selectedBookSet.size} book${selectedBookSet.size === 1 ? '' : 's'} into ${projectShortName}`}
-        </Button>
+        <>
+          <Button
+            disabled={selectedBookSet.size === 0}
+            onClick={() => {
+              if (selectedBookSet.size === 0) return;
+              if (needsConfirm) setConfirmOpen(true);
+              else dispatchImport('nonExisting');
+            }}
+          >
+            {`Import ${selectedBookSet.size} book${selectedBookSet.size === 1 ? '' : 's'} into ${projectShortName}`}
+          </Button>
+          <ConfirmOverwriteDialog
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            conflictBooks={conflictBooks}
+            destProjectName={projectName}
+            variant="import"
+            onConfirm={dispatchImport}
+          />
+        </>
       }
     >
       <input
@@ -7425,16 +7533,18 @@ function deterministicNumberFromBook(book: string, salt: number): number {
 }
 
 function ShowProgressViewListSection({
-  projectId,
   projectName,
   projectShortName,
+  present,
   tracked,
   selected,
   setSelected,
+  onStartTracking,
+  onStopTracking,
 }: {
-  projectId: string;
   projectName: string;
   projectShortName: string;
+  present: Set<string>;
   tracked: Set<string>;
   /**
    * Lifted selection so picks survive sidebar tab switches. Mirrors the Create / Delete
@@ -7443,8 +7553,9 @@ function ShowProgressViewListSection({
    */
   selected: Set<string>;
   setSelected: React.Dispatch<React.SetStateAction<Set<string>>>;
+  onStartTracking: ViewListSectionHandlers['onStartTracking'];
+  onStopTracking: ViewListSectionHandlers['onStopTracking'];
 }) {
-  const present = PROJECT_PRESENT_BOOKS[projectId] ?? new Set<string>();
   const presentBooks = useMemo(() => ALL_BOOKS.filter((b) => present.has(b)), [present]);
   const [filterText, setFilterText] = useState('');
   const isFiltered = filterText.trim().length > 0;
@@ -7693,10 +7804,26 @@ function ShowProgressViewListSection({
           <Button
             variant="destructive"
             disabled={trackedSelectedCount === 0 || dominantStatus === 'Untracked'}
+            onClick={() => {
+              if (trackedSelectedCount === 0) return;
+              const trackedSelected = Array.from(effectiveSelection).filter((b) =>
+                tracked.has(b),
+              );
+              void onStopTracking(trackedSelected);
+            }}
           >
             {`Stop tracking (${trackedSelectedCount})`}
           </Button>
-          <Button disabled={untrackedSelectedCount === 0 || dominantStatus === 'Tracked'}>
+          <Button
+            disabled={untrackedSelectedCount === 0 || dominantStatus === 'Tracked'}
+            onClick={() => {
+              if (untrackedSelectedCount === 0) return;
+              const untrackedSelected = Array.from(effectiveSelection).filter(
+                (b) => !tracked.has(b),
+              );
+              void onStartTracking(untrackedSelected);
+            }}
+          >
             {`Start tracking (${untrackedSelectedCount})`}
           </Button>
         </>
@@ -7745,12 +7872,13 @@ function IntroductionsViewListSection({
   projectId,
   projectName,
   projectShortName,
+  present,
 }: {
   projectId: string;
   projectName: string;
   projectShortName: string;
+  present: Set<string>;
 }) {
-  const present = PROJECT_PRESENT_BOOKS[projectId] ?? new Set<string>();
   const presentBooks = useMemo(() => ALL_BOOKS.filter((b) => present.has(b)), [present]);
   const [book, setBook] = useState<string | undefined>(presentBooks[0]);
   // If the project changes and the current book isn't present in the new project, fall
@@ -7857,6 +7985,94 @@ function IntroductionsViewListSection({
   );
 }
 
+// --------------------------------------------------------------------------
+// View-list select: shared async helpers
+// --------------------------------------------------------------------------
+
+type OverwriteMode = 'overwrite' | 'nonExisting';
+
+// Stand-in for the real "save to disk" / "talk to the backend" call. Resolves on success
+// or rejects to drive the rollback path. The parent flips `simulateError` to demo the
+// failure flow; without it every action resolves cleanly so screenshots stay stable.
+function pretendBackendCall(simulateError: boolean, label: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      if (simulateError) reject(new Error(`Backend rejected: ${label}`));
+      else resolve();
+    }, 600);
+  });
+}
+
+/**
+ * Confirmation dialog surfaced when the user kicks off Copy or Import while one or more
+ * selected books already exist in the destination project (Newer / Older / Same in the
+ * comparison). Lets the user pick whether to keep existing chapters intact (Overwrite
+ * non-existing chapters) or to fully replace each conflicting book (Copy & overwrite /
+ * Import & overwrite). Mirrors the future-outlook variant's conflict modal — a small,
+ * centered Dialog rather than an inline popover so the styling stays consistent across
+ * the manage-books surface.
+ */
+function ConfirmOverwriteDialog({
+  open,
+  onOpenChange,
+  conflictBooks,
+  destProjectName,
+  variant,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+  conflictBooks: string[];
+  destProjectName: string;
+  variant: 'copy' | 'import';
+  onConfirm: (mode: OverwriteMode) => void;
+}) {
+  const overwriteLabel = variant === 'copy' ? 'Copy & overwrite' : 'Import & overwrite';
+  const verb = variant === 'copy' ? 'copy' : 'import';
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="tw-max-w-md">
+        <div className="tw-flex tw-flex-col tw-gap-4">
+          <div className="tw-flex tw-flex-col tw-gap-1">
+            <h2 className="tw-text-base tw-font-semibold">Books already exist</h2>
+            <p className="tw-text-sm tw-text-muted-foreground">
+              {`${conflictBooks.length} book${conflictBooks.length === 1 ? '' : 's'} already exist${conflictBooks.length === 1 ? 's' : ''} in ${destProjectName}: ${conflictBooks.join(', ')}`}
+            </p>
+            <p className="tw-text-sm tw-text-muted-foreground">
+              {`Choose how to proceed with the ${verb} or close to cancel.`}
+            </p>
+          </div>
+          <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
+            <Button variant="outline" onClick={() => onConfirm('nonExisting')}>
+              Overwrite non-existing chapters
+            </Button>
+            <Button onClick={() => onConfirm('overwrite')}>{overwriteLabel}</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type ViewListSectionHandlers = {
+  onCreate: (
+    books: string[],
+    options: {
+      method: 'empty' | 'chapterVerse' | 'fromTemplate';
+      templateProjectId?: string;
+    },
+  ) => Promise<void>;
+  onDelete: (books: string[]) => Promise<void>;
+  onCopy: (
+    books: string[],
+    sourceProjectId: string,
+    mode: OverwriteMode,
+  ) => Promise<void>;
+  onImport: (books: string[], mode: OverwriteMode) => Promise<void>;
+  onStartTracking: (books: string[]) => Promise<void>;
+  onStopTracking: (books: string[]) => Promise<void>;
+};
+
 function ManageBooksDialogViewListSelect() {
   const [open, setOpen] = useState(true);
   const [active, setActive] = useState<SectionId>('show');
@@ -7883,19 +8099,326 @@ function ManageBooksDialogViewListSelect() {
   const [progressSelected, setProgressSelected] = useState<Set<string>>(() => new Set());
   // Shared groupBy so the user's Canon/Status choice carries across workflows.
   const [groupBy, setGroupBy] = useState<BookGridGroupBy>('canon');
-  // Tracked books per project come from the module-level mock. Prototype-only; the footer
-  // "Add tracking" / "Remove tracking" buttons don't actually mutate state yet.
-  const tracked = PROJECT_TRACKED_BOOKS[projectId] ?? new Set<string>();
+  // Lifted, mutable mirror of the per-project book inventory. All view-list sections read
+  // from this map (rather than the static module mocks) so that an optimistic update
+  // applied here is reflected in every other section the moment the user dispatches an
+  // action — Show, Copy comparisons, Delete, Import, etc.
+  const [projectsData, setProjectsData] = useState<Record<string, ProjectBookState>>(
+    () => createInitialProjectBooks(),
+  );
+  const [trackedByProject, setTrackedByProject] = useState<Record<string, Set<string>>>(
+    () => {
+      const initial: Record<string, Set<string>> = {};
+      Object.entries(PROJECT_TRACKED_BOOKS).forEach(([pid, set]) => {
+        initial[pid] = new Set(set);
+      });
+      return initial;
+    },
+  );
+  // Test affordance: when on, every async handler rejects so the user can verify the
+  // optimistic-update + rollback + error-toast flow without needing a real backend.
+  const [simulateError, setSimulateError] = useState<boolean>(false);
+  const present = projectsData[projectId]?.present ?? new Set<string>();
+  const projectDates = projectsData[projectId]?.dates ?? {};
+  const tracked = trackedByProject[projectId] ?? new Set<string>();
   const scopeId = PROJECT_SCOPE_IDS[projectId];
+
+  // Apply an optimistic mutation to a single project, run the backend call, and roll back
+  // on failure. Returns the resolved promise so callers can chain (e.g. clearing UI state
+  // only after success). The label is surfaced in the rollback toast.
+  const runOptimistic = async (
+    label: string,
+    apply: () => void,
+    revert: () => void,
+  ): Promise<void> => {
+    apply();
+    try {
+      await pretendBackendCall(simulateError, label);
+    } catch (err) {
+      revert();
+      sonner.error(`Could not ${label.toLowerCase()}`, {
+        description: err instanceof Error ? err.message : String(err),
+        position: 'bottom-center',
+        duration: 6000,
+        dismissible: true,
+        closeButton: true,
+      });
+      throw err;
+    }
+  };
+
+  const updateProjectData = (
+    pid: string,
+    mutate: (prev: ProjectBookState) => ProjectBookState,
+  ) =>
+    setProjectsData((prev) => ({
+      ...prev,
+      [pid]: mutate(prev[pid] ?? { present: new Set<string>(), dates: {} }),
+    }));
+
+  const restoreProjectData = (pid: string, snapshot: ProjectBookState | undefined) =>
+    setProjectsData((prev) => {
+      if (!snapshot) {
+        const next = { ...prev };
+        delete next[pid];
+        return next;
+      }
+      return { ...prev, [pid]: snapshot };
+    });
+
+  const handleCreate: ViewListSectionHandlers['onCreate'] = async (
+    books,
+    options,
+  ) => {
+    if (books.length === 0) return;
+    const targetId = projectId;
+    const snapshot = projectsData[targetId];
+    const sourceData =
+      options.method === 'fromTemplate' && options.templateProjectId
+        ? projectsData[options.templateProjectId]
+        : undefined;
+    const today = todayISO();
+    const previousSelection = createSelected;
+    setCreateSelected(new Set());
+    try {
+      await runOptimistic(
+        `Create ${books.length} book${books.length === 1 ? '' : 's'}`,
+        () =>
+          updateProjectData(targetId, (prev) => {
+            const nextPresent = new Set(prev.present);
+            const nextDates = { ...prev.dates };
+            books.forEach((b) => {
+              nextPresent.add(b);
+              // Books created from a template inherit the template's lastModified date so
+              // Copy / Show comparisons stay coherent; otherwise we stamp today.
+              nextDates[b] = sourceData?.dates[b] ?? today;
+            });
+            return { present: nextPresent, dates: nextDates };
+          }),
+        () => {
+          restoreProjectData(targetId, snapshot);
+          setCreateSelected(previousSelection);
+        },
+      );
+    } catch {
+      // Already surfaced by runOptimistic; swallow so the await chain doesn't bubble up
+      // an unhandled rejection in callers that ignore the return value.
+    }
+  };
+
+  const handleDelete: ViewListSectionHandlers['onDelete'] = async (books) => {
+    if (books.length === 0) return;
+    const targetId = projectId;
+    const snapshot = projectsData[targetId];
+    const trackedSnapshot = trackedByProject[targetId];
+    const previousSelection = deleteSelected;
+    setDeleteSelected(new Set());
+    try {
+      await runOptimistic(
+        `Delete ${books.length} book${books.length === 1 ? '' : 's'}`,
+        () => {
+          updateProjectData(targetId, (prev) => {
+            const nextPresent = new Set(prev.present);
+            const nextDates = { ...prev.dates };
+            books.forEach((b) => {
+              nextPresent.delete(b);
+              delete nextDates[b];
+            });
+            return { present: nextPresent, dates: nextDates };
+          });
+          // Deleted books are silently dropped from the tracked set — a tracked book that
+          // no longer exists is meaningless and would otherwise leak into the Progress
+          // workflow once the deletion lands on the backend.
+          setTrackedByProject((prev) => {
+            const current = prev[targetId];
+            if (!current) return prev;
+            const next = new Set(current);
+            books.forEach((b) => next.delete(b));
+            return { ...prev, [targetId]: next };
+          });
+        },
+        () => {
+          restoreProjectData(targetId, snapshot);
+          setTrackedByProject((prev) => ({
+            ...prev,
+            [targetId]: trackedSnapshot ?? new Set<string>(),
+          }));
+          setDeleteSelected(previousSelection);
+        },
+      );
+    } catch {
+      // Surfaced by runOptimistic.
+    }
+  };
+
+  const handleCopy: ViewListSectionHandlers['onCopy'] = async (
+    books,
+    sourceProjectId,
+    mode,
+  ) => {
+    if (books.length === 0) return;
+    const targetId = projectId;
+    const snapshot = projectsData[targetId];
+    const sourceData = projectsData[sourceProjectId];
+    if (!sourceData) return;
+    const previousCopyState = copyState;
+    setCopyState((prev) => ({ ...prev, selected: new Set() }));
+    const label = `Copy ${books.length} book${books.length === 1 ? '' : 's'}`;
+    try {
+      await runOptimistic(
+        label,
+        () =>
+          updateProjectData(targetId, (prev) => {
+            const nextPresent = new Set(prev.present);
+            const nextDates = { ...prev.dates };
+            books.forEach((b) => {
+              if (!sourceData.present.has(b)) return;
+              const alreadyHas = prev.present.has(b);
+              // 'nonExisting' keeps existing books in the destination untouched — only
+              // brand-new entries are written. 'overwrite' rewrites every selected book,
+              // existing or not, with the source's date.
+              if (mode === 'nonExisting' && alreadyHas) return;
+              nextPresent.add(b);
+              nextDates[b] = sourceData.dates[b] ?? todayISO();
+            });
+            return { present: nextPresent, dates: nextDates };
+          }),
+        () => {
+          restoreProjectData(targetId, snapshot);
+          setCopyState(previousCopyState);
+        },
+      );
+    } catch {
+      // Surfaced by runOptimistic.
+    }
+  };
+
+  const handleImport: ViewListSectionHandlers['onImport'] = async (books, mode) => {
+    if (books.length === 0) return;
+    const targetId = projectId;
+    const snapshot = projectsData[targetId];
+    const importSnapshot = importState;
+    // Build a per-book file lookup so the optimistic update can copy each file's date
+    // straight onto the destination project. Files are keyed by name in importState; we
+    // pick the first file matching each book.
+    const fileForBook = new Map<string, ImportRow>();
+    importState.files.forEach((row) => {
+      if (!fileForBook.has(row.book)) fileForBook.set(row.book, row);
+    });
+    // Drop the imported files (and their selections) from the import list eagerly so the
+    // user can immediately see what landed on the project; rollback restores them.
+    const importedBookSet = new Set(books);
+    setImportState((prev) => {
+      const remainingFiles = prev.files.filter((f) => !importedBookSet.has(f.book));
+      const remainingSelected = new Set(
+        Array.from(prev.selected).filter((file) => {
+          const row = prev.files.find((f) => f.file === file);
+          return row ? !importedBookSet.has(row.book) : false;
+        }),
+      );
+      const remainingReplace = new Set(
+        Array.from(prev.replace).filter((b) => !importedBookSet.has(b)),
+      );
+      return { files: remainingFiles, selected: remainingSelected, replace: remainingReplace };
+    });
+    const label = `Import ${books.length} book${books.length === 1 ? '' : 's'}`;
+    try {
+      await runOptimistic(
+        label,
+        () =>
+          updateProjectData(targetId, (prev) => {
+            const nextPresent = new Set(prev.present);
+            const nextDates = { ...prev.dates };
+            books.forEach((b) => {
+              const file = fileForBook.get(b);
+              const alreadyHas = prev.present.has(b);
+              if (mode === 'nonExisting' && alreadyHas) return;
+              nextPresent.add(b);
+              nextDates[b] = file?.fromDate ?? todayISO();
+            });
+            return { present: nextPresent, dates: nextDates };
+          }),
+        () => {
+          restoreProjectData(targetId, snapshot);
+          setImportState(importSnapshot);
+        },
+      );
+    } catch {
+      // Surfaced by runOptimistic.
+    }
+  };
+
+  const handleStartTracking: ViewListSectionHandlers['onStartTracking'] = async (
+    books,
+  ) => {
+    if (books.length === 0) return;
+    const targetId = projectId;
+    const trackedSnapshot = trackedByProject[targetId];
+    const previousSelection = progressSelected;
+    setProgressSelected(new Set());
+    try {
+      await runOptimistic(
+        `Start tracking ${books.length} book${books.length === 1 ? '' : 's'}`,
+        () =>
+          setTrackedByProject((prev) => {
+            const current = prev[targetId] ?? new Set<string>();
+            const next = new Set(current);
+            books.forEach((b) => next.add(b));
+            return { ...prev, [targetId]: next };
+          }),
+        () => {
+          setTrackedByProject((prev) => ({
+            ...prev,
+            [targetId]: trackedSnapshot ?? new Set<string>(),
+          }));
+          setProgressSelected(previousSelection);
+        },
+      );
+    } catch {
+      // Surfaced by runOptimistic.
+    }
+  };
+
+  const handleStopTracking: ViewListSectionHandlers['onStopTracking'] = async (
+    books,
+  ) => {
+    if (books.length === 0) return;
+    const targetId = projectId;
+    const trackedSnapshot = trackedByProject[targetId];
+    const previousSelection = progressSelected;
+    setProgressSelected(new Set());
+    try {
+      await runOptimistic(
+        `Stop tracking ${books.length} book${books.length === 1 ? '' : 's'}`,
+        () =>
+          setTrackedByProject((prev) => {
+            const current = prev[targetId] ?? new Set<string>();
+            const next = new Set(current);
+            books.forEach((b) => next.delete(b));
+            return { ...prev, [targetId]: next };
+          }),
+        () => {
+          setTrackedByProject((prev) => ({
+            ...prev,
+            [targetId]: trackedSnapshot ?? new Set<string>(),
+          }));
+          setProgressSelected(previousSelection);
+        },
+      );
+    } catch {
+      // Surfaced by runOptimistic.
+    }
+  };
 
   const renderSection = () => {
     switch (active) {
       case 'show':
         return (
           <ShowBooksViewListSection
-            projectId={projectId}
             projectName={projectName}
             projectShortName={projectShortName}
+            present={present}
+            projectDates={projectDates}
             tracked={tracked}
             scopeId={scopeId}
             groupBy={groupBy}
@@ -7910,22 +8433,27 @@ function ManageBooksDialogViewListSelect() {
             projectName={projectName}
             projectShortName={projectShortName}
             scopeId={scopeId}
+            present={present}
+            projectsData={projectsData}
             selected={createSelected}
             setSelected={setCreateSelected}
             groupBy={groupBy}
             setGroupBy={setGroupBy}
+            onCreate={handleCreate}
           />
         );
       case 'delete':
         return (
           <DeleteBooksViewListSection
-            projectId={projectId}
             projectName={projectName}
             projectShortName={projectShortName}
+            present={present}
+            projectDates={projectDates}
             selected={deleteSelected}
             setSelected={setDeleteSelected}
             groupBy={groupBy}
             setGroupBy={setGroupBy}
+            onDelete={handleDelete}
           />
         );
       case 'copy':
@@ -7934,34 +8462,39 @@ function ManageBooksDialogViewListSelect() {
             projectId={projectId}
             projectName={projectName}
             scopeId={scopeId}
+            projectsData={projectsData}
             state={copyState}
             setState={setCopyState}
             groupBy={groupBy}
             setGroupBy={setGroupBy}
+            onCopy={handleCopy}
           />
         );
       case 'import':
         return (
           <ImportBooksViewListSection
-            projectId={projectId}
             projectShortName={projectShortName}
             projectName={projectName}
             scopeId={scopeId}
+            present={present}
             state={importState}
             setState={setImportState}
             groupBy={groupBy}
             setGroupBy={setGroupBy}
+            onImport={handleImport}
           />
         );
       case 'show-progress':
         return (
           <ShowProgressViewListSection
-            projectId={projectId}
             projectName={projectName}
             projectShortName={projectShortName}
+            present={present}
             tracked={tracked}
             selected={progressSelected}
             setSelected={setProgressSelected}
+            onStartTracking={handleStartTracking}
+            onStopTracking={handleStopTracking}
           />
         );
       case 'book-names':
@@ -7977,6 +8510,7 @@ function ManageBooksDialogViewListSelect() {
             projectId={projectId}
             projectName={projectName}
             projectShortName={projectShortName}
+            present={present}
           />
         );
       default:
@@ -7995,7 +8529,22 @@ function ManageBooksDialogViewListSelect() {
           pointer-events: auto !important;
         }
       `}</style>
-      <Button onClick={() => setOpen(true)}>Open Manage Books (view-list select)</Button>
+      <div className="tw-flex tw-flex-col tw-items-start tw-gap-2">
+        <Button onClick={() => setOpen(true)}>Open Manage Books (view-list select)</Button>
+        {/*
+          Backend-error toggle. Lets reviewers exercise the optimistic-update + rollback
+          path without wiring a real backend. When on, every action's pretend backend call
+          rejects, the optimistic UI snaps back to the prior state, and a sonner error
+          surfaces with a description.
+        */}
+        <label className="tw-flex tw-items-center tw-gap-2 tw-text-xs tw-text-muted-foreground">
+          <Checkbox
+            checked={simulateError}
+            onCheckedChange={(v) => setSimulateError(v === true)}
+          />
+          Simulate backend errors (rollback + sonner)
+        </label>
+      </div>
       <Dialog open={open} onOpenChange={setOpen} modal={false}>
         <DialogContent
           className="tw-h-[80vh] tw-w-[95vw] tw-max-w-5xl tw-gap-0 tw-overflow-hidden tw-p-0"
