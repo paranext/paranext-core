@@ -632,11 +632,31 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
       equivalentMarkers: string;
       markerFilter: string;
     }) => {
-      setEquivalentMarkers(nextEquivalent);
+      // Collapse internal whitespace runs in the equivalent-markers string before persisting (the
+      // dialog just trims now per Sebastian PR #2219 #3138226285 — validation/normalization
+      // concerns moved out of the presentational component). The backend stores the value
+      // verbatim; we keep the canonical wire format here so it matches what the backend's
+      // validateMarkerSettings parsing expects.
+      setEquivalentMarkers(nextEquivalent.replace(/\s+/g, ' '));
       setMarkerFilter(nextFilter);
       setIsSettingsOpen(false);
     },
     [setEquivalentMarkers, setMarkerFilter],
+  );
+
+  // Backend validation callback for the MarkerSettingsDialog. Calls the backend's
+  // `validateMarkerSettings` PAPI command via the network-object proxy. The dialog calls this
+  // (debounced) on every input change so the inline validation feedback reflects backend truth.
+  // If the service proxy isn't available yet (e.g. during initial mount), return a permissive
+  // valid result — the dialog will retry on the next input change once the proxy resolves.
+  const handleSettingsValidate = useCallback(
+    async (input: string) => {
+      if (!service) {
+        return { valid: true, parsedPairs: undefined, errorMessage: undefined };
+      }
+      return service.validateMarkerSettings(input);
+    },
+    [service],
   );
 
   const handleSettingsCancel = useCallback(() => {
@@ -691,6 +711,7 @@ global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState
         open={isSettingsOpen}
         initialEquivalentMarkers={equivalentMarkers}
         initialMarkerFilter={markerFilter}
+        validate={handleSettingsValidate}
         onSubmit={handleSettingsSubmit}
         onCancel={handleSettingsCancel}
         localizedStringsWithLoadingState={markerSettingsLocalizedStrings}

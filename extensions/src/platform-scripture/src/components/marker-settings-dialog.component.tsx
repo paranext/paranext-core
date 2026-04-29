@@ -8,8 +8,14 @@ import {
   DialogTitle,
   Input,
   Label,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
+import type { MarkerSettingsValidationResult } from 'platform-scripture';
+import { HelpCircle } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
@@ -23,13 +29,13 @@ export const MARKER_SETTINGS_STRING_KEYS = Object.freeze([
   '%markersChecklist_settings_title%',
   '%markersChecklist_settings_description%',
   '%markersChecklist_settings_equivalentMarkersLabel%',
+  '%markersChecklist_settings_equivalentMarkersHelp%',
   '%markersChecklist_settings_markerFilterLabel%',
+  '%markersChecklist_settings_markerFilterHelp%',
   '%markersChecklist_settings_ok%',
   '%markersChecklist_settings_cancel%',
-  '%markersChecklist_settings_validationErrorTitle%',
   '%markersChecklist_settings_validationErrorDescription%',
-  '%markersChecklist_settings_validationErrorOk%',
-  '%markersChecklist_settings_close%',
+  '%markersChecklist_settings_helpIconAriaLabel%',
 ] as const);
 
 type MarkerSettingsLocalizedStringKey = (typeof MARKER_SETTINGS_STRING_KEYS)[number];
@@ -43,16 +49,32 @@ export type MarkerSettingsLocalizedStrings = {
 };
 
 /**
- * Result passed to `onSubmit` after successful VAL-100 validation. Mirrors `MarkerSettingsOutput`
- * from `ui-state-contracts.md` (minus the discriminated-union wrapper — the dialog emits the
- * success case; cancel goes through `onCancel`).
+ * Result passed to `onSubmit` after the user clicks OK. Mirrors `MarkerSettingsOutput` from
+ * `ui-state-contracts.md` (minus the discriminated-union wrapper — the dialog only emits the
+ * accept-side; cancel goes through `onCancel`).
+ *
+ * The dialog submits raw values (with leading/trailing whitespace trimmed). Whitespace collapsing
+ * inside `equivalentMarkers` and any other VAL-100 normalization is the wiring layer's
+ * responsibility — see `marker-settings-dialog`-related code in `checklist.web-view.tsx`. This
+ * keeps validation/normalization concerns out of the presentational component (per Sebastian PR
+ * #2219 #3138226285).
  */
 export type MarkerSettingsSubmitResult = {
-  /** Equivalent-marker pairs string with consecutive whitespace collapsed to single spaces. */
+  /** Equivalent-marker pairs string with leading/trailing whitespace trimmed. */
   equivalentMarkers: string;
   /** Marker-filter string with surrounding whitespace trimmed. */
   markerFilter: string;
 };
+
+/**
+ * Validate-callback signature. The wiring layer wraps the backend
+ * `IChecklistService.validateMarkerSettings(equivalentMarkers)` call (or, in stories, a simple
+ * synchronous regex) and supplies the result. Returns the same `MarkerSettingsValidationResult`
+ * shape as the backend so `errorMessage` can be displayed inline without re-localization.
+ */
+export type MarkerSettingsValidate = (
+  equivalentMarkers: string,
+) => MarkerSettingsValidationResult | Promise<MarkerSettingsValidationResult>;
 
 /** Props for `MarkerSettingsDialog` — a pure presentational modal. */
 export type MarkerSettingsDialogProps = {
@@ -69,9 +91,16 @@ export type MarkerSettingsDialogProps = {
    */
   initialMarkerFilter?: string;
   /**
-   * Called after the user clicks OK AND VAL-100 validation passes. The payload is already
-   * normalized (spaces collapsed in `equivalentMarkers`, `markerFilter` trimmed). Parent commits
-   * these back to its `useWebViewState` slots.
+   * Validate the equivalent-markers input. The wiring layer hooks this up to the backend's
+   * `validateMarkerSettings` PAPI command. Stories may pass a synchronous regex-based stand-in.
+   * When omitted, the dialog assumes the input is always valid (useful for purely-visual Storybook
+   * variants).
+   */
+  validate?: MarkerSettingsValidate;
+  /**
+   * Called after the user clicks OK. The payload carries trimmed but otherwise raw user input; the
+   * wiring layer normalizes / persists. OK is only clickable when the most recent `validate` call
+   * returned `valid: true`.
    */
   onSubmit?: (result: MarkerSettingsSubmitResult) => void;
   /** Called when the user clicks Cancel or dismisses the dialog (Escape / close button). */
@@ -83,63 +112,34 @@ export type MarkerSettingsDialogProps = {
   localizedStringsWithLoadingState?: [MarkerSettingsLocalizedStrings, boolean];
 };
 
-/**
- * Validation result shape — matches the `ValidationResult` interface in
- * `ui-specifications/ui-state-contracts.md`.
- */
-export type MarkerSettingsValidationResult = {
-  isValid: boolean;
-  /** Localization key for the error message (empty when `isValid` is true). */
-  errorKey?: MarkerSettingsLocalizedStringKey;
-};
-
-/**
- * Validates equivalent marker mappings per PT9 VAL-100 (see
- * `ui-specifications/ui-spec-marker-settings.md`).
- *
- * Format: space-separated pairs, each pair is `marker1/marker2`. Empty string is valid (means "no
- * mappings"). Each non-empty token must contain exactly one `/` with both sides non-empty.
- */
-export function validateEquivalentMarkers(mappings: string): MarkerSettingsValidationResult {
-  const tokens = mappings.split(/\s+/).filter((token) => token.length > 0);
-  const isValid = tokens.every((token) => {
-    const parts = token.split('/');
-    return parts.length === 2 && parts[0].length > 0 && parts[1].length > 0;
-  });
-  return isValid
-    ? { isValid: true }
-    : { isValid: false, errorKey: '%markersChecklist_settings_validationErrorDescription%' };
-}
-
-/**
- * Collapses runs of whitespace inside `equivalentMarkers` to a single space (VAL-100.3) and trims
- * leading/trailing whitespace.
- */
-function normalizeEquivalentMarkers(value: string): string {
-  return value.trim().replace(/\s+/g, ' ');
-}
+const VALIDATION_DEBOUNCE_MS = 150;
 
 /**
  * Presentational Marker Settings dialog (SCR-002 in ui-specifications). Renders a shadcn `Dialog`
- * with two text inputs (equivalent markers + marker filter), OK/Cancel actions, and a nested
- * blocking alert dialog for VAL-100 validation errors.
+ * with two text inputs (equivalent markers + marker filter), help-icon Tooltips next to each label,
+ * OK/Cancel actions, and INLINE validation feedback below the equivalent-markers input.
  *
- * The nested alert is implemented as a second `Dialog` annotated with `role="alertdialog"` and
- * `aria-describedby` wired to the description node — mirroring shadcn's `AlertDialog` semantics
- * without requiring an additional Radix primitive (which is not exported by `platform-bible-react`
- * at this time). Per the T-R-2 spec revision, this behaviour is blocking: the user must dismiss the
- * alert before the surrounding dialog becomes interactive again.
+ * **Architecture (per Sebastian PR #2219 #3137704709 + #3138226285 + #3138246720):**
  *
- * **Architecture**: zero PAPI coupling. All data flows through props; the component never touches
- * `useWebViewState`, `useData`, or any `papi.*` API. Visibility is controlled by the `open` prop;
- * the wiring layer (phase-3-ui) decides when to open the dialog (typically in response to the
- * `platformScripture.openMarkersChecklistSettings` command) and where to persist the emitted
- * values.
+ * - The dialog is purely presentational — zero PAPI coupling. Validation runs through the `validate`
+ *   prop, which the wiring layer wires to the backend's `validateMarkerSettings` PAPI command
+ *   (`IChecklistService.validateMarkerSettings`).
+ * - Inline validation drives a `data-invalid` / `aria-invalid` styled Input + a description span with
+ *   `tw-text-destructive` class. The OK button is disabled while the input is invalid. This
+ *   replaces the previous nested-Dialog "blocking alert" pattern entirely — there is no second
+ *   dialog.
+ * - Help icons (lucide `HelpCircle`) sit after each Label with a hover/focus Tooltip carrying the
+ *   help-guide text quoted in Sebastian's review.
+ *
+ * Visibility is controlled by the `open` prop; the wiring layer (phase-3-ui) decides when to open
+ * the dialog (typically in response to the `platformScripture.openMarkersChecklistSettings`
+ * command) and where to persist the emitted values.
  */
 export function MarkerSettingsDialog({
   open,
   initialEquivalentMarkers = '',
   initialMarkerFilter = '',
+  validate,
   onSubmit = () => {},
   onCancel = () => {},
   localizedStringsWithLoadingState = [{}, false],
@@ -157,7 +157,14 @@ export function MarkerSettingsDialog({
   // Local form state — seeded from props each time the dialog transitions from closed → open.
   const [equivalentMarkers, setEquivalentMarkers] = useState<string>(initialEquivalentMarkers);
   const [markerFilter, setMarkerFilter] = useState<string>(initialMarkerFilter);
-  const [isValidationAlertOpen, setIsValidationAlertOpen] = useState<boolean>(false);
+  // `valid: true` until the first validate call completes; the OK button is enabled in this
+  // optimistic-default state to avoid a blocking flash on initial open. Once the first validate
+  // resolves, this reflects backend truth.
+  const [validationResult, setValidationResult] = useState<MarkerSettingsValidationResult>({
+    valid: true,
+    parsedPairs: undefined,
+    errorMessage: undefined,
+  });
 
   // Re-seed inputs whenever the dialog re-opens so stale values from a previous session don't
   // leak through (the component is mounted for the entire parent lifetime; `open` flips it on/off).
@@ -166,7 +173,7 @@ export function MarkerSettingsDialog({
     if (open && !previousOpenRef.current) {
       setEquivalentMarkers(initialEquivalentMarkers);
       setMarkerFilter(initialMarkerFilter);
-      setIsValidationAlertOpen(false);
+      setValidationResult({ valid: true, parsedPairs: undefined, errorMessage: undefined });
     }
     previousOpenRef.current = open;
   }, [open, initialEquivalentMarkers, initialMarkerFilter]);
@@ -174,15 +181,38 @@ export function MarkerSettingsDialog({
   // Stable ids so Label→Input associations survive re-renders and avoid collisions when multiple
   // dialogs coexist in Storybook autodocs.
   const equivalentMarkersInputId = useId();
+  const equivalentMarkersErrorId = useId();
   const markerFilterInputId = useId();
-  const validationDescriptionId = useId();
-  const validationTitleId = useId();
 
-  // useRef requires null as the initial value when used with a DOM element ref
-  // eslint-disable-next-line no-null/no-null
-  const equivalentMarkersInputRef = useRef<HTMLInputElement>(null);
+  // Debounced validate effect. Runs whenever `equivalentMarkers` changes (and on first open).
+  // The `validate` callback is async to accommodate the backend PAPI roundtrip; we cancel
+  // stale results with a token-based check so a slow earlier call can't overwrite a faster
+  // later result.
+  useEffect(() => {
+    if (!open || !validate) return undefined;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      Promise.resolve(validate(equivalentMarkers))
+        .then((result) => {
+          if (!cancelled) setValidationResult(result);
+        })
+        .catch(() => {
+          // If the backend round-trip fails, fall back to "assume valid" rather than locking the
+          // user out — typing a permissive value should still be possible.
+          if (!cancelled) {
+            setValidationResult({ valid: true, parsedPairs: undefined, errorMessage: undefined });
+          }
+        });
+    }, VALIDATION_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [equivalentMarkers, open, validate]);
 
-  // Validate + commit. Invoked by the OK button's onClick and by Enter in the inputs.
+  // Submit. Invoked by the OK button's onClick and by Enter in the inputs. Only fires when the
+  // current state is valid — if the user hits Enter while invalid, we no-op and let the inline
+  // error continue to communicate the problem.
   //
   // We deliberately DO NOT use a `<form onSubmit>` wrapper with `type="submit"` OK: Platform.Bible
   // web views run in sandboxed iframes without `allow-forms`, so the browser blocks form-submit
@@ -190,18 +220,14 @@ export function MarkerSettingsDialog({
   // form's frame is sandboxed and the 'allow-forms' permission is not set.`). Handling OK as a
   // plain button click with onClick sidesteps the sandbox restriction entirely.
   const handleCommit = useCallback(() => {
-    const result = validateEquivalentMarkers(equivalentMarkers);
-    if (!result.isValid) {
-      setIsValidationAlertOpen(true);
-      return;
-    }
+    if (!validationResult.valid) return;
     onSubmit({
-      equivalentMarkers: normalizeEquivalentMarkers(equivalentMarkers),
+      equivalentMarkers: equivalentMarkers.trim(),
       markerFilter: markerFilter.trim(),
     });
-  }, [equivalentMarkers, markerFilter, onSubmit]);
+  }, [equivalentMarkers, markerFilter, onSubmit, validationResult.valid]);
 
-  // Enter-to-submit on either input. Matching the form-submit semantics that users expect from a
+  // Enter-to-submit on either input. Matches the form-submit semantics that users expect from a
   // traditional dialog, without actually using a <form>.
   const handleInputKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
@@ -222,22 +248,13 @@ export function MarkerSettingsDialog({
     [onCancel],
   );
 
-  const handleValidationAlertOpenChange = useCallback((nextOpen: boolean) => {
-    setIsValidationAlertOpen(nextOpen);
-  }, []);
-
-  // Return focus to the equivalentMarkers input after the validation alert dismisses so the user
-  // can correct the offending value without reaching for the mouse (spec Acc row 5).
-  useEffect(() => {
-    if (!isValidationAlertOpen && open && equivalentMarkersInputRef.current) {
-      // Defer focus so Radix can finish its own focus-restoration before we override it.
-      const animationFrameId = requestAnimationFrame(() => {
-        equivalentMarkersInputRef.current?.focus();
-      });
-      return () => cancelAnimationFrame(animationFrameId);
-    }
-    return undefined;
-  }, [isValidationAlertOpen, open]);
+  const isInvalid = !validationResult.valid;
+  // Backend returns its own `errorMessage` when validation fails. Fall back to the localized
+  // generic description if the backend didn't supply one.
+  const errorMessage =
+    validationResult.errorMessage ??
+    getLocalizedString('%markersChecklist_settings_validationErrorDescription%');
+  const helpIconAriaLabel = getLocalizedString('%markersChecklist_settings_helpIconAriaLabel%');
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -253,35 +270,87 @@ export function MarkerSettingsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="tw-flex tw-flex-col tw-gap-4 tw-py-4">
-          <div className="tw-flex tw-flex-col tw-gap-2">
-            <Label htmlFor={equivalentMarkersInputId}>
-              {getLocalizedString('%markersChecklist_settings_equivalentMarkersLabel%')}
-            </Label>
-            <Input
-              ref={equivalentMarkersInputRef}
-              id={equivalentMarkersInputId}
-              data-testid="marker-settings-equivalent-markers"
-              value={equivalentMarkers}
-              onChange={(event) => setEquivalentMarkers(event.target.value)}
-              onKeyDown={handleInputKeyDown}
-              autoFocus
-            />
-          </div>
+        <TooltipProvider delayDuration={0}>
+          <div className="tw-flex tw-flex-col tw-gap-4 tw-py-4">
+            {/* Equivalent markers — with help icon + inline validation */}
+            <div className="tw-flex tw-flex-col tw-gap-2">
+              <div className="tw-flex tw-items-center tw-gap-2">
+                <Label htmlFor={equivalentMarkersInputId}>
+                  {getLocalizedString('%markersChecklist_settings_equivalentMarkersLabel%')}
+                </Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={helpIconAriaLabel}
+                      className="tw-text-muted-foreground hover:tw-text-foreground"
+                      data-testid="marker-settings-equivalent-markers-help"
+                    >
+                      <HelpCircle className="tw-h-4 tw-w-4" aria-hidden="true" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="tw-max-w-xs tw-whitespace-pre-line">
+                    {getLocalizedString('%markersChecklist_settings_equivalentMarkersHelp%')}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <Input
+                id={equivalentMarkersInputId}
+                data-testid="marker-settings-equivalent-markers"
+                value={equivalentMarkers}
+                onChange={(event) => setEquivalentMarkers(event.target.value)}
+                onKeyDown={handleInputKeyDown}
+                aria-invalid={isInvalid}
+                aria-describedby={isInvalid ? equivalentMarkersErrorId : undefined}
+                data-invalid={isInvalid ? '' : undefined}
+                className={
+                  isInvalid ? 'tw-border-destructive focus-visible:tw-ring-destructive' : undefined
+                }
+                autoFocus
+              />
+              {isInvalid && (
+                <span
+                  id={equivalentMarkersErrorId}
+                  className="tw-text-sm tw-text-destructive"
+                  data-testid="marker-settings-equivalent-markers-error"
+                >
+                  {errorMessage}
+                </span>
+              )}
+            </div>
 
-          <div className="tw-flex tw-flex-col tw-gap-2">
-            <Label htmlFor={markerFilterInputId}>
-              {getLocalizedString('%markersChecklist_settings_markerFilterLabel%')}
-            </Label>
-            <Input
-              id={markerFilterInputId}
-              data-testid="marker-settings-marker-filter"
-              value={markerFilter}
-              onChange={(event) => setMarkerFilter(event.target.value)}
-              onKeyDown={handleInputKeyDown}
-            />
+            {/* Marker filter — with help icon */}
+            <div className="tw-flex tw-flex-col tw-gap-2">
+              <div className="tw-flex tw-items-center tw-gap-2">
+                <Label htmlFor={markerFilterInputId}>
+                  {getLocalizedString('%markersChecklist_settings_markerFilterLabel%')}
+                </Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={helpIconAriaLabel}
+                      className="tw-text-muted-foreground hover:tw-text-foreground"
+                      data-testid="marker-settings-marker-filter-help"
+                    >
+                      <HelpCircle className="tw-h-4 tw-w-4" aria-hidden="true" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="tw-max-w-xs tw-whitespace-pre-line">
+                    {getLocalizedString('%markersChecklist_settings_markerFilterHelp%')}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <Input
+                id={markerFilterInputId}
+                data-testid="marker-settings-marker-filter"
+                value={markerFilter}
+                onChange={(event) => setMarkerFilter(event.target.value)}
+                onKeyDown={handleInputKeyDown}
+              />
+            </div>
           </div>
-        </div>
+        </TooltipProvider>
 
         <DialogFooter>
           <Button
@@ -292,45 +361,16 @@ export function MarkerSettingsDialog({
           >
             {getLocalizedString('%markersChecklist_settings_cancel%')}
           </Button>
-          <Button type="button" onClick={handleCommit} data-testid="marker-settings-ok">
+          <Button
+            type="button"
+            onClick={handleCommit}
+            disabled={isInvalid}
+            data-testid="marker-settings-ok"
+          >
             {getLocalizedString('%markersChecklist_settings_ok%')}
           </Button>
         </DialogFooter>
       </DialogContent>
-
-      {/* Validation error — a nested blocking alert. shadcn does not export an `AlertDialog`
-          primitive yet (Radix's alert-dialog package is not a dependency of platform-bible-react),
-          so we implement the same semantics on the existing Dialog primitive: `role="alertdialog"`,
-          `aria-describedby` wired to the description node, and Radix's built-in focus trap + Escape
-          handling. This satisfies the spec's Acc row 5 while avoiding a new library dependency. */}
-      <Dialog open={isValidationAlertOpen} onOpenChange={handleValidationAlertOpenChange}>
-        <DialogContent
-          className="tw-max-w-sm"
-          role="alertdialog"
-          aria-labelledby={validationTitleId}
-          aria-describedby={validationDescriptionId}
-          aria-label={getLocalizedString('%markersChecklist_settings_validationErrorTitle%')}
-        >
-          <DialogHeader>
-            <DialogTitle id={validationTitleId}>
-              {getLocalizedString('%markersChecklist_settings_validationErrorTitle%')}
-            </DialogTitle>
-            <DialogDescription id={validationDescriptionId}>
-              {getLocalizedString('%markersChecklist_settings_validationErrorDescription%')}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              onClick={() => setIsValidationAlertOpen(false)}
-              data-testid="marker-settings-validation-ok"
-              autoFocus
-            >
-              {getLocalizedString('%markersChecklist_settings_validationErrorOk%')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Dialog>
   );
 }

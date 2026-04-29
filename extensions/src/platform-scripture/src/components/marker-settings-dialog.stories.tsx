@@ -1,11 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { useEffect, useState } from 'react';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import {
   MARKER_SETTINGS_STRING_KEYS,
   MarkerSettingsDialog,
-  MarkerSettingsDialogProps,
   MarkerSettingsLocalizedStrings,
+  type MarkerSettingsValidate,
 } from './marker-settings-dialog.component';
 
 /**
@@ -19,14 +18,16 @@ const englishFallbacks: MarkerSettingsLocalizedStrings = {
   '%markersChecklist_settings_description%':
     'Configure equivalent marker mappings and the marker filter for the Markers checklist.',
   '%markersChecklist_settings_equivalentMarkersLabel%': 'Equivalent marker mappings',
+  '%markersChecklist_settings_equivalentMarkersHelp%':
+    'If you consider certain markers to be equivalent when you hide matches, enter each pair of equivalent markers separated by the / character. Separate pairs with a space.\nFor example, the mapping q/q1 means that you consider \\q in first text equivalent to \\q1 in the second (comparative) text.',
   '%markersChecklist_settings_markerFilterLabel%': 'Markers to be displayed (blank for all)',
+  '%markersChecklist_settings_markerFilterHelp%':
+    'To display only certain markers, enter them without the backslash, separated by a space.\nFor example: To display only markers for poetic lines, enter:\nq q1 q2',
   '%markersChecklist_settings_ok%': 'OK',
   '%markersChecklist_settings_cancel%': 'Cancel',
-  '%markersChecklist_settings_validationErrorTitle%': 'Invalid marker mappings',
   '%markersChecklist_settings_validationErrorDescription%':
     'Equivalent markers need to be entered in the form: p/q',
-  '%markersChecklist_settings_validationErrorOk%': 'OK',
-  '%markersChecklist_settings_close%': 'Close',
+  '%markersChecklist_settings_helpIconAriaLabel%': 'Help',
 };
 
 // Resolve localization keys for English. Any keys that aren't yet contributed to
@@ -47,6 +48,32 @@ const localizedStringsForStories: MarkerSettingsLocalizedStrings =
     return accumulator;
   }, {});
 
+/**
+ * Story-time stand-in for the backend validate callback. Mirrors the regex-validation that the PT9
+ * `MarkerSettingsForm` (and the C# `MarkersDataSource.ValidateMarkerSettings`) use: every non-empty
+ * whitespace-separated token must contain exactly one `/` with both sides non-empty. Returns the
+ * `MarkerSettingsValidationResult` shape the component expects.
+ */
+const storybookValidate: MarkerSettingsValidate = (equivalentMarkers) => {
+  const tokens = equivalentMarkers.split(/\s+/).filter((token) => token.length > 0);
+  const valid = tokens.every((token) => {
+    const parts = token.split('/');
+    return parts.length === 2 && parts[0].length > 0 && parts[1].length > 0;
+  });
+  return {
+    valid,
+    parsedPairs: valid
+      ? tokens.map((token) => {
+          const [marker1, marker2] = token.split('/');
+          return { marker1, marker2 };
+        })
+      : undefined,
+    errorMessage: valid
+      ? undefined
+      : englishFallbacks['%markersChecklist_settings_validationErrorDescription%'],
+  };
+};
+
 const meta: Meta<typeof MarkerSettingsDialog> = {
   title: 'Bundled Extensions/platform-scripture/MarkerSettingsDialog',
   component: MarkerSettingsDialog,
@@ -55,6 +82,7 @@ const meta: Meta<typeof MarkerSettingsDialog> = {
     localizedStringsWithLoadingState: [localizedStringsForStories, false],
     initialEquivalentMarkers: '',
     initialMarkerFilter: '',
+    validate: storybookValidate,
   },
   argTypes: {
     open: { control: 'boolean' },
@@ -65,17 +93,11 @@ export default meta;
 type Story = StoryObj<typeof MarkerSettingsDialog>;
 
 /**
- * Default — closed dialog. Flip the `open` arg in Storybook controls to preview the opened state,
- * or pick one of the explicit variants below.
+ * Default — dialog open with empty values. Matches the "Default State Wireframe". (Per Sebastian PR
+ * #2219 #3137704709 "Reduce the number of stories. Default, empty and open are the same" — we keep
+ * one Default story plus the meaningful variants below.)
  */
 export const Default: Story = {
-  args: {
-    open: false,
-  },
-};
-
-/** Dialog open with empty default values — matches the "Default State Wireframe". */
-export const Open: Story = {
   args: {
     open: true,
     initialEquivalentMarkers: '',
@@ -95,52 +117,16 @@ export const OpenWithValues: Story = {
   },
 };
 
-/** Alias for `Open` — kept as an explicit variant because it maps 1:1 to the first-run scenario. */
-export const OpenEmpty: Story = {
-  args: {
-    open: true,
-    initialEquivalentMarkers: '',
-    initialMarkerFilter: '',
-  },
-};
-
 /**
- * Dialog open with an invalid equivalent-markers value. A decorator pre-seeds the input and
- * dispatches a click on the OK button after the dialog mounts, so the blocking `AlertDialog` (the
- * validation-error "alertdialog"-role modal) renders on first paint — matching the "Validation
- * Error State Wireframe".
+ * Dialog open with an invalid equivalent-markers value (a single-token "p" with no `/`). The inline
+ * validation pattern picks this up after the debounce, marks the input invalid via `aria-invalid` +
+ * `data-invalid`, surfaces the error message under the input, and disables the OK button. Replaces
+ * the previous nested-AlertDialog flow per Sebastian PR #2219 #3138246720.
  */
-function ValidationErrorDecorator(props: MarkerSettingsDialogProps) {
-  // Mounts the dialog in the open state with an invalid value, then auto-clicks OK so the
-  // validation alert appears. Uses DOM lookups rather than refs because the stories file is not
-  // allowed to import PAPI and the dialog is portaled into `document.body`.
-  const [open, setOpen] = useState<boolean>(true);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      const okButton = document.querySelector<HTMLButtonElement>(
-        'button[data-testid="marker-settings-ok"]',
-      );
-      okButton?.click();
-    }, 100);
-    return () => window.clearTimeout(timeoutId);
-  }, []);
-
-  return (
-    <MarkerSettingsDialog
-      {...props}
-      open={open}
-      onCancel={() => setOpen(false)}
-      onSubmit={() => setOpen(false)}
-    />
-  );
-}
-
 export const ValidationError: Story = {
   args: {
     open: true,
     initialEquivalentMarkers: 'p',
     initialMarkerFilter: '',
   },
-  render: (args) => <ValidationErrorDecorator {...args} />,
 };
