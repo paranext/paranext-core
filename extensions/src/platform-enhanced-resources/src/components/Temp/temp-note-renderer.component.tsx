@@ -6,7 +6,7 @@ import type { LocalizedStringValue } from 'platform-bible-utils';
  * hook in the wiring layer to obtain localized strings, then pass the result via
  * `localizedStringsWithLoadingState`.
  */
-export const NOTE_RENDERER_STRING_KEYS = Object.freeze([
+export const TEMP_NOTE_RENDERER_STRING_KEYS = Object.freeze([
   '%enhancedResources_note_callerType_footnote%',
   '%enhancedResources_note_callerType_endnote%',
   '%enhancedResources_note_callerType_crossReference%',
@@ -14,9 +14,9 @@ export const NOTE_RENDERER_STRING_KEYS = Object.freeze([
   '%enhancedResources_note_references%',
 ] as const);
 
-type NoteRendererLocalizedStringKey = (typeof NOTE_RENDERER_STRING_KEYS)[number];
-type NoteRendererLocalizedStrings = {
-  [key in NoteRendererLocalizedStringKey]?: LocalizedStringValue;
+type TempNoteRendererLocalizedStringKey = (typeof TEMP_NOTE_RENDERER_STRING_KEYS)[number];
+type TempNoteRendererLocalizedStrings = {
+  [key in TempNoteRendererLocalizedStringKey]?: LocalizedStringValue;
 };
 
 /**
@@ -39,11 +39,11 @@ export type NoteData = {
   references: NoteVerseRef[];
 };
 
-export type NoteRendererProps = {
+export type TempNoteRendererProps = {
   /** Structured note data to render. */
   data: NoteData;
   /** Localized strings + loading flag. */
-  localizedStringsWithLoadingState?: [NoteRendererLocalizedStrings, boolean];
+  localizedStringsWithLoadingState?: [TempNoteRendererLocalizedStrings, boolean];
 };
 
 const formatRef = (ref: NoteVerseRef) => {
@@ -52,15 +52,26 @@ const formatRef = (ref: NoteVerseRef) => {
 };
 
 /**
- * Pure presentational component that renders a footnote/endnote/cross-reference note for the
- * Enhanced Resource scripture pane. Caller marker is shown in the gutter; body and references
- * follow.
+ * TEMP: Stand-in for the real footnote / endnote / cross-reference renderer.
+ *
+ * Replace with the platform-notes (or whichever extension owns notes rendering) component once that
+ * ships and exposes a presentational note renderer suitable for the Enhanced Resource scripture
+ * pane.
+ *
+ * Replacement plan:
+ *
+ * - Real component: TBD — likely from `platform-notes` or a shared scripture-utilities helper.
+ * - Swap-in phase: phase-3-ui (after the notes-rendering primitive ships).
+ * - On swap: delete this file and update imports in `web-views/enhanced-resource.web-view.tsx` plus
+ *   any `TempScripturePane` consumers.
+ *
+ * @see Component-Builder-Patterns.md § Temp Component Convention
  */
-export function NoteRenderer({
+export function TempNoteRenderer({
   data,
   localizedStringsWithLoadingState = [{}, false],
-}: NoteRendererProps) {
-  const getLocalizedString = (key: NoteRendererLocalizedStringKey) =>
+}: TempNoteRendererProps) {
+  const getLocalizedString = (key: TempNoteRendererLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
   const callerTypeLabel = (() => {
@@ -122,4 +133,4 @@ export function NoteRenderer({
   );
 }
 
-export default NoteRenderer;
+export default TempNoteRenderer;

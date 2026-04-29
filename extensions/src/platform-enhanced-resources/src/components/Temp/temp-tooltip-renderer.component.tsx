@@ -6,7 +6,7 @@ import type { LocalizedStringValue } from 'platform-bible-utils';
  * hook in the wiring layer to obtain localized strings, then pass the result via
  * `localizedStringsWithLoadingState`.
  */
-export const TOOLTIP_RENDERER_STRING_KEYS = Object.freeze([
+export const TEMP_TOOLTIP_RENDERER_STRING_KEYS = Object.freeze([
   '%enhancedResources_tooltip_lemma%',
   '%enhancedResources_tooltip_gloss%',
   '%enhancedResources_tooltip_partOfSpeech%',
@@ -15,9 +15,9 @@ export const TOOLTIP_RENDERER_STRING_KEYS = Object.freeze([
   '%enhancedResources_tooltip_notes%',
 ] as const);
 
-type TooltipRendererLocalizedStringKey = (typeof TOOLTIP_RENDERER_STRING_KEYS)[number];
-type TooltipRendererLocalizedStrings = {
-  [key in TooltipRendererLocalizedStringKey]?: LocalizedStringValue;
+type TempTooltipRendererLocalizedStringKey = (typeof TEMP_TOOLTIP_RENDERER_STRING_KEYS)[number];
+type TempTooltipRendererLocalizedStrings = {
+  [key in TempTooltipRendererLocalizedStringKey]?: LocalizedStringValue;
 };
 
 /**
@@ -36,25 +36,36 @@ export type TooltipData = {
   morphology: string | undefined;
 };
 
-export type TooltipRendererProps = {
+export type TempTooltipRendererProps = {
   /** Structured tooltip data to render. */
   data: TooltipData;
   /**
    * Object with all localized strings the component needs, plus a loading flag. When loading is
    * true, the component still renders but values fall back to localization keys.
    */
-  localizedStringsWithLoadingState?: [TooltipRendererLocalizedStrings, boolean];
+  localizedStringsWithLoadingState?: [TempTooltipRendererLocalizedStrings, boolean];
 };
 
 /**
- * Pure presentational component that renders a tooltip for a linked word in the Enhanced Resource
- * scripture pane. Consumes a {@link TooltipData} DTO; never fetches or wires to PAPI.
+ * TEMP: Stand-in for the real linked-word tooltip primitive.
+ *
+ * The current marker-tooltip approach is a design-time placeholder. The real tooltip rendering for
+ * linked scripture words will be owned by whichever extension provides the marker-tooltip primitive
+ * that integrates with `platform-scripture-editor`'s annotation system.
+ *
+ * Replacement plan:
+ *
+ * - Real component: TBD — the editor-side annotation tooltip primitive (see FN-014).
+ * - Swap-in phase: phase-3-ui (when `platform-scripture-editor` annotations + tooltip wiring ship).
+ * - On swap: delete this file and update imports in `TempScripturePane` (and any other consumer).
+ *
+ * @see Component-Builder-Patterns.md § Temp Component Convention
  */
-export function TooltipRenderer({
+export function TempTooltipRenderer({
   data,
   localizedStringsWithLoadingState = [{}, false],
-}: TooltipRendererProps) {
-  const getLocalizedString = (key: TooltipRendererLocalizedStringKey) =>
+}: TempTooltipRendererProps) {
+  const getLocalizedString = (key: TempTooltipRendererLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
   const lemmaLabel = getLocalizedString('%enhancedResources_tooltip_lemma%');
@@ -127,4 +138,4 @@ export function TooltipRenderer({
   );
 }
 
-export default TooltipRenderer;
+export default TempTooltipRenderer;

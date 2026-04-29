@@ -9,11 +9,11 @@ import {
 } from 'platform-bible-react';
 import type { LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
 import {
-  ScripturePane,
+  TempScripturePane,
   type MarbleTokenLike,
   type ScriptDisplayMode,
-  type ScripturePaneVerseRef,
-} from '../components/scripture-pane/scripture-pane.component';
+  type TempScripturePaneVerseRef,
+} from '../components/Temp/temp-scripture-pane.component';
 import {
   Toolbar,
   type HighlightMode,
@@ -77,7 +77,7 @@ export type EnhancedResourceWebViewProps = {
 
   // Scripture pane
   tokens: MarbleTokenLike[] | undefined;
-  currentReference: ScripturePaneVerseRef;
+  currentReference: TempScripturePaneVerseRef;
   filteredTokenId: string | undefined;
   hebrewDisplayMode?: ScriptDisplayMode;
   greekDisplayMode?: ScriptDisplayMode;
@@ -194,7 +194,8 @@ export type EnhancedResourceWebViewProps = {
 
 /**
  * Pure presentational shell for the Enhanced Resource window. Composes WarningRibbons, Toolbar,
- * ScripturePane (placeholder per FN-001/013/014), and the four research-pane tab content slots.
+ * TempScripturePane (placeholder per FN-001/013/014), and the four research-pane tab content
+ * slots.
  *
  * The shell is data-agnostic: every piece of state arrives via props and every interaction fires a
  * callback. Phase-3-ui wires PAPI hooks and the real scripture editor.
@@ -383,7 +384,7 @@ export function EnhancedResourceWebView({
               minSize={20}
               className="tw-flex tw-flex-col"
             >
-              <ScripturePane
+              <TempScripturePane
                 tokens={tokens}
                 currentReference={currentReference}
                 filteredTokenId={filteredTokenId}

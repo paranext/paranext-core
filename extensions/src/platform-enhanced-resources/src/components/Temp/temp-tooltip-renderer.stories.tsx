@@ -5,13 +5,16 @@ import {
   MOCK_TOOLTIP_MISSING_STRONGS,
   MOCK_TOOLTIP_MULTIPLE_SENSES,
 } from '../../data/marble-form.story-data';
-import { TooltipRenderer, TOOLTIP_RENDERER_STRING_KEYS } from './tooltip-renderer.component';
+import {
+  TempTooltipRenderer,
+  TEMP_TOOLTIP_RENDERER_STRING_KEYS,
+} from './temp-tooltip-renderer.component';
 
-const localizedStrings = getLocalizedStrings([...TOOLTIP_RENDERER_STRING_KEYS]);
+const localizedStrings = getLocalizedStrings([...TEMP_TOOLTIP_RENDERER_STRING_KEYS]);
 
-const meta: Meta<typeof TooltipRenderer> = {
-  title: 'Bundled Extensions/platform-enhanced-resources/TooltipRenderer',
-  component: TooltipRenderer,
+const meta: Meta<typeof TempTooltipRenderer> = {
+  title: 'Temp/TempTooltipRenderer',
+  component: TempTooltipRenderer,
   tags: ['autodocs'],
   args: {
     localizedStringsWithLoadingState: [localizedStrings, false],
@@ -19,7 +22,7 @@ const meta: Meta<typeof TooltipRenderer> = {
 };
 export default meta;
 
-type Story = StoryObj<typeof TooltipRenderer>;
+type Story = StoryObj<typeof TempTooltipRenderer>;
 
 export const Default: Story = {
   args: {

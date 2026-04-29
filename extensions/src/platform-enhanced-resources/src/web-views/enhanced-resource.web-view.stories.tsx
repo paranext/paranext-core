@@ -10,7 +10,7 @@ import {
   MOCK_RIBBONS_NONE,
   MOCK_COPYRIGHT_TEXT,
 } from '../data/marble-form.story-data';
-import { SCRIPTURE_PANE_STRING_KEYS } from '../components/scripture-pane/scripture-pane.component';
+import { TEMP_SCRIPTURE_PANE_STRING_KEYS } from '../components/Temp/temp-scripture-pane.component';
 import { TOOLBAR_STRING_KEYS, type ResearchTab } from '../components/toolbar/toolbar.component';
 import { WARNING_RIBBONS_STRING_KEYS } from '../components/warning-ribbons/warning-ribbons.component';
 import { COPYRIGHT_OVERLAY_STRING_KEYS } from '../components/warning-ribbons/copyright-overlay.component';
@@ -59,7 +59,7 @@ import {
 
 const allKeys = [
   ...ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS,
-  ...SCRIPTURE_PANE_STRING_KEYS,
+  ...TEMP_SCRIPTURE_PANE_STRING_KEYS,
   ...TOOLBAR_STRING_KEYS,
   ...WARNING_RIBBONS_STRING_KEYS,
   ...COPYRIGHT_OVERLAY_STRING_KEYS,

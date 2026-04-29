@@ -5,13 +5,16 @@ import {
   MOCK_GEN_1_1,
   MOCK_GEN_1_TOKENS,
 } from '../../data/marble-form.story-data';
-import { ScripturePane, SCRIPTURE_PANE_STRING_KEYS } from './scripture-pane.component';
+import {
+  TempScripturePane,
+  TEMP_SCRIPTURE_PANE_STRING_KEYS,
+} from './temp-scripture-pane.component';
 
-const localizedStrings = getLocalizedStrings([...SCRIPTURE_PANE_STRING_KEYS]);
+const localizedStrings = getLocalizedStrings([...TEMP_SCRIPTURE_PANE_STRING_KEYS]);
 
-const meta: Meta<typeof ScripturePane> = {
-  title: 'Bundled Extensions/platform-enhanced-resources/ScripturePane',
-  component: ScripturePane,
+const meta: Meta<typeof TempScripturePane> = {
+  title: 'Temp/TempScripturePane',
+  component: TempScripturePane,
   tags: ['autodocs'],
   args: {
     localizedStringsWithLoadingState: [localizedStrings, false],
@@ -25,7 +28,7 @@ const meta: Meta<typeof ScripturePane> = {
 };
 export default meta;
 
-type Story = StoryObj<typeof ScripturePane>;
+type Story = StoryObj<typeof TempScripturePane>;
 
 export const Default: Story = {
   args: {

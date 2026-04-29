@@ -5,13 +5,13 @@ import {
   MOCK_NOTE_EMPTY,
   MOCK_NOTE_LONG,
 } from '../../data/marble-form.story-data';
-import { NoteRenderer, NOTE_RENDERER_STRING_KEYS } from './note-renderer.component';
+import { TempNoteRenderer, TEMP_NOTE_RENDERER_STRING_KEYS } from './temp-note-renderer.component';
 
-const localizedStrings = getLocalizedStrings([...NOTE_RENDERER_STRING_KEYS]);
+const localizedStrings = getLocalizedStrings([...TEMP_NOTE_RENDERER_STRING_KEYS]);
 
-const meta: Meta<typeof NoteRenderer> = {
-  title: 'Bundled Extensions/platform-enhanced-resources/NoteRenderer',
-  component: NoteRenderer,
+const meta: Meta<typeof TempNoteRenderer> = {
+  title: 'Temp/TempNoteRenderer',
+  component: TempNoteRenderer,
   tags: ['autodocs'],
   args: {
     localizedStringsWithLoadingState: [localizedStrings, false],
@@ -19,7 +19,7 @@ const meta: Meta<typeof NoteRenderer> = {
 };
 export default meta;
 
-type Story = StoryObj<typeof NoteRenderer>;
+type Story = StoryObj<typeof TempNoteRenderer>;
 
 export const Default: Story = {
   args: {

@@ -3,7 +3,7 @@ import type { LocalizedStringValue } from 'platform-bible-utils';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 
 /** Object containing all keys used for localization in this component. */
-export const SCRIPTURE_PANE_STRING_KEYS = Object.freeze([
+export const TEMP_SCRIPTURE_PANE_STRING_KEYS = Object.freeze([
   '%enhancedResources_scripturePane_loading%',
   '%enhancedResources_scripturePane_emptyTitle%',
   '%enhancedResources_scripturePane_emptyDescription%',
@@ -13,9 +13,9 @@ export const SCRIPTURE_PANE_STRING_KEYS = Object.freeze([
   '%enhancedResources_scripturePane_footnotesHeader%',
 ] as const);
 
-type ScripturePaneLocalizedStringKey = (typeof SCRIPTURE_PANE_STRING_KEYS)[number];
-type ScripturePaneLocalizedStrings = {
-  [key in ScripturePaneLocalizedStringKey]?: LocalizedStringValue;
+type TempScripturePaneLocalizedStringKey = (typeof TEMP_SCRIPTURE_PANE_STRING_KEYS)[number];
+type TempScripturePaneLocalizedStrings = {
+  [key in TempScripturePaneLocalizedStringKey]?: LocalizedStringValue;
 };
 
 export type ScriptDisplayMode = 'script' | 'transliteration' | 'both';
@@ -49,17 +49,17 @@ export type MarbleTokenLike = {
   style?: string;
 };
 
-export type ScripturePaneVerseRef = {
+export type TempScripturePaneVerseRef = {
   book: number;
   chapter: number;
   verse: number;
 };
 
-export type ScripturePaneProps = {
+export type TempScripturePaneProps = {
   /** Token stream for the current chapter; when undefined, renders empty state. */
   tokens: MarbleTokenLike[] | undefined;
   /** Current verse reference (used as a header label). */
-  currentReference: ScripturePaneVerseRef;
+  currentReference: TempScripturePaneVerseRef;
   /** Token id of the currently filtered linked word, or undefined if no filter is active. */
   filteredTokenId: string | undefined;
   /** Hebrew/Greek display mode. Currently affects placeholder annotations only. */
@@ -84,22 +84,32 @@ export type ScripturePaneProps = {
     token: MarbleTokenLike,
     event: ReactMouseEvent<HTMLButtonElement>,
   ) => void;
-  localizedStringsWithLoadingState?: [ScripturePaneLocalizedStrings, boolean];
+  localizedStringsWithLoadingState?: [TempScripturePaneLocalizedStrings, boolean];
 };
 
-const formatRef = (ref: ScripturePaneVerseRef) => `Bk${ref.book} ${ref.chapter}:${ref.verse}`;
+const formatRef = (ref: TempScripturePaneVerseRef) => `Bk${ref.book} ${ref.chapter}:${ref.verse}`;
 
 const tokenIdOf = (token: MarbleTokenLike): string =>
   token.targetLinks?.[0] ?? token.strongNumber ?? `idx-${token.index}`;
 
 /**
- * Pure presentational stand-in for the Enhanced Resource scripture pane. Per FN-001/FN-013/FN-014,
- * this design-phase component does NOT integrate with `platform-scripture-editor`. It mocks the
- * layout with token chips so reviewers can validate the surrounding shell, ribbons, and toolbar.
+ * TEMP: Stand-in for the real Enhanced Resource scripture pane.
  *
- * The wiring layer (phase-3-ui) replaces this with the editor + USJ converter once those land.
+ * Replace with `platform-scripture-editor` (read-only mode + annotation support) once
+ * FN-001/FN-013/FN-014 are addressed in phase-3-ui. This design-phase component mocks the layout
+ * with token chips so reviewers can validate the surrounding shell, ribbons, and toolbar.
+ *
+ * Replacement plan:
+ *
+ * - Real component: `platform-scripture-editor` editor read-only mode (different repo —
+ *   `@eten-tech-foundation/platform-editor`). Requires editor capability work tracked in FN-001.
+ * - Swap-in phase: phase-3-ui (after FN-014 marble-aware USX→USJ converter ships and the editor
+ *   exposes the read-only annotation API).
+ * - On swap: delete this file and update imports in `web-views/enhanced-resource.web-view.tsx`.
+ *
+ * @see Component-Builder-Patterns.md § Temp Component Convention
  */
-export function ScripturePane({
+export function TempScripturePane({
   tokens,
   currentReference,
   filteredTokenId,
@@ -112,8 +122,8 @@ export function ScripturePane({
   onTokenClick = () => {},
   onTokenContextMenu = () => {},
   localizedStringsWithLoadingState = [{}, false],
-}: ScripturePaneProps) {
-  const getLocalizedString = (key: ScripturePaneLocalizedStringKey) =>
+}: TempScripturePaneProps) {
+  const getLocalizedString = (key: TempScripturePaneLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
   const loadingText = getLocalizedString('%enhancedResources_scripturePane_loading%');
@@ -285,4 +295,4 @@ export function ScripturePane({
   );
 }
 
-export default ScripturePane;
+export default TempScripturePane;
