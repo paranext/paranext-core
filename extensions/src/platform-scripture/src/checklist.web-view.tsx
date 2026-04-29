@@ -17,15 +17,17 @@ import {
   isPlatformError,
 } from 'platform-bible-utils';
 import type { ScrollGroupId } from 'platform-bible-utils';
-import type { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type {
   ChecklistComparativeTextRef,
   ChecklistRequest,
   ChecklistResultResponse,
   ChecklistScriptureRange,
+  IVersificationService,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
+import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
 import type {
   ChecklistCell,
   ChecklistData,
@@ -169,7 +171,6 @@ global.webViewComponent = function ChecklistWebView({
   void scrollGroupId;
   void setScrollGroupId;
   void setLiveScrRef;
-  void liveScrRef;
   void updateWebViewDefinition;
 
   const [equivalentMarkers, setEquivalentMarkers] = useWebViewState<string>(
@@ -216,16 +217,16 @@ global.webViewComponent = function ChecklistWebView({
     [],
   );
 
-  // Suppress unused warnings until tasks 6-10 wire each slot in.
+  // Suppress unused warnings until tasks 7-10 wire each slot in. `snapshotScrRef` (the read
+  // side) is wired in Task 8 (ScopeSelector display); the seed effect below consumes only the
+  // setter, so the read alias stays voided here.
   void scope;
   void setScope;
   void snapshotScrRef;
-  void setSnapshotScrRef;
   void rangeStart;
   void setRangeStart;
   void rangeEnd;
   void setRangeEnd;
-  void setVerseRange;
   void selectedBookIds;
   void setSelectedBookIds;
 
@@ -430,6 +431,79 @@ global.webViewComponent = function ChecklistWebView({
       cancelled = true;
     };
   }, [data?.columnProjectIds]);
+
+  // ─── Versification lookups (Theme 6) ──────────────────────────────────────
+  //
+  // Mirrors platform-scripture-editor.web-view.tsx:351-377. Uses VersificationService for
+  // current-book verse counts; other books would need their own fetch/cache (matches the
+  // scripture-editor's existing limitation).
+
+  const currentBookNum = useMemo(() => Canon.bookIdToNumber(liveScrRef.book), [liveScrRef.book]);
+
+  const fetchLastVersesInCurrentBook = useCallback(async (): Promise<number[] | undefined> => {
+    if (!projectId || currentBookNum <= 0) return undefined;
+    try {
+      const versificationService = await papi.networkObjects.get<IVersificationService>(
+        'platformScripture.versificationService',
+      );
+      if (!versificationService) return undefined;
+      return await versificationService.lookupFinalVerseNumbersInBook(projectId, currentBookNum);
+    } catch (err) {
+      logger.debug(`ChecklistWebView: VersificationService unavailable: ${getErrorMessage(err)}`);
+      return undefined;
+    }
+  }, [projectId, currentBookNum]);
+  const [lastVersesInCurrentBook] = usePromise(fetchLastVersesInCurrentBook, undefined);
+
+  const getEndVerse = useCallback(
+    (bookId: string, chapterNum: number): number => {
+      if (Canon.bookIdToNumber(bookId) !== currentBookNum) return 0;
+      return lastVersesInCurrentBook?.[chapterNum] ?? 0;
+    },
+    [currentBookNum, lastVersesInCurrentBook],
+  );
+
+  // Last-chapter lookup derived from the same per-book array. The verses array is 1-indexed
+  // (matches scripture-editor.web-view.tsx:374's `[chapterNum]` access pattern), so the array
+  // length minus 1 yields the highest chapter number. Returns 0 for non-current books, which
+  // computeRangeFromScope tolerates by falling back to the documented 999 sentinel.
+  const getLastChapter = useCallback(
+    (bookId: string): number => {
+      if (Canon.bookIdToNumber(bookId) !== currentBookNum) return 0;
+      if (!lastVersesInCurrentBook || lastVersesInCurrentBook.length === 0) return 0;
+      return lastVersesInCurrentBook.length - 1;
+    },
+    [currentBookNum, lastVersesInCurrentBook],
+  );
+
+  // ─── First-launch seed (R1) ──────────────────────────────────────────────
+  //
+  // PT9's behavior on first launch with no memento: defaults to "All Books". We deliberately
+  // deviate (per Sebastian's sluggish-default feedback): seed scope='chapter' from liveScrRef
+  // once it's available.
+
+  const hasSeededRef = useRef(false);
+  useEffect(() => {
+    if (hasSeededRef.current) return;
+    if (verseRange !== undefined) {
+      // Already seeded in a prior session — adopt it.
+      hasSeededRef.current = true;
+      return;
+    }
+    if (!liveScrRef || !liveScrRef.book) return;
+    const seededRange = computeRangeFromScope({
+      scope: 'chapter',
+      ref: liveScrRef,
+      rangeStart: defaultScrRef,
+      rangeEnd: defaultScrRef,
+      getEndVerse,
+      getLastChapter,
+    });
+    if (!seededRange) return;
+    hasSeededRef.current = true;
+    setSnapshotScrRef(liveScrRef);
+    setVerseRange(seededRange);
+  }, [verseRange, liveScrRef, getEndVerse, getLastChapter, setSnapshotScrRef, setVerseRange]);
 
   // ─── Client-side filtering for hideMatches ────────────────────────────────
 
