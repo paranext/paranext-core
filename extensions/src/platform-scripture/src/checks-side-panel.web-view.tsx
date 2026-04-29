@@ -671,10 +671,28 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const handleSelectProject = useCallback(
     (newSelection: { projectId: string; scrollGroupId: ScrollGroupId }) => {
+      // Q5 — Theme 5 #8: focus existing editor tab if present instead of opening duplicate.
+      const existingEditorTab = openTabsRich.find(
+        (t) =>
+          t.projectId === newSelection.projectId &&
+          t.webViewType === 'platformScriptureEditor.react',
+      );
+      if (existingEditorTab) {
+        papi.window
+          .setFocus({ focusType: 'webView', id: existingEditorTab.webViewId })
+          .catch((err: unknown) =>
+            logger.debug(`checks-side-panel: setFocus failed: ${getErrorMessage(err)}`),
+          );
+        // Adopt the existing tab's scroll group rather than the user-clicked one to keep
+        // bindings consistent.
+        updateWebViewDefinition({ projectId: newSelection.projectId });
+        setScrollGroupId(existingEditorTab.scrollGroupId);
+        return;
+      }
       updateWebViewDefinition({ projectId: newSelection.projectId });
       setScrollGroupId(newSelection.scrollGroupId);
     },
-    [updateWebViewDefinition, setScrollGroupId],
+    [openTabsRich, updateWebViewDefinition, setScrollGroupId],
   );
 
   const handleOpenProjectInGroup = useCallback(
