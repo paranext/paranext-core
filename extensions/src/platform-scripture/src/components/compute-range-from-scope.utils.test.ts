@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeRangeFromScope } from './compute-range-from-scope';
+import { computeRangeFromScope } from './compute-range-from-scope.utils';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 
 const REF_GEN_5_7: SerializedVerseRef = { book: 'GEN', chapterNum: 5, verseNum: 7 };
@@ -46,7 +46,7 @@ describe('computeRangeFromScope', () => {
     });
   });
 
-  it('chapter: getEndVerse returns 0 → fallback to a safe upper bound (200)', () => {
+  it('chapter: getEndVerse returns 0 → fallback to 999 sentinel', () => {
     const result = computeRangeFromScope({
       scope: 'chapter',
       ref: REF_GEN_5_7,
@@ -54,7 +54,10 @@ describe('computeRangeFromScope', () => {
       rangeEnd: REF_GEN_1_1,
       getEndVerse: () => 0,
     });
-    expect(result.end.verseNum).toBe(200);
+    expect(result).toEqual({
+      start: { book: 'GEN', chapterNum: 5, verseNum: 1 },
+      end: { book: 'GEN', chapterNum: 5, verseNum: 999 },
+    });
   });
 
   it('book: start = ch1:0, end = lastChapter:lastVerse via getEndVerse', () => {
@@ -72,7 +75,7 @@ describe('computeRangeFromScope', () => {
     });
   });
 
-  it('book: getLastChapter returns 0 → fallback to chapter 150 (max for any biblical book)', () => {
+  it('book: getLastChapter returns 0 → fallback to 999 chapter sentinel', () => {
     const result = computeRangeFromScope({
       scope: 'book',
       ref: REF_GEN_5_7,
@@ -81,7 +84,10 @@ describe('computeRangeFromScope', () => {
       getEndVerse: () => 0,
       getLastChapter: () => 0,
     });
-    expect(result.end.chapterNum).toBe(150);
+    expect(result).toEqual({
+      start: { book: 'GEN', chapterNum: 1, verseNum: 0 },
+      end: { book: 'GEN', chapterNum: 999, verseNum: 999 },
+    });
   });
 
   it('range: echoes rangeStart and rangeEnd verbatim', () => {

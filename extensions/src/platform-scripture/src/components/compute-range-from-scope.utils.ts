@@ -2,8 +2,9 @@ import type { SerializedVerseRef } from '@sillsdev/scripture';
 import type { Scope } from 'platform-bible-react';
 import type { ChecklistScriptureRange } from 'platform-scripture';
 
-const FALLBACK_END_VERSE = 200;
-const FALLBACK_END_CHAPTER = 150;
+// 999 is the documented "end of chapter / end of book" sentinel for ScriptureRange (see platform-scripture.d.ts).
+const FALLBACK_END_VERSE = 999;
+const FALLBACK_END_CHAPTER = 999;
 
 export interface ComputeRangeFromScopeArgs {
   scope: Scope;
@@ -59,7 +60,14 @@ export function computeRangeFromScope({
       return { start: rangeStart, end: rangeEnd };
     case 'selectedBooks':
     case 'selectedText':
-    default:
       return undefined;
+    default: {
+      // Exhaustiveness check: if `Scope` grows in platform-bible-react and a new value is added,
+      // TypeScript will flag this assignment as a compile-time error so the helper is forced to
+      // grow with the union.
+      const _exhaustive: never = scope;
+      void _exhaustive;
+      return undefined;
+    }
   }
 }
