@@ -73,7 +73,7 @@ internal class ParatextProjectSendReceiveService(
     /// Exception is thrown if this function is not implemented in the current application or if an
     /// error was encountered syncing.
     /// </summary>
-    protected void SyncProjects(String[] projectIds)
+    protected void SyncProjects(String[] projectIds, Func<bool>? isCancelled)
     {
         throw new PlatformUnimplementedException(
             $"Command '{nameof(SyncProjects)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
