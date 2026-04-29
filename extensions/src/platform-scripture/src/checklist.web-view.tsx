@@ -147,8 +147,23 @@ function formatScriptureRangeLabel(
  * - **UI-PKG-004** — six adjacent `useWebViewState<T>(key, default)` slots declared at the top of the
  *   component, backing per-web-view persistence for the checklist settings.
  */
-global.webViewComponent = function ChecklistWebView({ projectId, useWebViewState }: WebViewProps) {
+global.webViewComponent = function ChecklistWebView({
+  projectId,
+  useWebViewState,
+  useWebViewScrollGroupScrRef,
+  updateWebViewDefinition,
+}: WebViewProps) {
   // ─── UI-PKG-004: persisted state slots ────────────────────────────────────
+
+  // ─── Scroll group binding (drives currentScrRef + goto setter) ────────
+  const [liveScrRef, setLiveScrRef, scrollGroupId, setScrollGroupId] =
+    useWebViewScrollGroupScrRef();
+  // Suppress unused-variable warnings for slots we wire in later steps.
+  void scrollGroupId;
+  void setScrollGroupId;
+  void setLiveScrRef;
+  void liveScrRef;
+  void updateWebViewDefinition;
 
   const [equivalentMarkers, setEquivalentMarkers] = useWebViewState<string>(
     'checklistEquivalentMarkers',
