@@ -4,6 +4,8 @@ import { useData, useLocalizedStrings } from '@papi/frontend/react';
 import {
   useEvent,
   ProjectSelector,
+  ScopeSelector,
+  SCOPE_SELECTOR_STRING_KEYS,
   type OpenProjectTab,
   type ProjectPair,
   type ProjectSelectorProject,
@@ -216,18 +218,10 @@ global.webViewComponent = function ChecklistWebView({
     [],
   );
 
-  // Suppress unused warnings until tasks 7-10 wire each slot in. `snapshotScrRef` (the read
-  // side) is wired in Task 8 (ScopeSelector display); the seed effect below consumes only the
-  // setter, so the read alias stays voided here.
-  void scope;
-  void setScope;
-  void snapshotScrRef;
-  void rangeStart;
-  void setRangeStart;
-  void rangeEnd;
-  void setRangeEnd;
-  void selectedBookIds;
-  void setSelectedBookIds;
+  // Note: `scope`, `setScope`, `snapshotScrRef`, `rangeStart`, `setRangeStart`, `rangeEnd`,
+  // `setRangeEnd`, `selectedBookIds`, and `setSelectedBookIds` are all consumed below by the
+  // ScopeSelector wiring (Task 8). `setLiveScrRef`, `scrollGroupId`, and `setScrollGroupId`
+  // remain `void`-suppressed above pending Task 9 (goto navigation).
 
   // ─── Localization ─────────────────────────────────────────────────────────
 
@@ -237,6 +231,9 @@ global.webViewComponent = function ChecklistWebView({
 
   const markerSettingsStringKeys = useMemo(() => Array.from(MARKER_SETTINGS_STRING_KEYS), []);
   const markerSettingsLocalizedStrings = useLocalizedStrings(markerSettingsStringKeys);
+
+  const scopeSelectorStringKeys = useMemo(() => Array.from(SCOPE_SELECTOR_STRING_KEYS), []);
+  const [scopeSelectorLocalizedStrings] = useLocalizedStrings(scopeSelectorStringKeys);
 
   // ─── Service + editability ────────────────────────────────────────────────
 
@@ -274,6 +271,28 @@ global.webViewComponent = function ChecklistWebView({
           );
           setPrimaryProjectName(projectId);
         }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  // ─── Books-present for ScopeSelector ──────────────────────────────────────
+  const [booksPresent, setBooksPresent] = useState<string>(
+    '0'.repeat(124), // 124 books per BookSet — empty default until project setting resolves
+  );
+  useEffect(() => {
+    if (!projectId) return () => {};
+    let cancelled = false;
+    (async () => {
+      try {
+        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+        const next = await pdp.getSetting('platformScripture.booksPresent');
+        if (cancelled) return;
+        if (typeof next === 'string') setBooksPresent(next);
+      } catch (err) {
+        logger.debug(`ChecklistWebView: booksPresent fetch failed: ${getErrorMessage(err)}`);
       }
     })();
     return () => {
@@ -731,6 +750,50 @@ global.webViewComponent = function ChecklistWebView({
     [comparativeProjects, comparativeOpenTabs, comparativeSelection, handleComparativeTextsChange],
   );
 
+  // ─── ScopeSelector handlers (R1: snapshot at click-time) ─────────────────
+
+  const handleScopeChange = useCallback(
+    (newScope: Scope) => {
+      const computed = computeRangeFromScope({
+        scope: newScope,
+        ref: liveScrRef,
+        rangeStart,
+        rangeEnd,
+        getEndVerse,
+        getLastChapter,
+      });
+      setScope(newScope);
+      setSnapshotScrRef(liveScrRef);
+      if (computed) setVerseRange(computed);
+    },
+    [
+      liveScrRef,
+      rangeStart,
+      rangeEnd,
+      getEndVerse,
+      getLastChapter,
+      setScope,
+      setSnapshotScrRef,
+      setVerseRange,
+    ],
+  );
+
+  const handleRangeStartChange = useCallback(
+    (next: SerializedVerseRef) => {
+      setRangeStart(next);
+      if (scope === 'range') setVerseRange({ start: next, end: rangeEnd });
+    },
+    [scope, rangeEnd, setRangeStart, setVerseRange],
+  );
+
+  const handleRangeEndChange = useCallback(
+    (next: SerializedVerseRef) => {
+      setRangeEnd(next);
+      if (scope === 'range') setVerseRange({ start: rangeStart, end: next });
+    },
+    [scope, rangeStart, setRangeEnd, setVerseRange],
+  );
+
   // ─── Retry handler ────────────────────────────────────────────────────────
 
   const handleRetry = useCallback(() => {
@@ -839,6 +902,52 @@ global.webViewComponent = function ChecklistWebView({
     ],
   );
 
+  // ─── Verse-range picker via real ScopeSelector (Themes 5 #3 + 6) ─────────
+  //
+  // R1 mode-aware snapshot semantics: the displayed scripture reference is the snapshot taken
+  // at click-time (`snapshotScrRef`), falling back to `liveScrRef` on first render before any
+  // user pick. `availableScopes` excludes `selectedBooks` and `selectedText` because the
+  // backend's `ChecklistScriptureRange` contract only models contiguous start/end ranges.
+  // `getEndVerse` enables verse-grid selection in the BCV pickers used by `range` mode (Theme 6).
+
+  const verseRangeSelectorNode = useMemo(
+    () => (
+      <div data-testid="checklist-verse-range-trigger">
+        <ScopeSelector
+          variant="dropdown"
+          scope={scope}
+          availableScopes={['verse', 'chapter', 'book', 'range']}
+          onScopeChange={handleScopeChange}
+          availableBookInfo={booksPresent}
+          selectedBookIds={selectedBookIds}
+          onSelectedBookIdsChange={setSelectedBookIds}
+          localizedStrings={scopeSelectorLocalizedStrings}
+          currentScrRef={snapshotScrRef ?? liveScrRef}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          onRangeStartChange={handleRangeStartChange}
+          onRangeEndChange={handleRangeEndChange}
+          getEndVerse={getEndVerse}
+        />
+      </div>
+    ),
+    [
+      scope,
+      handleScopeChange,
+      booksPresent,
+      selectedBookIds,
+      setSelectedBookIds,
+      scopeSelectorLocalizedStrings,
+      snapshotScrRef,
+      liveScrRef,
+      rangeStart,
+      rangeEnd,
+      handleRangeStartChange,
+      handleRangeEndChange,
+      getEndVerse,
+    ],
+  );
+
   return (
     <>
       <ChecklistTool
@@ -855,6 +964,7 @@ global.webViewComponent = function ChecklistWebView({
         comparativeTextsLabel={comparativeTextsLabel}
         comparativeTextsSelector={comparativeTextsSelectorNode}
         verseRangeLabel={verseRangeLabel}
+        verseRangeSelector={verseRangeSelectorNode}
         onVerseRangeTriggerClick={handleVerseRangeTriggerClick}
         hideMatches={hideMatches}
         onHideMatchesChange={handleHideMatchesChange}
