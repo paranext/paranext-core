@@ -1,9 +1,8 @@
-import { RefObject, useMemo, useRef, useState } from 'react';
+import { RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { useListbox, type ListboxOption } from '@/hooks/listbox-keyboard-navigation.hook';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Skeleton } from '@/components/shadcn-ui/skeleton';
-import { Drawer, DrawerContent } from '@/components/shadcn-ui/drawer';
 import type {
   IndexedListItem,
   SourceLanguageIndexedListProps,
@@ -12,13 +11,22 @@ import type {
 /**
  * A shared list component for displaying source-language indexed items. Supports two-column layout
  * (resource term + source language term), keyboard navigation, text and thumbnail variants,
- * loading/empty states, and an optional detail drawer.
+ * loading/empty states, and an optional detail panel.
  *
- * When `renderDetailContent` is provided, clicking an item opens a right-side drawer **within the
- * component's own bounding box** using the Drawer component with a scoped `container` prop. The
- * drawer opens to 4/5 of the available width. Clicking a different list item while the drawer is
- * open swaps the content without requiring a close-then-reopen cycle. Clicking outside the drawer
- * closes it while allowing the click to pass through to the underlying element.
+ * When `renderDetailContent` is provided, clicking an item opens a right-side detail panel **within
+ * the component's own bounding box** using a plain absolute-positioned panel (NOT vaul/Radix
+ * Dialog) so the rest of the page stays fully interactive while details are open: outer toolbars,
+ * tab switches, keyboard navigation in the list itself, and any controls outside the SLI all remain
+ * live. The panel opens to 4/5 of the available width. Clicking a different list item while the
+ * panel is open swaps the content without requiring a close-then-reopen cycle. Clicking outside the
+ * SLI does nothing special (clicks pass through to underlying elements). Pressing Escape while
+ * focus is inside the detail panel closes it.
+ *
+ * The previous implementation used vaul's `Drawer` with `modal={false}` and `container={...}`,
+ * which still applied focus trapping and `pointer-events: none` to siblings via the underlying
+ * Radix Dialog primitive — leaving only the "back to list" button interactive across the whole UI.
+ * The non-vaul absolute-panel approach is the canonical fix from PR #2209
+ * (`CustomDrawerDomainOverlay` pattern in `source-language-indexed-list.stories.tsx`).
  *
  * Used by Enhanced Resources (dictionary, encyclopedia, media) and lexical tools (dictionary).
  *
@@ -98,6 +106,28 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
       });
     }
   };
+
+  // Escape closes the detail panel when focus is inside it (preserves the
+  // "Esc to close" UX without trapping focus globally like vaul/Radix would).
+  // ref.current expects null not undefined for div ref
+  // eslint-disable-next-line no-null/no-null
+  const detailPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!drawerItem) return undefined;
+    const node = detailPanelRef.current;
+    if (!node) return undefined;
+    const handleDetailKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCloseDetail();
+      }
+    };
+    node.addEventListener('keydown', handleDetailKeyDown);
+    return () => node.removeEventListener('keydown', handleDetailKeyDown);
+    // handleCloseDetail uses refs/state setters that are stable enough; we only
+    // re-bind when the open/close edge transitions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerItem]);
 
   if (isLoading) {
     return (
@@ -184,26 +214,23 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
     <div ref={containerRef} className={cn('tw-relative tw-h-full tw-overflow-hidden', className)}>
       <div className="tw-h-full tw-overflow-y-auto">{listContent}</div>
 
-      {/* Detail drawer - scoped to this component, 4/5 width, no overlay so clicks pass through */}
-      {renderDetailContent && (
-        <Drawer
-          direction="right"
-          modal={false}
-          open={drawerItem !== undefined}
-          onOpenChange={(open) => {
-            if (!open) handleCloseDetail();
-          }}
+      {/*
+        Detail panel - scoped to this component, 4/5 width, no overlay so clicks pass through.
+        Plain absolute-positioned panel (NOT vaul/Radix Dialog) to avoid the focus-trap and
+        pointer-events:none-on-siblings side effects that left only the "back to list" button
+        interactive across the whole UI. See PR #2209 `CustomDrawerDomainOverlay` reference.
+      */}
+      {renderDetailContent && drawerItem && (
+        <div
+          ref={detailPanelRef}
+          role="region"
+          aria-label="Selected item details"
+          className="tw-absolute tw-inset-y-0 tw-right-0 tw-z-10 tw-flex tw-w-4/5 tw-flex-col tw-overflow-hidden tw-border-l tw-bg-background tw-shadow-xl"
         >
-          <DrawerContent
-            container={containerRef.current}
-            hideDrawerHandle
-            className="tw-ml-0 tw-w-4/5 tw-max-w-none tw-rounded-none"
-          >
-            <div className="tw-h-full tw-overflow-y-auto tw-p-4">
-              {drawerItem && renderDetailContent(drawerItem, handleCloseDetail)}
-            </div>
-          </DrawerContent>
-        </Drawer>
+          <div className="tw-h-full tw-overflow-y-auto tw-p-4">
+            {renderDetailContent(drawerItem, handleCloseDetail)}
+          </div>
+        </div>
       )}
     </div>
   );
