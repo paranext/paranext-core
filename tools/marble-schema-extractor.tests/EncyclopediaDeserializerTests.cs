@@ -37,7 +37,7 @@ public class EncyclopediaDeserializerTests
             </Thematic_Lexicon>
             """;
         _zipPath = MakeFixtureZip.CreatePasswordedZip(
-            new Dictionary<string, string> { ["Encyclopedia.xml"] = v1Xml },
+            new Dictionary<string, string> { ["FAUNA.XML"] = v1Xml },
             TestPassword
         );
 
@@ -60,7 +60,7 @@ public class EncyclopediaDeserializerTests
             </Thematic_Lexicon>
             """;
         _zipPath = MakeFixtureZip.CreatePasswordedZip(
-            new Dictionary<string, string> { ["Encyclopedia.xml"] = xml },
+            new Dictionary<string, string> { ["FAUNA.XML"] = xml },
             TestPassword
         );
 

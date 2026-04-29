@@ -173,16 +173,23 @@ internal sealed class LexiconDeserializer
     private static Lexicon_Main LoadLexicon(ResourceArchive archive)
     {
         // Files inside the zip use one of: Lexicon.xml, Lexicon_*.xml, or
-        // a file matching the resource ID (DCLEX.xml, etc.). Inspect at runtime
-        // and pick the first lexicon-shaped entry.
+        // a file matching the resource ID (DCLEX.xml, SDBG.xml, etc.). Sibling
+        // files we must NOT pick:
+        //   - Settings.xml (resource metadata)
+        //   - *DOMAIN*.xml (semantic domain side-table — separate Pocos type)
+        //   - *INDEX*.xml (image index lookups)
         var entries = archive.ListEntries().ToList();
+        bool IsLexiconCandidate(string e) =>
+            e.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+            && !e.Contains("Settings", StringComparison.OrdinalIgnoreCase)
+            && !e.Contains("Domain", StringComparison.OrdinalIgnoreCase)
+            && !e.Contains("Index", StringComparison.OrdinalIgnoreCase);
+
         string lexiconEntry =
             entries.FirstOrDefault(e =>
                 e.EndsWith("Lexicon.xml", StringComparison.OrdinalIgnoreCase)
             )
-            ?? entries.FirstOrDefault(e =>
-                e.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) && !e.Contains("Settings")
-            )
+            ?? entries.FirstOrDefault(IsLexiconCandidate)
             ?? throw new InvalidOperationException(
                 $"No lexicon XML found. Entries: {string.Join(", ", entries)}"
             );

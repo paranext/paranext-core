@@ -43,15 +43,17 @@ internal sealed class SemanticDomainDeserializer
     private static SemanticLexicalDomains LoadDoc(ResourceArchive archive)
     {
         var entries = archive.ListEntries().ToList();
-        string xmlEntry =
-            entries.FirstOrDefault(e =>
-                e.Contains("Domain", StringComparison.OrdinalIgnoreCase)
-                && e.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
-            )
-            ?? entries.FirstOrDefault(e => e.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidOperationException(
-                $"No domains XML found. Entries: {string.Join(", ", entries)}"
-            );
+        // Only return a real domains payload when a Domain-named XML file is
+        // actually present. Some lexicon resources (notably DCLEX) ship the
+        // domains inline inside the lexicon XML itself rather than as a sibling
+        // file, in which case this deserializer correctly reports no domains.
+        string? xmlEntry = entries.FirstOrDefault(e =>
+            e.Contains("Domain", StringComparison.OrdinalIgnoreCase)
+            && e.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+        );
+
+        if (xmlEntry is null)
+            return new SemanticLexicalDomains { SemanticDomains = new() };
 
         string xml = archive.ReadEntryText(xmlEntry);
         var serializer = new XmlSerializer(typeof(SemanticLexicalDomains));
