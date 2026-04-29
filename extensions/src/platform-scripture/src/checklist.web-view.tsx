@@ -18,7 +18,6 @@ import {
   getErrorMessage,
   isPlatformError,
 } from 'platform-bible-utils';
-import type { ScrollGroupId } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type {
   ChecklistComparativeTextRef,
@@ -682,42 +681,15 @@ global.webViewComponent = function ChecklistWebView({
     [allProjects, projectId],
   );
 
-  const [comparativeOpenTabsMap, setComparativeOpenTabsMap] = useState<Map<string, OpenProjectTab>>(
-    () => new Map(),
-  );
-
-  useEffect(() => {
-    const upsert = (webView: { id: string; projectId?: string; scrollGroupScrRef?: unknown }) => {
-      if (!webView.projectId || typeof webView.scrollGroupScrRef !== 'number') return;
-      setComparativeOpenTabsMap((prev) => {
-        const next = new Map(prev);
-        next.set(webView.id, {
-          projectId: webView.projectId!,
-          scrollGroupId: webView.scrollGroupScrRef as ScrollGroupId,
-        });
-        return next;
-      });
-    };
-    const unsubOpen = papi.webViews.onDidOpenWebView(({ webView }) => upsert(webView));
-    const unsubUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => upsert(webView));
-    const unsubClose = papi.webViews.onDidCloseWebView(({ webView }) => {
-      setComparativeOpenTabsMap((prev) => {
-        if (!prev.has(webView.id)) return prev;
-        const next = new Map(prev);
-        next.delete(webView.id);
-        return next;
-      });
-    });
-    return () => {
-      unsubOpen();
-      unsubUpdate();
-      unsubClose();
-    };
-  }, []);
-
+  // Comparative-texts ProjectSelector tracks ALL project-bound tabs (no webViewType filter).
+  // The shared `useOpenProjectTabs` hook (introduced for goto-focus tracking) returns a richer
+  // shape with webViewId + webViewType; map back to the lighter OpenProjectTab shape that
+  // ProjectSelector's `openTabs` prop expects.
+  const allOpenProjectTabs = useOpenProjectTabs();
   const comparativeOpenTabs = useMemo<OpenProjectTab[]>(
-    () => [...comparativeOpenTabsMap.values()],
-    [comparativeOpenTabsMap],
+    () =>
+      allOpenProjectTabs.map((t) => ({ projectId: t.projectId, scrollGroupId: t.scrollGroupId })),
+    [allOpenProjectTabs],
   );
 
   // ─── Editor-tab tracking (for goto focus, Q4-C) ───────────────────────────
