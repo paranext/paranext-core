@@ -33,8 +33,11 @@ internal class ParatextProjectSendReceiveService(
     #endregion
 
     #region Protected properties and methods
-
     protected PapiClient PapiClient { get; } = papiClient;
+
+    #endregion
+
+    #region Protected properties and methods
 
     /// <summary>
     /// Function to commit a snapshot of the current changes. Without `forceCommit` set to `true`,
@@ -46,7 +49,7 @@ internal class ParatextProjectSendReceiveService(
     protected Boolean CommitChanges(String projectId, String comment, Boolean forceCommit = false)
     {
         throw new PlatformUnimplementedException(
-            $"Command '{nameof(CommitChanges)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
     }
 
@@ -58,20 +61,18 @@ internal class ParatextProjectSendReceiveService(
     protected void CommitDaily(String projectId)
     {
         throw new PlatformUnimplementedException(
-            $"Command '{nameof(CommitDaily)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            "This command is unimplemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
     }
 
     /// <summary>
-    /// Syncs projects from the provided IDs: filters for editable projects and S/Rs them,
-    /// then reads each editable project's connected resources and projects (one level deep —
-    /// connections of connections are not included) and S/Rs connected translation projects
-    /// or DBL-updates connected resources. Non-editable and unknown IDs are skipped.
-    /// Deduplication is handled internally.
-    /// Exception is thrown if this function is not implemented in the current application
-    /// or if an error was encountered syncing.
+    /// Sends/Receives the provided projects and their connected projects. Also gets and/or updates
+    /// the project's connected resources as needed (e.g. from the DBL). Note, this function only
+    /// syncs the projects themselves and their connected resources; it does not the connected
+    /// projects' connected resources.
+    /// Exception is thrown if this function is not implemented in the current application or if an
+    /// error was encountered syncing.
     /// </summary>
-    /// <param name="projectIds">IDs of the open webview projects to evaluate</param>
     protected void SyncProjects(String[] projectIds)
     {
         throw new PlatformUnimplementedException(

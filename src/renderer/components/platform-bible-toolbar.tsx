@@ -71,7 +71,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_theme_loading%',
   '%toolbar_theme_loading_error%',
   '%toolbar_sync%',
-  '%toolbar_sync_tooltip%',
+  '%toolbar_sync_projects%',
 ];
 
 export function PlatformBibleToolbar() {
@@ -257,7 +257,7 @@ export function PlatformBibleToolbar() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="tw-font-light">{localizedStrings['%toolbar_sync_tooltip%']}</p>
+                  <p className="tw-font-light">{localizedStrings['%toolbar_sync_projects%']}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

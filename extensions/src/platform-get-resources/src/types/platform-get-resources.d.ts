@@ -87,11 +87,11 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
 
     /**
-     * Syncs projects from the provided IDs: filters for editable projects and S/Rs them, then reads
-     * each editable project's connected resources and projects (one level deep — connections of
-     * connections are not included) and S/Rs connected translation projects or DBL-updates
-     * connected resources. Non-editable and unknown project IDs are skipped. Deduplication is
-     * handled internally.
+     * Syncs projects from the provided IDs: filters for editable projects and sends/receives them,
+     * then reads each editable project's connected resources and projects (one level deep —
+     * connections of connections are not included) and sends/receives connected translation
+     * projects or DBL-updates connected resources as needed. Non-editable and unknown project IDs
+     * are skipped. Deduplication is handled internally.
      *
      * @param projectIds IDs of the open webview projects to evaluate
      * @throws `PlatformUnimplementedException` if not running in an application that implements

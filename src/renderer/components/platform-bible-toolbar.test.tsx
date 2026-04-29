@@ -17,7 +17,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%toolbar_sync%': 'Sync',
-      '%toolbar_sync_tooltip%': 'Syncs open projects and their linked projects and resources',
+      '%toolbar_sync_projects%': 'Sync open projects and linked resources',
       '%mainMenu_openHome%': 'Home',
       '%mainMenu_openParatextRegistration%': 'Registration',
       '%mainMenu_openInternetSettings%': 'Internet Settings',
@@ -153,9 +153,10 @@ describe('PlatformBibleToolbar — Sync button', () => {
     // Not reachable via accessibility tree (aria-hidden) or keyboard (tabIndex=-1)
     expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeInTheDocument();
     // But physically present in the DOM, reserving layout space (tw-invisible)
-    expect(
-      document.querySelector('button[data-testid="toolbar-sync-button"][aria-hidden="true"]'),
-    ).toBeInTheDocument();
+    const loadingBtn = document.querySelector('button[data-testid="toolbar-sync-button"]');
+    expect(loadingBtn).toBeInTheDocument();
+    expect(loadingBtn).toHaveAttribute('aria-hidden', 'true');
+    expect(loadingBtn).toHaveAttribute('tabIndex', '-1');
   });
 
   it('is rendered with correct text when isSendReceiveAvailable returns true', async () => {
@@ -237,7 +238,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     fireEvent.click(btn);
     await waitFor(() => {
       expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
-        expect.stringContaining('sync open projects'),
+        expect.stringContaining('Toolbar caught an error while trying to sync open projects:'),
       );
     });
   });
