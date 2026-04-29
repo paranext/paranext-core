@@ -7,10 +7,17 @@ import {
   type OpenProjectTab,
   type ProjectPair,
   type ProjectSelectorProject,
+  type Scope,
   usePromise,
 } from 'platform-bible-react';
-import { formatReplacementString, getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import {
+  defaultScrRef,
+  formatReplacementString,
+  getErrorMessage,
+  isPlatformError,
+} from 'platform-bible-utils';
 import type { ScrollGroupId } from 'platform-bible-utils';
+import type { SerializedVerseRef } from '@sillsdev/scripture';
 import type {
   ChecklistComparativeTextRef,
   ChecklistRequest,
@@ -181,10 +188,46 @@ global.webViewComponent = function ChecklistWebView({
     'checklistComparativeTexts',
     [],
   );
-  const [verseRange] = useWebViewState<ChecklistScriptureRange | undefined>(
+  // R1 — mode-aware snapshot persistence (matches PT9's frozen-range model).
+  // - `scope` + `snapshotScrRef` drive the ScopeSelector display label.
+  // - `verseRange` is the *frozen* request payload sent to the backend (PT9-equivalent;
+  //   `undefined` = "All Books", matching PT9 memento with empty FirstVerseRef/LastVerseRef).
+  // - `rangeStart` / `rangeEnd` back the BCV pickers shown in `range` mode.
+  // - `selectedBookIds` is wired to ScopeSelector but inert (its mode is not in availableScopes).
+  const [scope, setScope] = useWebViewState<Scope>('checklistScope', 'chapter');
+  const [snapshotScrRef, setSnapshotScrRef] = useWebViewState<SerializedVerseRef | undefined>(
+    'checklistSnapshotScrRef',
+    undefined,
+  );
+  const [rangeStart, setRangeStart] = useWebViewState<SerializedVerseRef>(
+    'checklistRangeStart',
+    defaultScrRef,
+  );
+  const [rangeEnd, setRangeEnd] = useWebViewState<SerializedVerseRef>(
+    'checklistRangeEnd',
+    defaultScrRef,
+  );
+  const [verseRange, setVerseRange] = useWebViewState<ChecklistScriptureRange | undefined>(
     'checklistVerseRange',
     undefined,
   );
+  const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
+    'checklistSelectedBookIds',
+    [],
+  );
+
+  // Suppress unused warnings until tasks 6-10 wire each slot in.
+  void scope;
+  void setScope;
+  void snapshotScrRef;
+  void setSnapshotScrRef;
+  void rangeStart;
+  void setRangeStart;
+  void rangeEnd;
+  void setRangeEnd;
+  void setVerseRange;
+  void selectedBookIds;
+  void setSelectedBookIds;
 
   // ─── Localization ─────────────────────────────────────────────────────────
 
