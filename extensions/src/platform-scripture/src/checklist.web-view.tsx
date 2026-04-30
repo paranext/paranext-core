@@ -28,7 +28,6 @@ import type {
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
-import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
 import type {
   ChecklistCell,
   ChecklistData,
@@ -172,16 +171,13 @@ global.webViewComponent = function ChecklistWebView({
     [],
   );
   // R1 — mode-aware snapshot persistence (matches PT9's frozen-range model).
-  // - `scope` + `snapshotScrRef` drive the ScopeSelector display label.
+  // - `scope` drives the ScopeSelector display label; `verseRange` auto-follows `liveScrRef`
+  //   via the effect below.
   // - `verseRange` is the *frozen* request payload sent to the backend (PT9-equivalent;
   //   `undefined` = "All Books", matching PT9 memento with empty FirstVerseRef/LastVerseRef).
   // - `rangeStart` / `rangeEnd` back the BCV pickers shown in `range` mode.
   // - `selectedBookIds` is wired to ScopeSelector but inert (its mode is not in availableScopes).
   const [scope, setScope] = useWebViewState<Scope>('checklistScope', 'chapter');
-  const [snapshotScrRef, setSnapshotScrRef] = useWebViewState<SerializedVerseRef | undefined>(
-    'checklistSnapshotScrRef',
-    undefined,
-  );
   const [rangeStart, setRangeStart] = useWebViewState<SerializedVerseRef>(
     'checklistRangeStart',
     defaultScrRef,
@@ -199,7 +195,7 @@ global.webViewComponent = function ChecklistWebView({
     [],
   );
 
-  // Note: `scope`, `setScope`, `snapshotScrRef`, `rangeStart`, `setRangeStart`, `rangeEnd`,
+  // Note: `scope`, `setScope`, `rangeStart`, `setRangeStart`, `rangeEnd`,
   // `setRangeEnd`, `selectedBookIds`, and `setSelectedBookIds` are all consumed below by the
   // ScopeSelector wiring (Task 8). `setLiveScrRef` and `scrollGroupId` are consumed by the
   // goto handler (Task 9). `setScrollGroupId` stays `void`-suppressed until a scroll-group
@@ -463,48 +459,6 @@ global.webViewComponent = function ChecklistWebView({
     [currentBookNum, lastVersesInCurrentBook],
   );
 
-  // Last-chapter lookup derived from the same per-book array. The verses array is 1-indexed
-  // (matches scripture-editor.web-view.tsx:374's `[chapterNum]` access pattern), so the array
-  // length minus 1 yields the highest chapter number. Returns 0 for non-current books, which
-  // computeRangeFromScope tolerates by falling back to the documented 999 sentinel.
-  const getLastChapter = useCallback(
-    (bookId: string): number => {
-      if (Canon.bookIdToNumber(bookId) !== currentBookNum) return 0;
-      if (!lastVersesInCurrentBook || lastVersesInCurrentBook.length === 0) return 0;
-      return lastVersesInCurrentBook.length - 1;
-    },
-    [currentBookNum, lastVersesInCurrentBook],
-  );
-
-  // ─── First-launch seed (R1) ──────────────────────────────────────────────
-  //
-  // PT9's behavior on first launch with no memento: defaults to "All Books". We deliberately
-  // deviate (per Sebastian's sluggish-default feedback): seed scope='chapter' from liveScrRef
-  // once it's available.
-
-  const hasSeededRef = useRef(false);
-  useEffect(() => {
-    if (hasSeededRef.current) return;
-    if (verseRange !== undefined) {
-      // Already seeded in a prior session — adopt it.
-      hasSeededRef.current = true;
-      return;
-    }
-    if (!liveScrRef || !liveScrRef.book) return;
-    const seededRange = computeRangeFromScope({
-      scope: 'chapter',
-      ref: liveScrRef,
-      rangeStart: defaultScrRef,
-      rangeEnd: defaultScrRef,
-      getEndVerse,
-      getLastChapter,
-    });
-    if (!seededRange) return;
-    hasSeededRef.current = true;
-    setSnapshotScrRef(liveScrRef);
-    setVerseRange(seededRange);
-  }, [verseRange, liveScrRef, getEndVerse, getLastChapter, setSnapshotScrRef, setVerseRange]);
-
   // ─── Client-side filtering for hideMatches ────────────────────────────────
 
   const visibleData = useMemo<ChecklistData | undefined>(() => {
@@ -706,28 +660,11 @@ global.webViewComponent = function ChecklistWebView({
 
   const handleScopeChange = useCallback(
     (newScope: Scope) => {
-      const computed = computeRangeFromScope({
-        scope: newScope,
-        ref: liveScrRef,
-        rangeStart,
-        rangeEnd,
-        getEndVerse,
-        getLastChapter,
-      });
+      // Auto-follow: verseRange is derived via the effect below from {scope, liveScrRef,
+      // rangeStart, rangeEnd}. handleScopeChange just commits the new mode.
       setScope(newScope);
-      setSnapshotScrRef(liveScrRef);
-      if (computed) setVerseRange(computed);
     },
-    [
-      liveScrRef,
-      rangeStart,
-      rangeEnd,
-      getEndVerse,
-      getLastChapter,
-      setScope,
-      setSnapshotScrRef,
-      setVerseRange,
-    ],
+    [setScope],
   );
 
   const handleRangeStartChange = useCallback(
@@ -850,10 +787,10 @@ global.webViewComponent = function ChecklistWebView({
 
   // ─── Verse-range picker via real ScopeSelector (Themes 5 #3 + 6) ─────────
   //
-  // R1 mode-aware snapshot semantics: the displayed scripture reference is the snapshot taken
-  // at click-time (`snapshotScrRef`), falling back to `liveScrRef` on first render before any
-  // user pick. `availableScopes` excludes `selectedBooks` and `selectedText` because the
-  // backend's `ChecklistScriptureRange` contract only models contiguous start/end ranges.
+  // Auto-follow semantics: the displayed scripture reference tracks `liveScrRef` directly;
+  // verseRange is derived from {scope, liveScrRef, rangeStart, rangeEnd} via the effect above.
+  // `availableScopes` excludes `selectedBooks` and `selectedText` because the backend's
+  // `ChecklistScriptureRange` contract only models contiguous start/end ranges.
   // `getEndVerse` enables verse-grid selection in the BCV pickers used by `range` mode (Theme 6).
 
   const verseRangeSelectorNode = useMemo(
@@ -868,7 +805,7 @@ global.webViewComponent = function ChecklistWebView({
           selectedBookIds={selectedBookIds}
           onSelectedBookIdsChange={setSelectedBookIds}
           localizedStrings={scopeSelectorLocalizedStrings}
-          currentScrRef={snapshotScrRef ?? liveScrRef}
+          currentScrRef={liveScrRef}
           rangeStart={rangeStart}
           rangeEnd={rangeEnd}
           onRangeStartChange={handleRangeStartChange}
@@ -886,7 +823,6 @@ global.webViewComponent = function ChecklistWebView({
       selectedBookIds,
       setSelectedBookIds,
       scopeSelectorLocalizedStrings,
-      snapshotScrRef,
       liveScrRef,
       rangeStart,
       rangeEnd,
