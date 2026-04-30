@@ -1696,8 +1696,26 @@ declare module 'papi-shared-types' {
     CheckDetails,
     CheckCreatorFunction,
     CheckResultsInvalidated,
+    ResourceReference,
+    ProjectReference,
+    DblResourceReference,
+    EnhancedResourceReference,
+    XmlResourceReference,
+    SourceLanguageResourceReference,
+    UnknownResourceReference,
     ResourceReferenceList,
   } from 'platform-scripture';
+
+  export type {
+    ResourceReference,
+    ProjectReference,
+    DblResourceReference,
+    EnhancedResourceReference,
+    XmlResourceReference,
+    SourceLanguageResourceReference,
+    UnknownResourceReference,
+    ResourceReferenceList,
+  };
 
   export interface ProjectDataProviderInterfaces {
     'platformScripture.USFM_Book': IUSFMBookProjectDataProvider;
@@ -1842,6 +1860,16 @@ declare module 'papi-shared-types' {
     'platformScripture.wordBreakRegex': string;
 
     /**
+     * Translations/resources used as translation models. In the vast majority of projects there
+     * will be only one model text; the list exists to support occasional exceptions. In contexts
+     * where exactly one model text is required, the first item in the list is used.
+     */
+    'platformScripture.modelTexts': ResourceReferenceList;
+
+    /** Projects and resources useful to team members as general translation references */
+    'platformScripture.referencedProjectsAndResources': ResourceReferenceList;
+
+    /**
      * Whether the project allows invisible characters to appear literally in USFM text. Corresponds
      * to `ScrText.Settings.AllowInvisibleChars` in Paratext 9.
      *
@@ -1869,16 +1897,6 @@ declare module 'papi-shared-types' {
      * When `true`, invisible characters are preserved literally in USFM. A `~` is then a literal
      * tilde character, not a whitespace substitute.
      */
-    /**
-     * Translations/resources used as translation models. In the vast majority of projects there
-     * will be only one model text; the list exists to support occasional exceptions. In contexts
-     * where exactly one model text is required, the first item in the list is used.
-     */
-    'platformScripture.modelTexts': ResourceReferenceList;
-
-    /** Projects and resources useful to team members as general translation references */
-    'platformScripture.referencedProjectsAndResources': ResourceReferenceList;
-
     'platformScripture.allowInvisibleCharacters': boolean;
   }
 }
