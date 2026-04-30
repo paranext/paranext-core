@@ -1,22 +1,27 @@
 /**
  * E2E tests for the markers-checklist Theme 5/4/6 wiring (Tasks 4-14).
  *
- * Coverage (10 tests):
+ * Test list (Test 3 deleted as obsolete under auto-follow — see comment by the gap):
  *
- * 1. First-launch seed — default scope='chapter' resolves to "Chapter: {currentBook} {chapterNum}".
- * 2. Scope freeze (R1) — toolbar trigger label does NOT update when only the scroll-group ref changes;
- *    the snapshot is frozen at the click that selected the scope.
- * 3. Re-pick — re-selecting "Chapter" while live ref is on a new chapter re-snapshots.
- * 4. Range mode emits BookChapterControl pickers and the trigger reflects the picked refs.
- * 5. Goto via row link broadcasts to the scroll group AND focuses the editor tab in the same project +
- *    scroll group.
- * 6. Goto without an open editor still broadcasts the scroll-group ref.
- * 7. Primary project retarget via ProjectSelector — tab title updates to new project name.
- * 8. Checks-side-panel tab dedup — re-selecting an already-open project does NOT open a duplicate
- *    editor tab (instead focuses the existing one).
- * 9. Sticky toolbar — toolbar triggers stay at top of the scrollable iframe area when the data table
- *    is scrolled.
- * 10. Hide-Matches gating — disabled when columnCount === 1; enabled after a comparative text is added.
+ * - Test 1: first-launch seed — default scope='chapter' resolves to "Chapter: {currentBook}
+ *   {chapterNum}".
+ * - Test 2: scope auto-follow — toolbar trigger label updates as the editor navigates to a different
+ *   chapter (per ScopeSelector deep surgery §6 — markers-checklist now auto-follows liveScrRef
+ *   instead of freezing a snapshot at scope-pick time).
+ * - Test 4a: range mode OK — picking "Range...", clicking OK commits the range and the trigger
+ *   reflects the committed range.
+ * - Test 4b: range mode Cancel — Cancel/Escape in the range dialog leaves scope/range unchanged (no
+ *   commit fires).
+ * - Test 5: goto via row link broadcasts to the scroll group AND focuses the editor tab in the same
+ *   project + scroll group.
+ * - Test 6: goto without an open editor still broadcasts the scroll-group ref.
+ * - Test 7: primary project retarget via ProjectSelector — tab title updates to new project name.
+ * - Test 8: checks-side-panel tab dedup — re-selecting an already-open project does NOT open a
+ *   duplicate editor tab (instead focuses the existing one).
+ * - Test 9: sticky toolbar — toolbar triggers stay at top of the scrollable iframe area when the data
+ *   table is scrolled.
+ * - Test 10: Hide-Matches gating — disabled when columnCount === 1; enabled after a comparative text
+ *   is added.
  *
  * Conventions match `markers-checklist-functional-UI-PKG-002.spec.ts` and
  * `markers-checklist-journey.spec.ts`:
@@ -197,9 +202,9 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   });
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Test 2: Scope freeze (R1) — navigation does NOT refetch / does NOT change trigger label
+  // Test 2: Scope auto-follow — navigation DOES update the trigger label
   // ═══════════════════════════════════════════════════════════════════════
-  test('Test 2: scope freeze (R1) — navigation does NOT change the verse-range trigger label', async ({
+  test('Test 2: scope auto-follow — editor navigation updates the verse-range trigger label', async ({
     mainPage,
   }) => {
     await openMarkersChecklistViaToolsMenu(mainPage);
@@ -210,10 +215,18 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
     await expect(trigger).toBeVisible({ timeout: 15_000 });
     const initialLabel = (await trigger.innerText()).trim();
     expect(initialLabel.length).toBeGreaterThan(0);
+    // The seed scope is 'chapter', and the trigger label format is "{Chapter}: {BOOK} {chapterNum}".
+    // Capture the chapter number we start at so we can pick a different one to navigate to.
+    const initialMatch = initialLabel.match(/([A-Z]{3})\s+(\d+)/);
+    expect(initialMatch).not.toBeNull();
+    const initialChapter = parseInt(initialMatch?.[2] ?? '1', 10);
+    // Navigate to a chapter that is guaranteed-different from the current one. Most books have
+    // at least chapter 1 and 2, so toggle between them.
+    const targetChapter = initialChapter === 1 ? 2 : 1;
 
     // Activate the editor tab so its hamburger / BCV are addressable (markers-checklist tab is
-    // currently covering it). Then navigate to a different chapter so the scroll-group ref
-    // updates while the markers-checklist's snapshotScrRef stays frozen.
+    // currently covering it). Then navigate to a different chapter — under auto-follow, the
+    // markers-checklist trigger label MUST update to track the live scrRef.
     //
     // The dock-tab is overlaid by a `.dock-panel-drag-size.drag-initiator` resize handle that
     // intercepts normal Playwright clicks. Use `dispatchEvent('click')` to fire the event
@@ -230,35 +243,27 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
       `iframe[title*="${PROJECT_NAME}" i][title*="Editable" i]`,
     );
 
-    // The editor's BCV trigger renders the current scripture reference inside the editor. Use
-    // the FIRST `[role="combobox"]` button — this matches the BookChapterControl's outer
-    // trigger across all editor variants.
-    // Best-effort navigation: drive the editor's BCV picker if present. The freeze invariant
-    // holds whether or not the BCV step succeeds — Playwright across editor variants can be
-    // fragile, so we treat any failure as benign and let the post-condition assertion do the
-    // real work.
+    // Drive the editor's BCV picker to navigate to a different chapter. The auto-follow effect
+    // uses a 250ms debounce, so we wait ~600ms after navigation before asserting.
+    //
+    // Use the Radix-friendly `pointerdown` sequence (same pattern as `openRadixDropdown`)
+    // because the editor's dock-ink-bar overlay intercepts ordinary `.click()` events on the
+    // BCV trigger after a tab swap. The popover opens on `pointerdown`.
     const editorBcv = editorFrame.locator('[role="combobox"]').first();
-    if ((await editorBcv.count()) > 0) {
-      try {
-        await editorBcv.click({ timeout: 5_000 });
-        const bcvInput = editorFrame.locator('[data-radix-popper-content-wrapper] input').first();
-        if ((await bcvInput.count()) > 0) {
-          await bcvInput.fill('1');
-          const ch1Cell = editorFrame
-            .locator('[data-radix-popper-content-wrapper]')
-            .getByText(/^1$/)
-            .first();
-          if ((await ch1Cell.count()) > 0) {
-            await ch1Cell.click({ timeout: 5_000 });
-          } else {
-            await mainPage.keyboard.press('Enter');
-          }
-        }
-        await mainPage.keyboard.press('Escape');
-      } catch {
-        // BCV interaction is fragile; the assertion below validates the freeze regardless.
-      }
-    }
+    await expect(editorBcv).toBeVisible({ timeout: 10_000 });
+    await editorBcv.dispatchEvent('pointerdown', { button: 0, pointerType: 'mouse' });
+    await editorBcv.dispatchEvent('mouseup', { button: 0 });
+    await editorBcv.dispatchEvent('click');
+    const bcvInput = editorFrame.locator('[data-radix-popper-content-wrapper] input').first();
+    await expect(bcvInput).toBeVisible({ timeout: 10_000 });
+    // Type the full reference "{BOOK} {chapter}" — `calculateTopMatch` parses this format and
+    // the picker's top-match Enter handler navigates to the parsed reference. Just typing the
+    // chapter number alone matches book IDs starting with that digit (e.g. "1" → "1 Chr").
+    const initialBook = initialMatch?.[1] ?? 'MAT';
+    await bcvInput.fill(`${initialBook} ${targetChapter}`);
+    await bcvInput.press('Enter');
+    await mainPage.waitForTimeout(200);
+    await mainPage.keyboard.press('Escape');
 
     // Re-activate the markers-checklist tab so the toolbar is foreground.
     await mainPage
@@ -266,77 +271,39 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
       .filter({ hasText: WEBVIEW_IFRAME_TITLE_RE })
       .first()
       .dispatchEvent('click');
-    // Give the tab swap a moment to settle.
-    await mainPage.waitForTimeout(300);
+    // Wait past the 250ms debounce + a buffer so the auto-follow effect has run and the
+    // displayed ref has updated.
+    await mainPage.waitForTimeout(600);
 
-    // Critical assertion: the trigger label did NOT change. The R1 contract freezes the scope
-    // snapshot at click-time, so navigation alone must not retarget the checklist.
+    // Critical assertion: under auto-follow, the trigger label MUST now reflect the new live
+    // scrRef. We poll up to a few seconds because the trigger label updates via React render
+    // (not immediate after the navigation click). The new label should contain the target
+    // chapter number.
+    await expect(trigger).toHaveText(new RegExp(`[A-Z]{3}\\s+${targetChapter}\\b`), {
+      timeout: 5_000,
+    });
     const afterLabel = (await trigger.innerText()).trim();
-    expect(afterLabel).toBe(initialLabel);
+    expect(afterLabel).not.toBe(initialLabel);
 
-    await mainPage.screenshot({ path: `${EVD_DIR}/test-2-freeze.png` });
+    await mainPage.screenshot({ path: `${EVD_DIR}/test-2-autofollow.png` });
   });
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Test 3: Re-pick chapter re-snapshots
+  // Test 3 (re-snapshot via re-pick) deleted: auto-follow makes this scenario
+  // obsolete (see surgery spec §6 — markers-checklist now auto-follows liveScrRef).
   // ═══════════════════════════════════════════════════════════════════════
-  test('Test 3: re-picking the current scope re-snapshots to the live ref', async ({
-    mainPage,
-  }) => {
-    await openMarkersChecklistViaToolsMenu(mainPage);
-    const frame = checklistFrame(mainPage);
-    await waitForDataTableSettled(frame);
-
-    const trigger = scopeTrigger(frame);
-    await expect(trigger).toBeVisible({ timeout: 15_000 });
-    const initialLabel = (await trigger.innerText()).trim();
-
-    // Open the ScopeSelector dropdown and re-click the current chapter option. This simulates
-    // the user re-picking after navigating: the wiring must call `setSnapshotScrRef(liveScrRef)`
-    // even when scope is unchanged, refreshing the displayed ref.
-    await openRadixDropdown(trigger, mainPage);
-
-    // The dropdown items render inside the Radix portal — inside an iframe that means the
-    // iframe's body. Click the "Current chapter" item (DropdownMenuCheckboxItem renders with
-    // `role="menuitemcheckbox"`). The popover may render off-viewport when the iframe is wider
-    // than the visible window, so dispatch the events directly rather than relying on
-    // viewport-targeted clicks.
-    const chapterItem = frame
-      .locator('[role="menuitemcheckbox"]')
-      .filter({ hasText: /chapter/i })
-      .first();
-    await expect(chapterItem).toBeAttached({ timeout: 10_000 });
-    await chapterItem.dispatchEvent('pointerdown', { button: 0, pointerType: 'mouse' });
-    await chapterItem.dispatchEvent('mouseup', { button: 0 });
-    await chapterItem.dispatchEvent('click');
-
-    // The data may refetch. Wait for it to settle.
-    await waitForDataTableSettled(frame);
-
-    // Trigger label is still present (could equal initialLabel if liveScrRef hasn't changed
-    // since first-launch seed — that's still a valid re-snapshot). The critical contract is:
-    // the label still matches the live "{BOOK} {chapterNum}" pattern.
-    const afterLabel = (await trigger.innerText()).trim();
-    expect(afterLabel).toMatch(/[A-Z]{3}\s+\d+/);
-    // Sanity — the label is a non-empty string (even if it equals initialLabel, the re-pick
-    // call was made and the slot was refreshed).
-    expect(afterLabel.length).toBeGreaterThan(0);
-    expect(initialLabel.length).toBeGreaterThan(0);
-
-    await mainPage.screenshot({ path: `${EVD_DIR}/test-3-resnapshot.png` });
-  });
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Test 4: Range mode emits picker refs
+  // Test 4a: Range mode — OK commits, trigger reflects the range
   // ═══════════════════════════════════════════════════════════════════════
-  // Range mode requires opening a Dialog (selectedBooks/range fallback dialog) and then driving
-  // two BookChapterControl pickers. The full BCV flow (book select → chapter select → submit)
-  // through CDP is fragile because the popover can re-mount during transitions. We assert the
-  // wiring point: selecting "Range..." opens the range dialog with two pickers and the trigger
-  // reflects the range mode (the `formatScrRefRange` output starts with a 3-letter book id).
-  test('Test 4: range mode opens range pickers and trigger shows the range', async ({
-    mainPage,
-  }) => {
+  // Range mode opens a Dialog (D2 staging — drafts populate while open, commit on OK). Driving
+  // both BookChapterControl pickers through CDP is fragile (popover re-mounts during
+  // transitions), so we assert the OK-commit wiring point: opening "Range...", clicking OK,
+  // and verifying the trigger now displays the (default-seeded) range — proving the dialog
+  // commit wiring is live and the staging drafts flushed correctly. NOTE: deviation from spec
+  // — picker interaction skipped, OK commits whatever the dialog seeds with. The point of 4a
+  // is the OK→commit path, not specific BCV values.
+  test('Test 4a: range mode — OK commits and trigger shows the range', async ({ mainPage }) => {
     await openMarkersChecklistViaToolsMenu(mainPage);
     const frame = checklistFrame(mainPage);
     await waitForDataTableSettled(frame);
@@ -361,17 +328,17 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
     const rangeDialog = frame.getByRole('dialog');
     await expect(rangeDialog).toBeAttached({ timeout: 10_000 });
 
-    // Close the dialog (full BCV navigation via CDP is fragile, so we assert the trigger
-    // updates after committing the current default range with OK). The OK button text may
-    // resolve to the localized "OK" once strings load, or remain as an unresolved key
-    // placeholder during early frame loads. The dialog has exactly four buttons (start BCV,
-    // end BCV, OK, Close); excluding the BCV triggers (aria-label="book-chapter-trigger") and
-    // the dialog's built-in Close button (text="Close") leaves the OK button unambiguously.
+    // Click OK (full BCV navigation via CDP is fragile, so we assert the trigger updates after
+    // committing the default-seeded range with OK). The DialogFooter renders the OK button as
+    // the LAST `<Button>` in the dialog body — Cancel is the first footer button (outline
+    // variant), OK is the second. Filtering out the BCV triggers (aria-label="book-chapter
+    // -trigger") and the dialog's built-in Close button (text="Close") leaves [Cancel, OK]
+    // in DOM order; `.last()` selects OK.
     const okBtn = rangeDialog
       .locator('button')
       .filter({ hasNotText: /^Close$/ })
       .filter({ hasNot: rangeDialog.locator('[aria-label="book-chapter-trigger"]') })
-      .first();
+      .last();
     await expect(okBtn).toBeAttached({ timeout: 5_000 });
     await okBtn.dispatchEvent('click');
 
@@ -384,7 +351,74 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
     const labelAfter = (await trigger.innerText()).trim();
     expect(labelAfter).toMatch(/[A-Z]{3}\s+\d+:\d+/);
 
-    await mainPage.screenshot({ path: `${EVD_DIR}/test-4-range.png` });
+    await mainPage.screenshot({ path: `${EVD_DIR}/test-4a-range-ok.png` });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Test 4b: Range mode — Cancel discards (no commit)
+  // ═══════════════════════════════════════════════════════════════════════
+  // Per ScopeSelector deep surgery §5.5 D3 — range dialog stages edits in drafts and discards
+  // on Cancel/Escape/X. The trigger label must remain unchanged after dismiss. NOTE: deviation
+  // from spec — picker interaction skipped (driving BCV pickers through CDP is fragile), and
+  // dismiss is via Escape rather than Cancel button click (the Cancel button can be off-screen
+  // in narrow viewports and BCV popovers intercept dispatched clicks on overlapping
+  // coordinates). All three dismiss paths flow through the same `handleDialogOpenChange(false)`
+  // → `setDraftScope(undefined)` discard logic, so the contract holds regardless.
+  test('Test 4b: range mode — Cancel/Escape discards, trigger label unchanged', async ({
+    mainPage,
+  }) => {
+    await openMarkersChecklistViaToolsMenu(mainPage);
+    const frame = checklistFrame(mainPage);
+    await waitForDataTableSettled(frame);
+
+    const trigger = scopeTrigger(frame);
+    await expect(trigger).toBeVisible({ timeout: 15_000 });
+    // Capture the chapter-scope label BEFORE opening the dialog. The seed scope is 'chapter',
+    // so this is the "Chapter: {BOOK} {chapterNum}" label. After Cancel, it must be unchanged.
+    const initialLabel = (await trigger.innerText()).trim();
+    expect(initialLabel.length).toBeGreaterThan(0);
+
+    // Open the dropdown and click "Range...".
+    await openRadixDropdown(trigger, mainPage);
+    const rangeItem = frame.locator('[role="menuitem"]').filter({ hasText: /range/i }).first();
+    await expect(rangeItem).toBeAttached({ timeout: 10_000 });
+    await rangeItem.dispatchEvent('pointerdown', { button: 0, pointerType: 'mouse' });
+    await rangeItem.dispatchEvent('mouseup', { button: 0 });
+    await rangeItem.dispatchEvent('click');
+
+    // Scope the dialog locator to the OUTER range dialog by its header text. BCV picker
+    // popovers also have role="dialog" but never carry the "Select range" header — using
+    // `getByRole('dialog', { name: ... })` would resolve via aria-labelledby, but the text
+    // can be unresolved during early frame loads. Instead match on the dialog whose subtree
+    // contains the heading text or the localization-key placeholder.
+    const rangeDialog = frame
+      .locator('[role="dialog"]')
+      .filter({
+        has: frame
+          .locator('h2, [role="heading"]')
+          .filter({ hasText: /select.?range|scope_selector_select_range/i }),
+      })
+      .first();
+    await expect(rangeDialog).toBeAttached({ timeout: 10_000 });
+
+    // Press Escape to dismiss the dialog. Per `handleDialogOpenChange(false)`, Escape /
+    // Cancel / X all flow through the same discard path: `setDialogSub(undefined)` plus
+    // `setDraftScope(undefined)` — no commit fires. This is the most robust dismiss method
+    // because the dialog's Cancel button can be off-screen in narrow viewports, and BCV
+    // popovers can intercept dispatched click events on overlapping coordinates.
+    await mainPage.keyboard.press('Escape');
+
+    // Dialog should close.
+    await expect(rangeDialog).not.toBeAttached({ timeout: 5_000 });
+
+    // Critical assertion: the trigger label is UNCHANGED — Cancel discarded any pending draft
+    // and no commit fired. We give the data table a moment to settle in case any spurious
+    // refetch was queued, then assert.
+    await mainPage.waitForTimeout(600);
+    const labelAfter = (await trigger.innerText()).trim();
+    expect(labelAfter).toBe(initialLabel);
+
+    await mainPage.screenshot({ path: `${EVD_DIR}/test-4b-range-cancel.png` });
   });
 
   // ═══════════════════════════════════════════════════════════════════════
