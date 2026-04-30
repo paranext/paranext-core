@@ -457,6 +457,84 @@ interface DataTableProps<TData, TValue> {
  * from TanStack's React Table library
  */
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, id, isLoading, noResultsMessage, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+/** A project that can appear in the Manage Books dropdown. */
+export type ManageBooksDialogProject = {
+	id: string;
+	shortName: string;
+	name: string;
+};
+/**
+ * Presence/metadata for a single book in a project. A project's book list is the set of books
+ * currently present in it; anything in the canonical list but not returned is treated as absent
+ * ("new" for create/copy/import purposes).
+ */
+export type ManageBooksDialogBookInfo = {
+	/** 3-letter USFM book code, e.g. 'GEN'. */
+	id: string;
+	/** ISO-formatted date the book was last modified in this project. */
+	lastModified?: string;
+};
+export type ManageBooksCreateMethod = "empty" | "chapterVerse" | "referenceText";
+export type ManageBooksImportStrategy = "replaceEntireBooks" | "nonExistingChapters";
+/** A single inline-picked file associated with a book. */
+export type ManageBooksImportFile = {
+	/** The picked file's display name. */
+	file: string;
+	/** ISO date representing the picked file's last-modified timestamp. */
+	date: string;
+};
+export type ManageBooksDialogProps = {
+	/** Whether the dialog is open. */
+	open: boolean;
+	/** Called when the dialog requests to be closed. */
+	onOpenChange: (open: boolean) => void;
+	/** Id of the project currently being managed (controlled). */
+	projectId: string;
+	/** Called when the user picks a different project in the header. */
+	onProjectIdChange: (projectId: string) => void;
+	/** Load the list of projects available for selection. */
+	loadProjects: () => Promise<ManageBooksDialogProject[]> | ManageBooksDialogProject[];
+	/** Load the books present in a given project. */
+	loadBooks: (projectId: string) => Promise<ManageBooksDialogBookInfo[]> | ManageBooksDialogBookInfo[];
+	/** Load the versification identifier for a given project. */
+	loadVersification: (projectId: string) => Promise<string> | string;
+	/** Cross-launch: open scripture reference settings for this project. */
+	onOpenScriptureReferenceSettings: (projectId: string) => void;
+	/** Cross-launch: open project canons for this project. */
+	onOpenProjectCanons: (projectId: string) => void;
+	/** Cross-launch: open registry for this project. */
+	onOpenRegistry: (projectId: string) => void;
+	/** Commit a Create-books operation with one of the three methods. */
+	onCreateBooks: (args: {
+		projectId: string;
+		books: string[];
+		method: ManageBooksCreateMethod;
+		referenceProjectId?: string;
+	}) => void | Promise<void>;
+	/** Commit an Import-books operation using the supplied inline files. */
+	onImportBooks: (args: {
+		projectId: string;
+		files: Record<string, ManageBooksImportFile>;
+		strategy: ManageBooksImportStrategy;
+	}) => void | Promise<void>;
+	/** Commit a Copy-books operation from another project. */
+	onCopyBooks: (args: {
+		destProjectId: string;
+		sourceProjectId: string;
+		books: string[];
+	}) => void | Promise<void>;
+	/** Commit a Delete-books operation. */
+	onDeleteBooks: (args: {
+		projectId: string;
+		books: string[];
+	}) => void | Promise<void>;
+	/**
+	 * Canonical book id list shown in the dialog. Defaults to the OT+NT+DC canonical books in
+	 * canonical order.
+	 */
+	bookIds?: string[];
+};
+export declare function ManageBooksDialog({ open, onOpenChange, projectId, onProjectIdChange, loadProjects, loadBooks, loadVersification, onOpenScriptureReferenceSettings, onOpenProjectCanons, onOpenRegistry, onCreateBooks, onImportBooks, onCopyBooks, onDeleteBooks, bookIds, }: ManageBooksDialogProps): import("react/jsx-runtime").JSX.Element;
 interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
