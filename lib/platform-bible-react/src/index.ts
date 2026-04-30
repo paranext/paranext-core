@@ -41,12 +41,19 @@ export type {
 } from './components/advanced/data-table/data-table.component';
 export {
   ManageBooksDialog,
-  type ManageBooksDialogProps,
-  type ManageBooksDialogProject,
-  type ManageBooksDialogBookInfo,
+  MANAGE_BOOKS_DIALOG_STRING_KEYS,
+  type AlertEntry as ManageBooksAlertEntry,
+  type EstherTemplate as ManageBooksEstherTemplate,
+  type ManageBooksAction,
+  type ManageBooksComparisonState,
   type ManageBooksCreateMethod,
-  type ManageBooksImportStrategy,
+  type ManageBooksDialogBookInfo,
+  type ManageBooksDialogLocalizedStrings,
+  type ManageBooksDialogProject,
+  type ManageBooksDialogProps,
   type ManageBooksImportFile,
+  type ManageBooksImportStrategy,
+  type MutationResult as ManageBooksMutationResult,
 } from './components/advanced/manage-books-dialog/manage-books-dialog.component';
 export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
 export {

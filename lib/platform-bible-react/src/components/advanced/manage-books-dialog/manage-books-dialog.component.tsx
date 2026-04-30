@@ -1,9 +1,16 @@
-/* eslint-disable -- Frozen design artifact from paranext-core PR #2224 (Sebastian Wiehe).
- * Lint compliance is intentionally deferred to phase-3-ui per FN-008 in
- * .context/features/manage-books/forward-notes.md (refactor + wire-in cycle). The cherry-pick
- * brings this file in verbatim so reviewers can compare against Sebastian's design source. */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  AlertCircle,
+  AlertTriangle,
   BookOpenCheck,
   BookPlus,
   Copy,
@@ -11,7 +18,9 @@ import {
   ExternalLink,
   FolderOpen,
   Info,
+  Loader2,
   Trash2,
+  X,
 } from 'lucide-react';
 import { Canon } from '@sillsdev/scripture';
 import { Dialog, DialogContent } from '@/components/shadcn-ui/dialog';
@@ -36,38 +45,36 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
 import { Sonner, sonner } from '@/components/shadcn-ui/sonner';
 import { cn } from '@/utils/shadcn-ui.util';
+import {
+  EstherTemplate,
+  ManageBooksAction,
+  ManageBooksComparisonState,
+  ManageBooksCreateMethod,
+  ManageBooksDialogBookInfo,
+  ManageBooksDialogLocalizedStrings,
+  ManageBooksDialogProject,
+  ManageBooksImportFile,
+  ManageBooksImportStrategy,
+  MutationResult,
+} from './manage-books-dialog.types';
 
-/** A project that can appear in the Manage Books dropdown. */
-export type ManageBooksDialogProject = {
-  id: string;
-  shortName: string;
-  name: string;
-};
+// Re-export the public types for backwards compatibility with the original cherry-pick.
+export type {
+  AlertEntry,
+  EstherTemplate,
+  ManageBooksAction,
+  ManageBooksComparisonState,
+  ManageBooksCreateMethod,
+  ManageBooksDialogBookInfo,
+  ManageBooksDialogLocalizedStrings,
+  ManageBooksDialogProject,
+  ManageBooksImportFile,
+  ManageBooksImportStrategy,
+  MutationResult,
+} from './manage-books-dialog.types';
+export { MANAGE_BOOKS_DIALOG_STRING_KEYS } from './manage-books-dialog.types';
 
-/**
- * Presence/metadata for a single book in a project. A project's book list is the set of books
- * currently present in it; anything in the canonical list but not returned is treated as absent
- * ("new" for create/copy/import purposes).
- */
-export type ManageBooksDialogBookInfo = {
-  /** 3-letter USFM book code, e.g. 'GEN'. */
-  id: string;
-  /** ISO-formatted date the book was last modified in this project. */
-  lastModified?: string;
-};
-
-export type ManageBooksCreateMethod = 'empty' | 'chapterVerse' | 'referenceText';
-
-export type ManageBooksImportStrategy = 'replaceEntireBooks' | 'nonExistingChapters';
-
-/** A single inline-picked file associated with a book. */
-export type ManageBooksImportFile = {
-  /** The picked file's display name. */
-  file: string;
-  /** ISO date representing the picked file's last-modified timestamp. */
-  date: string;
-};
-
+/** Props accepted by `ManageBooksDialog`. */
 export type ManageBooksDialogProps = {
   /** Whether the dialog is open. */
   open: boolean;
@@ -95,48 +102,77 @@ export type ManageBooksDialogProps = {
   /** Cross-launch: open registry for this project. */
   onOpenRegistry: (projectId: string) => void;
 
-  /** Commit a Create-books operation with one of the three methods. */
+  /**
+   * Commit a Create-books operation. Optional return shape carries `AlertEntry[]` warnings/errors
+   * to be rendered as a result panel. If void/undefined is returned, the panel is not shown.
+   */
   onCreateBooks: (args: {
     projectId: string;
     books: string[];
     method: ManageBooksCreateMethod;
     referenceProjectId?: string;
-  }) => void | Promise<void>;
+    estherTemplate?: EstherTemplate;
+  }) => Promise<MutationResult | undefined> | MutationResult | undefined | void;
 
-  /** Commit an Import-books operation using the supplied inline files. */
+  /** Commit an Import-books operation. */
   onImportBooks: (args: {
     projectId: string;
     files: Record<string, ManageBooksImportFile>;
     strategy: ManageBooksImportStrategy;
-  }) => void | Promise<void>;
+  }) => Promise<MutationResult | undefined> | MutationResult | undefined | void;
 
-  /** Commit a Copy-books operation from another project. */
+  /** Commit a Copy-books operation. */
   onCopyBooks: (args: {
     destProjectId: string;
     sourceProjectId: string;
     books: string[];
-  }) => void | Promise<void>;
+  }) => Promise<MutationResult | undefined> | MutationResult | undefined | void;
 
   /** Commit a Delete-books operation. */
-  onDeleteBooks: (args: { projectId: string; books: string[] }) => void | Promise<void>;
+  onDeleteBooks: (args: {
+    projectId: string;
+    books: string[];
+  }) => Promise<MutationResult | undefined> | MutationResult | undefined | void;
+
+  /**
+   * (A1) Open the Greek-Esther template picker. Returns the chosen template or undefined if the
+   * user cancels. The picker itself (WP-002) is built separately; the dialog only knows it must
+   * call this callback when ESG is being created from a reference text.
+   */
+  onOpenEstherPicker?: (selectedBooks: string[]) => Promise<EstherTemplate | undefined>;
+
+  /**
+   * (A8) Optional override for the Import file picker. When omitted, the dialog falls back to a
+   * native `<input type="file">`. Story decorators provide a programmatic mock here.
+   */
+  onPickImportFiles?: () => Promise<File[] | undefined>;
+
+  /**
+   * (A2) Whether the project is shared with other users. When true, the delete-confirm prompt shows
+   * enhanced "they will see this change immediately" copy. Defaults to false.
+   */
+  isSharedProject?: boolean;
 
   /**
    * Canonical book id list shown in the dialog. Defaults to the OT+NT+DC canonical books in
    * canonical order.
    */
   bookIds?: string[];
+
+  /**
+   * Localization strings. Pass a map keyed by `%manageBooks_*%` tokens (see
+   * `MANAGE_BOOKS_DIALOG_STRING_KEYS`). When a key is missing the component falls back to the
+   * English copy embedded inline.
+   */
+  localizedStrings?: ManageBooksDialogLocalizedStrings;
 };
 
 // --------------------------------------------------------------------------
 // Helpers
 // --------------------------------------------------------------------------
 
-type Action = 'view' | 'create' | 'import' | 'copy' | 'delete';
-
-type ComparisonState = 'Same' | 'Newer' | 'Older' | 'Missing' | 'New';
-
 const comparisonVariant = (
-  state: ComparisonState,
+  state: ManageBooksComparisonState,
 ): 'default' | 'secondary' | 'destructive' | 'outline' => {
   switch (state) {
     case 'Same':
@@ -154,23 +190,23 @@ const comparisonVariant = (
 const computeCompareState = (
   sourceDate: string | undefined,
   destDate: string | undefined,
-): ComparisonState => {
+): ManageBooksComparisonState => {
+  if (!sourceDate && !destDate) return 'undetermined';
   if (!sourceDate) return 'Missing';
   if (!destDate) return 'New';
   if (sourceDate === destDate) return 'Same';
   return sourceDate > destDate ? 'Newer' : 'Older';
 };
 
-const CREATE_METHOD_LABELS: Record<ManageBooksCreateMethod, string> = {
-  empty: 'Empty book',
-  chapterVerse: 'With all chapter and verse numbers',
-  referenceText: 'Based on',
+/** A7 default-eligibility per comparison state. */
+const isDefaultEligible = (state: ManageBooksComparisonState): boolean => {
+  // from-only ('New' here) and from-newer ('Newer') checked by default;
+  // identical/Same, to-newer/Older, undetermined left unchecked.
+  return state === 'New' || state === 'Newer';
 };
 
 const DEFAULT_BOOK_IDS: string[] = (() => {
   const ids: string[] = [];
-  // Canon numbers 1-39 are OT, 40-66 NT, 67+ deuterocanon. Use whatever the
-  // Canon module resolves so we stay in sync with @sillsdev/scripture.
   for (let n = 1; n <= 88; n += 1) {
     const id = Canon.bookNumberToId(n, '');
     if (id) ids.push(id);
@@ -179,6 +215,34 @@ const DEFAULT_BOOK_IDS: string[] = (() => {
 })();
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+
+const isCanonicalId = (book: string): boolean => Canon.isCanonical(book);
+
+const isUsxFileName = (name: string): boolean => {
+  const lower = name.toLowerCase();
+  return lower.endsWith('.usx') || lower.endsWith('.xml');
+};
+
+/** Narrow runtime check for an action toggle value. */
+const isAction = (v: string): v is ManageBooksAction =>
+  v === 'view' || v === 'create' || v === 'import' || v === 'copy' || v === 'delete';
+
+/** Narrow runtime check for a create-method dropdown value. */
+const isCreateMethod = (v: string): v is ManageBooksCreateMethod =>
+  v === 'empty' || v === 'chapterVerse' || v === 'referenceText';
+
+type ViewPresenceFilter = 'all' | 'new' | 'existing';
+type CopyStateFilter = 'all' | 'new' | 'newer' | 'older' | 'same' | 'undetermined';
+
+const isPresenceFilter = (v: string): v is ViewPresenceFilter =>
+  v === 'all' || v === 'new' || v === 'existing';
+const isCopyStateFilter = (v: string): v is CopyStateFilter =>
+  v === 'all' ||
+  v === 'new' ||
+  v === 'newer' ||
+  v === 'older' ||
+  v === 'same' ||
+  v === 'undetermined';
 
 type ProjectBookState = {
   present: Set<string>;
@@ -194,6 +258,13 @@ const toProjectBookState = (books: ManageBooksDialogBookInfo[] | undefined): Pro
   });
   return { present, dates };
 };
+
+/** Format a localized template string by substituting positional `{0}`, `{1}`, … placeholders. */
+const fmt = (template: string, ...values: ReadonlyArray<string | number>): string =>
+  template.replace(/\{(\d+)\}/g, (_, idx) => {
+    const v = values[Number(idx)];
+    return v === undefined ? '' : String(v);
+  });
 
 // --------------------------------------------------------------------------
 // Component
@@ -214,9 +285,23 @@ export function ManageBooksDialog({
   onImportBooks,
   onCopyBooks,
   onDeleteBooks,
+  onOpenEstherPicker,
+  onPickImportFiles,
+  isSharedProject = false,
   bookIds,
+  localizedStrings = {},
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
+
+  const t = useCallback(
+    (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) =>
+      localizedStrings[key] ?? fallback,
+    [localizedStrings],
+  );
+
+  const liveRegionId = useId();
+  const cvDisabledHintId = useId();
+  const applyDisabledHintId = useId();
 
   // -- Loaded data ---------------------------------------------------------
   const [projects, setProjects] = useState<ManageBooksDialogProject[]>([]);
@@ -234,38 +319,72 @@ export function ManageBooksDialog({
 
   useEffect(() => {
     if (!open) return;
-    Promise.resolve(loadProjects()).then(setProjects);
+    Promise.resolve(loadProjects())
+      .then((next) => {
+        setProjects(next);
+        return undefined;
+      })
+      .catch(() => undefined);
   }, [open, loadProjects]);
 
   useEffect(() => {
     if (!open) return;
-    refreshBooks(projectId);
+    refreshBooks(projectId).catch(() => undefined);
   }, [open, projectId, refreshBooks]);
 
   // -- UI state ------------------------------------------------------------
-  const [action, setAction] = useState<Action>('view');
-  // One selection set per action; a filter only affects visibility, so items
-  // outside the filter stay in the selection for when the user switches back.
+  const [action, setAction] = useState<ManageBooksAction>('view');
   const [selectionsByAction, setSelectionsByAction] = useState<Record<string, Set<string>>>({});
   const [filter, setFilter] = useState('');
   const [copySourceId, setCopySourceId] = useState<string | undefined>(undefined);
   const [createMethod, setCreateMethod] = useState<ManageBooksCreateMethod>('referenceText');
   const [createReferenceId, setCreateReferenceId] = useState<string | undefined>(undefined);
   const [importFiles, setImportFiles] = useState<Record<string, ManageBooksImportFile>>({});
-  const [importConflict, setImportConflict] = useState<{
-    books: string[];
-    existing: string[];
-  } | null>(null);
+  const [importConflict, setImportConflict] = useState<
+    | {
+        books: string[];
+        existing: string[];
+      }
+    | undefined
+  >(undefined);
+  const [usxConfirm, setUsxConfirm] = useState<{ files: string[] } | undefined>(undefined);
+  const [overlapError, setOverlapError] = useState<
+    { book: string; existingFile: string; newFile: string } | undefined
+  >(undefined);
   const [copyStateFilter, setCopyStateFilter] = useState<
-    'all' | 'new' | 'newer' | 'older' | 'same'
+    'all' | 'new' | 'newer' | 'older' | 'same' | 'undetermined'
   >('all');
   const [importPresenceFilter, setImportPresenceFilter] = useState<'all' | 'new' | 'existing'>(
     'all',
   );
   const [viewPresenceFilter, setViewPresenceFilter] = useState<'all' | 'new' | 'existing'>('all');
+  // Using null for React ref compatibility
+  // eslint-disable-next-line no-null/no-null
   const importFileInputRef = useRef<HTMLInputElement>(null);
+  // Using null for React ref compatibility
+  // eslint-disable-next-line no-null/no-null
   const toggleGroupRef = useRef<HTMLDivElement>(null);
   const [toggleGroupWidth, setToggleGroupWidth] = useState<number | undefined>(undefined);
+
+  // A2: delete confirm state
+  const [deleteConfirm, setDeleteConfirm] = useState<{ books: string[] } | undefined>(undefined);
+  // A4: pre-flight prompts (versification + missing model books)
+  const [createPrompt, setCreatePrompt] = useState<
+    | { kind: 'missing-model'; missing: string[]; available: string[] }
+    | { kind: 'versification'; destVrs: string; modelVrs: string; books: string[] }
+    | undefined
+  >(undefined);
+  // A3: loading state during mutations
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // A5: result panel from latest mutation
+  const [result, setResult] = useState<MutationResult | undefined>(undefined);
+  // A8: track auto-browse to fire only once per Import-mode entry
+  const importAutoBrowseFired = useRef(false);
+  // C3: roving tabindex for keyboard navigation
+  const [focusedBook, setFocusedBook] = useState<string | undefined>(undefined);
+  // Using null for React ref compatibility
+  // eslint-disable-next-line no-null/no-null
+  const gridRef = useRef<HTMLUListElement>(null);
 
   // -- Load source-project books on demand when Copy picks a source --------
   useEffect(() => {
@@ -275,29 +394,37 @@ export function ManageBooksDialog({
     refreshBooks(copySourceId);
   }, [open, copySourceId, booksByProjectId, refreshBooks]);
 
-  // -- Load versification for the current project (exposed to consumer via
-  // their own callback side-effects; we also surface it in the header).
+  // -- Load versification for the current project -------------------------
   const [versification, setVersification] = useState<string | undefined>(undefined);
   useEffect(() => {
     if (!open) {
       setVersification(undefined);
-      return;
+      return undefined;
     }
     let cancelled = false;
-    Promise.resolve(loadVersification(projectId)).then((v) => {
-      if (!cancelled) setVersification(v);
-    });
+    Promise.resolve(loadVersification(projectId))
+      .then((v) => {
+        if (!cancelled) setVersification(v);
+        return undefined;
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
   }, [open, projectId, loadVersification]);
 
   // -- Derived state -------------------------------------------------------
-  const project =
-    projects.find((p) => p.id === projectId) ??
-    ({ id: projectId, shortName: projectId, name: projectId } as ManageBooksDialogProject);
+  const fallbackProject: ManageBooksDialogProject = {
+    id: projectId,
+    shortName: projectId,
+    name: projectId,
+  };
+  const project = projects.find((p) => p.id === projectId) ?? fallbackProject;
   const otherProjects = projects.filter((p) => p.id !== projectId);
   const copySourceProject = copySourceId ? projects.find((p) => p.id === copySourceId) : undefined;
+  const createReferenceProject = createReferenceId
+    ? projects.find((p) => p.id === createReferenceId)
+    : undefined;
 
   const current = useMemo<ProjectBookState>(
     () => toProjectBookState(booksByProjectId[projectId]),
@@ -306,6 +433,10 @@ export function ManageBooksDialog({
   const copySource = useMemo<ProjectBookState | undefined>(
     () => (copySourceId ? toProjectBookState(booksByProjectId[copySourceId]) : undefined),
     [copySourceId, booksByProjectId],
+  );
+  const createReferenceBookState = useMemo<ProjectBookState | undefined>(
+    () => (createReferenceId ? toProjectBookState(booksByProjectId[createReferenceId]) : undefined),
+    [createReferenceId, booksByProjectId],
   );
 
   const selected = useMemo(
@@ -325,7 +456,7 @@ export function ManageBooksDialog({
   // Project change wipes selections; nothing carries across projects.
   useEffect(() => setSelectionsByAction({}), [projectId]);
 
-  // Changing the copy source invalidates the copy selection.
+  // Changing the copy source invalidates the copy selection (we re-seed it below with defaults).
   useEffect(() => {
     setSelectionsByAction((prev) => {
       if (!prev.copy) return prev;
@@ -353,8 +484,7 @@ export function ManageBooksDialog({
     if (createReferenceId === projectId) setCreateReferenceId(undefined);
   }, [copySourceId, createReferenceId, projectId]);
 
-  // Mirror the ToggleGroup width so the Create dropdown row can span the same
-  // width (single dropdown fills; referenceText splits 50/50).
+  // Mirror the ToggleGroup width for the create-mode method-row sizing.
   useLayoutEffect(() => {
     const el = toggleGroupRef.current;
     if (!el) return undefined;
@@ -385,6 +515,25 @@ export function ManageBooksDialog({
     }
   }, [action, allBooks, current, copySource]);
 
+  // A7: seed copy selection with default-eligible books when source picked.
+  useEffect(() => {
+    if (action !== 'copy') return;
+    if (!copySource || !copySourceId) return;
+    setSelectionsByAction((prev) => {
+      if (prev.copy && prev.copy.size > 0) return prev;
+      const seed = new Set<string>();
+      universe.forEach((b) => {
+        const destHas = current.present.has(b);
+        const state = computeCompareState(
+          copySource.dates[b],
+          destHas ? current.dates[b] : undefined,
+        );
+        if (isDefaultEligible(state)) seed.add(b);
+      });
+      return { ...prev, copy: seed };
+    });
+  }, [action, copySource, copySourceId, universe, current]);
+
   const detectBookId = useCallback(
     (filename: string): string | undefined => {
       const upper = filename.toUpperCase();
@@ -393,40 +542,124 @@ export function ManageBooksDialog({
     [allBooks],
   );
 
+  /**
+   * (A10) Ingest a list of picked files into the import grid. Detects the book ID per file,
+   * surfaces unmatched files via a sonner warning, and rejects the addition with an in-dialog
+   * validation error if two files map to the same book.
+   */
+  const ingestImportFiles = useCallback(
+    (picked: { name: string }[]): { addedBooks: string[] } => {
+      const emptyResult: { addedBooks: string[] } = { addedBooks: [] };
+      if (picked.length === 0) return emptyResult;
+      const additions: Record<string, ManageBooksImportFile> = {};
+      const addedBooks: string[] = [];
+      const unmatched: string[] = [];
+      const usxFiles: string[] = [];
+      // A10: guard against two files mapping to the same book within this batch.
+      const seenInBatch: Record<string, string> = {};
+      let aborted = false;
+      picked.forEach((f) => {
+        if (aborted) return;
+        const book = detectBookId(f.name);
+        if (!book) {
+          unmatched.push(f.name);
+          return;
+        }
+        if (seenInBatch[book]) {
+          setOverlapError({ book, existingFile: seenInBatch[book], newFile: f.name });
+          aborted = true;
+          return;
+        }
+        // A10: also block if the grid already has a different file for this book.
+        const existing = importFiles[book];
+        if (existing && existing.file !== f.name) {
+          setOverlapError({ book, existingFile: existing.file, newFile: f.name });
+          aborted = true;
+          return;
+        }
+        seenInBatch[book] = f.name;
+        additions[book] = { file: f.name, date: todayISO() };
+        addedBooks.push(book);
+        if (isUsxFileName(f.name)) usxFiles.push(f.name);
+      });
+      if (aborted) return emptyResult;
+      if (unmatched.length > 0) {
+        sonner.warning(
+          unmatched.length === 1
+            ? fmt(
+                t('%manageBooks_import_unmatchedOne%', 'Could not detect a matching book in "{0}"'),
+                unmatched[0],
+              )
+            : fmt(
+                t(
+                  '%manageBooks_import_unmatchedMany%',
+                  'Could not detect a matching book in {0} files',
+                ),
+                unmatched.length,
+              ),
+          {
+            description: unmatched.length > 1 ? unmatched.join(', ') : undefined,
+            duration: Infinity,
+            closeButton: true,
+          },
+        );
+      }
+      if (addedBooks.length === 0) return { addedBooks };
+      setImportFiles((prev) => ({ ...prev, ...additions }));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        addedBooks.forEach((b) => next.add(b));
+        return next;
+      });
+      // A9: if any USX/XML files were added, prompt to confirm immediate import.
+      if (usxFiles.length > 0) {
+        setUsxConfirm({ files: usxFiles });
+      }
+      return { addedBooks };
+    },
+    [detectBookId, importFiles, setSelected, t],
+  );
+
   const handleImportFilesPicked = (picked: FileList | null) => {
     if (!picked || picked.length === 0) return;
-    const additions: Record<string, ManageBooksImportFile> = {};
-    const addedBooks: string[] = [];
-    const unmatched: string[] = [];
-    Array.from(picked).forEach((f) => {
-      const book = detectBookId(f.name);
-      if (!book) {
-        unmatched.push(f.name);
-        return;
-      }
-      additions[book] = { file: f.name, date: todayISO() };
-      addedBooks.push(book);
-    });
-    if (unmatched.length > 0) {
-      sonner.warning(
-        unmatched.length === 1
-          ? `Could not detect a matching book in "${unmatched[0]}"`
-          : `Could not detect a matching book in ${unmatched.length} files`,
-        {
-          description: unmatched.length > 1 ? unmatched.join(', ') : undefined,
-          duration: Infinity,
-          closeButton: true,
-        },
-      );
-    }
-    if (addedBooks.length === 0) return;
-    setImportFiles((prev) => ({ ...prev, ...additions }));
-    setSelected((prev) => {
-      const next = new Set(prev);
-      addedBooks.forEach((b) => next.add(b));
-      return next;
-    });
+    ingestImportFiles(Array.from(picked));
   };
+
+  const triggerFileBrowser = useCallback(async (): Promise<{ pickedAny: boolean }> => {
+    if (onPickImportFiles) {
+      const files = await onPickImportFiles();
+      if (!files || files.length === 0) return { pickedAny: false };
+      const { addedBooks } = ingestImportFiles(files);
+      return { pickedAny: addedBooks.length > 0 };
+    }
+    importFileInputRef.current?.click();
+    // We can't easily await the native picker; treat this as "pickedAny=undefined".
+    return { pickedAny: true };
+  }, [ingestImportFiles, onPickImportFiles]);
+
+  // A8: auto-browse on Import mode entry.
+  useEffect(() => {
+    if (!open) {
+      importAutoBrowseFired.current = false;
+      return;
+    }
+    if (action !== 'import') {
+      importAutoBrowseFired.current = false;
+      return;
+    }
+    if (importAutoBrowseFired.current) return;
+    if (Object.keys(importFiles).length > 0) return;
+    importAutoBrowseFired.current = true;
+    triggerFileBrowser()
+      .then(({ pickedAny }) => {
+        if (!pickedAny && Object.keys(importFiles).length === 0) {
+          // A8: silently revert to View when the user cancels the auto-picker.
+          setAction('view');
+        }
+        return undefined;
+      })
+      .catch(() => undefined);
+  }, [open, action, importFiles, triggerFileBrowser]);
 
   const filterTerm = filter.trim().toLowerCase();
 
@@ -438,6 +671,7 @@ export function ManageBooksDialog({
           copySource.dates[b],
           destHas ? current.dates[b] : undefined,
         );
+        if (copyStateFilter === 'undetermined') return state === 'undetermined';
         return state.toLowerCase() === copyStateFilter;
       });
     }
@@ -508,41 +742,119 @@ export function ManageBooksDialog({
 
   const selectedArr = selectableVisibleBooks.filter((b) => selected.has(b));
   const hasInlineFiles = Object.keys(importFiles).length > 0;
+
+  // A6: CV radio disabled when only non-canonical books selected.
+  const cvAllowed = useMemo<boolean>(() => {
+    if (selectedArr.length === 0) return true;
+    return selectedArr.some(isCanonicalId);
+  }, [selectedArr]);
+
+  // If user had CV selected and selection becomes only-non-canonical, fall back to empty.
+  useEffect(() => {
+    if (action === 'create' && createMethod === 'chapterVerse' && !cvAllowed) {
+      setCreateMethod('empty');
+    }
+  }, [action, createMethod, cvAllowed]);
+
   const canApply =
     action !== 'view' &&
     selectedArr.length > 0 &&
     (action !== 'copy' || !!copySourceId) &&
-    !(action === 'create' && createMethod === 'referenceText' && !createReferenceId);
+    !(action === 'create' && createMethod === 'referenceText' && !createReferenceId) &&
+    !isSubmitting;
 
   // -- Mutations -----------------------------------------------------------
-  const runCreate = async (books: string[]) => {
+
+  const normalizeResult = (
+    raw: Awaited<ReturnType<NonNullable<typeof onCreateBooks>>>,
+  ): MutationResult | undefined => {
+    if (!raw) return undefined;
+    return raw;
+  };
+
+  const runCreate = async (books: string[], estherTemplate?: EstherTemplate) => {
     if (books.length === 0) return;
-    await onCreateBooks({
-      projectId,
-      books,
-      method: createMethod,
-      referenceProjectId: createMethod === 'referenceText' ? createReferenceId : undefined,
-    });
-    setSelected(new Set());
-    refreshBooks(projectId);
+    setIsSubmitting(true);
+    try {
+      const raw = await Promise.resolve(
+        onCreateBooks({
+          projectId,
+          books,
+          method: createMethod,
+          referenceProjectId: createMethod === 'referenceText' ? createReferenceId : undefined,
+          estherTemplate,
+        }),
+      );
+      setResult(normalizeResult(raw));
+      setSelected(new Set());
+      await refreshBooks(projectId);
+    } catch (e) {
+      setResult({
+        success: false,
+        warnings: [],
+        errors: [
+          {
+            level: 'error',
+            caption: '',
+            text: e instanceof Error ? e.message : String(e),
+          },
+        ],
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const runDelete = async (books: string[]) => {
     if (books.length === 0) return;
-    await onDeleteBooks({ projectId, books });
-    setSelected(new Set());
-    refreshBooks(projectId);
+    setIsSubmitting(true);
+    try {
+      const raw = await Promise.resolve(onDeleteBooks({ projectId, books }));
+      setResult(normalizeResult(raw));
+      setSelected(new Set());
+      await refreshBooks(projectId);
+    } catch (e) {
+      setResult({
+        success: false,
+        warnings: [],
+        errors: [
+          {
+            level: 'error',
+            caption: '',
+            text: e instanceof Error ? e.message : String(e),
+          },
+        ],
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const runCopy = async (books: string[], sourceId: string) => {
     if (books.length === 0) return;
-    await onCopyBooks({
-      destProjectId: projectId,
-      sourceProjectId: sourceId,
-      books,
-    });
-    setSelected(new Set());
-    refreshBooks(projectId);
+    setIsSubmitting(true);
+    try {
+      const raw = await Promise.resolve(
+        onCopyBooks({ destProjectId: projectId, sourceProjectId: sourceId, books }),
+      );
+      setResult(normalizeResult(raw));
+      setSelected(new Set());
+      await refreshBooks(projectId);
+    } catch (e) {
+      setResult({
+        success: false,
+        warnings: [],
+        errors: [
+          {
+            level: 'error',
+            caption: '',
+            text: e instanceof Error ? e.message : String(e),
+          },
+        ],
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const runImport = async (books: string[], strategy: ManageBooksImportStrategy) => {
@@ -551,70 +863,138 @@ export function ManageBooksDialog({
     books.forEach((b) => {
       if (importFiles[b]) files[b] = importFiles[b];
     });
-    await onImportBooks({ projectId, files, strategy });
-    setSelected((prev) => {
-      const next = new Set(prev);
-      books.forEach((b) => next.delete(b));
-      return next;
-    });
-    setImportFiles((prev) => {
-      const next = { ...prev };
-      books.forEach((b) => delete next[b]);
-      return next;
-    });
-    refreshBooks(projectId);
+    setIsSubmitting(true);
+    try {
+      const raw = await Promise.resolve(onImportBooks({ projectId, files, strategy }));
+      setResult(normalizeResult(raw));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        books.forEach((b) => next.delete(b));
+        return next;
+      });
+      setImportFiles((prev) => {
+        const next = { ...prev };
+        books.forEach((b) => delete next[b]);
+        return next;
+      });
+      await refreshBooks(projectId);
+    } catch (e) {
+      setResult({
+        success: false,
+        warnings: [],
+        errors: [
+          {
+            level: 'error',
+            caption: '',
+            text: e instanceof Error ? e.message : String(e),
+          },
+        ],
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const pendingEstherRef = useRef<EstherTemplate | undefined>(undefined);
+
+  /** A1+A4: orchestrate Create-mode submit (Esther picker + missing-model + versification). */
+  const beginCreateFlow = async () => {
+    let estherTemplate: EstherTemplate | undefined;
+    // A1: Greek Esther picker (if ESG selected and method is referenceText/fromTemplate).
+    if (createMethod === 'referenceText' && selectedArr.includes('ESG') && onOpenEstherPicker) {
+      const chosen = await onOpenEstherPicker(selectedArr);
+      if (!chosen) return; // user cancelled
+      estherTemplate = chosen;
+    }
+
+    // A4: missing-model-books pre-flight (only if a reference project is chosen).
+    if (createMethod === 'referenceText' && createReferenceId && createReferenceBookState) {
+      const missing = selectedArr.filter((b) => !createReferenceBookState.present.has(b));
+      const available = selectedArr.filter((b) => createReferenceBookState.present.has(b));
+      if (missing.length > 0) {
+        setCreatePrompt({ kind: 'missing-model', missing, available });
+        // Stash the chosen template until prompt resolution.
+        pendingEstherRef.current = estherTemplate;
+        return;
+      }
+    }
+
+    // A4: versification mismatch pre-flight.
+    if (createMethod === 'referenceText' && createReferenceId) {
+      const destVrs = versification ?? '';
+      const modelVrs = await Promise.resolve(loadVersification(createReferenceId)).catch(() => '');
+      if (destVrs && modelVrs && destVrs !== modelVrs) {
+        setCreatePrompt({
+          kind: 'versification',
+          destVrs,
+          modelVrs,
+          books: selectedArr,
+        });
+        pendingEstherRef.current = estherTemplate;
+        return;
+      }
+    }
+
+    await runCreate(selectedArr, estherTemplate);
   };
 
   const apply = () => {
     if (!canApply) return;
+    setResult(undefined);
     switch (action) {
       case 'create':
-        runCreate(selectedArr);
-        return;
+        beginCreateFlow().catch(() => undefined);
+        break;
       case 'delete':
-        runDelete(selectedArr);
-        return;
+        // A2: open delete-confirm prompt.
+        setDeleteConfirm({ books: selectedArr });
+        break;
       case 'copy':
-        if (copySourceId) runCopy(selectedArr, copySourceId);
-        return;
+        if (copySourceId) runCopy(selectedArr, copySourceId).catch(() => undefined);
+        break;
       case 'import': {
         const existing = selectedArr.filter((b) => current.present.has(b));
         if (existing.length > 0) {
           setImportConflict({ books: selectedArr, existing });
-          return;
+          break;
         }
-        runImport(selectedArr, 'nonExistingChapters');
-        return;
+        runImport(selectedArr, 'nonExistingChapters').catch(() => undefined);
+        break;
       }
       default:
-        return;
+        break;
     }
   };
 
   const totalPresent = allBooks.filter((b) => current.present.has(b)).length;
 
-  const actionVerb = (() => {
-    if (action === 'create') return 'Create';
-    if (action === 'delete') return 'Delete';
-    if (action === 'copy') return 'Copy';
-    if (action === 'import') return 'Import';
-    return '';
-  })();
+  const subtitleTemplate = versification
+    ? t('%manageBooks_header_subtitle%', '{0} of {1} canonical books in {2} ({3})')
+    : t('%manageBooks_header_subtitleNoVersification%', '{0} of {1} canonical books in {2}');
+  const headerSubtitle = versification
+    ? fmt(subtitleTemplate, totalPresent, allBooks.length, project.shortName, versification)
+    : fmt(subtitleTemplate, totalPresent, allBooks.length, project.shortName);
 
-  const actionButtonLabel = (() => {
-    if (!canApply) return actionVerb;
-    const n = selectedArr.length;
-    const suffix = `${n} book${n === 1 ? '' : 's'}`;
-    const dest = project.shortName;
-    if (action === 'create') return `Create ${suffix} in ${dest}`;
-    if (action === 'delete') return `Delete ${suffix} from ${dest}`;
-    if (action === 'copy') return `Copy ${suffix} into ${dest}`;
-    if (action === 'import') return `Import ${suffix} into ${dest}`;
-    return actionVerb;
-  })();
+  const pillStateLabel = (state: ManageBooksComparisonState): string => {
+    switch (state) {
+      case 'Same':
+        return t('%manageBooks_pill_state_same%', 'Same');
+      case 'Newer':
+        return t('%manageBooks_pill_state_newer%', 'Newer');
+      case 'Older':
+        return t('%manageBooks_pill_state_older%', 'Older');
+      case 'Missing':
+        return t('%manageBooks_pill_state_missing%', 'Missing');
+      case 'New':
+        return t('%manageBooks_pill_new%', 'New');
+      case 'undetermined':
+      default:
+        return t('%manageBooks_pill_state_undetermined%', 'Undetermined');
+    }
+  };
 
   const renderComparisonBadge = (
-    state: ComparisonState,
+    state: ManageBooksComparisonState,
     sideALabel: string,
     sideADate: string | undefined,
     sideBLabel: string,
@@ -622,7 +1002,7 @@ export function ManageBooksDialog({
   ) => (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge variant={comparisonVariant(state)}>{state}</Badge>
+        <Badge variant={comparisonVariant(state)}>{pillStateLabel(state)}</Badge>
       </TooltipTrigger>
       <TooltipContent>
         <div>{`${sideALabel}: ${sideADate ?? '—'}`}</div>
@@ -630,6 +1010,37 @@ export function ManageBooksDialog({
       </TooltipContent>
     </Tooltip>
   );
+
+  const getBookComparisonState = useCallback(
+    (book: string): ManageBooksComparisonState | undefined => {
+      if (action !== 'copy' || !copySource) return undefined;
+      const destDate = current.dates[book];
+      const isPresent = current.present.has(book);
+      return computeCompareState(copySource.dates[book], isPresent ? destDate : undefined);
+    },
+    [action, copySource, current],
+  );
+
+  const filterChipLabel = (s: string): string => {
+    switch (s) {
+      case 'all':
+        return t('%manageBooks_filter_state_all%', 'All');
+      case 'new':
+        return t('%manageBooks_filter_state_new%', 'New');
+      case 'existing':
+        return t('%manageBooks_filter_state_existing%', 'Existing');
+      case 'newer':
+        return t('%manageBooks_filter_state_newer%', 'Newer');
+      case 'older':
+        return t('%manageBooks_filter_state_older%', 'Older');
+      case 'same':
+        return t('%manageBooks_filter_state_same%', 'Same');
+      case 'undetermined':
+        return t('%manageBooks_filter_state_undetermined%', 'Undetermined');
+      default:
+        return s;
+    }
+  };
 
   const renderMeta = (book: string) => {
     const isPresent = current.present.has(book);
@@ -640,7 +1051,7 @@ export function ManageBooksDialog({
       if (state === 'New') {
         return (
           <Badge variant="outline" className="tw-font-normal tw-text-muted-foreground">
-            New
+            {t('%manageBooks_pill_new%', 'New')}
           </Badge>
         );
       }
@@ -655,14 +1066,14 @@ export function ManageBooksDialog({
     if (action === 'delete') {
       return (
         <Badge variant="secondary" className="tw-font-normal">
-          {destDate ?? 'Present'}
+          {destDate ?? t('%manageBooks_pill_present%', 'Present')}
         </Badge>
       );
     }
     if (action === 'create') {
       return (
         <Badge variant="outline" className="tw-font-normal tw-text-muted-foreground">
-          New
+          {t('%manageBooks_pill_new%', 'New')}
         </Badge>
       );
     }
@@ -692,11 +1103,11 @@ export function ManageBooksDialog({
     if (action === 'view' && !isPresent) return undefined;
     return isPresent ? (
       <Badge variant="secondary" className="tw-font-normal">
-        {destDate ?? 'Present'}
+        {destDate ?? t('%manageBooks_pill_present%', 'Present')}
       </Badge>
     ) : (
       <Badge variant="outline" className="tw-font-normal tw-text-muted-foreground">
-        New
+        {t('%manageBooks_pill_new%', 'New')}
       </Badge>
     );
   };
@@ -705,13 +1116,25 @@ export function ManageBooksDialog({
     visibleBooks.length === 0 && universe.length > 0 && !(action === 'copy' && !copySourceId);
   const emptyStateMessage = (() => {
     if (action === 'copy' && !copySourceId)
-      return 'Choose a source project to see books available to copy.';
+      return t(
+        '%manageBooks_copy_emptyState_chooseSource%',
+        'Choose a source project to see books available to copy.',
+      );
     if (universe.length === 0) {
-      if (action === 'create') return 'This project already contains every canonical book.';
-      if (action === 'delete') return 'This project has no books to delete.';
-      if (action === 'copy') return 'The chosen source project has no books to copy.';
+      if (action === 'create')
+        return t(
+          '%manageBooks_create_emptyState_allPresent%',
+          'This project already contains every canonical book.',
+        );
+      if (action === 'delete')
+        return t('%manageBooks_delete_emptyState_noBooks%', 'This project has no books to delete.');
+      if (action === 'copy')
+        return t(
+          '%manageBooks_copy_emptyState_noBooks%',
+          'The chosen source project has no books to copy.',
+        );
     }
-    return 'No books match the current filter.';
+    return t('%manageBooks_filter_emptyState%', 'No books match the current filter.');
   })();
   const clearActiveFilters = () => {
     setFilter('');
@@ -720,13 +1143,207 @@ export function ManageBooksDialog({
     setViewPresenceFilter('all');
   };
 
-  const headerSubtitle = versification
-    ? `${totalPresent} of ${allBooks.length} canonical books in ${project.shortName} (${versification})`
-    : `${totalPresent} of ${allBooks.length} canonical books in ${project.shortName}`;
+  // -- Footer apply-button label ------------------------------------------
+  const applyButtonLabel = (() => {
+    if (!canApply) {
+      switch (action) {
+        case 'create':
+          return t('%manageBooks_footer_apply_create%', 'Create');
+        case 'delete':
+          return t('%manageBooks_footer_apply_delete%', 'Delete');
+        case 'copy':
+          return t('%manageBooks_footer_apply_copy%', 'Copy');
+        case 'import':
+          return t('%manageBooks_footer_apply_import%', 'Import');
+        default:
+          return '';
+      }
+    }
+    const n = selectedArr.length;
+    const dest = project.shortName;
+    const single = n === 1;
+    if (action === 'create')
+      return single
+        ? fmt(t('%manageBooks_footer_apply_create_one%', 'Create 1 book in {0}'), dest)
+        : fmt(t('%manageBooks_footer_apply_create_many%', 'Create {0} books in {1}'), n, dest);
+    if (action === 'delete')
+      return single
+        ? fmt(t('%manageBooks_footer_apply_delete_one%', 'Delete 1 book from {0}'), dest)
+        : fmt(t('%manageBooks_footer_apply_delete_many%', 'Delete {0} books from {1}'), n, dest);
+    if (action === 'copy')
+      return single
+        ? fmt(t('%manageBooks_footer_apply_copy_one%', 'Copy 1 book into {0}'), dest)
+        : fmt(t('%manageBooks_footer_apply_copy_many%', 'Copy {0} books into {1}'), n, dest);
+    if (action === 'import')
+      return single
+        ? fmt(t('%manageBooks_footer_apply_import_one%', 'Import 1 book into {0}'), dest)
+        : fmt(t('%manageBooks_footer_apply_import_many%', 'Import {0} books into {1}'), n, dest);
+    return '';
+  })();
+
+  // -- Footer summary line ------------------------------------------------
+  const summaryText = (() => {
+    if (action === 'view')
+      return fmt(t('%manageBooks_footer_summary_view%', 'Viewing {0}'), project.shortName);
+    if (action === 'create') {
+      let methodLabel = t('%manageBooks_create_method_referenceText%', 'Based on');
+      if (createMethod === 'empty') {
+        methodLabel = t('%manageBooks_create_method_empty%', 'Empty book');
+      } else if (createMethod === 'chapterVerse') {
+        methodLabel = t(
+          '%manageBooks_create_method_chapterVerse%',
+          'With all chapter and verse numbers',
+        );
+      }
+      return fmt(
+        t('%manageBooks_footer_summary_create%', 'Create in {0} — {1}'),
+        project.shortName,
+        methodLabel,
+      );
+    }
+    if (action === 'delete')
+      return fmt(t('%manageBooks_footer_summary_delete%', 'Delete from {0}'), project.shortName);
+    if (action === 'copy') {
+      if (copySourceProject)
+        return fmt(
+          t('%manageBooks_footer_summary_copy_with%', 'Copy from {0} into {1}'),
+          copySourceProject.shortName,
+          project.shortName,
+        );
+      return fmt(
+        t('%manageBooks_footer_summary_copy_without%', 'Copy into {0}'),
+        project.shortName,
+      );
+    }
+    if (action === 'import')
+      return fmt(t('%manageBooks_footer_summary_import%', 'Import into {0}'), project.shortName);
+    return '';
+  })();
+
+  // -- aria-live announcements --------------------------------------------
+  const liveAnnouncement = (() => {
+    if (isSubmitting) {
+      switch (action) {
+        case 'create':
+          return t('%manageBooks_footer_loading_create%', 'Creating books…');
+        case 'delete':
+          return t('%manageBooks_footer_loading_delete%', 'Deleting books…');
+        case 'copy':
+          return t('%manageBooks_footer_loading_copy%', 'Copying books…');
+        case 'import':
+          return t('%manageBooks_footer_loading_import%', 'Importing books…');
+        default:
+          return t('%manageBooks_footer_loading%', 'Working…');
+      }
+    }
+    if (action !== 'view' && selectableVisibleBooks.length > 0) {
+      return fmt(
+        t('%manageBooks_selection_announcement%', '{0} of {1} books selected'),
+        visibleSelectedCount,
+        selectableVisibleBooks.length,
+      );
+    }
+    return '';
+  })();
+
+  // -- C3 grid keyboard navigation (roving tabindex) -----------------------
+  const handleGridKeyDown = (e: ReactKeyboardEvent<HTMLUListElement>) => {
+    if (visibleBooks.length === 0) return;
+    const activeBook = focusedBook ?? visibleBooks[0];
+    const idx = visibleBooks.indexOf(activeBook);
+    if (idx === -1) return;
+    let nextIdx: number | undefined;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      nextIdx = Math.min(visibleBooks.length - 1, idx + 1);
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      nextIdx = Math.max(0, idx - 1);
+    } else if (e.key === 'Home') {
+      nextIdx = 0;
+    } else if (e.key === 'End') {
+      nextIdx = visibleBooks.length - 1;
+    } else if (e.key === ' ' || e.key === 'Enter') {
+      const showCheckbox =
+        action === 'create' ||
+        action === 'delete' ||
+        action === 'copy' ||
+        (action === 'import' && !!importFiles[activeBook]);
+      if (showCheckbox) {
+        e.preventDefault();
+        toggleOne(activeBook);
+      }
+      return;
+    } else {
+      return;
+    }
+    if (nextIdx !== undefined) {
+      e.preventDefault();
+      const nextBook = visibleBooks[nextIdx];
+      setFocusedBook(nextBook);
+      const next = gridRef.current?.querySelector<HTMLLIElement>(`[data-book="${nextBook}"]`);
+      next?.focus();
+    }
+  };
+
+  // -- Disabled-button tooltip --------------------------------------------
+  const disabledTooltip = (() => {
+    if (canApply || action === 'view') return undefined;
+    if (action === 'copy' && !copySourceId)
+      return t('%manageBooks_footer_disabledTooltip_chooseSource%', 'Choose a source project');
+    if (action === 'create' && createMethod === 'referenceText' && !createReferenceId)
+      return t(
+        '%manageBooks_footer_disabledTooltip_chooseReference%',
+        "Choose a reference project or change 'based on'",
+      );
+    if (selectedArr.length === 0)
+      return action === 'import'
+        ? t('%manageBooks_footer_disabledTooltip_addFile%', 'Add a file or select a book')
+        : t('%manageBooks_footer_disabledTooltip_selectBook%', 'Select at least one book');
+    return undefined;
+  })();
+
+  // -- Result panel resolution helpers ------------------------------------
+  const dismissResult = () => setResult(undefined);
+
+  // -- A2 Delete confirm helpers ------------------------------------------
+  const deleteConfirmBody = (() => {
+    if (!deleteConfirm) return '';
+    const n = deleteConfirm.books.length;
+    const dest = project.shortName;
+    const allSelected = n === current.present.size;
+    if (allSelected)
+      return fmt(
+        t(
+          '%manageBooks_delete_confirmBodyAll%',
+          'All books will be deleted from {0}. The project itself will not be deleted. This cannot be undone.',
+        ),
+        dest,
+      );
+    if (isSharedProject)
+      return fmt(
+        t(
+          '%manageBooks_delete_confirmBodyShared%',
+          '{0} book(s) will be deleted from {1}, which is shared with other users. They will see this change immediately. This cannot be undone.',
+        ),
+        n,
+        dest,
+      );
+    return fmt(
+      t(
+        '%manageBooks_delete_confirmBodyPartial%',
+        '{0} book(s) will be deleted from {1}. This cannot be undone.',
+      ),
+      n,
+      dest,
+    );
+  })();
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => (isSubmitting ? undefined : onOpenChange(v))}
+        modal={false}
+      >
         <DialogContent
           className="tw-h-[80vh] tw-w-[95vw] tw-max-w-4xl tw-gap-0 tw-overflow-hidden tw-p-0"
           onInteractOutside={(e) => e.preventDefault()}
@@ -744,14 +1361,20 @@ export function ManageBooksDialog({
               <header className="tw-flex tw-items-center tw-gap-3 tw-border-b tw-px-6 tw-py-4">
                 <BookOpenCheck className="tw-h-5 tw-w-5 tw-text-muted-foreground" aria-hidden />
                 <div className="tw-flex tw-flex-col">
-                  <h2 className="tw-text-lg tw-font-semibold">Manage Books</h2>
+                  <h2 className="tw-text-lg tw-font-semibold">
+                    {t('%manageBooks_dialog_title%', 'Manage Books')}
+                  </h2>
                   <p className="tw-text-xs tw-text-muted-foreground">{headerSubtitle}</p>
                 </div>
                 <div className="tw-ml-auto tw-mr-8 tw-flex tw-items-center tw-gap-2">
                   <Label htmlFor="af-project" className="tw-text-xs tw-text-muted-foreground">
-                    Project
+                    {t('%manageBooks_header_projectLabel%', 'Project')}
                   </Label>
-                  <Select value={projectId} onValueChange={onProjectIdChange}>
+                  <Select
+                    value={projectId}
+                    onValueChange={onProjectIdChange}
+                    disabled={isSubmitting}
+                  >
                     <SelectTrigger id="af-project" className="tw-h-8 tw-w-24">
                       <SelectValue />
                     </SelectTrigger>
@@ -772,7 +1395,9 @@ export function ManageBooksDialog({
                   type="single"
                   variant="outline"
                   value={action}
-                  onValueChange={(v) => v && setAction(v as Action)}
+                  onValueChange={(v) => {
+                    if (v && !isSubmitting && isAction(v)) setAction(v);
+                  }}
                   className="tw-gap-0"
                 >
                   <ToggleGroupItem
@@ -783,7 +1408,7 @@ export function ManageBooksDialog({
                       className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline"
                       aria-hidden
                     />
-                    View
+                    {t('%manageBooks_action_view%', 'View')}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="create"
@@ -793,7 +1418,7 @@ export function ManageBooksDialog({
                       className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline"
                       aria-hidden
                     />
-                    Create
+                    {t('%manageBooks_action_create%', 'Create')}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="import"
@@ -803,21 +1428,21 @@ export function ManageBooksDialog({
                       className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline"
                       aria-hidden
                     />
-                    Import
+                    {t('%manageBooks_action_import%', 'Import')}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="copy"
                     className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
                   >
                     <Copy className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline" aria-hidden />
-                    Copy
+                    {t('%manageBooks_action_copy%', 'Copy')}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="delete"
                     className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-l-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
                   >
                     <Trash2 className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline" aria-hidden />
-                    Delete
+                    {t('%manageBooks_action_delete%', 'Delete')}
                   </ToggleGroupItem>
                 </ToggleGroup>
 
@@ -829,7 +1454,7 @@ export function ManageBooksDialog({
                       className="tw-h-8 tw-px-2 tw-text-xs"
                       onClick={() => onOpenScriptureReferenceSettings(projectId)}
                     >
-                      Scripture reference settings...
+                      {t('%manageBooks_view_openScrRefSettings%', 'Scripture reference settings…')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -837,7 +1462,7 @@ export function ManageBooksDialog({
                       className="tw-h-8 tw-px-2 tw-text-xs"
                       onClick={() => onOpenProjectCanons(projectId)}
                     >
-                      Project canons...
+                      {t('%manageBooks_view_openProjectCanons%', 'Project canons…')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -845,12 +1470,37 @@ export function ManageBooksDialog({
                       className="tw-h-8 tw-gap-1.5 tw-px-2 tw-text-xs"
                       onClick={() => onOpenRegistry(projectId)}
                     >
-                      Registry
+                      {t('%manageBooks_view_openRegistry%', 'Registry')}
                       <ExternalLink
                         className="tw-h-3 tw-w-3 tw-text-muted-foreground"
                         aria-hidden
                       />
                     </Button>
+                    {/* F1: DEF-UI-001 disabled stub for "View differences" */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="tw-h-8 tw-px-2 tw-text-xs"
+                            aria-disabled
+                            aria-describedby={`${liveRegionId}-view-diff`}
+                            // DEF-UI-001 disabled stub: no-op until implemented
+                            // eslint-disable-next-line @typescript-eslint/no-empty-function
+                            onClick={() => {}}
+                          >
+                            {t('%manageBooks_view_diff_label%', 'View differences')}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent id={`${liveRegionId}-view-diff`}>
+                        {t(
+                          '%manageBooks_view_diff_tooltip%',
+                          'View differences (not yet available)',
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 )}
 
@@ -861,31 +1511,54 @@ export function ManageBooksDialog({
                   >
                     <Select
                       value={createMethod}
-                      onValueChange={(v) => setCreateMethod(v as ManageBooksCreateMethod)}
+                      onValueChange={(v) => {
+                        if (isCreateMethod(v)) setCreateMethod(v);
+                      }}
+                      disabled={isSubmitting}
                     >
                       <SelectTrigger id="af-method" className="tw-h-8 tw-min-w-0 tw-flex-1">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {(Object.keys(CREATE_METHOD_LABELS) as ManageBooksCreateMethod[]).map(
-                          (m) => (
-                            <SelectItem key={m} value={m}>
-                              {CREATE_METHOD_LABELS[m]}
-                            </SelectItem>
-                          ),
-                        )}
+                        <SelectItem value="empty">
+                          {t('%manageBooks_create_method_empty%', 'Empty book')}
+                        </SelectItem>
+                        <SelectItem
+                          value="chapterVerse"
+                          disabled={!cvAllowed}
+                          aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
+                        >
+                          {t(
+                            '%manageBooks_create_method_chapterVerse%',
+                            'With all chapter and verse numbers',
+                          )}
+                        </SelectItem>
+                        <SelectItem value="referenceText">
+                          {t('%manageBooks_create_method_referenceText%', 'Based on')}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
+                    {!cvAllowed && (
+                      <span id={cvDisabledHintId} className="tw-sr-only">
+                        {t(
+                          '%manageBooks_create_method_chapterVerse_disabledTooltip%',
+                          'Disabled because the selection contains only non-canonical books.',
+                        )}
+                      </span>
+                    )}
                     {createMethod === 'referenceText' && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Info
                             className="tw-h-4 tw-w-4 tw-shrink-0 tw-text-muted-foreground"
-                            aria-label="Based on info"
+                            aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
                           />
                         </TooltipTrigger>
                         <TooltipContent>
-                          Prefill with the same markers as a selected project
+                          {t(
+                            '%manageBooks_create_basedOnInfo%',
+                            'Prefill with the same markers as a selected project',
+                          )}
                         </TooltipContent>
                       </Tooltip>
                     )}
@@ -893,6 +1566,7 @@ export function ManageBooksDialog({
                       <Select
                         value={createReferenceId ?? ''}
                         onValueChange={(v) => setCreateReferenceId(v || undefined)}
+                        disabled={isSubmitting}
                       >
                         <SelectTrigger
                           id="af-reference"
@@ -902,7 +1576,12 @@ export function ManageBooksDialog({
                               'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90 [&>span]:tw-text-primary-foreground [&_svg]:tw-text-primary-foreground',
                           )}
                         >
-                          <SelectValue placeholder="Select reference project" />
+                          <SelectValue
+                            placeholder={t(
+                              '%manageBooks_create_referenceProjectPlaceholder%',
+                              'Select reference project',
+                            )}
+                          />
                         </SelectTrigger>
                         <SelectContent>
                           {otherProjects.map((p) => (
@@ -919,11 +1598,12 @@ export function ManageBooksDialog({
                 {action === 'copy' && (
                   <div className="tw-flex tw-items-center tw-gap-2">
                     <Label htmlFor="af-source" className="tw-text-xs tw-text-muted-foreground">
-                      From
+                      {t('%manageBooks_copy_fromLabel%', 'From')}
                     </Label>
                     <Select
                       value={copySourceId ?? ''}
                       onValueChange={(v) => setCopySourceId(v || undefined)}
+                      disabled={isSubmitting}
                     >
                       <SelectTrigger
                         id="af-source"
@@ -933,7 +1613,9 @@ export function ManageBooksDialog({
                             'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90 [&>span]:tw-text-primary-foreground [&_svg]:tw-text-primary-foreground',
                         )}
                       >
-                        <SelectValue placeholder="Select project" />
+                        <SelectValue
+                          placeholder={t('%manageBooks_copy_sourcePlaceholder%', 'Select project')}
+                        />
                       </SelectTrigger>
                       <SelectContent>
                         {otherProjects.map((p) => (
@@ -958,28 +1640,40 @@ export function ManageBooksDialog({
                         handleImportFilesPicked(e.target.files);
                         e.target.value = '';
                       }}
+                      aria-hidden
                     />
                     <Button
                       variant={hasInlineFiles ? 'outline' : 'default'}
                       size="sm"
                       className="tw-h-8"
-                      onClick={() => importFileInputRef.current?.click()}
+                      onClick={() => {
+                        triggerFileBrowser().catch(() => undefined);
+                      }}
+                      disabled={isSubmitting}
                     >
                       <FolderOpen className="tw-mr-1.5 tw-h-3.5 tw-w-3.5" aria-hidden />
-                      {hasInlineFiles ? 'Add files…' : 'Choose files…'}
+                      {hasInlineFiles
+                        ? t('%manageBooks_import_addMore%', 'Add files…')
+                        : t('%manageBooks_import_choose%', 'Choose files…')}
                     </Button>
                     {hasInlineFiles && (
                       <>
                         <span className="tw-text-xs tw-text-muted-foreground">
-                          {`${Object.keys(importFiles).length} file${Object.keys(importFiles).length === 1 ? '' : 's'} matched`}
+                          {Object.keys(importFiles).length === 1
+                            ? t('%manageBooks_import_filesMatched_one%', '1 file matched')
+                            : fmt(
+                                t('%manageBooks_import_filesMatched_other%', '{0} files matched'),
+                                Object.keys(importFiles).length,
+                              )}
                         </span>
                         <Button
                           variant="ghost"
                           size="sm"
                           className="tw-h-8"
                           onClick={() => setImportFiles({})}
+                          disabled={isSubmitting}
                         >
-                          Clear
+                          {t('%manageBooks_import_clearFiles%', 'Clear')}
                         </Button>
                       </>
                     )}
@@ -995,27 +1689,36 @@ export function ManageBooksDialog({
                         <Checkbox
                           id="af-sel-all"
                           checked={headerSelectState}
-                          disabled={selectableVisibleBooks.length === 0}
+                          disabled={selectableVisibleBooks.length === 0 || isSubmitting}
                           onCheckedChange={toggleAllVisible}
                           aria-label={
                             visibleSelectedCount > 0
-                              ? `${visibleSelectedCount} selected`
-                              : 'Select all'
+                              ? fmt(
+                                  t('%manageBooks_selection_xSelected%', '{0} selected'),
+                                  visibleSelectedCount,
+                                )
+                              : t('%manageBooks_selection_selectAll%', 'Select all')
                           }
                         />
                       </span>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {visibleSelectedCount > 0 ? `${visibleSelectedCount} selected` : 'Select all'}
+                      {visibleSelectedCount > 0
+                        ? fmt(
+                            t('%manageBooks_selection_xSelected%', '{0} selected'),
+                            visibleSelectedCount,
+                          )
+                        : t('%manageBooks_selection_selectAll%', 'Select all')}
                     </TooltipContent>
                   </Tooltip>
                 )}
                 <Input
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
-                  placeholder="Filter books…"
+                  placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
                   className="tw-h-8 tw-min-w-0 tw-max-w-xs tw-flex-1 tw-basis-24"
-                  aria-label="Filter books"
+                  aria-label={t('%manageBooks_filter_books%', 'Filter books')}
+                  disabled={isSubmitting}
                 />
                 <span
                   className={cn(
@@ -1024,16 +1727,20 @@ export function ManageBooksDialog({
                   )}
                 >
                   {universe.length === 0
-                    ? '0 books'
-                    : `${visibleBooks.length} of ${universe.length}`}
+                    ? t('%manageBooks_filter_zero%', '0 books')
+                    : fmt(
+                        t('%manageBooks_filter_count%', '{0} of {1}'),
+                        visibleBooks.length,
+                        universe.length,
+                      )}
                 </span>
                 {action === 'view' && (
                   <ToggleGroup
                     type="single"
                     value={viewPresenceFilter}
-                    onValueChange={(v) =>
-                      v && setViewPresenceFilter(v as typeof viewPresenceFilter)
-                    }
+                    onValueChange={(v) => {
+                      if (v && isPresenceFilter(v)) setViewPresenceFilter(v);
+                    }}
                     className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
                   >
                     {(['all', 'new', 'existing'] as const).map((s) => (
@@ -1042,7 +1749,7 @@ export function ManageBooksDialog({
                         value={s}
                         className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
                       >
-                        {s}
+                        {filterChipLabel(s)}
                       </ToggleGroupItem>
                     ))}
                   </ToggleGroup>
@@ -1051,27 +1758,31 @@ export function ManageBooksDialog({
                   <ToggleGroup
                     type="single"
                     value={copyStateFilter}
-                    onValueChange={(v) => v && setCopyStateFilter(v as typeof copyStateFilter)}
+                    onValueChange={(v) => {
+                      if (v && isCopyStateFilter(v)) setCopyStateFilter(v);
+                    }}
                     className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
                   >
-                    {(['all', 'new', 'newer', 'older', 'same'] as const).map((s) => (
-                      <ToggleGroupItem
-                        key={s}
-                        value={s}
-                        className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
-                      >
-                        {s}
-                      </ToggleGroupItem>
-                    ))}
+                    {(['all', 'new', 'newer', 'older', 'same', 'undetermined'] as const).map(
+                      (s) => (
+                        <ToggleGroupItem
+                          key={s}
+                          value={s}
+                          className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
+                        >
+                          {filterChipLabel(s)}
+                        </ToggleGroupItem>
+                      ),
+                    )}
                   </ToggleGroup>
                 )}
                 {action === 'import' && (
                   <ToggleGroup
                     type="single"
                     value={importPresenceFilter}
-                    onValueChange={(v) =>
-                      v && setImportPresenceFilter(v as typeof importPresenceFilter)
-                    }
+                    onValueChange={(v) => {
+                      if (v && isPresenceFilter(v)) setImportPresenceFilter(v);
+                    }}
                     className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
                   >
                     {(['all', 'new', 'existing'] as const).map((s) => (
@@ -1080,7 +1791,7 @@ export function ManageBooksDialog({
                         value={s}
                         className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
                       >
-                        {s}
+                        {filterChipLabel(s)}
                       </ToggleGroupItem>
                     ))}
                   </ToggleGroup>
@@ -1093,12 +1804,22 @@ export function ManageBooksDialog({
                     <span>{emptyStateMessage}</span>
                     {isFilterEmptyState && (
                       <Button variant="outline" size="sm" onClick={clearActiveFilters}>
-                        Clear filter
+                        {t('%manageBooks_filter_clearButton%', 'Clear filter')}
                       </Button>
                     )}
                   </div>
                 ) : (
-                  <ul className="tw-flex tw-flex-col tw-gap-0.5">
+                  <ul
+                    ref={gridRef}
+                    role="listbox"
+                    aria-multiselectable={action !== 'view'}
+                    aria-label={fmt(
+                      t('%manageBooks_grid_label%', 'Books in {0}'),
+                      project.shortName,
+                    )}
+                    className="tw-flex tw-flex-col tw-gap-0.5 tw-outline-none"
+                    onKeyDown={handleGridKeyDown}
+                  >
                     {visibleBooks.map((book) => {
                       const isSelected = selected.has(book);
                       const showCheckbox =
@@ -1108,16 +1829,48 @@ export function ManageBooksDialog({
                         (action === 'import' && !!importFiles[book]);
                       const showCheckboxPlaceholder = action === 'import' && !importFiles[book];
                       const isMissingInView = action === 'view' && !current.present.has(book);
+                      const compState = getBookComparisonState(book);
+                      // A7 row coloring: greyed for identical, highlight for to-newer.
+                      let rowClass = '';
+                      if (action === 'copy' && compState === 'Same') {
+                        rowClass = 'tw-text-muted-foreground tw-opacity-60';
+                      } else if (action === 'copy' && compState === 'Older') {
+                        rowClass = 'tw-bg-amber-50 dark:tw-bg-amber-900/20';
+                      }
+                      const focusable =
+                        focusedBook === book ||
+                        (focusedBook === undefined && book === visibleBooks[0]);
                       return (
                         <li
                           key={book}
+                          data-book={book}
+                          role="option"
+                          aria-selected={showCheckbox ? isSelected : undefined}
+                          aria-checked={showCheckbox ? isSelected : undefined}
+                          aria-label={
+                            showCheckbox
+                              ? fmt(
+                                  t('%manageBooks_selection_selectBook%', 'Select {0}'),
+                                  Canon.bookIdToEnglishName(book),
+                                )
+                              : undefined
+                          }
+                          tabIndex={focusable ? 0 : -1}
+                          onFocus={() => setFocusedBook(book)}
                           onClick={() => {
                             if (showCheckbox) toggleOne(book);
                           }}
+                          onKeyDown={(e) => {
+                            if (showCheckbox && (e.key === ' ' || e.key === 'Enter')) {
+                              e.preventDefault();
+                              toggleOne(book);
+                            }
+                          }}
                           className={cn(
-                            'tw-flex tw-items-center tw-gap-2 tw-rounded-md tw-px-3 tw-py-1.5 tw-text-sm hover:tw-bg-accent/60',
+                            'tw-flex tw-items-center tw-gap-2 tw-rounded-md tw-px-3 tw-py-1.5 tw-text-sm hover:tw-bg-accent/60 focus:tw-outline-2 focus:tw-outline-primary',
                             isSelected && 'tw-bg-accent',
                             showCheckbox && 'tw-cursor-pointer',
+                            rowClass,
                           )}
                         >
                           {showCheckbox && (
@@ -1125,7 +1878,11 @@ export function ManageBooksDialog({
                               checked={isSelected}
                               onCheckedChange={() => toggleOne(book)}
                               onClick={(e) => e.stopPropagation()}
-                              aria-label={`Select ${book}`}
+                              aria-label={fmt(
+                                t('%manageBooks_selection_selectBook%', 'Select {0}'),
+                                book,
+                              )}
+                              tabIndex={-1}
                             />
                           )}
                           {showCheckboxPlaceholder && (
@@ -1152,7 +1909,10 @@ export function ManageBooksDialog({
                                       variant="outline"
                                       size="sm"
                                       className="tw-h-7 tw-w-7 tw-p-0"
-                                      aria-label={`Delete ${book}`}
+                                      aria-label={fmt(
+                                        t('%manageBooks_view_inlineDeleteAria%', 'Delete {0}'),
+                                        book,
+                                      )}
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSelectionsByAction((prev) => ({
@@ -1165,7 +1925,12 @@ export function ManageBooksDialog({
                                       <Trash2 className="tw-h-3.5 tw-w-3.5" aria-hidden />
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent side="left">Go to Delete screen</TooltipContent>
+                                  <TooltipContent side="left">
+                                    {t(
+                                      '%manageBooks_view_inlineDeleteTooltip%',
+                                      'Go to Delete screen',
+                                    )}
+                                  </TooltipContent>
                                 </Tooltip>
                               ) : (
                                 <Tooltip>
@@ -1183,10 +1948,15 @@ export function ManageBooksDialog({
                                         setAction('create');
                                       }}
                                     >
-                                      Create
+                                      {t('%manageBooks_view_inlineCreateButton%', 'Create')}
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent side="left">Go to Create screen</TooltipContent>
+                                  <TooltipContent side="left">
+                                    {t(
+                                      '%manageBooks_view_inlineCreateTooltip%',
+                                      'Go to Create screen',
+                                    )}
+                                  </TooltipContent>
                                 </Tooltip>
                               ))}
                           </div>
@@ -1197,89 +1967,129 @@ export function ManageBooksDialog({
                 )}
               </div>
 
+              {/* A5 result panel */}
+              {result && (result.errors.length > 0 || result.warnings.length > 0) && (
+                <div
+                  role="alert"
+                  aria-live="polite"
+                  className="tw-flex tw-flex-col tw-gap-2 tw-border-t tw-bg-muted/40 tw-px-6 tw-py-3"
+                >
+                  {result.errors.length > 0 && (
+                    <div className="tw-flex tw-flex-col tw-gap-1">
+                      <div className="tw-flex tw-items-center tw-gap-1.5 tw-text-xs tw-font-semibold tw-text-destructive">
+                        <AlertCircle className="tw-h-3.5 tw-w-3.5" aria-hidden />
+                        {t('%manageBooks_results_errorsTitle%', 'Errors')} ({result.errors.length})
+                      </div>
+                      <ul className="tw-flex tw-flex-col tw-gap-1 tw-pl-5">
+                        {result.errors.map((entry) => (
+                          <li
+                            key={`err-${entry.caption}-${entry.text}`}
+                            className="tw-text-xs tw-text-destructive"
+                          >
+                            {entry.caption ? <strong>{entry.caption}: </strong> : undefined}
+                            {entry.text}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {result.warnings.length > 0 && (
+                    <div className="tw-flex tw-flex-col tw-gap-1">
+                      <div className="tw-flex tw-items-center tw-gap-1.5 tw-text-xs tw-font-semibold tw-text-amber-700 dark:tw-text-amber-400">
+                        <AlertTriangle className="tw-h-3.5 tw-w-3.5" aria-hidden />
+                        {t('%manageBooks_results_warningsTitle%', 'Warnings')} (
+                        {result.warnings.length})
+                      </div>
+                      <ul className="tw-flex tw-flex-col tw-gap-1 tw-pl-5">
+                        {result.warnings.map((entry) => (
+                          <li
+                            key={`warn-${entry.caption}-${entry.text}`}
+                            className="tw-text-xs tw-text-amber-700 dark:tw-text-amber-400"
+                          >
+                            {entry.caption ? <strong>{entry.caption}: </strong> : undefined}
+                            {entry.text}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="tw-flex tw-justify-end">
+                    <Button variant="ghost" size="sm" onClick={dismissResult}>
+                      <X className="tw-mr-1 tw-h-3.5 tw-w-3.5" aria-hidden />
+                      {t('%manageBooks_results_dismiss%', 'Dismiss')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <footer className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-px-6 tw-py-3">
-                <span className="tw-text-xs tw-text-muted-foreground">
-                  {action === 'view'
-                    ? `Viewing ${project.shortName}`
-                    : action === 'create'
-                      ? `Create in ${project.shortName} — ${CREATE_METHOD_LABELS[createMethod]}`
-                      : action === 'delete'
-                        ? `Delete from ${project.shortName}`
-                        : action === 'copy'
-                          ? copySourceProject
-                            ? `Copy from ${copySourceProject.shortName} into ${project.shortName}`
-                            : `Copy into ${project.shortName}`
-                          : `Import into ${project.shortName}`}
+                <span className="tw-text-xs tw-text-muted-foreground">{summaryText}</span>
+                {/* C4: aria-live region for selection-count + status */}
+                <span id={liveRegionId} aria-live="polite" className="tw-sr-only">
+                  {liveAnnouncement}
                 </span>
                 <div className="tw-flex tw-items-center tw-gap-2">
-                  <Button variant="outline" onClick={() => onOpenChange(false)}>
-                    {action === 'view' ? 'Close' : 'Cancel'}
+                  {isSubmitting && (
+                    <span className="tw-flex tw-items-center tw-gap-1.5 tw-text-xs tw-text-muted-foreground">
+                      <Loader2 className="tw-h-3.5 tw-w-3.5 tw-animate-spin" aria-hidden />
+                      {liveAnnouncement}
+                    </span>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => onOpenChange(false)}
+                    disabled={isSubmitting}
+                  >
+                    {action === 'view'
+                      ? t('%manageBooks_footer_close%', 'Close')
+                      : t('%manageBooks_footer_cancel%', 'Cancel')}
                   </Button>
                   {action !== 'view' &&
                     (() => {
+                      const disabled = !canApply;
+                      const renderActionIcon = () => {
+                        if (isSubmitting)
+                          return (
+                            <Loader2
+                              className="tw-mr-1.5 tw-h-4 tw-w-4 tw-animate-spin"
+                              aria-hidden
+                            />
+                          );
+                        if (action === 'create')
+                          return <BookPlus className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                        if (action === 'delete')
+                          return <Trash2 className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                        if (action === 'copy')
+                          return <Copy className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                        if (action === 'import')
+                          return <Download className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                        return undefined;
+                      };
                       const actionButton = (
                         <Button
                           variant={action === 'delete' ? 'destructive' : 'default'}
-                          disabled={!canApply}
+                          aria-disabled={disabled}
+                          aria-describedby={disabled ? applyDisabledHintId : undefined}
+                          disabled={disabled}
                           onClick={apply}
                         >
-                          {action === 'create' && (
-                            <BookPlus className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />
-                          )}
-                          {action === 'delete' && (
-                            <Trash2 className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />
-                          )}
-                          {action === 'copy' && (
-                            <Copy className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />
-                          )}
-                          {action === 'import' && (
-                            <Download className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />
-                          )}
-                          {actionButtonLabel}
+                          {renderActionIcon()}
+                          {applyButtonLabel}
                         </Button>
                       );
-                      let tooltip: string | undefined;
-                      if (!canApply) {
-                        const missing: string[] = [];
-                        if (action === 'copy' && !copySourceId)
-                          missing.push('choose a source project');
-                        if (
-                          action === 'create' &&
-                          createMethod === 'referenceText' &&
-                          !createReferenceId
-                        )
-                          missing.push("choose a reference project or change 'based on'");
-                        if (selectedArr.length === 0)
-                          missing.push(
-                            action === 'import'
-                              ? 'add a file or select a book'
-                              : 'select at least one book',
-                          );
-                        if (missing.length > 0) {
-                          const next = missing[0];
-                          tooltip = `${next[0].toUpperCase()}${next.slice(1)}`;
-                        }
-                      } else if (action === 'create') {
-                        if (createMethod === 'empty') tooltip = 'Create empty';
-                        else if (createMethod === 'chapterVerse')
-                          tooltip = 'Create with all chapters and verses';
-                        else {
-                          const ref = createReferenceId
-                            ? projects.find((p) => p.id === createReferenceId)
-                            : undefined;
-                          tooltip = `Create based on ${ref?.name ?? '…'}`;
-                        }
-                      } else if (action === 'copy') {
-                        tooltip = `Create from ${copySourceProject?.name ?? '…'}`;
-                      }
-                      if (!tooltip) return actionButton;
+                      if (!disabledTooltip) return actionButton;
                       return (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>{actionButton}</span>
-                          </TooltipTrigger>
-                          <TooltipContent>{tooltip}</TooltipContent>
-                        </Tooltip>
+                        <>
+                          <span id={applyDisabledHintId} className="tw-sr-only">
+                            {disabledTooltip}
+                          </span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>{actionButton}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>{disabledTooltip}</TooltipContent>
+                          </Tooltip>
+                        </>
                       );
                     })()}
                 </div>
@@ -1289,22 +2099,279 @@ export function ManageBooksDialog({
         </DialogContent>
       </Dialog>
 
+      {/* A2 — Delete confirmation prompt */}
+      <Dialog
+        open={!!deleteConfirm}
+        onOpenChange={(v) => {
+          if (!v) setDeleteConfirm(undefined);
+        }}
+      >
+        <DialogContent className="tw-max-w-md" role="alertdialog">
+          <div className="tw-flex tw-flex-col tw-gap-4">
+            <div className="tw-flex tw-flex-col tw-gap-1">
+              <h2 className="tw-text-base tw-font-semibold">
+                {fmt(
+                  t('%manageBooks_delete_confirmTitle%', 'Delete books from {0}?'),
+                  project.shortName,
+                )}
+              </h2>
+              <p className="tw-text-sm tw-text-muted-foreground">{deleteConfirmBody}</p>
+            </div>
+            <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
+              <Button variant="outline" autoFocus onClick={() => setDeleteConfirm(undefined)}>
+                {t('%manageBooks_delete_confirmCancel%', 'Cancel')}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (!deleteConfirm) return;
+                  const { books } = deleteConfirm;
+                  setDeleteConfirm(undefined);
+                  runDelete(books).catch(() => undefined);
+                }}
+              >
+                {t('%manageBooks_delete_confirmAccept%', 'Delete')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* A4 — Create pre-flight prompts (missing model / versification mismatch) */}
+      <Dialog
+        open={!!createPrompt}
+        onOpenChange={(v) => {
+          if (!v) {
+            setCreatePrompt(undefined);
+            pendingEstherRef.current = undefined;
+          }
+        }}
+      >
+        <DialogContent className="tw-max-w-md" role="alertdialog">
+          <div className="tw-flex tw-flex-col tw-gap-4">
+            <div className="tw-flex tw-flex-col tw-gap-1">
+              <h2 className="tw-text-base tw-font-semibold">
+                {createPrompt?.kind === 'missing-model'
+                  ? t(
+                      '%manageBooks_create_missingModelBooksTitle%',
+                      'Some books are not in the model project',
+                    )
+                  : t('%manageBooks_create_versificationMismatchTitle%', 'Versification mismatch')}
+              </h2>
+              <p className="tw-text-sm tw-text-muted-foreground">
+                {(() => {
+                  if (createPrompt?.kind === 'missing-model')
+                    return fmt(
+                      t(
+                        '%manageBooks_create_missingModelBooksBody%',
+                        '{0} of the selected books are not in the model project {1}. Proceed with the {2} book(s) that are available?',
+                      ),
+                      createPrompt.missing.length,
+                      createReferenceProject?.name ?? '',
+                      createPrompt.available.length,
+                    );
+                  if (createPrompt?.kind === 'versification')
+                    return fmt(
+                      t(
+                        '%manageBooks_create_versificationMismatchBody%',
+                        '{0} uses {1} versification but the model project {2} uses {3}. Continue?',
+                      ),
+                      project.shortName,
+                      createPrompt.destVrs,
+                      createReferenceProject?.shortName ?? '',
+                      createPrompt.modelVrs,
+                    );
+                  return '';
+                })()}
+              </p>
+            </div>
+            <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
+              <Button
+                variant="outline"
+                autoFocus
+                onClick={() => {
+                  setCreatePrompt(undefined);
+                  pendingEstherRef.current = undefined;
+                }}
+              >
+                {t('%manageBooks_prompt_cancel%', 'Cancel')}
+              </Button>
+              <Button
+                onClick={async () => {
+                  const prompt = createPrompt;
+                  if (!prompt) return;
+                  setCreatePrompt(undefined);
+                  if (prompt.kind === 'missing-model') {
+                    // Continue versification check next.
+                    const destVrs = versification ?? '';
+                    const modelVrs = createReferenceId
+                      ? await Promise.resolve(loadVersification(createReferenceId)).catch(() => '')
+                      : '';
+                    if (destVrs && modelVrs && destVrs !== modelVrs) {
+                      setCreatePrompt({
+                        kind: 'versification',
+                        destVrs,
+                        modelVrs,
+                        books: prompt.available,
+                      });
+                      return;
+                    }
+                    runCreate(prompt.available, pendingEstherRef.current).catch(() => undefined);
+                    pendingEstherRef.current = undefined;
+                    return;
+                  }
+                  runCreate(prompt.books, pendingEstherRef.current).catch(() => undefined);
+                  pendingEstherRef.current = undefined;
+                }}
+              >
+                {t('%manageBooks_prompt_continue%', 'Continue')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* A9 — USX confirmation prompt */}
+      <Dialog
+        open={!!usxConfirm}
+        onOpenChange={(v) => {
+          if (!v) setUsxConfirm(undefined);
+        }}
+      >
+        <DialogContent className="tw-max-w-md" role="alertdialog">
+          <div className="tw-flex tw-flex-col tw-gap-4">
+            <div className="tw-flex tw-flex-col tw-gap-1">
+              <h2 className="tw-text-base tw-font-semibold">
+                {t('%manageBooks_import_usxConfirmTitle%', 'Import USX files?')}
+              </h2>
+              <p className="tw-text-sm tw-text-muted-foreground">
+                {fmt(
+                  t(
+                    '%manageBooks_import_usxConfirmBody%',
+                    'Import the following USX files into project {0}?',
+                  ),
+                  project.name,
+                )}
+              </p>
+              <ul className="tw-mt-1 tw-flex tw-flex-col tw-gap-0.5 tw-pl-5 tw-text-xs tw-text-muted-foreground">
+                {usxConfirm?.files.map((f) => <li key={f}>{f}</li>)}
+              </ul>
+            </div>
+            <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
+              <Button
+                variant="outline"
+                autoFocus
+                onClick={() => {
+                  // A9: cancel removes the USX files from the grid.
+                  if (usxConfirm) {
+                    const fileSet = new Set(usxConfirm.files);
+                    setImportFiles((prev) => {
+                      const next = { ...prev };
+                      Object.keys(next).forEach((book) => {
+                        if (fileSet.has(next[book].file)) delete next[book];
+                      });
+                      return next;
+                    });
+                  }
+                  setUsxConfirm(undefined);
+                }}
+              >
+                {t('%manageBooks_import_usxConfirmCancel%', 'Cancel')}
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!usxConfirm) return;
+                  // A9: Confirm imports immediately. Find the books mapped to these USX files.
+                  const fileSet = new Set(usxConfirm.files);
+                  const usxBooks = Object.keys(importFiles).filter((book) =>
+                    fileSet.has(importFiles[book].file),
+                  );
+                  setUsxConfirm(undefined);
+                  if (usxBooks.length > 0)
+                    runImport(usxBooks, 'replaceEntireBooks').catch(() => undefined);
+                }}
+              >
+                {t('%manageBooks_import_usxConfirmAccept%', 'Import')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* A10 — Overlap validation error */}
+      <Dialog
+        open={!!overlapError}
+        onOpenChange={(v) => {
+          if (!v) setOverlapError(undefined);
+        }}
+      >
+        <DialogContent className="tw-max-w-md" role="alertdialog">
+          <div className="tw-flex tw-flex-col tw-gap-4">
+            <div className="tw-flex tw-flex-col tw-gap-1">
+              <h2 className="tw-text-base tw-font-semibold">
+                {t('%manageBooks_import_overlapTitle%', 'Two files map to the same book')}
+              </h2>
+              <p className="tw-text-sm tw-text-muted-foreground">
+                {/* B2 — reuse existing backend key for the canonical message, augmented with file names */}
+                {t(
+                  '%manageBooks_import_errorOverlappingFiles%',
+                  'Two files contain information for the same book. They can not both be selected.',
+                )}
+              </p>
+              {overlapError && (
+                <p className="tw-text-sm tw-text-muted-foreground">
+                  {fmt(
+                    t(
+                      '%manageBooks_import_overlapBody%',
+                      'Cannot import: {0} would be supplied by both "{1}" and "{2}".',
+                    ),
+                    overlapError.book,
+                    overlapError.existingFile,
+                    overlapError.newFile,
+                  )}
+                </p>
+              )}
+            </div>
+            <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
+              <Button autoFocus onClick={() => setOverlapError(undefined)}>
+                {t('%manageBooks_import_overlapDismiss%', 'OK')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Existing import-conflict prompt (replace-entire vs non-existing) */}
       <Dialog
         open={!!importConflict}
         onOpenChange={(v) => {
-          if (!v) setImportConflict(null);
+          if (!v) setImportConflict(undefined);
         }}
       >
         <DialogContent className="tw-max-w-md">
           <div className="tw-flex tw-flex-col tw-gap-4">
             <div className="tw-flex tw-flex-col tw-gap-1">
-              <h2 className="tw-text-base tw-font-semibold">Books already exist</h2>
+              <h2 className="tw-text-base tw-font-semibold">
+                {t('%manageBooks_import_conflictTitle%', 'Books already exist')}
+              </h2>
               <p className="tw-text-sm tw-text-muted-foreground">
-                {importConflict &&
-                  `${importConflict.existing.length} book${importConflict.existing.length === 1 ? '' : 's'} already exist${importConflict.existing.length === 1 ? 's' : ''} in ${project.name}: ${importConflict.existing.join(', ')}`}
+                {importConflict
+                  ? fmt(
+                      t(
+                        '%manageBooks_import_conflictBody%',
+                        '{0} book(s) already exist in {1}: {2}',
+                      ),
+                      importConflict.existing.length,
+                      project.name,
+                      importConflict.existing.join(', '),
+                    )
+                  : ''}
               </p>
               <p className="tw-text-sm tw-text-muted-foreground">
-                Choose how to proceed with the import or close to cancel.
+                {t(
+                  '%manageBooks_import_conflictBody2%',
+                  'Choose how to proceed with the import or close to cancel.',
+                )}
               </p>
             </div>
             <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
@@ -1312,20 +2379,20 @@ export function ManageBooksDialog({
                 variant="outline"
                 onClick={() => {
                   if (!importConflict) return;
-                  runImport(importConflict.books, 'replaceEntireBooks');
-                  setImportConflict(null);
+                  runImport(importConflict.books, 'replaceEntireBooks').catch(() => undefined);
+                  setImportConflict(undefined);
                 }}
               >
-                Replace entire books
+                {t('%manageBooks_import_replaceEntireBooks%', 'Replace entire books')}
               </Button>
               <Button
                 onClick={() => {
                   if (!importConflict) return;
-                  runImport(importConflict.books, 'nonExistingChapters');
-                  setImportConflict(null);
+                  runImport(importConflict.books, 'nonExistingChapters').catch(() => undefined);
+                  setImportConflict(undefined);
                 }}
               >
-                Import non-existing chapters
+                {t('%manageBooks_import_nonExistingChapters%', 'Import non-existing chapters')}
               </Button>
             </div>
           </div>
