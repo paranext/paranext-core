@@ -19,7 +19,7 @@ const meta: Meta<typeof DictionaryTab> = {
     isLoading: false,
     emptyState: 'none',
     activeDictionary: 'SDBH',
-    hideNonRelevantSenses: false,
+    hideLessRelevantSenses: false,
     scopeLabel: 'current verse',
   },
   decorators: [
@@ -38,7 +38,7 @@ type DictKey = 'sdbh' | 'sdbg';
 
 /**
  * Default - fully interactive. The wrapper drives selection, the active dictionary, the
- * hide-non-relevant-senses toggle, and the per-row callbacks (sourceText / occurrence-link /
+ * hide-less-relevant-senses toggle, and the per-row callbacks (sourceText / occurrence-link /
  * helpfulness flow / context-menu copy/find), exercising every user flow on the real component with
  * sample data. Reviewers see selection drive the in-container detail panel that exposes the
  * helpfulness Yes/No prompt + optional "Give feedback..." link (Theme 13b) and the source-language
@@ -46,7 +46,7 @@ type DictKey = 'sdbh' | 'sdbg';
  */
 function InteractiveDictionaryTabDemo() {
   const [selectedTokenId, setSelectedTokenId] = useState<string | undefined>();
-  const [hideNonRelevant, setHideNonRelevant] = useState(false);
+  const [hideLessRelevant, setHideLessRelevant] = useState(false);
   const [dictionary, setDictionary] = useState<DictKey>('sdbh');
   const [eventLog, setEventLog] = useState<string[]>([]);
 
@@ -81,10 +81,10 @@ function InteractiveDictionaryTabDemo() {
           activeDictionary={dictionary === 'sdbh' ? 'SDBH' : 'SDBG'}
           selectedTokenId={selectedTokenId}
           onSelectionChange={setSelectedTokenId}
-          hideNonRelevantSenses={hideNonRelevant}
-          onToggleHideNonRelevantSenses={(hide) => {
-            setHideNonRelevant(hide);
-            log(`hide-non-relevant ${hide}`);
+          hideLessRelevantSenses={hideLessRelevant}
+          onToggleHideLessRelevantSenses={(hide) => {
+            setHideLessRelevant(hide);
+            log(`hide-less-relevant ${hide}`);
           }}
           onSourceTextClick={(tokenId) => log(`source-text-click ${tokenId}`)}
           onAllOccurrencesClick={(tokenId) => log(`all-occurrences-click ${tokenId}`)}

@@ -380,6 +380,11 @@ export type EnhancedResourceTabBarProps = {
    * Theme 9 — whether the current `searchValue` matched any results in the active research pane.
    * Drives the "has matches" green tint vs "no matches" orange tint described in
    * `ui-spec-marble-form.md` line 36 (`filterBox`).
+   *
+   * [Revised: 2026-04-30 SB#2] Preserved Toolbar capability NOT currently consumed by the ER
+   * backend - the green/orange tint behavior originates in Biblical Terms integration and is
+   * retained here so the BT integration (when ported) can reuse this surface without further UI
+   * changes. Default `true` keeps the input visually neutral when ER alone drives the tab bar.
    */
   hasMatches?: boolean;
   localizedStringsWithLoadingState?: [ToolbarLocalizedStrings, boolean];

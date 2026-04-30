@@ -129,14 +129,14 @@ export type EnhancedResourceWebViewProps = {
   dictionaryFilterWord?: string;
   dictionaryScopeLabel?: string;
   dictionaryActiveDictionary?: 'SDBH' | 'SDBG';
-  dictionaryHideNonRelevantSenses?: boolean;
+  dictionaryHideLessRelevantSenses?: boolean;
   onDictionarySelectionChange?: (tokenId: string | undefined) => void;
   onDictionarySourceTextClick?: (tokenId: string) => void;
   /** Click on the entry-level "Occurrences in all books" link inside the detail panel. */
   onDictionaryAllOccurrencesClick?: (tokenId: string) => void;
   /** Click on a sense's "Occurrences in all books" link inside the detail panel. */
   onDictionarySenseOccurrencesClick?: (senseId: string) => void;
-  onDictionaryToggleHideNonRelevantSenses?: (hide: boolean) => void;
+  onDictionaryToggleHideLessRelevantSenses?: (hide: boolean) => void;
   /** Helpfulness Yes/No answer (Theme 13b; backend FN-018). */
   onDictionaryHelpfulnessAnswer?: (entryTokenId: string, answer: 'yes' | 'no') => void;
   /** "Give feedback..." link click (Theme 13b; backend FN-018). */
@@ -266,12 +266,12 @@ export function EnhancedResourceWebView({
   dictionaryFilterWord,
   dictionaryScopeLabel = '',
   dictionaryActiveDictionary = 'SDBH',
-  dictionaryHideNonRelevantSenses = false,
+  dictionaryHideLessRelevantSenses = false,
   onDictionarySelectionChange = () => {},
   onDictionarySourceTextClick = () => {},
   onDictionaryAllOccurrencesClick = () => {},
   onDictionarySenseOccurrencesClick = () => {},
-  onDictionaryToggleHideNonRelevantSenses = () => {},
+  onDictionaryToggleHideLessRelevantSenses = () => {},
   onDictionaryHelpfulnessAnswer = () => {},
   onDictionaryGiveFeedback = () => {},
   onDictionaryCopySurfaceForm = () => {},
@@ -432,12 +432,12 @@ export function EnhancedResourceWebView({
                     filterWord={dictionaryFilterWord}
                     scopeLabel={dictionaryScopeLabel}
                     activeDictionary={dictionaryActiveDictionary}
-                    hideNonRelevantSenses={dictionaryHideNonRelevantSenses}
+                    hideLessRelevantSenses={dictionaryHideLessRelevantSenses}
                     onSelectionChange={onDictionarySelectionChange}
                     onSourceTextClick={onDictionarySourceTextClick}
                     onAllOccurrencesClick={onDictionaryAllOccurrencesClick}
                     onSenseOccurrencesClick={onDictionarySenseOccurrencesClick}
-                    onToggleHideNonRelevantSenses={onDictionaryToggleHideNonRelevantSenses}
+                    onToggleHideLessRelevantSenses={onDictionaryToggleHideLessRelevantSenses}
                     onHelpfulnessAnswer={onDictionaryHelpfulnessAnswer}
                     onGiveFeedback={onDictionaryGiveFeedback}
                     onCopySurfaceForm={onDictionaryCopySurfaceForm}

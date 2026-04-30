@@ -152,8 +152,8 @@
     "%enhancedResources_dictionary_sense_occurrencesInAllBooks%": {
       "notes": ["Per-sense link label that opens the all-book occurrences for that sense."]
     },
-    "%enhancedResources_dictionary_sense_nonRelevantLabel%": {
-      "notes": ["ARIA label for a sense flagged as non-relevant for the current verse."]
+    "%enhancedResources_dictionary_sense_lessRelevantLabel%": {
+      "notes": ["ARIA label for a sense flagged as less-relevant for the current verse."]
     },
     "%enhancedResources_dictionary_emptyState_noData%": {
       "notes": [
@@ -210,8 +210,8 @@
       "notes": ["Context menu item: Find this text (search by surface text)."]
     },
     "%enhancedResources_dictionary_sensesHeader%": {},
-    "%enhancedResources_dictionary_hideNonRelevantToggle%": {
-      "notes": ["Switch label: hide senses flagged as non-relevant in the current verse."]
+    "%enhancedResources_dictionary_hideLessRelevantToggle%": {
+      "notes": ["Switch label: hide senses flagged as less-relevant in the current verse."]
     },
     "%enhancedResources_dictionary_allOccurrencesLink%": {
       "notes": ["Entry-level link label that opens all-book occurrences for the entire entry."]
@@ -567,7 +567,7 @@
       "%enhancedResources_dictionary_sense_commentLabel%": "Comment:",
       "%enhancedResources_dictionary_sense_commentsAndNotesLabel%": "Comments and Notes:",
       "%enhancedResources_dictionary_sense_occurrencesInAllBooks%": "Occurrences in all books",
-      "%enhancedResources_dictionary_sense_nonRelevantLabel%": "Non-relevant sense",
+      "%enhancedResources_dictionary_sense_lessRelevantLabel%": "Less-relevant sense",
       "%enhancedResources_dictionary_emptyState_noData%": "No data found for {scope}.",
       "%enhancedResources_dictionary_emptyState_noMatch%": "No data found for \"{word}\" in {scope}.",
       "%enhancedResources_dictionary_emptyState_wordNotInScope%": "\"{word}\" does not occur in {scope}.",
@@ -583,7 +583,7 @@
       "%enhancedResources_dictionary_findLemma%": "Find lemma",
       "%enhancedResources_dictionary_findText%": "Find text",
       "%enhancedResources_dictionary_sensesHeader%": "Senses",
-      "%enhancedResources_dictionary_hideNonRelevantToggle%": "Hide non-relevant senses",
+      "%enhancedResources_dictionary_hideLessRelevantToggle%": "Hide less-relevant senses",
       "%enhancedResources_dictionary_allOccurrencesLink%": "Occurrences in all books",
       "%enhancedResources_dictionary_emptyDetail%": "No additional detail available.",
       "%enhancedResources_dictionary_backToList%": "Back to list",

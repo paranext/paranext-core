@@ -60,8 +60,8 @@ export type DictionaryTabProps = {
   scopeLabel?: string;
   /** Active dictionary - drives the dictionary label. */
   activeDictionary?: 'SDBH' | 'SDBG';
-  /** Whether non-relevant senses are hidden in the detail panel. */
-  hideNonRelevantSenses?: boolean;
+  /** Whether less-relevant senses are hidden in the detail panel. */
+  hideLessRelevantSenses?: boolean;
 
   /** Selection callback - parent toggles drawer via this. */
   onSelectionChange?: (tokenId: string | undefined) => void;
@@ -72,7 +72,7 @@ export type DictionaryTabProps = {
   onAllOccurrencesClick?: (tokenId: string) => void;
   /** Click on a sense's "Occurrences in all books" link inside the detail panel. */
   onSenseOccurrencesClick?: (senseId: string) => void;
-  onToggleHideNonRelevantSenses?: (hide: boolean) => void;
+  onToggleHideLessRelevantSenses?: (hide: boolean) => void;
 
   /** Helpfulness flow (Theme 13b; backend FN-018). */
   onHelpfulnessAnswer?: (entryTokenId: string, answer: 'yes' | 'no') => void;
@@ -117,14 +117,14 @@ export function DictionaryTab({
   filterWord,
   scopeLabel = '',
   activeDictionary = 'SDBH',
-  hideNonRelevantSenses = false,
+  hideLessRelevantSenses = false,
 
   onSelectionChange = () => {},
 
   onSourceTextClick = () => {},
   onAllOccurrencesClick = () => {},
   onSenseOccurrencesClick = () => {},
-  onToggleHideNonRelevantSenses = () => {},
+  onToggleHideLessRelevantSenses = () => {},
 
   onHelpfulnessAnswer = () => {},
   onGiveFeedback = () => {},
@@ -238,8 +238,9 @@ export function DictionaryTab({
               sourceText={item.sourceText}
               transliteration={item.translit}
               senses={item.senses}
-              hideNonRelevantSenses={hideNonRelevantSenses}
-              onToggleHideNonRelevantSenses={onToggleHideNonRelevantSenses}
+              totalOccurrencesInAllBooks={item.totalOccurrencesInAllBooks}
+              hideLessRelevantSenses={hideLessRelevantSenses}
+              onToggleHideLessRelevantSenses={onToggleHideLessRelevantSenses}
               onSourceTextClick={onSourceTextClick}
               onAllOccurrencesClick={onAllOccurrencesClick}
               onSenseOccurrencesClick={onSenseOccurrencesClick}

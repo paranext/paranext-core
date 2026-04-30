@@ -34,14 +34,14 @@ type Story = StoryObj<typeof DictionaryEntryDetail>;
 type LangFixture = 'hebrew' | 'greek';
 
 /**
- * Default - fully interactive. The wrapper exposes the hide-non-relevant toggle, a language
+ * Default - fully interactive. The wrapper exposes the hide-less-relevant toggle, a language
  * switcher (Hebrew / Greek fixtures so reviewers can see both ContextMenu sub-menus and both
  * "Occurrences in all books" labels), and click counters that pick up the source-text click,
  * helpfulness Yes/No, "Give feedback..." link, and context-menu copy/find actions. Right-click on
  * the source word reveals the per-component context menu (Theme 16).
  */
 function InteractiveEntryDetailDemo() {
-  const [hideNonRelevant, setHideNonRelevant] = useState(false);
+  const [hideLessRelevant, setHideLessRelevant] = useState(false);
   const [language, setLanguage] = useState<LangFixture>('hebrew');
   const [eventLog, setEventLog] = useState<string[]>([]);
 
@@ -55,10 +55,10 @@ function InteractiveEntryDetailDemo() {
         <label className="tw-flex tw-items-center tw-gap-1">
           <input
             type="checkbox"
-            checked={hideNonRelevant}
-            onChange={(e) => setHideNonRelevant(e.target.checked)}
+            checked={hideLessRelevant}
+            onChange={(e) => setHideLessRelevant(e.target.checked)}
           />
-          Hide non-relevant senses
+          Hide less-relevant senses
         </label>
         <label className="tw-flex tw-items-center tw-gap-1">
           Language:
@@ -80,8 +80,8 @@ function InteractiveEntryDetailDemo() {
         sourceText={fixture.sourceText}
         transliteration={fixture.translit}
         senses={fixture.senses}
-        hideNonRelevantSenses={hideNonRelevant}
-        onToggleHideNonRelevantSenses={setHideNonRelevant}
+        hideLessRelevantSenses={hideLessRelevant}
+        onToggleHideLessRelevantSenses={setHideLessRelevant}
         totalOccurrencesInAllBooks={fixture.totalOccurrencesInAllBooks}
         onSourceTextClick={(tokenId) => log(`source-text-click ${tokenId}`)}
         onAllOccurrencesClick={(tokenId) => log(`all-occurrences-click ${tokenId}`)}

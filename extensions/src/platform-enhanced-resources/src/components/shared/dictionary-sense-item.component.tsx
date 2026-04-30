@@ -10,7 +10,7 @@ export const DICTIONARY_SENSE_ITEM_STRING_KEYS = Object.freeze([
   '%enhancedResources_dictionary_sense_commentLabel%',
   '%enhancedResources_dictionary_sense_commentsAndNotesLabel%',
   '%enhancedResources_dictionary_sense_occurrencesInAllBooks%',
-  '%enhancedResources_dictionary_sense_nonRelevantLabel%',
+  '%enhancedResources_dictionary_sense_lessRelevantLabel%',
 ] as const);
 
 type DictionarySenseItemLocalizedStringKey = (typeof DICTIONARY_SENSE_ITEM_STRING_KEYS)[number];
@@ -57,8 +57,8 @@ export type DictionarySenseDisplay = {
    */
   occurrencesInAllBooksCount?: number;
   /**
-   * Whether this sense is "relevant" for the current verse / context. Non-relevant senses are
-   * grayed out (when shown) or hidden completely (when hideNonRelevant is true).
+   * Whether this sense is "relevant" for the current verse / context. Less-relevant senses are
+   * grayed out (when shown) or hidden completely (when hideLessRelevant is true).
    */
   isRelevant: boolean;
 };
@@ -66,8 +66,8 @@ export type DictionarySenseDisplay = {
 export type DictionarySenseItemProps = {
   /** The sense data to display. */
   sense: DictionarySenseDisplay;
-  /** When true non-relevant senses are hidden entirely; when false they are shown but grayed. */
-  hideNonRelevant?: boolean;
+  /** When true less-relevant senses are hidden entirely; when false they are shown but grayed. */
+  hideLessRelevant?: boolean;
   /** Callback when the "Occurrences in all books" link is clicked - parent routes to MarbleForm. */
   onSenseOccurrencesClick?: (senseId: string) => void;
   /** Forwarded localized strings. */
@@ -82,22 +82,22 @@ export type DictionarySenseItemProps = {
  * 1. <description> Occurrences in all books (N) Glosses: <gloss> Domain: <domain 1> Domain: <domain 2>
  *    Notes: <notes> Comment: <comment> Comments and Notes: <both>
  *
- * Optional rows are conditionally rendered. Non-relevant senses are dimmed (when shown) or
- * unrendered (when `hideNonRelevant` is true).
+ * Optional rows are conditionally rendered. Less-relevant senses are dimmed (when shown) or
+ * unrendered (when `hideLessRelevant` is true).
  *
  * Note: Domain/Notes/Comment fields require backend FN-019 (load Sense.Comments, Lexicon_Note,
  * LEXSubDomains in C# loader). UI shows blank rows until backend ships.
  */
 export function DictionarySenseItem({
   sense,
-  hideNonRelevant = false,
+  hideLessRelevant = false,
   onSenseOccurrencesClick = () => {},
   localizedStringsWithLoadingState = [{}, false],
 }: DictionarySenseItemProps) {
   const getLocalizedString = (key: DictionarySenseItemLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
-  if (!sense.isRelevant && hideNonRelevant) {
+  if (!sense.isRelevant && hideLessRelevant) {
     return undefined;
   }
 
@@ -118,8 +118,8 @@ export function DictionarySenseItem({
   const occurrencesLinkLabel = String(
     getLocalizedString('%enhancedResources_dictionary_sense_occurrencesInAllBooks%'),
   );
-  const nonRelevantLabel = String(
-    getLocalizedString('%enhancedResources_dictionary_sense_nonRelevantLabel%'),
+  const lessRelevantLabel = String(
+    getLocalizedString('%enhancedResources_dictionary_sense_lessRelevantLabel%'),
   );
 
   const occurrenceCount = sense.occurrencesInAllBooksCount;
@@ -160,7 +160,7 @@ export function DictionarySenseItem({
   return (
     <div
       role="group"
-      aria-label={dimmed ? nonRelevantLabel : undefined}
+      aria-label={dimmed ? lessRelevantLabel : undefined}
       data-testid={`dictionary-sense-${sense.id}`}
       className={cn(
         'tw-flex tw-flex-col tw-gap-2 tw-rounded tw-border tw-border-border tw-bg-background tw-p-2',

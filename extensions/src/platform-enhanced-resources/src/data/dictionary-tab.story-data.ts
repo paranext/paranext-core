@@ -17,14 +17,11 @@
 import type { DictionaryDisplayItemData } from '../components/dictionary-tab/dictionary-display-item.component';
 
 /**
- * Internal alias used by stories that exercise per-entry total occurrence counts. The
- * `totalOccurrencesInAllBooks` field is consumed by `DictionaryEntryDetail` (entry-level link
- * label) when present. Stories pass it explicitly via the `totalOccurrencesInAllBooks` prop.
+ * Mock entry alias kept as a named type for story readability. `totalOccurrencesInAllBooks` is now
+ * part of `DictionaryDisplayItemData` itself (revised 2026-04-30 SB#5d), so this is just a
+ * re-export alias. Story call sites can use `DictionaryDisplayItemData` directly if they prefer.
  */
-export interface MockDictionaryEntry extends DictionaryDisplayItemData {
-  /** Total occurrences across all books (entry-level "Occurrences in all books" link label). */
-  totalOccurrencesInAllBooks?: number;
-}
+export type MockDictionaryEntry = DictionaryDisplayItemData;
 
 /** Hebrew entry derived from gm-020 (אֱלֹהִים -> "God") */
 export const MOCK_DICT_ENTRY_ELOHIM: MockDictionaryEntry = {

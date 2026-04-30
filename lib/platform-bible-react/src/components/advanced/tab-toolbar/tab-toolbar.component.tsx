@@ -78,7 +78,7 @@ export function TabToolbar({
         />
       )}
       {startAreaChildren && (
-        <div className="tw-flex tw-h-full tw-shrink tw-grow-[10] tw-flex-row tw-flex-wrap tw-items-start tw-gap-x-1 tw-gap-y-2 tw-overflow-clip">
+        <div className="tw-flex tw-h-full tw-shrink tw-grow-[1] tw-flex-row tw-flex-wrap tw-items-start tw-gap-x-1 tw-gap-y-2 tw-overflow-clip">
           {startAreaChildren}
         </div>
       )}

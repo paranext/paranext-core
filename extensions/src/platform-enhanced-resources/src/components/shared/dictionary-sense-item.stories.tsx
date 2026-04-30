@@ -29,10 +29,10 @@ const RELEVANT_SENSE: DictionarySenseDisplay = {
 };
 
 /**
- * A sense flagged as non-relevant for the current verse - demonstrates the dimmed appearance and
+ * A sense flagged as less-relevant for the current verse - demonstrates the dimmed appearance and
  * the Comments-and-Notes optional row.
  */
-const NON_RELEVANT_SENSE: DictionarySenseDisplay = {
+const LESS_RELEVANT_SENSE: DictionarySenseDisplay = {
   id: 'sense-2',
   senseNumber: 2,
   definition: 'A general term for divine beings or judges acting on behalf of God.',
@@ -71,17 +71,17 @@ export default meta;
 type Story = StoryObj<typeof DictionarySenseItem>;
 
 /**
- * Default - fully interactive. The wrapper exposes a "Hide non-relevant" toggle plus a "Toggle
- * relevance" control so reviewers can flip the same sense between relevant and non-relevant states,
- * and observe the per-sense "Occurrences in all books" link routing through the wrapper's own click
- * counter (no parent component needed for this experience).
+ * Default - fully interactive. The wrapper exposes a "Hide less-relevant" toggle plus a "Toggle
+ * relevance" control so reviewers can flip the same sense between relevant and less-relevant
+ * states, and observe the per-sense "Occurrences in all books" link routing through the wrapper's
+ * own click counter (no parent component needed for this experience).
  */
 function InteractiveSenseDemo() {
-  const [hideNonRelevant, setHideNonRelevant] = useState(false);
+  const [hideLessRelevant, setHideLessRelevant] = useState(false);
   const [isRelevant, setIsRelevant] = useState(false);
   const [clickCount, setClickCount] = useState(0);
 
-  const sense: DictionarySenseDisplay = isRelevant ? RELEVANT_SENSE : NON_RELEVANT_SENSE;
+  const sense: DictionarySenseDisplay = isRelevant ? RELEVANT_SENSE : LESS_RELEVANT_SENSE;
 
   return (
     <div className="tw-flex tw-flex-col tw-gap-3">
@@ -89,10 +89,10 @@ function InteractiveSenseDemo() {
         <label className="tw-flex tw-items-center tw-gap-1">
           <input
             type="checkbox"
-            checked={hideNonRelevant}
-            onChange={(e) => setHideNonRelevant(e.target.checked)}
+            checked={hideLessRelevant}
+            onChange={(e) => setHideLessRelevant(e.target.checked)}
           />
-          Hide non-relevant
+          Hide less-relevant
         </label>
         <label className="tw-flex tw-items-center tw-gap-1">
           <input
@@ -108,7 +108,7 @@ function InteractiveSenseDemo() {
       </div>
       <DictionarySenseItem
         sense={sense}
-        hideNonRelevant={hideNonRelevant}
+        hideLessRelevant={hideLessRelevant}
         onSenseOccurrencesClick={() => setClickCount((c) => c + 1)}
         localizedStringsWithLoadingState={[localizedStrings, false]}
       />
@@ -122,13 +122,13 @@ export const Default: Story = {
 };
 
 /**
- * NonRelevantHidden - unreachable from Default because the interactive demo cannot stay rendering a
- * non-relevant sense while hideNonRelevant is on (the component returns nothing). This story
+ * LessRelevantHidden - unreachable from Default because the interactive demo cannot stay rendering
+ * a less-relevant sense while hideLessRelevant is on (the component returns nothing). This story
  * captures that the empty render is correct.
  */
-export const NonRelevantHidden: Story = {
+export const LessRelevantHidden: Story = {
   args: {
-    sense: NON_RELEVANT_SENSE,
-    hideNonRelevant: true,
+    sense: LESS_RELEVANT_SENSE,
+    hideLessRelevant: true,
   },
 };

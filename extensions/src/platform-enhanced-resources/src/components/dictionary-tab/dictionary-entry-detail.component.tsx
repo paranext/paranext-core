@@ -25,7 +25,7 @@ import {
 /** Object containing all keys used for localization in this component. */
 export const DICTIONARY_ENTRY_DETAIL_STRING_KEYS = Object.freeze([
   '%enhancedResources_dictionary_sensesHeader%',
-  '%enhancedResources_dictionary_hideNonRelevantToggle%',
+  '%enhancedResources_dictionary_hideLessRelevantToggle%',
   '%enhancedResources_dictionary_allOccurrencesLink%',
   '%enhancedResources_dictionary_emptyDetail%',
   '%enhancedResources_dictionary_backToList%',
@@ -77,10 +77,10 @@ export type DictionaryEntryDetailProps = {
   transliteration?: string;
   /** Sense list (with relevance flags). */
   senses?: DictionarySenseDisplay[];
-  /** When true, non-relevant senses are hidden entirely. */
-  hideNonRelevantSenses?: boolean;
-  /** Callback fired when the "hide non-relevant senses" switch is toggled. */
-  onToggleHideNonRelevantSenses?: (hide: boolean) => void;
+  /** When true, less-relevant senses are hidden entirely. */
+  hideLessRelevantSenses?: boolean;
+  /** Callback fired when the "hide less-relevant senses" switch is toggled. */
+  onToggleHideLessRelevantSenses?: (hide: boolean) => void;
   /** Total occurrences in all books across the entire entry (used for the entry-wide link label). */
   totalOccurrencesInAllBooks?: number;
 
@@ -144,8 +144,8 @@ export function DictionaryEntryDetail({
   sourceText,
   transliteration,
   senses,
-  hideNonRelevantSenses = false,
-  onToggleHideNonRelevantSenses = () => {},
+  hideLessRelevantSenses = false,
+  onToggleHideLessRelevantSenses = () => {},
   totalOccurrencesInAllBooks,
   onSourceTextClick = () => {},
   onAllOccurrencesClick = () => {},
@@ -164,8 +164,8 @@ export function DictionaryEntryDetail({
     localizedStringsWithLoadingState[0][key] ?? key;
 
   const sensesHeader = String(getLocalizedString('%enhancedResources_dictionary_sensesHeader%'));
-  const hideNonRelevantLabel = String(
-    getLocalizedString('%enhancedResources_dictionary_hideNonRelevantToggle%'),
+  const hideLessRelevantLabel = String(
+    getLocalizedString('%enhancedResources_dictionary_hideLessRelevantToggle%'),
   );
   const allOccurrencesRawLabel = String(
     getLocalizedString('%enhancedResources_dictionary_allOccurrencesLink%'),
@@ -307,7 +307,7 @@ export function DictionaryEntryDetail({
         {renderEntryContextMenuContent()}
       </ContextMenu>
 
-      {/* Senses + hide-non-relevant toggle. */}
+      {/* Senses + hide-less-relevant toggle. */}
       {senses && senses.length > 0 && (
         <section aria-label={sensesHeader}>
           <div className="tw-mb-2 tw-flex tw-items-center tw-justify-between">
@@ -316,11 +316,11 @@ export function DictionaryEntryDetail({
             </h4>
             <label className="tw-flex tw-items-center tw-gap-2 tw-text-xs">
               <Switch
-                checked={hideNonRelevantSenses}
-                onCheckedChange={onToggleHideNonRelevantSenses}
-                aria-label={hideNonRelevantLabel}
+                checked={hideLessRelevantSenses}
+                onCheckedChange={onToggleHideLessRelevantSenses}
+                aria-label={hideLessRelevantLabel}
               />
-              <span>{hideNonRelevantLabel}</span>
+              <span>{hideLessRelevantLabel}</span>
             </label>
           </div>
           <div className="tw-flex tw-flex-col tw-gap-2">
@@ -328,7 +328,7 @@ export function DictionaryEntryDetail({
               <DictionarySenseItem
                 key={sense.id}
                 sense={sense}
-                hideNonRelevant={hideNonRelevantSenses}
+                hideLessRelevant={hideLessRelevantSenses}
                 onSenseOccurrencesClick={onSenseOccurrencesClick}
                 localizedStringsWithLoadingState={senseStrings}
               />

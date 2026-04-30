@@ -46,6 +46,13 @@ export type DictionaryDisplayItemData = {
   translit: string;
   /** Detail data (loaded lazily when expanded). */
   senses?: DictionarySenseDisplay[];
+  /**
+   * Total occurrences in all books for the entire entry. Consumed by `DictionaryEntryDetail` for
+   * the entry-level "Occurrences in all books ({x})" link. Optional during loading; production data
+   * provider always populates it (see data-contracts.md M-006 readDictionaryEntry). [Revised:
+   * 2026-04-30 SB#5d]
+   */
+  totalOccurrencesInAllBooks?: number;
 };
 
 export type DictionaryDisplayItemProps = {

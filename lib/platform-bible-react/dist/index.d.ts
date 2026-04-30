@@ -1770,22 +1770,20 @@ export type SourceLanguageIndexedListLocalizedStrings = {
 /**
  * A shared list component for displaying source-language indexed items. Supports two-column layout
  * (resource term + source language term), keyboard navigation, text and thumbnail variants,
- * loading/empty states, and an optional detail panel.
+ * loading/empty states, and an optional side-by-side detail panel.
  *
- * When `renderDetailContent` is provided, clicking an item opens a right-side detail panel **within
- * the component's own bounding box** using a plain absolute-positioned panel (NOT vaul/Radix
- * Dialog) so the rest of the page stays fully interactive while details are open: outer toolbars,
- * tab switches, keyboard navigation in the list itself, and any controls outside the SLI all remain
- * live. The panel opens to 4/5 of the available width. Clicking a different list item while the
- * panel is open swaps the content without requiring a close-then-reopen cycle. Clicking outside the
- * SLI does nothing special (clicks pass through to underlying elements). Pressing Escape while
- * focus is inside the detail panel closes it.
+ * When `renderDetailContent` is provided, clicking an item opens a side-by-side detail panel using
+ * a `ResizablePanelGroup` split (list at ~33%, detail at ~67%, with a draggable handle). This is
+ * the pattern from PR #2209's stories (`source-language-indexed-list.stories.tsx`); the previous
+ * absolute-positioned and vaul-`Drawer` implementations are both abandoned because the former
+ * obscured the list and the latter triggered Radix `pointer-events: none` body locks that left only
+ * the "back to list" button interactive across the whole page.
  *
- * The previous implementation used vaul's `Drawer` with `modal={false}` and `container={...}`,
- * which still applied focus trapping and `pointer-events: none` to siblings via the underlying
- * Radix Dialog primitive — leaving only the "back to list" button interactive across the whole UI.
- * The non-vaul absolute-panel approach is the canonical fix from PR #2209
- * (`CustomDrawerDomainOverlay` pattern in `source-language-indexed-list.stories.tsx`).
+ * Click swap: clicking a different list item while the panel is open swaps the detail content
+ * without requiring a close-then-reopen cycle. Clicking the already-selected item closes the
+ * detail. Pressing Escape while focus is inside the detail panel closes it (focus returns to the
+ * listbox). The list and detail are siblings inside the same scrollable container, so outer
+ * toolbars, tab switches, scope selectors, and any controls outside the SLI remain fully live.
  *
  * Used by Enhanced Resources (dictionary, encyclopedia, media) and lexical tools (dictionary).
  *

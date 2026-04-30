@@ -46,6 +46,14 @@ export type CopyrightOverlayProps = {
  * `dismissed` prop was removed in favor of the standard shadcn `open` / `onOpenChange` pair so the
  * parent always mounts the component (no conditional mounting required) and the Dialog handles
  * Esc-to-close and overlay-click-to-close automatically.
+ *
+ * [Revised: 2026-04-30] SB#3 — `modal={false}` prevents Radix Dialog from locking body
+ * `pointer-events` while open. Without this, after closing the dialog (X / Escape / outside-click /
+ * Close button), Radix's body-lock cleanup occasionally leaves the underlying ER UI unresponsive
+ * because the cleanup races against React state updates from the always-mounted sibling
+ * `MediaViewer`/`MarbleGuide` Dialogs in the web-view shell. With `modal={false}`, the visual
+ * overlay still renders and Esc/outside-click still close the dialog (Radix preserves those when
+ * non-modal), but the body never gets `pointer-events: none`, so there is nothing to leak.
  */
 export function CopyrightOverlay({
   copyrightInfo,
@@ -63,7 +71,7 @@ export function CopyrightOverlay({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
       <DialogContent className="tw-max-w-2xl">
         <DialogHeader>
           <DialogTitle>{titleText}</DialogTitle>

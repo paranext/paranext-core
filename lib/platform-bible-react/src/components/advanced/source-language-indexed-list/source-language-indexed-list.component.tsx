@@ -3,6 +3,11 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { useListbox, type ListboxOption } from '@/hooks/listbox-keyboard-navigation.hook';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { Skeleton } from '@/components/shadcn-ui/skeleton';
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '@/components/shadcn-ui/resizable';
 import type {
   IndexedListItem,
   SourceLanguageIndexedListProps,
@@ -11,22 +16,20 @@ import type {
 /**
  * A shared list component for displaying source-language indexed items. Supports two-column layout
  * (resource term + source language term), keyboard navigation, text and thumbnail variants,
- * loading/empty states, and an optional detail panel.
+ * loading/empty states, and an optional side-by-side detail panel.
  *
- * When `renderDetailContent` is provided, clicking an item opens a right-side detail panel **within
- * the component's own bounding box** using a plain absolute-positioned panel (NOT vaul/Radix
- * Dialog) so the rest of the page stays fully interactive while details are open: outer toolbars,
- * tab switches, keyboard navigation in the list itself, and any controls outside the SLI all remain
- * live. The panel opens to 4/5 of the available width. Clicking a different list item while the
- * panel is open swaps the content without requiring a close-then-reopen cycle. Clicking outside the
- * SLI does nothing special (clicks pass through to underlying elements). Pressing Escape while
- * focus is inside the detail panel closes it.
+ * When `renderDetailContent` is provided, clicking an item opens a side-by-side detail panel using
+ * a `ResizablePanelGroup` split (list at ~33%, detail at ~67%, with a draggable handle). This is
+ * the pattern from PR #2209's stories (`source-language-indexed-list.stories.tsx`); the previous
+ * absolute-positioned and vaul-`Drawer` implementations are both abandoned because the former
+ * obscured the list and the latter triggered Radix `pointer-events: none` body locks that left only
+ * the "back to list" button interactive across the whole page.
  *
- * The previous implementation used vaul's `Drawer` with `modal={false}` and `container={...}`,
- * which still applied focus trapping and `pointer-events: none` to siblings via the underlying
- * Radix Dialog primitive — leaving only the "back to list" button interactive across the whole UI.
- * The non-vaul absolute-panel approach is the canonical fix from PR #2209
- * (`CustomDrawerDomainOverlay` pattern in `source-language-indexed-list.stories.tsx`).
+ * Click swap: clicking a different list item while the panel is open swaps the detail content
+ * without requiring a close-then-reopen cycle. Clicking the already-selected item closes the
+ * detail. Pressing Escape while focus is inside the detail panel closes it (focus returns to the
+ * listbox). The list and detail are siblings inside the same scrollable container, so outer
+ * toolbars, tab switches, scope selectors, and any controls outside the SLI remain fully live.
  *
  * Used by Enhanced Resources (dictionary, encyclopedia, media) and lexical tools (dictionary).
  *
@@ -210,27 +213,35 @@ export default function SourceLanguageIndexedList<T extends IndexedListItem>({
     </ul>
   );
 
-  return (
-    <div ref={containerRef} className={cn('tw-relative tw-h-full tw-overflow-hidden', className)}>
-      <div className="tw-h-full tw-overflow-y-auto">{listContent}</div>
+  const detailElement =
+    renderDetailContent && drawerItem
+      ? renderDetailContent(drawerItem, handleCloseDetail)
+      : undefined;
 
-      {/*
-        Detail panel - scoped to this component, 4/5 width, no overlay so clicks pass through.
-        Plain absolute-positioned panel (NOT vaul/Radix Dialog) to avoid the focus-trap and
-        pointer-events:none-on-siblings side effects that left only the "back to list" button
-        interactive across the whole UI. See PR #2209 `CustomDrawerDomainOverlay` reference.
-      */}
-      {renderDetailContent && drawerItem && (
-        <div
-          ref={detailPanelRef}
-          role="region"
-          aria-label="Selected item details"
-          className="tw-absolute tw-inset-y-0 tw-right-0 tw-z-10 tw-flex tw-w-4/5 tw-flex-col tw-overflow-hidden tw-border-l tw-bg-background tw-shadow-xl"
-        >
-          <div className="tw-h-full tw-overflow-y-auto tw-p-4">
-            {renderDetailContent(drawerItem, handleCloseDetail)}
-          </div>
-        </div>
+  return (
+    <div ref={containerRef} className={cn('tw-relative tw-flex tw-h-full tw-overflow-hidden', className)}>
+      {detailElement ? (
+        // Side-by-side ResizablePanelGroup split per PR #2209 stories pattern: list at ~33% with
+        // a draggable handle, detail at ~67%. The detail is a sibling of the list (not an overlay)
+        // so all controls outside the SLI remain interactive while the detail is open.
+        <ResizablePanelGroup direction="horizontal" className="tw-h-full tw-w-full">
+          <ResizablePanel defaultSize={33.3333} minSize={20}>
+            <div className="tw-h-full tw-overflow-y-auto">{listContent}</div>
+          </ResizablePanel>
+          <ResizableHandle />
+          <ResizablePanel defaultSize={66.6667} minSize={30}>
+            <div
+              ref={detailPanelRef}
+              role="region"
+              aria-label="Selected item details"
+              className="tw-h-full tw-overflow-y-auto tw-bg-background tw-p-4"
+            >
+              {detailElement}
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
+        <div className="tw-h-full tw-w-full tw-overflow-y-auto">{listContent}</div>
       )}
     </div>
   );
