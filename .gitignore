@@ -78,3 +78,6 @@ secrets/
 *.p12
 credentials.json
 service-account.json
+
+# Brainstorming session artifacts (visual companion)
+.superpowers/
