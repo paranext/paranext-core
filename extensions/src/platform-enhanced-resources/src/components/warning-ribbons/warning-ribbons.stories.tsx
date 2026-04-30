@@ -13,6 +13,14 @@ const INITIAL_STATE: RibbonStates = MOCK_RIBBONS_ALL;
 
 const localizedStrings = getLocalizedStrings([...WARNING_RIBBONS_STRING_KEYS]);
 
+/**
+ * Story-only placeholder for handlers that phase-3-ui will wire to real PAPI commands. We use
+ * `alert` (not console.log) so reviewers exercising the Storybook flow get visible confirmation
+ * that the design-layer handler fired, without needing the dev tools panel.
+ */
+// eslint-disable-next-line no-alert
+const placeholderAction = (message: string) => alert(message);
+
 const meta: Meta<typeof WarningRibbons> = {
   title: 'Bundled Extensions/platform-enhanced-resources/WarningRibbons',
   component: WarningRibbons,
@@ -119,8 +127,12 @@ export const Default: Story = {
               updateAvailable: { visible: state.updateAvailable.visible, dismissed: true },
             })
           }
-          onCopyrightMoreInfo={() => alert('Phase-3-ui wires this to the CopyrightOverlay Dialog.')}
-          onMetadataUpdate={() => alert('Phase-3-ui wires this to the metadata-update command.')}
+          onCopyrightMoreInfo={() =>
+            placeholderAction('Phase-3-ui wires this to the CopyrightOverlay Dialog.')
+          }
+          onMetadataUpdate={() =>
+            placeholderAction('Phase-3-ui wires this to the metadata-update command.')
+          }
         />
       </div>
     );

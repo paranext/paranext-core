@@ -15,6 +15,14 @@ import {
 
 const localizedStrings = getLocalizedStrings([...TOOLBAR_STRING_KEYS]);
 
+/**
+ * Story-only placeholder for handlers that phase-3-ui will wire to real PAPI commands or webView
+ * APIs. We use `alert` (not console.log) so reviewers exercising the Storybook flow get visible
+ * confirmation that the design-layer handler fired, without needing the dev tools panel.
+ */
+// eslint-disable-next-line no-alert
+const placeholderAction = (message: string) => alert(message);
+
 const meta: Meta<typeof Toolbar> = {
   title: 'Bundled Extensions/platform-enhanced-resources/Toolbar',
   component: Toolbar,
@@ -71,8 +79,10 @@ export const Default: Story = {
           hasMatches={hasMatches}
           highlightMode={highlightMode}
           onHighlightModeChange={setHighlightMode}
-          onInfoClick={() => alert('Phase-3-ui wires this to MarbleGuide (FN-016).')}
-          onReferenceClick={() => alert('Phase-3-ui wires this to BookChapterControl (FN-015).')}
+          onInfoClick={() => placeholderAction('Phase-3-ui wires this to MarbleGuide (FN-016).')}
+          onReferenceClick={() =>
+            placeholderAction('Phase-3-ui wires this to BookChapterControl (FN-015).')
+          }
           scrollGroupId={scrollGroupId}
           availableScrollGroupIds={[undefined, 0, 1, 2, 3]}
           onScrollGroupChange={setScrollGroupId}
@@ -88,12 +98,12 @@ export const Default: Story = {
             onGreekDisplayModeChange: (next: ScriptDisplayMode) =>
               setViewMenu((prev) => ({ ...prev, greekDisplayMode: next })),
             onShowCopyrightInfo: () =>
-              alert('Phase-3-ui wires this to CopyrightOverlay open=true.'),
-            onFindInResource: () => alert('Phase-3-ui wires this to FindReplaceForm.'),
-            onCloseWindow: () => alert('Phase-3-ui wires this to webView.close().'),
-            onZoomIn: () => alert('Zoom in (wired in phase-3-ui).'),
-            onZoomOut: () => alert('Zoom out (wired in phase-3-ui).'),
-            onZoomReset: () => alert('Zoom reset (wired in phase-3-ui).'),
+              placeholderAction('Phase-3-ui wires this to CopyrightOverlay open=true.'),
+            onFindInResource: () => placeholderAction('Phase-3-ui wires this to FindReplaceForm.'),
+            onCloseWindow: () => placeholderAction('Phase-3-ui wires this to webView.close().'),
+            onZoomIn: () => placeholderAction('Zoom in (wired in phase-3-ui).'),
+            onZoomOut: () => placeholderAction('Zoom out (wired in phase-3-ui).'),
+            onZoomReset: () => placeholderAction('Zoom reset (wired in phase-3-ui).'),
           }}
         />
 
@@ -208,8 +218,10 @@ export const TopToolbarOnly: Story = {
         localizedStringsWithLoadingState={[localizedStrings, false]}
         highlightMode={highlightMode}
         onHighlightModeChange={setHighlightMode}
-        onInfoClick={() => alert('Phase-3-ui wires this to MarbleGuide (FN-016).')}
-        onReferenceClick={() => alert('Phase-3-ui wires this to BookChapterControl (FN-015).')}
+        onInfoClick={() => placeholderAction('Phase-3-ui wires this to MarbleGuide (FN-016).')}
+        onReferenceClick={() =>
+          placeholderAction('Phase-3-ui wires this to BookChapterControl (FN-015).')
+        }
         scrollGroupId={scrollGroupId}
         availableScrollGroupIds={[undefined, 0, 1, 2, 3]}
         onScrollGroupChange={setScrollGroupId}

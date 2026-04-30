@@ -89,6 +89,8 @@ export const Default: Story = {
       // entries. The story keeps the pre-loaded fixture so reviewers can exercise the
       // breadcrumb popovers without losing the populated list.
       setDomainPath(newPath);
+      // Story-only logging so reviewers can see the breadcrumb-driven domain path
+      // without needing the React DevTools panel. Real wiring lives in phase-3-ui.
       // eslint-disable-next-line no-console
       console.log(
         '[SemanticDomainViewer story] domain change ->',

@@ -80,6 +80,14 @@ const allKeys = [
 const localizedStrings = getLocalizedStrings(allKeys);
 
 /**
+ * Story-only placeholder for handlers that phase-3-ui will wire to real PAPI commands or webView
+ * APIs. We use `alert` (not console.log) so reviewers exercising the Storybook flow get visible
+ * confirmation that the design-layer handler fired, without needing the dev tools panel.
+ */
+// eslint-disable-next-line no-alert
+const placeholderAction = (message: string) => alert(message);
+
+/**
  * Story-only adapter from the dictionary mock entries to the SemanticDomainFilteredItem shape that
  * `SemanticDomainViewer` consumes. Production wiring will swap in the real backend filter; this
  * passes the entries through unchanged so the dialog has rows to render.
@@ -269,7 +277,7 @@ export const Default: Story = {
           onHighlightModeChange={(highlightMode) => update({ highlightMode })}
           onInfoClick={() => update({ marbleGuideOpen: true })}
           onReferenceClick={() =>
-            alert(
+            placeholderAction(
               'Phase-3-ui wires this to the BookChapterControl driven by useWebViewScrollGroupScrRef (FN-015).',
             )
           }
@@ -283,12 +291,13 @@ export const Default: Story = {
             onHebrewDisplayModeChange: setHebrew,
             onGreekDisplayModeChange: setGreek,
             onShowCopyrightInfo: () => update({ copyrightOverlayVisible: true }),
-            onFindInResource: () => alert('Phase-3-ui wires this to FindReplaceForm in ER mode.'),
+            onFindInResource: () =>
+              placeholderAction('Phase-3-ui wires this to FindReplaceForm in ER mode.'),
             onCloseWindow: () =>
-              alert('Phase-3-ui wires this to webView.close() (Ctrl+F4 in PT9).'),
-            onZoomIn: () => alert('Zoom in (wired in phase-3-ui).'),
-            onZoomOut: () => alert('Zoom out (wired in phase-3-ui).'),
-            onZoomReset: () => alert('Zoom reset (wired in phase-3-ui).'),
+              placeholderAction('Phase-3-ui wires this to webView.close() (Ctrl+F4 in PT9).'),
+            onZoomIn: () => placeholderAction('Zoom in (wired in phase-3-ui).'),
+            onZoomOut: () => placeholderAction('Zoom out (wired in phase-3-ui).'),
+            onZoomReset: () => placeholderAction('Zoom reset (wired in phase-3-ui).'),
           }}
           ribbons={MOCK_RIBBONS_NONE}
           tokens={MOCK_GEN_1_TOKENS}
