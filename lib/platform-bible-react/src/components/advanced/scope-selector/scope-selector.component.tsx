@@ -533,11 +533,8 @@ export function ScopeSelector({
   // eagerly — matching radio-button UX. Per spec D3 / §5.5.
   const isInRangeDialog = variant === 'dropdown' && dialogSub === 'range';
   const rangeStartSubmit = isInRangeDialog ? setDraftRangeStart : handleRangeStartChange;
-  const rangeEndSubmit = isInRangeDialog
-    ? setDraftRangeEnd
-    : onRangeEndChange
-      ? handleRangeEndChangeWrapper
-      : noopScrRefChange;
+  const eagerRangeEndSubmit = onRangeEndChange ? handleRangeEndChangeWrapper : noopScrRefChange;
+  const rangeEndSubmit = isInRangeDialog ? setDraftRangeEnd : eagerRangeEndSubmit;
 
   const rangeBlock = (
     <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-4">
