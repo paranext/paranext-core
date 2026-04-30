@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Localized, LocalizedStringValue, MultiColumnMenu } from 'platform-bible-utils';
 
 /**
@@ -204,13 +205,13 @@ export type ChecklistToolProps = {
   // placeholders for visual review.
 
   /** Primary-project selector — typically `<ProjectSelector mode="project" ... />`. */
-  primaryProjectSelector?: React.ReactNode;
+  primaryProjectSelector?: ReactNode;
 
   /** Comparative-texts selector — typically `<ProjectSelector mode="project-multi" ... />`. */
-  comparativeTextsSelector?: React.ReactNode;
+  comparativeTextsSelector?: ReactNode;
 
   /** Verse-range selector — typically `<ScopeSelector variant="dropdown" ... />`. */
-  verseRangeSelector?: React.ReactNode;
+  verseRangeSelector?: ReactNode;
 
   // ----- View dropdown toggles (bound to UI-PKG-004 slots in the wiring phase) -----
 

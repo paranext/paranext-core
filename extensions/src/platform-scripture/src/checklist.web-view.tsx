@@ -151,11 +151,9 @@ global.webViewComponent = function ChecklistWebView({
   // ─── UI-PKG-004: persisted state slots ────────────────────────────────────
 
   // ─── Scroll group binding (drives currentScrRef + goto setter) ────────
-  const [liveScrRef, setLiveScrRef, scrollGroupId, setScrollGroupId] =
-    useWebViewScrollGroupScrRef();
-  // `setScrollGroupId` is reserved for a future scroll-group picker UI (parity with
-  // checks-side-panel Tasks 13/14); suppress unused-variable warning until wired.
-  void setScrollGroupId;
+  // The fourth tuple slot (`setScrollGroupId`) is reserved for a future scroll-group picker UI
+  // (parity with checks-side-panel Tasks 13/14); omitted here until that UI is wired.
+  const [liveScrRef, setLiveScrRef, scrollGroupId] = useWebViewScrollGroupScrRef();
 
   const [equivalentMarkers, setEquivalentMarkers] = useWebViewState<string>(
     'checklistEquivalentMarkers',

@@ -61,13 +61,12 @@ export function computeRangeFromScope({
     case 'selectedBooks':
     case 'selectedText':
       return undefined;
-    default: {
-      // Exhaustiveness check: if `Scope` grows in platform-bible-react and a new value is added,
-      // TypeScript will flag this assignment as a compile-time error so the helper is forced to
-      // grow with the union.
-      const _exhaustive: never = scope;
-      void _exhaustive;
-      return undefined;
-    }
+    default:
+      // Exhaustiveness check: the IIFE's parameter is typed as `never`, so if `Scope` grows in
+      // platform-bible-react and a new value is added, `scope` will no longer narrow to `never`
+      // and TypeScript will flag this call site at compile time, forcing the helper to grow with
+      // the union. `never` is assignable to `undefined`, so the runtime fall-through returns
+      // `undefined` (same as the unhandled-scope branches above).
+      return ((scopeNever: never): undefined => scopeNever)(scope);
   }
 }

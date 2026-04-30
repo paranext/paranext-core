@@ -25,11 +25,13 @@ import {
  * stories use these stand-ins so the visual review focuses on the data path rather than the picker
  * internals (which have their own stories under Advanced/).
  */
-const SAMPLE_TRIGGER = (label: string) => (
-  <Button variant="outline" className="tw-h-8" onClick={() => undefined}>
-    {label}
-  </Button>
-);
+function sampleTrigger(label: string) {
+  return (
+    <Button variant="outline" className="tw-h-8" onClick={() => undefined}>
+      {label}
+    </Button>
+  );
+}
 
 /**
  * English fallbacks for every localization key the component declares. The `.storybook`
@@ -116,9 +118,9 @@ const projectMenuData: Localized<MultiColumnMenu> = {
 
 const baseArgs: Partial<ChecklistToolProps> = {
   localizedStringsWithLoadingState: [localizedStringsForStories, false],
-  primaryProjectSelector: SAMPLE_TRIGGER('TSTGM001'),
-  comparativeTextsSelector: SAMPLE_TRIGGER('None'),
-  verseRangeSelector: SAMPLE_TRIGGER('Whole Bible'),
+  primaryProjectSelector: sampleTrigger('TSTGM001'),
+  comparativeTextsSelector: sampleTrigger('None'),
+  verseRangeSelector: sampleTrigger('Whole Bible'),
   hideMatches: false,
   showVerseText: false,
   isLoading: false,
@@ -136,7 +138,7 @@ const baseArgs: Partial<ChecklistToolProps> = {
  * does not show/hide the omitted count").
  *
  * Project / comparative-text / scope selectors are simple `<Button>` placeholders here (see
- * `SAMPLE_TRIGGER` above) because the real `ProjectSelector` / `ScopeSelector` from PRs #2223 /
+ * `sampleTrigger` above) because the real `ProjectSelector` / `ScopeSelector` from PRs #2223 /
  * #2212 require their own data wiring that's out of scope for this presentational storybook. The
  * live web-view (`checklist.web-view.tsx`) passes the real ReactNodes via the same `*Selector`
  * props.
@@ -228,9 +230,9 @@ type Story = StoryObj<typeof ChecklistTool>;
 export const Default: Story = {
   args: {
     data: CHECKLIST_STORY_DATA_DEFAULT,
-    primaryProjectSelector: SAMPLE_TRIGGER('TSTGM001'),
-    comparativeTextsSelector: SAMPLE_TRIGGER('None'),
-    verseRangeSelector: SAMPLE_TRIGGER('Whole Bible'),
+    primaryProjectSelector: sampleTrigger('TSTGM001'),
+    comparativeTextsSelector: sampleTrigger('None'),
+    verseRangeSelector: sampleTrigger('Whole Bible'),
   },
 };
 
@@ -242,9 +244,9 @@ export const Default: Story = {
 export const MultiColumn: Story = {
   args: {
     data: CHECKLIST_STORY_DATA_MULTI_COLUMN,
-    primaryProjectSelector: SAMPLE_TRIGGER('TSTGM003A'),
-    comparativeTextsSelector: SAMPLE_TRIGGER('2 selected'),
-    verseRangeSelector: SAMPLE_TRIGGER('EXO 20:1 - EXO 20:5'),
+    primaryProjectSelector: sampleTrigger('TSTGM003A'),
+    comparativeTextsSelector: sampleTrigger('2 selected'),
+    verseRangeSelector: sampleTrigger('EXO 20:1 - EXO 20:5'),
   },
 };
 
@@ -255,9 +257,9 @@ export const MultiColumn: Story = {
 export const HideMatches: Story = {
   args: {
     data: CHECKLIST_STORY_DATA_HIDE_MATCHES,
-    primaryProjectSelector: SAMPLE_TRIGGER('TSTGM004A'),
-    comparativeTextsSelector: SAMPLE_TRIGGER('1 selected'),
-    verseRangeSelector: SAMPLE_TRIGGER('EXO 20:1 - EXO 20:5'),
+    primaryProjectSelector: sampleTrigger('TSTGM004A'),
+    comparativeTextsSelector: sampleTrigger('1 selected'),
+    verseRangeSelector: sampleTrigger('EXO 20:1 - EXO 20:5'),
     hideMatches: true,
     matchCountLabel: '12 Matches Omitted',
   },
@@ -271,9 +273,9 @@ export const Loading: Story = {
   args: {
     data: undefined,
     isLoading: true,
-    primaryProjectSelector: SAMPLE_TRIGGER('TSTGM001'),
-    comparativeTextsSelector: SAMPLE_TRIGGER('None'),
-    verseRangeSelector: SAMPLE_TRIGGER('Whole Bible'),
+    primaryProjectSelector: sampleTrigger('TSTGM001'),
+    comparativeTextsSelector: sampleTrigger('None'),
+    verseRangeSelector: sampleTrigger('Whole Bible'),
   },
 };
 
@@ -286,9 +288,9 @@ export const Loading: Story = {
 export const Empty: Story = {
   args: {
     data: CHECKLIST_STORY_DATA_EMPTY,
-    primaryProjectSelector: SAMPLE_TRIGGER('TSTGM002A'),
-    comparativeTextsSelector: SAMPLE_TRIGGER('1 selected'),
-    verseRangeSelector: SAMPLE_TRIGGER('Whole Bible'),
+    primaryProjectSelector: sampleTrigger('TSTGM002A'),
+    comparativeTextsSelector: sampleTrigger('1 selected'),
+    verseRangeSelector: sampleTrigger('Whole Bible'),
     helpText: undefined,
   },
 };
@@ -303,9 +305,9 @@ export const Error: Story = {
   args: {
     data: undefined,
     error: 'Failed to build checklist: project data provider returned INVALID_SOURCE.',
-    primaryProjectSelector: SAMPLE_TRIGGER('TSTGM001'),
-    comparativeTextsSelector: SAMPLE_TRIGGER('None'),
-    verseRangeSelector: SAMPLE_TRIGGER('Whole Bible'),
+    primaryProjectSelector: sampleTrigger('TSTGM001'),
+    comparativeTextsSelector: sampleTrigger('None'),
+    verseRangeSelector: sampleTrigger('Whole Bible'),
   },
 };
 
@@ -317,9 +319,9 @@ export const Error: Story = {
 export const ShowVerseText: Story = {
   args: {
     data: CHECKLIST_STORY_DATA_SHOW_VERSE_TEXT,
-    primaryProjectSelector: SAMPLE_TRIGGER('TSTGM016A'),
-    comparativeTextsSelector: SAMPLE_TRIGGER('1 selected'),
-    verseRangeSelector: SAMPLE_TRIGGER('EXO 20:1 - EXO 20:5'),
+    primaryProjectSelector: sampleTrigger('TSTGM016A'),
+    comparativeTextsSelector: sampleTrigger('1 selected'),
+    verseRangeSelector: sampleTrigger('EXO 20:1 - EXO 20:5'),
     showVerseText: true,
   },
 };
@@ -331,9 +333,9 @@ export const ShowVerseText: Story = {
 export const TruncatedMaxRows: Story = {
   args: {
     data: CHECKLIST_STORY_DATA_TRUNCATED,
-    primaryProjectSelector: SAMPLE_TRIGGER('TSTGM001'),
-    comparativeTextsSelector: SAMPLE_TRIGGER('None'),
-    verseRangeSelector: SAMPLE_TRIGGER('Whole Bible'),
+    primaryProjectSelector: sampleTrigger('TSTGM001'),
+    comparativeTextsSelector: sampleTrigger('None'),
+    verseRangeSelector: sampleTrigger('Whole Bible'),
     helpText:
       'Too many items to display; showing the first 5000. Please check a smaller range of books at a time in order to see all items.',
   },

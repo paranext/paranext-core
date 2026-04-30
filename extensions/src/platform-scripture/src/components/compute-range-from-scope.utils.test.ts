@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { computeRangeFromScope } from './compute-range-from-scope.utils';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
+import { computeRangeFromScope } from './compute-range-from-scope.utils';
 
 const REF_GEN_5_7: SerializedVerseRef = { book: 'GEN', chapterNum: 5, verseNum: 7 };
 const REF_GEN_1_1: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
