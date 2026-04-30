@@ -11,7 +11,6 @@ import {
 } from '@/components/shadcn-ui/dialog';
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -618,7 +617,7 @@ export function ScopeSelector({
     [],
   );
   // The outer combobox button. Focus is returned here when a dialog closes so the UX
-  // matches selecting a simple option (Radix's default for DropdownMenuCheckboxItem
+  // matches selecting a simple option (Radix's default for DropdownMenuItem
   // selection). React refs use `null` for "not attached"; there is no undefined equivalent
   // in the DOM/ref API.
   // eslint-disable-next-line no-null/no-null
@@ -684,7 +683,7 @@ export function ScopeSelector({
   // selectedBooks / range launchers: promote the picker to a modal dialog. Closing the outer
   // dropdown here gives the dialog a clean focus handoff — the dialog opens as the dropdown
   // tears down, and when the dialog closes we return focus to the outer trigger (same UX as
-  // Radix's default behavior after selecting a simple DropdownMenuCheckboxItem).
+  // Radix's default behavior after selecting a simple DropdownMenuItem).
   const openDialogFallback = useCallback(
     (targetScope: Scope) => {
       // D1: seed drafts from current props/state; do NOT commit scope yet.
@@ -779,28 +778,37 @@ export function ScopeSelector({
             >
               <PopoverPortalContainerProvider container={dropdownContentEl}>
                 {simpleScopes.map(({ value, label, dropdownLabel, scrRefSuffix, id: scopeId }) => (
-                  <DropdownMenuCheckboxItem
+                  <DropdownMenuItem
                     key={scopeId}
                     ref={assignScopeItemRef(value)}
-                    checked={scope === value}
-                    // Scopes are mutually exclusive: a change only promotes the clicked item to
-                    // the active scope. Unchecking the current item is a no-op so there's always
-                    // exactly one selected scope.
-                    onCheckedChange={(checked) => {
-                      if (checked) handleScopeChange(value);
-                    }}
+                    // Match dialog-launcher items for visual consistency.
+                    // tw-ps-8 reserves space for the leading Check indicator.
+                    // data-[highlighted] styles trigger on Radix's hover/focus mapping
+                    // (D5: pointer hover normally fires data-highlighted; this makes the
+                    // tw-bg-accent highlight unambiguous).
+                    className="tw-relative tw-ps-8 data-[highlighted]:tw-bg-accent data-[highlighted]:tw-text-accent-foreground"
+                    onSelect={() => handleScopeChange(value)}
+                    data-selected={scope === value ? 'true' : undefined}
                   >
+                    {scope === value && (
+                      <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
+                        <Check className="tw-h-4 tw-w-4" />
+                      </span>
+                    )}
                     {renderScopeLabel(dropdownLabel ?? label, scrRefSuffix, isDropdownNarrow)}
-                  </DropdownMenuCheckboxItem>
+                  </DropdownMenuItem>
                 ))}
                 {(selectedBooksScope || rangeScope) && <DropdownMenuSeparator />}
                 {selectedBooksScope && (
                   <DropdownMenuItem
                     ref={assignScopeItemRef('selectedBooks')}
-                    // `focus:tw-text-accent-foreground` mirrors the simple RadioItems so the
-                    // hover effect is visually identical across the whole list. `tw-ps-8` keeps
-                    // the label aligned with the radio-item labels above.
-                    className={cn('tw-relative tw-ps-8 focus:tw-text-accent-foreground')}
+                    // `data-[highlighted]` mirrors the simple scope items so the hover/focus
+                    // effect is visually identical across the whole list. `tw-ps-8` keeps the
+                    // label aligned with the items above.
+                    className={cn(
+                      'tw-relative tw-ps-8',
+                      'data-[highlighted]:tw-bg-accent data-[highlighted]:tw-text-accent-foreground',
+                    )}
                     onSelect={() => openDialogFallback('selectedBooks')}
                     data-selected={scope === 'selectedBooks' ? 'true' : undefined}
                   >
@@ -813,7 +821,10 @@ export function ScopeSelector({
                 {rangeScope && (
                   <DropdownMenuItem
                     ref={assignScopeItemRef('range')}
-                    className={cn('tw-relative tw-ps-8 focus:tw-text-accent-foreground')}
+                    className={cn(
+                      'tw-relative tw-ps-8',
+                      'data-[highlighted]:tw-bg-accent data-[highlighted]:tw-text-accent-foreground',
+                    )}
                     onSelect={() => openDialogFallback('range')}
                     data-selected={scope === 'range' ? 'true' : undefined}
                   >
