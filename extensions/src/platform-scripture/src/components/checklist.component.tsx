@@ -528,7 +528,13 @@ export function ChecklistTool({
                 aria-label={getLocalizedString('%markersChecklist_toolbar_hideMatches%')}
                 data-testid="checklist-hide-matches-item"
               >
-                <EyeOff className="tw-h-4 tw-w-4" aria-hidden="true" />
+                {/* Icon swaps with state: when matches are hidden, show EyeOff (slashed);
+                    when visible, show Eye. Pairs with the data-[state=on] background highlight. */}
+                {isHideMatchesEnabled && hideMatches ? (
+                  <EyeOff className="tw-h-4 tw-w-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="tw-h-4 tw-w-4" aria-hidden="true" />
+                )}
               </ToggleGroupItem>
             </TooltipTrigger>
             <TooltipContent>
@@ -544,7 +550,13 @@ export function ChecklistTool({
                 aria-label={getLocalizedString('%markersChecklist_toolbar_showVerseText%')}
                 data-testid="checklist-show-verse-text-item"
               >
-                <Eye className="tw-h-4 tw-w-4" aria-hidden="true" />
+                {/* Icon swaps with state for symmetry with Hide Matches: when verse text is
+                    shown, show Eye; when hidden, show EyeOff. */}
+                {showVerseText ? (
+                  <Eye className="tw-h-4 tw-w-4" aria-hidden="true" />
+                ) : (
+                  <EyeOff className="tw-h-4 tw-w-4" aria-hidden="true" />
+                )}
               </ToggleGroupItem>
             </TooltipTrigger>
             <TooltipContent>

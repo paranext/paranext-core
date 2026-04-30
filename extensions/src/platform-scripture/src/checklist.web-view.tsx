@@ -695,6 +695,7 @@ global.webViewComponent = function ChecklistWebView({
           openTabs={comparativeOpenTabs}
           selection={comparativeSelection}
           onChangeSelection={handleComparativeTextsChange}
+          buttonClassName="tw-h-8 tw-min-w-32 tw-font-normal"
         />
       </div>
     ),
@@ -873,6 +874,8 @@ global.webViewComponent = function ChecklistWebView({
           onRangeStartChange={handleRangeStartChange}
           onRangeEndChange={handleRangeEndChange}
           getEndVerse={getEndVerse}
+          hideLabel
+          buttonClassName="tw-h-8 tw-min-w-32 tw-font-normal"
         />
       </div>
     ),
