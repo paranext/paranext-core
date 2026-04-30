@@ -273,19 +273,17 @@ test.describe('manage-books PAPI command verification (wire-level round-trip)', 
     }
   });
 
-  test('M-014 copyCustomVersification — object { fromProjectId, toProjectId } (C# shape)', async ({
+  test('M-014 copyCustomVersification — two positional strings (Theme 1 reconciled)', async ({
     papiLive,
   }) => {
-    // NOTE: data-contracts.md §4.14 documents this as two positional string args, but the
-    // implemented C# wire uses a single CopyCustomVersificationRequest object
-    // ({ fromProjectId, toProjectId }). This test sends the C# shape. See
-    // proofs/runtime-verification/param-alignment.md for the "M-014 documented drift" note.
+    // data-contracts.md §4.14 specifies (sourceProjectId, destProjectId) as two positional
+    // string arguments. The C# wire was reconciled to match this shape on 2026-04-30
+    // (Theme 1 of phase-3-backend revision). See backend-alignment.md for the
+    // "two same-typed positional args" exception to the general object-form preference.
     const wire = `${METHOD_PREFIX}.copyCustomVersification`;
     const response = await papiLive.requestRaw(wire, [
-      {
-        fromProjectId: `${BOGUS_PROJECT_ID}-src`,
-        toProjectId: `${BOGUS_PROJECT_ID}-dst`,
-      },
+      `${BOGUS_PROJECT_ID}-src`,
+      `${BOGUS_PROJECT_ID}-dst`,
     ]);
     expectNotProtocolError(response, wire);
   });

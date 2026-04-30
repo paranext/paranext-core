@@ -102,24 +102,13 @@ namespace TestParanextDataProvider.ManageBooks
         // GROUP A — Constructor DI
         // ====================================================================
 
-        [Test]
-        [Category("Acceptance")]
-        [Category("Integration")]
-        [Property("CapabilityId", "CAP-012")]
-        [Property("ScenarioId", "TS-072")]
-        [Property("BehaviorId", "BHV-402")]
-        [Description(
-            "CAP-012 constructor DI: service instantiates with (PapiClient, LocalParatextProjects, ParatextProjectDataProviderFactory)."
-        )]
-        public void Constructor_WithValidDependencies_Succeeds()
-        {
-            // Arrange + Act: a fresh instance (separate from _service, which is
-            // already constructed in SetUp) must succeed without throwing.
-            var service = new ManageBooksService(Client, ParatextProjects, _pdpFactory);
-
-            // Assert
-            Assert.That(service, Is.Not.Null);
-        }
+        // Theme 7 (2026-04-30): removed the tautological
+        // Constructor_WithValidDependencies_Succeeds test — record-typed
+        // results and ref-typed services are never null after `new`, and
+        // ManageBooksService's constructor does no argument null-validation,
+        // so the only behavior the deleted test exercised was "the C#
+        // runtime exists." If null-guards are added later, restore an
+        // ArgumentNullException-asserting variant.
 
         [Test]
         [Category("Integration")]
@@ -133,8 +122,21 @@ namespace TestParanextDataProvider.ManageBooks
             // Arrange: first registration must succeed
             await _service.RegisterNetworkObjectAsync();
 
-            // Act + Assert: second registration throws
-            Assert.ThrowsAsync<Exception>(async () => await _service.RegisterNetworkObjectAsync());
+            // Theme 7 (2026-04-30): the prior assertion only checked
+            // `Throws<Exception>` — too permissive (any failure mode would
+            // satisfy it). Tighten to assert the message contains the
+            // already-registered phrase NetworkObject.cs:30 uses, so a
+            // future change to a different failure mode (NRE, etc.) breaks
+            // this test instead of silently passing.
+            var caught = Assert.ThrowsAsync<Exception>(
+                async () => await _service.RegisterNetworkObjectAsync()
+            );
+            Assert.That(
+                caught!.Message,
+                Does.Contain("already been registered"),
+                "double-registration must throw the NetworkObject-base "
+                    + "'already been registered' exception, not some other failure"
+            );
         }
 
         // ====================================================================
@@ -378,6 +380,55 @@ namespace TestParanextDataProvider.ManageBooks
                 availableBooks,
                 Is.Not.Null,
                 "Handler returned null — expected an int[] of available book numbers."
+            );
+        }
+
+        [Test]
+        [Category("Acceptance")]
+        [Category("Integration")]
+        [Property("CapabilityId", "CAP-012")]
+        [Property("ScenarioId", "TS-072")]
+        [Property("BehaviorId", "BHV-402")]
+        [Description(
+            "Theme 7 (2026-04-30): second dispatch-roundtrip test alongside "
+                + "GetAvailableBooksForCreation_DispatchedViaPapi_ReturnsResult. "
+                + "Picks a method with a record payload (BookComparisonInput) "
+                + "rather than a positional string so the function-table dispatch "
+                + "is exercised across both shapes — the lone positional-string "
+                + "test was too narrow."
+        )]
+        public async Task GetBookComparison_DispatchedViaPapi_ReturnsResult()
+        {
+            await _service.RegisterNetworkObjectAsync();
+
+            // Set up a second project so GetBookComparison has both endpoints
+            // to compare. The base fixture only sets up `_projectId`; we need
+            // a `to` project too.
+            var toScrText = (DummyScrText)CreateDummyProject();
+            var toDetails = CreateProjectDetails(toScrText);
+            ParatextProjects.FakeAddProject(toDetails, toScrText);
+
+            string requestType = $"{NetworkObjectRequestPrefix}.getBookComparison";
+            var input = new BookComparisonInput(_projectId, toDetails.Metadata.Id);
+            Task<BookComparisonResult>? handlerTask = await Client.SendRequestAsync<
+                Task<BookComparisonResult>
+            >(requestType, new object?[] { input });
+
+            Assert.That(
+                handlerTask,
+                Is.Not.Null,
+                $"Dispatch round-trip via '{requestType}' did not reach the registered handler."
+            );
+
+            BookComparisonResult result = await handlerTask!;
+
+            // Behavioral assertion: the handler returned a non-null Entries
+            // array (might be empty since both projects are empty), proving the
+            // record-payload dispatch round-trip works.
+            Assert.That(
+                result.Entries,
+                Is.Not.Null,
+                "BookComparisonResult.Entries must be a non-null array even for empty projects"
             );
         }
 

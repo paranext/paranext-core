@@ -133,11 +133,19 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("BehaviorId", "BHV-407")]
         [Property("GoldenMaster", "gm-001")]
         [Description(
-            "gm-001 acceptance: empty-book output matches the captured PT9 golden master "
-                + "(semantic comparison with line-ending normalization). "
-                + "Captured expected: \\id JUD - <project>\\r\\n\\r\\n"
+            "gm-001 SHAPE check (semantic, not byte-level): the \\id line "
+                + "matches '\\id JUD - <project>' with line-ending normalization. "
+                + "Theme 7 (2026-04-30) renamed from MatchesGoldenMaster_gm001 "
+                + "to ShapeMatchesGoldenMaster_gm001 to reflect that this test "
+                + "verifies the canonical \\id structure only, not byte-for-byte "
+                + "fidelity — byte-level GM disk verification is deferred to "
+                + "Phase 3 UI per FN-006. Strengthening the assertion to verify "
+                + "additional structural elements (no chapter/verse markers, "
+                + "trailing blank line, byte-identical write) would also "
+                + "satisfy this theme; rename was chosen as the lighter-touch "
+                + "fix consistent with the agreed deferral."
         )]
-        public void CreateOneBook_EmptyBook_MatchesGoldenMaster_gm001()
+        public void CreateOneBook_EmptyBook_ShapeMatchesGoldenMaster_gm001()
         {
             // Act
             bool result = ScriptureTemplateService.CreateOneBook(

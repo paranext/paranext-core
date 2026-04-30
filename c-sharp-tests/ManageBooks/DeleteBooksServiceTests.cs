@@ -86,6 +86,8 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("CapabilityId", "CAP-005")]
         [Property("ScenarioId", "TS-001")]
         [Property("BehaviorId", "BHV-100")]
+        [Property("BehaviorId", "BHV-404")] // Theme 8: BooksPresentSet update post-delete (transitive observation below)
+        [Property("BehaviorId", "BHV-126")] // Theme 8: file-system delete via FileManager.Delete
         [Property("SpecId", "spec-001")]
         [Description("OUTER acceptance: valid request deletes book and returns success result.")]
         public async Task DeleteBooksAsync_ValidRequest_SucceedsWithCorrectResult()
@@ -141,18 +143,46 @@ namespace TestParanextDataProvider.ManageBooks
             _pdpFactory.GetProjectDataProviderID(_projectId);
             var pdp = _pdpFactory.GetExistingProjectDataProvider(_projectId);
             Assert.That(pdp, Is.Not.Null, "precondition: a PDP must exist for the project");
-            var eventsBefore = Client.SentEventCount;
+
+            // Theme 7 (2026-04-30): drain the event queue BEFORE the act so
+            // we can assert exactly one NEW event of the expected shape
+            // afterwards. The prior `SentEventCount > eventsBefore` assertion
+            // accepted any event firing (including unrelated ones from PDP
+            // setup) — too permissive.
+            DrainEventQueue();
 
             // Act
             await _service.DeleteBooksAsync(new DeleteBooksRequest(_projectId, new[] { 1 }));
 
-            // Assert: at least one event was fired on the client (the DATA_TYPE_UPDATE
-            // event produced by SendFullProjectUpdateEvent).
+            // Assert: exactly one new event, type `<pdp-name>:onDidUpdate` with
+            // payload `*` (the full-project-update marker per
+            // DataProvider.SendDataUpdateEventAsync). This proves
+            // SendFullProjectUpdateEvent fired AND targeted this project's PDP.
+            string expectedEventType = $"{pdp!.DataProviderName}:onDidUpdate";
+            (string eventType, object? eventParameters) ev = Client.NextSentEvent;
+            Assert.That(
+                ev.eventType,
+                Is.EqualTo(expectedEventType),
+                "Expected the DESTINATION PDP's onDidUpdate event"
+            );
+            Assert.That(
+                ev.eventParameters,
+                Is.EqualTo("*"),
+                "Full project update fires with the '*' dataScope marker"
+            );
             Assert.That(
                 Client.SentEventCount,
-                Is.GreaterThan(eventsBefore),
-                "Expected SendFullProjectUpdateEvent to fire a client event after delete"
+                Is.EqualTo(0),
+                "no other events should fire on a successful delete"
             );
+        }
+
+        // Drain pre-existing events so post-action assertions see only
+        // events fired by the action under test.
+        private void DrainEventQueue()
+        {
+            while (Client.SentEventCount > 0)
+                _ = Client.NextSentEvent;
         }
 
         [Test]

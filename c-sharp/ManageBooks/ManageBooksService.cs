@@ -1,4 +1,5 @@
 using Paranext.DataProvider.NetworkObjects;
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
@@ -81,6 +82,48 @@ internal sealed class ManageBooksService : NetworkObject
     internal const string MissingSourceProjectTypeForFilterFallback =
         "Source project type is required for copy destination filtering";
 
+    // CopyCustomVersification (M-014) precondition guard. data-contracts §4.14
+    // specifies NO_CUSTOM_VERSIFICATION as a FAILED_PRECONDITION returned when
+    // the source project has no custom.vrs file (Theme 5, 2026-04-30). The
+    // public CopyCustomVersification entry on the wire must surface this so
+    // callers can distinguish "copied" from "no file to copy". (The
+    // CopyBooks-internal call to TryCopyCustomVersification continues to
+    // swallow the missing-file case as a best-effort step inside the broader
+    // copy operation — see CopyBooksOrchestrator.)
+    internal const string NoCustomVersificationKey =
+        "%manageBooks_copyCustomVersification_noCustomVersification%";
+    internal const string NoCustomVersificationFallback =
+        "Source project does not have a custom versification file";
+
+    // CreateBooks 3-level permission gate (Theme 6, 2026-04-30). PT9 enforces
+    // INV-004 / INV-005 via ProjectPermissionManager.CanCreateOrImportBooks
+    // which checks: (1) project editable, (2) user is Administrator OR
+    // TeamMember, (3) per-book CanEdit. PT10 wire layer enforces level 1
+    // (EnsureProjectEditable) and level 2 (this guard); per-book level 3 is
+    // enforced inside CreateBooksOrchestrator.CreateBooks where TeamMembers
+    // who lack edit rights for a specific book are skipped with an
+    // AlertEntry — matching PT9 CreateBooksForm.cs:131-138 "alert and skip
+    // per book" semantics.
+    internal const string NotAdminOrTeamMemberKey = "%manageBooks_create_notAdminOrTeamMember%";
+    internal const string NotAdminOrTeamMemberFallback =
+        "You must be an administrator or team member to create books in this project.";
+
+    // Per-book level-3 message (parameterized — UI substitutes the book id).
+    internal const string TeamMemberCannotEditBookKey =
+        "%manageBooks_create_teamMemberCannotEditBook%";
+    internal const string TeamMemberCannotEditBookFallback =
+        "Cannot create book {0}: you don't have permission to edit it";
+
+    // Theme 9 (2026-04-30): the overlap-detection invariant branch — reached
+    // only if CheckOverlappingFiles returned Severity=Error but Message=null
+    // (an invariant violation, not a user-actionable error). Replaces the
+    // prior hardcoded English `"Overlapping files detected"` so translators
+    // can localize the message for the rare case it surfaces.
+    internal const string UnexpectedNullOverlapMessageKey =
+        "%manageBooks_internal_unexpectedNullOverlapMessage%";
+    internal const string UnexpectedNullOverlapMessageFallback =
+        "Internal error: overlap message was null";
+
     private readonly LocalParatextProjects _paratextProjects;
     private readonly ParatextProjectDataProviderFactory _pdpFactory;
 
@@ -96,21 +139,40 @@ internal sealed class ManageBooksService : NetworkObject
     }
 
     /// <summary>
-    /// Registers this service with PAPI. Additional wire methods registered
-    /// here as later BE micro-phases (BE-2+) add Create/Copy/Import support.
+    /// Registers this service with PAPI. The wire-method registration list
+    /// is composed of per-capability helpers so the function table is
+    /// auditable by capability banner. Theme 9 (2026-04-30) extracted the
+    /// previously-flat 57-line collection into per-capability methods.
     /// </summary>
     public Task RegisterNetworkObjectAsync()
     {
-        List<(string functionName, Delegate function)> functions =
+        var functions = new List<(string functionName, Delegate function)>();
+        functions.AddRange(CreateDeleteFunctions());
+        functions.AddRange(CreateCreateFunctions());
+        functions.AddRange(CreateCopyFunctions());
+        functions.AddRange(CreateImportFunctions());
+        functions.AddRange(CreateUtilityFunctions());
+
+        return RegisterNetworkObjectAsync(
+            NetworkObjectName,
+            functions,
+            new NetworkObjectCreatedDetails
+            {
+                Id = NetworkObjectName,
+                ObjectType = NetworkObjectType.OBJECT,
+                FunctionNames = [.. functions.Select(f => f.functionName)],
+            }
+        );
+    }
+
+    // CAP-005: DeleteBooks wire registration (single mutation method).
+    private List<(string, Delegate)> CreateDeleteFunctions() =>
+        [("deleteBooks", new Func<DeleteBooksRequest, Task<DeleteBooksResult>>(DeleteBooksAsync))];
+
+    // CAP-004: Create/Validate/AvailableBooks — the Create Books dialog's
+    // pre-flight + commit wire methods.
+    private List<(string, Delegate)> CreateCreateFunctions() =>
         [
-            (
-                "deleteBooks",
-                new Func<DeleteBooksRequest, Task<DeleteBooksResult>>(DeleteBooksAsync)
-            ),
-            (
-                "filterProjects",
-                new Func<ProjectFilterInput, Task<ProjectListResult>>(FilterProjectsAsync)
-            ),
             (
                 "createBooks",
                 new Func<CreateBooksRequest, Task<CreateBooksResult>>(CreateBooksAsync)
@@ -125,23 +187,34 @@ internal sealed class ManageBooksService : NetworkObject
                     ValidateCreateBooksAsync
                 )
             ),
+        ];
+
+    // CAP-006 / CAP-007 / CAP-008 / M-014: Copy-side wire methods —
+    // book comparison (read-only pre-flight), CopyBooks (commit),
+    // CopyCustomVersification (M-014, two positional strings post-Theme-1),
+    // and the per-source-type project filter for the destination dropdown.
+    private List<(string, Delegate)> CreateCopyFunctions() =>
+        [
             (
                 "getBookComparison",
                 new Func<BookComparisonInput, Task<BookComparisonResult>>(GetBookComparisonAsync)
+            ),
+            ("copyBooks", new Func<CopyBooksRequest, Task<CopyBooksResult>>(CopyBooksAsync)),
+            (
+                "copyCustomVersification",
+                new Func<string, string, Task>(CopyCustomVersificationAsync)
             ),
             (
                 "getToProjectFilter",
                 new Func<ProjectFilterInput, Task<ProjectListResult>>(GetToProjectFilterAsync)
             ),
-            // CAP-007 (BE-3): CopyBooks wire entry + M-014 CopyCustomVersification
-            ("copyBooks", new Func<CopyBooksRequest, Task<CopyBooksResult>>(CopyBooksAsync)),
-            (
-                "copyCustomVersification",
-                new Func<CopyCustomVersificationRequest, Task>(CopyCustomVersificationAsync)
-            ),
-            // CAP-009 (BE-4): ImportParsing — read-only parse + overlap check.
-            // CAP-010 (BE-4) appends importBooks alongside these; CAP-012 finalizes
-            // the TS-side extension wiring for all three.
+        ];
+
+    // CAP-009 / CAP-010: Import-side wire methods — parse (read-only),
+    // overlap-check (read-only), and ImportBooks (the AlertCapture-wrapped
+    // mutation).
+    private List<(string, Delegate)> CreateImportFunctions() =>
+        [
             (
                 "parseImportFiles",
                 new Func<ImportBooksInput, Task<BookComparisonResult>>(ParseImportFilesAsync)
@@ -150,26 +223,18 @@ internal sealed class ManageBooksService : NetworkObject
                 "checkOverlappingFiles",
                 new Func<OverlapCheckEntry[], Task<ValidationResult>>(CheckOverlappingFilesAsync)
             ),
-            // CAP-010 (BE-4): ImportBooks — import-execution mutation.
-            // Wire method dispatches to the orchestrator wrapped in
-            // AlertCapture; CAP-012 finalizes TS-side extension wiring.
-            (
-                "importBooks",
-                new Func<ImportBooksInput, Task<ImportBooksResult>>(ImportBooksAsync)
-            ),
+            ("importBooks", new Func<ImportBooksInput, Task<ImportBooksResult>>(ImportBooksAsync)),
         ];
 
-        return RegisterNetworkObjectAsync(
-            NetworkObjectName,
-            functions,
-            new NetworkObjectCreatedDetails
-            {
-                Id = NetworkObjectName,
-                ObjectType = NetworkObjectType.OBJECT,
-                FunctionNames = [.. functions.Select(f => f.functionName)],
-            }
-        );
-    }
+    // CAP-011: cross-cutting project filter (FilterProjects) — used by
+    // multiple dialogs as a unified read-only facade.
+    private List<(string, Delegate)> CreateUtilityFunctions() =>
+        [
+            (
+                "filterProjects",
+                new Func<ProjectFilterInput, Task<ProjectListResult>>(FilterProjectsAsync)
+            ),
+        ];
 
     /// <summary>
     /// Wire entry point for book deletion. Maps to data-contracts.md Section 4.6.
@@ -227,7 +292,10 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     private void EnsureBookNumbersNonEmpty(int[] bookNumbers)
     {
-        if (bookNumbers == null || bookNumbers.Length == 0)
+        // Theme 9 (2026-04-30): NRT is enabled project-wide; the parameter
+        // type `int[]` is non-nullable, so the prior `bookNumbers == null`
+        // check was unreachable. Length is the only check needed.
+        if (bookNumbers.Length == 0)
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.InvalidArgument,
                 Loc(EmptyBookNumbersKey, EmptyBookNumbersFallback)
@@ -266,7 +334,19 @@ internal sealed class ManageBooksService : NetworkObject
         {
             return LocalParatextProjects.GetParatextProject(projectId);
         }
-        catch (Exception)
+        // Theme 9 (2026-04-30): narrowed from `catch (Exception)` to the
+        // expected lookup-failure types only. ScrTextCollection.GetById
+        // throws ProjectNotFoundException for an unknown id;
+        // HexId.FromStr → StringUtils.HexToByteArr throws ArgumentException
+        // for malformed hex input ("Input must have even number of
+        // characters" / non-hex characters). Anything else (NRE, IO, etc.)
+        // is unexpected — let it propagate so the failure mode and stack
+        // trace are visible rather than masquerading as a semantic NOT_FOUND.
+        catch (ProjectNotFoundException)
+        {
+            throw PlatformErrorCodes.WithCode(platformErrorCode, errorMessage);
+        }
+        catch (ArgumentException)
         {
             throw PlatformErrorCodes.WithCode(platformErrorCode, errorMessage);
         }
@@ -284,6 +364,25 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     private static bool IsSharedProjectWithoutAdmin(ScrText scrText) =>
         scrText.IsProjectShared && !scrText.Permissions.AmAdministrator;
+
+    // === NEW IN PT10 ===
+    // Reason: Theme 6 (CreateBooks 3-level permission gate, 2026-04-30).
+    //   INV-004 mandates the three-level check (editable → role → per-book).
+    //   The role level here is "Administrator OR TeamMember" — strictly less
+    //   restrictive than IsSharedProjectWithoutAdmin (used for Delete / Copy /
+    //   Import) which forbids TeamMembers entirely. Per-book level-3 lives in
+    //   CreateBooksOrchestrator. Matches PT9 ProjectPermissionManager
+    //   CanCreateOrImportBooks (Paratext/ParatextData/Users/
+    //   ProjectPermissionManager.cs:101-130) for create-style operations.
+    /// <summary>
+    /// True when the current user is at least a TeamMember (Administrator or
+    /// TeamMember) on the project. Distinct from
+    /// <see cref="IsSharedProjectWithoutAdmin"/>: this is the create-side
+    /// permission gate (INV-004 level 2), used by CreateBooks and
+    /// ValidateCreateBooks.
+    /// </summary>
+    private static bool IsAdministratorOrTeamMember(ScrText scrText) =>
+        scrText.Permissions.AmAdministratorOrTeamMember;
 
     /// <summary>
     /// Precondition: every requested book must already exist in the project's
@@ -330,7 +429,12 @@ internal sealed class ManageBooksService : NetworkObject
             return Task.FromResult(ProjectFilterService.FilterProjects(input));
         }
         catch (Exception ex)
-            when (ex.Data["platformErrorCode"] as string == PlatformErrorCodes.InvalidArgument
+            // Theme 9 (2026-04-30): replaced the magic-key indexing
+            // `ex.Data["platformErrorCode"] as string` with the typed helper
+            // `PlatformErrorCodes.TryGetCode` so the dictionary key stays
+            // colocated with its declaration in PlatformErrorCodes.cs.
+            when (PlatformErrorCodes.TryGetCode(ex, out string? code)
+                && code == PlatformErrorCodes.InvalidArgument
                 && IsLocalizeKey(ex.Message)
             )
         {
@@ -393,6 +497,19 @@ internal sealed class ManageBooksService : NetworkObject
 
         EnsureProjectEditable(scrText);
 
+        // Theme 6 level-2 gate (INV-004): user must be Administrator or
+        // TeamMember to invoke CreateBooks. Per-book level-3 (TeamMember
+        // CanEdit) is enforced inside the orchestrator's per-book loop so
+        // partial-success semantics survive (admins skip level-3 per
+        // INV-005). Distinct from IsSharedProjectWithoutAdmin used by
+        // Delete/Copy/Import — those forbid TeamMembers entirely; CreateBooks
+        // does not.
+        if (!IsAdministratorOrTeamMember(scrText))
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.PermissionDenied,
+                Loc(NotAdminOrTeamMemberKey, NotAdminOrTeamMemberFallback)
+            );
+
         ScrText? modelScrText = null;
         if (request.CreationMethod == CreationMethod.FromTemplate)
         {
@@ -452,6 +569,16 @@ internal sealed class ManageBooksService : NetworkObject
     public Task<ValidationResult> ValidateCreateBooksAsync(ValidateCreateBooksRequest request)
     {
         ScrText scrText = GetProjectOrThrowNotFound(request.ProjectId);
+
+        // Theme 6 (2026-04-30): pre-flight validation surfaces the level-2
+        // permission gap as a ValidationResult.Error rather than throwing —
+        // the UI uses this to disable the Create button before the user
+        // commits. (CreateBooksAsync still throws PermissionDenied if a
+        // caller bypasses the validate step.)
+        if (!IsAdministratorOrTeamMember(scrText))
+            return Task.FromResult(
+                ValidationResult.Error(Loc(NotAdminOrTeamMemberKey, NotAdminOrTeamMemberFallback))
+            );
 
         ScrText? modelScrText = null;
         if (request.CreationMethod == CreationMethod.FromTemplate && request.ModelProjectId != null)
@@ -745,18 +872,31 @@ internal sealed class ManageBooksService : NetworkObject
     /// here — the Copy Books dialog triggers this alongside a CopyBooks call
     /// that provides its own event notification.
     /// </summary>
-    public Task CopyCustomVersificationAsync(CopyCustomVersificationRequest request)
+    public Task CopyCustomVersificationAsync(string sourceProjectId, string destProjectId)
     {
         ScrText fromScrText = ResolveProjectOrThrow(
-            request.FromProjectId,
+            sourceProjectId,
             PlatformErrorCodes.NotFound,
-            $"Source project not found: {request.FromProjectId}"
+            $"Source project not found: {sourceProjectId}"
         );
         ScrText toScrText = ResolveProjectOrThrow(
-            request.ToProjectId,
+            destProjectId,
             PlatformErrorCodes.NotFound,
-            $"Destination project not found: {request.ToProjectId}"
+            $"Destination project not found: {destProjectId}"
         );
+
+        // Theme 5 (2026-04-30): wire-boundary NO_CUSTOM_VERSIFICATION
+        // precondition per data-contracts §4.14. Without this check, callers
+        // received Task.CompletedTask whether or not the copy actually
+        // happened — the orchestrator's swallow-all-exceptions policy
+        // (preserved on `TryCopyCustomVersification` for in-CopyBooks use)
+        // hid the missing-file case. The wire layer is the right place to
+        // surface the precondition so callers can distinguish the two.
+        if (!CopyBooksOrchestrator.HasCustomVersification(fromScrText))
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.FailedPrecondition,
+                Loc(NoCustomVersificationKey, NoCustomVersificationFallback)
+            );
 
         CopyBooksOrchestrator.CopyCustomVersification(fromScrText, toScrText);
         return Task.CompletedTask;
@@ -926,7 +1066,22 @@ internal sealed class ManageBooksService : NetworkObject
         if (overlap.Severity == ValidationSeverity.Error)
             throw PlatformErrorCodes.WithCode(
                 PlatformErrorCodes.FailedPrecondition,
-                overlap.Message ?? "Overlapping files detected"
+                // Resolve the orchestrator's localize-key Message; the null
+                // fallback covers an invariant-violation branch (Severity=Error
+                // with no message) and now also goes through the localizer
+                // (Theme 9, 2026-04-30) so translators can localize even the
+                // internal-error case.
+                overlap.Message != null
+                && IsLocalizeKey(overlap.Message)
+                    ? Loc(
+                        ImportBooksOrchestrator.OverlappingFilesAlertKey,
+                        ImportBooksOrchestrator.OverlappingFilesAlertFallback
+                    )
+                    : overlap.Message
+                        ?? Loc(
+                            UnexpectedNullOverlapMessageKey,
+                            UnexpectedNullOverlapMessageFallback
+                        )
             );
 
         // Guard 5: WriteLock marker seam — mirrors CAP-005/007 where
@@ -985,8 +1140,10 @@ internal sealed class ManageBooksService : NetworkObject
     /// ensures calling the resolver twice on the same record does not
     /// re-resolve an already-resolved value.
     /// </summary>
-    private static bool IsLocalizeKey(string? s) =>
-        s != null && s.Length >= 2 && s[0] == '%' && s[^1] == '%';
+    // Theme 9 (2026-04-30): renamed parameter `s` → `value` for consistency
+    // with the calling helpers (ResolveIfKey takes `string? value`).
+    private static bool IsLocalizeKey(string? value) =>
+        value != null && value.Length >= 2 && value[0] == '%' && value[^1] == '%';
 
     /// <summary>
     /// Resolves <paramref name="value"/> if it looks like a localize key;

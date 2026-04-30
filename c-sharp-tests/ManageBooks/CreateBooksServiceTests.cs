@@ -4,6 +4,7 @@ using Paranext.DataProvider.ManageBooks;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
+using Paratext.Data.Users;
 using SIL.Scripture;
 
 namespace TestParanextDataProvider.ManageBooks
@@ -606,6 +607,135 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         // -------------------------------------------------------------------
+        // Theme 6: 3-level permission gate (INV-004 / INV-005)
+        // -------------------------------------------------------------------
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-004")]
+        [Property("BehaviorId", "BHV-405")]
+        [Property("InvariantId", "INV-004")]
+        [Description(
+            "Theme 6 level-2 (INV-004): Observers (and any role weaker than "
+                + "TeamMember) cannot create books. The wire layer must throw "
+                + "PERMISSION_DENIED rather than reaching the orchestrator. "
+                + "Distinct from the Delete/Copy/Import 'shared without admin' "
+                + "guard — Create permits TeamMembers, only blocks Observers."
+        )]
+        public void CreateBooksAsync_NonAdminOrTeamMember_ThrowsPermissionDenied()
+        {
+            var observer = new ObserverScrText();
+            var details = CreateProjectDetails(observer);
+            ParatextProjects.FakeAddProject(details, observer);
+            var request = new CreateBooksRequest(
+                details.Metadata.Id,
+                BookNumbers: new[] { 1 },
+                CreationMethod: CreationMethod.Empty,
+                ModelProjectId: null
+            );
+
+            Exception? caught = null;
+            try
+            {
+                _service.CreateBooksAsync(request).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+
+            Assert.That(caught, Is.Not.Null, "Observer must be denied at the wire layer");
+            Assert.That(
+                caught!.Data["platformErrorCode"],
+                Is.EqualTo(PlatformErrorCodes.PermissionDenied),
+                "INV-004 level-2: non-Administrator/non-TeamMember must surface PERMISSION_DENIED"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-004")]
+        [Property("BehaviorId", "BHV-405")]
+        [Property("InvariantId", "INV-004")]
+        [Description(
+            "Theme 6 level-3 (INV-004): a TeamMember without explicit CanEdit "
+                + "rights for one of the requested books has that book SKIPPED "
+                + "with a recorded error; the remaining requested books are "
+                + "still created. Matches PT9 CreateBooksForm.cs:131-138 "
+                + "'alert and skip per book' semantics. CreatedCount counts "
+                + "only successfully-created books."
+        )]
+        public void CreateBooks_TeamMemberWithoutEditRightsForOneBook_SkipsThatBookOnly()
+        {
+            var teamMember = new TeamMemberCanEditOnlyBook2ScrText();
+            var details = CreateProjectDetails(teamMember);
+            ParatextProjects.FakeAddProject(details, teamMember);
+            var request = new CreateBooksRequest(
+                details.Metadata.Id,
+                BookNumbers: new[] { 1, 2 },
+                CreationMethod: CreationMethod.Empty,
+                ModelProjectId: null
+            );
+
+            CreateBooksResult result = _service.CreateBooksAsync(request).GetAwaiter().GetResult();
+
+            Assert.That(
+                result.CreatedCount,
+                Is.EqualTo(1),
+                "only book 2 (which the TeamMember can edit) should be created"
+            );
+            Assert.That(
+                result.Errors,
+                Has.Length.EqualTo(1),
+                "the skipped book must produce exactly one error entry"
+            );
+            Assert.That(
+                result.Errors[0].Text,
+                Does.Contain("GEN"),
+                "error must reference book 1 (GEN), the skipped book"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-004")]
+        [Property("BehaviorId", "BHV-405")]
+        [Property("InvariantId", "INV-005")]
+        [Description(
+            "Theme 6 INV-005: Administrators bypass the per-book CanEdit check "
+                + "and can create books even without explicit per-book edit "
+                + "permission. The level-3 skip applies only to TeamMembers."
+        )]
+        public void CreateBooks_AdministratorBypassesPerBookEditCheck()
+        {
+            // Default DummyScrText reports AmAdministrator=false but
+            // HasPermissionsDefined=false too — meaning the project is
+            // unshared and AmAdministrator returns true via the unshared
+            // fallback path. The base _scrText fixture is Administrator-by-
+            // default for this very reason; a single-book request that the
+            // admin "lacks per-book CanEdit for" must still succeed.
+            var request = new CreateBooksRequest(
+                _projectId,
+                BookNumbers: new[] { 1 },
+                CreationMethod: CreationMethod.Empty,
+                ModelProjectId: null
+            );
+
+            CreateBooksResult result = _service.CreateBooksAsync(request).GetAwaiter().GetResult();
+
+            Assert.That(
+                result.CreatedCount,
+                Is.EqualTo(1),
+                "Administrator must create book 1 even without explicit per-book edit rights"
+            );
+            Assert.That(
+                result.Errors,
+                Is.Empty,
+                "INV-005: admin bypass must not record any per-book permission errors"
+            );
+        }
+
+        // -------------------------------------------------------------------
         // Test-local ScrText subclass: non-editable project (INV-003)
         // -------------------------------------------------------------------
 
@@ -624,6 +754,87 @@ namespace TestParanextDataProvider.ManageBooks
             {
                 Settings.Editable = false;
             }
+        }
+
+        // -------------------------------------------------------------------
+        // Theme 6 test seams
+        //
+        // PT9's PermissionManager.AmAdministratorOrTeamMember is non-virtual
+        // — it reads from the protected Data.Users list and the result of
+        // (virtual) AmAdministrator. Test seams populate Data.Users with the
+        // appropriate role for RegistrationInfo.DefaultUser and override
+        // AmAdministrator (and CanEdit, which IS virtual).
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Test-local ScrText for the Observer role: shared project,
+        /// AmAdministrator=false, no entry in Data.Users for the current
+        /// user, so AmAdministratorOrTeamMember returns false too. The
+        /// service-level Theme-6 gate must fire.
+        /// </summary>
+        private sealed class ObserverScrText : DummyScrText
+        {
+            private readonly ObserverPermissionManager _permissions = new();
+
+            public override PermissionManager Permissions => _permissions;
+
+            private sealed class ObserverPermissionManager : PermissionManager
+            {
+                // Non-null Data with a single Observer-role user for
+                // RegistrationInfo.DefaultUser. AmAdministrator=false (override),
+                // AmAdministratorOrTeamMember reads false because role != Admin
+                // and role != TeamMember.
+                protected override InternalProjectUserAccessData Data { get; set; } =
+                    BuildDataWithRole(UserRoles.Observer);
+
+                public override bool AmAdministrator => false;
+            }
+        }
+
+        /// <summary>
+        /// Test-local ScrText for a TeamMember role with per-book edit
+        /// rights for book 2 (EXO) only. The service-level level-2 gate
+        /// passes (AmAdministratorOrTeamMember=true via Data.Users role),
+        /// then the orchestrator's level-3 per-book check skips book 1 (GEN)
+        /// and proceeds to book 2.
+        /// </summary>
+        private sealed class TeamMemberCanEditOnlyBook2ScrText : DummyScrText
+        {
+            private readonly TeamMemberPerBookEditRightsPermissions _permissions = new();
+
+            public override PermissionManager Permissions => _permissions;
+
+            private sealed class TeamMemberPerBookEditRightsPermissions : PermissionManager
+            {
+                protected override InternalProjectUserAccessData Data { get; set; } =
+                    BuildDataWithRole(UserRoles.TeamMember);
+
+                public override bool AmAdministrator => false;
+
+                public override bool CanEdit(
+                    int bookNum,
+                    int chapterNum = 0,
+                    string? userName = null,
+                    PermissionSet permissionSet = PermissionSet.Merged
+                ) => bookNum == 2;
+            }
+        }
+
+        // Builds a PermissionManager.InternalProjectUserAccessData containing
+        // a single user (the test's DefaultUser) with the requested role.
+        // Shared by Theme-6 permission seams.
+        private static PermissionManager.InternalProjectUserAccessData BuildDataWithRole(
+            UserRoles role
+        )
+        {
+            var data = new PermissionManager.InternalProjectUserAccessData();
+            data.Users.Add(
+                new PermissionManager.InternalProjectUserAccess(
+                    RegistrationInfo.DefaultUser.Name,
+                    role
+                )
+            );
+            return data;
         }
     }
 }

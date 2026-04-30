@@ -1,3 +1,4 @@
+using Paranext.DataProvider.ParatextUtils;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
 using PtxUtils;
@@ -671,7 +672,17 @@ public static class CopyBooksOrchestrator
 
         int copiedCount = 0;
         int? lastCopiedBookNum = null;
-        var errors = new List<string>();
+        // Per-book domain errors (encoding conversion, lock failures) are
+        // string messages from our orchestrator. Theme 2 (2026-04-30) wraps
+        // each into an AlertEntry with the book id as caption so they coexist
+        // with captured ParatextData alerts on the same Errors[] array.
+        var domainErrorStrings = new List<string>();
+
+        // Theme 2 (2026-04-30): wrap the copy loop and CopyCustomVersification
+        // in an AlertCapture scope so any ParatextData Alert.Show calls
+        // (NBSP warning, versification confirmation, language fallback) surface
+        // as captured AlertEntry records on the result.
+        using AlertCapture.AlertScope alertScope = AlertCapture.StartCapture();
 
         // Marker seam for TS-092: fail on the first requested book to simulate
         // an encoding conversion failure; remaining books copy normally so the
@@ -687,14 +698,14 @@ public static class CopyBooksOrchestrator
             if (isEncodingFailureMarker && !encodingFailureAlreadyFired)
             {
                 encodingFailureAlreadyFired = true;
-                errors.Add(
+                domainErrorStrings.Add(
                     $"Failed to copy book {Canon.BookNumberToId(bookNum)}: "
                         + "Encoding conversion failed"
                 );
                 continue;
             }
 
-            if (TryCopyOneBook(fromScrText, toScrText, bookNum, errors))
+            if (TryCopyOneBook(fromScrText, toScrText, bookNum, domainErrorStrings))
             {
                 copiedCount++;
                 lastCopiedBookNum = bookNum;
@@ -707,10 +718,34 @@ public static class CopyBooksOrchestrator
         // files (ProjectSettings.cs:2128-2131).
         TryCopyCustomVersification(fromScrText, toScrText);
 
+        AlertCapture.PartitionAlertsByLevel(
+            alertScope.Entries,
+            out AlertEntry[] capturedWarnings,
+            out AlertEntry[] capturedErrors
+        );
+
+        // Wrap each per-book domain error into an AlertEntry so the Errors[]
+        // shape is uniform across captured ParatextData alerts and our own
+        // orchestrator-detected failures. Caption is the bare "Copy" stage
+        // label; the message text already carries the book id.
+        AlertEntry[] errors;
+        if (domainErrorStrings.Count == 0)
+        {
+            errors = capturedErrors;
+        }
+        else
+        {
+            var combined = new List<AlertEntry>(capturedErrors.Length + domainErrorStrings.Count);
+            combined.AddRange(capturedErrors);
+            foreach (string text in domainErrorStrings)
+                combined.Add(new AlertEntry(text, "Copy", AlertLevel.Error));
+            errors = combined.ToArray();
+        }
+
         return new CopyBooksResult(
-            Success: errors.Count == 0 && copiedCount > 0,
+            Success: errors.Length == 0 && copiedCount > 0,
             LastCopiedBookNum: lastCopiedBookNum,
-            Warnings: [],
+            Warnings: capturedWarnings,
             Errors: errors,
             CopiedCount: copiedCount
         );
@@ -739,6 +774,7 @@ public static class CopyBooksOrchestrator
         List<string> errors
     )
     {
+        string bookId = Canon.BookNumberToId(bookNum);
         try
         {
             string sourceUsfm = fromScrText.GetText(bookNum);
@@ -747,7 +783,12 @@ public static class CopyBooksOrchestrator
         }
         catch (Exception ex)
         {
-            errors.Add($"Failed to copy book {Canon.BookNumberToId(bookNum)}: {ex.Message}");
+            // Server-side: log full ex.ToString() (filesystem paths, stack)
+            // for diagnostics. Wire-side: categorized text only — never
+            // include ex.Message verbatim (may surface lock-file paths or
+            // internal ParatextData state across the PAPI boundary). Theme 4.
+            Console.WriteLine($"[CopyBooks.TryCopyOneBook] copy failed for book {bookId}: {ex}");
+            errors.Add($"Failed to copy book {bookId}");
             return false;
         }
     }
@@ -778,6 +819,27 @@ public static class CopyBooksOrchestrator
     {
         TryCopyCustomVersification(fromScrText, toScrText);
     }
+
+    // === NEW IN PT10 ===
+    // Reason: Theme 5 (M-014 NO_CUSTOM_VERSIFICATION precondition, 2026-04-30).
+    //   data-contracts §4.14 specifies that the wire entry for
+    //   `copyCustomVersification` must surface a FAILED_PRECONDITION when the
+    //   source project has no `custom.vrs` file. The orchestrator's
+    //   `CopyCustomVersification` is best-effort by design (used inline by
+    //   `CopyBooks` where missing custom.vrs must not abort the surrounding
+    //   copy); the service layer is the right place to enforce the
+    //   wire-boundary precondition. This helper exposes the check so the
+    //   service can decide whether to throw.
+    /// <summary>
+    /// Returns <c>true</c> when the source project has a <c>custom.vrs</c>
+    /// file in its project file manager (real disk or InMemoryFileManager
+    /// for tests). Used by
+    /// <c>ManageBooksService.CopyCustomVersificationAsync</c> to enforce the
+    /// NO_CUSTOM_VERSIFICATION precondition documented in
+    /// <c>data-contracts.md §4.14</c>.
+    /// </summary>
+    public static bool HasCustomVersification(ScrText fromScrText) =>
+        fromScrText.FileManager.Exists("custom.vrs");
 
     /// <summary>
     /// Defensive wrapper around

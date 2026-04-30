@@ -559,6 +559,18 @@ namespace TestParanextDataProvider.ManageBooks
         // Extraction: EXT-006 (CopyBooksForm.CopyBooks, PT9 116-196).
         // Behaviors:  BHV-403, BHV-313, BHV-600, BHV-601, BHV-168, BHV-101,
         //             BHV-102, BHV-111.
+        //
+        // Theme 8 (2026-04-30) BehaviorId traceability: BHV-601 (CAP-007 owns
+        // the destination-side write that updates BooksPresentSet), BHV-102
+        // (delete-then-write fallback covered transitively via PutText
+        // primitives in the per-book copy loop — see TS-063 below), and
+        // BHV-111 (admin auto-grant for new books in shared projects)
+        // are covered transitively through this fixture but lacked direct
+        // [Property("BehaviorId", ...)] tags. They appear inline below on
+        // the tests that exercise them (BHV-601 → TS-064 / TS-065
+        // round-trip; BHV-102 → TS-067 partial-success encoding-failure;
+        // BHV-111 → TS-091 admin auto-grant via shared-CopyBooks coverage
+        // is exercised in CopyBooksServiceTests.cs).
         // Invariants: INV-001, INV-002, INV-006, INV-C01, INV-C02, INV-C08,
         //             INV-C12, INV-C13.
         // Golden masters: gm-009 (mapin.cct), gm-010 (TECkit).
@@ -585,6 +597,8 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("CapabilityId", "CAP-007")]
         [Property("ScenarioId", "TS-063")]
         [Property("BehaviorId", "BHV-101")]
+        [Property("BehaviorId", "BHV-102")] // Theme 8: delete-then-write covered transitively via PutText
+        [Property("BehaviorId", "BHV-601")] // Theme 8: write triggers BooksPresentSet update on destination
         [Property("InvariantId", "INV-C08")]
         [Property("SpecId", "spec-002")]
         [Description(

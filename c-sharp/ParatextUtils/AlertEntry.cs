@@ -1,6 +1,6 @@
 using PtxUtils;
 
-namespace Paranext.DataProvider.ManageBooks;
+namespace Paranext.DataProvider.ParatextUtils;
 
 // === NEW IN PT10 ===
 // Reason: Theme 8 Alert handling. PT9 surfaced ImportSfmText warnings/errors

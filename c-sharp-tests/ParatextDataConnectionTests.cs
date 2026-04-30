@@ -42,18 +42,32 @@ namespace TestParanextDataProvider
         [Test]
         public void LoadPackagedWEB_LoadsProject()
         {
+            // Capture and restore Alert.Implementation so this test does not
+            // leak DummyAlert into other fixtures' global state — the
+            // ParatextGlobals install (FixtureSetup OneTimeSetUp) sets it to
+            // AlertCapture, and tests that observe the install path
+            // (ParatextGlobalsAlertInstallTests) need that state preserved.
+            // Theme 9 (2026-04-30) regression-guard for the Theme-3 install.
+            Alert previousImplementation = Alert.Implementation;
             Alert.Implementation = new DummyAlert();
-            EnsureIcuConfigFileIsInPlace();
-
-            Console.WriteLine(Assembly.GetExecutingAssembly().Location);
-            ParatextGlobals.Initialize("assets");
-
-            ScrText scrText = ScrTextCollection.Get("WEB");
-            Assert.Multiple(() =>
+            try
             {
-                Assert.That(scrText.Name, Is.EqualTo("WEB"));
-                Assert.That(scrText.Settings.BooksPresentSet.Count, Is.EqualTo(83));
-            });
+                EnsureIcuConfigFileIsInPlace();
+
+                Console.WriteLine(Assembly.GetExecutingAssembly().Location);
+                ParatextGlobals.Initialize("assets");
+
+                ScrText scrText = ScrTextCollection.Get("WEB");
+                Assert.Multiple(() =>
+                {
+                    Assert.That(scrText.Name, Is.EqualTo("WEB"));
+                    Assert.That(scrText.Settings.BooksPresentSet.Count, Is.EqualTo(83));
+                });
+            }
+            finally
+            {
+                Alert.Implementation = previousImplementation;
+            }
         }
 
         #region DummyAlert class

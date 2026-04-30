@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Paranext.DataProvider;
 
 // === NEW IN PT10 ===
@@ -35,6 +37,12 @@ public static class PlatformErrorCodes
     public const string Unimplemented = "UNIMPLEMENTED";
     public const string Unknown = "UNKNOWN";
 
+    // The Exception.Data dictionary key carrying the PlatformError code.
+    // Colocated here (private) so the magic string is declared exactly once;
+    // call sites use TryGetCode below rather than indexing by literal.
+    // Theme 9 (2026-04-30).
+    internal const string PlatformErrorCodeDataKey = "platformErrorCode";
+
     /// <summary>
     /// Builds an exception carrying a PlatformError code in
     /// <c>Exception.Data["platformErrorCode"]</c>. The network layer extracts the
@@ -43,7 +51,45 @@ public static class PlatformErrorCodes
     public static Exception WithCode(string code, string message)
     {
         var ex = new Exception(message);
-        ex.Data["platformErrorCode"] = code;
+        ex.Data[PlatformErrorCodeDataKey] = code;
         return ex;
+    }
+
+    // Theme 9 (2026-04-30): static-analysis-friendly companion to WithCode.
+    // Uses [DoesNotReturn] so call sites flagged by the compiler/analyzer as
+    // unreachable-after-throw produce correct nullable-flow analysis. Pairs
+    // with the existing WithCode for cases where the caller wants to wrap
+    // and rethrow with extra context.
+    /// <summary>
+    /// Throws an <see cref="Exception"/> carrying the supplied PlatformError
+    /// <paramref name="code"/> and <paramref name="message"/>. Marked
+    /// <see cref="DoesNotReturnAttribute"/> so static analysis treats call
+    /// sites as terminating — `Throw(...)` is a complete statement, no
+    /// `throw` keyword needed at the call site.
+    /// </summary>
+    [DoesNotReturn]
+    public static void Throw(string code, string message)
+    {
+        throw WithCode(code, message);
+    }
+
+    // Theme 9 (2026-04-30): replaces the magic-string lookup
+    // `ex.Data["platformErrorCode"] as string` at call sites with a typed
+    // helper so the dictionary key stays colocated with its declaration.
+    /// <summary>
+    /// Returns <c>true</c> and outputs the PlatformError <paramref name="code"/>
+    /// when <paramref name="ex"/> carries one in
+    /// <c>Exception.Data["platformErrorCode"]</c>; otherwise outputs
+    /// <c>null</c> and returns <c>false</c>.
+    /// </summary>
+    public static bool TryGetCode(Exception ex, [NotNullWhen(true)] out string? code)
+    {
+        if (ex.Data[PlatformErrorCodeDataKey] is string c)
+        {
+            code = c;
+            return true;
+        }
+        code = null;
+        return false;
     }
 }

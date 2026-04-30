@@ -215,6 +215,19 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
   // `error.data.data.platformErrorCode`. Extract it here so it survives the
   // rethrow as a PlatformError with a machine-readable `code` property.
   // FN-002, Theme 7 — manage-books feature.
+  //
+  // The double `.data?.data?` indirection mirrors StreamJsonRpc's wire shape
+  // (Theme 12, 2026-04-30):
+  //   - The OUTER `error.data` is the standard JSON-RPC 2.0 error envelope's
+  //     `data` field (where StreamJsonRpc places its serialized error payload
+  //     for thrown C# exceptions).
+  //   - The INNER `.data` is StreamJsonRpc's serialized representation of
+  //     the C# `Exception.Data` IDictionary, where
+  //     `PlatformErrorCodes.WithCode` writes
+  //     `ex.Data["platformErrorCode"] = code` (decision-registry.json
+  //     `patterns.errorHandling.platformErrorCodes`).
+  // Do NOT flatten this access unless StreamJsonRpc's serialization changes —
+  // both levels are intentional.
   let platformErrorCode: PlatformErrorCode | undefined;
   if (isJsonRpcResponse(response)) {
     if (!response.error) return response.result;

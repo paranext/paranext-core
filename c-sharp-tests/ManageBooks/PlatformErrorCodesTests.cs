@@ -90,17 +90,12 @@ namespace TestParanextDataProvider.ManageBooks
             Assert.That(ex.Data["platformErrorCode"], Is.EqualTo(code));
         }
 
-        [Test]
-        [Category("Infrastructure")]
-        [Property("InfraId", "FN-002")]
-        public void WithCode_EmptyMessage_StillReturnsExceptionWithCode()
-        {
-            // Edge case: empty message is unusual but must not crash the helper.
-            var ex = PlatformErrorCodes.WithCode(PlatformErrorCodes.Unknown, string.Empty);
-
-            Assert.That(ex, Is.Not.Null);
-            Assert.That(ex.Message, Is.EqualTo(string.Empty));
-            Assert.That(ex.Data["platformErrorCode"], Is.EqualTo(PlatformErrorCodes.Unknown));
-        }
+        // Theme 7 (2026-04-30): removed WithCode_EmptyMessage_StillReturnsExceptionWithCode.
+        // Helper callers always pass a non-empty user-facing message
+        // (every production call site uses either a literal or `Loc(key, fallback)`
+        // both of which yield non-empty strings); the helper's public contract
+        // is not to "handle empty messages" — the contract is to attach the
+        // code to whatever Exception.Message the caller supplied. Asserting
+        // on an unsupported edge case made the test surface non-load-bearing.
     }
 }

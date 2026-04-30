@@ -1,4 +1,6 @@
+using Paranext.DataProvider.ParatextUtils;
 using Paratext.Data;
+using PtxUtils;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.ManageBooks;
@@ -46,6 +48,13 @@ public static class CreateBooksOrchestrator
     /// <summary>English fallback for <see cref="SelectModelTextKey"/>.</summary>
     public const string SelectModelTextFallback = "Please select model text";
 
+    // Per-book level-3 message used when a TeamMember (non-admin) lacks
+    // CanEdit rights for a specific book. Matches the same key/fallback the
+    // wire layer registers (see ManageBooksService.TeamMemberCannotEditBook*).
+    // Format placeholder: {0} = book id (e.g., "GEN").
+    private const string TeamMemberCannotEditBookFallback =
+        "Cannot create book {0}: you don't have permission to edit it";
+
     // === PORTED FROM PT9 ===
     // Source: PT9/Paratext/ToolsMenu/CreateBooksForm.cs:152, 169-183
     // Method: CreateBooksForm.cmdOK_Click — the per-book create loop.
@@ -87,8 +96,42 @@ public static class CreateBooksOrchestrator
         int createdCount = 0;
         int? lastCreatedBookNum = null;
 
+        // Theme 2 (2026-04-30): wrap the per-book delegation loop in an
+        // AlertCapture scope so any ParatextData Alert.Show calls during
+        // model lookup, language-fallback probes, NBSP warnings, or
+        // versification confirmation surface as captured AlertEntry records
+        // on the result. Without this scope, ParatextData alerts would be
+        // logged to Console.WriteLine and never reach the UI.
+        using AlertCapture.AlertScope alertScope = AlertCapture.StartCapture();
+
+        // Theme 6 level-3 (INV-004 + INV-005): TeamMembers must have CanEdit
+        // rights for each book they create; Administrators bypass this
+        // per-book check (INV-005 — admins can always create books). The
+        // wire-boundary level-2 gate (IsAdministratorOrTeamMember) already
+        // ran in ManageBooksService.CreateBooksAsync, so reaching this
+        // method implies the user is at least a TeamMember.
+        bool isAdministrator = scrText.Permissions.AmAdministrator;
+        var domainErrors = new List<AlertEntry>();
+
         foreach (int bookNum in selectedBooks.SelectedBookNumbers)
         {
+            // Per-book level-3 skip: TeamMembers without explicit CanEdit
+            // rights for this book are skipped with a recorded error.
+            // Matches PT9 CreateBooksForm.cs:131-138 "alert and skip per
+            // book" semantics. Admins bypass per INV-005.
+            if (!isAdministrator && !scrText.Permissions.CanEdit(bookNum))
+            {
+                string bookId = Canon.BookNumberToId(bookNum);
+                domainErrors.Add(
+                    new AlertEntry(
+                        string.Format(TeamMemberCannotEditBookFallback, bookId),
+                        "CreateBooks",
+                        AlertLevel.Error
+                    )
+                );
+                continue;
+            }
+
             // Snapshot presence BEFORE delegating so we don't double-count
             // idempotent no-ops. ScriptureTemplateService.CreateOneBook
             // returns true for already-present books (per PT9
@@ -114,11 +157,25 @@ public static class CreateBooksOrchestrator
             }
         }
 
+        AlertCapture.PartitionAlertsByLevel(
+            alertScope.Entries,
+            out AlertEntry[] warnings,
+            out AlertEntry[] capturedErrors
+        );
+
+        // Merge captured ParatextData errors with our level-3 per-book
+        // permission errors so they surface on the same Errors[] array
+        // (callers don't need to distinguish the source).
+        AlertEntry[] errors =
+            domainErrors.Count == 0
+                ? capturedErrors
+                : capturedErrors.Concat(domainErrors).ToArray();
+
         return new CreateBooksResult(
-            Success: true,
+            Success: errors.Length == 0,
             LastCreatedBookNum: lastCreatedBookNum,
-            Warnings: [],
-            Errors: [],
+            Warnings: warnings,
+            Errors: errors,
             CreatedCount: createdCount
         );
     }

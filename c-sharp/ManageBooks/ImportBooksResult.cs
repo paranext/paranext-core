@@ -1,3 +1,5 @@
+using Paranext.DataProvider.ParatextUtils;
+
 namespace Paranext.DataProvider.ManageBooks;
 
 // === PORTED FROM PT9 CONTRACT ===

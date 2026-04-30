@@ -430,26 +430,75 @@ namespace TestParanextDataProvider.ManageBooks
         // M-014: CopyCustomVersification wire entry (BHV-168, TS-048)
         // -------------------------------------------------------------------
 
+        // Seeds a minimal custom.vrs file into the source project's
+        // InMemoryFileManager so HasCustomVersification(_fromScrText) returns
+        // true. Any non-empty content satisfies the file-existence probe — the
+        // orchestrator's TryCopyCustomVersification swallows downstream
+        // ProjectSettings.CopyCustomVersification exceptions for DummyScrText.
+        private void SeedCustomVersificationOnSource()
+        {
+            using TextWriter writer = _fromScrText.FileManager.OpenFileForWrite("custom.vrs");
+            writer.Write("# minimal custom versification placeholder\n");
+        }
+
         [Test]
         [Category("Contract")]
         [Property("CapabilityId", "CAP-007")]
         [Property("ScenarioId", "TS-048")]
         [Property("BehaviorId", "BHV-168")]
         [Description(
-            "TS-048 / BHV-168: CopyCustomVersificationAsync delegates to the "
-                + "orchestrator for a valid request and does not throw. The "
-                + "stronger side-effect (destination custom.vrs exists) is "
-                + "asserted at the orchestrator layer; here we verify the wire "
-                + "path resolves both projects and delegates."
+            "TS-048 / BHV-168 (positive path): when the source has a custom.vrs, "
+                + "CopyCustomVersificationAsync must NOT throw. Verifies the "
+                + "wire path resolves both projects, the precondition check passes, "
+                + "and the orchestrator runs to completion (the orchestrator's "
+                + "deep contract is verified in CopyBooksOrchestratorTests)."
         )]
-        public async Task CopyCustomVersificationAsync_ValidRequest_CompletesWithoutThrowing()
+        public void CopyCustomVersificationAsync_SourceHasCustomVrs_DoesNotThrow()
         {
-            var request = new CopyCustomVersificationRequest(_fromProjectId, _toProjectId);
+            SeedCustomVersificationOnSource();
 
-            await _service.CopyCustomVersificationAsync(request);
-            // No exception thrown — the wire path resolved both projects and
-            // reached the orchestrator (the orchestrator's deep contract is
-            // verified in CopyBooksOrchestratorTests.CopyCustomVersification_*).
+            Assert.DoesNotThrowAsync(
+                async () =>
+                    await _service.CopyCustomVersificationAsync(_fromProjectId, _toProjectId),
+                "wire path must complete cleanly when source has a custom.vrs"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("BehaviorId", "BHV-168")]
+        [Description(
+            "Theme 5 NO_CUSTOM_VERSIFICATION precondition (data-contracts §4.14): "
+                + "when the source project has no custom.vrs file, the wire entry "
+                + "must throw a FailedPrecondition error so callers can distinguish "
+                + "'copied' from 'no file to copy'. Without this guard, prior "
+                + "behavior silently returned Task.CompletedTask in both cases."
+        )]
+        public void CopyCustomVersificationAsync_SourceMissingCustomVrs_ThrowsFailedPrecondition()
+        {
+            // No SeedCustomVersificationOnSource call — _fromScrText.FileManager
+            // does not contain custom.vrs, so HasCustomVersification returns false.
+
+            Exception? caught = null;
+            try
+            {
+                _service
+                    .CopyCustomVersificationAsync(_fromProjectId, _toProjectId)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+
+            Assert.That(caught, Is.Not.Null, "missing custom.vrs must surface an error");
+            Assert.That(
+                caught!.Data["platformErrorCode"],
+                Is.EqualTo(PlatformErrorCodes.FailedPrecondition),
+                "platformErrorCode must match data-contracts §4.14 NO_CUSTOM_VERSIFICATION"
+            );
         }
 
         [Test]
@@ -458,19 +507,22 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("BehaviorId", "BHV-168")]
         [Description(
             "Unknown fromProjectId on CopyCustomVersification → NOT_FOUND "
-                + "(Theme 7; mirrors the general project-resolution guard)."
+                + "(Theme 7; mirrors the general project-resolution guard). "
+                + "Resolution failure precedes the NO_CUSTOM_VERSIFICATION "
+                + "precondition so an unknown project surfaces the more specific "
+                + "NOT_FOUND code rather than FAILED_PRECONDITION."
         )]
         public void CopyCustomVersificationAsync_UnknownFromProjectId_ThrowsNotFound()
         {
-            var request = new CopyCustomVersificationRequest(
-                "0123456789ABCDEF0123456789ABCDEF01234567",
-                _toProjectId
-            );
+            const string unknownProjectId = "0123456789ABCDEF0123456789ABCDEF01234567";
 
             Exception? caught = null;
             try
             {
-                _service.CopyCustomVersificationAsync(request).GetAwaiter().GetResult();
+                _service
+                    .CopyCustomVersificationAsync(unknownProjectId, _toProjectId)
+                    .GetAwaiter()
+                    .GetResult();
             }
             catch (Exception ex)
             {

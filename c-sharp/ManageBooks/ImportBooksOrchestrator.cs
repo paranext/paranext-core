@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.XPath;
+using Paranext.DataProvider.ParatextUtils;
 using Paratext.Data;
 using PtxUtils;
 using SIL.Scripture;
@@ -289,7 +290,13 @@ public static class ImportBooksOrchestrator
         usfm = string.Empty;
         try
         {
-            var doc = new XmlDocument { PreserveWhitespace = true };
+            // XXE-safe: explicitly disable external entity resolution.
+            // Defense-in-depth — .NET 8's default for XmlDocument is already
+            // XmlResolver=null, but the explicit assignment makes the safety
+            // posture self-documenting and survives future .NET upgrades that
+            // might flip the default. USX content comes from user-supplied
+            // files (Theme 11, 2026-04-30).
+            var doc = new XmlDocument { PreserveWhitespace = true, XmlResolver = null };
             doc.LoadXml(usxContent);
 
             UsxFragmenter.FindFragments(
@@ -649,6 +656,13 @@ public static class ImportBooksOrchestrator
             );
 
         int importedCount = 0;
+        // Per-book write failures detected by our own orchestrator code go
+        // here as structured AlertEntry records. We keep them out of the
+        // AlertCapture scope on purpose (decision-registry constraint
+        // alertCapture.notAllowed: "Calling Alert.Show from your own
+        // orchestrator code as a poor-man's logging — use the structured
+        // AlertEntry[] result field instead." — Theme 4).
+        var domainErrors = new List<AlertEntry>();
 
         // AlertCapture wrapping: any ParatextData Alert.Show / ShowLater calls
         // made inside the import (language-definition probe, encoding errors,
@@ -664,19 +678,27 @@ public static class ImportBooksOrchestrator
             if (!file.Included)
                 continue;
 
-            importedCount += ImportOneFile(scrText, file, replaceEntireBook);
+            importedCount += ImportOneFile(scrText, file, replaceEntireBook, domainErrors);
         }
 
         // Single-pass split of captured alerts by severity. Error-level
         // entries surface on Errors[]; Information/Warning/Question entries
-        // surface on Warnings[] (Theme 8 projection — see
-        // backend-alignment.md "Alert Handling — AlertCapture"). Imperative
-        // loop matches the partition style used in CopyBooksOrchestrator.
-        PartitionAlertsByLevel(
+        // surface on Warnings[]. Theme 2 (2026-04-30) extracted this helper
+        // to AlertCapture.PartitionAlertsByLevel so CAP-004 / CAP-007 share
+        // the same severity bucketing.
+        AlertCapture.PartitionAlertsByLevel(
             alertScope.Entries,
-            out AlertEntry[] warnings,
-            out AlertEntry[] errors
+            out AlertEntry[] capturedWarnings,
+            out AlertEntry[] capturedErrors
         );
+
+        // Merge orchestrator-detected domain errors after ParatextData-captured
+        // errors so capture-order is preserved; both surface on the same
+        // Errors[] array on the wire (callers don't need to distinguish).
+        AlertEntry[] errors =
+            domainErrors.Count == 0
+                ? capturedErrors
+                : capturedErrors.Concat(domainErrors).ToArray();
 
         // Success: no error-level alerts. ImportedCount independently counts
         // books actually written, so an empty-files input returns
@@ -685,40 +707,9 @@ public static class ImportBooksOrchestrator
         return new ImportBooksResult(
             Success: errors.Length == 0,
             ImportedCount: importedCount,
-            Warnings: warnings,
+            Warnings: capturedWarnings,
             Errors: errors
         );
-    }
-
-    // === NEW IN PT10 ===
-    // Reason: Theme 8 projection — captured alerts split into Warnings[] and
-    //   Errors[] on the wire result. Single-pass partition: one iteration
-    //   produces both arrays, avoiding the two-pass Where(...).ToArray()
-    //   idiom. Matches the imperative-loop style used elsewhere in this
-    //   capability (CopyBooksOrchestrator.CopyBooks).
-    /// <summary>
-    /// Splits <paramref name="captured"/> into warnings (Information,
-    /// Warning, Question) and errors (Error) using a single pass. The
-    /// projection matches the Theme-8 wire contract documented in
-    /// backend-alignment.md ("Alert Handling — AlertCapture").
-    /// </summary>
-    private static void PartitionAlertsByLevel(
-        List<AlertEntry> captured,
-        out AlertEntry[] warnings,
-        out AlertEntry[] errors
-    )
-    {
-        var warningList = new List<AlertEntry>(captured.Count);
-        var errorList = new List<AlertEntry>();
-        foreach (AlertEntry entry in captured)
-        {
-            if (entry.Level == AlertLevel.Error)
-                errorList.Add(entry);
-            else
-                warningList.Add(entry);
-        }
-        warnings = warningList.ToArray();
-        errors = errorList.ToArray();
     }
 
     // === PORTED FROM PT9 ===
@@ -738,10 +729,17 @@ public static class ImportBooksOrchestrator
     // management satisfies INV-C01).
     //
     // Per-file failures (USX conversion, missing \id, invalid Canon code,
-    // PutText exception) surface as Alert.Show calls captured by the enclosing
-    // AlertCapture scope and mapped to Errors[] on the result. The loop
-    // continues to the next file (BHV-106 partial-success semantics).
-    private static int ImportOneFile(ScrText scrText, ImportFileEntry file, bool replaceEntireBook)
+    // PutText exception) surface as structured AlertEntry records appended
+    // to <paramref name="domainErrors"/> by <see cref="TryPutBook"/>. The
+    // loop continues to the next file (BHV-106 partial-success semantics).
+    // ParatextData's own Alert.Show calls (encoding warnings, language probe)
+    // are captured separately via the enclosing AlertCapture scope.
+    private static int ImportOneFile(
+        ScrText scrText,
+        ImportFileEntry file,
+        bool replaceEntireBook,
+        List<AlertEntry> domainErrors
+    )
     {
         string usfmContent = file.Content;
 
@@ -762,7 +760,7 @@ public static class ImportBooksOrchestrator
         int written = 0;
         foreach (ExtractedBook book in extracted)
         {
-            if (TryPutBook(scrText, book.BookNum, book.Text, replaceEntireBook))
+            if (TryPutBook(scrText, book.BookNum, book.Text, replaceEntireBook, domainErrors))
                 written++;
         }
         return written;
@@ -775,15 +773,19 @@ public static class ImportBooksOrchestrator
     //   Both paths bypass ScrText.PutText's natural BooksPresentSet update,
     //   which the PT10 InMemoryFileManager tests depend on. PT10 uses
     //   PutText for both modes so BooksPresentSet is maintained consistently
-    //   across test and production backends. Per-book exceptions are
-    //   captured as Alert.Show calls inside the AlertCapture scope.
+    //   across test and production backends. Per-book exceptions become
+    //   structured AlertEntry records on the result (Theme 4 — replaces the
+    //   prior poor-man's-logging Alert.Show pattern that
+    //   alertCapture.notAllowed[1] forbids).
     private static bool TryPutBook(
         ScrText scrText,
         int bookNum,
         string bookText,
-        bool replaceEntireBook
+        bool replaceEntireBook,
+        List<AlertEntry> errors
     )
     {
+        string bookId = SIL.Scripture.Canon.BookNumberToId(bookNum);
         try
         {
             // replaceEntireBook=true routes whole-book replacement via
@@ -798,16 +800,29 @@ public static class ImportBooksOrchestrator
             scrText.PutText(bookNum, 0, false, bookText, null);
             return true;
         }
+        catch (LockNotObtainedException ex)
+        {
+            // Server-side: keep full diagnostic info (lock-file path) for
+            // debugging. Wire-side: categorized text only — never expose
+            // the lock-file path across the PAPI boundary (Theme 4 security).
+            Console.WriteLine($"[ImportBooks.TryPutBook] LockNotObtained for book {bookId}: {ex}");
+            errors.Add(
+                new AlertEntry(
+                    $"Failed to import book {bookId}: write lock unavailable",
+                    "Import",
+                    AlertLevel.Error
+                )
+            );
+            return false;
+        }
         catch (Exception ex)
         {
-            // PT9 ImportSfmText raises Alert.Show on per-file write failure
-            // (ImportSfmText.cs:188-191). PT10 does the same so the failure
-            // surfaces in Errors[] on the wire result (Theme 8).
-            Alert.Show(
-                $"Failed to import book {SIL.Scripture.Canon.BookNumberToId(bookNum)}: {ex.Message}",
-                "Import",
-                AlertButtons.Ok,
-                AlertLevel.Error
+            // Server-side: full ex.ToString() for diagnostics. Wire-side:
+            // generic categorized text — never include ex.Message verbatim
+            // (may contain filesystem paths or internal state — Theme 4).
+            Console.WriteLine($"[ImportBooks.TryPutBook] write failed for book {bookId}: {ex}");
+            errors.Add(
+                new AlertEntry($"Failed to import book {bookId}", "Import", AlertLevel.Error)
             );
             return false;
         }

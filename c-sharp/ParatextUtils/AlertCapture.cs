@@ -1,7 +1,8 @@
 using System.ComponentModel;
+using System.Text.RegularExpressions;
 using PtxUtils;
 
-namespace Paranext.DataProvider.ManageBooks;
+namespace Paranext.DataProvider.ParatextUtils;
 
 // === NEW IN PT10 ===
 // Reason: Theme 8. Replaces AlertStub for manage-books flows — instead of
@@ -85,7 +86,12 @@ public sealed class AlertCapture : Alert
             return AlertResult.Positive;
 
         // No scope active — mirror AlertStub behavior: log and return Negative.
-        Console.WriteLine($"[Alert.Show] {caption}: {text}");
+        // Filesystem-path-shaped substrings are redacted before writing so
+        // server-side console output never carries raw paths from
+        // ParatextData exception text. Server-process logs are still
+        // admin-readable; this is defense-in-depth for the case where logs
+        // are aggregated or shipped off-host (Theme 4).
+        Console.WriteLine($"[Alert.Show] {RedactPathsForLog(caption)}: {RedactPathsForLog(text)}");
         return AlertResult.Negative;
     }
 
@@ -102,7 +108,60 @@ public sealed class AlertCapture : Alert
         if (TryCaptureToScope(text, caption, alertLevel))
             return;
 
-        Console.WriteLine($"[Alert.ShowLater] {caption}: {text}");
+        Console.WriteLine(
+            $"[Alert.ShowLater] {RedactPathsForLog(caption)}: {RedactPathsForLog(text)}"
+        );
+    }
+
+    // Conservative filesystem-path redactor for server-side log output.
+    // Matches:
+    //   - Windows absolute paths:  C:\path\to\file
+    //   - UNC paths:               \\server\share\path
+    //   - POSIX absolute paths:    /a/b/c (≥ 3 segments to reduce false
+    //                              positives on common inline strings)
+    // Replaces each match with "<path>" so logs do not echo raw filesystem
+    // paths surfaced in ParatextData exception text. False positives merely
+    // truncate path-shaped substrings; false negatives still leave the
+    // existing AlertStub-equivalent behavior. Theme 4 defense-in-depth.
+    private static readonly Regex s_pathPattern =
+        new(
+            @"(?:[A-Za-z]:[\\/][^\s""<>|]+|\\\\[^\s\\""<>|]+\\[^\s""<>|]+|/[A-Za-z0-9._\-]+(?:/[A-Za-z0-9._\-]+){2,})",
+            RegexOptions.Compiled
+        );
+
+    private static string RedactPathsForLog(string? value) =>
+        string.IsNullOrEmpty(value) ? string.Empty : s_pathPattern.Replace(value, "<path>");
+
+    /// <summary>
+    /// Splits <paramref name="captured"/> into warnings (Information,
+    /// Warning, Question) and errors (Error) using a single pass. Shared by
+    /// every orchestrator that wraps ParatextData in an <see cref="AlertScope"/>
+    /// (manage-books CAP-004, CAP-007, CAP-010 and any future capability that
+    /// adopts the AlertCapture pattern). Theme 2 (2026-04-30) extracted this
+    /// helper from <c>ImportBooksOrchestrator</c> so all orchestrators
+    /// project the same severity buckets.
+    /// </summary>
+    /// <param name="captured">The <see cref="AlertScope.Entries"/> of a
+    ///   completed scope.</param>
+    /// <param name="warnings">All non-Error entries, original order preserved.</param>
+    /// <param name="errors">All Error entries, original order preserved.</param>
+    public static void PartitionAlertsByLevel(
+        List<AlertEntry> captured,
+        out AlertEntry[] warnings,
+        out AlertEntry[] errors
+    )
+    {
+        var warningList = new List<AlertEntry>(captured.Count);
+        var errorList = new List<AlertEntry>();
+        foreach (AlertEntry entry in captured)
+        {
+            if (entry.Level == AlertLevel.Error)
+                errorList.Add(entry);
+            else
+                warningList.Add(entry);
+        }
+        warnings = warningList.ToArray();
+        errors = errorList.ToArray();
     }
 
     // Appends an <see cref="AlertEntry"/> to the ambient <see cref="AlertScope"/>

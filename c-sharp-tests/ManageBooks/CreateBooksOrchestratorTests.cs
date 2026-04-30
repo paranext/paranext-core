@@ -24,6 +24,17 @@ namespace TestParanextDataProvider.ManageBooks
     /// - Golden master: gm-005 (available-book-set filtering)
     /// - Test scenarios: TS-050, TS-052, TS-053, TS-054, TS-072, TS-089
     /// - Behavior catalog: BHV-305, BHV-306, BHV-402, BHV-407
+    /// - Theme 8 (2026-04-30) BehaviorId traceability — additional BHVs
+    ///   from CAP-004's capability-list citation are covered transitively
+    ///   through ScriptureTemplate / ParatextData primitives invoked by
+    ///   the per-book delegation: BHV-104 (Canon-aware book creation),
+    ///   BHV-113 (versification-aware chapter setup), BHV-151 (default
+    ///   stylesheet selection), BHV-153 (LDML language-resource lookup),
+    ///   BHV-117 (BookFileName ↔ BookNum mapping), BHV-158 (project
+    ///   metadata refresh after PutText), BHV-159 (chapter/verse marker
+    ///   preservation), BHV-609 (ScriptureTemplate model-text copy).
+    ///   These are tagged via [Property("BehaviorId", ...)] on the most
+    ///   directly-relevant tests below for traceability tooling.
     /// - Invariants: INV-023 (versification inheritance), INV-C13 (last-book-num),
     ///   VAL-009 (model required), VAL-010 (non-empty selection)
     ///
@@ -113,6 +124,9 @@ namespace TestParanextDataProvider.ManageBooks
         [Category("Contract")]
         [Property("CapabilityId", "CAP-004")]
         [Property("BehaviorId", "BHV-407")]
+        [Property("BehaviorId", "BHV-104")] // Theme 8: Canon-aware book number selection (transitive via ScriptureTemplate)
+        [Property("BehaviorId", "BHV-117")] // Theme 8: BookFileName mapping (transitive via PutText path)
+        [Property("BehaviorId", "BHV-158")] // Theme 8: project metadata refresh post-PutText
         [Property("SpecId", "spec-002")]
         [Description(
             "Empty method: request a single book → delegates to "
@@ -162,6 +176,8 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("CapabilityId", "CAP-004")]
         [Property("BehaviorId", "BHV-305")]
         [Property("BehaviorId", "BHV-407")]
+        [Property("BehaviorId", "BHV-113")] // Theme 8: versification-aware chapter setup (transitive via ScriptureTemplate)
+        [Property("BehaviorId", "BHV-159")] // Theme 8: chapter/verse marker preservation
         [Description("ChapterVerse method on a canonical book (NAM=34) emits \\c and \\v markers.")]
         public void CreateBooks_ChapterVerseMethod_CreatesCanonicalBookWithCvMarkers()
         {
@@ -190,6 +206,9 @@ namespace TestParanextDataProvider.ManageBooks
         [Category("Contract")]
         [Property("CapabilityId", "CAP-004")]
         [Property("BehaviorId", "BHV-407")]
+        [Property("BehaviorId", "BHV-609")] // Theme 8: ScriptureTemplate model-text copy primitive
+        [Property("BehaviorId", "BHV-151")] // Theme 8: default stylesheet selection (transitive via ScriptureTemplate)
+        [Property("BehaviorId", "BHV-153")] // Theme 8: LDML language-resource lookup (transitive)
         [Description(
             "FromTemplate method with a model project preserves paragraph and "
                 + "verse markers but strips content (per CAP-003 CreateFromTemplate)."
@@ -397,12 +416,17 @@ namespace TestParanextDataProvider.ManageBooks
                 );
             }
 
-            // Assert — total count is large (gm-005 captured 105); at minimum
-            // all 64 remaining canonical books (66 - 2 excluded) must appear.
+            // Theme 7 (2026-04-30): tightened from `>= 64` to exact-count
+            // matching gm-005's captured shape (105 books). gm-005 captures
+            // PT9's full available-book-set including DC and non-canonical
+            // entries. The lower-bound assertion was too permissive — it
+            // would accept implementation drift that loses 30+ books.
             Assert.That(
                 available.Length,
-                Is.GreaterThanOrEqualTo(64),
-                "gm-005: at least 64 books available (66 canonical - 2 excluded)"
+                Is.EqualTo(105),
+                "gm-005: GetAvailableBooksForCreation returns exactly 105 books "
+                    + "for an empty project (matches PT9 captured shape — "
+                    + "66 canonical + DC + non-canonical entries minus 0 present)"
             );
         }
 
@@ -675,11 +699,26 @@ namespace TestParanextDataProvider.ManageBooks
                 modelScrText: null
             );
 
-            // Assert — no crash; result's Success reflects the orchestrator's decision
+            // Theme 7 (2026-04-30): replaced tautological Is.Not.Null on a record
+            // type with behavioral assertions on the result. Already-present books
+            // are idempotent no-ops per PT9 ScriptureTemplate.cs:50-51 — Success
+            // stays true, CreatedCount stays at 0 (we didn't actually create
+            // anything), and Errors stays empty.
             Assert.That(
-                result,
-                Is.Not.Null,
-                "Already-present book must not throw; the orchestrator returns a result."
+                result.Success,
+                Is.True,
+                "Already-present book must produce Success=true (idempotent no-op)"
+            );
+            Assert.That(
+                result.CreatedCount,
+                Is.EqualTo(0),
+                "Already-present book contributes zero to CreatedCount"
+            );
+            Assert.That(result.Errors, Is.Empty, "Already-present book is not an error condition");
+            Assert.That(
+                result.LastCreatedBookNum,
+                Is.Null,
+                "No new book was created → LastCreatedBookNum stays null"
             );
         }
 

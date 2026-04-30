@@ -1,5 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using Paranext.DataProvider.ManageBooks;
+using Paranext.DataProvider.ParatextUtils;
 using PtxUtils;
 
 namespace TestParanextDataProvider.ManageBooks

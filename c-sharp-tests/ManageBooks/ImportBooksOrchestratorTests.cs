@@ -29,6 +29,14 @@ namespace TestParanextDataProvider.ManageBooks
     ///   TS-095, TS-096.
     /// - Behavior catalog: BHV-106, BHV-107, BHV-108, BHV-109 (reused),
     ///   BHV-112, BHV-125, BHV-318.
+    /// - Theme 8 (2026-04-30) BehaviorId traceability — additional CAP-009 /
+    ///   CAP-010 BHVs are exercised transitively through the import pipeline:
+    ///   BHV-108 (USX-or-USFM detection — CAP-009 ParseImportFiles inspects
+    ///   file content), BHV-111 (admin auto-grant for new books in shared
+    ///   projects — CAP-010 transitive via ImportSfmText), BHV-121 (per-file
+    ///   encoding error → AlertEntry capture — CAP-010 via AlertCapture
+    ///   scope), BHV-123 (USX → USFM conversion — CAP-010 TryConvertUsxToUsfm).
+    ///   Tagged on the most directly-relevant tests below.
     /// - Invariants / Validations: INV-009, INV-010, VAL-006, VAL-007, VAL-008, VAL-012.
     ///
     /// SCOPE BOUNDARIES (CAP-009 only — parse + overlap; NOT execution):
@@ -589,6 +597,20 @@ namespace TestParanextDataProvider.ManageBooks
                 Is.EqualTo(ImportBooksOrchestrator.OverlappingFilesAlertKey),
                 "gm-012: orchestrator returns the localize key"
             );
+            // Theme 7 (2026-04-30): rolled in the previously-separate
+            // OverlappingFilesAlertMessage_ExposesCanonicalWording test —
+            // the canonical PT9 fallback wording ('can not' — not 'cannot')
+            // lives in the fallback constant. Asserting it here keeps the
+            // gm-012 byte-for-byte tie next to the meaningful behavior test
+            // rather than as a free-standing constant probe.
+            Assert.That(
+                ImportBooksOrchestrator.OverlappingFilesAlertFallback,
+                Is.EqualTo(
+                    "Two files contain information for the same book. "
+                        + "They can not both be selected."
+                ),
+                "gm-012: localize-key fallback preserves PT9 wording byte-for-byte"
+            );
         }
 
         [Test]
@@ -661,30 +683,6 @@ namespace TestParanextDataProvider.ManageBooks
             Assert.That(result.Severity, Is.EqualTo(ValidationSeverity.Ok));
         }
 
-        [Test]
-        [Category("Contract")]
-        [Property("CapabilityId", "CAP-009")]
-        [Property("BehaviorId", "BHV-318")]
-        [Property("GoldenMaster", "gm-012")]
-        [Description(
-            "gm-012: the overlapping-files alert message is exposed as a public "
-                + "constant matching the PT9 Localizer fallback verbatim ('can "
-                + "not' — not 'cannot')."
-        )]
-        public void OverlappingFilesAlertMessage_ExposesCanonicalWording()
-        {
-            // Post-localization: the orchestrator exposes a KEY and a
-            // FALLBACK; the canonical PT9 wording lives in the fallback
-            // (verbatim) so gm-012's English assertion stays intact.
-            Assert.That(
-                ImportBooksOrchestrator.OverlappingFilesAlertFallback,
-                Is.EqualTo(
-                    "Two files contain information for the same book. "
-                        + "They can not both be selected."
-                )
-            );
-        }
-
         // =====================================================================
         // CAP-010: ImportBooks execution tests (Theme 8 AlertCapture)
         //
@@ -722,6 +720,8 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("CapabilityId", "CAP-010")]
         [Property("ScenarioId", "TS-014")]
         [Property("BehaviorId", "BHV-105")]
+        [Property("BehaviorId", "BHV-111")] // Theme 8: admin auto-grant for new books in shared projects (transitive via ImportSfmText)
+        [Property("BehaviorId", "BHV-121")] // Theme 8: per-file encoding error → AlertEntry capture (transitive via AlertCapture scope)
         [Property("SpecId", "spec-003")]
         [Property("InvariantId", "INV-C08")]
         [Description(
@@ -788,10 +788,18 @@ namespace TestParanextDataProvider.ManageBooks
                 replaceEntireBook: true
             );
 
-            Assert.That(result, Is.Not.Null);
+            // Theme 7 (2026-04-30): replaced Is.Not.Null tautologies on a
+            // record return type and AlertEntry[] (which can't be null on a
+            // success path) with Is.Empty assertions on the actual contract:
+            // an empty-input import succeeds with zero imported books and no
+            // captured alerts.
             Assert.That(result.ImportedCount, Is.EqualTo(0));
-            Assert.That(result.Warnings, Is.Not.Null);
-            Assert.That(result.Errors, Is.Not.Null);
+            Assert.That(
+                result.Warnings,
+                Is.Empty,
+                "empty input → no captured ParatextData warnings"
+            );
+            Assert.That(result.Errors, Is.Empty, "empty input → no captured ParatextData errors");
         }
 
         [Test]
@@ -968,6 +976,8 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("CapabilityId", "CAP-010")]
         [Property("ScenarioId", "TS-096")]
         [Property("BehaviorId", "BHV-112")]
+        [Property("BehaviorId", "BHV-108")] // Theme 8: USX-or-USFM detection (file content inspection)
+        [Property("BehaviorId", "BHV-123")] // Theme 8: USX → USFM conversion path
         [Property("SpecId", "spec-004")]
         [Description(
             "TS-096: USX with no <book> element parses as valid XML but "
