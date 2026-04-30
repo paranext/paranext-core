@@ -35,6 +35,7 @@ internal sealed class EnhancedResourceFactory : NetworkObject
     private SourceLanguageSearchService? _sourceLanguageSearch;
     private TooltipService? _tooltip;
     private IMarbleBookTokenProvider? _bookTokens;
+    private IMarbleBookXmlSource? _bookXmlSource;
 
     public EnhancedResourceFactory(
         PapiClient papiClient,
@@ -170,6 +171,21 @@ internal sealed class EnhancedResourceFactory : NetworkObject
                     RouteMedia(s => s.FetchImageBytes(input))
                 )
             ),
+            (
+                "loadMarbleChapterXml",
+                new Func<LoadMarbleChapterXmlInput, string>(input =>
+                    RouteWithBookXml(
+                        input.ResourceId,
+                        input.BookNum,
+                        xml =>
+                            MarbleChapterXmlExtractor.ExtractChapter(xml, input.ChapterNumber)
+                            ?? throw PlatformErrorCodes.WithCode(
+                                PlatformErrorCodes.NotFound,
+                                $"Chapter {input.ChapterNumber} not found in book {input.BookNum} of resource '{input.ResourceId}'"
+                            )
+                    )
+                )
+            ),
         ];
 
     /// <summary>
@@ -247,6 +263,7 @@ internal sealed class EnhancedResourceFactory : NetworkObject
             Volatile.Write(ref _media, media);
             Volatile.Write(ref _sourceLanguageSearch, sourceLang);
             Volatile.Write(ref _tooltip, tooltip);
+            Volatile.Write(ref _bookXmlSource, bookXmlSource);
             Volatile.Write(ref _bookTokens, bookTokenProvider);
             Volatile.Write(ref _marbleDataAccess, marbleData);
 
@@ -289,6 +306,27 @@ internal sealed class EnhancedResourceFactory : NetworkObject
             );
         }
         return call(provider.GetTokens(resourceId, bookNum).ToArray());
+    }
+
+    private T RouteWithBookXml<T>(string resourceId, int bookNum, Func<string, T> call)
+    {
+        var source = Volatile.Read(ref _bookXmlSource);
+        if (source is null)
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.FailedPrecondition,
+                "Enhanced Resources not yet loaded"
+            );
+        }
+        var xml = source.ReadBookXml(resourceId, bookNum);
+        if (string.IsNullOrEmpty(xml))
+        {
+            throw PlatformErrorCodes.WithCode(
+                PlatformErrorCodes.NotFound,
+                $"Book {bookNum} not found in resource '{resourceId}'"
+            );
+        }
+        return call(xml);
     }
 
     private static T Route<TService, T>(TService? service, Func<TService, T> call)

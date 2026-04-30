@@ -268,6 +268,24 @@ internal class EnhancedResourceFactoryTests : PapiTestBase
         Assert.That(names, Does.Contain("buildTooltipData"));
     }
 
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-019")]
+    [Property("BehaviorId", "BHV-105")]
+    [Description("loadMarbleChapterXml is registered (M-019, FN-014)")]
+    public void BuildFunctionList_IncludesLoadMarbleChapterXml()
+    {
+        var factory = new EnhancedResourceFactory(
+            Client,
+            ParatextProjects,
+            StubMarbleDataLoader.Empty()
+        );
+
+        var names = factory.GetRegisteredFunctionNamesForTest();
+
+        Assert.That(names, Does.Contain("loadMarbleChapterXml"));
+    }
+
     #endregion
 
     #region Error Tests
