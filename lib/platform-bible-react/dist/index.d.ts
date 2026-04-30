@@ -1581,6 +1581,17 @@ interface ScopeSelectorProps {
 	 * the range BCV controls enable verse selection. See `BookChapterControlProps.getEndVerse`.
 	 */
 	getEndVerse?: (bookId: string, chapterNum: number) => number;
+	/**
+	 * When true, suppresses the "Scope" label rendered above the trigger. Useful for compact
+	 * placements (e.g. inside a tab toolbar) where the trigger speaks for itself and the extra
+	 * vertical space pushes the trigger off-screen.
+	 */
+	hideLabel?: boolean;
+	/**
+	 * Additional Tailwind classes applied to the trigger button. Use this to control the trigger
+	 * height in compact contexts (e.g. `'tw-h-8'` to align with other toolbar controls).
+	 */
+	buttonClassName?: string;
 }
 /**
  * A component that allows users to select the scope of their search or operation. Available scopes
@@ -1588,7 +1599,7 @@ interface ScopeSelectorProps {
  * component is displayed to allow users to choose specific books. When 'range' is chosen, two
  * BookChapterControl pickers are displayed for selecting the start and end verse of the range.
  */
-export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no

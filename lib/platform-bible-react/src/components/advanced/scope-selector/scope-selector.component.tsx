@@ -189,6 +189,17 @@ interface ScopeSelectorProps {
    * the range BCV controls enable verse selection. See `BookChapterControlProps.getEndVerse`.
    */
   getEndVerse?: (bookId: string, chapterNum: number) => number;
+  /**
+   * When true, suppresses the "Scope" label rendered above the trigger. Useful for compact
+   * placements (e.g. inside a tab toolbar) where the trigger speaks for itself and the extra
+   * vertical space pushes the trigger off-screen.
+   */
+  hideLabel?: boolean;
+  /**
+   * Additional Tailwind classes applied to the trigger button. Use this to control the trigger
+   * height in compact contexts (e.g. `'tw-h-8'` to align with other toolbar controls).
+   */
+  buttonClassName?: string;
 }
 
 /**
@@ -216,6 +227,8 @@ export function ScopeSelector({
   onCurrentScrRefChange,
   bookChapterControlLocalizedStrings,
   getEndVerse,
+  hideLabel = false,
+  buttonClassName,
 }: ScopeSelectorProps) {
   const selectedTextText = localizeString(
     localizedStrings,
@@ -675,7 +688,7 @@ export function ScopeSelector({
   return (
     <div id={id} className="tw-grid tw-gap-4">
       <div className="tw-grid tw-gap-2">
-        <Label>{scopeText}</Label>
+        {!hideLabel && <Label>{scopeText}</Label>}
         {variant === 'dropdown' ? (
           <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
             <DropdownMenuTrigger asChild>
@@ -683,7 +696,10 @@ export function ScopeSelector({
                 ref={outerTriggerRef}
                 variant="outline"
                 role="combobox"
-                className="tw-w-full tw-justify-between tw-overflow-hidden tw-font-normal"
+                className={cn(
+                  'tw-w-full tw-justify-between tw-overflow-hidden tw-font-normal',
+                  buttonClassName,
+                )}
               >
                 {/* tw-min-w-0 lets the span shrink inside the flex Button so tw-truncate can clip
                     the text instead of pushing the chevron out when the selection is long. */}
