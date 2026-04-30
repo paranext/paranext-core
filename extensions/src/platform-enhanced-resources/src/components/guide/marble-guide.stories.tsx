@@ -10,11 +10,9 @@ const meta: Meta<typeof MarbleGuide> = {
   title: 'Bundled Extensions/platform-enhanced-resources/MarbleGuide',
   component: MarbleGuide,
   tags: ['autodocs'],
-  args: {
-    open: true,
-    neverShowAgain: false,
-    localizedStringsWithLoadingState: [localizedStrings, false],
-  },
+  // Args are intentionally minimal - the Default story drives every prop through real state.
+  // Defining args at the meta level would suggest static-args usage and conflict with the
+  // controlled-state interactive flow this WP requires (see Theme 4 / SB #2 in the feedback brief).
   decorators: [
     (Story) => (
       // The Dialog renders into a portal at document.body, so the surrounding container exists
@@ -30,71 +28,89 @@ const meta: Meta<typeof MarbleGuide> = {
 };
 export default meta;
 
-type Story = StoryObj<typeof MarbleGuide>;
-
 /**
- * Default state - the guide is open with the "Don't show this again" checkbox unchecked. Matches
- * the first-time auto-show UX where the user has not yet opted out.
+ * Default - the only story for MarbleGuide. Theme 4 / SB #2 of the phase-3-ui-design feedback brief
+ * requires a single fully-interactive story per component, driven by `useState` over the real
+ * `MarbleGuide` Dialog rather than a static-args snapshot.
+ *
+ * What this story demonstrates:
+ *
+ * - Open the Dialog via the "Show guide" trigger button.
+ * - Close the Dialog via the in-dialog Close button, the built-in Esc key, the overlay click, or the
+ *   shadcn Dialog X corner button (all funnel through `onOpenChange` -> `onClose`).
+ * - Toggle the "Don't show this again" checkbox; the new value is observable in the inline
+ *   "neverShowAgain" / "lastPersisted" lines below the trigger so a reviewer can confirm the
+ *   close-with-preference-save flow without opening devtools.
+ * - Keyboard navigation: Tab cycles between Close button and the checkbox; Esc closes. shadcn Dialog
+ *   provides focus trap + Tab routing automatically.
+ *
+ * No `NeverShowAgainChecked`, `Closed`, or static-args `Interactive` stories - those states are all
+ * reachable from this interactive flow (toggle the checkbox to reach the "checked" state; close to
+ * reach the "closed" state).
  */
-export const Default: Story = {
-  args: {
-    open: true,
-    neverShowAgain: false,
-  },
-};
-
-/**
- * The user has ticked "Don't show this again" before pressing Close. On close the parent will
- * persist `showGuide = false` so the guide does not auto-show in future sessions.
- */
-export const NeverShowAgainChecked: Story = {
-  args: {
-    open: true,
-    neverShowAgain: true,
-  },
-};
-
-/**
- * Sanity check: dialog with `open={false}` renders nothing visible. Useful to verify the parent's
- * controlled-open contract.
- */
-export const Closed: Story = {
-  args: {
-    open: false,
-    neverShowAgain: false,
-  },
-};
-
-/**
- * Interactive story - exercises the controlled-open + controlled-checkbox flow from a parent's
- * perspective. The reopen button demonstrates how a toolbar info-icon would re-trigger the guide
- * after the user closes it.
- */
-export const Interactive: Story = {
-  render: function InteractiveStory() {
+export const Default: StoryObj<typeof MarbleGuide> = {
+  parameters: { chromatic: { disableSnapshot: true } },
+  render: function Render() {
+    // Controller state: mirrors the parent contract from MarbleGuideFormState in
+    // ui-spec-marble-guide-form.md - `isVisible` (open) and `neverShowAgain`.
     const [open, setOpen] = useState(true);
     const [neverShowAgain, setNeverShowAgain] = useState(false);
+    // `lastPersisted` mirrors what production wiring (phase-3-ui) will save to settings on close:
+    // ShowMarbleGuide = !neverShowAgain. Surfaced inline so reviewers can verify that closing the
+    // dialog after toggling the checkbox flows the new preference through `onClose`.
+    const [lastPersisted, setLastPersisted] = useState<boolean | undefined>(undefined);
 
     const handleClose = useCallback(() => {
-      // In production wiring this is also where ShowMarbleGuide = !neverShowAgain is persisted.
+      // Production wiring will persist `showGuide = !neverShowAgain` here; the story records the
+      // value that would be saved so the close-with-preference-save flow is observable.
+      setLastPersisted(!neverShowAgain);
       setOpen(false);
+    }, [neverShowAgain]);
+
+    const handleNeverShowAgainChange = useCallback((next: boolean) => {
+      setNeverShowAgain(next);
+    }, []);
+
+    const handleReopen = useCallback(() => {
+      setOpen(true);
     }, []);
 
     return (
-      <div className="tw-flex tw-flex-col tw-gap-4">
-        <div className="tw-flex tw-items-center tw-gap-3">
-          <Button type="button" onClick={() => setOpen(true)} data-testid="story-reopen-button">
-            Reopen guide
+      <div className="tw-flex tw-flex-col tw-gap-3 tw-p-4">
+        <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-3">
+          <Button
+            type="button"
+            onClick={handleReopen}
+            disabled={open}
+            data-testid="story-show-guide-button"
+          >
+            Show guide
           </Button>
-          <span className="tw-text-sm tw-text-muted-foreground">
+          <span
+            className="tw-text-sm tw-text-muted-foreground"
+            data-testid="story-state-display-never-show-again"
+          >
             neverShowAgain = {neverShowAgain ? 'true' : 'false'}
           </span>
+          <span
+            className="tw-text-sm tw-text-muted-foreground"
+            data-testid="story-state-display-last-persisted"
+          >
+            lastPersisted (showGuide saved on last close) ={' '}
+            {lastPersisted === undefined ? '(none yet)' : (!lastPersisted).toString()}
+          </span>
         </div>
+        <p className="tw-text-sm tw-text-muted-foreground">
+          Click <strong>Show guide</strong> to (re)open the Dialog. Toggle the checkbox inside the
+          Dialog and close via the Close button, Esc, the X corner button, or the overlay click; the
+          inline lines above reflect the live <code>neverShowAgain</code> value plus the
+          <code> showGuide </code>preference that wiring would persist on close.
+        </p>
         <MarbleGuide
           open={open}
           neverShowAgain={neverShowAgain}
           onClose={handleClose}
-          onNeverShowAgainChange={setNeverShowAgain}
+          onNeverShowAgainChange={handleNeverShowAgainChange}
           localizedStringsWithLoadingState={[localizedStrings, false]}
         />
       </div>
