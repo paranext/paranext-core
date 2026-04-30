@@ -496,11 +496,27 @@ export function ScopeSelector({
   const selectedBooksScope = displayedScopes.find((option) => option.value === 'selectedBooks');
   const rangeScope = displayedScopes.find((option) => option.value === 'range');
 
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  // `dialogSub` tracks which scope's content is currently showing in the modal dialog
+  // (the selectedBooks / range pickers always open as dialogs rather than as flyout submenus —
+  // the dialog form is consistent regardless of viewport size and gives those more complex
+  // pickers their own focus scope).
+  const [dialogSub, setDialogSub] = useState<Scope | undefined>(undefined);
+  // ─── Dialog staging (D1, D2, D3) ──────────────────────────────────────────
+  // While a range / selectedBooks dialog is open, edits accumulate into these
+  // drafts. They commit (via the prop callbacks) on OK and discard on
+  // Cancel/X/Escape. No callback fires while the dialog is open.
+  const [draftScope, setDraftScope] = useState<Scope | undefined>(undefined);
+  const [draftRangeStart, setDraftRangeStart] = useState<SerializedVerseRef | undefined>(undefined);
+  const [draftRangeEnd, setDraftRangeEnd] = useState<SerializedVerseRef | undefined>(undefined);
+  const [draftSelectedBookIds, setDraftSelectedBookIds] = useState<string[]>([]);
+
+  const isInBooksDialog = variant === 'dropdown' && dialogSub === 'selectedBooks';
   const bookSelectorBlock = (
     <BookSelector
       availableBookInfo={availableBookInfo}
-      selectedBookIds={selectedBookIds}
-      onChangeSelectedBookIds={onSelectedBookIdsChange}
+      selectedBookIds={isInBooksDialog ? draftSelectedBookIds : selectedBookIds}
+      onChangeSelectedBookIds={isInBooksDialog ? setDraftSelectedBookIds : onSelectedBookIdsChange}
       localizedStrings={localizedStrings}
       localizedBookNames={localizedBookNames}
     />
@@ -513,6 +529,17 @@ export function ScopeSelector({
   const endMuted = activeRangeBcv === 'start';
   const mutedClass = 'tw-text-muted-foreground';
 
+  // When the range dialog is open in the dropdown variant, BCV submits write to drafts
+  // (committed on OK). Otherwise (radio variant inline), they fire the prop callbacks
+  // eagerly — matching radio-button UX. Per spec D3 / §5.5.
+  const isInRangeDialog = variant === 'dropdown' && dialogSub === 'range';
+  const rangeStartSubmit = isInRangeDialog ? setDraftRangeStart : handleRangeStartChange;
+  const rangeEndSubmit = isInRangeDialog
+    ? setDraftRangeEnd
+    : onRangeEndChange
+      ? handleRangeEndChangeWrapper
+      : noopScrRefChange;
+
   const rangeBlock = (
     <div className="tw-flex tw-flex-wrap tw-items-end tw-gap-4">
       <div className="tw-grid tw-gap-2">
@@ -521,8 +548,8 @@ export function ScopeSelector({
         </Label>
         <BookChapterControl
           id="scope-range-start"
-          scrRef={resolvedRangeStart}
-          handleSubmit={handleRangeStartChange}
+          scrRef={isInRangeDialog ? (draftRangeStart ?? resolvedRangeStart) : resolvedRangeStart}
+          handleSubmit={rangeStartSubmit}
           localizedBookNames={localizedBookNames}
           localizedStrings={bookChapterControlLocalizedStrings}
           getEndVerse={getEndVerse}
@@ -546,12 +573,14 @@ export function ScopeSelector({
         </Label>
         <BookChapterControl
           id="scope-range-end"
-          scrRef={resolvedRangeEnd}
-          handleSubmit={onRangeEndChange ? handleRangeEndChangeWrapper : noopScrRefChange}
+          scrRef={isInRangeDialog ? (draftRangeEnd ?? resolvedRangeEnd) : resolvedRangeEnd}
+          handleSubmit={rangeEndSubmit}
           localizedBookNames={localizedBookNames}
           localizedStrings={bookChapterControlLocalizedStrings}
           getEndVerse={getEndVerse}
-          disableReferencesUpTo={resolvedRangeStart}
+          disableReferencesUpTo={
+            isInRangeDialog ? (draftRangeStart ?? resolvedRangeStart) : resolvedRangeStart
+          }
           onOpenChange={handleRangeEndOpenChange}
           onCloseAutoFocus={(event) => {
             // After the user submits the end reference, park focus on the dialog's
@@ -578,20 +607,6 @@ export function ScopeSelector({
     </div>
   );
 
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  // `dialogSub` tracks which scope's content is currently showing in the modal dialog
-  // (the selectedBooks / range pickers always open as dialogs rather than as flyout submenus —
-  // the dialog form is consistent regardless of viewport size and gives those more complex
-  // pickers their own focus scope).
-  const [dialogSub, setDialogSub] = useState<Scope | undefined>(undefined);
-  // ─── Dialog staging (D1, D2, D3) ──────────────────────────────────────────
-  // While a range / selectedBooks dialog is open, edits accumulate into these
-  // drafts. They commit (via the prop callbacks) on OK and discard on
-  // Cancel/X/Escape. No callback fires while the dialog is open.
-  const [draftScope, setDraftScope] = useState<Scope | undefined>(undefined);
-  const [draftRangeStart, setDraftRangeStart] = useState<SerializedVerseRef | undefined>(undefined);
-  const [draftRangeEnd, setDraftRangeEnd] = useState<SerializedVerseRef | undefined>(undefined);
-  const [draftSelectedBookIds, setDraftSelectedBookIds] = useState<string[]>([]);
   // Refs to every scope entry in the dropdown (simple checkbox items and dialog-launcher
   // items) keyed by scope value. Used by the open-focus effect below to land initial focus
   // on the currently selected scope instead of Radix's default first-item.
