@@ -1,0 +1,200 @@
+using System.Text.Json;
+using Paranext.DataProvider.JsonUtils;
+using Paranext.DataProvider.Projects;
+
+namespace TestParanextDataProvider.Projects;
+
+[TestFixture]
+public class ResourceReferenceListTests
+{
+    #region Serialization — ResourceReferenceList constants
+
+    [Test]
+    public void CurrentMajorVersion_Is1()
+    {
+        Assert.That(ResourceReferenceList.CurrentMajorVersion, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void CurrentFormatVersion_StartsWithMajor1()
+    {
+        Assert.That(ResourceReferenceList.CurrentFormatVersion, Does.StartWith("1."));
+    }
+
+    [Test]
+    public void CurrentDataVersion_StartsWithMajor1()
+    {
+        Assert.That(ResourceReferenceList.CurrentDataVersion, Does.StartWith("1."));
+    }
+
+    [Test]
+    public void DefaultInstance_HasCurrentDataVersionAndEmptyItems()
+    {
+        var list = new ResourceReferenceList();
+        Assert.That(list.DataVersion, Is.EqualTo(ResourceReferenceList.CurrentDataVersion));
+        Assert.That(list.Items, Is.Empty);
+    }
+
+    #endregion
+
+    #region Serialization — known types round-trip
+
+    [Test]
+    public void ProjectReference_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc" }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Items, Has.Count.EqualTo(1));
+        var item = result.Items[0] as ProjectReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.Name, Is.EqualTo("My Project"));
+        Assert.That(item.Id, Is.EqualTo("aabbcc"));
+    }
+
+    [Test]
+    public void DblResourceReference_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new DblResourceReference { Name = "DBL Resource", Id = "112233445566" }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        Assert.That(result, Is.Not.Null);
+        var item = result!.Items[0] as DblResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.Name, Is.EqualTo("DBL Resource"));
+        Assert.That(item.Id, Is.EqualTo("112233445566"));
+    }
+
+    [Test]
+    public void EnhancedResourceReference_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new EnhancedResourceReference { Name = "MyEnhancedResource" }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        Assert.That(result, Is.Not.Null);
+        var item = result!.Items[0] as EnhancedResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.Name, Is.EqualTo("MyEnhancedResource"));
+    }
+
+    [Test]
+    public void XmlResourceReference_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new XmlResourceReference { Name = "MyXmlResource" }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        Assert.That(result, Is.Not.Null);
+        var item = result!.Items[0] as XmlResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.Name, Is.EqualTo("MyXmlResource"));
+    }
+
+    [Test]
+    public void SourceLanguageResourceReference_SerializesAndDeserializesCorrectly()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new SourceLanguageResourceReference { Name = "Greek" }],
+        };
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        Assert.That(result, Is.Not.Null);
+        var item = result!.Items[0] as SourceLanguageResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.Name, Is.EqualTo("Greek"));
+    }
+
+    #endregion
+
+    #region Serialization — unknown type round-trip
+
+    [Test]
+    public void UnknownType_DeserializesToUnknownResourceReference_AndRoundTrips()
+    {
+        // JSON with a future/unknown type discriminant
+        const string json =
+            """{"dataVersion":"1.0.0","items":[{"type":"futureType","name":"Future","extraField":"preserved"}]}""";
+
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Items, Has.Count.EqualTo(1));
+        var item = result.Items[0] as UnknownResourceReference;
+        Assert.That(item, Is.Not.Null);
+
+        // Re-serialize and verify extra field is preserved
+        string reSerialised = result.SerializeToJson();
+        Assert.That(reSerialised, Does.Contain("futureType"));
+        Assert.That(reSerialised, Does.Contain("extraField"));
+        Assert.That(reSerialised, Does.Contain("preserved"));
+    }
+
+    #endregion
+
+    #region Serialization — JSON property names are camelCase
+
+    [Test]
+    public void SerializedJson_UsesExpectedPropertyNames()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items = [new ProjectReference { Name = "P", Id = "123" }],
+        };
+        string json = list.SerializeToJson();
+
+        // dataVersion and items use camelCase
+        Assert.That(json, Does.Contain("\"dataVersion\""));
+        Assert.That(json, Does.Contain("\"items\""));
+        // type discriminant and known property names
+        Assert.That(json, Does.Contain("\"type\""));
+        Assert.That(json, Does.Contain("\"name\""));
+        Assert.That(json, Does.Contain("\"id\""));
+    }
+
+    #endregion
+
+    #region Serialization — mixed-type list
+
+    [Test]
+    public void MixedTypeList_AllItemsRoundTrip()
+    {
+        var list = new ResourceReferenceList
+        {
+            Items =
+            [
+                new ProjectReference { Name = "Proj", Id = "aaa" },
+                new EnhancedResourceReference { Name = "Enh" },
+                new SourceLanguageResourceReference { Name = "Heb" },
+            ],
+        };
+
+        string json = list.SerializeToJson();
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Items, Has.Count.EqualTo(3));
+        Assert.That(result.Items[0], Is.InstanceOf<ProjectReference>());
+        Assert.That(result.Items[1], Is.InstanceOf<EnhancedResourceReference>());
+        Assert.That(result.Items[2], Is.InstanceOf<SourceLanguageResourceReference>());
+    }
+
+    #endregion
+}
