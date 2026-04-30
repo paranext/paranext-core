@@ -41,6 +41,7 @@ import {
 import { useChecklistService } from './hooks/use-checklist';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { parseScrRef } from './components/parse-scr-ref.utils';
+import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -459,6 +460,20 @@ global.webViewComponent = function ChecklistWebView({
     [currentBookNum, lastVersesInCurrentBook],
   );
 
+  // Last-chapter lookup derived from the same per-book array as getEndVerse.
+  // The verses array is 1-indexed (matches scripture-editor.web-view.tsx:374's
+  // `[chapterNum]` access pattern), so length - 1 yields the highest chapter number.
+  // Returns 0 for non-current books — computeRangeFromScope tolerates 0 by falling back
+  // to the documented 999 sentinel (FALLBACK_END_CHAPTER).
+  const getLastChapter = useCallback(
+    (bookId: string): number => {
+      if (Canon.bookIdToNumber(bookId) !== currentBookNum) return 0;
+      if (!lastVersesInCurrentBook || lastVersesInCurrentBook.length === 0) return 0;
+      return lastVersesInCurrentBook.length - 1;
+    },
+    [currentBookNum, lastVersesInCurrentBook],
+  );
+
   // ─── Client-side filtering for hideMatches ────────────────────────────────
 
   const visibleData = useMemo<ChecklistData | undefined>(() => {
@@ -784,6 +799,29 @@ global.webViewComponent = function ChecklistWebView({
       primaryProjectLabel,
     ],
   );
+
+  // ─── Auto-follow effect: recompute verseRange when scope or liveScrRef changes ────
+  //
+  // Debounced 250ms (matches checks-side-panel.web-view.tsx:496) so rapid editor
+  // navigation doesn't fire a backend refetch on every cursor blink. The fetch effect
+  // (which depends on verseRange) only fires when the computed range actually changes
+  // shape — within a chapter, scope='chapter' produces an identical range so the
+  // referential change still bumps verseRange but the request payload is the same;
+  // backend can dedupe.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      const computed = computeRangeFromScope({
+        scope,
+        ref: liveScrRef,
+        rangeStart,
+        rangeEnd,
+        getEndVerse,
+        getLastChapter,
+      });
+      if (computed) setVerseRange(computed);
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [scope, liveScrRef, rangeStart, rangeEnd, getEndVerse, getLastChapter, setVerseRange]);
 
   // ─── Verse-range picker via real ScopeSelector (Themes 5 #3 + 6) ─────────
   //
