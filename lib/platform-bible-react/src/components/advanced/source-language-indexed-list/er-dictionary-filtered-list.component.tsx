@@ -689,6 +689,11 @@ function TreeNodeList({
   parentPath: SemanticDomain[];
   scrollRef: RefObject<HTMLButtonElement>;
 }) {
+  // Depth = number of ancestors. parentPath.length is 0 for the top-level list,
+  // 1 for first-level children, etc. Used by TreeNode to decide whether the
+  // chevron and label should be a single expand-only button (depth 0) or two
+  // separate controls — chevron toggles expand, label triggers select (depth >= 1).
+  const depth = parentPath.length;
   return (
     <ul className={cn('tw-space-y-0.5', { 'tw-ml-3': parentPath.length > 0 })}>
       {domains.map((domain) => {
@@ -709,6 +714,7 @@ function TreeNodeList({
             key={domain.id}
             domain={domain}
             thisPath={thisPath}
+            depth={depth}
             isSelected={isSelected}
             hasChildren={hasChildren ?? false}
             defaultExpanded={shouldExpand}
@@ -724,9 +730,22 @@ function TreeNodeList({
   );
 }
 
+/**
+ * Renders a single tree node.
+ *
+ * Behavior depends on `depth`:
+ *
+ * - `depth === 0` (top-level domains): the chevron and label are rendered as a SINGLE combined
+ *   button. Clicking it ONLY toggles expand/collapse — it never calls `onSelect`. This prevents the
+ *   surrounding tree from collapsing when a user clicks a top-level entry to drill into it.
+ * - `depth >= 1` (nested domains): the chevron and label are SEPARATE buttons. The chevron toggles
+ *   expand; the label triggers `onSelect`. The label gains `hover:tw-underline` to make the click
+ *   affordance visually clearer. [Revised: 2026-04-29]
+ */
 function TreeNode({
   domain,
   thisPath,
+  depth,
   isSelected,
   hasChildren,
   defaultExpanded,
@@ -738,6 +757,7 @@ function TreeNode({
 }: {
   domain: SemanticDomain;
   thisPath: SemanticDomain[];
+  depth: number;
   isSelected: boolean;
   hasChildren: boolean;
   defaultExpanded: boolean;
@@ -753,35 +773,64 @@ function TreeNode({
     if (defaultExpanded) setExpanded(true);
   }, [defaultExpanded]);
 
+  const isTopLevelWithChildren = depth === 0 && hasChildren;
+
   return (
     <li>
       <div className="tw-flex tw-items-center tw-gap-0.5">
-        {hasChildren ? (
+        {isTopLevelWithChildren ? (
+          // Combined chevron + label button. Clicking ONLY expands/collapses; it does not
+          // call onSelect. This avoids the bug where clicking a top-level domain selected
+          // it (and the parent path collapsed because the new path was rooted elsewhere).
           <button
             type="button"
-            className="tw-flex tw-h-5 tw-w-5 tw-shrink-0 tw-items-center tw-justify-center tw-rounded hover:tw-bg-muted focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring"
+            ref={isScrollTarget ? scrollRef : undefined}
+            className={cn(
+              'tw-flex tw-flex-1 tw-items-center tw-gap-0.5 tw-rounded tw-px-1.5 tw-py-0.5 tw-text-left tw-text-sm focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring',
+              isSelected ? 'tw-bg-accent tw-font-medium' : 'hover:tw-bg-muted',
+            )}
+            aria-expanded={expanded}
             onClick={() => setExpanded(!expanded)}
           >
             <ChevronRight
-              className={cn('tw-h-3 tw-w-3 tw-transition-transform', {
+              className={cn('tw-h-3 tw-w-3 tw-shrink-0 tw-transition-transform', {
                 'tw-rotate-90': expanded,
               })}
             />
+            <span>{domain.label}</span>
           </button>
         ) : (
-          <span className="tw-w-5 tw-shrink-0" />
+          <>
+            {hasChildren ? (
+              <button
+                type="button"
+                className="tw-flex tw-h-5 tw-w-5 tw-shrink-0 tw-items-center tw-justify-center tw-rounded hover:tw-bg-muted focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring"
+                aria-expanded={expanded}
+                aria-label={expanded ? 'Collapse' : 'Expand'}
+                onClick={() => setExpanded(!expanded)}
+              >
+                <ChevronRight
+                  className={cn('tw-h-3 tw-w-3 tw-transition-transform', {
+                    'tw-rotate-90': expanded,
+                  })}
+                />
+              </button>
+            ) : (
+              <span className="tw-w-5 tw-shrink-0" />
+            )}
+            <button
+              type="button"
+              ref={isScrollTarget ? scrollRef : undefined}
+              className={cn(
+                'tw-flex-1 tw-rounded tw-px-1.5 tw-py-0.5 tw-text-left tw-text-sm focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring',
+                isSelected ? 'tw-bg-accent tw-font-medium' : 'hover:tw-bg-muted hover:tw-underline',
+              )}
+              onClick={() => onSelect(thisPath)}
+            >
+              {domain.label}
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          ref={isScrollTarget ? scrollRef : undefined}
-          className={cn(
-            'tw-flex-1 tw-rounded tw-px-1.5 tw-py-0.5 tw-text-left tw-text-sm focus:tw-outline-none focus:tw-ring-1 focus:tw-ring-ring',
-            isSelected ? 'tw-bg-accent tw-font-medium' : 'hover:tw-bg-muted',
-          )}
-          onClick={() => onSelect(thisPath)}
-        >
-          {domain.label}
-        </button>
       </div>
       {expanded && domain.children && domain.children.length > 0 && (
         <TreeNodeList

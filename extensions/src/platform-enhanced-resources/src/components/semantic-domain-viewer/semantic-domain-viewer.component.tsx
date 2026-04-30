@@ -77,6 +77,18 @@ export type SemanticDomainViewerProps = {
  * Replaces the previous right-side Drawer surface (UI-PKG-007). The persistent tree pane,
  * breadcrumb, and Back/Close chrome are dropped - tree access lives in the breadcrumb popover and
  * the Dialog's built-in close handles dismissal.
+ *
+ * [Revised: 2026-04-29] Theme 17 fixes applied:
+ *
+ * - #11a (depth-0 expand-only) lives in the lib's `TreeNode` (combined chevron+label button at depth
+ *   0; underline-on-hover for depth >= 1).
+ * - #11b (breadcrumbs do not overflow the X button) is fixed here: the wrapping `<div>` reserves
+ *   right padding equal to the close-X button's width + offset so the inner BreadcrumbBar's
+ *   `outer.clientWidth` measurement subtracts the X automatically.
+ * - #11c (keyboard nav inside Dialog) — the lib's `ErDictionaryFilteredList` already focuses the
+ *   listbox on mount and handles ArrowUp/Down, and Radix's DialogContent traps Tab/Shift+Tab and
+ *   Escape. The nested `SegmentDropdown` stops Escape propagation so closing the popover does not
+ *   close the Dialog.
  */
 export function SemanticDomainViewer({
   open,
@@ -146,7 +158,12 @@ export function SemanticDomainViewer({
               localizedStringsWithLoadingState={localizedStringsWithLoadingState}
             />
           )}
-          className="tw-h-full"
+          // tw-pe-12 (48px) reserves room on the inline-end side for the Dialog's
+          // absolute-positioned close X (top-right). The internal BreadcrumbBar measures
+          // its parent's clientWidth to drive its collapse-to-ellipsis logic, so applying
+          // the padding here naturally shrinks the available width and keeps the breadcrumbs
+          // from running under the X button. [Revised: 2026-04-29 - Theme 17 #11b]
+          className="tw-h-full tw-pe-12"
         />
       </DialogContent>
     </Dialog>
