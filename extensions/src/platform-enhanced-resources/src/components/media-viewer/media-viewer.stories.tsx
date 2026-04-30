@@ -5,7 +5,6 @@ import { getLocalizedStrings } from '../../../../../../.storybook/localization.u
 import { MediaViewer, MEDIA_VIEWER_STRING_KEYS } from './media-viewer.component';
 import {
   MOCK_VIEWER_IMAGES,
-  MOCK_VIEWER_IMAGE_CORINTH,
   MOCK_VIEWER_IMAGE_LONG_CAPTION,
   MOCK_VIEWER_MAP_GALILEE,
   mockMediaViewerImageUrlResolver,
@@ -40,58 +39,14 @@ export default meta;
 
 type Story = StoryObj<typeof MediaViewer>;
 
-/** Default - single image, no navigation handlers (prev/next buttons disabled). */
-export const Default: Story = {
-  args: {
-    item: MOCK_VIEWER_IMAGE_CORINTH,
-  },
-};
-
-/** Map media-type variant exercising the same Dialog layout. */
-export const Map: Story = {
-  args: {
-    item: MOCK_VIEWER_MAP_GALILEE,
-  },
-};
-
-/** Long caption that wraps below the image. */
-export const LongCaption: Story = {
-  args: {
-    item: MOCK_VIEWER_IMAGE_LONG_CAPTION,
-  },
-};
-
-/** Both navigation handlers supplied - prev/next buttons enabled (mid-sequence). */
-export const WithNavigation: Story = {
-  args: {
-    item: MOCK_VIEWER_IMAGES[1],
-    onPrev: () => {},
-    onNext: () => {},
-  },
-};
-
-/** First image of multi-image group - Previous button disabled (no onPrev handler). */
-export const AtStart: Story = {
-  args: {
-    item: MOCK_VIEWER_IMAGES[0],
-    onNext: () => {},
-  },
-};
-
-/** Last image of multi-image group - Next button disabled (no onNext handler). */
-export const AtEnd: Story = {
-  args: {
-    item: MOCK_VIEWER_IMAGES[MOCK_VIEWER_IMAGES.length - 1],
-    onPrev: () => {},
-  },
-};
-
 /**
- * Interactive variant: parent owns state and reacts to all callbacks. Demonstrates the full
- * UI-PKG-005 acceptance criteria in action - close, prev/next, zoom in/out via the toolbar buttons.
- * The trigger button restores focus per Dialog focus management.
+ * Default (Interactive): parent owns state and reacts to all callbacks. Demonstrates the full
+ * UI-PKG-005 acceptance criteria in action - open/close from a trigger, prev/next navigation across
+ * a multi-image group (Previous disabled at start, Next disabled at end), and zoom in/out via the
+ * toolbar buttons (which exercise the component's internal zoom state and the reset-on-item-change
+ * behavior).
  */
-export const Interactive: StoryObj<typeof MediaViewer> = {
+export const Default: StoryObj<typeof MediaViewer> = {
   parameters: { chromatic: { disableSnapshot: true } },
   render: function Render() {
     const [open, setOpen] = useState(false);
@@ -117,6 +72,7 @@ export const Interactive: StoryObj<typeof MediaViewer> = {
         </Button>
         <p className="tw-text-sm tw-text-muted-foreground">
           Use the toolbar arrows to navigate, the zoom buttons to scale, and Escape to close.
+          Previous is disabled at the first image and Next is disabled at the last image.
         </p>
         <MediaViewer
           open={open}
@@ -129,5 +85,26 @@ export const Interactive: StoryObj<typeof MediaViewer> = {
         />
       </div>
     );
+  },
+};
+
+/**
+ * Map media-type variant: content-driven story showing the same Dialog layout with a map item
+ * (Galilee). Kept as a separate static story so the map vs image presentation can be reviewed
+ * side-by-side without driving the cycle through the interactive Default.
+ */
+export const Map: Story = {
+  args: {
+    item: MOCK_VIEWER_MAP_GALILEE,
+  },
+};
+
+/**
+ * Long caption variant: content-driven story exercising multi-line caption wrapping in the Dialog
+ * footer. Kept separate so the wrapping evidence is stable for visual review.
+ */
+export const LongCaption: Story = {
+  args: {
+    item: MOCK_VIEWER_IMAGE_LONG_CAPTION,
   },
 };
