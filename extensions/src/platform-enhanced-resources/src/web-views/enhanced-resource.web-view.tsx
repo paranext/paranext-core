@@ -35,9 +35,15 @@ import {
 import { CopyrightOverlay } from '../components/warning-ribbons/copyright-overlay.component';
 import {
   DictionaryTab,
+  DICTIONARY_TAB_STRING_KEYS,
   type DictionaryEmptyStateVariant,
 } from '../components/dictionary-tab/dictionary-tab.component';
 import type { DictionaryDisplayItemData } from '../components/dictionary-tab/dictionary-display-item.component';
+import type { DictionarySenseDisplay } from '../components/shared/dictionary-sense-item.component';
+import {
+  presentDictionaryEntry,
+  type DictionaryEntryDataInput,
+} from '../presenters/dictionary-presenter';
 import {
   EncyclopediaTab,
   type EncyclopediaEmptyStateVariant,
@@ -555,8 +561,20 @@ const EMPTY_RIBBON_STATES: RibbonStates = {
 /**
  * Module-level mutable copy of the localized-string keys, kept stable across renders
  * (useLocalizedStrings warns its first argument must keep the same array reference).
+ *
+ * The wiring layer batches every key the shell + nested children consume into a single
+ * `useLocalizedStrings` call, so the entire children tree resolves through one bag. This is the
+ * same pattern UI-PKG-001 established; UI-PKG-002 just adds the dictionary-tab keys.
  */
-const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [...ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS];
+const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  ...ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS,
+  ...DICTIONARY_TAB_STRING_KEYS,
+  // Toolbar / scope labels surface in empty-state templates.
+  '%enhancedResources_toolbar_scope_currentVerse%',
+  '%enhancedResources_toolbar_scope_currentSection%',
+  '%enhancedResources_toolbar_scope_currentChapter%',
+  '%enhancedResources_toolbar_scope_currentSense%',
+];
 
 /** Network object id for the Enhanced Resources composition root (see EnhancedResourceFactory.cs). */
 const ER_NETWORK_OBJECT_ID = 'platform.enhancedResources';
@@ -572,13 +590,180 @@ type LoadMarbleChapterXmlInput = {
 };
 
 /**
+ * VerseRef wire shape consumed by the C# Enhanced Resources network object methods. Mirrors
+ * `SIL.Scripture.VerseRef` JSON serialization (the .NET data provider uses `BookNum`, `ChapterNum`,
+ * `VerseNum` PascalCase keys).
+ */
+type VerseRefDto = {
+  bookNum: number;
+  chapterNum: number;
+  verseNum: number;
+};
+
+/** Mirror of the C# `WordFilterInput` record (data-contracts.md §2.7), camelCase on the wire. */
+type WordFilterInputDto = {
+  tokenId: string;
+  lemma: string;
+  source: string;
+  translit: string;
+  senses: string;
+  targetLinks: string;
+  clickOrigin: 'ScripturePane' | 'DictionaryTab' | 'OtherTab';
+};
+
+/** Input for the `loadDictionary` PAPI command (mirrors C# `DictionaryLoadInput`). */
+type DictionaryLoadInputDto = {
+  currentReference: VerseRefDto;
+  scope: 'CurrentVerse' | 'CurrentSection' | 'CurrentChapter';
+  filter: WordFilterInputDto | undefined;
+  showTranslations: boolean;
+  glossLanguage: string;
+  resourceId: string;
+};
+
+/** Output of `loadDictionary` (mirrors C# `DictionaryDisplayItem`). */
+type DictionaryDisplayItemDto = {
+  tokenId: string;
+  entryId: string;
+  term: string;
+  sourceText: string;
+  translit: string;
+  glosses: string[];
+  partOfSpeech: string;
+  occurrenceCount: number;
+  definition?: string | null;
+};
+
+type DictionaryLoadResultDto = {
+  items: DictionaryDisplayItemDto[];
+  activeDictionary: string;
+  emptyStateMessage: string | null | undefined;
+};
+
+/** Mirror of C# `DictionaryEntryInput`. */
+type DictionaryEntryInputDto = {
+  entryId: string;
+  glossLanguage: string;
+  subItemId?: string;
+};
+
+/** Mirror of C# `DictionaryEntryData` (no FN-019 forward fields yet — presenter handles absence). */
+type DictionaryEntryDataDto = {
+  entryId: string;
+  lemma: string;
+  senses: {
+    senseId: string;
+    glosses: { language: string; text: string }[];
+    definition: string;
+  }[];
+  semanticDomains: string[];
+  relatedLexemes: { lemma: string; entryId: string; relationship: string; gloss: string }[];
+  morphology: string;
+};
+
+/**
  * Subset of the network-object proxy we care about. `papi.networkObjects.get` returns the proxy
  * typed as a generic `NetworkObject<object>`; we narrow with a structural cast to the methods this
  * web view uses. All cross-process calls return promises.
  */
 type EnhancedResourcesNetworkObject = {
   loadMarbleChapterXml: (input: LoadMarbleChapterXmlInput) => Promise<string>;
+  loadDictionary: (input: DictionaryLoadInputDto) => Promise<DictionaryLoadResultDto>;
+  readDictionaryEntry: (input: DictionaryEntryInputDto) => Promise<DictionaryEntryDataDto>;
 };
+
+/**
+ * Adapt the toolbar's `ScriptDisplayMode` (`'transliteration'`) to the presenter's narrower mode
+ * vocabulary (`'translit'`). The two have always meant the same thing — the presenter type was
+ * sized to the contract test fixtures while the toolbar type predates it.
+ */
+function toPresenterMode(mode: ScriptDisplayMode): 'script' | 'translit' | 'both' {
+  switch (mode) {
+    case 'transliteration':
+      return 'translit';
+    case 'script':
+    case 'both':
+    default:
+      return mode;
+  }
+}
+
+/** Map a UI MarbleScope (the toolbar's value) to the C# ScopeEnum string. */
+function marbleScopeToBackend(
+  scope: MarbleScope,
+): 'CurrentVerse' | 'CurrentSection' | 'CurrentChapter' {
+  switch (scope) {
+    case 'current-section':
+      return 'CurrentSection';
+    case 'current-chapter':
+      return 'CurrentChapter';
+    case 'current-sense':
+    case 'current-verse':
+    default:
+      return 'CurrentVerse';
+  }
+}
+
+/** OT books are 1-39 in SIL canon; everything from 40 (Matthew) onward routes to SDBG. */
+function isOldTestamentBook(bookNum: number): boolean {
+  return bookNum >= 1 && bookNum <= 39;
+}
+
+/** Adapt the presenter's DomainLink to the UI's lighter DictionarySenseDomain (id + label only). */
+function senseDisplaysFromPresentation(
+  senses: {
+    id: string;
+    senseNumber: number;
+    definition: string;
+    glosses: string;
+    domains: { id: string; label: string }[];
+    notes: string;
+    comment: string;
+    commentsAndNotes: string;
+    isRelevant: boolean;
+    senseOccurrences: { count: number; tooltip: string };
+  }[],
+): DictionarySenseDisplay[] {
+  return senses.map((s) => ({
+    id: s.id,
+    senseNumber: s.senseNumber,
+    definition: s.definition,
+    glosses: s.glosses || undefined,
+    domains:
+      s.domains.length > 0 ? s.domains.map((d) => ({ id: d.id, label: d.label })) : undefined,
+    notes: s.notes || undefined,
+    comment: s.comment || undefined,
+    commentsAndNotes: s.commentsAndNotes || undefined,
+    occurrencesInAllBooksCount: s.senseOccurrences.count,
+    occurrencesTooltip: s.senseOccurrences.tooltip,
+    isRelevant: s.isRelevant,
+  }));
+}
+
+/**
+ * Adapt the C# `DictionaryEntryData` wire DTO into the presenter input. The C# DTO uses PascalCase
+ * field names; the presenter expects camelCase. This is the single conversion point.
+ */
+function entryDtoToPresenterInput(dto: DictionaryEntryDataDto): DictionaryEntryDataInput {
+  return {
+    entryId: dto.entryId,
+    lemma: dto.lemma,
+    morphology: dto.morphology,
+    semanticDomains: dto.semanticDomains,
+    relatedLexemes: dto.relatedLexemes.map((r) => ({
+      lemma: r.lemma,
+      entryId: r.entryId,
+      relationship: r.relationship,
+      gloss: r.gloss,
+    })),
+    senses: dto.senses.map((s) => ({
+      senseId: s.senseId,
+      definition: s.definition,
+      glosses: s.glosses.map((g) => ({ language: g.language, text: g.text })),
+      // FN-019 forward fields are absent in today's C# DTO — presenter emits blank rows.
+    })),
+  };
+}
 
 /**
  * Convert annotation metadata produced by the marble-aware USX→USJ converter into the
@@ -733,9 +918,248 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     };
   }, [resourceId, scrRef.book, scrRef.chapterNum]);
 
+  // ---------------------------------------------------------------------------
+  // Dictionary tab wiring (UI-PKG-002)
+  // ---------------------------------------------------------------------------
+  // The dictionary list comes from the backend `loadDictionary` PAPI command on every
+  // (resourceId, scrRef, scope, filter, glossLanguage) change. The detail panel is loaded lazily
+  // via `readDictionaryEntry` whenever the user selects a row, then run through the pure
+  // `presentDictionaryEntry` adapter so the UI types stay decoupled from the wire shape.
+
+  const [dictionaryItems, setDictionaryItems] = useState<DictionaryDisplayItemData[]>([]);
+  const [dictionaryActiveDictionary, setDictionaryActiveDictionary] = useState<'SDBH' | 'SDBG'>(
+    'SDBH',
+  );
+  const [dictionaryIsLoading, setDictionaryIsLoading] = useState(false);
+  const [dictionarySelectedTokenId, setDictionarySelectedTokenId] = useWebViewState<
+    string | undefined
+  >('dictionarySelectedTokenId', undefined);
+  const [dictionaryHideLessRelevantSenses, setDictionaryHideLessRelevantSenses] =
+    useWebViewState<boolean>('dictionaryHideLessRelevantSenses', false);
+
+  // FN-022 verse-occurrences-by-sense: backend does not yet emit per-sense verse refs. We pass an
+  // empty map so the presenter emits count=0 / blank-tooltip rows; FN-019 backend follow-up will
+  // populate this without a UI change.
+  const EMPTY_VERSE_OCCURRENCES: Record<string, never> = useMemo(() => ({}), []);
+
+  // Default gloss language (FN-017 / settings TBD): English for now. Will become a setting.
+  const glossLanguage = 'en';
+
+  // Compute current book number for (a) routing the chapter loader (already done) and (b) deciding
+  // whether the active dictionary should default to SDBH or SDBG when the backend returns empty.
+  const bookNum = useMemo(() => Canon.bookIdToNumber(scrRef.book), [scrRef.book]);
+
+  // Effect: load the dictionary entry list whenever the relevant inputs change.
+  useEffect(() => {
+    let cancelled = false;
+    if (!resourceId || bookNum <= 0) {
+      setDictionaryItems([]);
+      setDictionaryIsLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const filter: WordFilterInputDto | undefined = filteredTokenId
+      ? {
+          tokenId: filteredTokenId,
+          lemma: '',
+          source: '',
+          translit: filteredTokenId, // best-effort until we wire a token→lemma resolver
+          senses: '',
+          targetLinks: '',
+          clickOrigin: 'ScripturePane',
+        }
+      : undefined;
+
+    const input: DictionaryLoadInputDto = {
+      currentReference: {
+        bookNum,
+        chapterNum: scrRef.chapterNum,
+        verseNum: scrRef.verseNum,
+      },
+      scope: marbleScopeToBackend(scope),
+      filter,
+      showTranslations,
+      glossLanguage,
+      resourceId,
+    };
+
+    setDictionaryIsLoading(true);
+    (async () => {
+      try {
+        const proxy =
+          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
+        if (!proxy) {
+          if (!cancelled) {
+            setDictionaryItems([]);
+            setDictionaryActiveDictionary(isOldTestamentBook(bookNum) ? 'SDBH' : 'SDBG');
+          }
+          return;
+        }
+        const result = await proxy.loadDictionary(input);
+        if (cancelled) return;
+
+        const mapped: DictionaryDisplayItemData[] = result.items.map((it) => ({
+          tokenId: it.tokenId,
+          sourceText: it.sourceText,
+          translit: it.translit,
+          totalOccurrencesInAllBooks: it.occurrenceCount,
+        }));
+        setDictionaryItems(mapped);
+
+        let active: 'SDBH' | 'SDBG';
+        if (result.activeDictionary === 'SDBH' || result.activeDictionary === 'SDBG') {
+          active = result.activeDictionary;
+        } else {
+          active = isOldTestamentBook(bookNum) ? 'SDBH' : 'SDBG';
+        }
+        setDictionaryActiveDictionary(active);
+      } catch (err) {
+        if (cancelled) return;
+        logger.warn(
+          `Enhanced Resources: loadDictionary failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        setDictionaryItems([]);
+        setDictionaryActiveDictionary(isOldTestamentBook(bookNum) ? 'SDBH' : 'SDBG');
+      } finally {
+        if (!cancelled) setDictionaryIsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    resourceId,
+    bookNum,
+    scrRef.chapterNum,
+    scrRef.verseNum,
+    scope,
+    filteredTokenId,
+    showTranslations,
+  ]);
+
+  // Effect: load entry detail (senses + presentation) whenever the user selects a row.
+  useEffect(() => {
+    let cancelled = false;
+    if (!dictionarySelectedTokenId) return () => {};
+    const targetItem = dictionaryItems.find((i) => i.tokenId === dictionarySelectedTokenId);
+    if (!targetItem) return () => {};
+    // If senses already loaded for this token, no-op.
+    if (targetItem.senses && targetItem.senses.length > 0) return () => {};
+
+    (async () => {
+      try {
+        const proxy =
+          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
+        if (!proxy) return;
+        const dto = await proxy.readDictionaryEntry({
+          entryId: dictionarySelectedTokenId,
+          glossLanguage,
+        });
+        if (cancelled) return;
+
+        const presentation = presentDictionaryEntry(entryDtoToPresenterInput(dto), {
+          glossLanguage,
+          resourceLanguage: dictionaryActiveDictionary === 'SDBH' ? 'heb' : 'grc',
+          hebrewDisplayMode: toPresenterMode(hebrewDisplayMode),
+          greekDisplayMode: toPresenterMode(greekDisplayMode),
+          hideLessRelevantSenses: dictionaryHideLessRelevantSenses,
+          // Without per-sense relevance from backend, mark every sense relevant so the user sees
+          // them all. FN-019/SDBG enrichment can later populate this from real link data.
+          relevantSenseIds: new Set(dto.senses.map((s) => s.senseId)),
+          lexeme: dto.lemma,
+          totalOccurrencesCount: targetItem.totalOccurrencesInAllBooks ?? 0,
+          // No live transliteration service yet (FN-017 roadmap) — fall back to the row's translit.
+          transliterate: () => targetItem.translit ?? '',
+          // POS translation backend is `translatePartOfSpeech(tag, lang, form)`; for now pass the
+          // raw morphology through unchanged so the UI shows what the data provides.
+          translatePartOfSpeech: (raw) => raw,
+          verseOccurrencesBySenseId: EMPTY_VERSE_OCCURRENCES,
+          formatSenseOccurrencesTooltip: ({ senseNumber, lexeme, count, verseRangeLabel }) =>
+            verseRangeLabel
+              ? `Find sense ${senseNumber} of ${lexeme} in all books (${count} occurrences in ${verseRangeLabel})`
+              : `Find sense ${senseNumber} of ${lexeme} in all books (${count} occurrences)`,
+          formatVerseRange: () => '',
+        });
+
+        if (!presentation) return;
+
+        setDictionaryItems((prev) =>
+          prev.map((item) =>
+            item.tokenId === dictionarySelectedTokenId
+              ? {
+                  ...item,
+                  senses: senseDisplaysFromPresentation(presentation.senses),
+                  totalOccurrencesInAllBooks:
+                    presentation.totalOccurrencesInAllBooks || item.totalOccurrencesInAllBooks,
+                }
+              : item,
+          ),
+        );
+      } catch (err) {
+        logger.warn(
+          `Enhanced Resources: readDictionaryEntry failed for ${dictionarySelectedTokenId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    dictionarySelectedTokenId,
+    dictionaryItems,
+    dictionaryActiveDictionary,
+    hebrewDisplayMode,
+    greekDisplayMode,
+    dictionaryHideLessRelevantSenses,
+    EMPTY_VERSE_OCCURRENCES,
+  ]);
+
+  // Empty-state classification — three variants per BHV-352.
+  let dictionaryEmptyState: DictionaryEmptyStateVariant;
+  if (dictionaryItems.length > 0) {
+    dictionaryEmptyState = 'none';
+  } else if (filteredTokenId) {
+    dictionaryEmptyState = 'word-not-in-scope';
+  } else {
+    dictionaryEmptyState = 'no-data';
+  }
+
+  // Localized scope label for the empty-state {scope} placeholder.
+  const dictionaryScopeLabel = (() => {
+    switch (scope) {
+      case 'current-section':
+        return String(stringsBag['%enhancedResources_toolbar_scope_currentSection%'] ?? 'section');
+      case 'current-chapter':
+        return String(stringsBag['%enhancedResources_toolbar_scope_currentChapter%'] ?? 'chapter');
+      case 'current-sense':
+        return String(stringsBag['%enhancedResources_toolbar_scope_currentSense%'] ?? 'sense');
+      case 'current-verse':
+      default:
+        return String(stringsBag['%enhancedResources_toolbar_scope_currentVerse%'] ?? 'verse');
+    }
+  })();
+
   // FN-020: linked-word click → set filter, ensure scope dropdown gains "Current Sense" option,
   // and propagate the filter to whatever research tab is currently active.
   const handleTokenClick = useCallback(
+    (tokenId: string) => {
+      setFilteredTokenId(tokenId);
+    },
+    [setFilteredTokenId],
+  );
+
+  // FN-020 (c): clicking a source-language word in DictionaryTab sets the filter to that lemma so
+  // the scripture pane (and other research tabs) propagate. We reuse the existing token-click
+  // handler — both paths terminate in `setFilteredTokenId`.
+  const handleDictionarySourceTextClick = useCallback(
     (tokenId: string) => {
       setFilteredTokenId(tokenId);
     },
@@ -826,6 +1250,17 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       viewMenuHandlers={viewMenuHandlers}
       ribbons={EMPTY_RIBBON_STATES}
       splitterPercentage={splitterPercentage}
+      dictionaryItems={dictionaryItems}
+      dictionarySelectedTokenId={dictionarySelectedTokenId}
+      dictionaryIsLoading={dictionaryIsLoading}
+      dictionaryEmptyState={dictionaryEmptyState}
+      dictionaryFilterWord={filteredTokenId}
+      dictionaryScopeLabel={dictionaryScopeLabel}
+      dictionaryActiveDictionary={dictionaryActiveDictionary}
+      dictionaryHideLessRelevantSenses={dictionaryHideLessRelevantSenses}
+      onDictionarySelectionChange={setDictionarySelectedTokenId}
+      onDictionarySourceTextClick={handleDictionarySourceTextClick}
+      onDictionaryToggleHideLessRelevantSenses={setDictionaryHideLessRelevantSenses}
       localizedStringsWithLoadingState={[stringsForShell, isLoadingStrings]}
     />
   );

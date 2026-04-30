@@ -1,4 +1,11 @@
-import { Button, cn } from 'platform-bible-react';
+import {
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  cn,
+} from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { Fragment } from 'react';
 
@@ -61,6 +68,13 @@ export type DictionarySenseDisplay = {
    * grayed out (when shown) or hidden completely (when hideLessRelevant is true).
    */
   isRelevant: boolean;
+  /**
+   * FN-022: optional descriptive tooltip displayed on hover/focus of the sense-level occurrences
+   * link. When present, the visible label collapses to `(N)` and the localized "Occurrences in all
+   * books" prefix moves into the tooltip's prose. The presenter
+   * (`presentDictionaryEntry.senses[i].senseOccurrences.tooltip`) supplies the localized text.
+   */
+  occurrencesTooltip?: string;
 };
 
 export type DictionarySenseItemProps = {
@@ -123,10 +137,18 @@ export function DictionarySenseItem({
   );
 
   const occurrenceCount = sense.occurrencesInAllBooksCount;
-  const linkText =
-    typeof occurrenceCount === 'number'
-      ? `${occurrencesLinkLabel} (${occurrenceCount})`
-      : occurrencesLinkLabel;
+  // FN-022: when the presenter provides a descriptive tooltip, render the link label as `(N)` only
+  // and wrap the link in a Tooltip carrying the prose. Without a tooltip we keep the legacy PT9
+  // surface ("Occurrences in all books (N)") so existing storybook fixtures stay valid.
+  const fn022Mode = typeof sense.occurrencesTooltip === 'string' && sense.occurrencesTooltip !== '';
+  let linkText: string;
+  if (fn022Mode) {
+    linkText = `(${occurrenceCount ?? 0})`;
+  } else if (typeof occurrenceCount === 'number') {
+    linkText = `${occurrencesLinkLabel} (${occurrenceCount})`;
+  } else {
+    linkText = occurrencesLinkLabel;
+  }
 
   // Build the table rows declaratively so optional rows are conditionally rendered.
   type Row = { key: string; label: string; value: string };
@@ -172,14 +194,33 @@ export function DictionarySenseItem({
           {sense.senseNumber}.
         </span>
         <span className="tw-flex-1 tw-text-sm">{sense.definition}</span>
-        <Button
-          variant="link"
-          className="tw-h-auto tw-shrink-0 tw-p-0 tw-text-xs"
-          onClick={() => onSenseOccurrencesClick(sense.id)}
-          data-testid={`dictionary-sense-occurrences-${sense.id}`}
-        >
-          {linkText}
-        </Button>
+        {fn022Mode ? (
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="link"
+                  className="tw-h-auto tw-shrink-0 tw-p-0 tw-text-xs"
+                  onClick={() => onSenseOccurrencesClick(sense.id)}
+                  aria-label={sense.occurrencesTooltip}
+                  data-testid={`dictionary-sense-occurrences-${sense.id}`}
+                >
+                  {linkText}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{sense.occurrencesTooltip}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <Button
+            variant="link"
+            className="tw-h-auto tw-shrink-0 tw-p-0 tw-text-xs"
+            onClick={() => onSenseOccurrencesClick(sense.id)}
+            data-testid={`dictionary-sense-occurrences-${sense.id}`}
+          >
+            {linkText}
+          </Button>
+        )}
       </div>
       {tableRows.length > 0 && (
         <dl className="tw-grid tw-grid-cols-[max-content_1fr] tw-gap-x-3 tw-gap-y-1 tw-pl-6 tw-text-xs">
