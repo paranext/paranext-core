@@ -1578,6 +1578,99 @@ declare module 'platform-scripture' {
   };
 
   // #endregion ChecksSetup Types
+
+  // #region Resource Reference Types
+
+  /** A reference to a Paratext project, identified by its 20-byte (40-char) hex ID */
+  export type ProjectReference = {
+    /** Discriminant identifying this as a reference to a Paratext project */
+    type: 'project';
+    /**
+     * Human-readable display name; serves as a sanity-check and aids forensic examination of the
+     * settings file
+     */
+    name: string;
+    /** 20-byte (40-char) hex ID that uniquely identifies the project */
+    id: string;
+  };
+
+  /** A reference to a DBL resource, identified by its 24-byte (48-char) hex ID */
+  export type DblResourceReference = {
+    /** Discriminant identifying this as a reference to a DBL resource */
+    type: 'dblResource';
+    /**
+     * Human-readable display name; serves as a sanity-check and aids forensic examination of the
+     * settings file
+     */
+    name: string;
+    /** 24-byte (48-char) hex ID that uniquely identifies the resource */
+    id: string;
+  };
+
+  /** A reference to an Enhanced resource, identified by name */
+  export type EnhancedResourceReference = {
+    /** Discriminant identifying this as a reference to an Enhanced resource */
+    type: 'enhancedResource';
+    /** Name that uniquely identifies the resource */
+    name: string;
+  };
+
+  /** A reference to an XML resource, identified by name */
+  export type XmlResourceReference = {
+    /** Discriminant identifying this as a reference to an XML resource */
+    type: 'xmlResource';
+    /** Name that uniquely identifies the resource */
+    name: string;
+  };
+
+  /** A reference to a Source Language resource, identified by name */
+  export type SourceLanguageResourceReference = {
+    /** Discriminant identifying this as a reference to a Source Language resource */
+    type: 'sourceLanguageResource';
+    /** Name that uniquely identifies the resource */
+    name: string;
+  };
+
+  /**
+   * A resource reference with a type discriminant not recognized by this version of the software.
+   * Preserved as-is for forward compatibility — consumers should treat unknown items as opaque and
+   * round-trip them unchanged.
+   */
+  export type UnknownResourceReference = {
+    /** Unrecognized type discriminant */
+    type: string;
+    /** Additional properties preserved from the stored JSON */
+    [key: string]: unknown;
+  };
+
+  /** Discriminated union of all project/resource reference types */
+  export type ResourceReference =
+    | ProjectReference
+    | DblResourceReference
+    | EnhancedResourceReference
+    | XmlResourceReference
+    | SourceLanguageResourceReference
+    | UnknownResourceReference;
+
+  /** Ordered list of project and resource references */
+  export type ResourceReferenceList = {
+    /**
+     * Data schema version in Major.Minor.Patch format. Distinct from the storage-format version
+     * prefix — this version describes the semantics of the `items` content.
+     *
+     * The project setting validator rejects any write that would downgrade the major or minor
+     * version of the currently stored value. **The patch digit is not protected:** it may be
+     * downgraded freely, so only use a patch bump for changes that are entirely optional and can be
+     * silently lost with no harmful consequences (e.g., cosmetic ordering, non-critical display
+     * hints). Use minor bumps for additive, backwards-compatible changes. Use major bumps for
+     * breaking changes.
+     */
+    dataVersion: string;
+    /** Ordered list of project and resource references */
+    items: ResourceReference[];
+  };
+
+  // #endregion Resource Reference Types
 }
 
 declare module 'papi-shared-types' {
@@ -1603,6 +1696,7 @@ declare module 'papi-shared-types' {
     CheckDetails,
     CheckCreatorFunction,
     CheckResultsInvalidated,
+    ResourceReferenceList,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -1775,6 +1869,16 @@ declare module 'papi-shared-types' {
      * When `true`, invisible characters are preserved literally in USFM. A `~` is then a literal
      * tilde character, not a whitespace substitute.
      */
+    /**
+     * Translations/resources used as translation models. In the vast majority of projects there
+     * will be only one model text; the list exists to support occasional exceptions. In contexts
+     * where exactly one model text is required, the first item in the list is used.
+     */
+    'platformScripture.modelTexts': ResourceReferenceList;
+
+    /** Projects and resources useful to team members as general translation references */
+    'platformScripture.referencedProjectsAndResources': ResourceReferenceList;
+
     'platformScripture.allowInvisibleCharacters': boolean;
   }
 }
