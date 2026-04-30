@@ -110,6 +110,15 @@ declare module 'papi-shared-types' {
      *   this command (e.g., Paratext 10 Studio)
      */
     'paratextBibleSendReceive.syncOpenProjects': (isCancelled?: () => boolean) => Promise<void>;
+
+    /**
+     * Cancels an in-progress sync operation if one is running. The process will finish dealing with
+     * the current project/resource and then it will abort. It will not undo what has been done.
+     *
+     * @throws `PlatformUnimplementedException` if not running in an application that implements
+     *   this command (e.g., Paratext 10 Studio)
+     */
+    'paratextBibleSendReceive.cancelSync': () => Promise<void>;
   }
 
   export interface SettingTypes {

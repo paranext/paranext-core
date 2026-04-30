@@ -26,6 +26,10 @@ internal class ParatextProjectSendReceiveService(
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.syncProjects",
                 SyncProjects
+            ),
+            PapiClient.RegisterRequestHandlerAsync(
+                "command:paratextBibleSendReceive.cancelSync",
+                CancelSync
             )
         );
     }
@@ -77,6 +81,19 @@ internal class ParatextProjectSendReceiveService(
     {
         throw new PlatformUnimplementedException(
             $"Command '{nameof(SyncProjects)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+        );
+    }
+
+    /// <summary>
+    /// Cancels an in-progress sync operation if one is running. The process will finish dealing
+    /// with the current project/resource and then it will abort. It will not undo what has been
+    /// done.
+    /// Exception is thrown if this function is not implemented in the current application.
+    /// </summary>
+    protected void CancelSync()
+    {
+        throw new PlatformUnimplementedException(
+            $"Command '{nameof(CancelSync)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
     }
 
