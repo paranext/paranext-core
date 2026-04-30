@@ -590,9 +590,6 @@ export function ScopeSelector({
   const [draftRangeStart, setDraftRangeStart] = useState<SerializedVerseRef | undefined>(undefined);
   const [draftRangeEnd, setDraftRangeEnd] = useState<SerializedVerseRef | undefined>(undefined);
   const [draftSelectedBookIds, setDraftSelectedBookIds] = useState<string[]>([]);
-  // Scaffold: silence noUnusedLocals for draft values until SS-T3 (commitDialog)
-  // and SS-T5 (BCV pickers) read them. Removed entirely once those commits land.
-  void [draftScope, draftRangeStart, draftRangeEnd, draftSelectedBookIds];
   // Refs to every scope entry in the dropdown (simple checkbox items and dialog-launcher
   // items) keyed by scope value. Used by the open-focus effect below to land initial focus
   // on the currently selected scope instead of Radix's default first-item.
@@ -684,6 +681,43 @@ export function ScopeSelector({
     },
     [resolvedRangeStart, resolvedRangeEnd, selectedBookIds],
   );
+
+  const commitDialog = useCallback(() => {
+    if (draftScope === undefined) return;
+    if (draftScope === 'range') {
+      if (draftRangeStart) onRangeStartChange?.(draftRangeStart);
+      if (draftRangeEnd) onRangeEndChange?.(draftRangeEnd);
+    } else if (draftScope === 'selectedBooks') {
+      onSelectedBookIdsChange(draftSelectedBookIds);
+    }
+    // Fire onScopeChange last so consumers reading committed range/book values
+    // (e.g. markers-checklist post-migration: verseRange computed from rangeStart/rangeEnd
+    // when scope === 'range') see updated values when they react to the scope change.
+    // React batches these state updates within the same handler invocation.
+    handleScopeChange(draftScope);
+    setDialogSub(undefined);
+    setDraftScope(undefined);
+  }, [
+    draftScope,
+    draftRangeStart,
+    draftRangeEnd,
+    draftSelectedBookIds,
+    onRangeStartChange,
+    onRangeEndChange,
+    onSelectedBookIdsChange,
+    handleScopeChange,
+  ]);
+
+  const handleDialogOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      // Cancel/X/Escape/clickaway — discard drafts, no callbacks fire.
+      setDialogSub(undefined);
+      setDraftScope(undefined);
+    }
+  }, []);
+  // Scaffold: silence noUnusedLocals for commitDialog/handleDialogOpenChange until
+  // SS-T4 wires them into the dialog JSX (OK button + Dialog onOpenChange).
+  void [commitDialog, handleDialogOpenChange];
 
   // Dialog's `onCloseAutoFocus` default restores focus to the element that had focus before
   // the dialog opened — which was the (now-unmounted) DropdownMenuItem inside the closed
