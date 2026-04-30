@@ -582,6 +582,27 @@ export function ScopeSelector({
   // the dialog form is consistent regardless of viewport size and gives those more complex
   // pickers their own focus scope).
   const [dialogSub, setDialogSub] = useState<Scope | undefined>(undefined);
+  // ─── Dialog staging (D1, D2, D3) ──────────────────────────────────────────
+  // While a range / selectedBooks dialog is open, edits accumulate into these
+  // drafts. They commit (via the prop callbacks) on OK and discard on
+  // Cancel/X/Escape. No callback fires while the dialog is open.
+  const [draftScope, setDraftScope] = useState<Scope | undefined>(undefined);
+  const [draftRangeStart, setDraftRangeStart] = useState<SerializedVerseRef | undefined>(undefined);
+  const [draftRangeEnd, setDraftRangeEnd] = useState<SerializedVerseRef | undefined>(undefined);
+  const [draftSelectedBookIds, setDraftSelectedBookIds] = useState<string[]>([]);
+  // Scaffold reference: this `void` keeps tsc(6133) happy under `noUnusedLocals`
+  // while the drafts are added in this commit but wired in subsequent commits
+  // (SS-T2..SS-T5). Remove this line as soon as the drafts are read in handlers.
+  void [
+    draftScope,
+    setDraftScope,
+    draftRangeStart,
+    setDraftRangeStart,
+    draftRangeEnd,
+    setDraftRangeEnd,
+    draftSelectedBookIds,
+    setDraftSelectedBookIds,
+  ];
   // Refs to every scope entry in the dropdown (simple checkbox items and dialog-launcher
   // items) keyed by scope value. Used by the open-focus effect below to land initial focus
   // on the currently selected scope instead of Radix's default first-item.
