@@ -1477,6 +1477,7 @@ export declare const SCOPE_SELECTOR_STRING_KEYS: readonly [
 	"%webView_scope_selector_range_start%",
 	"%webView_scope_selector_range_end%",
 	"%webView_scope_selector_ok%",
+	"%webView_scope_selector_cancel%",
 	"%webView_scope_selector_navigate%",
 	"%webView_book_selector_books_selected%",
 	"%webView_book_selector_select_books%",

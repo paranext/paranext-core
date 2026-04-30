@@ -54,6 +54,7 @@ export const SCOPE_SELECTOR_STRING_KEYS = Object.freeze([
   '%webView_scope_selector_range_start%',
   '%webView_scope_selector_range_end%',
   '%webView_scope_selector_ok%',
+  '%webView_scope_selector_cancel%',
   '%webView_scope_selector_navigate%',
   '%webView_book_selector_books_selected%',
   '%webView_book_selector_select_books%',
@@ -254,6 +255,7 @@ export function ScopeSelector({
   const rangeStartText = localizeString(localizedStrings, '%webView_scope_selector_range_start%');
   const rangeEndText = localizeString(localizedStrings, '%webView_scope_selector_range_end%');
   const okText = localizeString(localizedStrings, '%webView_scope_selector_ok%');
+  const cancelText = localizeString(localizedStrings, '%webView_scope_selector_cancel%');
   const navigateText = localizeString(localizedStrings, '%webView_scope_selector_navigate%');
 
   // For the verse / chapter / book scopes we surface the current scripture reference alongside the
@@ -715,10 +717,6 @@ export function ScopeSelector({
       setDraftScope(undefined);
     }
   }, []);
-  // Scaffold: silence noUnusedLocals for commitDialog/handleDialogOpenChange until
-  // SS-T4 wires them into the dialog JSX (OK button + Dialog onOpenChange).
-  void [commitDialog, handleDialogOpenChange];
-
   // Dialog's `onCloseAutoFocus` default restores focus to the element that had focus before
   // the dialog opened — which was the (now-unmounted) DropdownMenuItem inside the closed
   // dropdown. That leaves focus on document.body. PreventDefault and refocus the outer
@@ -969,12 +967,7 @@ export function ScopeSelector({
           (no flyout submenu path). `tw-pe-8` on the header reserves space for the
           absolute-positioned close button so it can't overlap a long title. */}
       {variant === 'dropdown' && selectedBooksScope && (
-        <Dialog
-          open={dialogSub === 'selectedBooks'}
-          onOpenChange={(open) => {
-            if (!open) setDialogSub(undefined);
-          }}
-        >
+        <Dialog open={dialogSub === 'selectedBooks'} onOpenChange={handleDialogOpenChange}>
           <DialogContent
             ref={setBooksDialogEl}
             onCloseAutoFocus={handleDialogCloseAutoFocus}
@@ -998,19 +991,17 @@ export function ScopeSelector({
               </DialogHeader>
               {bookSelectorBlock}
               <DialogFooter>
-                <Button onClick={() => setDialogSub(undefined)}>{okText}</Button>
+                <Button variant="outline" onClick={() => handleDialogOpenChange(false)}>
+                  {cancelText}
+                </Button>
+                <Button onClick={commitDialog}>{okText}</Button>
               </DialogFooter>
             </PopoverPortalContainerProvider>
           </DialogContent>
         </Dialog>
       )}
       {variant === 'dropdown' && rangeScope && (
-        <Dialog
-          open={dialogSub === 'range'}
-          onOpenChange={(open) => {
-            if (!open) setDialogSub(undefined);
-          }}
-        >
+        <Dialog open={dialogSub === 'range'} onOpenChange={handleDialogOpenChange}>
           <DialogContent
             ref={setRangeDialogEl}
             onCloseAutoFocus={handleDialogCloseAutoFocus}
@@ -1028,7 +1019,10 @@ export function ScopeSelector({
               </DialogHeader>
               {rangeBlock}
               <DialogFooter>
-                <Button ref={rangeOkButtonRef} onClick={() => setDialogSub(undefined)}>
+                <Button variant="outline" onClick={() => handleDialogOpenChange(false)}>
+                  {cancelText}
+                </Button>
+                <Button ref={rangeOkButtonRef} onClick={commitDialog}>
                   {okText}
                 </Button>
               </DialogFooter>
