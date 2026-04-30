@@ -538,26 +538,84 @@ test.describe('markers-checklist wiring Theme 5/4/6 (E2E)', () => {
   // ═══════════════════════════════════════════════════════════════════════
   // Test 8: Tab dedup in checks-side-panel
   // ═══════════════════════════════════════════════════════════════════════
-  // The checks-side-panel uses `useOpenProjectTabs` and `handleSelectProject` to focus an
-  // existing editor tab instead of opening a duplicate when the user re-selects an already-open
-  // project. Driving the side-panel's project ProjectSelector is involved (it isn't reachable
-  // from the markers-checklist menu); we mark this test fixme with a clear note rather than
-  // skipping the assertion entirely.
-  test.fixme(
-    'Test 8: re-selecting a project in checks-side-panel does not open a duplicate editor tab',
-    async ({ mainPage }) => {
-      // The checks-side-panel is opened from the scripture editor's hamburger via "Run Checks"
-      // (when wired) or from a top-level Tools menu. Reaching it via visible UI requires
-      // additional menu plumbing that's not part of this wiring task. The dedup logic itself
-      // is unit-tested by `handleSelectProject` tests in checks-side-panel test files; the
-      // Theme 5 #8 wiring change (Task 14) is exercised by visible UI in checks-side-panel's
-      // own e2e suite, not this one.
-      //
-      // TODO: activate when checks-side-panel e2e suite adds a navigation entry, or when the
-      // side-panel registers a top-level Tools menu item we can click here.
-      await openMarkersChecklistViaToolsMenu(mainPage);
-    },
-  );
+  // The checks-side-panel uses `useOpenProjectTabs` and `handleSelectProject` (Task 14) to focus
+  // an existing editor tab instead of opening a duplicate when the user re-selects a project
+  // that already has an editor open. Navigation: scripture editor → hamburger → "Open Checks...".
+  test('Test 8: re-selecting an open project in checks-side-panel focuses the editor tab without duplicating it', async ({
+    mainPage,
+  }) => {
+    // The default project (`wgPIDGIN`) editor is already open from `beforeEach`. Open the
+    // checks side panel from the editor's hamburger menu — same pattern as
+    // `openMarkersChecklistViaToolsMenu`, just a different menu item.
+    const editorFrame = mainPage.frameLocator(
+      `iframe[title*="${PROJECT_NAME}" i][title*="Editable" i]`,
+    );
+    await editorFrame.locator("button[aria-label='Project']").first().click();
+    await editorFrame
+      .getByRole('menuitem', { name: /Open Checks/i })
+      .first()
+      .click();
+
+    // The side panel mounts as a docked panel to the right; its iframe title is "Checks".
+    const sidePanelFrame = mainPage.frameLocator('iframe[title*="Checks" i]');
+    // Wait for the panel's primary ProjectSelector (mode='projectScrollGroup') to render — it's
+    // the first `[role="combobox"]` inside the side panel.
+    const sidePanelProjectTrigger = sidePanelFrame.locator('[role="combobox"]').first();
+    await expect(sidePanelProjectTrigger).toBeVisible({ timeout: 30_000 });
+
+    // Capture the dock-tab count (excluding Home) BEFORE re-selecting the project. The
+    // wgPIDGIN editor + checks side panel + Home should all be present; the side panel may or
+    // may not register as its own dock tab depending on how it's docked, so we capture the
+    // current count as the dedup baseline rather than asserting an exact number.
+    const allDockTabs = mainPage.locator('.dock-tab');
+    const tabCountBefore = await allDockTabs.count();
+
+    // The editor tab for wgPIDGIN — we'll assert it ends up active after the dedup behavior.
+    const editorTab = mainPage
+      .locator('.dock-tab')
+      .filter({ hasText: new RegExp(PROJECT_NAME, 'i') })
+      .filter({ hasNotText: /Markers Checklist/i })
+      .filter({ hasNotText: /Checks/i });
+    await expect(editorTab.first()).toBeVisible({ timeout: 10_000 });
+
+    // Open the side panel's ProjectSelector and re-pick wgPIDGIN. Use the Radix-friendly
+    // pointerdown sequence — same pattern as `openRadixDropdown` above.
+    await openRadixDropdown(sidePanelProjectTrigger, mainPage);
+
+    // The cmdk-rendered options expose each project as a `role="option"`. Find the wgPIDGIN row
+    // and click it. Tab dedup wiring focuses the existing editor tab instead of opening a new
+    // one.
+    const pidginOption = sidePanelFrame
+      .getByRole('option')
+      .filter({ hasText: new RegExp(PROJECT_NAME, 'i') })
+      .first();
+    await expect(pidginOption).toBeAttached({ timeout: 15_000 });
+    await pidginOption.dispatchEvent('pointerdown', { button: 0, pointerType: 'mouse' });
+    await pidginOption.dispatchEvent('mouseup', { button: 0 });
+    await pidginOption.dispatchEvent('click');
+
+    // Allow tab change to settle.
+    await mainPage.waitForTimeout(500);
+
+    // ASSERTION 1: NO new dock tab opened (no duplicate editor). Tab count is unchanged. This is
+    // the primary dedup contract from Task 14.
+    const tabCountAfter = await allDockTabs.count();
+    expect(tabCountAfter).toBe(tabCountBefore);
+
+    // ASSERTION 2: An ACTIVE editor tab for wgPIDGIN is present. rc-dock duplicates the
+    // `.dock-tab` element across the panel header and stacked tab strip, with only one of those
+    // copies receiving the `dock-tab-active` class — so we filter by the active class directly
+    // rather than relying on `.first()`. The presence of an active wgPIDGIN editor tab confirms
+    // the dedup logic kept the existing editor in focus instead of opening a new one.
+    const activeEditorTab = mainPage
+      .locator('.dock-tab.dock-tab-active')
+      .filter({ hasText: new RegExp(PROJECT_NAME, 'i') })
+      .filter({ hasNotText: /Markers Checklist/i })
+      .filter({ hasNotText: /Checks/i });
+    await expect(activeEditorTab.first()).toBeAttached({ timeout: 10_000 });
+
+    await mainPage.screenshot({ path: `${EVD_DIR}/test-8-dedup.png` });
+  });
 
   // ═══════════════════════════════════════════════════════════════════════
   // Test 9: Sticky toolbar stays at top during scroll
