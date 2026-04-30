@@ -590,19 +590,9 @@ export function ScopeSelector({
   const [draftRangeStart, setDraftRangeStart] = useState<SerializedVerseRef | undefined>(undefined);
   const [draftRangeEnd, setDraftRangeEnd] = useState<SerializedVerseRef | undefined>(undefined);
   const [draftSelectedBookIds, setDraftSelectedBookIds] = useState<string[]>([]);
-  // Scaffold reference: this `void` keeps tsc(6133) happy under `noUnusedLocals`
-  // while the drafts are added in this commit but wired in subsequent commits
-  // (SS-T2..SS-T5). Remove this line as soon as the drafts are read in handlers.
-  void [
-    draftScope,
-    setDraftScope,
-    draftRangeStart,
-    setDraftRangeStart,
-    draftRangeEnd,
-    setDraftRangeEnd,
-    draftSelectedBookIds,
-    setDraftSelectedBookIds,
-  ];
+  // Scaffold: silence noUnusedLocals for draft values until SS-T3 (commitDialog)
+  // and SS-T5 (BCV pickers) read them. Removed entirely once those commits land.
+  void [draftScope, draftRangeStart, draftRangeEnd, draftSelectedBookIds];
   // Refs to every scope entry in the dropdown (simple checkbox items and dialog-launcher
   // items) keyed by scope value. Used by the open-focus effect below to land initial focus
   // on the currently selected scope instead of Radix's default first-item.
@@ -683,11 +673,16 @@ export function ScopeSelector({
   // Radix's default behavior after selecting a simple DropdownMenuCheckboxItem).
   const openDialogFallback = useCallback(
     (targetScope: Scope) => {
-      handleScopeChange(targetScope);
+      // D1: seed drafts from current props/state; do NOT commit scope yet.
+      // commitDialog (Task SS-T3) fires onScopeChange + range/books callbacks on OK.
+      setDraftScope(targetScope);
+      setDraftRangeStart(resolvedRangeStart);
+      setDraftRangeEnd(resolvedRangeEnd);
+      setDraftSelectedBookIds(selectedBookIds);
       setIsDropdownOpen(false);
       setDialogSub(targetScope);
     },
-    [handleScopeChange],
+    [resolvedRangeStart, resolvedRangeEnd, selectedBookIds],
   );
 
   // Dialog's `onCloseAutoFocus` default restores focus to the element that had focus before
