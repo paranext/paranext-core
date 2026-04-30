@@ -34,5 +34,11 @@ declare module 'papi-shared-types' {
     'platformEnhancedResources.openEnhancedResource': (
       editorWebViewId?: string,
     ) => Promise<string | undefined>;
+
+    /**
+     * Opens (or focuses) the MarbleGuide dialog. Wired by UI-PKG-008. The Enhanced Resource shell
+     * dispatches this command from its info-icon button (FN-016).
+     */
+    'platformEnhancedResources.openGuide': () => Promise<void>;
   }
 }

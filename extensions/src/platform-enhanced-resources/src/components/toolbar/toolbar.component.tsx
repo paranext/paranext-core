@@ -492,6 +492,7 @@ export function EnhancedResourceTabBar({
 
         {filterVisible && (
           <div
+            data-testid="er-filter-box"
             className={cn(
               'tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-1 tw-rounded tw-border tw-px-1',
               filterTintClass,

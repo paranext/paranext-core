@@ -68,6 +68,12 @@ export type TempScripturePaneProps = {
   isLoading?: boolean;
   /** Error message - when set, renders an Alert. Overrides loading/empty states. */
   errorMessage?: string;
+  /**
+   * Whether the "All Research Terms" highlight overlay is active. Drives the `data-highlight`
+   * attribute on each linked-word token so functional tests can assert highlight state without
+   * peeking at CSS classes.
+   */
+  highlightAllResearchTerms?: boolean;
   /** Click handler for a linked-word token. Receives the targetLinks key (or token text). */
   onTokenClick?: (tokenId: string, token: MarbleTokenLike) => void;
   /**
@@ -112,6 +118,7 @@ export function TempScripturePane({
   scripturePaneZoom = 1,
   isLoading = false,
   errorMessage,
+  highlightAllResearchTerms = false,
   onTokenClick = () => {},
   onTokenContextMenu = () => {},
   localizedStringsWithLoadingState = [{}, false],
@@ -188,6 +195,10 @@ export function TempScripturePane({
               if (token.type === 'TextLink') {
                 const id = tokenIdOf(token);
                 const isFiltered = filteredTokenId !== undefined && filteredTokenId === id;
+                // FN-013 / functional-test-plan: token-level data-* attributes let Playwright
+                // tests target linked words and assert filter / highlight state without peeking
+                // at internal CSS classes.
+                const lemmaCount = (token.targetLinks?.length ?? 0) || (token.strongNumber ? 1 : 0);
                 // Raw <button> chosen over `platform-bible-react` Button because the linked words
                 // must render inline within scripture text flow. The library Button has padding,
                 // height, and variant styling designed for standalone controls and would break
@@ -199,6 +210,10 @@ export function TempScripturePane({
                     type="button"
                     role="link"
                     aria-label={token.text}
+                    data-token-id={id}
+                    data-lemma-count={lemmaCount}
+                    data-filtered={isFiltered ? 'true' : 'false'}
+                    data-highlight={highlightAllResearchTerms ? 'true' : 'false'}
                     onClick={() => onTokenClick(id, token)}
                     onContextMenu={(event) => {
                       event.preventDefault();
@@ -208,6 +223,7 @@ export function TempScripturePane({
                       'tw-cursor-pointer tw-rounded tw-px-1 tw-py-0.5 tw-text-primary tw-underline tw-decoration-dotted tw-underline-offset-4 hover:tw-bg-accent focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring',
                       {
                         'tw-bg-accent tw-font-semibold tw-text-accent-foreground': isFiltered,
+                        'tw-bg-yellow-100 dark:tw-bg-yellow-900/40': highlightAllResearchTerms,
                       },
                     )}
                   >
@@ -265,18 +281,23 @@ export function TempScripturePane({
             </p>
           )}
         </div>
-        {showFootnotes && (
-          <div
-            data-testid="er-footnotes-pane"
-            className="tw-border-t tw-bg-muted/40 tw-px-4 tw-py-2 tw-text-xs"
-          >
-            <span className="tw-font-semibold">{footnotesHeader}</span>
-            <p className="tw-mt-1 tw-text-muted-foreground">
-              {/* Placeholder for footnote rendering; phase-3-ui replaces with NoteRenderer list */}
-              {editorPlaceholderText}
-            </p>
-          </div>
-        )}
+        {/*
+         * Per functional-test-plan-UI-PKG-001 selector checklist: the footnotes pane stays
+         * attached to the DOM at all times - tests use `toBeAttached()` for the default-collapsed
+         * case and `toBeVisible()` after the user toggles "Show footnotes" via the hamburger menu.
+         * The collapsed state hides the pane via `hidden` (CSS `display: none`), not by unmounting.
+         */}
+        <div
+          data-testid="er-footnotes-pane"
+          hidden={!showFootnotes}
+          className="tw-border-t tw-bg-muted/40 tw-px-4 tw-py-2 tw-text-xs"
+        >
+          <span className="tw-font-semibold">{footnotesHeader}</span>
+          <p className="tw-mt-1 tw-text-muted-foreground">
+            {/* Placeholder for footnote rendering; phase-3-ui replaces with NoteRenderer list */}
+            {editorPlaceholderText}
+          </p>
+        </div>
       </Card>
     </div>
   );

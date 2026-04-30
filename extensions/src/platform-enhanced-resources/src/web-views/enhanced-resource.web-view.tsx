@@ -1,5 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
+import type { WebViewProps } from '@papi/core';
+import { Canon } from '@sillsdev/scripture';
 import {
   ResizableHandle,
   ResizablePanel,
@@ -10,6 +13,7 @@ import {
   cn,
 } from 'platform-bible-react';
 import type { LocalizeKey, LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
+import { convertMarbleChapterXml, type MarbleAnnotation } from '../lib/marble-converter';
 import {
   TempScripturePane,
   type MarbleTokenLike,
@@ -399,6 +403,7 @@ export function EnhancedResourceWebView({
                 showFootnotes={showFootnotes}
                 scripturePaneZoom={scripturePaneZoom}
                 errorMessage={scripturePaneError}
+                highlightAllResearchTerms={highlightMode === 'all-research-terms'}
                 onTokenClick={onTokenClick}
                 localizedStringsWithLoadingState={childStrings}
               />
@@ -424,6 +429,7 @@ export function EnhancedResourceWebView({
               <Tabs value={activeTab} className="tw-flex tw-h-full tw-flex-col">
                 <TabsContent
                   value="dictionary"
+                  data-testid="er-dictionary-tab-panel"
                   className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
                 >
                   <DictionaryTab
@@ -452,6 +458,7 @@ export function EnhancedResourceWebView({
                 </TabsContent>
                 <TabsContent
                   value="encyclopedia"
+                  data-testid="er-encyclopedia-tab-panel"
                   className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
                 >
                   <EncyclopediaTab
@@ -471,6 +478,7 @@ export function EnhancedResourceWebView({
                 </TabsContent>
                 <TabsContent
                   value="media"
+                  data-testid="er-media-tab-panel"
                   className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
                 >
                   <MediaImagesTab
@@ -487,6 +495,7 @@ export function EnhancedResourceWebView({
                 </TabsContent>
                 <TabsContent
                   value="maps"
+                  data-testid="er-maps-tab-panel"
                   className="tw-flex tw-flex-1 tw-flex-col data-[state=inactive]:tw-hidden"
                 >
                   <MediaMapsTab
@@ -549,35 +558,274 @@ const EMPTY_RIBBON_STATES: RibbonStates = {
  */
 const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [...ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS];
 
+/** Network object id for the Enhanced Resources composition root (see EnhancedResourceFactory.cs). */
+const ER_NETWORK_OBJECT_ID = 'platform.enhancedResources';
+
 /**
- * Web view entry point. Thin wiring layer that mounts {@link EnhancedResourceWebView} with minimal
- * default state - sufficient for the launcher (UI-PKG-009) to render the empty state gracefully
- * (TS-043). Subsequent UI-PKGs will replace this with full PAPI wiring (scripture pane, dictionary,
- * encyclopedia, media tabs).
- *
- * The localized-strings bag is fetched once here and forwarded to the shell + nested children (per
- * the existing prop contract).
+ * Shape of the chapter input for the `loadMarbleChapterXml` PAPI command, mirroring
+ * `LoadMarbleChapterXmlInput` in C#.
  */
-globalThis.webViewComponent = function EnhancedResourceWebViewWiring() {
+type LoadMarbleChapterXmlInput = {
+  resourceId: string;
+  bookNum: number;
+  chapterNumber: number;
+};
+
+/**
+ * Subset of the network-object proxy we care about. `papi.networkObjects.get` returns the proxy
+ * typed as a generic `NetworkObject<object>`; we narrow with a structural cast to the methods this
+ * web view uses. All cross-process calls return promises.
+ */
+type EnhancedResourcesNetworkObject = {
+  loadMarbleChapterXml: (input: LoadMarbleChapterXmlInput) => Promise<string>;
+};
+
+/**
+ * Convert annotation metadata produced by the marble-aware USX→USJ converter into the
+ * `MarbleTokenLike[]` shape the placeholder ScripturePane consumes. This is the FN-013 → FN-014
+ * connection point: the `wg` markers are preserved by the editor via __unknownAttributes, so the
+ * annotation indices stay aligned with what the real read-only editor will display once it lands.
+ */
+function annotationsToTokens(annotations: MarbleAnnotation[]): MarbleTokenLike[] {
+  return annotations
+    .filter((a) => a.kind === 'word')
+    .map((a, index) => ({
+      type: 'TextLink' as const,
+      // The annotation id is the marble `<wg id="...">` value (typically "Greek 1234" or
+      // "Hebrew 5678"). The placeholder pane displays the id as the visible text - the real
+      // platform-scripture-editor will instead render the underlying scripture word. The visible
+      // label here is just a stand-in until FN-001 ships read-only mode in the editor.
+      text: a.annotationId,
+      index,
+      strongNumber: a.metadata.strong,
+      targetLinks: a.metadata.targetLinks,
+      thematicLinks: a.metadata.thematicLinks,
+      lexicalLinks: a.metadata.lexicalLinks,
+      imageLinks: a.metadata.imageLinks,
+      mapLinks: a.metadata.mapLinks,
+    }));
+}
+
+/**
+ * Web view entry point. Wires PAPI hooks (`useWebViewScrollGroupScrRef`, `useWebViewState`),
+ * dispatches PAPI commands for chapter loads + guide-open, and hosts the FN-020 integrated state
+ * machine (linked-word click → filter; tab-switch + clear-filter propagation; BCV change → chapter
+ * reload).
+ *
+ * Memento fields (BHV-319) persisted via `useWebViewState`: activeTab, scope, highlightMode,
+ * showFootnotes, hebrewDisplayMode, greekDisplayMode, splitterPercentage, scripturePaneZoom,
+ * filteredTokenId. The shell's empty state still renders gracefully when PAPI returns no data
+ * (TS-043).
+ */
+globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
+  useWebViewScrollGroupScrRef,
+  useWebViewState,
+  state: savedWebViewState,
+}: WebViewProps) {
   // The keys reference must be stable across renders - WIRING_LOCALIZED_STRING_KEYS is module-level.
-  // The hook's LanguageStrings return type is structurally a record from string to
-  // LocalizedStringValue, which is assignable to the shell's looser
-  // Record<string, LocalizedStringValue | undefined> prop contract via direct array build.
   const [stringsBag, isLoadingStrings] = useLocalizedStrings(WIRING_LOCALIZED_STRING_KEYS);
   const stringsForShell: Record<string, LocalizedStringValue | undefined> = { ...stringsBag };
 
-  const [activeTab, setActiveTab] = useState<ResearchTab>('dictionary');
-  const [scope, setScope] = useState<MarbleScope>('current-verse');
+  // BCV reference + scroll-group sync (FN-015 / BHV-317).
+  const [scrRef, , scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+
+  // Memento fields - BHV-319 (23-field round-trip). The functional test for TS-055 customizes
+  // tab + scope + highlight, closes/reopens the window, and asserts the values come back.
+  const [activeTab, setActiveTab] = useWebViewState<ResearchTab>('activeTab', 'dictionary');
+  const [scope, setScope] = useWebViewState<MarbleScope>('scope', 'current-verse');
+  const [highlightMode, setHighlightMode] = useWebViewState<HighlightMode>('highlightMode', 'none');
+  const [showFootnotes, setShowFootnotes] = useWebViewState<boolean>('showFootnotes', false);
+  const [showTranslations, setShowTranslations] = useWebViewState<boolean>(
+    'showTranslations',
+    true,
+  );
+  const [hebrewDisplayMode, setHebrewDisplayMode] = useWebViewState<ScriptDisplayMode>(
+    'hebrewDisplayMode',
+    'both',
+  );
+  const [greekDisplayMode, setGreekDisplayMode] = useWebViewState<ScriptDisplayMode>(
+    'greekDisplayMode',
+    'both',
+  );
+  // splitterPercentage is persisted for round-trip but not yet user-editable - the
+  // ResizablePanel onResize callback will plug into the setter once we surface the splitter
+  // change to the wiring layer (BHV-319 keeps the value across reopens regardless).
+  const [splitterPercentage] = useWebViewState<number>('splitterPercentage', 60);
+  const [scripturePaneZoom, setScripturePaneZoom] = useWebViewState<number>('scripturePaneZoom', 1);
+  const [filteredTokenId, setFilteredTokenId] = useWebViewState<string | undefined>(
+    'filteredTokenId',
+    undefined,
+  );
+
+  // resourceId is provider-supplied via savedWebView.state - no `useWebViewState` because it's
+  // populated at provider time and shouldn't be changed from inside the web view.
+  // Use unknown narrowing - savedWebViewState carries arbitrary JSON.
+  const resourceId =
+    savedWebViewState && typeof savedWebViewState.resourceId === 'string'
+      ? savedWebViewState.resourceId
+      : undefined;
+
+  // Chapter token state - drives the scripture pane.
+  const [tokens, setTokens] = useState<MarbleTokenLike[] | undefined>(undefined);
+  const [scripturePaneError, setScripturePaneError] = useState<string | undefined>(undefined);
+
+  // Load chapter XML when (resourceId, bookId, chapterNum) changes. resourceId may be undefined
+  // when the launcher fired without one - the shell renders its empty state in that case
+  // (TS-043). The PAPI call goes against the `platform.enhancedResources` network object via
+  // `papi.networkObjects.get` (the C# EnhancedResourceFactory exposes `loadMarbleChapterXml`
+  // there).
+  useEffect(() => {
+    let cancelled = false;
+    if (resourceId === undefined) {
+      setTokens(undefined);
+      setScripturePaneError(undefined);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const bookNum = Canon.bookIdToNumber(scrRef.book);
+    if (bookNum <= 0) {
+      // Unknown book id - leave the empty state in place rather than blow up.
+      setTokens(undefined);
+      setScripturePaneError(undefined);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    (async () => {
+      try {
+        const proxy =
+          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
+        if (!proxy) {
+          if (!cancelled) {
+            setTokens(undefined);
+            setScripturePaneError('Enhanced Resources backend is not available.');
+          }
+          return;
+        }
+        const xml = await proxy.loadMarbleChapterXml({
+          resourceId,
+          bookNum,
+          chapterNumber: scrRef.chapterNum,
+        });
+        if (cancelled) return;
+        const { annotations } = convertMarbleChapterXml(xml);
+        setTokens(annotationsToTokens(annotations));
+        setScripturePaneError(undefined);
+      } catch (err) {
+        if (cancelled) return;
+        logger.warn(
+          `Enhanced Resources: failed to load chapter ${scrRef.book} ${scrRef.chapterNum}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        setTokens(undefined);
+        // Surface a user-visible error only for unexpected failures - missing-book / missing-data
+        // resolutions belong to the warning-ribbon system (BHV-310).
+        setScripturePaneError(undefined);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resourceId, scrRef.book, scrRef.chapterNum]);
+
+  // FN-020: linked-word click → set filter, ensure scope dropdown gains "Current Sense" option,
+  // and propagate the filter to whatever research tab is currently active.
+  const handleTokenClick = useCallback(
+    (tokenId: string) => {
+      setFilteredTokenId(tokenId);
+    },
+    [setFilteredTokenId],
+  );
+
+  // FN-020: clear-filter → reset filteredTokenId. Because `hasSenseScope` is derived from
+  // `filteredTokenId`, the "Current Sense" scope option also disappears, and the scope value
+  // resets to current-verse if it was on current-sense.
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      if (value === '') {
+        setFilteredTokenId(undefined);
+        // Keep scope on current-sense impossible once filter is gone.
+        if (scope === 'current-sense') setScope('current-verse');
+      }
+    },
+    [scope, setFilteredTokenId, setScope],
+  );
+
+  // FN-016: info-icon → dispatch the registered guide-open command. The actual MarbleGuide dialog
+  // is owned by UI-PKG-008 - the wiring layer just dispatches the command. If the command is not
+  // yet registered (UI-PKG-008 hasn't shipped), log and continue.
+  const handleInfoClick = useCallback(() => {
+    papi.commands.sendCommand('platformEnhancedResources.openGuide').catch((err) => {
+      logger.info(
+        `Enhanced Resources: openGuide command not yet available: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    });
+  }, []);
+
+  // Compute the BCV button label - keeps display logic out of the toolbar. Falls back to the
+  // saved scripture reference if Canon can't resolve the book id.
+  const currentReferenceLabel = useMemo(() => {
+    const bookId = scrRef.book;
+    return `${bookId} ${scrRef.chapterNum}:${scrRef.verseNum}`;
+  }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
+
+  // The filter input shows the transliterated form of the clicked word; until the wiring layer
+  // is hooked up to the tooltip service we use the token id as the visible value.
+  const searchValue = filteredTokenId ?? '';
+
+  // ViewMenu state surface (the hamburger menu's checkboxes + radio groups). Persists via
+  // useWebViewState so memento fully round-trips (FN-017).
+  const viewMenu: ViewMenuState = {
+    showFootnotes,
+    showTranslations,
+    hebrewDisplayMode,
+    greekDisplayMode,
+  };
+  const viewMenuHandlers: ViewMenuHandlers = {
+    onToggleShowFootnotes: setShowFootnotes,
+    onToggleShowTranslations: setShowTranslations,
+    onHebrewDisplayModeChange: setHebrewDisplayMode,
+    onGreekDisplayModeChange: setGreekDisplayMode,
+    onZoomIn: () => setScripturePaneZoom(Math.min(scripturePaneZoom + 0.1, 3)),
+    onZoomOut: () => setScripturePaneZoom(Math.max(scripturePaneZoom - 0.1, 0.5)),
+    onZoomReset: () => setScripturePaneZoom(1),
+  };
 
   return (
     <EnhancedResourceWebView
-      tokens={undefined}
-      filteredTokenId={undefined}
+      resourceName={resourceId}
+      tokens={tokens}
+      filteredTokenId={filteredTokenId}
+      hebrewDisplayMode={hebrewDisplayMode}
+      greekDisplayMode={greekDisplayMode}
+      showFootnotes={showFootnotes}
+      scripturePaneZoom={scripturePaneZoom}
+      scripturePaneError={scripturePaneError}
+      onTokenClick={handleTokenClick}
       activeTab={activeTab}
       onTabChange={setActiveTab}
       scope={scope}
       onScopeChange={setScope}
+      hasSenseScope={filteredTokenId !== undefined}
+      searchValue={searchValue}
+      onSearchChange={handleSearchChange}
+      highlightMode={highlightMode}
+      onHighlightModeChange={setHighlightMode}
+      onInfoClick={handleInfoClick}
+      scrollGroupId={scrollGroupId}
+      onScrollGroupChange={setScrollGroupId}
+      currentReferenceLabel={currentReferenceLabel}
+      viewMenu={viewMenu}
+      viewMenuHandlers={viewMenuHandlers}
       ribbons={EMPTY_RIBBON_STATES}
+      splitterPercentage={splitterPercentage}
       localizedStringsWithLoadingState={[stringsForShell, isLoadingStrings]}
     />
   );
