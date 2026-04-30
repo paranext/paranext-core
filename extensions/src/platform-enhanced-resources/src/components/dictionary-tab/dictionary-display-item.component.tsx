@@ -3,22 +3,26 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import type {
-  SemanticDomainLink,
-  RelatedLexemeLink,
-  EncyclopediaArticleLink,
-  VerseOccurrenceLink,
-} from './dictionary-entry-detail.component';
 import type { DictionarySenseDisplay } from '../shared/dictionary-sense-item.component';
+
+/** Preview length for the first-sense description shown in the collapsed row. */
+const FIRST_SENSE_PREVIEW_CHARS = 80;
 
 /** Object containing all keys used for localization in this component. */
 export const DICTIONARY_DISPLAY_ITEM_STRING_KEYS = Object.freeze([
   '%enhancedResources_dictionary_copySurfaceForm%',
   '%enhancedResources_dictionary_copyLemma%',
-  '%enhancedResources_dictionary_occurrenceCountTooltip%',
+  '%enhancedResources_dictionary_copy_originalScript%',
+  '%enhancedResources_dictionary_copy_transliteration%',
+  '%enhancedResources_dictionary_findSense%',
+  '%enhancedResources_dictionary_findLemma%',
+  '%enhancedResources_dictionary_findText%',
   '%enhancedResources_dictionary_sourceTextTooltip%',
 ] as const);
 
@@ -28,67 +32,67 @@ type DictionaryDisplayItemLocalizedStrings = {
 };
 
 /**
- * Display data for a single dictionary entry row. Mirrors DictionaryDisplayItem from
- * data-contracts.md plus optional senses + translations fields used by the expanded detail.
+ * Display data for a single dictionary entry row [Revised: 2026-04-29 Theme 13c]. Per the data
+ * shape audit (#7c) the collapsed row is reduced to the source-language word (clickable) plus a
+ * first-N-chars preview of the first sense's description. The previously-rendered `glosses`,
+ * `partOfSpeech`, `occurrenceCount`, and `translations` columns were dropped - they have no
+ * collapsed-row analog in PT9.
  */
 export type DictionaryDisplayItemData = {
   tokenId: string;
-  /** Term in the user's language (column 1 - "Translations" when shown). */
-  term: string;
   /** Lemma in original Hebrew/Greek script. */
   sourceText: string;
   /** Transliteration. */
   translit: string;
-  /** Top-level glosses (comma-separated when rendered). */
-  glosses: string[];
-  /** Translated POS string (already localized via PartOfSpeechTranslator). */
-  partOfSpeech: string;
-  /** Number of occurrences in the current scope. */
-  occurrenceCount: number;
-  /** Translations from the tracked project (optional - hidden when showTranslations is false). */
-  translations?: string[];
   /** Detail data (loaded lazily when expanded). */
-  definition?: string;
   senses?: DictionarySenseDisplay[];
-  semanticDomains?: SemanticDomainLink[];
-  relatedLexemes?: RelatedLexemeLink[];
-  encyclopediaLinks?: EncyclopediaArticleLink[];
-  verseOccurrences?: VerseOccurrenceLink[];
 };
 
 export type DictionaryDisplayItemProps = {
   /** Entry data to render. */
   item: DictionaryDisplayItemData;
-  /** Whether to show the Translations column (column 1). */
-  showTranslations?: boolean;
 
-  /** Click handlers (parent routes to MarbleForm / drawer). */
+  /** Click handler for the source-language word; routes to MarbleForm word filter. */
   onSourceTextClick?: (tokenId: string) => void;
-  /** Trailing-badge click; routes to MarbleForm filtered by occurrences. */
-  onOccurrenceCountClick?: (tokenId: string) => void;
 
-  /** Context menu handlers (BHV-353 - Copy surface form / Copy lemma). */
-  onCopySurfaceForm?: (item: DictionaryDisplayItemData) => void;
-  onCopyLemma?: (item: DictionaryDisplayItemData) => void;
+  /**
+   * Context menu handlers (Theme 16). Identical surface to `DictionaryEntryDetail` so reviewers see
+   * one consistent menu pattern across both controls.
+   */
+  onCopySurfaceForm?: (
+    item: DictionaryDisplayItemData,
+    variant: 'original' | 'transliteration',
+  ) => void;
+  onCopyLemma?: (item: DictionaryDisplayItemData, variant: 'original' | 'transliteration') => void;
+  onFindSense?: (item: DictionaryDisplayItemData) => void;
+  onFindLemma?: (item: DictionaryDisplayItemData) => void;
+  onFindText?: (item: DictionaryDisplayItemData) => void;
 
   localizedStringsWithLoadingState?: [DictionaryDisplayItemLocalizedStrings, boolean];
 };
 
+/** Truncate `text` at `maxChars`, appending an ellipsis when truncation occurs. */
+function previewText(text: string | undefined, maxChars: number): string {
+  if (!text) return '';
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars).trimEnd()}…`;
+}
+
 /**
- * Pure presentational entry row content used inside `ErDictionaryList`'s `renderItem` slot. The
- * surrounding `<li>` (selection, focus, keyboard nav) is owned by the list component.
+ * Pure presentational entry row content used inside `SourceLanguageIndexedList`'s `renderItem`
+ * slot. The surrounding `<li>` (selection, focus, keyboard nav) is owned by the list component.
+ *
+ * [Revised: 2026-04-29 Theme 13c]
  *
  * Body layout:
  *
- * - Column 1 (when showTranslations): translations from the tracked project
- * - Column 2: source text (translit) + script + POS - clickable, routes to MarbleForm
- * - Column 3: glosses (truncated)
- * - Column 4: occurrence-count button (when count > 0) - routes to MarbleForm filtered by occurrences
+ * <source-language word (clickable)> <first ~80 chars of first sense's definition>
  *
- * `e.stopPropagation()` on the source-text and occurrence-count buttons prevents the row's parent
- * `<li>` selection click from firing when these dedicated handlers are invoked.
+ * `e.stopPropagation()` on the source-text button prevents the row's parent `<li>` selection click
+ * from firing when the dedicated source-text handler is invoked.
  *
- * Right-click anywhere on the row opens the ContextMenu (BHV-353: Copy surface form / Copy lemma).
+ * Right-click anywhere on the row opens the ContextMenu with copySurfaceForm / copyLemma (with
+ * Original / Transliteration sub-items) plus findSense / findLemma / findText (Theme 16).
  *
  * Selectors for tests (per ui-spec-dictionary-tab.md test contract):
  *
@@ -96,14 +100,12 @@ export type DictionaryDisplayItemProps = {
  */
 export function DictionaryDisplayItem({
   item,
-  showTranslations = false,
-
   onSourceTextClick = () => {},
-  onOccurrenceCountClick = () => {},
-
   onCopySurfaceForm = () => {},
   onCopyLemma = () => {},
-
+  onFindSense = () => {},
+  onFindLemma = () => {},
+  onFindText = () => {},
   localizedStringsWithLoadingState = [{}, false],
 }: DictionaryDisplayItemProps) {
   const getLocalizedString = (key: DictionaryDisplayItemLocalizedStringKey) =>
@@ -113,12 +115,21 @@ export function DictionaryDisplayItem({
     getLocalizedString('%enhancedResources_dictionary_copySurfaceForm%'),
   );
   const copyLemmaLabel = String(getLocalizedString('%enhancedResources_dictionary_copyLemma%'));
+  const copyOriginalScriptLabel = String(
+    getLocalizedString('%enhancedResources_dictionary_copy_originalScript%'),
+  );
+  const copyTransliterationLabel = String(
+    getLocalizedString('%enhancedResources_dictionary_copy_transliteration%'),
+  );
+  const findSenseLabel = String(getLocalizedString('%enhancedResources_dictionary_findSense%'));
+  const findLemmaLabel = String(getLocalizedString('%enhancedResources_dictionary_findLemma%'));
+  const findTextLabel = String(getLocalizedString('%enhancedResources_dictionary_findText%'));
   const sourceTextTooltip = String(
     getLocalizedString('%enhancedResources_dictionary_sourceTextTooltip%'),
   );
-  const occurrenceTooltip = String(
-    getLocalizedString('%enhancedResources_dictionary_occurrenceCountTooltip%'),
-  );
+
+  const firstSenseDefinition = item.senses?.[0]?.definition;
+  const preview = previewText(firstSenseDefinition, FIRST_SENSE_PREVIEW_CHARS);
 
   return (
     <ContextMenu>
@@ -127,12 +138,7 @@ export function DictionaryDisplayItem({
           data-testid={`dictionary-entry-${item.tokenId}`}
           className="tw-flex tw-w-full tw-items-baseline tw-gap-3"
         >
-          {showTranslations && (
-            <div className="tw-w-[120px] tw-shrink-0 tw-text-sm tw-text-muted-foreground">
-              {(item.translations ?? []).join(', ') || '—'}
-            </div>
-          )}
-          <div className="tw-flex tw-min-w-0 tw-flex-col">
+          <div className="tw-flex tw-min-w-0 tw-shrink-0 tw-flex-col">
             <Button
               variant="link"
               className="tw-h-auto tw-justify-start tw-p-0 tw-text-start tw-text-sm"
@@ -142,36 +148,47 @@ export function DictionaryDisplayItem({
                 onSourceTextClick(item.tokenId);
               }}
             >
-              <span className="tw-truncate tw-font-semibold">{item.translit}</span>
+              <span className="tw-truncate tw-font-semibold">{item.sourceText}</span>
             </Button>
-            <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
-              <span>{item.sourceText}</span> <span className="tw-italic">{item.partOfSpeech}</span>
-            </span>
+            {item.translit && (
+              <span className="tw-truncate tw-text-xs tw-italic tw-text-muted-foreground">
+                {item.translit}
+              </span>
+            )}
           </div>
-          <span className="tw-ml-auto tw-flex-1 tw-truncate tw-text-sm tw-text-muted-foreground">
-            {item.glosses.join(', ')}
-          </span>
-          {item.occurrenceCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="tw-h-5 tw-min-w-5 tw-shrink-0 tw-rounded tw-bg-accent tw-px-1.5 tw-py-0 tw-text-xs"
-              aria-label={occurrenceTooltip}
-              onClick={(e) => {
-                e.stopPropagation();
-                onOccurrenceCountClick(item.tokenId);
-              }}
-            >
-              {item.occurrenceCount}
-            </Button>
+          {preview && (
+            <span className="tw-flex-1 tw-truncate tw-text-sm tw-text-muted-foreground">
+              {preview}
+            </span>
           )}
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => onCopySurfaceForm(item)}>
-          {copySurfaceFormLabel}
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => onCopyLemma(item)}>{copyLemmaLabel}</ContextMenuItem>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>{copySurfaceFormLabel}</ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            <ContextMenuItem onClick={() => onCopySurfaceForm(item, 'original')}>
+              {copyOriginalScriptLabel}
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => onCopySurfaceForm(item, 'transliteration')}>
+              {copyTransliterationLabel}
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>{copyLemmaLabel}</ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            <ContextMenuItem onClick={() => onCopyLemma(item, 'original')}>
+              {copyOriginalScriptLabel}
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => onCopyLemma(item, 'transliteration')}>
+              {copyTransliterationLabel}
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        <ContextMenuItem onClick={() => onFindSense(item)}>{findSenseLabel}</ContextMenuItem>
+        <ContextMenuItem onClick={() => onFindLemma(item)}>{findLemmaLabel}</ContextMenuItem>
+        <ContextMenuItem onClick={() => onFindText(item)}>{findTextLabel}</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );

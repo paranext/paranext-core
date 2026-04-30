@@ -16,7 +16,6 @@ import {
 import {
   DictionaryEntryDetail,
   DICTIONARY_ENTRY_DETAIL_STRING_KEYS,
-  type VerseOccurrenceLink,
 } from '../dictionary-tab/dictionary-entry-detail.component';
 
 /** Object containing all keys used for localization in this component. */
@@ -60,14 +59,10 @@ export type SemanticDomainViewerProps = {
 
   /** Click on a filtered entry row's source-text button (parent typically opens MarbleForm). */
   onEntryClick?: (entry: DictionaryDisplayItemData) => void;
-  /** Click on a semantic-domain badge inside the entry detail. */
-  onSemanticDomainClick?: (domainId: string) => void;
-  /** Click on an encyclopedia link inside the entry detail. */
-  onEncyclopediaLinkClick?: (articleId: string) => void;
-  /** Click on a related-lexeme link inside the entry detail. */
-  onRelatedLexemeClick?: (lemma: string) => void;
-  /** Click on a verse occurrence inside the entry detail. */
-  onVerseOccurrenceClick?: (verse: VerseOccurrenceLink) => void;
+  /** Click on the entry-level "Occurrences in all books" link inside the detail panel. */
+  onAllOccurrencesClick?: (tokenId: string) => void;
+  /** Click on a sense's "Occurrences in all books" link inside the detail panel. */
+  onSenseOccurrencesClick?: (senseId: string) => void;
 
   localizedStringsWithLoadingState?: [SemanticDomainViewerLocalizedStrings, boolean];
 };
@@ -92,10 +87,8 @@ export function SemanticDomainViewer({
   onOpenChange,
   onDomainChange,
   onEntryClick = () => {},
-  onSemanticDomainClick = () => {},
-  onEncyclopediaLinkClick = () => {},
-  onRelatedLexemeClick = () => {},
-  onVerseOccurrenceClick = () => {},
+  onAllOccurrencesClick = () => {},
+  onSenseOccurrencesClick = () => {},
   localizedStringsWithLoadingState = [{}, false],
 }: SemanticDomainViewerProps) {
   const getLocalizedString = (key: SemanticDomainViewerLocalizedStringKey) =>
@@ -143,16 +136,12 @@ export function SemanticDomainViewer({
           )}
           renderDetailContent={(item, onClose) => (
             <DictionaryEntryDetail
-              definition={item.definition}
+              tokenId={item.tokenId}
+              sourceText={item.sourceText}
+              transliteration={item.translit}
               senses={item.senses}
-              semanticDomains={item.semanticDomains}
-              relatedLexemes={item.relatedLexemes}
-              encyclopediaLinks={item.encyclopediaLinks}
-              verseOccurrences={item.verseOccurrences}
-              onSemanticDomainClick={onSemanticDomainClick}
-              onRelatedLexemeClick={onRelatedLexemeClick}
-              onEncyclopediaLinkClick={onEncyclopediaLinkClick}
-              onVerseOccurrenceClick={onVerseOccurrenceClick}
+              onAllOccurrencesClick={onAllOccurrencesClick}
+              onSenseOccurrencesClick={onSenseOccurrencesClick}
               onClose={onClose}
               localizedStringsWithLoadingState={localizedStringsWithLoadingState}
             />

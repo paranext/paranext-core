@@ -55,7 +55,6 @@ import {
 import { MarbleGuide, MARBLE_GUIDE_STRING_KEYS } from '../components/guide/marble-guide.component';
 import {
   MOCK_DICT_ENTRIES_FILTERED,
-  MOCK_DOMAIN_PATH_DEEP,
   MOCK_DOMAIN_TREE,
 } from '../data/semantic-domain-viewer.story-data';
 import {
@@ -81,30 +80,15 @@ const allKeys = [
 const localizedStrings = getLocalizedStrings(allKeys);
 
 /**
- * Resolve a SemanticDomain id to a breadcrumb path by walking the domain tree. Returns the deepest
- * matching path; falls back to the deep mock path when the id is not present in the tree (mock
- * dictionary entries reference domain ids like "5.1" that are real nodes in MOCK_DOMAIN_TREE).
- */
-function resolveDomainPath(domainId: string): SemanticDomain[] {
-  const findPath = (
-    nodes: SemanticDomain[],
-    targetId: string,
-    trail: SemanticDomain[],
-  ): SemanticDomain[] | undefined => {
-    return nodes.reduce<SemanticDomain[] | undefined>((acc, node) => {
-      if (acc) return acc;
-      const next = [...trail, node];
-      if (node.id === targetId) return next;
-      return node.children ? findPath(node.children, targetId, next) : undefined;
-    }, undefined);
-  };
-  return findPath(MOCK_DOMAIN_TREE, domainId, []) ?? MOCK_DOMAIN_PATH_DEEP;
-}
-
-/**
  * Story-only adapter from the dictionary mock entries to the SemanticDomainFilteredItem shape that
  * `SemanticDomainViewer` consumes. Production wiring will swap in the real backend filter; this
  * passes the entries through unchanged so the dialog has rows to render.
+ *
+ * [Revised: 2026-04-29 Themes 13/15] The dictionary tab no longer surfaces a per-entry
+ * semantic-domain click path (semantic domains are sense-level only, and currently not
+ * click-routed). The SemanticDomainViewer story can still be exercised via its own Default story
+ * (`semantic-domain-viewer.stories.tsx`); this web-view shell story leaves the SDV mounted but
+ * dormant unless it is opened from another path.
  */
 function buildFilteredEntries(): SemanticDomainFilteredItem[] {
   return MOCK_DICT_ENTRIES_FILTERED;
@@ -319,10 +303,16 @@ export const Default: Story = {
           onDictionarySelectionChange={(selectedDictionaryTokenId) =>
             update({ selectedDictionaryTokenId })
           }
-          onDictionarySemanticDomainClick={(domainId) =>
-            update({ semanticDomainPath: resolveDomainPath(domainId) })
-          }
-          onDictionaryEncyclopediaLinkClick={(activeArticleId) => update({ activeArticleId })}
+          onDictionaryFindSense={(entry) => {
+            // Storybook-only diagnostic: production routes to MarbleForm filtered by sense.
+            // eslint-disable-next-line no-console
+            console.log('[story] dictionary find-sense', entry.sourceText);
+          }}
+          onDictionaryFindLemma={(entry) => {
+            // Storybook-only diagnostic: production routes to MarbleForm filtered by lemma.
+            // eslint-disable-next-line no-console
+            console.log('[story] dictionary find-lemma', entry.sourceText);
+          }}
           encyclopediaItems={MOCK_ENC_ENTRIES_HEBREW}
           encyclopediaScopeLabel="current verse"
           encyclopediaArticleDataMap={MOCK_ARTICLE_DATA_MAP}
@@ -355,10 +345,16 @@ export const Default: Story = {
           filteredEntries={filteredEntries}
           onOpenChange={(open) => !open && update({ semanticDomainPath: undefined })}
           onDomainChange={(semanticDomainPath) => update({ semanticDomainPath })}
-          onEncyclopediaLinkClick={(activeArticleId) => update({ activeArticleId })}
-          onSemanticDomainClick={(domainId) =>
-            update({ semanticDomainPath: resolveDomainPath(domainId) })
-          }
+          onAllOccurrencesClick={(tokenId) => {
+            // Storybook-only diagnostic: production routes to MarbleForm filtered by occurrences.
+            // eslint-disable-next-line no-console
+            console.log('[story] sdv all-occurrences-click', tokenId);
+          }}
+          onSenseOccurrencesClick={(senseId) => {
+            // Storybook-only diagnostic: production routes to MarbleForm filtered by sense.
+            // eslint-disable-next-line no-console
+            console.log('[story] sdv sense-occurrences-click', senseId);
+          }}
           localizedStringsWithLoadingState={[localizedStrings, false]}
         />
         <ArticleViewer

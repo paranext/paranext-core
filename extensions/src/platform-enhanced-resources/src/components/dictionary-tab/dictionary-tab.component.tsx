@@ -10,7 +10,7 @@ import {
 import {
   DictionaryEntryDetail,
   DICTIONARY_ENTRY_DETAIL_STRING_KEYS,
-  type VerseOccurrenceLink,
+  type DictionaryEntryRef,
 } from './dictionary-entry-detail.component';
 
 /** Object containing all keys used for localization in this component. */
@@ -40,7 +40,7 @@ type DictionaryRowItem = IndexedListItem & DictionaryDisplayItemData;
 const toRowItem = (entry: DictionaryDisplayItemData): DictionaryRowItem => ({
   ...entry,
   id: entry.tokenId,
-  primaryText: entry.term,
+  primaryText: entry.sourceText,
   sourceLanguageText: entry.sourceText,
   transliteration: entry.translit,
 });
@@ -58,8 +58,6 @@ export type DictionaryTabProps = {
   filterWord?: string;
   /** Scope label for empty state messages ('{scope}' replacement, already localized). */
   scopeLabel?: string;
-  /** Whether the Translations column is shown in the row. */
-  showTranslations?: boolean;
   /** Active dictionary - drives the dictionary label. */
   activeDictionary?: 'SDBH' | 'SDBG';
   /** Whether non-relevant senses are hidden in the detail panel. */
@@ -70,27 +68,38 @@ export type DictionaryTabProps = {
 
   /** Per-row callbacks (forwarded to DictionaryDisplayItem + DictionaryEntryDetail). */
   onSourceTextClick?: (tokenId: string) => void;
-  onOccurrenceCountClick?: (tokenId: string) => void;
-  onSemanticDomainClick?: (domainId: string) => void;
-  onRelatedLexemeClick?: (lemma: string) => void;
-  onEncyclopediaLinkClick?: (articleId: string) => void;
-  onVerseOccurrenceClick?: (verse: VerseOccurrenceLink) => void;
+  /** Click on the entry-level "Occurrences in all books" link inside the detail panel. */
+  onAllOccurrencesClick?: (tokenId: string) => void;
+  /** Click on a sense's "Occurrences in all books" link inside the detail panel. */
+  onSenseOccurrencesClick?: (senseId: string) => void;
   onToggleHideNonRelevantSenses?: (hide: boolean) => void;
-  onCopySurfaceForm?: (item: DictionaryDisplayItemData) => void;
-  onCopyLemma?: (item: DictionaryDisplayItemData) => void;
+
+  /** Helpfulness flow (Theme 13b; backend FN-018). */
+  onHelpfulnessAnswer?: (entryTokenId: string, answer: 'yes' | 'no') => void;
+  onGiveFeedback?: (entryTokenId: string) => void;
+
+  /** Context-menu callbacks (Theme 16) - shared between row + detail. */
+  onCopySurfaceForm?: (
+    entry: DictionaryDisplayItemData,
+    variant: 'original' | 'transliteration',
+  ) => void;
+  onCopyLemma?: (entry: DictionaryDisplayItemData, variant: 'original' | 'transliteration') => void;
+  onFindSense?: (entry: DictionaryDisplayItemData) => void;
+  onFindLemma?: (entry: DictionaryDisplayItemData) => void;
+  onFindText?: (entry: DictionaryDisplayItemData) => void;
 
   localizedStringsWithLoadingState?: [DictionaryTabLocalizedStrings, boolean];
 };
 
 /**
- * Pure presentational DictionaryTab. Renders a small dictionary-label header followed by a
- * `SourceLanguageIndexedList` (single-select with side-drawer detail). Each row uses
- * `DictionaryDisplayItem` via the `renderItem` slot; the right-side drawer uses
- * `DictionaryEntryDetail` via `renderDetailContent`.
+ * Pure presentational DictionaryTab [Revised: 2026-04-29 Themes 13/15/16]. Renders a small
+ * dictionary-label header followed by a `SourceLanguageIndexedList` (single-select with
+ * in-container detail panel). Each row uses `DictionaryDisplayItem` via the `renderItem` slot; the
+ * detail panel uses `DictionaryEntryDetail` via `renderDetailContent`.
  *
  * Note: We consume `SourceLanguageIndexedList` directly (not the `ErDictionaryList` wrapper)
  * because that wrapper unconditionally overrides `renderItem`, which would silently drop our custom
- * row (translations column, ContextMenu, click-routing).
+ * row (ContextMenu, click-routing).
  *
  * Empty state handling (BHV-352):
  *
@@ -107,21 +116,24 @@ export function DictionaryTab({
   emptyState = 'none',
   filterWord,
   scopeLabel = '',
-  showTranslations = false,
   activeDictionary = 'SDBH',
   hideNonRelevantSenses = false,
 
   onSelectionChange = () => {},
 
   onSourceTextClick = () => {},
-  onOccurrenceCountClick = () => {},
-  onSemanticDomainClick = () => {},
-  onRelatedLexemeClick = () => {},
-  onEncyclopediaLinkClick = () => {},
-  onVerseOccurrenceClick = () => {},
+  onAllOccurrencesClick = () => {},
+  onSenseOccurrencesClick = () => {},
   onToggleHideNonRelevantSenses = () => {},
+
+  onHelpfulnessAnswer = () => {},
+  onGiveFeedback = () => {},
+
   onCopySurfaceForm = () => {},
   onCopyLemma = () => {},
+  onFindSense = () => {},
+  onFindLemma = () => {},
+  onFindText = () => {},
 
   localizedStringsWithLoadingState = [{}, false],
 }: DictionaryTabProps) {
@@ -154,6 +166,40 @@ export function DictionaryTab({
 
   const rowItems = useMemo(() => items.map(toRowItem), [items]);
 
+  // Bridge the entry-detail's DictionaryEntryRef back to the original DictionaryDisplayItemData
+  // when forwarding context-menu callbacks. Falls back to a synthesized item when the entry isn't
+  // in the current items list (defensive - shouldn't happen because the detail is rendered for a
+  // selected row).
+  const findItemByTokenId = (tokenId: string): DictionaryDisplayItemData | undefined =>
+    items.find((entry) => entry.tokenId === tokenId);
+
+  const handleDetailCopySurfaceForm = (
+    entry: DictionaryEntryRef,
+    variant: 'original' | 'transliteration',
+  ) => {
+    const item = findItemByTokenId(entry.tokenId);
+    if (item) onCopySurfaceForm(item, variant);
+  };
+  const handleDetailCopyLemma = (
+    entry: DictionaryEntryRef,
+    variant: 'original' | 'transliteration',
+  ) => {
+    const item = findItemByTokenId(entry.tokenId);
+    if (item) onCopyLemma(item, variant);
+  };
+  const handleDetailFindSense = (entry: DictionaryEntryRef) => {
+    const item = findItemByTokenId(entry.tokenId);
+    if (item) onFindSense(item);
+  };
+  const handleDetailFindLemma = (entry: DictionaryEntryRef) => {
+    const item = findItemByTokenId(entry.tokenId);
+    if (item) onFindLemma(item);
+  };
+  const handleDetailFindText = (entry: DictionaryEntryRef) => {
+    const item = findItemByTokenId(entry.tokenId);
+    if (item) onFindText(item);
+  };
+
   return (
     <div
       className="tw-flex tw-h-full tw-min-h-0 tw-flex-col"
@@ -177,28 +223,33 @@ export function DictionaryTab({
           renderItem={(item) => (
             <DictionaryDisplayItem
               item={item}
-              showTranslations={showTranslations}
               onSourceTextClick={onSourceTextClick}
-              onOccurrenceCountClick={onOccurrenceCountClick}
               onCopySurfaceForm={onCopySurfaceForm}
               onCopyLemma={onCopyLemma}
+              onFindSense={onFindSense}
+              onFindLemma={onFindLemma}
+              onFindText={onFindText}
               localizedStringsWithLoadingState={childStrings}
             />
           )}
           renderDetailContent={(item, onClose) => (
             <DictionaryEntryDetail
-              definition={item.definition}
+              tokenId={item.tokenId}
+              sourceText={item.sourceText}
+              transliteration={item.translit}
               senses={item.senses}
               hideNonRelevantSenses={hideNonRelevantSenses}
               onToggleHideNonRelevantSenses={onToggleHideNonRelevantSenses}
-              semanticDomains={item.semanticDomains}
-              relatedLexemes={item.relatedLexemes}
-              encyclopediaLinks={item.encyclopediaLinks}
-              verseOccurrences={item.verseOccurrences}
-              onSemanticDomainClick={onSemanticDomainClick}
-              onRelatedLexemeClick={onRelatedLexemeClick}
-              onEncyclopediaLinkClick={onEncyclopediaLinkClick}
-              onVerseOccurrenceClick={onVerseOccurrenceClick}
+              onSourceTextClick={onSourceTextClick}
+              onAllOccurrencesClick={onAllOccurrencesClick}
+              onSenseOccurrencesClick={onSenseOccurrencesClick}
+              onHelpfulnessAnswer={(answer) => onHelpfulnessAnswer(item.tokenId, answer)}
+              onGiveFeedback={() => onGiveFeedback(item.tokenId)}
+              onCopySurfaceForm={handleDetailCopySurfaceForm}
+              onCopyLemma={handleDetailCopyLemma}
+              onFindSense={handleDetailFindSense}
+              onFindLemma={handleDetailFindLemma}
+              onFindText={handleDetailFindText}
               onClose={onClose}
               localizedStringsWithLoadingState={childStrings}
             />

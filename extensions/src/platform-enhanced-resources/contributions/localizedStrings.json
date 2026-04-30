@@ -124,16 +124,35 @@
     "%enhancedResources_shell_title%": {},
     "%enhancedResources_shell_emptyTitle%": {},
     "%enhancedResources_shell_emptyDescription%": {},
-    "%enhancedResources_sense_definitionLabel%": {
-      "notes": ["Inline label preceding a sense definition."]
+    "%enhancedResources_dictionary_sense_glossesLabel%": {
+      "notes": [
+        "Inline label in the per-sense definition table preceding the Glosses value (PT9 'Glosses:')."
+      ]
     },
-    "%enhancedResources_sense_glossesLabel%": {
-      "notes": ["Inline label preceding the gloss list of a sense."]
+    "%enhancedResources_dictionary_sense_domainLabel%": {
+      "notes": [
+        "Inline label in the per-sense definition table preceding a Domain value (PT9 'Domain:'); repeats per domain."
+      ]
     },
-    "%enhancedResources_sense_partOfSpeechLabel%": {
-      "notes": ["Inline label preceding the part of speech of a sense."]
+    "%enhancedResources_dictionary_sense_notesLabel%": {
+      "notes": [
+        "Inline label in the per-sense definition table preceding the Notes value (PT9 'Notes:'). Backend FN-019."
+      ]
     },
-    "%enhancedResources_sense_nonRelevantLabel%": {
+    "%enhancedResources_dictionary_sense_commentLabel%": {
+      "notes": [
+        "Inline label in the per-sense definition table preceding the Comment value (PT9 'Comment:'). Backend FN-019."
+      ]
+    },
+    "%enhancedResources_dictionary_sense_commentsAndNotesLabel%": {
+      "notes": [
+        "Inline label in the per-sense definition table preceding the Comments and Notes value. Backend FN-019."
+      ]
+    },
+    "%enhancedResources_dictionary_sense_occurrencesInAllBooks%": {
+      "notes": ["Per-sense link label that opens the all-book occurrences for that sense."]
+    },
+    "%enhancedResources_dictionary_sense_nonRelevantLabel%": {
       "notes": ["ARIA label for a sense flagged as non-relevant for the current verse."]
     },
     "%enhancedResources_dictionary_emptyState_noData%": {
@@ -164,35 +183,61 @@
       "notes": ["ARIA label for clicking a source text link to filter the form."]
     },
     "%enhancedResources_dictionary_copySurfaceForm%": {
-      "notes": ["Context menu item: Copy the surface form (Hebrew/Greek + transliteration)."]
+      "notes": [
+        "Context menu item: Copy the surface form (parent of Original/Transliteration sub-items)."
+      ]
     },
     "%enhancedResources_dictionary_copyLemma%": {
-      "notes": ["Context menu item: Copy the lemma (Hebrew/Greek + transliteration)."]
+      "notes": ["Context menu item: Copy the lemma (parent of Original/Transliteration sub-items)."]
     },
-    "%enhancedResources_dictionary_definitionHeader%": {},
+    "%enhancedResources_dictionary_copy_originalScript%": {
+      "notes": [
+        "Sub-menu item under Copy surface form / Copy lemma: copy the Hebrew/Greek script value."
+      ]
+    },
+    "%enhancedResources_dictionary_copy_transliteration%": {
+      "notes": [
+        "Sub-menu item under Copy surface form / Copy lemma: copy the transliterated value."
+      ]
+    },
+    "%enhancedResources_dictionary_findSense%": {
+      "notes": ["Context menu item: Find this sense (filters MarbleForm to sense scope)."]
+    },
+    "%enhancedResources_dictionary_findLemma%": {
+      "notes": ["Context menu item: Find this lemma (filters MarbleForm to lemma scope)."]
+    },
+    "%enhancedResources_dictionary_findText%": {
+      "notes": ["Context menu item: Find this text (search by surface text)."]
+    },
     "%enhancedResources_dictionary_sensesHeader%": {},
     "%enhancedResources_dictionary_hideNonRelevantToggle%": {
       "notes": ["Switch label: hide senses flagged as non-relevant in the current verse."]
     },
-    "%enhancedResources_dictionary_semanticDomainsHeader%": {},
-    "%enhancedResources_dictionary_relatedLexemesHeader%": {},
-    "%enhancedResources_dictionary_relatedLexemes_byGloss%": {
-      "notes": ["Group label inside related lexemes: lexemes related by shared gloss."]
+    "%enhancedResources_dictionary_allOccurrencesLink%": {
+      "notes": ["Entry-level link label that opens all-book occurrences for the entire entry."]
     },
-    "%enhancedResources_dictionary_relatedLexemes_byDomain%": {
-      "notes": ["Group label inside related lexemes: lexemes related by shared semantic domain."]
-    },
-    "%enhancedResources_dictionary_relatedLexemes_byLexical%": {
-      "notes": ["Group label inside related lexemes: lexemes related by lexical relation."]
-    },
-    "%enhancedResources_dictionary_seeAlsoHeader%": {},
-    "%enhancedResources_dictionary_occurrencesHeader%": {},
     "%enhancedResources_dictionary_emptyDetail%": {
       "notes": ["Placeholder when an expanded entry has no detail data to display."]
     },
     "%enhancedResources_dictionary_backToList%": {
       "notes": [
         "Label for the 'Back to list' button at the top of the dictionary entry detail drawer."
+      ]
+    },
+    "%enhancedResources_dictionary_wasThisHelpful%": {
+      "notes": [
+        "Prompt above Yes/No radio buttons asking whether the dictionary entry was helpful (Theme 13b; backend FN-018)."
+      ]
+    },
+    "%enhancedResources_dictionary_helpful_yes%": {
+      "notes": ["Yes radio button label for the 'Was this helpful?' prompt."]
+    },
+    "%enhancedResources_dictionary_helpful_no%": {
+      "notes": ["No radio button label for the 'Was this helpful?' prompt."]
+    },
+    "%enhancedResources_dictionary_giveFeedback%": {
+      "notes": [
+        "Optional 'Give feedback...' link revealed after the user answers the helpfulness prompt."
       ]
     },
     "%enhancedResources_encyclopedia_tabLabel%": {
@@ -521,10 +566,13 @@
       "%enhancedResources_shell_title%": "Enhanced resource",
       "%enhancedResources_shell_emptyTitle%": "No resource selected",
       "%enhancedResources_shell_emptyDescription%": "Open an Enhanced Resource from the Paratext menu to begin.",
-      "%enhancedResources_sense_definitionLabel%": "Definition:",
-      "%enhancedResources_sense_glossesLabel%": "Glosses:",
-      "%enhancedResources_sense_partOfSpeechLabel%": "Part of speech:",
-      "%enhancedResources_sense_nonRelevantLabel%": "Non-relevant sense",
+      "%enhancedResources_dictionary_sense_glossesLabel%": "Glosses:",
+      "%enhancedResources_dictionary_sense_domainLabel%": "Domain:",
+      "%enhancedResources_dictionary_sense_notesLabel%": "Notes:",
+      "%enhancedResources_dictionary_sense_commentLabel%": "Comment:",
+      "%enhancedResources_dictionary_sense_commentsAndNotesLabel%": "Comments and Notes:",
+      "%enhancedResources_dictionary_sense_occurrencesInAllBooks%": "Occurrences in all books",
+      "%enhancedResources_dictionary_sense_nonRelevantLabel%": "Non-relevant sense",
       "%enhancedResources_dictionary_emptyState_noData%": "No data found for {scope}.",
       "%enhancedResources_dictionary_emptyState_noMatch%": "No data found for \"{word}\" in {scope}.",
       "%enhancedResources_dictionary_emptyState_wordNotInScope%": "\"{word}\" does not occur in {scope}.",
@@ -534,18 +582,20 @@
       "%enhancedResources_dictionary_sourceTextTooltip%": "Filter on this word",
       "%enhancedResources_dictionary_copySurfaceForm%": "Copy surface form",
       "%enhancedResources_dictionary_copyLemma%": "Copy lemma",
-      "%enhancedResources_dictionary_definitionHeader%": "Definition",
+      "%enhancedResources_dictionary_copy_originalScript%": "Original script",
+      "%enhancedResources_dictionary_copy_transliteration%": "Transliteration",
+      "%enhancedResources_dictionary_findSense%": "Find sense",
+      "%enhancedResources_dictionary_findLemma%": "Find lemma",
+      "%enhancedResources_dictionary_findText%": "Find text",
       "%enhancedResources_dictionary_sensesHeader%": "Senses",
       "%enhancedResources_dictionary_hideNonRelevantToggle%": "Hide non-relevant senses",
-      "%enhancedResources_dictionary_semanticDomainsHeader%": "Semantic domains",
-      "%enhancedResources_dictionary_relatedLexemesHeader%": "Related lexemes",
-      "%enhancedResources_dictionary_relatedLexemes_byGloss%": "By gloss",
-      "%enhancedResources_dictionary_relatedLexemes_byDomain%": "By domain",
-      "%enhancedResources_dictionary_relatedLexemes_byLexical%": "By lexical relation",
-      "%enhancedResources_dictionary_seeAlsoHeader%": "See also",
-      "%enhancedResources_dictionary_occurrencesHeader%": "Occurrences",
+      "%enhancedResources_dictionary_allOccurrencesLink%": "Occurrences in all books",
       "%enhancedResources_dictionary_emptyDetail%": "No additional detail available.",
       "%enhancedResources_dictionary_backToList%": "Back to list",
+      "%enhancedResources_dictionary_wasThisHelpful%": "Was this helpful?",
+      "%enhancedResources_dictionary_helpful_yes%": "Yes",
+      "%enhancedResources_dictionary_helpful_no%": "No",
+      "%enhancedResources_dictionary_giveFeedback%": "Give feedback... (optional)",
       "%enhancedResources_encyclopedia_tabLabel%": "Encyclopedia",
       "%enhancedResources_encyclopedia_emptyState_noData%": "No data found for {scope}.",
       "%enhancedResources_encyclopedia_emptyState_noMatch%": "No data found for \"{word}\" in {scope}.",

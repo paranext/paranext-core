@@ -67,15 +67,15 @@ export const Interactive: Story = {
         filteredEntries={MOCK_DICT_ENTRIES_FILTERED}
         onOpenChange={setOpen}
         onDomainChange={setDomainPath}
-        onSemanticDomainClick={(id) => {
-          // Storybook-only diagnostic - production wires this to a SemanticDomainViewer reopen.
+        onAllOccurrencesClick={(tokenId) => {
+          // Storybook-only diagnostic - production routes to MarbleForm filtered by occurrences.
           // eslint-disable-next-line no-console
-          console.log('[SemanticDomainViewer story] domain-click', id);
+          console.log('[SemanticDomainViewer story] all-occurrences-click', tokenId);
         }}
-        onEncyclopediaLinkClick={(id) => {
-          // Storybook-only diagnostic - production wires this to ArticleViewer open.
+        onSenseOccurrencesClick={(senseId) => {
+          // Storybook-only diagnostic - production routes to MarbleForm filtered by sense.
           // eslint-disable-next-line no-console
-          console.log('[SemanticDomainViewer story] encyclopedia-click', id);
+          console.log('[SemanticDomainViewer story] sense-occurrences-click', senseId);
         }}
         localizedStringsWithLoadingState={[localizedStrings, false]}
       />

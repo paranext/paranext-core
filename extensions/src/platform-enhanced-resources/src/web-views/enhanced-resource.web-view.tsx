@@ -32,7 +32,6 @@ import {
   type DictionaryEmptyStateVariant,
 } from '../components/dictionary-tab/dictionary-tab.component';
 import type { DictionaryDisplayItemData } from '../components/dictionary-tab/dictionary-display-item.component';
-import type { VerseOccurrenceLink } from '../components/dictionary-tab/dictionary-entry-detail.component';
 import {
   EncyclopediaTab,
   type EncyclopediaEmptyStateVariant,
@@ -129,26 +128,38 @@ export type EnhancedResourceWebViewProps = {
   /** Splitter percentage between scripture pane and research pane. Defaults to 60. */
   splitterPercentage?: number;
 
-  // Dictionary tab
+  // Dictionary tab [Revised: 2026-04-29 Themes 13/15/16]
   dictionaryItems?: DictionaryDisplayItemData[];
   dictionarySelectedTokenId?: string;
   dictionaryIsLoading?: boolean;
   dictionaryEmptyState?: DictionaryEmptyStateVariant;
   dictionaryFilterWord?: string;
   dictionaryScopeLabel?: string;
-  dictionaryShowTranslations?: boolean;
   dictionaryActiveDictionary?: 'SDBH' | 'SDBG';
   dictionaryHideNonRelevantSenses?: boolean;
   onDictionarySelectionChange?: (tokenId: string | undefined) => void;
   onDictionarySourceTextClick?: (tokenId: string) => void;
-  onDictionaryOccurrenceCountClick?: (tokenId: string) => void;
-  onDictionarySemanticDomainClick?: (domainId: string) => void;
-  onDictionaryRelatedLexemeClick?: (lemma: string) => void;
-  onDictionaryEncyclopediaLinkClick?: (articleId: string) => void;
-  onDictionaryVerseOccurrenceClick?: (verse: VerseOccurrenceLink) => void;
+  /** Click on the entry-level "Occurrences in all books" link inside the detail panel. */
+  onDictionaryAllOccurrencesClick?: (tokenId: string) => void;
+  /** Click on a sense's "Occurrences in all books" link inside the detail panel. */
+  onDictionarySenseOccurrencesClick?: (senseId: string) => void;
   onDictionaryToggleHideNonRelevantSenses?: (hide: boolean) => void;
-  onDictionaryCopySurfaceForm?: (item: DictionaryDisplayItemData) => void;
-  onDictionaryCopyLemma?: (item: DictionaryDisplayItemData) => void;
+  /** Helpfulness Yes/No answer (Theme 13b; backend FN-018). */
+  onDictionaryHelpfulnessAnswer?: (entryTokenId: string, answer: 'yes' | 'no') => void;
+  /** "Give feedback..." link click (Theme 13b; backend FN-018). */
+  onDictionaryGiveFeedback?: (entryTokenId: string) => void;
+  /** Context-menu callbacks (Theme 16). */
+  onDictionaryCopySurfaceForm?: (
+    item: DictionaryDisplayItemData,
+    variant: 'original' | 'transliteration',
+  ) => void;
+  onDictionaryCopyLemma?: (
+    item: DictionaryDisplayItemData,
+    variant: 'original' | 'transliteration',
+  ) => void;
+  onDictionaryFindSense?: (item: DictionaryDisplayItemData) => void;
+  onDictionaryFindLemma?: (item: DictionaryDisplayItemData) => void;
+  onDictionaryFindText?: (item: DictionaryDisplayItemData) => void;
 
   // Encyclopedia tab
   encyclopediaItems?: EncyclopediaDisplayItemData[];
@@ -266,19 +277,20 @@ export function EnhancedResourceWebView({
   dictionaryEmptyState = 'none',
   dictionaryFilterWord,
   dictionaryScopeLabel = '',
-  dictionaryShowTranslations = false,
   dictionaryActiveDictionary = 'SDBH',
   dictionaryHideNonRelevantSenses = false,
   onDictionarySelectionChange = () => {},
   onDictionarySourceTextClick = () => {},
-  onDictionaryOccurrenceCountClick = () => {},
-  onDictionarySemanticDomainClick = () => {},
-  onDictionaryRelatedLexemeClick = () => {},
-  onDictionaryEncyclopediaLinkClick = () => {},
-  onDictionaryVerseOccurrenceClick = () => {},
+  onDictionaryAllOccurrencesClick = () => {},
+  onDictionarySenseOccurrencesClick = () => {},
   onDictionaryToggleHideNonRelevantSenses = () => {},
+  onDictionaryHelpfulnessAnswer = () => {},
+  onDictionaryGiveFeedback = () => {},
   onDictionaryCopySurfaceForm = () => {},
   onDictionaryCopyLemma = () => {},
+  onDictionaryFindSense = () => {},
+  onDictionaryFindLemma = () => {},
+  onDictionaryFindText = () => {},
 
   encyclopediaItems = [],
   encyclopediaSelectedTokenId,
@@ -436,19 +448,20 @@ export function EnhancedResourceWebView({
                     emptyState={dictionaryEmptyState}
                     filterWord={dictionaryFilterWord}
                     scopeLabel={dictionaryScopeLabel}
-                    showTranslations={dictionaryShowTranslations}
                     activeDictionary={dictionaryActiveDictionary}
                     hideNonRelevantSenses={dictionaryHideNonRelevantSenses}
                     onSelectionChange={onDictionarySelectionChange}
                     onSourceTextClick={onDictionarySourceTextClick}
-                    onOccurrenceCountClick={onDictionaryOccurrenceCountClick}
-                    onSemanticDomainClick={onDictionarySemanticDomainClick}
-                    onRelatedLexemeClick={onDictionaryRelatedLexemeClick}
-                    onEncyclopediaLinkClick={onDictionaryEncyclopediaLinkClick}
-                    onVerseOccurrenceClick={onDictionaryVerseOccurrenceClick}
+                    onAllOccurrencesClick={onDictionaryAllOccurrencesClick}
+                    onSenseOccurrencesClick={onDictionarySenseOccurrencesClick}
                     onToggleHideNonRelevantSenses={onDictionaryToggleHideNonRelevantSenses}
+                    onHelpfulnessAnswer={onDictionaryHelpfulnessAnswer}
+                    onGiveFeedback={onDictionaryGiveFeedback}
                     onCopySurfaceForm={onDictionaryCopySurfaceForm}
                     onCopyLemma={onDictionaryCopyLemma}
+                    onFindSense={onDictionaryFindSense}
+                    onFindLemma={onDictionaryFindLemma}
+                    onFindText={onDictionaryFindText}
                     localizedStringsWithLoadingState={childStrings}
                   />
                 </TabsContent>
