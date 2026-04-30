@@ -265,6 +265,7 @@
       "%webView_punctuationInventory_title%": "Punctuation Inventory: {projectName}",
       "%webView_repeatedWordsInventory_title%": "Repeated Words Inventory: {projectName}",
       "%webView_scope_selector_book%": "Book",
+      "%webView_scope_selector_cancel%": "Cancel",
       "%webView_scope_selector_chapter%": "Chapter",
       "%webView_scope_selector_choose_books%": "Choose books",
       "%webView_scope_selector_current_book%": "Current book",
