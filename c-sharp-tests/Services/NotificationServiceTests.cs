@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Services;
+using TestParanextDataProvider;
 
 namespace Paranext.DataProvider.Services.Tests;
 
@@ -10,11 +11,19 @@ namespace Paranext.DataProvider.Services.Tests;
 public class NotificationServiceTests
 {
     private JsonSerializerOptions _options = null!;
+    private DummyPapiClient _client = null!;
 
     [SetUp]
     public void Setup()
     {
         _options = SerializationOptions.CreateSerializationOptions();
+        _client = new DummyPapiClient();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _client.Dispose();
     }
 
     [Test]
@@ -170,5 +179,66 @@ public class NotificationServiceTests
         Assert.That(root.GetProperty("clickCommandLabel").GetString(), Is.EqualTo("View details"));
         Assert.That(root.GetProperty("clickCommand").GetString(), Is.EqualTo("myExtension.viewDetails"));
         Assert.That(root.GetProperty("duration").GetInt32(), Is.EqualTo(5000));
+    }
+
+    // --- NotificationService ---
+
+    [Test]
+    public async Task NotificationService_Send_ReturnsStringId_WhenServerRespondsWithString()
+    {
+        string expectedId = "toast-abc";
+        Func<object?, JsonElement> handler = (_) =>
+            JsonDocument.Parse($@"""{expectedId}""").RootElement;
+        await _client.RegisterRequestHandlerAsync("object:NotificationService.send", handler, null);
+
+        NotificationId id = NotificationService.Send(_client, new PlatformNotification("Hello", NotificationSeverity.Info));
+
+        Assert.That(id.ToString(), Is.EqualTo(expectedId));
+        Assert.That(id.ToSerializable(), Is.InstanceOf<string>());
+    }
+
+    [Test]
+    public async Task NotificationService_Send_ReturnsNumericId_WhenServerRespondsWithNumber()
+    {
+        Func<object?, JsonElement> handler = (_) => JsonDocument.Parse("55").RootElement;
+        await _client.RegisterRequestHandlerAsync("object:NotificationService.send", handler, null);
+
+        NotificationId id = NotificationService.Send(_client, new PlatformNotification("Hello", NotificationSeverity.Warning));
+
+        Assert.That(id.ToString(), Is.EqualTo("55"));
+        Assert.That(id.ToSerializable(), Is.InstanceOf<long>());
+        Assert.That((long)id.ToSerializable(), Is.EqualTo(55L));
+    }
+
+    [Test]
+    public async Task NotificationService_Dismiss_WithStringId_PassesStringToServer()
+    {
+        object? receivedArg = null;
+        Action<object?> handler = (arg) =>
+        {
+            receivedArg = arg;
+        };
+        await _client.RegisterRequestHandlerAsync("object:NotificationService.dismiss", handler, null);
+
+        NotificationService.Dismiss(_client, NotificationId.FromString("my-toast"));
+
+        Assert.That(receivedArg, Is.EqualTo("my-toast"));
+        Assert.That(receivedArg, Is.InstanceOf<string>());
+    }
+
+    [Test]
+    public async Task NotificationService_Dismiss_WithNumericId_PassesLongToServer()
+    {
+        object? receivedArg = null;
+        Action<object?> handler = (arg) =>
+        {
+            receivedArg = arg;
+        };
+        await _client.RegisterRequestHandlerAsync("object:NotificationService.dismiss", handler, null);
+
+        NotificationService.Dismiss(_client, NotificationId.FromNumber(42L));
+
+        Assert.That(receivedArg, Is.InstanceOf<long>());
+        Assert.That((long)receivedArg!, Is.EqualTo(42L));
     }
 }
