@@ -323,8 +323,9 @@ global.webViewComponent = function ChecklistWebView({
         // a `success` field — narrowing is on the presence of `rows` (success shape) vs `code`
         // (ChecklistResultError shape). See data-contracts.md §3.1.
         if ('rows' in response) {
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          setData(toChecklistData(response as Extract<ChecklistResultResponse, { success: true }>));
+          // The `'rows' in response` narrowing already proves response is the success variant,
+          // so we can pass it through without further casting.
+          setData(toChecklistData(response));
           setError(undefined);
         } else {
           setData(undefined);
@@ -590,6 +591,8 @@ global.webViewComponent = function ChecklistWebView({
               pdp.getSetting('platform.fullName'),
               Promise.resolve(undefined), // language not strictly required
             ]);
+            // pdp.getSetting can return `null` for missing settings — must compare against null
+            // explicitly here, so we disable the no-null rule for this guard only.
             // eslint-disable-next-line no-null/no-null
             if (shortName !== null && shortName !== undefined) {
               results.push({

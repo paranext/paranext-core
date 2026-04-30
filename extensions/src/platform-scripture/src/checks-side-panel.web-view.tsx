@@ -803,8 +803,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
           openTabs={openTabs}
           selection={{
             projectId,
-            scrollGroupId:
-              typeof scrollGroupId === 'number' ? (scrollGroupId as ScrollGroupId) : undefined,
+            scrollGroupId: typeof scrollGroupId === 'number' ? scrollGroupId : undefined,
           }}
           onChangeSelection={handleSelectProject}
           onOpenProjectInGroup={handleOpenProjectInGroup}

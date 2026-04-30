@@ -1,3 +1,8 @@
+// ProjectSelector accepts a discriminated union of props (mode: 'project' | 'project-multi' |
+// 'projectScrollGroup'). Destructuring at the parameter level loses TypeScript's type narrowing
+// on the mode-discriminated adjacent fields, so we keep `props.X` access throughout to preserve
+// narrowing inside `if (props.mode === '...')` blocks.
+/* eslint-disable react/destructuring-assignment */
 import { Fragment, ReactNode, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
 import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Filter } from 'lucide-react';
 import type { ScrollGroupId } from 'platform-bible-utils';
@@ -227,7 +232,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
   );
 
   // Right-side content: chip(s) and, for bound-but-closed rows, an "Open" button.
-  let rightContent: ReactNode = null;
+  let rightContent: ReactNode;
   if (mode === 'project') {
     if (row.openGroups.length > 0) {
       rightContent = (

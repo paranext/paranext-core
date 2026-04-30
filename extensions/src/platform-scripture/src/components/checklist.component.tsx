@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { AlertTriangle, Eye, EyeOff, Pencil, X } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import type {
   ChecklistCell,
   ChecklistLocalizedStringKey,
@@ -69,7 +69,7 @@ const localizeString = (strings: ChecklistLocalizedStrings, key: ChecklistLocali
 
 const MARKER_INDENT_REM_PER_LEVEL = 1;
 
-function getMarkerIndentStyle(marker: string): React.CSSProperties {
+function getMarkerIndentStyle(marker: string): CSSProperties {
   // Match a marker family followed by a level number, e.g. `q2`, `qm3`, `mt2`, `pi1`, `ms2`.
   // Markers without a trailing digit (`p`, `m`, `s`, bare `q`) get no indent.
   const match = /^[a-zA-Z]+(\d+)$/.exec(marker);
@@ -317,9 +317,8 @@ export function ChecklistTool({
 
   const [dismissedErrorKey, setDismissedErrorKey] = useState<string | undefined>(undefined);
   const [dismissedHelpTextKey, setDismissedHelpTextKey] = useState<string | undefined>(undefined);
-  const isErrorDismissed = error !== undefined && error !== null && error === dismissedErrorKey;
-  const isHelpTextDismissed =
-    helpText !== undefined && helpText !== null && helpText === dismissedHelpTextKey;
+  const isErrorDismissed = error !== undefined && error === dismissedErrorKey;
+  const isHelpTextDismissed = helpText !== undefined && helpText === dismissedHelpTextKey;
   const handleDismissError = useCallback(() => {
     if (typeof error === 'string') setDismissedErrorKey(error);
   }, [error]);

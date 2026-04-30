@@ -195,6 +195,7 @@ export function MarkerSettingsDialog({
       Promise.resolve(validate(equivalentMarkers))
         .then((result) => {
           if (!cancelled) setValidationResult(result);
+          return undefined;
         })
         .catch(() => {
           // If the backend round-trip fails, fall back to "assume valid" rather than locking the

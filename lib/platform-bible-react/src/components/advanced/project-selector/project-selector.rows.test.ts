@@ -1,3 +1,8 @@
+// Test fixtures use `as ScrollGroupId` to construct branded-number values from literals, and `!`
+// non-null assertions immediately after `expect(x).toBeDefined()` calls to read fields off the
+// just-asserted value. Both are idiomatic for test code; the lint rule's strict prohibition fits
+// production code better than test fixtures.
+/* eslint-disable no-type-assertion/no-type-assertion */
 import { describe, it, expect } from 'vitest';
 import type { ScrollGroupId } from 'platform-bible-utils';
 import {

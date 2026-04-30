@@ -653,6 +653,7 @@ export function ScopeSelector({
   // undefined.
   // eslint-disable-next-line no-null/no-null
   const [rangeDialogEl, setRangeDialogEl] = useState<HTMLDivElement | null>(null);
+  // Same `null` lifecycle as `rangeDialogEl` above — see that comment for rationale.
   // eslint-disable-next-line no-null/no-null
   const [booksDialogEl, setBooksDialogEl] = useState<HTMLDivElement | null>(null);
   // `null` tracking for the outer dropdown's content element. We portal the inline

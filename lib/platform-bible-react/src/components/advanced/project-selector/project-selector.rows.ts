@@ -179,17 +179,17 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
 
   // project-multi and projectScrollGroup share the row structure (per-pair rows plus per-project
   // rows for not-open projects). They differ only in how selection is keyed.
-  const selectedPairs: readonly ProjectPair[] =
-    args.mode === 'project-multi'
-      ? args.selection.pairs
-      : args.selection.projectId !== undefined
-        ? [
-            {
-              projectId: args.selection.projectId,
-              scrollGroupId: args.selection.scrollGroupId,
-            },
-          ]
-        : [];
+  let selectedPairs: readonly ProjectPair[] = [];
+  if (args.mode === 'project-multi') {
+    selectedPairs = args.selection.pairs;
+  } else if (args.selection.projectId !== undefined) {
+    selectedPairs = [
+      {
+        projectId: args.selection.projectId,
+        scrollGroupId: args.selection.scrollGroupId,
+      },
+    ];
+  }
 
   const rows: ProjectRow[] = [];
 

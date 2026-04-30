@@ -1,3 +1,7 @@
+// Story sample data uses `as ScrollGroupId` to construct branded-number values from numeric
+// literals — a common pattern for fixture data in stories. The lint rule's strict prohibition
+// fits production code better than story fixtures.
+/* eslint-disable no-type-assertion/no-type-assertion */
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import type { ScrollGroupId } from 'platform-bible-utils';
