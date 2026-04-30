@@ -16,9 +16,29 @@ import {
 const localizedStrings = getLocalizedStrings([...ARTICLE_VIEWER_STRING_KEYS]);
 
 /**
- * Long-article fixture for the scrolling-body story. Repeats the Camel article paragraphs to push
- * the body past the dialog height and force the inner scroll container to scroll. Mirrors the
- * ArticleRendererData shape exactly (no story-only fields).
+ * Heaven article variant with extra cross-references so the see-also list renders with multiple
+ * entries. Mirrors the original Heaven fixture (same articleId / paragraphs / abbreviations /
+ * inline images) but adds three more see-also links plus a launchViewer cross-ref so the Default
+ * story can exercise the full set of cross-reference branches in `onCrossReferenceClick`.
+ */
+const MOCK_ARTICLE_HEAVEN_MULTI_SEEALSO: MockArticleData = {
+  ...MOCK_ARTICLE_HEAVEN,
+  crossReferences: [
+    { targetArticleId: 'REALIA:5.3', displayText: 'Sky and clouds', type: 'seealso' },
+    { targetArticleId: 'REALIA:5.4', displayText: 'Stars and constellations', type: 'seealso' },
+    { targetArticleId: 'FAUNA:0', displayText: 'Contents and Introduction', type: 'seealso' },
+    {
+      targetArticleId: 'CosmologyDiagram',
+      displayText: 'ANE Cosmology diagram',
+      type: 'launchViewer',
+    },
+  ],
+};
+
+/**
+ * Long-article fixture used only by the LongArticle path inside the Default cycle. Repeats the
+ * Camel paragraphs to push the body past the dialog height and force the inner scroll container to
+ * scroll. Mirrors the ArticleRendererData shape exactly (no story-only fields).
  */
 const MOCK_ARTICLE_LONG: MockArticleData = {
   articleId: 'FAUNA:2.8-LONG',
@@ -48,30 +68,20 @@ const MOCK_ARTICLE_LONG: MockArticleData = {
 };
 
 /**
- * Heaven article variant with extra cross-references to demonstrate the WithSeeAlso story. Mirrors
- * the original Heaven fixture but adds two more see-also links so the section renders as a list.
+ * Articles indexed by id, used by the Default story to navigate cross-references. Heaven's id
+ * (REALIA:5.2) maps to the multi-seealso variant so the see-also list is rich enough to exercise
+ * all branches: a target with a fixture, two targets without a fixture (diagnostic-log path), and a
+ * launchViewer cross-ref.
  */
-const MOCK_ARTICLE_HEAVEN_MULTI_SEEALSO: MockArticleData = {
-  ...MOCK_ARTICLE_HEAVEN,
-  crossReferences: [
-    { targetArticleId: 'REALIA:5.3', displayText: 'Sky and clouds', type: 'seealso' },
-    { targetArticleId: 'REALIA:5.4', displayText: 'Stars and constellations', type: 'seealso' },
-    { targetArticleId: 'FAUNA:0', displayText: 'Contents and Introduction', type: 'seealso' },
-    {
-      targetArticleId: 'CosmologyDiagram',
-      displayText: 'ANE Cosmology diagram',
-      type: 'launchViewer',
-    },
-  ],
+const ARTICLE_INDEX: Record<string, MockArticleData> = {
+  [MOCK_ARTICLE_HEAVEN_MULTI_SEEALSO.articleId]: MOCK_ARTICLE_HEAVEN_MULTI_SEEALSO,
+  [MOCK_ARTICLE_CONTENTS.articleId]: MOCK_ARTICLE_CONTENTS,
+  [MOCK_ARTICLE_CAMEL.articleId]: MOCK_ARTICLE_CAMEL,
+  [MOCK_ARTICLE_MINIMAL.articleId]: MOCK_ARTICLE_MINIMAL,
+  [MOCK_ARTICLE_LONG.articleId]: MOCK_ARTICLE_LONG,
 };
 
-/** Articles indexed by id, used by the Interactive story to navigate cross-references. */
-const ARTICLE_INDEX: Record<string, MockArticleData> = {
-  [MOCK_ARTICLE_CAMEL.articleId]: MOCK_ARTICLE_CAMEL,
-  [MOCK_ARTICLE_HEAVEN.articleId]: MOCK_ARTICLE_HEAVEN,
-  [MOCK_ARTICLE_CONTENTS.articleId]: MOCK_ARTICLE_CONTENTS,
-  [MOCK_ARTICLE_MINIMAL.articleId]: MOCK_ARTICLE_MINIMAL,
-};
+const SEED_ARTICLE_ID = MOCK_ARTICLE_HEAVEN_MULTI_SEEALSO.articleId;
 
 const meta: Meta<typeof ArticleViewer> = {
   title: 'Bundled Extensions/platform-enhanced-resources/ArticleViewer',
@@ -79,8 +89,8 @@ const meta: Meta<typeof ArticleViewer> = {
   tags: ['autodocs'],
   args: {
     open: true,
-    articleId: MOCK_ARTICLE_CAMEL.articleId,
-    articleData: MOCK_ARTICLE_CAMEL,
+    articleId: SEED_ARTICLE_ID,
+    articleData: MOCK_ARTICLE_HEAVEN_MULTI_SEEALSO,
     imageUrlResolver: mockImageUrlResolver,
     onOpenChange: () => {},
     localizedStringsWithLoadingState: [localizedStrings, false],
@@ -102,69 +112,42 @@ export default meta;
 
 type Story = StoryObj<typeof ArticleViewer>;
 
-/** Default - full article rendered with verse link, inline image, and see-also list. */
-export const Default: Story = {
-  args: {
-    articleId: MOCK_ARTICLE_CAMEL.articleId,
-    articleData: MOCK_ARTICLE_CAMEL,
-  },
-};
-
-/** Inline images visible inside paragraphs (Camel article has Dromedary inline image). */
-export const WithImages: Story = {
-  args: {
-    articleId: MOCK_ARTICLE_CAMEL.articleId,
-    articleData: MOCK_ARTICLE_CAMEL,
-  },
-};
-
-/** Multiple see-also links rendered as a list under the article. */
-export const WithSeeAlso: Story = {
-  args: {
-    articleId: MOCK_ARTICLE_HEAVEN_MULTI_SEEALSO.articleId,
-    articleData: MOCK_ARTICLE_HEAVEN_MULTI_SEEALSO,
-  },
-};
-
-/** Single-paragraph article with no extras (covers minimal-content edge case). */
-export const Minimal: Story = {
-  args: {
-    articleId: MOCK_ARTICLE_MINIMAL.articleId,
-    articleData: MOCK_ARTICLE_MINIMAL,
-  },
-};
-
-/** Long article body that overflows the dialog height (forces inner scroll). */
-export const LongArticle: Story = {
-  args: {
-    articleId: MOCK_ARTICLE_LONG.articleId,
-    articleData: MOCK_ARTICLE_LONG,
-  },
-};
-
-/** Loading state - skeleton lines while the article body is being fetched. */
-export const Loading: Story = {
-  args: {
-    articleId: 'art-001',
-    articleData: undefined,
-  },
-};
-
 /**
- * Interactive variant: parent owns state and reacts to all callbacks. Demonstrates open/close,
- * scrolling, and cross-reference navigation - clicking a "see also" link swaps the article in
- * place. The trigger button restores focus per Dialog focus management.
+ * Default - fully-interactive story. The trigger button opens the dialog seeded with the Heaven
+ * (multi-seealso) article. The article body exercises:
+ *
+ * - Abbreviation tooltip on hover (paragraph 1's "ANE" -> "Ancient Near Eastern")
+ * - Inline image click (Cosmology image; logs the imageId via onImageClick)
+ * - Verse reference click (paragraph 2's John 3:16 link; logs the link via onVerseLinkClick)
+ * - See-also navigation: the four cross-refs cover (a) a target WITH a fixture (Contents and
+ *   Introduction -> MOCK_ARTICLE_CONTENTS; from Contents the user can drill into MOCK_ARTICLE_CAMEL
+ *   via its CROSS_REF_CAMEL_DETAIL), (b) targets WITHOUT a fixture (Sky and clouds, Stars and
+ *   constellations - log path), and (c) a launchViewer cross-ref (ANE Cosmology diagram - log path;
+ *   production wires this to MediaViewer).
+ *
+ * Three secondary trigger buttons exist so a reviewer can re-seed the dialog with the long-article
+ * fixture (forces inner scroll), the minimal-content fixture (single paragraph edge case), and a
+ * pre-undefined "loading" state. Closing via the Dialog's X / Escape / click-outside feeds back
+ * through onOpenChange to flip open back to false.
  */
-export const Interactive: StoryObj<typeof ArticleViewer> = {
+export const Default: StoryObj<typeof ArticleViewer> = {
   parameters: { chromatic: { disableSnapshot: true } },
   render: function Render() {
     const [open, setOpen] = useState(false);
-    const [activeArticleId, setActiveArticleId] = useState<string>(MOCK_ARTICLE_CAMEL.articleId);
+    const [activeArticleId, setActiveArticleId] = useState<string>(SEED_ARTICLE_ID);
+    const [articleLoading, setArticleLoading] = useState(false);
 
-    const currentArticle = ARTICLE_INDEX[activeArticleId];
+    const currentArticle = articleLoading ? undefined : ARTICLE_INDEX[activeArticleId];
 
-    const handleOpen = useCallback(() => {
-      setActiveArticleId(MOCK_ARTICLE_CAMEL.articleId);
+    const openWithArticle = useCallback((articleId: string) => {
+      setArticleLoading(false);
+      setActiveArticleId(articleId);
+      setOpen(true);
+    }, []);
+
+    const openLoading = useCallback(() => {
+      setArticleLoading(true);
+      setActiveArticleId('FAUNA:fetching');
       setOpen(true);
     }, []);
 
@@ -176,6 +159,7 @@ export const Interactive: StoryObj<typeof ArticleViewer> = {
         return;
       }
       if (ARTICLE_INDEX[ref.targetArticleId]) {
+        setArticleLoading(false);
         setActiveArticleId(ref.targetArticleId);
       } else {
         // Storybook-only diagnostic when a see-also target has no fixture in the story map.
@@ -186,12 +170,32 @@ export const Interactive: StoryObj<typeof ArticleViewer> = {
 
     return (
       <div className="tw-flex tw-flex-col tw-gap-3 tw-p-4">
-        <Button type="button" onClick={handleOpen}>
-          Open ArticleViewer
-        </Button>
+        <div className="tw-flex tw-flex-wrap tw-gap-2">
+          <Button type="button" onClick={() => openWithArticle(SEED_ARTICLE_ID)}>
+            Open ArticleViewer
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => openWithArticle(MOCK_ARTICLE_LONG.articleId)}
+          >
+            Open long article
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => openWithArticle(MOCK_ARTICLE_MINIMAL.articleId)}
+          >
+            Open minimal article
+          </Button>
+          <Button type="button" variant="outline" onClick={openLoading}>
+            Open loading state
+          </Button>
+        </div>
         <p className="tw-text-sm tw-text-muted-foreground">
-          Click a See also link to swap articles in place, or click a verse reference / inline image
-          to log the callback. Escape and click-outside close.
+          Click a See also link to swap articles in place, hover an abbreviation (e.g. ANE) to see
+          its tooltip, click an inline image or verse reference to log the callback. Escape and
+          click-outside close.
         </p>
         <ArticleViewer
           open={open}
@@ -210,5 +214,18 @@ export const Interactive: StoryObj<typeof ArticleViewer> = {
         />
       </div>
     );
+  },
+};
+
+/**
+ * Loading state - skeleton lines while the article body is being fetched. Kept as a dedicated
+ * static story so the loading-skeleton evidence stays isolated and stable for visual review. (The
+ * interactive Default also reaches this state via the "Open loading state" trigger, so this export
+ * is optional per Theme 4 - but keeping it preserves the snapshot as a baseline.)
+ */
+export const Loading: Story = {
+  args: {
+    articleId: 'art-001',
+    articleData: undefined,
   },
 };
