@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { useLocalizedStrings } from '@papi/frontend/react';
 import {
   ResizableHandle,
   ResizablePanel,
@@ -7,7 +9,7 @@ import {
   Tabs,
   cn,
 } from 'platform-bible-react';
-import type { LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
+import type { LocalizeKey, LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
 import {
   TempScripturePane,
   type MarbleTokenLike,
@@ -531,3 +533,52 @@ export function EnhancedResourceWebView({
 }
 
 export default EnhancedResourceWebView;
+
+const EMPTY_RIBBON_STATES: RibbonStates = {
+  missingBook: false,
+  reviewStatus: { visible: false, dismissed: false },
+  imageWarning: false,
+  copyright: { visible: false, dismissed: false },
+  updateRequiredData: false,
+  updateAvailable: { visible: false, dismissed: false },
+};
+
+/**
+ * Module-level mutable copy of the localized-string keys, kept stable across renders
+ * (useLocalizedStrings warns its first argument must keep the same array reference).
+ */
+const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [...ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS];
+
+/**
+ * Web view entry point. Thin wiring layer that mounts {@link EnhancedResourceWebView} with minimal
+ * default state - sufficient for the launcher (UI-PKG-009) to render the empty state gracefully
+ * (TS-043). Subsequent UI-PKGs will replace this with full PAPI wiring (scripture pane, dictionary,
+ * encyclopedia, media tabs).
+ *
+ * The localized-strings bag is fetched once here and forwarded to the shell + nested children (per
+ * the existing prop contract).
+ */
+globalThis.webViewComponent = function EnhancedResourceWebViewWiring() {
+  // The keys reference must be stable across renders - WIRING_LOCALIZED_STRING_KEYS is module-level.
+  // The hook's LanguageStrings return type is structurally a record from string to
+  // LocalizedStringValue, which is assignable to the shell's looser
+  // Record<string, LocalizedStringValue | undefined> prop contract via direct array build.
+  const [stringsBag, isLoadingStrings] = useLocalizedStrings(WIRING_LOCALIZED_STRING_KEYS);
+  const stringsForShell: Record<string, LocalizedStringValue | undefined> = { ...stringsBag };
+
+  const [activeTab, setActiveTab] = useState<ResearchTab>('dictionary');
+  const [scope, setScope] = useState<MarbleScope>('current-verse');
+
+  return (
+    <EnhancedResourceWebView
+      tokens={undefined}
+      filteredTokenId={undefined}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      scope={scope}
+      onScopeChange={setScope}
+      ribbons={EMPTY_RIBBON_STATES}
+      localizedStringsWithLoadingState={[stringsForShell, isLoadingStrings]}
+    />
+  );
+};

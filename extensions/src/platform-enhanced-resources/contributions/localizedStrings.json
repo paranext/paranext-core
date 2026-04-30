@@ -1,64 +1,68 @@
 {
   "metadata": {
+    "%platformEnhancedResources_mainMenu_openEnhancedResource%": {
+      "notes": "Application main menu > Platform.bible > Open Enhanced Resource. Launches the Enhanced Resource web view for the user-selected Enhanced Resource."
+    },
+    "%platformEnhancedResources_title_enhancedResource%": {
+      "notes": "Title bar / tab title for the Enhanced Resource web view. Shown when no resource-specific name is available."
+    },
     "%enhancedResources_tooltip_lemma%": {
-      "notes": ["Label preceding a Hebrew/Greek lemma in the Enhanced Resource word tooltip."]
+      "notes": "Label preceding a Hebrew/Greek lemma in the Enhanced Resource word tooltip."
     },
     "%enhancedResources_tooltip_gloss%": {
-      "notes": ["Label preceding a short gloss in the Enhanced Resource word tooltip."]
+      "notes": "Label preceding a short gloss in the Enhanced Resource word tooltip."
     },
     "%enhancedResources_tooltip_partOfSpeech%": {
-      "notes": ["Label preceding the part of speech in the Enhanced Resource word tooltip."]
+      "notes": "Label preceding the part of speech in the Enhanced Resource word tooltip."
     },
     "%enhancedResources_tooltip_strongNumber%": {
-      "notes": ["Label preceding a Strong's number in the Enhanced Resource word tooltip."]
+      "notes": "Label preceding a Strong's number in the Enhanced Resource word tooltip."
     },
     "%enhancedResources_tooltip_morphology%": {
-      "notes": ["Label preceding the morphology code in the Enhanced Resource word tooltip."]
+      "notes": "Label preceding the morphology code in the Enhanced Resource word tooltip."
     },
     "%enhancedResources_tooltip_notes%": {
-      "notes": ["Label preceding the notes list in the Enhanced Resource word tooltip."]
+      "notes": "Label preceding the notes list in the Enhanced Resource word tooltip."
     },
     "%enhancedResources_note_callerType_footnote%": {
-      "notes": ["Label that identifies a footnote in the scripture pane note popup."]
+      "notes": "Label that identifies a footnote in the scripture pane note popup."
     },
     "%enhancedResources_note_callerType_endnote%": {
-      "notes": ["Label that identifies an endnote in the scripture pane note popup."]
+      "notes": "Label that identifies an endnote in the scripture pane note popup."
     },
     "%enhancedResources_note_callerType_crossReference%": {
-      "notes": ["Label that identifies a cross-reference in the scripture pane note popup."]
+      "notes": "Label that identifies a cross-reference in the scripture pane note popup."
     },
     "%enhancedResources_note_emptyBody%": {
-      "notes": ["Placeholder shown when a note has no body text."]
+      "notes": "Placeholder shown when a note has no body text."
     },
     "%enhancedResources_note_references%": {
-      "notes": ["Heading above the list of verse references inside a note."]
+      "notes": "Heading above the list of verse references inside a note."
     },
     "%enhancedResources_scripturePane_loading%": {
-      "notes": ["ARIA label for the scripture pane while it is loading."]
+      "notes": "ARIA label for the scripture pane while it is loading."
     },
     "%enhancedResources_scripturePane_emptyTitle%": {
-      "notes": ["Title shown when no chapter is loaded in the scripture pane."]
+      "notes": "Title shown when no chapter is loaded in the scripture pane."
     },
     "%enhancedResources_scripturePane_emptyDescription%": {
-      "notes": ["Body shown when no chapter is loaded in the scripture pane."]
+      "notes": "Body shown when no chapter is loaded in the scripture pane."
     },
     "%enhancedResources_scripturePane_errorTitle%": {
-      "notes": ["Title shown when scripture pane fails to load."]
+      "notes": "Title shown when scripture pane fails to load."
     },
     "%enhancedResources_scripturePane_filterActive%": {
-      "notes": ["Status text shown when a word filter is active in the scripture pane."]
+      "notes": "Status text shown when a word filter is active in the scripture pane."
     },
     "%enhancedResources_scripturePane_editorPlaceholder%": {
-      "notes": [
-        "Placeholder text rendered in place of the real scripture editor during the design phase."
-      ]
+      "notes": "Placeholder text rendered in place of the real scripture editor during the design phase."
     },
     "%enhancedResources_scripturePane_footnotesHeader%": {
-      "notes": ["Header above the footnote list in the scripture pane."]
+      "notes": "Header above the footnote list in the scripture pane."
     },
     "%enhancedResources_ribbon_missingBook_title%": {},
     "%enhancedResources_ribbon_missingBook_description%": {
-      "notes": ["{resourceName} is replaced with the resource short name."]
+      "notes": "{resourceName} is replaced with the resource short name."
     },
     "%enhancedResources_ribbon_reviewStatus_title%": {},
     "%enhancedResources_ribbon_reviewStatus_description%": {},
@@ -74,7 +78,7 @@
     "%enhancedResources_ribbon_updateAvailable_description%": {},
     "%enhancedResources_ribbon_updateAvailable_downloadDisabled%": {},
     "%enhancedResources_ribbon_dismiss%": {
-      "notes": ["ARIA label for the close button on a dismissible warning ribbon."]
+      "notes": "ARIA label for the close button on a dismissible warning ribbon."
     },
     "%enhancedResources_copyrightOverlay_title%": {},
     "%enhancedResources_copyrightOverlay_dismiss%": {},
@@ -84,12 +88,10 @@
     "%enhancedResources_toolbar_highlightAllResearchTerms%": {},
     "%enhancedResources_toolbar_currentReference%": {},
     "%enhancedResources_toolbar_filterAriaLabel%": {
-      "notes": [
-        "ARIA label for the filter input that appears in the lower research-pane tab bar after a word is clicked. The input is read-only and shows the transliterated form of the clicked word; aria-label gives screen readers context since there is no placeholder."
-      ]
+      "notes": "ARIA label for the filter input that appears in the lower research-pane tab bar after a word is clicked. The input is read-only and shows the transliterated form of the clicked word; aria-label gives screen readers context since there is no placeholder."
     },
     "%enhancedResources_toolbar_filterClear%": {
-      "notes": ["ARIA label for the X button that clears and hides the filter input."]
+      "notes": "ARIA label for the X button that clears and hides the filter input."
     },
     "%enhancedResources_toolbar_scopeLabel%": {},
     "%enhancedResources_toolbar_scope_currentVerse%": {},
@@ -101,16 +103,16 @@
     "%enhancedResources_toolbar_tab_media%": {},
     "%enhancedResources_toolbar_tab_maps%": {},
     "%enhancedResources_toolbar_menu_showFootnotes%": {
-      "notes": ["View-menu item: toggles the footnote pane below the scripture pane (BHV-302)."]
+      "notes": "View-menu item: toggles the footnote pane below the scripture pane (BHV-302)."
     },
     "%enhancedResources_toolbar_menu_showTranslations%": {
-      "notes": ["View-menu item: toggles the translations column in the research pane (BHV-303)."]
+      "notes": "View-menu item: toggles the translations column in the research pane (BHV-303)."
     },
     "%enhancedResources_toolbar_menu_hebrewHeader%": {
-      "notes": ["View-menu sub-section header for Hebrew display-mode radio group (BHV-304)."]
+      "notes": "View-menu sub-section header for Hebrew display-mode radio group (BHV-304)."
     },
     "%enhancedResources_toolbar_menu_greekHeader%": {
-      "notes": ["View-menu sub-section header for Greek display-mode radio group (BHV-304)."]
+      "notes": "View-menu sub-section header for Greek display-mode radio group (BHV-304)."
     },
     "%enhancedResources_toolbar_menu_originalScript%": {},
     "%enhancedResources_toolbar_menu_transliteration%": {},
@@ -125,370 +127,272 @@
     "%enhancedResources_shell_emptyTitle%": {},
     "%enhancedResources_shell_emptyDescription%": {},
     "%enhancedResources_dictionary_sense_glossesLabel%": {
-      "notes": [
-        "Inline label in the per-sense definition table preceding the Glosses value (PT9 'Glosses:')."
-      ]
+      "notes": "Inline label in the per-sense definition table preceding the Glosses value (PT9 'Glosses:')."
     },
     "%enhancedResources_dictionary_sense_domainLabel%": {
-      "notes": [
-        "Inline label in the per-sense definition table preceding a Domain value (PT9 'Domain:'); repeats per domain."
-      ]
+      "notes": "Inline label in the per-sense definition table preceding a Domain value (PT9 'Domain:'); repeats per domain."
     },
     "%enhancedResources_dictionary_sense_notesLabel%": {
-      "notes": [
-        "Inline label in the per-sense definition table preceding the Notes value (PT9 'Notes:'). Backend FN-019."
-      ]
+      "notes": "Inline label in the per-sense definition table preceding the Notes value (PT9 'Notes:'). Backend FN-019."
     },
     "%enhancedResources_dictionary_sense_commentLabel%": {
-      "notes": [
-        "Inline label in the per-sense definition table preceding the Comment value (PT9 'Comment:'). Backend FN-019."
-      ]
+      "notes": "Inline label in the per-sense definition table preceding the Comment value (PT9 'Comment:'). Backend FN-019."
     },
     "%enhancedResources_dictionary_sense_commentsAndNotesLabel%": {
-      "notes": [
-        "Inline label in the per-sense definition table preceding the Comments and Notes value. Backend FN-019."
-      ]
+      "notes": "Inline label in the per-sense definition table preceding the Comments and Notes value. Backend FN-019."
     },
     "%enhancedResources_dictionary_sense_occurrencesInAllBooks%": {
-      "notes": ["Per-sense link label that opens the all-book occurrences for that sense."]
+      "notes": "Per-sense link label that opens the all-book occurrences for that sense."
     },
     "%enhancedResources_dictionary_sense_lessRelevantLabel%": {
-      "notes": ["ARIA label for a sense flagged as less-relevant for the current verse."]
+      "notes": "ARIA label for a sense flagged as less-relevant for the current verse."
     },
     "%enhancedResources_dictionary_emptyState_noData%": {
-      "notes": [
-        "Empty state when there is no data for the current scope. {scope} is the localized scope label."
-      ]
+      "notes": "Empty state when there is no data for the current scope. {scope} is the localized scope label."
     },
     "%enhancedResources_dictionary_emptyState_noMatch%": {
-      "notes": [
-        "Empty state when the filter word matches no entries in scope. {word} and {scope} are replaced."
-      ]
+      "notes": "Empty state when the filter word matches no entries in scope. {word} and {scope} are replaced."
     },
     "%enhancedResources_dictionary_emptyState_wordNotInScope%": {
-      "notes": [
-        "Empty state when the filter word does not occur in the current scope. {word} and {scope} are replaced."
-      ]
+      "notes": "Empty state when the filter word does not occur in the current scope. {word} and {scope} are replaced."
     },
     "%enhancedResources_dictionary_dictionaryLabel_sdbh%": {
-      "notes": ["Heading shown when the active dictionary is SDBH (Hebrew)."]
+      "notes": "Heading shown when the active dictionary is SDBH (Hebrew)."
     },
     "%enhancedResources_dictionary_dictionaryLabel_sdbg%": {
-      "notes": ["Heading shown when the active dictionary is SDBG (Greek)."]
+      "notes": "Heading shown when the active dictionary is SDBG (Greek)."
     },
     "%enhancedResources_dictionary_occurrenceCountTooltip%": {
-      "notes": ["Tooltip / ARIA label for the per-entry occurrence count badge."]
+      "notes": "Tooltip / ARIA label for the per-entry occurrence count badge."
     },
     "%enhancedResources_dictionary_sourceTextTooltip%": {
-      "notes": ["ARIA label for clicking a source text link to filter the form."]
+      "notes": "ARIA label for clicking a source text link to filter the form."
     },
     "%enhancedResources_dictionary_copySurfaceForm%": {
-      "notes": [
-        "Context menu item: Copy the surface form (parent of Original/Transliteration sub-items)."
-      ]
+      "notes": "Context menu item: Copy the surface form (parent of Original/Transliteration sub-items)."
     },
     "%enhancedResources_dictionary_copyLemma%": {
-      "notes": ["Context menu item: Copy the lemma (parent of Original/Transliteration sub-items)."]
+      "notes": "Context menu item: Copy the lemma (parent of Original/Transliteration sub-items)."
     },
     "%enhancedResources_dictionary_copy_originalScript%": {
-      "notes": [
-        "Sub-menu item under Copy surface form / Copy lemma: copy the Hebrew/Greek script value."
-      ]
+      "notes": "Sub-menu item under Copy surface form / Copy lemma: copy the Hebrew/Greek script value."
     },
     "%enhancedResources_dictionary_copy_transliteration%": {
-      "notes": [
-        "Sub-menu item under Copy surface form / Copy lemma: copy the transliterated value."
-      ]
+      "notes": "Sub-menu item under Copy surface form / Copy lemma: copy the transliterated value."
     },
     "%enhancedResources_dictionary_findSense%": {
-      "notes": ["Context menu item: Find this sense (filters MarbleForm to sense scope)."]
+      "notes": "Context menu item: Find this sense (filters MarbleForm to sense scope)."
     },
     "%enhancedResources_dictionary_findLemma%": {
-      "notes": ["Context menu item: Find this lemma (filters MarbleForm to lemma scope)."]
+      "notes": "Context menu item: Find this lemma (filters MarbleForm to lemma scope)."
     },
     "%enhancedResources_dictionary_findText%": {
-      "notes": ["Context menu item: Find this text (search by surface text)."]
+      "notes": "Context menu item: Find this text (search by surface text)."
     },
     "%enhancedResources_dictionary_sensesHeader%": {},
     "%enhancedResources_dictionary_hideLessRelevantToggle%": {
-      "notes": ["Switch label: hide senses flagged as less-relevant in the current verse."]
+      "notes": "Switch label: hide senses flagged as less-relevant in the current verse."
     },
     "%enhancedResources_dictionary_allOccurrencesLink%": {
-      "notes": ["Entry-level link label that opens all-book occurrences for the entire entry."]
+      "notes": "Entry-level link label that opens all-book occurrences for the entire entry."
     },
     "%enhancedResources_dictionary_emptyDetail%": {
-      "notes": ["Placeholder when an expanded entry has no detail data to display."]
+      "notes": "Placeholder when an expanded entry has no detail data to display."
     },
     "%enhancedResources_dictionary_backToList%": {
-      "notes": [
-        "Label for the 'Back to list' button at the top of the dictionary entry detail drawer."
-      ]
+      "notes": "Label for the 'Back to list' button at the top of the dictionary entry detail drawer."
     },
     "%enhancedResources_dictionary_wasThisHelpful%": {
-      "notes": [
-        "Prompt above Yes/No radio buttons asking whether the dictionary entry was helpful (Theme 13b; backend FN-018)."
-      ]
+      "notes": "Prompt above Yes/No radio buttons asking whether the dictionary entry was helpful (Theme 13b; backend FN-018)."
     },
     "%enhancedResources_dictionary_helpful_yes%": {
-      "notes": ["Yes radio button label for the 'Was this helpful?' prompt."]
+      "notes": "Yes radio button label for the 'Was this helpful?' prompt."
     },
     "%enhancedResources_dictionary_helpful_no%": {
-      "notes": ["No radio button label for the 'Was this helpful?' prompt."]
+      "notes": "No radio button label for the 'Was this helpful?' prompt."
     },
     "%enhancedResources_dictionary_giveFeedback%": {
-      "notes": [
-        "Optional 'Give feedback...' link revealed after the user answers the helpfulness prompt."
-      ]
+      "notes": "Optional 'Give feedback...' link revealed after the user answers the helpfulness prompt."
     },
     "%enhancedResources_encyclopedia_tabLabel%": {
-      "notes": ["Heading and ARIA label for the Encyclopedia research tab."]
+      "notes": "Heading and ARIA label for the Encyclopedia research tab."
     },
     "%enhancedResources_encyclopedia_emptyState_noData%": {
-      "notes": [
-        "Empty state when no encyclopedia entries match the current scope. {scope} is the localized scope label."
-      ]
+      "notes": "Empty state when no encyclopedia entries match the current scope. {scope} is the localized scope label."
     },
     "%enhancedResources_encyclopedia_emptyState_noMatch%": {
-      "notes": [
-        "Empty state when the filter word matches no encyclopedia entries in scope. {word} and {scope} are replaced."
-      ]
+      "notes": "Empty state when the filter word matches no encyclopedia entries in scope. {word} and {scope} are replaced."
     },
     "%enhancedResources_encyclopedia_emptyState_wordNotInScope%": {
-      "notes": [
-        "Empty state when the filter word does not occur in the current scope. {word} and {scope} are replaced."
-      ]
+      "notes": "Empty state when the filter word does not occur in the current scope. {word} and {scope} are replaced."
     },
     "%enhancedResources_encyclopedia_copySurfaceForm%": {
-      "notes": ["Encyclopedia context menu item: Copy the surface form."]
+      "notes": "Encyclopedia context menu item: Copy the surface form."
     },
     "%enhancedResources_encyclopedia_copyLemma%": {
-      "notes": ["Encyclopedia context menu item: Copy the lemma."]
+      "notes": "Encyclopedia context menu item: Copy the lemma."
     },
     "%enhancedResources_encyclopedia_sourceTextTooltip%": {
-      "notes": ["ARIA label for clicking a source-text link in the encyclopedia entry row."]
+      "notes": "ARIA label for clicking a source-text link in the encyclopedia entry row."
     },
     "%enhancedResources_encyclopedia_articleLoading%": {
-      "notes": ["ARIA label for the article loading skeleton in the expanded encyclopedia detail."]
+      "notes": "ARIA label for the article loading skeleton in the expanded encyclopedia detail."
     },
     "%enhancedResources_encyclopedia_emptyDetail%": {
-      "notes": ["Placeholder when an expanded encyclopedia entry has no article data to display."]
+      "notes": "Placeholder when an expanded encyclopedia entry has no article data to display."
     },
     "%enhancedResources_encyclopedia_formatVersionLabel%": {
-      "notes": [
-        "Reserved label for V1/V2 format indicator (currently unused; backend abstracts the difference)."
-      ]
+      "notes": "Reserved label for V1/V2 format indicator (currently unused; backend abstracts the difference)."
     },
     "%enhancedResources_article_seeAlsoHeader%": {
-      "notes": ["Section heading above the cross-references list inside an encyclopedia article."]
+      "notes": "Section heading above the cross-references list inside an encyclopedia article."
     },
     "%enhancedResources_article_referencesHeader%": {
-      "notes": ["Section heading above the verse-reference list inside an encyclopedia article."]
+      "notes": "Section heading above the verse-reference list inside an encyclopedia article."
     },
     "%enhancedResources_article_imageAltLabel%": {
-      "notes": ["Alt-text prefix for inline images inside an encyclopedia article."]
+      "notes": "Alt-text prefix for inline images inside an encyclopedia article."
     },
     "%enhancedResources_article_inlineImageOpenLabel%": {
-      "notes": ["ARIA label for clicking an inline article image to open the MediaViewer."]
+      "notes": "ARIA label for clicking an inline article image to open the MediaViewer."
     },
     "%enhancedResources_article_crossReferenceOpenLabel%": {
-      "notes": ["ARIA label for clicking a See also cross-reference link in an article."]
+      "notes": "ARIA label for clicking a See also cross-reference link in an article."
     },
     "%enhancedResources_article_verseLinkOpenLabel%": {
-      "notes": ["ARIA label for clicking a verse reference link inside an article."]
+      "notes": "ARIA label for clicking a verse reference link inside an article."
     },
     "%enhancedResources_article_emptyArticle%": {
-      "notes": ["Placeholder shown when ArticleRenderer receives no article data."]
+      "notes": "Placeholder shown when ArticleRenderer receives no article data."
     },
     "%enhancedResources_article_truncatedNotice%": {
-      "notes": [
-        "Inline notice shown at the end of a preview-mode article when paragraphs were omitted."
-      ]
+      "notes": "Inline notice shown at the end of a preview-mode article when paragraphs were omitted."
     },
     "%enhancedResources_media_thumbnailLabel%": {
-      "notes": [
-        "ARIA label / alt text for a media thumbnail. {title} is replaced with the entry title."
-      ]
+      "notes": "ARIA label / alt text for a media thumbnail. {title} is replaced with the entry title."
     },
     "%enhancedResources_media_maximize%": {
-      "notes": [
-        "ARIA label for the Maximize button shown over the media-detail thumbnail; opens the centered MediaViewer Dialog with zoom + navigation."
-      ]
+      "notes": "ARIA label for the Maximize button shown over the media-detail thumbnail; opens the centered MediaViewer Dialog with zoom + navigation."
     },
     "%enhancedResources_media_thumbnailLoading%": {
-      "notes": [
-        "ARIA label for a media thumbnail Skeleton placeholder shown while the bytes are still being fetched (BHV-359 deferred loading)."
-      ]
+      "notes": "ARIA label for a media thumbnail Skeleton placeholder shown while the bytes are still being fetched (BHV-359 deferred loading)."
     },
     "%enhancedResources_media_images_tabLabel%": {
-      "notes": ["Heading and ARIA label for the Media Images research tab."]
+      "notes": "Heading and ARIA label for the Media Images research tab."
     },
     "%enhancedResources_media_images_emptyState_noData%": {
-      "notes": [
-        "Empty state message for the Media Images tab when no images match the current scope. {scope} is the localized scope label."
-      ]
+      "notes": "Empty state message for the Media Images tab when no images match the current scope. {scope} is the localized scope label."
     },
     "%enhancedResources_media_images_countLabel_singular%": {
-      "notes": [
-        "Singular media-files count label shown in the Media Images tab header. {count} is replaced with the integer count (always 1 here)."
-      ]
+      "notes": "Singular media-files count label shown in the Media Images tab header. {count} is replaced with the integer count (always 1 here)."
     },
     "%enhancedResources_media_images_countLabel_plural%": {
-      "notes": [
-        "Plural media-files count label shown in the Media Images tab header. {count} is the integer count."
-      ]
+      "notes": "Plural media-files count label shown in the Media Images tab header. {count} is the integer count."
     },
     "%enhancedResources_media_maps_tabLabel%": {
-      "notes": ["Heading and ARIA label for the Media Maps research tab (Satellite Bible Atlas)."]
+      "notes": "Heading and ARIA label for the Media Maps research tab (Satellite Bible Atlas)."
     },
     "%enhancedResources_media_maps_emptyState_noData%": {
-      "notes": [
-        "Empty state message for the Media Maps tab when no Satellite Bible Atlas entries match the current scope. {scope} is the localized scope label."
-      ]
+      "notes": "Empty state message for the Media Maps tab when no Satellite Bible Atlas entries match the current scope. {scope} is the localized scope label."
     },
     "%enhancedResources_media_maps_countLabel_singular%": {
-      "notes": [
-        "Singular map-files count label shown in the Media Maps tab header. {count} is replaced with the integer count (always 1 here)."
-      ]
+      "notes": "Singular map-files count label shown in the Media Maps tab header. {count} is replaced with the integer count (always 1 here)."
     },
     "%enhancedResources_media_maps_countLabel_plural%": {
-      "notes": [
-        "Plural map-files count label shown in the Media Maps tab header. {count} is the integer count."
-      ]
+      "notes": "Plural map-files count label shown in the Media Maps tab header. {count} is the integer count."
     },
     "%enhancedResources_mediaViewer_previous%": {
-      "notes": [
-        "ARIA label for the MediaViewer previous-image button. Hidden when there is only one image."
-      ]
+      "notes": "ARIA label for the MediaViewer previous-image button. Hidden when there is only one image."
     },
     "%enhancedResources_mediaViewer_next%": {
-      "notes": [
-        "ARIA label for the MediaViewer next-image button. Hidden when there is only one image."
-      ]
+      "notes": "ARIA label for the MediaViewer next-image button. Hidden when there is only one image."
     },
     "%enhancedResources_mediaViewer_zoomIn%": {
-      "notes": ["ARIA label for the MediaViewer zoom-in button (+ icon)."]
+      "notes": "ARIA label for the MediaViewer zoom-in button (+ icon)."
     },
     "%enhancedResources_mediaViewer_zoomOut%": {
-      "notes": ["ARIA label for the MediaViewer zoom-out button (- icon). Disabled at 1x zoom."]
+      "notes": "ARIA label for the MediaViewer zoom-out button (- icon). Disabled at 1x zoom."
     },
     "%enhancedResources_mediaViewer_imageAlt%": {
-      "notes": [
-        "Alt text template for the MediaViewer image. {title} is replaced with the image title."
-      ]
+      "notes": "Alt text template for the MediaViewer image. {title} is replaced with the image title."
     },
     "%enhancedResources_mediaViewer_zoomLevelAnnouncement%": {
-      "notes": [
-        "ARIA-live announcement of the current zoom level. {percent} is the zoom percentage (100 = 1x)."
-      ]
+      "notes": "ARIA-live announcement of the current zoom level. {percent} is the zoom percentage (100 = 1x)."
     },
     "%enhancedResources_articleViewer_title%": {
-      "notes": [
-        "DrawerTitle text for the ArticleViewer overlay (also the screen-reader fallback when no article is loaded)."
-      ]
+      "notes": "DrawerTitle text for the ArticleViewer overlay (also the screen-reader fallback when no article is loaded)."
     },
     "%enhancedResources_semanticDomain_title%": {
-      "notes": ["DrawerTitle text for the SemanticDomainViewer overlay."]
+      "notes": "DrawerTitle text for the SemanticDomainViewer overlay."
     },
     "%enhancedResources_semanticDomain_description%": {
-      "notes": [
-        "Screen-reader description for the SemanticDomainViewer drawer. Announces the drawer's purpose."
-      ]
+      "notes": "Screen-reader description for the SemanticDomainViewer drawer. Announces the drawer's purpose."
     },
     "%enhancedResources_marbleGuide_title%": {
-      "notes": [
-        "Title of the 'Getting started in Enhanced Resources' guide dialog. Mirrors PT9 string MarbleGuideForm_1."
-      ]
+      "notes": "Title of the 'Getting started in Enhanced Resources' guide dialog. Mirrors PT9 string MarbleGuideForm_1."
     },
     "%enhancedResources_marbleGuide_description%": {
-      "notes": [
-        "Screen-reader description of the MarbleGuide dialog. Not visible on screen; provides context for the Radix Dialog primitive."
-      ]
+      "notes": "Screen-reader description of the MarbleGuide dialog. Not visible on screen; provides context for the Radix Dialog primitive."
     },
     "%enhancedResources_marbleGuide_overview%": {
-      "notes": [
-        "Opening paragraph of the guide explaining what an Enhanced Resource is. PT9 MarbleGuideForm_2."
-      ]
+      "notes": "Opening paragraph of the guide explaining what an Enhanced Resource is. PT9 MarbleGuideForm_2."
     },
     "%enhancedResources_marbleGuide_chooseMaterial%": {
-      "notes": [
-        "Paragraph instructing the user how to use the colored buttons at the top of the resource. PT9 MarbleGuideForm_3."
-      ]
+      "notes": "Paragraph instructing the user how to use the colored buttons at the top of the resource. PT9 MarbleGuideForm_3."
     },
     "%enhancedResources_marbleGuide_aboutBlueHighlight%": {
-      "notes": [
-        "Paragraph describing research-term highlighting. Contains the {colorWord} placeholder which is replaced with a color chip showing the localized 'blue' word. PT9 MarbleGuideForm_4."
-      ]
+      "notes": "Paragraph describing research-term highlighting. Contains the {colorWord} placeholder which is replaced with a color chip showing the localized 'blue' word. PT9 MarbleGuideForm_4."
     },
     "%enhancedResources_marbleGuide_blueWordTitle%": {
-      "notes": [
-        "The localized name of the highlight color used for research terms (English: 'blue'). Displayed inside the color chip in the guide. PT9 MarbleGuideForm_5."
-      ]
+      "notes": "The localized name of the highlight color used for research terms (English: 'blue'). Displayed inside the color chip in the guide. PT9 MarbleGuideForm_5."
     },
     "%enhancedResources_marbleGuide_aboutBiblicalTerms%": {
-      "notes": [
-        "Paragraph describing how to research Biblical Terms in the user's project. PT9 MarbleGuideForm_6."
-      ]
+      "notes": "Paragraph describing how to research Biblical Terms in the user's project. PT9 MarbleGuideForm_6."
     },
     "%enhancedResources_marbleGuide_aboutGrayHighlight%": {
-      "notes": [
-        "Paragraph describing found-rendering highlighting. Contains the {colorWord} placeholder. PT9 MarbleGuideForm_7."
-      ]
+      "notes": "Paragraph describing found-rendering highlighting. Contains the {colorWord} placeholder. PT9 MarbleGuideForm_7."
     },
     "%enhancedResources_marbleGuide_grayWordTitle%": {
-      "notes": [
-        "The localized name of the highlight color used for found renderings (English: 'gray'). PT9 MarbleGuideForm_8."
-      ]
+      "notes": "The localized name of the highlight color used for found renderings (English: 'gray'). PT9 MarbleGuideForm_8."
     },
     "%enhancedResources_marbleGuide_aboutOrangeHighlight%": {
-      "notes": [
-        "Paragraph describing needs-rendering highlighting. Contains {colorWord} and {helpLink} placeholders. PT9 MarbleGuideForm_9."
-      ]
+      "notes": "Paragraph describing needs-rendering highlighting. Contains {colorWord} and {helpLink} placeholders. PT9 MarbleGuideForm_9."
     },
     "%enhancedResources_marbleGuide_orangeWordTitle%": {
-      "notes": [
-        "The localized name of the highlight color used for needs-rendering attention (English: 'orange'). PT9 MarbleGuideForm_10."
-      ]
+      "notes": "The localized name of the highlight color used for needs-rendering attention (English: 'orange'). PT9 MarbleGuideForm_10."
     },
     "%enhancedResources_marbleGuide_thisHelpTopic%": {
-      "notes": [
-        "Anchor text for the help-topic link inside the orange-highlight paragraph. PT9 MarbleGuideForm_11."
-      ]
+      "notes": "Anchor text for the help-topic link inside the orange-highlight paragraph. PT9 MarbleGuideForm_11."
     },
     "%enhancedResources_marbleGuide_tabsHeader%": {
-      "notes": ["Heading above the research tab icon grid. PT9 MarbleGuideForm_12."]
+      "notes": "Heading above the research tab icon grid. PT9 MarbleGuideForm_12."
     },
     "%enhancedResources_marbleGuide_tab_dictionary%": {
-      "notes": ["Caption below the dictionary tab icon in the guide. PT9 MarbleGuideForm_13."]
+      "notes": "Caption below the dictionary tab icon in the guide. PT9 MarbleGuideForm_13."
     },
     "%enhancedResources_marbleGuide_tab_encyclopedia%": {
-      "notes": ["Caption below the encyclopedia tab icon in the guide. PT9 MarbleGuideForm_14."]
+      "notes": "Caption below the encyclopedia tab icon in the guide. PT9 MarbleGuideForm_14."
     },
     "%enhancedResources_marbleGuide_tab_media%": {
-      "notes": ["Caption below the media tab icon in the guide. PT9 MarbleGuideForm_15."]
+      "notes": "Caption below the media tab icon in the guide. PT9 MarbleGuideForm_15."
     },
     "%enhancedResources_marbleGuide_tab_maps%": {
-      "notes": ["Caption below the maps tab icon in the guide. PT9 MarbleGuideForm_16."]
+      "notes": "Caption below the maps tab icon in the guide. PT9 MarbleGuideForm_16."
     },
     "%enhancedResources_marbleGuide_updateFrequently%": {
-      "notes": [
-        "Reminder paragraph telling users to keep their resources up to date. PT9 MarbleGuideForm_17."
-      ]
+      "notes": "Reminder paragraph telling users to keep their resources up to date. PT9 MarbleGuideForm_17."
     },
     "%enhancedResources_marbleGuide_howToOpenGuide%": {
-      "notes": [
-        "Paragraph explaining how to reopen the guide via the info icon. Contains the {infoIcon} placeholder. PT9 MarbleGuideForm_18."
-      ]
+      "notes": "Paragraph explaining how to reopen the guide via the info icon. Contains the {infoIcon} placeholder. PT9 MarbleGuideForm_18."
     },
     "%enhancedResources_marbleGuide_moreHelp%": {
-      "notes": [
-        "Anchor text for the 'More help...' link at the bottom of the guide. PT9 MarbleGuideForm_19."
-      ]
+      "notes": "Anchor text for the 'More help...' link at the bottom of the guide. PT9 MarbleGuideForm_19."
     },
     "%enhancedResources_marbleGuide_close%": {
-      "notes": ["Label for the Close button in the MarbleGuide dialog footer."]
+      "notes": "Label for the Close button in the MarbleGuide dialog footer."
     },
     "%enhancedResources_marbleGuide_neverShowAgain%": {
-      "notes": ["Label for the 'Don't show this again' checkbox in the MarbleGuide dialog footer."]
+      "notes": "Label for the 'Don't show this again' checkbox in the MarbleGuide dialog footer."
     }
   },
   "localizedStrings": {
@@ -650,7 +554,12 @@
       "%enhancedResources_marbleGuide_howToOpenGuide%": "You can open this guide at any time using the {infoIcon} icon at the top right.",
       "%enhancedResources_marbleGuide_moreHelp%": "More help...",
       "%enhancedResources_marbleGuide_close%": "Close",
-      "%enhancedResources_marbleGuide_neverShowAgain%": "Don't show this again"
+      "%enhancedResources_marbleGuide_neverShowAgain%": "Don't show this again",
+      "%platformEnhancedResources_mainMenu_openEnhancedResource%": "Open Enhanced Resource",
+      "%platformEnhancedResources_title_enhancedResource%": "Enhanced Resource"
+    },
+    "es": {
+      "%platformEnhancedResources_mainMenu_openEnhancedResource%": "Abrir recurso mejorado"
     }
   }
 }
