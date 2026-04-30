@@ -36,15 +36,8 @@ import {
   EncyclopediaTab,
   type EncyclopediaEmptyStateVariant,
 } from '../components/encyclopedia-tab/encyclopedia-tab.component';
-import type {
-  EncyclopediaDisplayItemData,
-  EncyclopediaEntryRefData,
-} from '../components/encyclopedia-tab/encyclopedia-display-item.component';
-import type {
-  ArticleCrossRefData,
-  ArticleRendererData,
-  ArticleVerseLinkData,
-} from '../components/shared/article-renderer.component';
+import type { EncyclopediaDisplayItemData } from '../components/encyclopedia-tab/encyclopedia-display-item.component';
+import type { ArticleRendererData } from '../components/shared/article-renderer.component';
 import { MediaImagesTab } from '../components/media-tab/media-images-tab.component';
 import { MediaMapsTab } from '../components/media-tab/media-maps-tab.component';
 import type { MediaEntryRowData } from '../components/media-tab/media-entry-row.component';
@@ -169,15 +162,10 @@ export type EnhancedResourceWebViewProps = {
   encyclopediaFilterWord?: string;
   encyclopediaScopeLabel?: string;
   encyclopediaArticleDataMap?: Record<string, ArticleRendererData | undefined>;
-  encyclopediaImageUrlResolver?: (imageId: string) => string;
   onEncyclopediaSelectionChange?: (tokenId: string | undefined) => void;
   onEncyclopediaSourceTextClick?: (tokenId: string) => void;
   onEncyclopediaCopySurfaceForm?: (item: EncyclopediaDisplayItemData) => void;
   onEncyclopediaCopyLemma?: (item: EncyclopediaDisplayItemData) => void;
-  onEncyclopediaVerseLinkClick?: (link: ArticleVerseLinkData) => void;
-  onEncyclopediaCrossReferenceClick?: (ref: ArticleCrossRefData) => void;
-  onEncyclopediaImageClick?: (imageId: string) => void;
-  onEncyclopediaViewFullArticle?: (entry: EncyclopediaEntryRefData) => void;
 
   // Media (Images) tab
   mediaImagesItems?: MediaEntryRowData[];
@@ -299,15 +287,10 @@ export function EnhancedResourceWebView({
   encyclopediaFilterWord,
   encyclopediaScopeLabel = '',
   encyclopediaArticleDataMap = {},
-  encyclopediaImageUrlResolver,
   onEncyclopediaSelectionChange = () => {},
   onEncyclopediaSourceTextClick = () => {},
   onEncyclopediaCopySurfaceForm = () => {},
   onEncyclopediaCopyLemma = () => {},
-  onEncyclopediaVerseLinkClick = () => {},
-  onEncyclopediaCrossReferenceClick = () => {},
-  onEncyclopediaImageClick = () => {},
-  onEncyclopediaViewFullArticle = () => {},
 
   mediaImagesItems = [],
   mediaImagesSelectedItemId,
@@ -477,15 +460,10 @@ export function EnhancedResourceWebView({
                     filterWord={encyclopediaFilterWord}
                     scopeLabel={encyclopediaScopeLabel}
                     articleDataMap={encyclopediaArticleDataMap}
-                    imageUrlResolver={encyclopediaImageUrlResolver}
                     onSelectionChange={onEncyclopediaSelectionChange}
                     onSourceTextClick={onEncyclopediaSourceTextClick}
                     onCopySurfaceForm={onEncyclopediaCopySurfaceForm}
                     onCopyLemma={onEncyclopediaCopyLemma}
-                    onVerseLinkClick={onEncyclopediaVerseLinkClick}
-                    onCrossReferenceClick={onEncyclopediaCrossReferenceClick}
-                    onImageClick={onEncyclopediaImageClick}
-                    onViewFullArticle={onEncyclopediaViewFullArticle}
                     localizedStringsWithLoadingState={childStrings}
                   />
                 </TabsContent>

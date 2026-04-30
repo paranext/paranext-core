@@ -316,12 +316,10 @@ export const Default: Story = {
           encyclopediaItems={MOCK_ENC_ENTRIES_HEBREW}
           encyclopediaScopeLabel="current verse"
           encyclopediaArticleDataMap={MOCK_ARTICLE_DATA_MAP}
-          encyclopediaImageUrlResolver={mockImageUrlResolver}
           encyclopediaSelectedTokenId={state.selectedEncyclopediaTokenId}
           onEncyclopediaSelectionChange={(selectedEncyclopediaTokenId) =>
             update({ selectedEncyclopediaTokenId })
           }
-          onEncyclopediaViewFullArticle={(entry) => update({ activeArticleId: entry.articleId })}
           mediaImagesItems={MOCK_MEDIA_IMAGES}
           mediaImagesScopeLabel="current verse"
           mediaImagesThumbnailUrlResolver={mockMediaThumbnailUrlResolver}
@@ -416,7 +414,6 @@ export const WithAllRibbons: Story = {
     encyclopediaItems: MOCK_ENC_ENTRIES_HEBREW,
     encyclopediaScopeLabel: 'current verse',
     encyclopediaArticleDataMap: MOCK_ARTICLE_DATA_MAP,
-    encyclopediaImageUrlResolver: mockImageUrlResolver,
     mediaImagesItems: MOCK_MEDIA_IMAGES,
     mediaImagesScopeLabel: 'current verse',
     mediaImagesThumbnailUrlResolver: mockMediaThumbnailUrlResolver,

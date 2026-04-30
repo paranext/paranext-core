@@ -267,11 +267,6 @@
     "%enhancedResources_encyclopedia_sourceTextTooltip%": {
       "notes": ["ARIA label for clicking a source-text link in the encyclopedia entry row."]
     },
-    "%enhancedResources_encyclopedia_viewFullArticle%": {
-      "notes": [
-        "Footer link in expanded encyclopedia detail that opens the full ArticleViewer drawer."
-      ]
-    },
     "%enhancedResources_encyclopedia_articleLoading%": {
       "notes": ["ARIA label for the article loading skeleton in the expanded encyclopedia detail."]
     },
@@ -603,7 +598,6 @@
       "%enhancedResources_encyclopedia_copySurfaceForm%": "Copy surface form",
       "%enhancedResources_encyclopedia_copyLemma%": "Copy lemma",
       "%enhancedResources_encyclopedia_sourceTextTooltip%": "Filter on this word",
-      "%enhancedResources_encyclopedia_viewFullArticle%": "View full article",
       "%enhancedResources_encyclopedia_articleLoading%": "Loading article",
       "%enhancedResources_encyclopedia_emptyDetail%": "No article content available.",
       "%enhancedResources_encyclopedia_formatVersionLabel%": "Format",

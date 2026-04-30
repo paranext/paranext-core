@@ -7,17 +7,12 @@ import {
   EncyclopediaDisplayItem,
   ENCYCLOPEDIA_DISPLAY_ITEM_STRING_KEYS,
   type EncyclopediaDisplayItemData,
-  type EncyclopediaEntryRefData,
 } from './encyclopedia-display-item.component';
 import {
   EncyclopediaEntryDetail,
   ENCYCLOPEDIA_ENTRY_DETAIL_STRING_KEYS,
 } from './encyclopedia-entry-detail.component';
-import type {
-  ArticleCrossRefData,
-  ArticleRendererData,
-  ArticleVerseLinkData,
-} from '../shared/article-renderer.component';
+import type { ArticleRendererData } from '../shared/article-renderer.component';
 
 /** Object containing all keys used for localization in this component. */
 export const ENCYCLOPEDIA_TAB_STRING_KEYS = Object.freeze([
@@ -70,8 +65,6 @@ export type EncyclopediaTabProps = {
    * detail panel renders a skeleton.
    */
   articleDataMap?: Record<string, ArticleRendererData | undefined>;
-  /** Image url resolver, forwarded to ArticleRenderer / EncyclopediaEntryDetail (FN-009). */
-  imageUrlResolver?: (imageId: string) => string;
   /** Number of preview paragraphs (default 2). */
   previewParagraphCount?: number;
 
@@ -83,12 +76,6 @@ export type EncyclopediaTabProps = {
   onCopySurfaceForm?: (item: EncyclopediaDisplayItemData) => void;
   onCopyLemma?: (item: EncyclopediaDisplayItemData) => void;
 
-  /** Article-renderer callbacks (forwarded to EncyclopediaEntryDetail). */
-  onVerseLinkClick?: (link: ArticleVerseLinkData) => void;
-  onCrossReferenceClick?: (ref: ArticleCrossRefData) => void;
-  onImageClick?: (imageId: string) => void;
-  onViewFullArticle?: (entry: EncyclopediaEntryRefData) => void;
-
   localizedStringsWithLoadingState?: [EncyclopediaTabLocalizedStrings, boolean];
 };
 
@@ -99,9 +86,15 @@ export type EncyclopediaTabProps = {
  * `EncyclopediaEntryDetail` per article reference attached to the lemma, with a single "Back to
  * list" button at the top of the stack.
  *
+ * [Revised: 2026-04-29] Theme 14: dropped `onViewFullArticle` / `onVerseLinkClick` /
+ * `onCrossReferenceClick` / `onImageClick` / `imageUrlResolver` props since
+ * `EncyclopediaEntryDetail` no longer renders interactive cross-references, verse links, inline
+ * images, or a "View full article" footer. Article-side interactivity now lives only in
+ * `ArticleViewer` (UI-PKG-006).
+ *
  * Note: We consume `SourceLanguageIndexedList` directly (not the `ErEncyclopediaList` wrapper)
  * because that wrapper unconditionally overrides `renderItem`, which would silently drop our custom
- * row (ContextMenu, click-routing, count badge).
+ * row (ContextMenu, click-routing).
  *
  * Empty state handling (BHV-352):
  *
@@ -119,7 +112,6 @@ export function EncyclopediaTab({
   filterWord,
   scopeLabel = '',
   articleDataMap = {},
-  imageUrlResolver,
   previewParagraphCount = 2,
 
   onSelectionChange = () => {},
@@ -127,11 +119,6 @@ export function EncyclopediaTab({
   onSourceTextClick = () => {},
   onCopySurfaceForm = () => {},
   onCopyLemma = () => {},
-
-  onVerseLinkClick = () => {},
-  onCrossReferenceClick = () => {},
-  onImageClick = () => {},
-  onViewFullArticle = () => {},
 
   localizedStringsWithLoadingState = [{}, false],
 }: EncyclopediaTabProps) {
@@ -204,12 +191,7 @@ export function EncyclopediaTab({
                   key={entryRef.articleId}
                   entry={entryRef}
                   articleData={articleDataMap[item.tokenId]}
-                  imageUrlResolver={imageUrlResolver}
                   previewParagraphCount={previewParagraphCount}
-                  onVerseLinkClick={onVerseLinkClick}
-                  onCrossReferenceClick={onCrossReferenceClick}
-                  onImageClick={onImageClick}
-                  onViewFullArticle={onViewFullArticle}
                   localizedStringsWithLoadingState={childStrings}
                 />
               ))}

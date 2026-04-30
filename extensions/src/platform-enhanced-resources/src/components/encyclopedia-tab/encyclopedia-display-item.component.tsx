@@ -20,6 +20,9 @@ type EncyclopediaDisplayItemLocalizedStrings = {
   [key in EncyclopediaDisplayItemLocalizedStringKey]?: LocalizedStringValue;
 };
 
+/** Number of teaser characters shown in the collapsed row (PT9 "first-x-chars" pattern). */
+const TEASER_PREVIEW_CHAR_LIMIT = 80;
+
 /** Single encyclopedia article reference attached to a display item. */
 export type EncyclopediaEntryRefData = {
   articleId: string;
@@ -72,15 +75,18 @@ export type EncyclopediaDisplayItemProps = {
  * `renderItem` slot. The surrounding `<li>` (selection, focus, keyboard nav) is owned by the list
  * component.
  *
- * Body layout (single line + optional teaser):
+ * [Revised: 2026-04-29] Theme 14 / audit `working-docs/2026-04-29-marble-data-shape-audit.md#8`:
+ * The collapsed row now follows PT9's simple "headline + first-x-chars" pattern — clickable
+ * source-language headline plus a single-paragraph teaser preview truncated to ~80 characters. The
+ * previous structured columns (count badge for multiple-article lemmas, collection italic suffix)
+ * are gone; reviewers can still see article counts and collections in the side drawer detail.
  *
- * - Translit (clickable - routes to MarbleForm) + source text + collection italic
- * - Trailing entries-count badge (when > 0)
- * - Optional teaser line: first article's preview text (line-clamped to 2 lines)
+ * Body layout:
  *
- * Right-clicking opens the ContextMenu (BHV-353: Copy surface form / Copy lemma). The article
- * details (full teaser, thumbnails, see-also, etc.) live in the side drawer via
- * `EncyclopediaEntryDetail`.
+ * - Translit (clickable - routes to MarbleForm) acting as the headline
+ * - Optional teaser line: first article's preview text, truncated to ~80 chars
+ *
+ * Right-clicking opens the ContextMenu (BHV-353: Copy surface form / Copy lemma) — preserved.
  *
  * Selectors for tests:
  *
@@ -107,6 +113,12 @@ export function EncyclopediaDisplayItem({
     getLocalizedString('%enhancedResources_encyclopedia_sourceTextTooltip%'),
   );
 
+  const fullTeaser = item.entries[0]?.teaserText ?? '';
+  const teaserPreview =
+    fullTeaser.length > TEASER_PREVIEW_CHAR_LIMIT
+      ? `${fullTeaser.slice(0, TEASER_PREVIEW_CHAR_LIMIT).trimEnd()}…`
+      : fullTeaser;
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -114,31 +126,19 @@ export function EncyclopediaDisplayItem({
           data-testid={`encyclopedia-entry-${item.tokenId}`}
           className="tw-flex tw-w-full tw-flex-col tw-gap-0.5"
         >
-          <div className="tw-flex tw-items-baseline tw-gap-3">
-            <Button
-              variant="link"
-              className="tw-h-auto tw-justify-start tw-p-0 tw-text-start tw-text-sm"
-              aria-label={sourceTextTooltip}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSourceTextClick(item.tokenId);
-              }}
-            >
-              <span className="tw-truncate tw-font-semibold">{item.translit}</span>
-            </Button>
-            <span className="tw-text-xs tw-text-muted-foreground">
-              {item.sourceText} <span className="tw-italic">{item.collection.toLowerCase()}</span>
-            </span>
-            {item.entries.length > 0 && (
-              <span className="tw-ml-auto tw-shrink-0 tw-rounded tw-bg-accent tw-px-1.5 tw-py-0.5 tw-text-xs">
-                {item.entries.length}
-              </span>
-            )}
-          </div>
-          {item.entries[0]?.teaserText && (
-            <p className="tw-line-clamp-2 tw-text-xs tw-text-muted-foreground">
-              {item.entries[0].teaserText}
-            </p>
+          <Button
+            variant="link"
+            className="tw-h-auto tw-justify-start tw-p-0 tw-text-start tw-text-sm"
+            aria-label={sourceTextTooltip}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSourceTextClick(item.tokenId);
+            }}
+          >
+            <span className="tw-truncate tw-font-semibold">{item.translit}</span>
+          </Button>
+          {teaserPreview && (
+            <p className="tw-line-clamp-1 tw-text-xs tw-text-muted-foreground">{teaserPreview}</p>
           )}
         </div>
       </ContextMenuTrigger>

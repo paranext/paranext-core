@@ -6,9 +6,7 @@ import {
   MOCK_ARTICLE_DATA_MAP,
   MOCK_ENC_ENTRIES_GREEK,
   MOCK_ENC_ENTRIES_HEBREW,
-  MOCK_ENC_ENTRY_GAMAL,
   MOCK_ENC_ENTRY_SHAMAYIM,
-  mockImageUrlResolver,
 } from '../../data/encyclopedia-tab.story-data';
 
 const localizedStrings = getLocalizedStrings([...ENCYCLOPEDIA_TAB_STRING_KEYS]);
@@ -19,20 +17,10 @@ const meta: Meta<typeof EncyclopediaTab> = {
   tags: ['autodocs'],
   args: {
     localizedStringsWithLoadingState: [localizedStrings, false],
-    selectedTokenId: undefined,
     isLoading: false,
     emptyState: 'none',
     scopeLabel: 'current verse',
     articleDataMap: MOCK_ARTICLE_DATA_MAP,
-    imageUrlResolver: mockImageUrlResolver,
-    onSelectionChange: () => {},
-    onSourceTextClick: () => {},
-    onCopySurfaceForm: () => {},
-    onCopyLemma: () => {},
-    onVerseLinkClick: () => {},
-    onCrossReferenceClick: () => {},
-    onImageClick: () => {},
-    onViewFullArticle: () => {},
   },
   decorators: [
     (Story) => (
@@ -46,30 +34,111 @@ export default meta;
 
 type Story = StoryObj<typeof EncyclopediaTab>;
 
+type FixtureKey = 'hebrew' | 'greek' | 'multiple-articles-per-lemma';
+
+/**
+ * Default - fully interactive. The wrapper lets reviewers toggle between Hebrew, Greek, and a
+ * "shamayim" fixture that has multiple article references stacked in the side drawer. Selection
+ * state is wired so clicking a row opens the side drawer with the (Theme 14) headline-plus-content
+ * detail; clicking the same row again closes it. Per-row callbacks (source-text click, BHV-353
+ * context menu) are wired with a click counter for diagnostic feedback.
+ */
+function InteractiveEncyclopediaTabDemo() {
+  const [fixture, setFixture] = useState<FixtureKey>('hebrew');
+  const [selectedTokenId, setSelectedTokenId] = useState<string | undefined>();
+  const [eventLog, setEventLog] = useState<string[]>([]);
+
+  const items = (() => {
+    if (fixture === 'hebrew') return MOCK_ENC_ENTRIES_HEBREW;
+    if (fixture === 'greek') return MOCK_ENC_ENTRIES_GREEK;
+    // shamayim has 2 article refs - synthesize a 3rd to exercise the dense stack case (3+
+    // EncyclopediaEntryDetail panels rendered in the side drawer).
+    const seed = MOCK_ENC_ENTRY_SHAMAYIM;
+    const dense = {
+      ...seed,
+      entries: [
+        ...seed.entries,
+        {
+          ...seed.entries[0],
+          articleId: 'REALIA:5.4',
+          key: '5.4',
+          title: 'Cosmic waters',
+          teaserText:
+            'Many texts also speak of waters above the firmament, an upper sea separated from the lower sea by the dome...',
+        },
+      ],
+    };
+    return [dense];
+  })();
+  const log = (label: string) =>
+    setEventLog((s) => [`${new Date().toISOString().slice(11, 19)} ${label}`, ...s].slice(0, 12));
+
+  return (
+    <div className="tw-flex tw-h-full tw-flex-col tw-gap-2">
+      <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-3 tw-text-xs">
+        <label className="tw-flex tw-items-center tw-gap-1">
+          Fixture:
+          <select
+            value={fixture}
+            onChange={(e) => {
+              if (
+                e.target.value === 'hebrew' ||
+                e.target.value === 'greek' ||
+                e.target.value === 'multiple-articles-per-lemma'
+              ) {
+                setFixture(e.target.value);
+                setSelectedTokenId(undefined);
+              }
+            }}
+          >
+            <option value="hebrew">Hebrew entries</option>
+            <option value="greek">Greek entries</option>
+            <option value="multiple-articles-per-lemma">
+              Hebrew shamayim (3 article refs - dense stack)
+            </option>
+          </select>
+        </label>
+        <span className="tw-text-muted-foreground">
+          Selected: <strong>{selectedTokenId ?? 'none'}</strong>
+        </span>
+      </div>
+      <div className="tw-min-h-0 tw-flex-1">
+        <EncyclopediaTab
+          items={items}
+          articleDataMap={MOCK_ARTICLE_DATA_MAP}
+          selectedTokenId={selectedTokenId}
+          onSelectionChange={setSelectedTokenId}
+          onSourceTextClick={(tokenId) => log(`source-text-click ${tokenId}`)}
+          onCopySurfaceForm={(item) => log(`copy-surface-form ${item.lemma}`)}
+          onCopyLemma={(item) => log(`copy-lemma ${item.translit}`)}
+          localizedStringsWithLoadingState={[localizedStrings, false]}
+          scopeLabel="current verse"
+        />
+      </div>
+      <div className="tw-rounded tw-border tw-border-dashed tw-border-border tw-p-2 tw-text-xs">
+        <div className="tw-mb-1 tw-font-semibold">Event log (most recent first):</div>
+        {eventLog.length === 0 ? (
+          <span className="tw-text-muted-foreground">
+            (Click a row, the source word, or right-click for the context menu...)
+          </span>
+        ) : (
+          <ul>
+            {eventLog.map((entry, idx) => (
+              // Event log is append-only; idx is part of the key alongside the entry text to keep
+              // entries stable while React reconciles the list.
+              // eslint-disable-next-line react/no-array-index-key
+              <li key={`${entry}-${idx}`}>{entry}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export const Default: Story = {
-  args: {
-    items: MOCK_ENC_ENTRIES_HEBREW,
-  },
-};
-
-export const WithFirstSelected: Story = {
-  args: {
-    items: MOCK_ENC_ENTRIES_HEBREW,
-    selectedTokenId: MOCK_ENC_ENTRY_GAMAL.tokenId,
-  },
-};
-
-export const Greek: Story = {
-  args: {
-    items: MOCK_ENC_ENTRIES_GREEK,
-  },
-};
-
-export const MultipleArticlesPerLemma: Story = {
-  args: {
-    items: [MOCK_ENC_ENTRY_SHAMAYIM],
-    selectedTokenId: MOCK_ENC_ENTRY_SHAMAYIM.tokenId,
-  },
+  parameters: { chromatic: { disableSnapshot: true } },
+  render: () => <InteractiveEncyclopediaTabDemo />,
 };
 
 export const Loading: Story = {
@@ -102,78 +171,5 @@ export const EmptyWordNotInScope: Story = {
     emptyState: 'word-not-in-scope',
     filterWord: 'gamal',
     scopeLabel: 'current verse',
-  },
-};
-
-export const Interactive: Story = {
-  parameters: { chromatic: { disableSnapshot: true } },
-  render: function Render(args) {
-    const [selectedTokenId, setSelectedTokenId] = useState<string | undefined>();
-    return (
-      <EncyclopediaTab
-        {...args}
-        items={MOCK_ENC_ENTRIES_HEBREW}
-        selectedTokenId={selectedTokenId}
-        onSelectionChange={setSelectedTokenId}
-        // Storybook-only diagnostic - production routes to MarbleForm.
-        // eslint-disable-next-line no-console
-        onSourceTextClick={(id) => console.log('[EncyclopediaTab story] source-text-click', id)}
-        onCopySurfaceForm={(item) => {
-          // Storybook-only diagnostic - production calls clipboard write.
-          // eslint-disable-next-line no-console
-          console.log('[EncyclopediaTab story] copy-surface', item.lemma);
-        }}
-        // Storybook-only diagnostic - production calls clipboard write.
-        // eslint-disable-next-line no-console
-        onCopyLemma={(item) => console.log('[EncyclopediaTab story] copy-lemma', item.translit)}
-        // Storybook-only diagnostic - production fires goto:{verseRef}.
-        // eslint-disable-next-line no-console
-        onVerseLinkClick={(link) => console.log('[EncyclopediaTab story] verse-link', link)}
-        // Storybook-only diagnostic - production opens cross-ref overlay.
-        // eslint-disable-next-line no-console
-        onCrossReferenceClick={(ref) => console.log('[EncyclopediaTab story] cross-ref', ref)}
-        // Storybook-only diagnostic - production opens MediaViewer.
-        // eslint-disable-next-line no-console
-        onImageClick={(id) => console.log('[EncyclopediaTab story] image', id)}
-        onViewFullArticle={(entry) => {
-          // Storybook-only diagnostic - production opens ArticleViewer (UI-PKG-006).
-          // eslint-disable-next-line no-console
-          console.log('[EncyclopediaTab story] view-full-article', entry.articleId);
-        }}
-      />
-    );
-  },
-};
-
-export const MultipleArticleReferences: Story = {
-  parameters: { chromatic: { disableSnapshot: true } },
-  render: function Render(args) {
-    // SHAMAYIM has 2 article refs in the mock data; synthesize a 3rd to exercise the dense-stack
-    // case (3+ EncyclopediaEntryDetail panels rendered in the side drawer).
-    const seed = MOCK_ENC_ENTRY_SHAMAYIM;
-    const denseItem = {
-      ...seed,
-      entries: [
-        ...seed.entries,
-        {
-          ...seed.entries[0],
-          articleId: 'REALIA:5.4',
-          key: '5.4',
-          title: 'Cosmic waters',
-          teaserText:
-            'Many texts also speak of waters above the firmament, an upper sea separated from the lower sea by the dome...',
-        },
-      ],
-    };
-    const items = [denseItem];
-    const [selectedTokenId, setSelectedTokenId] = useState<string | undefined>(items[0]?.tokenId);
-    return (
-      <EncyclopediaTab
-        {...args}
-        items={items}
-        selectedTokenId={selectedTokenId}
-        onSelectionChange={setSelectedTokenId}
-      />
-    );
   },
 };

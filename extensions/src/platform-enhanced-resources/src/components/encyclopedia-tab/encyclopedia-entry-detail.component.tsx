@@ -1,21 +1,12 @@
-import { Button, Skeleton } from 'platform-bible-react';
+import { Skeleton } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import {
-  ArticleRenderer,
-  ARTICLE_RENDERER_STRING_KEYS,
-  type ArticleCrossRefData,
-  type ArticleRendererData,
-  type ArticleVerseLinkData,
-} from '../shared/article-renderer.component';
+import type { ArticleRendererData } from '../shared/article-renderer.component';
 import type { EncyclopediaEntryRefData } from './encyclopedia-display-item.component';
 
 /** Object containing all keys used for localization in this component. */
 export const ENCYCLOPEDIA_ENTRY_DETAIL_STRING_KEYS = Object.freeze([
-  '%enhancedResources_encyclopedia_viewFullArticle%',
   '%enhancedResources_encyclopedia_articleLoading%',
   '%enhancedResources_encyclopedia_emptyDetail%',
-  '%enhancedResources_encyclopedia_formatVersionLabel%',
-  ...ARTICLE_RENDERER_STRING_KEYS,
 ] as const);
 
 type EncyclopediaEntryDetailLocalizedStringKey =
@@ -33,55 +24,40 @@ export type EncyclopediaEntryDetailProps = {
    * arrives).
    */
   articleData?: ArticleRendererData;
-  /** Image url resolver, forwarded to ArticleRenderer (FN-009). */
-  imageUrlResolver?: (imageId: string) => string;
-  /** Number of preview paragraphs (default 2). */
+  /** Number of preview paragraphs to show (default 2). */
   previewParagraphCount?: number;
-
-  /** Click callbacks - parent dispatches navigation / overlays. */
-  onVerseLinkClick?: (link: ArticleVerseLinkData) => void;
-  onCrossReferenceClick?: (ref: ArticleCrossRefData) => void;
-  onImageClick?: (imageId: string) => void;
-  /** Fires when the user clicks the "View full article" footer link. */
-  onViewFullArticle?: (entry: EncyclopediaEntryRefData) => void;
 
   localizedStringsWithLoadingState?: [EncyclopediaEntryDetailLocalizedStrings, boolean];
 };
 
 /**
- * Pure presentational expanded-detail panel for a single encyclopedia article reference. Renders
- * the ArticleRenderer in 'preview' mode (truncated paragraphs, see-also list, references), plus a
- * "View full article" button at the bottom that opens the ArticleViewer drawer (UI-PKG-006).
+ * Pure presentational expanded-detail panel for a single encyclopedia article reference.
+ *
+ * [Revised: 2026-04-29] Theme 14 / audit `working-docs/2026-04-29-marble-data-shape-audit.md#8`:
+ * Per the Marble data audit, `LEXLinks` is 0% populated across all shipped dictionaries, so PT9's
+ * encyclopedia surface is just headline + content — there are no `References`, `See also`, or `View
+ * full article` sections, and dropping them aligns with the actual data. The detail now renders
+ * ONLY the article title (headline) plus a paragraph preview of the article content. We no longer
+ * delegate to `ArticleRenderer` (which still carries those structures for the `ArticleViewer`
+ * UI-PKG-006 full-mode surface) — the encyclopedia preview path is rendered inline here.
  *
  * If multiple article references are attached to the same lemma, the parent renders multiple
- * EncyclopediaEntryDetail instances stacked vertically inside the expanded entry row.
+ * EncyclopediaEntryDetail instances stacked vertically inside the side drawer.
  */
 export function EncyclopediaEntryDetail({
   entry,
   articleData,
-  imageUrlResolver,
   previewParagraphCount = 2,
-
-  onVerseLinkClick = () => {},
-  onCrossReferenceClick = () => {},
-  onImageClick = () => {},
-  onViewFullArticle = () => {},
 
   localizedStringsWithLoadingState = [{}, false],
 }: EncyclopediaEntryDetailProps) {
   const getLocalizedString = (key: EncyclopediaEntryDetailLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
-  const viewFullLabel = String(
-    getLocalizedString('%enhancedResources_encyclopedia_viewFullArticle%'),
-  );
   const loadingLabel = String(
     getLocalizedString('%enhancedResources_encyclopedia_articleLoading%'),
   );
   const emptyDetail = String(getLocalizedString('%enhancedResources_encyclopedia_emptyDetail%'));
-
-  const childStrings: [EncyclopediaEntryDetailLocalizedStrings, boolean] =
-    localizedStringsWithLoadingState;
 
   const renderBody = () => {
     if (!articleData) {
@@ -93,24 +69,24 @@ export function EncyclopediaEntryDetail({
         </div>
       );
     }
-    if (articleData.paragraphs.length === 0 && articleData.crossReferences.length === 0) {
+    if (articleData.paragraphs.length === 0) {
       return (
         <div role="status" className="tw-text-xs tw-italic tw-text-muted-foreground">
           {emptyDetail}
         </div>
       );
     }
+    const paragraphsToShow = articleData.paragraphs.slice(0, Math.max(0, previewParagraphCount));
     return (
-      <ArticleRenderer
-        article={articleData}
-        mode="preview"
-        previewParagraphCount={previewParagraphCount}
-        imageUrlResolver={imageUrlResolver}
-        onVerseLinkClick={onVerseLinkClick}
-        onCrossReferenceClick={onCrossReferenceClick}
-        onImageClick={onImageClick}
-        localizedStringsWithLoadingState={childStrings}
-      />
+      <div className="tw-flex tw-flex-col tw-gap-2">
+        {paragraphsToShow.map((paragraph, idx) => (
+          // Paragraph order is the only stable identity; backend doesn't ship paragraph ids.
+          // eslint-disable-next-line react/no-array-index-key
+          <p key={idx} className="tw-text-sm tw-leading-relaxed">
+            {paragraph.text}
+          </p>
+        ))}
+      </div>
     );
   };
 
@@ -124,16 +100,6 @@ export function EncyclopediaEntryDetail({
       </header>
 
       {renderBody()}
-
-      <div className="tw-flex tw-justify-end">
-        <Button
-          variant="link"
-          className="tw-h-auto tw-p-0 tw-text-sm"
-          onClick={() => onViewFullArticle(entry)}
-        >
-          {viewFullLabel}
-        </Button>
-      </div>
     </div>
   );
 }
