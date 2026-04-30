@@ -1250,6 +1250,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                                 == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
                         )
                         {
+                            // Validator code should have ensured that value is not null.
                             var list = value!
                                 .ToString()!
                                 .DeserializeFromJson<ResourceReferenceList>()!;
