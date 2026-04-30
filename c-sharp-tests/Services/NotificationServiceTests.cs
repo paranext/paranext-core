@@ -104,4 +104,71 @@ public class NotificationServiceTests
         Assert.That(id.ToString(), Is.EqualTo("77"));
         Assert.That((long)id.ToSerializable(), Is.EqualTo(77L));
     }
+
+    // --- PlatformNotification ---
+
+    [Test]
+    public void PlatformNotification_RequiredFields_SerializesCorrectly()
+    {
+        PlatformNotification notification = new("Hello world", NotificationSeverity.Warning);
+        string json = JsonSerializer.Serialize(notification, _options);
+
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement root = doc.RootElement;
+        Assert.That(root.GetProperty("message").GetString(), Is.EqualTo("Hello world"));
+        Assert.That(root.GetProperty("severity").GetString(), Is.EqualTo("warning"));
+        Assert.That(root.TryGetProperty("clickCommandLabel", out _), Is.False);
+        Assert.That(root.TryGetProperty("notificationId", out _), Is.False);
+        Assert.That(root.TryGetProperty("duration", out _), Is.False);
+    }
+
+    [Test]
+    public void PlatformNotification_WithStringNotificationId_SerializesIdAsString()
+    {
+        NotificationId existingId = NotificationId.FromString("existing-toast");
+        PlatformNotification notification = new("Updated message", NotificationSeverity.Info)
+        {
+            NotificationId = existingId,
+        };
+        string json = JsonSerializer.Serialize(notification, _options);
+
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement root = doc.RootElement;
+        Assert.That(root.GetProperty("notificationId").ValueKind, Is.EqualTo(JsonValueKind.String));
+        Assert.That(root.GetProperty("notificationId").GetString(), Is.EqualTo("existing-toast"));
+    }
+
+    [Test]
+    public void PlatformNotification_WithNumericNotificationId_SerializesIdAsNumber()
+    {
+        NotificationId existingId = NotificationId.FromNumber(7L);
+        PlatformNotification notification = new("Updated message", NotificationSeverity.Error)
+        {
+            NotificationId = existingId,
+        };
+        string json = JsonSerializer.Serialize(notification, _options);
+
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement root = doc.RootElement;
+        Assert.That(root.GetProperty("notificationId").ValueKind, Is.EqualTo(JsonValueKind.Number));
+        Assert.That(root.GetProperty("notificationId").GetInt64(), Is.EqualTo(7L));
+    }
+
+    [Test]
+    public void PlatformNotification_WithOptionalFields_SerializesAllFields()
+    {
+        PlatformNotification notification = new("Test", NotificationSeverity.Info)
+        {
+            ClickCommandLabel = "View details",
+            ClickCommand = "myExtension.viewDetails",
+            Duration = 5000,
+        };
+        string json = JsonSerializer.Serialize(notification, _options);
+
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement root = doc.RootElement;
+        Assert.That(root.GetProperty("clickCommandLabel").GetString(), Is.EqualTo("View details"));
+        Assert.That(root.GetProperty("clickCommand").GetString(), Is.EqualTo("myExtension.viewDetails"));
+        Assert.That(root.GetProperty("duration").GetInt32(), Is.EqualTo(5000));
+    }
 }
