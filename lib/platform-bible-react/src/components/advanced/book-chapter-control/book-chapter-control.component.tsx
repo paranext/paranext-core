@@ -914,9 +914,20 @@ export function BookChapterControl({
         // close the popover early (before Radix's own dismiss path) and set
         // `justClosedByTriggerRef` so the trigger's `onClick` can call `preventDefault()`
         // which makes Radix's `composeEventHandlers` skip `onOpenToggle` entirely.
+        //
+        // Guard with `isCommandOpen`: PopoverContent stays mounted during the fade-out
+        // animation after close, so this handler still fires for trigger clicks made while
+        // the popover is animating out. Treating those as "close" would set the
+        // `justClosedByTriggerRef` interlock and block the legitimate reopen click. Only
+        // intercept when the popover is logically open.
         onPointerDownOutside={(event) => {
           const { target } = event;
-          if (triggerRef.current && target instanceof Node && triggerRef.current.contains(target)) {
+          if (
+            isCommandOpen &&
+            triggerRef.current &&
+            target instanceof Node &&
+            triggerRef.current.contains(target)
+          ) {
             // Mark that we're closing due to a trigger click so the subsequent `click`
             // event on the button (which would reopen the popover via Radix's
             // `onOpenToggle`) can be blocked. See `justClosedByTriggerRef`.
