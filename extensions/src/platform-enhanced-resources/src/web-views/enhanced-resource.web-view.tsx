@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import type { WebViewProps } from '@papi/core';
-import { Canon } from '@sillsdev/scripture';
+import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import {
   ResizableHandle,
   ResizablePanel,
@@ -13,6 +13,7 @@ import {
   cn,
 } from 'platform-bible-react';
 import type { LocalizeKey, LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
+import { formatScrRef, formatScrRefRange } from 'platform-bible-utils';
 import { convertMarbleChapterXml, type MarbleAnnotation } from '../lib/marble-converter';
 import {
   TempScripturePane,
@@ -63,13 +64,25 @@ import type {
   ArticleVerseLinkData,
   ArticleCrossRefData,
 } from '../components/shared/article-renderer.component';
-import { MediaImagesTab } from '../components/media-tab/media-images-tab.component';
-import { MediaMapsTab } from '../components/media-tab/media-maps-tab.component';
+import {
+  MediaImagesTab,
+  MEDIA_IMAGES_TAB_STRING_KEYS,
+} from '../components/media-tab/media-images-tab.component';
+import {
+  MediaMapsTab,
+  MEDIA_MAPS_TAB_STRING_KEYS,
+} from '../components/media-tab/media-maps-tab.component';
 import type { MediaEntryRowData } from '../components/media-tab/media-entry-row.component';
 import {
   MediaViewer,
+  MEDIA_VIEWER_STRING_KEYS,
   type MediaViewerItem,
 } from '../components/media-viewer/media-viewer.component';
+import {
+  presentMediaItems,
+  type MediaDisplayItemInput,
+  type MediaTabType,
+} from '../presenters/media-presenter';
 
 /** Object containing all keys used for localization in this component. */
 export const ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS = Object.freeze([
@@ -583,6 +596,9 @@ const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   ...ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS,
   ...DICTIONARY_TAB_STRING_KEYS,
   ...ENCYCLOPEDIA_TAB_STRING_KEYS,
+  ...MEDIA_IMAGES_TAB_STRING_KEYS,
+  ...MEDIA_MAPS_TAB_STRING_KEYS,
+  ...MEDIA_VIEWER_STRING_KEYS,
   // Toolbar / scope labels surface in empty-state templates.
   '%enhancedResources_toolbar_scope_currentVerse%',
   '%enhancedResources_toolbar_scope_currentSection%',
@@ -762,6 +778,46 @@ type ArticleDataDto = {
 };
 
 /**
+ * Mirror of C# `MediaLoadInput` (data-contracts.md §2.9). The C# enum `MediaTabType` serializes as
+ * the literal strings `"Images"` and `"Maps"` via the System.Text.Json default converter.
+ */
+type MediaLoadInputDto = {
+  currentReference: VerseRefDto;
+  scope: 'CurrentVerse' | 'CurrentSection' | 'CurrentChapter';
+  filter: WordFilterInputDto | undefined;
+  tabType: MediaTabType;
+  userLanguage: string;
+  resourceId: string;
+};
+
+/**
+ * Mirror of C# `MediaDisplayItem` (data-contracts.md §3.9). `startRef` / `endRef` carry the full
+ * SIL `VerseRef` shape (incl. `book` id, `chapterNum`, `verseNum`); the wiring layer narrows them
+ * to the presenter's `MediaVerseRefInput` shape before passing them in. `path` and `fileName` are
+ * back-end internals used by `fetchImageBytes` and are ignored here.
+ */
+type MediaDisplayItemDto = {
+  imageId: string;
+  imageSource: string;
+  title: string;
+  thumbnailSource: string;
+  startRef: SerializedVerseRef;
+  endRef: SerializedVerseRef;
+  collection: string;
+  languageCode: string;
+  displayIndex: number;
+  path?: string;
+  fileName?: string;
+};
+
+/** Mirror of C# `MediaLoadResult` (data-contracts.md §3.9). */
+type MediaLoadResultDto = {
+  items: MediaDisplayItemDto[];
+  countLabel: string;
+  emptyStateMessage: string | null | undefined;
+};
+
+/**
  * Subset of the network-object proxy we care about. `papi.networkObjects.get` returns the proxy
  * typed as a generic `NetworkObject<object>`; we narrow with a structural cast to the methods this
  * web view uses. All cross-process calls return promises.
@@ -772,6 +828,12 @@ type EnhancedResourcesNetworkObject = {
   readDictionaryEntry: (input: DictionaryEntryInputDto) => Promise<DictionaryEntryDataDto>;
   loadEncyclopedia: (input: EncyclopediaLoadInputDto) => Promise<EncyclopediaLoadResultDto>;
   readArticle: (input: ArticleInputDto) => Promise<ArticleDataDto>;
+  /**
+   * Backend method registered as `"loadMedia"` (NOT `"loadMediaResources"`) in
+   * `EnhancedResourceFactory.BuildFunctionList`. The factory routes to
+   * `MediaService.LoadResources(input)` which applies the SBA filter server-side per `tabType`.
+   */
+  loadMedia: (input: MediaLoadInputDto) => Promise<MediaLoadResultDto>;
 };
 
 /**
@@ -954,6 +1016,79 @@ function presentationToItemData(p: {
     imageIds: p.imageIds,
     collection: p.collection,
   };
+}
+
+/**
+ * Adapt the C# `MediaDisplayItem` DTO into the presenter input. Drops backend-internal fields
+ * (`imageSource`, `thumbnailSource`, `displayIndex`, `languageCode`, `path`, `fileName`) the UI
+ * does not consume; narrows `startRef` / `endRef` from the full `SerializedVerseRef` to the
+ * presenter's minimal verse-ref shape.
+ */
+function mediaDtoToPresenterInput(dto: MediaDisplayItemDto): MediaDisplayItemInput {
+  return {
+    imageId: dto.imageId,
+    title: dto.title,
+    startRef: {
+      book: dto.startRef.book,
+      chapterNum: dto.startRef.chapterNum,
+      verseNum: dto.startRef.verseNum,
+    },
+    endRef: {
+      book: dto.endRef.book,
+      chapterNum: dto.endRef.chapterNum,
+      verseNum: dto.endRef.verseNum,
+    },
+    collection: dto.collection,
+  };
+}
+
+/**
+ * FN-009 seam: build a `papi-er://` URL for the renderer's `<img src>`. The custom protocol is
+ * registered by `src/main/services/enhanced-resource-protocol.service.ts` and resolves the bytes
+ * via `platform.enhancedResources.fetchImageBytes`. CSP is augmented in `src/renderer/index.ejs`
+ * and `web-view.service-host.ts` so `<img src="papi-er://...">` works directly. The protocol does
+ * not appear in `connect-src` by design - calling `fetch('papi-er://...')` will be CSP-blocked.
+ */
+function buildPapiErImageUrl(imageId: string, size?: 'full'): string {
+  const encoded = encodeURIComponent(imageId);
+  const suffix = size === 'full' ? '?size=full' : '';
+  return `papi-er://images/${encoded}${suffix}`;
+}
+
+/**
+ * Format a media item's verse-range label using the platform-bible-utils formatters. Matches the
+ * PT9 convention BHV-612 documents (single-verse: "GEN 1:1"; multi-verse: "ACT 2:1 - 5:42").
+ *
+ * `start` and `end` come from the C# loader; we project them onto `SerializedVerseRef` (the shape
+ * the formatters consume) without re-parsing book ids.
+ */
+function formatMediaReferenceLabel(
+  start: { book: string; chapterNum: number; verseNum: number },
+  end: { book: string; chapterNum: number; verseNum: number },
+): string {
+  const startRef: SerializedVerseRef = {
+    book: start.book,
+    chapterNum: start.chapterNum,
+    verseNum: start.verseNum,
+  };
+  const endRef: SerializedVerseRef = {
+    book: end.book,
+    chapterNum: end.chapterNum,
+    verseNum: end.verseNum,
+  };
+  // Same start and end → format as a single ref. Otherwise format the range, suppressing the book
+  // id at the end ref when both refs share a book.
+  if (
+    startRef.book === endRef.book &&
+    startRef.chapterNum === endRef.chapterNum &&
+    startRef.verseNum === endRef.verseNum
+  ) {
+    return formatScrRef(startRef, 'id');
+  }
+  return formatScrRefRange(startRef, endRef, {
+    optionOrLocalizedBookName: 'id',
+    rangeSeparator: '-',
+  });
 }
 
 /**
@@ -1482,6 +1617,293 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     setEncyclopediaSelectedTokenId,
   ]);
 
+  // ---------------------------------------------------------------------------
+  // Media tabs wiring (UI-PKG-004)
+  // ---------------------------------------------------------------------------
+  // Two near-identical effects, one per tab, each calling the same backend method `loadMedia` with
+  // a different `tabType`. The C# `MediaService.LoadResources` applies the Satellite Bible Atlas
+  // filter server-side (TS-071 / BHV-601) so the wiring layer trusts the result and does not
+  // re-filter. The pure `presentMediaItems` adapter formats the verse-range label and emits the
+  // flat `MediaEntryRowData` shape the tabs consume.
+  //
+  // BHV-359 (deferred loading): the load fires only after the user has activated the tab at least
+  // once. We track this via two `useState` flags that flip from `false` -> `true` when
+  // `activeTab === 'media'` / `activeTab === 'maps'` is seen for the first time. Subsequent
+  // BCV/scope/filter changes re-fire the load on the already-activated tab.
+
+  const [mediaImagesItems, setMediaImagesItems] = useState<MediaEntryRowData[]>([]);
+  const [mediaImagesIsLoading, setMediaImagesIsLoading] = useState(false);
+  const [mediaImagesLoaded, setMediaImagesLoaded] = useState(false);
+  const [mediaImagesEverActivated, setMediaImagesEverActivated] = useState(false);
+  const [mediaImagesSelectedItemId, setMediaImagesSelectedItemId] = useWebViewState<
+    string | undefined
+  >('mediaImagesSelectedItemId', undefined);
+
+  const [mediaMapsItems, setMediaMapsItems] = useState<MediaEntryRowData[]>([]);
+  const [mediaMapsIsLoading, setMediaMapsIsLoading] = useState(false);
+  const [mediaMapsLoaded, setMediaMapsLoaded] = useState(false);
+  const [mediaMapsEverActivated, setMediaMapsEverActivated] = useState(false);
+  const [mediaMapsSelectedItemId, setMediaMapsSelectedItemId] = useWebViewState<string | undefined>(
+    'mediaMapsSelectedItemId',
+    undefined,
+  );
+
+  // BHV-359: flip the activation flag the first time each tab becomes the active tab.
+  useEffect(() => {
+    if (activeTab === 'media' && !mediaImagesEverActivated) {
+      setMediaImagesEverActivated(true);
+    }
+    if (activeTab === 'maps' && !mediaMapsEverActivated) {
+      setMediaMapsEverActivated(true);
+    }
+  }, [activeTab, mediaImagesEverActivated, mediaMapsEverActivated]);
+
+  // Effect: load Images tab whenever (resourceId, BCV, scope, filter) changes AND the tab has been
+  // activated at least once. Fires on activation immediately because the dependency array includes
+  // `mediaImagesEverActivated`.
+  useEffect(() => {
+    let cancelled = false;
+    if (!mediaImagesEverActivated) return () => {};
+    if (!resourceId || bookNum <= 0) {
+      setMediaImagesItems([]);
+      setMediaImagesIsLoading(false);
+      setMediaImagesLoaded(true);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const filter: WordFilterInputDto | undefined = filteredTokenId
+      ? {
+          tokenId: filteredTokenId,
+          lemma: '',
+          source: '',
+          translit: filteredTokenId,
+          senses: '',
+          targetLinks: '',
+          clickOrigin: 'ScripturePane',
+        }
+      : undefined;
+
+    const input: MediaLoadInputDto = {
+      currentReference: {
+        bookNum,
+        chapterNum: scrRef.chapterNum,
+        verseNum: scrRef.verseNum,
+      },
+      scope: marbleScopeToBackend(scope),
+      filter,
+      tabType: 'Images',
+      userLanguage: glossLanguage,
+      resourceId,
+    };
+
+    setMediaImagesIsLoading(true);
+    setMediaImagesLoaded(false);
+    (async () => {
+      try {
+        const proxy =
+          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
+        if (!proxy) {
+          if (!cancelled) {
+            setMediaImagesItems([]);
+            setMediaImagesLoaded(true);
+          }
+          return;
+        }
+        const result = await proxy.loadMedia(input);
+        if (cancelled) return;
+        const presentations = presentMediaItems(result.items.map(mediaDtoToPresenterInput), {
+          tabType: 'Images',
+          formatReferenceLabel: formatMediaReferenceLabel,
+        });
+        setMediaImagesItems(presentations);
+        setMediaImagesLoaded(true);
+      } catch (err) {
+        if (cancelled) return;
+        logger.warn(
+          `Enhanced Resources: loadMedia (Images) failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        setMediaImagesItems([]);
+        setMediaImagesLoaded(true);
+      } finally {
+        if (!cancelled) setMediaImagesIsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    mediaImagesEverActivated,
+    resourceId,
+    bookNum,
+    scrRef.chapterNum,
+    scrRef.verseNum,
+    scope,
+    filteredTokenId,
+  ]);
+
+  // Effect: load Maps tab. Mirrors the Images-tab effect with `tabType: 'Maps'`.
+  useEffect(() => {
+    let cancelled = false;
+    if (!mediaMapsEverActivated) return () => {};
+    if (!resourceId || bookNum <= 0) {
+      setMediaMapsItems([]);
+      setMediaMapsIsLoading(false);
+      setMediaMapsLoaded(true);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const filter: WordFilterInputDto | undefined = filteredTokenId
+      ? {
+          tokenId: filteredTokenId,
+          lemma: '',
+          source: '',
+          translit: filteredTokenId,
+          senses: '',
+          targetLinks: '',
+          clickOrigin: 'ScripturePane',
+        }
+      : undefined;
+
+    const input: MediaLoadInputDto = {
+      currentReference: {
+        bookNum,
+        chapterNum: scrRef.chapterNum,
+        verseNum: scrRef.verseNum,
+      },
+      scope: marbleScopeToBackend(scope),
+      filter,
+      tabType: 'Maps',
+      userLanguage: glossLanguage,
+      resourceId,
+    };
+
+    setMediaMapsIsLoading(true);
+    setMediaMapsLoaded(false);
+    (async () => {
+      try {
+        const proxy =
+          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
+        if (!proxy) {
+          if (!cancelled) {
+            setMediaMapsItems([]);
+            setMediaMapsLoaded(true);
+          }
+          return;
+        }
+        const result = await proxy.loadMedia(input);
+        if (cancelled) return;
+        const presentations = presentMediaItems(result.items.map(mediaDtoToPresenterInput), {
+          tabType: 'Maps',
+          formatReferenceLabel: formatMediaReferenceLabel,
+        });
+        setMediaMapsItems(presentations);
+        setMediaMapsLoaded(true);
+      } catch (err) {
+        if (cancelled) return;
+        logger.warn(
+          `Enhanced Resources: loadMedia (Maps) failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        setMediaMapsItems([]);
+        setMediaMapsLoaded(true);
+      } finally {
+        if (!cancelled) setMediaMapsIsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    mediaMapsEverActivated,
+    resourceId,
+    bookNum,
+    scrRef.chapterNum,
+    scrRef.verseNum,
+    scope,
+    filteredTokenId,
+  ]);
+
+  // MediaViewer (centered Dialog) state. Driven by either tab's Maximize button via the
+  // `onMaximize` callback. Tracks which tab the maximized item came from so prev/next cycles
+  // through the right list.
+  const [maximizedMediaContext, setMaximizedMediaContext] = useState<
+    { tab: MediaTabType; index: number } | undefined
+  >(undefined);
+
+  const handleMediaImagesMaximize = useCallback(
+    (id: string) => {
+      const index = mediaImagesItems.findIndex((i) => i.imageId === id);
+      if (index < 0) return;
+      setMaximizedMediaContext({ tab: 'Images', index });
+    },
+    [mediaImagesItems],
+  );
+
+  const handleMediaMapsMaximize = useCallback(
+    (id: string) => {
+      const index = mediaMapsItems.findIndex((i) => i.imageId === id);
+      if (index < 0) return;
+      setMaximizedMediaContext({ tab: 'Maps', index });
+    },
+    [mediaMapsItems],
+  );
+
+  const maximizedMediaList = useMemo(() => {
+    if (!maximizedMediaContext) return undefined;
+    return maximizedMediaContext.tab === 'Maps' ? mediaMapsItems : mediaImagesItems;
+  }, [maximizedMediaContext, mediaImagesItems, mediaMapsItems]);
+
+  const maximizedMediaItem: MediaViewerItem | undefined = useMemo(() => {
+    if (!maximizedMediaContext || !maximizedMediaList) return undefined;
+    const entry = maximizedMediaList[maximizedMediaContext.index];
+    if (!entry) return undefined;
+    return {
+      imageId: entry.imageId,
+      title: entry.title,
+      mediaType: entry.mediaType,
+      caption: entry.referenceLabel,
+    };
+  }, [maximizedMediaContext, maximizedMediaList]);
+
+  const handleMaximizedMediaOpenChange = useCallback((open: boolean) => {
+    if (!open) setMaximizedMediaContext(undefined);
+  }, []);
+
+  // Prev / next through the active list. Returning `undefined` from these callbacks disables the
+  // Dialog button (component contract).
+  const handleMaximizedMediaPrev = useMemo(() => {
+    if (!maximizedMediaContext || !maximizedMediaList) return undefined;
+    if (maximizedMediaContext.index <= 0) return undefined;
+    return () =>
+      setMaximizedMediaContext((prev) => (prev ? { tab: prev.tab, index: prev.index - 1 } : prev));
+  }, [maximizedMediaContext, maximizedMediaList]);
+
+  const handleMaximizedMediaNext = useMemo(() => {
+    if (!maximizedMediaContext || !maximizedMediaList) return undefined;
+    if (maximizedMediaContext.index >= maximizedMediaList.length - 1) return undefined;
+    return () =>
+      setMaximizedMediaContext((prev) => (prev ? { tab: prev.tab, index: prev.index + 1 } : prev));
+  }, [maximizedMediaContext, maximizedMediaList]);
+
+  // FN-009 resolvers: thumbnails (tab + drawer) and full-size image (MediaViewer Dialog).
+  const mediaThumbnailUrlResolver = useCallback(
+    (imageId: string) => buildPapiErImageUrl(imageId),
+    [],
+  );
+  const mediaViewerImageUrlResolver = useCallback(
+    (imageId: string) => buildPapiErImageUrl(imageId, 'full'),
+    [],
+  );
+
   // Empty-state classification for encyclopedia (BHV-352, three variants).
   let encyclopediaEmptyState: EncyclopediaEmptyStateVariant;
   if (encyclopediaItems.length > 0) {
@@ -1650,6 +2072,27 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       encyclopediaArticleDataMap={encyclopediaArticleDataMap}
       onEncyclopediaSelectionChange={setEncyclopediaSelectedTokenId}
       onEncyclopediaSourceTextClick={handleEncyclopediaSourceTextClick}
+      mediaImagesItems={mediaImagesItems}
+      mediaImagesSelectedItemId={mediaImagesSelectedItemId}
+      mediaImagesIsLoading={mediaImagesIsLoading}
+      mediaImagesLoaded={mediaImagesLoaded}
+      mediaImagesScopeLabel={dictionaryScopeLabel}
+      mediaImagesThumbnailUrlResolver={mediaThumbnailUrlResolver}
+      onMediaImagesSelectionChange={setMediaImagesSelectedItemId}
+      onMediaImagesMaximize={handleMediaImagesMaximize}
+      mediaMapsItems={mediaMapsItems}
+      mediaMapsSelectedItemId={mediaMapsSelectedItemId}
+      mediaMapsIsLoading={mediaMapsIsLoading}
+      mediaMapsLoaded={mediaMapsLoaded}
+      mediaMapsScopeLabel={dictionaryScopeLabel}
+      mediaMapsThumbnailUrlResolver={mediaThumbnailUrlResolver}
+      onMediaMapsSelectionChange={setMediaMapsSelectedItemId}
+      onMediaMapsMaximize={handleMediaMapsMaximize}
+      maximizedMediaItem={maximizedMediaItem}
+      mediaViewerImageUrlResolver={mediaViewerImageUrlResolver}
+      onMaximizedMediaOpenChange={handleMaximizedMediaOpenChange}
+      onMaximizedMediaPrev={handleMaximizedMediaPrev}
+      onMaximizedMediaNext={handleMaximizedMediaNext}
       localizedStringsWithLoadingState={[stringsForShell, isLoadingStrings]}
     />
   );
