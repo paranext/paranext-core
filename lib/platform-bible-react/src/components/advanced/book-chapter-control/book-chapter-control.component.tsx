@@ -51,6 +51,7 @@ export function BookChapterControl({
   recentSearches,
   onAddRecentSearch,
   id,
+  hideVerse = false,
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
 
@@ -275,14 +276,18 @@ export function BookChapterControl({
     [topMatch],
   );
 
-  const currentDisplayValue = useMemo(
-    () =>
-      formatScrRef(
-        scrRef,
-        localizedBookNames ? getLocalizedBookName(scrRef.book, localizedBookNames) : 'English',
-      ),
-    [scrRef, localizedBookNames],
-  );
+  const currentDisplayValue = useMemo(() => {
+    const bookName = localizedBookNames
+      ? getLocalizedBookName(scrRef.book, localizedBookNames)
+      : 'English';
+    if (hideVerse) {
+      // formatScrRef has no option to omit the verse, so we strip the trailing ":<verse>"
+      // produced with the default chapter/verse separator. The book name itself never
+      // ends with ":<digits>", so this is unambiguous.
+      return formatScrRef(scrRef, bookName).replace(/:\d+$/, '');
+    }
+    return formatScrRef(scrRef, bookName);
+  }, [scrRef, localizedBookNames, hideVerse]);
 
   const setChapterRef = useCallback((chapter: number) => {
     return (element: HTMLDivElement | null) => {

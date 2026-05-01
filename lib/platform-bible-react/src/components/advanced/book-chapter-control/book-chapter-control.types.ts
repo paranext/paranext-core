@@ -48,4 +48,15 @@ export type BookChapterControlProps = {
   onAddRecentSearch?: (scrRef: SerializedVerseRef) => void;
   /** Optional ID for the popover content for accessibility */
   id?: string;
+  /**
+   * If true, the trigger button's label will display the book and chapter only (e.g. "1 John 3"),
+   * omitting the verse part (":1"). The popover-driven selection still operates on
+   * `SerializedVerseRef` values internally; only the displayed label is affected.
+   *
+   * Useful for chapter-level workflows (e.g. exports or scopes that operate on whole chapters)
+   * where surfacing a verse number is misleading.
+   *
+   * @default false
+   */
+  hideVerse?: boolean;
 };
