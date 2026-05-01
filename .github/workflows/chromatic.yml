@@ -54,11 +54,17 @@ jobs:
       - name: Read story filter
         id: story_filter
         run: |
+          # .chromatic-story-filter may contain one glob per line for
+          # readability; join lines with spaces so the value stays a valid
+          # single-line GITHUB_OUTPUT entry. Chromatic's --only-story-files
+          # is variadic and accepts whitespace-separated filespecs, so the
+          # joined string passes through chromaui/action correctly.
           if [ -f .chromatic-story-filter ]; then
-            echo "glob=$(cat .chromatic-story-filter)" >> "$GITHUB_OUTPUT"
+            glob=$(tr '\n' ' ' < .chromatic-story-filter | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//')
           else
-            echo "glob=extensions/src/**/*.stories.tsx" >> "$GITHUB_OUTPUT"
+            glob="extensions/src/**/*.stories.tsx"
           fi
+          echo "glob=$glob" >> "$GITHUB_OUTPUT"
 
       - name: Run Chromatic
         uses: chromaui/action@v16
