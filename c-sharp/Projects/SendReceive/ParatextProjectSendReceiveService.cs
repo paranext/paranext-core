@@ -70,13 +70,18 @@ internal class ParatextProjectSendReceiveService(
     }
 
     /// <summary>
-    /// Sends/Receives the provided projects and their connected projects. Also gets and/or updates
-    /// the project's connected resources as needed (e.g. from the DBL). Note, this function only
-    /// syncs the projects themselves and their connected resources; it does not the connected
-    /// projects' connected resources.
-    /// Exception is thrown if this function is not implemented in the current application or if an
-    /// error was encountered syncing.
+    /// Syncs projects from the provided IDs: filters for editable projects and S/Rs them,
+    /// then reads each editable project's connected resources and projects (one level deep —
+    /// connections of connections are not included) and S/Rs connected translation projects
+    /// or DBL-updates connected resources. Non-editable and unknown IDs are skipped.
+    /// Deduplication is handled internally.
+    /// Exception is thrown if this function is not implemented in the current application
+    /// or if an error was encountered syncing.
     /// </summary>
+    /// <param name="projectIds">
+    /// IDs of the projects to sync. If <see langword="null"/>, all shared projects that are already
+    /// present locally (i.e., not new) are synced. An empty array is a no-op.
+    /// </param>
     protected void SyncProjects(String[]? projectIds)
     {
         throw new PlatformUnimplementedException(

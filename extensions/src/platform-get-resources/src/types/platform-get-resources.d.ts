@@ -87,13 +87,14 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
 
     /**
-     * Syncs projects from the provided IDs: filters for editable projects and sends/receives them,
-     * then reads each editable project's connected resources and projects (one level deep —
-     * connections of connections are not included) and sends/receives connected translation
-     * projects or DBL-updates connected resources as needed. Non-editable and unknown project IDs
-     * are skipped. Deduplication is handled internally.
+     * Syncs projects: sends/receives each project, then reads each project's connected resources
+     * and projects (one level deep — connections of connections are not included) and
+     * sends/receives connected translation projects or DBL-updates connected resources as needed.
+     * Unknown project IDs are skipped. Deduplication is handled internally.
      *
-     * @param projectIds IDs of the open webview projects to evaluate
+     * @param projectIds IDs of the projects to sync. If omitted, all shared projects that are
+     *   already present locally (i.e., not new) are synced. If provided, only projects already
+     *   present locally are synced; new projects (not yet received) and unknown IDs are skipped.
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)
      */
@@ -107,15 +108,6 @@ declare module 'papi-shared-types' {
      *   this command (e.g., Paratext 10 Studio)
      */
     'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
-
-    /**
-     * Cancels an in-progress sync operation if one is running. The process will finish dealing with
-     * the current project/resource and then it will abort. It will not undo what has been done.
-     *
-     * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
-     */
-    'paratextBibleSendReceive.cancelSync': () => Promise<void>;
   }
 
   export interface SettingTypes {
