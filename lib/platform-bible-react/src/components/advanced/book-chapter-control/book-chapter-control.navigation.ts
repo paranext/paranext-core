@@ -16,6 +16,7 @@ export function useQuickNavButtons(
   availableBooks: string[],
   direction: Direction,
   handleSubmit: (scrRef: SerializedVerseRef) => void,
+  hideVerse: boolean = false,
 ): QuickNavButton[] {
   const handlePreviousChapter = useCallback(() => {
     if (scrRef.chapterNum > 1) {
@@ -78,42 +79,43 @@ export function useQuickNavButtons(
   }, [scrRef, handleSubmit]);
 
   return useMemo(() => {
-    return [
-      {
-        onClick: handlePreviousChapter,
-        disabled:
-          availableBooks.length === 0 ||
-          (scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0),
-        title: 'Previous chapter',
-        icon: direction === 'ltr' ? ChevronsLeft : ChevronsRight,
-      },
-      {
-        onClick: handlePreviousVerse,
-        disabled: availableBooks.length === 0 || scrRef.verseNum === 0,
-        title: 'Previous verse',
-        icon: direction === 'ltr' ? ChevronLeft : ChevronRight,
-      },
-      {
-        onClick: handleNextVerse,
-        disabled: availableBooks.length === 0,
-        title: 'Next verse',
-        icon: direction === 'ltr' ? ChevronRight : ChevronLeft,
-      },
-      {
-        onClick: handleNextChapter,
-        disabled:
-          availableBooks.length === 0 ||
-          ((scrRef.chapterNum === fetchEndChapter(scrRef.book) ||
-            fetchEndChapter(scrRef.book) <= 0) &&
-            availableBooks.indexOf(scrRef.book) === availableBooks.length - 1),
-        title: 'Next chapter',
-        icon: direction === 'ltr' ? ChevronsRight : ChevronsLeft,
-      },
-    ];
+    const previousChapter: QuickNavButton = {
+      onClick: handlePreviousChapter,
+      disabled:
+        availableBooks.length === 0 ||
+        (scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0),
+      title: 'Previous chapter',
+      icon: direction === 'ltr' ? ChevronsLeft : ChevronsRight,
+    };
+    const previousVerse: QuickNavButton = {
+      onClick: handlePreviousVerse,
+      disabled: availableBooks.length === 0 || scrRef.verseNum === 0,
+      title: 'Previous verse',
+      icon: direction === 'ltr' ? ChevronLeft : ChevronRight,
+    };
+    const nextVerse: QuickNavButton = {
+      onClick: handleNextVerse,
+      disabled: availableBooks.length === 0,
+      title: 'Next verse',
+      icon: direction === 'ltr' ? ChevronRight : ChevronLeft,
+    };
+    const nextChapter: QuickNavButton = {
+      onClick: handleNextChapter,
+      disabled:
+        availableBooks.length === 0 ||
+        ((scrRef.chapterNum === fetchEndChapter(scrRef.book) ||
+          fetchEndChapter(scrRef.book) <= 0) &&
+          availableBooks.indexOf(scrRef.book) === availableBooks.length - 1),
+      title: 'Next chapter',
+      icon: direction === 'ltr' ? ChevronsRight : ChevronsLeft,
+    };
+    if (hideVerse) return [previousChapter, nextChapter];
+    return [previousChapter, previousVerse, nextVerse, nextChapter];
   }, [
     scrRef,
     availableBooks,
     direction,
+    hideVerse,
     handlePreviousChapter,
     handlePreviousVerse,
     handleNextVerse,

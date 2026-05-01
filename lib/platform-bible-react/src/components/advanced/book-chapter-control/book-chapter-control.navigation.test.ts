@@ -49,6 +49,22 @@ describe('book-chapter-control.navigation', () => {
       expect(result.current[3].title).toBe('Next chapter');
     });
 
+    test('Omits verse navigation buttons when hideVerse is true', () => {
+      const { result } = renderHook(() =>
+        useQuickNavButtons(
+          { book: 'GEN', chapterNum: 1, verseNum: 1 },
+          availableBooks,
+          'ltr',
+          mockHandleSubmit,
+          true,
+        ),
+      );
+
+      expect(result.current).toHaveLength(2);
+      expect(result.current[0].title).toBe('Previous chapter');
+      expect(result.current[1].title).toBe('Next chapter');
+    });
+
     describe('Previous chapter navigation', () => {
       test('Navigates to previous chapter within same book', () => {
         const { result } = renderHook(() =>

@@ -215,7 +215,13 @@ export function BookChapterControl({
   // #region Navigation and view changes
 
   // Hook that provides navigation buttons for quick chapter/verse navigation
-  const quickNavButtons = useQuickNavButtons(scrRef, availableBooks, direction, handleSubmit);
+  const quickNavButtons = useQuickNavButtons(
+    scrRef,
+    availableBooks,
+    direction,
+    handleSubmit,
+    hideVerse,
+  );
 
   const handleBackToBooks = useCallback(() => {
     setViewMode('books');
