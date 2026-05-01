@@ -9,8 +9,6 @@ import {
   useState,
 } from 'react';
 import {
-  AlertCircle,
-  AlertTriangle,
   BookOpenCheck,
   BookPlus,
   Copy,
@@ -20,7 +18,6 @@ import {
   Info,
   Loader2,
   Trash2,
-  X,
 } from 'lucide-react';
 import { Canon } from '@sillsdev/scripture';
 import { Dialog, DialogContent } from '@/components/shadcn-ui/dialog';
@@ -42,6 +39,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/shadcn-ui/context-menu';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
 import { Sonner, sonner } from '@/components/shadcn-ui/sonner';
 import { cn } from '@/utils/shadcn-ui.util';
@@ -104,7 +107,9 @@ export type ManageBooksDialogProps = {
 
   /**
    * Commit a Create-books operation. Optional return shape carries `AlertEntry[]` warnings/errors
-   * to be rendered as a result panel. If void/undefined is returned, the panel is not shown.
+   * which the wiring layer routes to toast notifications via the `onMutationResult` callback; the
+   * dialog itself no longer renders an in-dialog result panel (FN-008 v2.6.0+ Theme C1,
+   * 2026-05-01).
    */
   onCreateBooks: (args: {
     projectId: string;
@@ -148,6 +153,16 @@ export type ManageBooksDialogProps = {
   onPickImportFiles?: () => Promise<File[] | undefined>;
 
   /**
+   * Theme C1 (FN-008 v2.6.0+, 2026-05-01): mutation result sink. Called after every successful
+   * mutation (create/delete/copy/import) with the AlertEntry-bearing result the orchestrator
+   * returned. The wiring layer iterates `result.warnings` and `result.errors` and routes each entry
+   * to `notificationService.send` (severity mapped from `AlertEntry.level`). The dialog does NOT
+   * render an in-dialog result panel — toasts are the canonical surface (per
+   * `ui-spec-manage-books.md:118` and phase-3-backend Decision 26).
+   */
+  onMutationResult?: (result: MutationResult) => void;
+
+  /**
    * (A2) Whether the project is shared with other users. When true, the delete-confirm prompt shows
    * enhanced "they will see this change immediately" copy. Defaults to false.
    */
@@ -175,12 +190,12 @@ const comparisonVariant = (
   state: ManageBooksComparisonState,
 ): 'default' | 'secondary' | 'destructive' | 'outline' => {
   switch (state) {
-    case 'Same':
+    case 'filesAreSame':
       return 'secondary';
-    case 'Newer':
-    case 'New':
+    case 'sourceIsNewer':
+    case 'destDoesNotExist':
       return 'default';
-    case 'Older':
+    case 'sourceIsOlder':
       return 'destructive';
     default:
       return 'outline';
@@ -192,22 +207,28 @@ const computeCompareState = (
   destDate: string | undefined,
 ): ManageBooksComparisonState => {
   if (!sourceDate && !destDate) return 'undetermined';
-  if (!sourceDate) return 'Missing';
-  if (!destDate) return 'New';
-  if (sourceDate === destDate) return 'Same';
-  return sourceDate > destDate ? 'Newer' : 'Older';
+  if (!sourceDate) return 'sourceDoesNotExist';
+  if (!destDate) return 'destDoesNotExist';
+  if (sourceDate === destDate) return 'filesAreSame';
+  return sourceDate > destDate ? 'sourceIsNewer' : 'sourceIsOlder';
 };
 
 /** A7 default-eligibility per comparison state. */
 const isDefaultEligible = (state: ManageBooksComparisonState): boolean => {
-  // from-only ('New' here) and from-newer ('Newer') checked by default;
+  // from-only ('destDoesNotExist' here) and from-newer ('sourceIsNewer') checked by default;
   // identical/Same, to-newer/Older, undetermined left unchecked.
-  return state === 'New' || state === 'Newer';
+  return state === 'destDoesNotExist' || state === 'sourceIsNewer';
 };
 
+// Default book range covers the canonical OT (1-39), NT (40-66), and DC (67-88) books PLUS the
+// non-canonical "extras" that PT9 surfaced in the Manage Books book chooser: XXA-XXG (93-99) and
+// FRT/BAK/OTH (100-102). This matches PT9 `BookChooserForm` behavior and lets the
+// CV-disabled-when-non-canonical guard (A6 / VAL-105.1) actually exercise non-canonical selections.
+// Books 103+ (3ES, EZA, 5EZ, etc.) are deuterocanonical "Latin Vulgate" extensions that PT9 did not
+// surface in the manage-books flow; we likewise omit them.
 const DEFAULT_BOOK_IDS: string[] = (() => {
   const ids: string[] = [];
-  for (let n = 1; n <= 88; n += 1) {
+  for (let n = 1; n <= 102; n += 1) {
     const id = Canon.bookNumberToId(n, '');
     if (id) ids.push(id);
   }
@@ -229,7 +250,7 @@ const isAction = (v: string): v is ManageBooksAction =>
 
 /** Narrow runtime check for a create-method dropdown value. */
 const isCreateMethod = (v: string): v is ManageBooksCreateMethod =>
-  v === 'empty' || v === 'chapterVerse' || v === 'referenceText';
+  v === 'empty' || v === 'chapterVerse' || v === 'fromTemplate';
 
 type ViewPresenceFilter = 'all' | 'new' | 'existing';
 type CopyStateFilter = 'all' | 'new' | 'newer' | 'older' | 'same' | 'undetermined';
@@ -287,6 +308,7 @@ export function ManageBooksDialog({
   onDeleteBooks,
   onOpenEstherPicker,
   onPickImportFiles,
+  onMutationResult,
   isSharedProject = false,
   bookIds,
   localizedStrings = {},
@@ -337,7 +359,10 @@ export function ManageBooksDialog({
   const [selectionsByAction, setSelectionsByAction] = useState<Record<string, Set<string>>>({});
   const [filter, setFilter] = useState('');
   const [copySourceId, setCopySourceId] = useState<string | undefined>(undefined);
-  const [createMethod, setCreateMethod] = useState<ManageBooksCreateMethod>('referenceText');
+  // Default Create method is Empty (matches PT9 `CreateBooksForm.Designer.cs` `rbnEmpty.Checked = true`).
+  // Empty allows the Create apply button to enable immediately once a book is selected; the user can
+  // change to ChapterAndVerse or FromTemplate for richer templates.
+  const [createMethod, setCreateMethod] = useState<ManageBooksCreateMethod>('empty');
   const [createReferenceId, setCreateReferenceId] = useState<string | undefined>(undefined);
   const [importFiles, setImportFiles] = useState<Record<string, ManageBooksImportFile>>({});
   const [importConflict, setImportConflict] = useState<
@@ -376,8 +401,19 @@ export function ManageBooksDialog({
   >(undefined);
   // A3: loading state during mutations
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // A5: result panel from latest mutation
-  const [result, setResult] = useState<MutationResult | undefined>(undefined);
+  // Theme C1 (FN-008 v2.6.0+, 2026-05-01): mutation results route to the
+  // wiring layer via `onMutationResult` (toast surface). The dialog no longer
+  // holds a `result` state or renders an in-dialog result panel.
+  const emitResult = useCallback(
+    (mutation: MutationResult) => {
+      // Drop empty results (no warnings, no errors) — they convey nothing the
+      // user can act on. The `success` flag alone is implicit from the lack of
+      // entries.
+      if (mutation.errors.length === 0 && mutation.warnings.length === 0) return;
+      onMutationResult?.(mutation);
+    },
+    [onMutationResult],
+  );
   // A8: track auto-browse to fire only once per Import-mode entry
   const importAutoBrowseFired = useRef(false);
   // C3: roving tabindex for keyboard navigation
@@ -475,7 +511,7 @@ export function ManageBooksDialog({
 
   // Clear the reference project when the creation method is no longer referenceText.
   useEffect(() => {
-    if (createMethod !== 'referenceText') setCreateReferenceId(undefined);
+    if (createMethod !== 'fromTemplate') setCreateReferenceId(undefined);
   }, [createMethod]);
 
   // Source and reference projects can never equal destination.
@@ -760,16 +796,27 @@ export function ManageBooksDialog({
     action !== 'view' &&
     selectedArr.length > 0 &&
     (action !== 'copy' || !!copySourceId) &&
-    !(action === 'create' && createMethod === 'referenceText' && !createReferenceId) &&
+    !(action === 'create' && createMethod === 'fromTemplate' && !createReferenceId) &&
     !isSubmitting;
 
   // -- Mutations -----------------------------------------------------------
 
-  const normalizeResult = (
-    raw: Awaited<ReturnType<NonNullable<typeof onCreateBooks>>>,
-  ): MutationResult | undefined => {
-    if (!raw) return undefined;
-    return raw;
+  // Theme C1: dispatch a thrown-mutation error as a single-error MutationResult
+  // so the wiring layer's toast surface can render it consistently with the
+  // orchestrator-returned warnings/errors. Using a helper keeps the four
+  // run* paths uniform.
+  const emitThrownError = (e: unknown) => {
+    emitResult({
+      success: false,
+      warnings: [],
+      errors: [
+        {
+          level: 'error',
+          caption: '',
+          text: e instanceof Error ? e.message : String(e),
+        },
+      ],
+    });
   };
 
   const runCreate = async (books: string[], estherTemplate?: EstherTemplate) => {
@@ -781,25 +828,15 @@ export function ManageBooksDialog({
           projectId,
           books,
           method: createMethod,
-          referenceProjectId: createMethod === 'referenceText' ? createReferenceId : undefined,
+          referenceProjectId: createMethod === 'fromTemplate' ? createReferenceId : undefined,
           estherTemplate,
         }),
       );
-      setResult(normalizeResult(raw));
+      if (raw) emitResult(raw);
       setSelected(new Set());
       await refreshBooks(projectId);
     } catch (e) {
-      setResult({
-        success: false,
-        warnings: [],
-        errors: [
-          {
-            level: 'error',
-            caption: '',
-            text: e instanceof Error ? e.message : String(e),
-          },
-        ],
-      });
+      emitThrownError(e);
     } finally {
       setIsSubmitting(false);
     }
@@ -810,21 +847,11 @@ export function ManageBooksDialog({
     setIsSubmitting(true);
     try {
       const raw = await Promise.resolve(onDeleteBooks({ projectId, books }));
-      setResult(normalizeResult(raw));
+      if (raw) emitResult(raw);
       setSelected(new Set());
       await refreshBooks(projectId);
     } catch (e) {
-      setResult({
-        success: false,
-        warnings: [],
-        errors: [
-          {
-            level: 'error',
-            caption: '',
-            text: e instanceof Error ? e.message : String(e),
-          },
-        ],
-      });
+      emitThrownError(e);
     } finally {
       setIsSubmitting(false);
     }
@@ -837,21 +864,11 @@ export function ManageBooksDialog({
       const raw = await Promise.resolve(
         onCopyBooks({ destProjectId: projectId, sourceProjectId: sourceId, books }),
       );
-      setResult(normalizeResult(raw));
+      if (raw) emitResult(raw);
       setSelected(new Set());
       await refreshBooks(projectId);
     } catch (e) {
-      setResult({
-        success: false,
-        warnings: [],
-        errors: [
-          {
-            level: 'error',
-            caption: '',
-            text: e instanceof Error ? e.message : String(e),
-          },
-        ],
-      });
+      emitThrownError(e);
     } finally {
       setIsSubmitting(false);
     }
@@ -866,7 +883,7 @@ export function ManageBooksDialog({
     setIsSubmitting(true);
     try {
       const raw = await Promise.resolve(onImportBooks({ projectId, files, strategy }));
-      setResult(normalizeResult(raw));
+      if (raw) emitResult(raw);
       setSelected((prev) => {
         const next = new Set(prev);
         books.forEach((b) => next.delete(b));
@@ -879,17 +896,7 @@ export function ManageBooksDialog({
       });
       await refreshBooks(projectId);
     } catch (e) {
-      setResult({
-        success: false,
-        warnings: [],
-        errors: [
-          {
-            level: 'error',
-            caption: '',
-            text: e instanceof Error ? e.message : String(e),
-          },
-        ],
-      });
+      emitThrownError(e);
     } finally {
       setIsSubmitting(false);
     }
@@ -901,14 +908,14 @@ export function ManageBooksDialog({
   const beginCreateFlow = async () => {
     let estherTemplate: EstherTemplate | undefined;
     // A1: Greek Esther picker (if ESG selected and method is referenceText/fromTemplate).
-    if (createMethod === 'referenceText' && selectedArr.includes('ESG') && onOpenEstherPicker) {
+    if (createMethod === 'fromTemplate' && selectedArr.includes('ESG') && onOpenEstherPicker) {
       const chosen = await onOpenEstherPicker(selectedArr);
       if (!chosen) return; // user cancelled
       estherTemplate = chosen;
     }
 
     // A4: missing-model-books pre-flight (only if a reference project is chosen).
-    if (createMethod === 'referenceText' && createReferenceId && createReferenceBookState) {
+    if (createMethod === 'fromTemplate' && createReferenceId && createReferenceBookState) {
       const missing = selectedArr.filter((b) => !createReferenceBookState.present.has(b));
       const available = selectedArr.filter((b) => createReferenceBookState.present.has(b));
       if (missing.length > 0) {
@@ -920,7 +927,7 @@ export function ManageBooksDialog({
     }
 
     // A4: versification mismatch pre-flight.
-    if (createMethod === 'referenceText' && createReferenceId) {
+    if (createMethod === 'fromTemplate' && createReferenceId) {
       const destVrs = versification ?? '';
       const modelVrs = await Promise.resolve(loadVersification(createReferenceId)).catch(() => '');
       if (destVrs && modelVrs && destVrs !== modelVrs) {
@@ -940,7 +947,6 @@ export function ManageBooksDialog({
 
   const apply = () => {
     if (!canApply) return;
-    setResult(undefined);
     switch (action) {
       case 'create':
         beginCreateFlow().catch(() => undefined);
@@ -966,26 +972,30 @@ export function ManageBooksDialog({
     }
   };
 
-  const totalPresent = allBooks.filter((b) => current.present.has(b)).length;
+  // Subtitle reports counts over the canonical-only subset (matching PT9 "X of 88 canonical books"
+  // copy). The wider `allBooks` universe includes XXA/FRT/etc. as creatable options but those are
+  // not "canonical books" by definition.
+  const canonicalBooks = useMemo(() => allBooks.filter((b) => isCanonicalId(b)), [allBooks]);
+  const totalPresent = canonicalBooks.filter((b) => current.present.has(b)).length;
 
   const subtitleTemplate = versification
     ? t('%manageBooks_header_subtitle%', '{0} of {1} canonical books in {2} ({3})')
     : t('%manageBooks_header_subtitleNoVersification%', '{0} of {1} canonical books in {2}');
   const headerSubtitle = versification
-    ? fmt(subtitleTemplate, totalPresent, allBooks.length, project.shortName, versification)
-    : fmt(subtitleTemplate, totalPresent, allBooks.length, project.shortName);
+    ? fmt(subtitleTemplate, totalPresent, canonicalBooks.length, project.shortName, versification)
+    : fmt(subtitleTemplate, totalPresent, canonicalBooks.length, project.shortName);
 
   const pillStateLabel = (state: ManageBooksComparisonState): string => {
     switch (state) {
-      case 'Same':
+      case 'filesAreSame':
         return t('%manageBooks_pill_state_same%', 'Same');
-      case 'Newer':
+      case 'sourceIsNewer':
         return t('%manageBooks_pill_state_newer%', 'Newer');
-      case 'Older':
+      case 'sourceIsOlder':
         return t('%manageBooks_pill_state_older%', 'Older');
-      case 'Missing':
+      case 'sourceDoesNotExist':
         return t('%manageBooks_pill_state_missing%', 'Missing');
-      case 'New':
+      case 'destDoesNotExist':
         return t('%manageBooks_pill_new%', 'New');
       case 'undetermined':
       default:
@@ -1048,7 +1058,7 @@ export function ManageBooksDialog({
     if (action === 'copy' && copySource && copySourceProject) {
       const sourceDate = copySource.dates[book];
       const state = computeCompareState(sourceDate, isPresent ? destDate : undefined);
-      if (state === 'New') {
+      if (state === 'destDoesNotExist') {
         return (
           <Badge variant="outline" className="tw-font-normal tw-text-muted-foreground">
             {t('%manageBooks_pill_new%', 'New')}
@@ -1289,7 +1299,7 @@ export function ManageBooksDialog({
     if (canApply || action === 'view') return undefined;
     if (action === 'copy' && !copySourceId)
       return t('%manageBooks_footer_disabledTooltip_chooseSource%', 'Choose a source project');
-    if (action === 'create' && createMethod === 'referenceText' && !createReferenceId)
+    if (action === 'create' && createMethod === 'fromTemplate' && !createReferenceId)
       return t(
         '%manageBooks_footer_disabledTooltip_chooseReference%',
         "Choose a reference project or change 'based on'",
@@ -1300,9 +1310,6 @@ export function ManageBooksDialog({
         : t('%manageBooks_footer_disabledTooltip_selectBook%', 'Select at least one book');
     return undefined;
   })();
-
-  // -- Result panel resolution helpers ------------------------------------
-  const dismissResult = () => setResult(undefined);
 
   // -- A2 Delete confirm helpers ------------------------------------------
   const deleteConfirmBody = (() => {
@@ -1399,9 +1406,11 @@ export function ManageBooksDialog({
                     if (v && !isSubmitting && isAction(v)) setAction(v);
                   }}
                   className="tw-gap-0"
+                  data-testid="action-toggle"
                 >
                   <ToggleGroupItem
                     value="view"
+                    data-testid="action-toggle-view"
                     className="tw-h-9 tw-gap-1.5 !tw-rounded-r-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
                   >
                     <BookOpenCheck
@@ -1412,6 +1421,7 @@ export function ManageBooksDialog({
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="create"
+                    data-testid="action-toggle-create"
                     className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
                   >
                     <BookPlus
@@ -1422,6 +1432,7 @@ export function ManageBooksDialog({
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="import"
+                    data-testid="action-toggle-import"
                     className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
                   >
                     <Download
@@ -1432,6 +1443,7 @@ export function ManageBooksDialog({
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="copy"
+                    data-testid="action-toggle-copy"
                     className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
                   >
                     <Copy className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline" aria-hidden />
@@ -1439,6 +1451,7 @@ export function ManageBooksDialog({
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="delete"
+                    data-testid="action-toggle-delete"
                     className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-l-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
                   >
                     <Trash2 className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline" aria-hidden />
@@ -1476,31 +1489,34 @@ export function ManageBooksDialog({
                         aria-hidden
                       />
                     </Button>
-                    {/* F1: DEF-UI-001 disabled stub for "View differences" */}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="tw-h-8 tw-px-2 tw-text-xs"
-                            aria-disabled
-                            aria-describedby={`${liveRegionId}-view-diff`}
-                            // DEF-UI-001 disabled stub: no-op until implemented
-                            // eslint-disable-next-line @typescript-eslint/no-empty-function
-                            onClick={() => {}}
-                          >
-                            {t('%manageBooks_view_diff_label%', 'View differences')}
-                          </Button>
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent id={`${liveRegionId}-view-diff`}>
-                        {t(
-                          '%manageBooks_view_diff_tooltip%',
-                          'View differences (not yet available)',
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
+                    {/* F1: DEF-UI-001 stub for "View differences" — Theme C3
+                        (FN-008 v2.6.0+, 2026-05-01) replaced the
+                        Tooltip-wrapped empty-onClick Button with a true
+                        shadcn ContextMenu containing a disabled
+                        ContextMenuItem. The trigger button keeps the visible
+                        affordance; right-click opens the menu, which conveys
+                        "not yet available" through a disabled item rather
+                        than via a Tooltip on a no-op left-click. */}
+                    <ContextMenu>
+                      <ContextMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="tw-h-8 tw-px-2 tw-text-xs"
+                          aria-haspopup="menu"
+                        >
+                          {t('%manageBooks_view_diff_label%', 'View differences')}
+                        </Button>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent>
+                        <ContextMenuItem disabled>
+                          {t(
+                            '%manageBooks_view_diff_tooltip%',
+                            'View differences (not yet available)',
+                          )}
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
                   </div>
                 )}
 
@@ -1533,7 +1549,7 @@ export function ManageBooksDialog({
                             'With all chapter and verse numbers',
                           )}
                         </SelectItem>
-                        <SelectItem value="referenceText">
+                        <SelectItem value="fromTemplate">
                           {t('%manageBooks_create_method_referenceText%', 'Based on')}
                         </SelectItem>
                       </SelectContent>
@@ -1546,7 +1562,7 @@ export function ManageBooksDialog({
                         )}
                       </span>
                     )}
-                    {createMethod === 'referenceText' && (
+                    {createMethod === 'fromTemplate' && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Info
@@ -1562,7 +1578,7 @@ export function ManageBooksDialog({
                         </TooltipContent>
                       </Tooltip>
                     )}
-                    {createMethod === 'referenceText' && (
+                    {createMethod === 'fromTemplate' && (
                       <Select
                         value={createReferenceId ?? ''}
                         onValueChange={(v) => setCreateReferenceId(v || undefined)}
@@ -1742,11 +1758,13 @@ export function ManageBooksDialog({
                       if (v && isPresenceFilter(v)) setViewPresenceFilter(v);
                     }}
                     className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
+                    data-testid="presence-filter"
                   >
                     {(['all', 'new', 'existing'] as const).map((s) => (
                       <ToggleGroupItem
                         key={s}
                         value={s}
+                        data-testid={`presence-filter-${s}`}
                         className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
                       >
                         {filterChipLabel(s)}
@@ -1762,12 +1780,14 @@ export function ManageBooksDialog({
                       if (v && isCopyStateFilter(v)) setCopyStateFilter(v);
                     }}
                     className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
+                    data-testid="copy-state-filter"
                   >
                     {(['all', 'new', 'newer', 'older', 'same', 'undetermined'] as const).map(
                       (s) => (
                         <ToggleGroupItem
                           key={s}
                           value={s}
+                          data-testid={`copy-state-filter-${s}`}
                           className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
                         >
                           {filterChipLabel(s)}
@@ -1784,11 +1804,13 @@ export function ManageBooksDialog({
                       if (v && isPresenceFilter(v)) setImportPresenceFilter(v);
                     }}
                     className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
+                    data-testid="import-presence-filter"
                   >
                     {(['all', 'new', 'existing'] as const).map((s) => (
                       <ToggleGroupItem
                         key={s}
                         value={s}
+                        data-testid={`import-presence-filter-${s}`}
                         className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
                       >
                         {filterChipLabel(s)}
@@ -1832,9 +1854,9 @@ export function ManageBooksDialog({
                       const compState = getBookComparisonState(book);
                       // A7 row coloring: greyed for identical, highlight for to-newer.
                       let rowClass = '';
-                      if (action === 'copy' && compState === 'Same') {
+                      if (action === 'copy' && compState === 'filesAreSame') {
                         rowClass = 'tw-text-muted-foreground tw-opacity-60';
-                      } else if (action === 'copy' && compState === 'Older') {
+                      } else if (action === 'copy' && compState === 'sourceIsOlder') {
                         rowClass = 'tw-bg-amber-50 dark:tw-bg-amber-900/20';
                       }
                       const focusable =
@@ -1967,60 +1989,10 @@ export function ManageBooksDialog({
                 )}
               </div>
 
-              {/* A5 result panel */}
-              {result && (result.errors.length > 0 || result.warnings.length > 0) && (
-                <div
-                  role="alert"
-                  aria-live="polite"
-                  className="tw-flex tw-flex-col tw-gap-2 tw-border-t tw-bg-muted/40 tw-px-6 tw-py-3"
-                >
-                  {result.errors.length > 0 && (
-                    <div className="tw-flex tw-flex-col tw-gap-1">
-                      <div className="tw-flex tw-items-center tw-gap-1.5 tw-text-xs tw-font-semibold tw-text-destructive">
-                        <AlertCircle className="tw-h-3.5 tw-w-3.5" aria-hidden />
-                        {t('%manageBooks_results_errorsTitle%', 'Errors')} ({result.errors.length})
-                      </div>
-                      <ul className="tw-flex tw-flex-col tw-gap-1 tw-pl-5">
-                        {result.errors.map((entry) => (
-                          <li
-                            key={`err-${entry.caption}-${entry.text}`}
-                            className="tw-text-xs tw-text-destructive"
-                          >
-                            {entry.caption ? <strong>{entry.caption}: </strong> : undefined}
-                            {entry.text}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {result.warnings.length > 0 && (
-                    <div className="tw-flex tw-flex-col tw-gap-1">
-                      <div className="tw-flex tw-items-center tw-gap-1.5 tw-text-xs tw-font-semibold tw-text-amber-700 dark:tw-text-amber-400">
-                        <AlertTriangle className="tw-h-3.5 tw-w-3.5" aria-hidden />
-                        {t('%manageBooks_results_warningsTitle%', 'Warnings')} (
-                        {result.warnings.length})
-                      </div>
-                      <ul className="tw-flex tw-flex-col tw-gap-1 tw-pl-5">
-                        {result.warnings.map((entry) => (
-                          <li
-                            key={`warn-${entry.caption}-${entry.text}`}
-                            className="tw-text-xs tw-text-amber-700 dark:tw-text-amber-400"
-                          >
-                            {entry.caption ? <strong>{entry.caption}: </strong> : undefined}
-                            {entry.text}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  <div className="tw-flex tw-justify-end">
-                    <Button variant="ghost" size="sm" onClick={dismissResult}>
-                      <X className="tw-mr-1 tw-h-3.5 tw-w-3.5" aria-hidden />
-                      {t('%manageBooks_results_dismiss%', 'Dismiss')}
-                    </Button>
-                  </div>
-                </div>
-              )}
+              {/* Theme C1 (FN-008 v2.6.0+, 2026-05-01): the in-dialog
+                  role="alert" result panel was removed. AlertEntry warnings
+                  and errors now flow through the `onMutationResult` callback
+                  prop and are surfaced as toasts by the wiring layer. */}
 
               <footer className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-px-6 tw-py-3">
                 <span className="tw-text-xs tw-text-muted-foreground">{summaryText}</span>

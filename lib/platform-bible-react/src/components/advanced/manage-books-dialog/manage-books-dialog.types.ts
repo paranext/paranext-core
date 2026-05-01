@@ -16,25 +16,33 @@ export type ManageBooksAction = 'view' | 'create' | 'import' | 'copy' | 'delete'
 /**
  * Methods for creating a new book.
  *
- * Note: `'referenceText'` will be renamed to `'fromTemplate'` during phase-3-ui per FN-008 #1.
+ * Renamed `'referenceText'` → `'fromTemplate'` on 2026-05-01 per FN-008 #1 (phase-3-ui wiring
+ * adapter). The C# orchestrator's `CreationMethod` enum already uses `FromTemplate`; the frontend
+ * now matches that canonical name.
  */
-export type ManageBooksCreateMethod = 'empty' | 'chapterVerse' | 'referenceText';
+export type ManageBooksCreateMethod = 'empty' | 'chapterVerse' | 'fromTemplate';
 
 /** Strategy for resolving conflicts when importing into a project that already has the book. */
 export type ManageBooksImportStrategy = 'replaceEntireBooks' | 'nonExistingChapters';
 
 /**
  * Comparison state between a candidate book in a source/import file and the destination project.
- * Cherry-pick names preserved for now; the rename to `data-contracts.md` names (`from-newer |
- * sourceIsOlder | from-only | identical | to-newer | undetermined`) is a phase-3-ui task per FN-008
- * #1.
+ * Renamed on 2026-05-01 per FN-008 #1 to match `data-contracts.md` Section 3.7's canonical names
+ * (the C# `ComparisonState` enum):
+ *
+ * - `'Same'` → `'filesAreSame'`
+ * - `'Newer'` → `'sourceIsNewer'` (source has the more recent file)
+ * - `'Older'` → `'sourceIsOlder'`
+ * - `'Missing'` (was: in dest, missing in source) → `'sourceDoesNotExist'`
+ * - `'New'` (was: in source, missing in dest) → `'destDoesNotExist'`
+ * - `'undetermined'` → `'undetermined'` (unchanged)
  */
 export type ManageBooksComparisonState =
-  | 'Same'
-  | 'Newer'
-  | 'Older'
-  | 'Missing'
-  | 'New'
+  | 'filesAreSame'
+  | 'sourceIsNewer'
+  | 'sourceIsOlder'
+  | 'sourceDoesNotExist'
+  | 'destDoesNotExist'
   | 'undetermined';
 
 /* ------------------------------------------------------------------ */
@@ -254,6 +262,10 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_create_warningModelMissingBooks%',
   '%manageBooks_create_errorVersificationMismatch%',
   '%manageBooks_import_errorOverlappingFiles%',
+  // Wiring-layer toast strings (FN-008 v2.6.0+, 2026-05-01) — used by the
+  // web view layer for cross-launch and file-picker stub notifications.
+  '%manageBooks_crossLaunch_notYetAvailable%',
+  '%manageBooks_filePicker_notYetAvailable%',
 ] as const);
 
 /** Localized strings consumed by `ManageBooksDialog`. */

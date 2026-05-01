@@ -477,7 +477,11 @@
       "%markersChecklist_menu_copy%": "Copy",
       "%markersChecklist_menu_settings%": "Settings",
       "%webView_platformScripture_markersChecklist_viewColumn%": "View",
-      "%webView_platformScripture_markersChecklist_settings%": "Settings"
+      "%webView_platformScripture_markersChecklist_settings%": "Settings",
+      "%manageBooks_openMenuItem%": "Manage Books…",
+      "%manageBooks_toolsMenuColumn%": "Tools",
+      "%manageBooks_crossLaunch_notYetAvailable%": "Not yet available — coming soon",
+      "%manageBooks_filePicker_notYetAvailable%": "Importing files is not yet available in Platform.Bible. Coming soon."
     },
     "es": {
       "%inventoryName_Character%": "Inventario de caracteres",
@@ -669,7 +673,11 @@
       "%webview_checksSidePanel_checkTypeFilter_selectAll%": "Seleccionar todos",
       "%webview_checksSidePanel_checkTypeFilter_setUp%": "Configuración",
       "%markersChecklist_errorInvalidMarkerPair%": "Marcadores equivalentes deben ser entrados en la forma: p/q",
-      "%markersChecklist_emptyResult_identicalMarkers%": "Textos comparativos tienen marcadores idénticos."
+      "%markersChecklist_emptyResult_identicalMarkers%": "Textos comparativos tienen marcadores idénticos.",
+      "%manageBooks_openMenuItem%": "Administrar libros…",
+      "%manageBooks_toolsMenuColumn%": "Herramientas",
+      "%manageBooks_crossLaunch_notYetAvailable%": "Aún no disponible — próximamente",
+      "%manageBooks_filePicker_notYetAvailable%": "La importación de archivos aún no está disponible en Platform.Bible. Próximamente."
     },
     "am": {
       "%manageBooks_error_adminRequired%": "ይህ ለአስተዳዳሪዎች ብቻ የሚገኘው ነው።",

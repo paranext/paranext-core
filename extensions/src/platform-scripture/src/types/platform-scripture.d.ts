@@ -986,7 +986,8 @@ declare module 'platform-scripture' {
      *
      * @example Not a known name "{name}"
      *
-     * @example %tab_title_unknown% (illustrative — any `LocalizeKey` is valid here)
+     * @example A LocalizeKey referencing a registered localization template (the actual key string
+     * is wrapped in percent signs as documented in {@link LocalizeKey}).
      */
     messageFormatString: LocalizeKey | string;
     /**
@@ -1821,6 +1822,15 @@ declare module 'papi-shared-types' {
      * replaced with the real dialog launcher in UI-PKG-003.
      */
     'platformScripture.openMarkersChecklistSettings': () => Promise<void>;
+
+    /**
+     * Open the unified Manage Books dialog (FN-008, 2026-05-01) for the active scripture project.
+     * Opens the dialog as a float web view; the dialog itself supports View / Create / Delete /
+     * Copy / Import action modes and an inline book-chooser grid.
+     */
+    'platformScripture.openManageBooks': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {

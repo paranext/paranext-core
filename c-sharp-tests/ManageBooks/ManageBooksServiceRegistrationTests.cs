@@ -19,10 +19,12 @@ namespace TestParanextDataProvider.ManageBooks
     /// Contracts:
     /// - Single <c>RegisterNetworkObjectAsync("platformScripture.manageBooks", functions, details)</c> call
     /// - <see cref="NetworkObjectCreatedDetails"/> event with Id, ObjectType=OBJECT, FunctionNames
-    /// - 12 wire methods: deleteBooks, filterProjects, createBooks,
+    /// - 13 wire methods: deleteBooks, filterProjects, isProjectShared, createBooks,
     ///   getAvailableBooksForCreation, validateCreateBooks, getBookComparison,
     ///   getToProjectFilter, copyBooks, copyCustomVersification,
     ///   parseImportFiles, checkOverlappingFiles, importBooks
+    ///   (isProjectShared added 2026-05-01 per FN-008 Theme C2 for the unified
+    ///   ManageBooksDialog wiring layer.)
     ///
     /// Theme-1 constraint: NO individual <c>RegisterRequestHandlerAsync("command:…")</c>
     /// calls for manage-books methods — every manage-books wire entry is dispatched
@@ -46,8 +48,9 @@ namespace TestParanextDataProvider.ManageBooks
         /// <summary>
         /// The complete set of NetworkObject wire method names the
         /// <c>ManageBooksService</c> must expose. Sourced from the strategic
-        /// plan's CAP-012 "12 NetworkObject Methods" list and from the Theme-1
+        /// plan's CAP-012 NetworkObject methods list and from the Theme-1
         /// single-registration design. Order-independent.
+        /// (13 methods after FN-008 Theme C2 added isProjectShared on 2026-05-01.)
         /// </summary>
         private static readonly string[] ExpectedWireMethodNames =
         [
@@ -55,6 +58,9 @@ namespace TestParanextDataProvider.ManageBooks
             "deleteBooks",
             // CAP-011
             "filterProjects",
+            // CAP-011 (Theme C2, 2026-05-01) — added for the unified
+            // ManageBooksDialog wiring layer (BHV-312 enhanced delete-confirm).
+            "isProjectShared",
             // CAP-004
             "createBooks",
             "getAvailableBooksForCreation",
@@ -151,9 +157,9 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("ScenarioId", "TS-072")]
         [Property("BehaviorId", "BHV-402")]
         [Description(
-            "OUTER acceptance (Theme 1): RegisterNetworkObjectAsync registers all 12 wire methods as `object:platformScripture.manageBooks.{method}` request handlers."
+            "OUTER acceptance (Theme 1): RegisterNetworkObjectAsync registers all 13 wire methods as `object:platformScripture.manageBooks.{method}` request handlers."
         )]
-        public async Task RegisterNetworkObjectAsync_RegistersAllTwelveWireMethods()
+        public async Task RegisterNetworkObjectAsync_RegistersAllWireMethods()
         {
             // Act
             await _service.RegisterNetworkObjectAsync();
@@ -230,9 +236,9 @@ namespace TestParanextDataProvider.ManageBooks
         [Property("ScenarioId", "TS-072")]
         [Property("BehaviorId", "BHV-402")]
         [Description(
-            "OUTER acceptance (Theme 1): the total count of manage-books wire handlers registered equals 12 methods + 1 NetworkObject sentinel = 13."
+            "OUTER acceptance (Theme 1): the total count of manage-books wire handlers registered equals 13 methods + 1 NetworkObject sentinel = 14 (after FN-008 Theme C2 added isProjectShared on 2026-05-01)."
         )]
-        public async Task RegisterNetworkObjectAsync_RegistersExactlyThirteenManageBooksHandlers()
+        public async Task RegisterNetworkObjectAsync_RegistersExactlyAllManageBooksHandlers()
         {
             // Act
             await _service.RegisterNetworkObjectAsync();

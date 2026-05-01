@@ -228,12 +228,17 @@ internal sealed class ManageBooksService : NetworkObject
 
     // CAP-011: cross-cutting project filter (FilterProjects) — used by
     // multiple dialogs as a unified read-only facade.
+    // Theme C2 (FN-008, 2026-05-01): isProjectShared added for the
+    // ManageBooksDialog wiring layer to detect shared-project context
+    // (delete-confirm copy enhancement, BHV-312). Mirrors PT9
+    // DeleteBooksForm.cs:77 — `scrText.IsProjectShared && UserCount > 1`.
     private List<(string, Delegate)> CreateUtilityFunctions() =>
         [
             (
                 "filterProjects",
                 new Func<ProjectFilterInput, Task<ProjectListResult>>(FilterProjectsAsync)
             ),
+            ("isProjectShared", new Func<string, Task<bool>>(IsProjectSharedAsync)),
         ];
 
     /// <summary>
@@ -450,6 +455,47 @@ internal sealed class ManageBooksService : NetworkObject
                     ProjectFilterService.MissingSourceProjectTypeFallback
                 )
             );
+        }
+    }
+
+    // === NEW IN PT10 ===
+    // Reason: Theme C2 (FN-008 v2.6.0+, 2026-05-01). The unified ManageBooksDialog
+    //   needs to know whether the active project is shared with other users so it
+    //   can show enhanced delete-confirm copy (BHV-312, A2). PT9 read this state
+    //   inline in DeleteBooksForm.cs:77 — `scrText.IsProjectShared && UserCount > 1`.
+    //   PT10 surfaces it as a wire method so the React web view can subscribe via
+    //   the platformScripture.manageBooks NetworkObject without any per-call
+    //   round-trip through other dialog APIs.
+    /// <summary>
+    /// True iff the project is shared (S/R, registered) AND has more than one
+    /// user-of-record. Mirrors the PT9 idiom in
+    /// <c>Paratext/ToolsMenu/DeleteBooksForm.cs:77</c>:
+    /// <c>scrText.IsProjectShared &amp;&amp; scrText.Permissions.UserCount &gt; 1</c>.
+    /// Returns <c>false</c> for unknown project ids rather than throwing —
+    /// the React caller invokes this on every project-change event and
+    /// stalling the UI on a stale id is unhelpful.
+    /// </summary>
+    /// <param name="projectId">Target project id (PT10 metadata id, not PT9 GUID).</param>
+    /// <returns><c>true</c> when shared+multi-user; <c>false</c> for unshared,
+    ///   single-user, or unknown projects.</returns>
+    public Task<bool> IsProjectSharedAsync(string projectId)
+    {
+        try
+        {
+            ScrText scrText = LocalParatextProjects.GetParatextProject(projectId);
+            return Task.FromResult(scrText.IsProjectShared && scrText.Permissions.UserCount > 1);
+        }
+        // Theme 9 conventions: narrow the catch to the documented lookup-failure
+        // types (ProjectNotFoundException for unknown id, ArgumentException for
+        // malformed HexId). Anything else propagates so unexpected failures are
+        // visible rather than masquerading as "not shared".
+        catch (ProjectNotFoundException)
+        {
+            return Task.FromResult(false);
+        }
+        catch (ArgumentException)
+        {
+            return Task.FromResult(false);
         }
     }
 
