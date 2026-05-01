@@ -97,10 +97,7 @@ declare module 'papi-shared-types' {
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)
      */
-    'paratextBibleSendReceive.syncProjects': (
-      projectIds: string[],
-      isCancelled?: () => boolean,
-    ) => Promise<void>;
+    'paratextBibleSendReceive.syncProjects': (projectIds: string[]) => Promise<void>;
 
     /**
      * Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjects` with
@@ -109,7 +106,7 @@ declare module 'papi-shared-types' {
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)
      */
-    'paratextBibleSendReceive.syncOpenProjects': (isCancelled?: () => boolean) => Promise<void>;
+    'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
 
     /**
      * Cancels an in-progress sync operation if one is running. The process will finish dealing with
