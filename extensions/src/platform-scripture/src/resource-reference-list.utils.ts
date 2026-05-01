@@ -1,5 +1,4 @@
 import type { ProjectSettingValidator } from '@papi/core';
-import type { ResourceReferenceList } from 'platform-scripture';
 
 export const isValidResourceReference = (item: unknown): boolean => {
   if (typeof item !== 'object' || item === null) return false;
