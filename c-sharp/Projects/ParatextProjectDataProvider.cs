@@ -1777,6 +1777,32 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     );
                 return boolValue;
             }
+
+            // Check if extension setting is a non-string type
+            bool? defaultBool = null;
+            try
+            {
+                if (ProjectSettingsService.GetDefault(PapiClient, settingName) is JsonElement elem)
+                    defaultBool = elem.Deserialize<bool?>();
+            }
+            catch
+            {
+                // No registered default; keep original string behavior
+            }
+
+            // Boolean setting found, so convert from string
+            if (defaultBool != null)
+            {
+                return settingValue.ToUpperInvariant() switch
+                {
+                    "F" => false,
+                    "FALSE" => false,
+                    "T" => true,
+                    "TRUE" => true,
+                    _ => defaultBool,
+                };
+            }
+
             return settingValue;
         }
 
@@ -1958,6 +1984,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                             // Normalize to the canonical single-letter form Paratext stores
                             value = boolValue ? "T" : "F";
                         }
+                        else if (value is bool boolValue)
+                            value = boolValue ? "T" : "F";
                         scrText.Settings.SetSetting(paratextSettingName, value!.ToString());
                         // We are notifying when we release our lock, so don't automatically
                         // notify in `Save`
