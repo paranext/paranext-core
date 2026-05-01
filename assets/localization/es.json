@@ -491,6 +491,8 @@
   "%theme_label_paratext_light%": "Paratext Claro",
   "%theme_label_user_dark%": "Oscuro definido por el usuario",
   "%theme_label_user_light%": "Claro definido por el usuario",
+  "%toolbar_sync%": "Sincronizar",
+  "%toolbar_sync_projects%": "Sincroniza los proyectos abiertos y sus recursos vinculados",
   "%toolbar_theme_change_to_dark%": "Cambiar al tema Oscuro",
   "%toolbar_theme_change_to_light%": "Cambiar al tema Claro",
   "%toolbar_theme_loading_error%": "Hubo un problema al cargar el tema",
