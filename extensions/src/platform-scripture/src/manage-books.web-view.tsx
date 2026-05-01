@@ -33,7 +33,13 @@ import {
   MANAGE_BOOKS_DIALOG_STRING_KEYS,
 } from 'platform-bible-react';
 import { Canon } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS,
+  GreekEstherTemplate,
+  GreekEstherTemplatePicker,
+  GreekEstherTemplatePickerLocalizedStrings,
+} from './greek-esther-template-picker.component';
 
 const NETWORK_OBJECT_ID = 'platformScripture.manageBooks';
 const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
@@ -218,9 +224,25 @@ global.webViewComponent = function ManageBooksWebView({
     }
   }, [projectId, persistedProjectId, setPersistedProjectId, updateWebViewDefinition]);
 
-  // Pull all the localization strings the dialog needs in one batch.
-  const stringKeys = useMemo(() => Array.from(MANAGE_BOOKS_DIALOG_STRING_KEYS), []);
+  // Pull all the localization strings the dialog + picker need in one batch. Including the
+  // picker keys here ensures the inline-rendered picker reads from the same string map and
+  // localization fetches happen as a single round-trip.
+  const stringKeys = useMemo(
+    () => [...MANAGE_BOOKS_DIALOG_STRING_KEYS, ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS],
+    [],
+  );
   const [localizedStrings] = useLocalizedStrings(stringKeys);
+
+  // Build a typed subset for the picker by copying the picker's keys out of the shared map.
+  // This avoids a `as`-assertion (banned by no-type-assertion lint rule) at the wire boundary.
+  const pickerLocalizedStrings = useMemo<GreekEstherTemplatePickerLocalizedStrings>(() => {
+    const out: GreekEstherTemplatePickerLocalizedStrings = {};
+    GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS.forEach((key) => {
+      const value = localizedStrings[key];
+      if (typeof value === 'string') out[key] = value;
+    });
+    return out;
+  }, [localizedStrings]);
 
   // ===== PAPI: project list =================================================
   // Resolve the manage-books NetworkObject lazily on first render.
@@ -495,24 +517,50 @@ global.webViewComponent = function ManageBooksWebView({
   // future `papi.dialogs.selectFiles({ multi, filters })` PAPI ships, wire
   // it in here as `const onPickImportFiles = async () => papi.dialogs.selectFiles(...)`.
 
-  // ===== Greek Esther picker (WP-002) — defer until that WP wires it up =====
-  // The dialog passes the currently-selected book IDs as the only argument
-  // (so the picker could in theory adapt to which Esther books are being
-  // created); we don't use it yet — WP-002 will replace this stub.
+  // ===== Greek Esther picker (WP-002) — modal-on-modal in-process render =====
+  // The picker is a Radix `<Dialog>` rendered as a peer of the parent ManageBooksDialog inside
+  // this same web view. Modal-on-modal stacking, focus trap, and Escape key are Radix Dialog
+  // defaults. Promise resolution happens locally: when `onOpenEstherPicker` is invoked we open
+  // the picker and stash the awaiting Promise's `resolve` in a ref; the picker's onSelect or
+  // onCancel calls that resolver and clears the ref.
+  //
+  // WP-002 architectural decision: in-process render rather than `papi.webViews.openWebView`.
+  // Rationale: the parent dialog awaits a `Promise<EstherTemplate | undefined>` returned from
+  // this callback. In-process resolution is one ref + one useState; the cross-iframe alternative
+  // would need a PAPI command + correlation ID + state subscription. Functional tests
+  // (manage-books-functional-WP-002.spec.ts) also assert the picker renders inside the
+  // manage-books iframe via `frame.getByRole('dialog', ...)`, which requires same-iframe render.
+  // The standalone `greek-esther-template-picker.web-view-provider.ts` exists for future callers
+  // that want a free-floating dialog but is not on the WP-002 hot path.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerResolverRef = useRef<((value: GreekEstherTemplate | undefined) => void) | undefined>(
+    undefined,
+  );
+
   const onOpenEstherPicker = useCallback(async (): Promise<EstherTemplate | undefined> => {
-    // WP-002 will register a sub-dialog and an open command. Until then,
-    // surfacing the info-toast keeps the user informed and the create flow
-    // falls back to no template (component handles undefined as cancel).
-    const message =
-      localizedStrings['%manageBooks_crossLaunch_notYetAvailable%'] ??
-      'Not yet available — coming soon';
-    try {
-      papi.notifications.send({ message, severity: 'info' });
-    } catch {
-      // best-effort
-    }
-    return undefined;
-  }, [localizedStrings]);
+    return new Promise<GreekEstherTemplate | undefined>((resolve) => {
+      // If a previous picker invocation is somehow still pending (defensive — shouldn't happen
+      // because the parent dialog awaits the promise sequentially), resolve it as cancelled
+      // before starting a new one so we never leak an unresolved promise.
+      if (pickerResolverRef.current) pickerResolverRef.current(undefined);
+      pickerResolverRef.current = resolve;
+      setPickerOpen(true);
+    });
+  }, []);
+
+  const handlePickerSelect = useCallback((template: GreekEstherTemplate) => {
+    setPickerOpen(false);
+    const resolver = pickerResolverRef.current;
+    pickerResolverRef.current = undefined;
+    resolver?.(template);
+  }, []);
+
+  const handlePickerCancel = useCallback(() => {
+    setPickerOpen(false);
+    const resolver = pickerResolverRef.current;
+    pickerResolverRef.current = undefined;
+    resolver?.(undefined);
+  }, []);
 
   // ===== Open/close ==========================================================
   // PAPI does not expose a "close my own web view" method (no `closeSelf`,
@@ -548,27 +596,35 @@ global.webViewComponent = function ManageBooksWebView({
   }, []);
 
   return (
-    <ManageBooksDialog
-      open
-      onOpenChange={(o) => {
-        if (!o) close();
-      }}
-      projectId={projectId}
-      onProjectIdChange={setProjectIdLocal}
-      loadProjects={loadProjects}
-      loadBooks={loadBooks}
-      loadVersification={loadVersification}
-      onOpenScriptureReferenceSettings={sendCrossLaunchStub}
-      onOpenProjectCanons={sendCrossLaunchStub}
-      onOpenRegistry={sendCrossLaunchStub}
-      onCreateBooks={onCreateBooks}
-      onDeleteBooks={onDeleteBooks}
-      onCopyBooks={onCopyBooks}
-      onImportBooks={onImportBooks}
-      onMutationResult={onMutationResult}
-      onOpenEstherPicker={onOpenEstherPicker}
-      isSharedProject={isSharedProject}
-      localizedStrings={localizedStrings}
-    />
+    <>
+      <ManageBooksDialog
+        open
+        onOpenChange={(o) => {
+          if (!o) close();
+        }}
+        projectId={projectId}
+        onProjectIdChange={setProjectIdLocal}
+        loadProjects={loadProjects}
+        loadBooks={loadBooks}
+        loadVersification={loadVersification}
+        onOpenScriptureReferenceSettings={sendCrossLaunchStub}
+        onOpenProjectCanons={sendCrossLaunchStub}
+        onOpenRegistry={sendCrossLaunchStub}
+        onCreateBooks={onCreateBooks}
+        onDeleteBooks={onDeleteBooks}
+        onCopyBooks={onCopyBooks}
+        onImportBooks={onImportBooks}
+        onMutationResult={onMutationResult}
+        onOpenEstherPicker={onOpenEstherPicker}
+        isSharedProject={isSharedProject}
+        localizedStrings={localizedStrings}
+      />
+      <GreekEstherTemplatePicker
+        open={pickerOpen}
+        onSelect={handlePickerSelect}
+        onCancel={handlePickerCancel}
+        localizedStrings={pickerLocalizedStrings}
+      />
+    </>
   );
 };

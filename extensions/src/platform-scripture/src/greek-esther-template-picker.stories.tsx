@@ -98,20 +98,22 @@ function StatefulPickerHarness({
 }
 
 /**
- * Default story: open dialog, default radio = `'modern_scholars'`. Clicking OK fires `onSelect` and
- * appends to the visible result log; Escape, Cancel, or overlay-click fire `onCancel`. Click "Open
- * picker" to re-open and try a different option.
+ * Default story: open dialog, default radio = `'lxx'` (Septuagint) per PT9 parity (RF-UI-006 closed
+ * 2026-05-01 — verified against `CreateESGForm.Designer.cs`'s `optLXX.Checked = true`). Clicking OK
+ * fires `onSelect` and appends to the visible result log; Escape, Cancel, or overlay-click fire
+ * `onCancel`. Click "Open picker" to re-open and try a different option.
  */
 export const Default: Story = {
   render: () => <StatefulPickerHarness />,
 };
 
 /**
- * Pre-selected to `'lxx'` via the `defaultTemplate` prop, demonstrating that the API default is
- * overridable. Clicking OK without changing the radio fires `onSelect('lxx')`.
+ * Pre-selected to `'modern_scholars'` via the `defaultTemplate` prop, demonstrating that the API
+ * default is overridable. Clicking OK without changing the radio fires
+ * `onSelect('modern_scholars')`.
  */
-export const PreSelectedLxx: Story = {
-  render: () => <StatefulPickerHarness staticArgs={{ defaultTemplate: 'lxx' }} />,
+export const PreSelectedModernScholars: Story = {
+  render: () => <StatefulPickerHarness staticArgs={{ defaultTemplate: 'modern_scholars' }} />,
 };
 
 /** Pre-selected to `'vulgate'`. */

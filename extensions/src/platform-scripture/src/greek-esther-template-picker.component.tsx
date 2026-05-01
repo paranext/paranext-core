@@ -70,9 +70,9 @@ export type GreekEstherTemplatePickerProps = {
   /** Called when the user picks Cancel, presses Escape, or clicks the overlay. */
   onCancel: () => void;
   /**
-   * Optional default selection. Defaults to `'modern_scholars'`. (PT9 `CreateESGForm.cs` field
-   * initializer suggests `'lxx'`; the actual pre-checked radio is uncertain without the Designer.cs
-   * file. Tracked as RF-UI-006.)
+   * Optional default selection. Defaults to `'lxx'` per PT9 parity (RF-UI-006 closed 2026-05-01 —
+   * `ParatextBase/CreateESGForm.Designer.cs:49` sets `optLXX.Checked = true`, and
+   * `CreateESGForm.cs:12` initializes `TemplateFile = "ESG_lxx.sfm"`).
    */
   defaultTemplate?: GreekEstherTemplate;
   /**
@@ -103,7 +103,7 @@ export function GreekEstherTemplatePicker({
   open,
   onSelect,
   onCancel,
-  defaultTemplate = 'modern_scholars',
+  defaultTemplate = 'lxx',
   localizedStrings = {},
 }: GreekEstherTemplatePickerProps) {
   const t = (key: GreekEstherTemplatePickerLocalizedStringKey) =>
