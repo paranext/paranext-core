@@ -20,6 +20,7 @@ import {
   DictionarySenseItem,
   DICTIONARY_SENSE_ITEM_STRING_KEYS,
   type DictionarySenseDisplay,
+  type DictionarySenseDomain,
 } from '../shared/dictionary-sense-item.component';
 
 /** Object containing all keys used for localization in this component. */
@@ -93,6 +94,12 @@ export type DictionaryEntryDetailProps = {
   onAllOccurrencesClick?: (tokenId: string) => void;
   /** Click handler for the per-sense "Occurrences in all books" link. */
   onSenseOccurrencesClick?: (senseId: string) => void;
+  /**
+   * FN-021 [UI-PKG-007]: Click handler for a Domain row inside a sense's definition table. When
+   * provided, each Domain row renders as a clickable link. Parent typically dispatches a
+   * SemanticDomainViewer-open with the full {@link DictionarySenseDomain} payload.
+   */
+  onSenseDomainClick?: (domain: DictionarySenseDomain) => void;
 
   /**
    * Helpfulness flow handlers [Revised: 2026-04-29 Theme 13b]. The component owns the local
@@ -150,6 +157,7 @@ export function DictionaryEntryDetail({
   onSourceTextClick = () => {},
   onAllOccurrencesClick = () => {},
   onSenseOccurrencesClick = () => {},
+  onSenseDomainClick,
   onHelpfulnessAnswer = () => {},
   onGiveFeedback = () => {},
   onCopySurfaceForm = () => {},
@@ -330,6 +338,7 @@ export function DictionaryEntryDetail({
                 sense={sense}
                 hideLessRelevant={hideLessRelevantSenses}
                 onSenseOccurrencesClick={onSenseOccurrencesClick}
+                onDomainClick={onSenseDomainClick}
                 localizedStringsWithLoadingState={senseStrings}
               />
             ))}

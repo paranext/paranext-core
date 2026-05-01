@@ -11,6 +11,7 @@ import {
   TabsContent,
   Tabs,
   cn,
+  type SemanticDomain,
 } from 'platform-bible-react';
 import type { LocalizeKey, LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
 import { formatScrRef, formatScrRefRange } from 'platform-bible-utils';
@@ -40,7 +41,10 @@ import {
   type DictionaryEmptyStateVariant,
 } from '../components/dictionary-tab/dictionary-tab.component';
 import type { DictionaryDisplayItemData } from '../components/dictionary-tab/dictionary-display-item.component';
-import type { DictionarySenseDisplay } from '../components/shared/dictionary-sense-item.component';
+import type {
+  DictionarySenseDisplay,
+  DictionarySenseDomain,
+} from '../components/shared/dictionary-sense-item.component';
 import {
   presentDictionaryEntry,
   type DictionaryEntryDataInput,
@@ -82,6 +86,11 @@ import {
   ArticleViewer,
   ARTICLE_VIEWER_STRING_KEYS,
 } from '../components/article-viewer/article-viewer.component';
+import {
+  SemanticDomainViewer,
+  SEMANTIC_DOMAIN_VIEWER_STRING_KEYS,
+  type SemanticDomainFilteredItem,
+} from '../components/semantic-domain-viewer/semantic-domain-viewer.component';
 import {
   presentMediaItems,
   type MediaDisplayItemInput,
@@ -195,6 +204,38 @@ export type EnhancedResourceWebViewProps = {
   onDictionaryFindSense?: (item: DictionaryDisplayItemData) => void;
   onDictionaryFindLemma?: (item: DictionaryDisplayItemData) => void;
   onDictionaryFindText?: (item: DictionaryDisplayItemData) => void;
+  /**
+   * UI-PKG-007 / FN-021 - click on a Domain row inside a sense definition table. Wiring layer
+   * dispatches a SemanticDomainViewer-open with the full DomainLink payload (filtered-list mode).
+   */
+  onDictionarySenseDomainClick?: (domain: DictionarySenseDomain) => void;
+  /**
+   * UI-PKG-007 cold-entry - "Browse semantic domains" button click in the dictionary tab header.
+   * Wiring layer dispatches a SemanticDomainViewer-open with no preselected domain (tree-overlay
+   * mode).
+   */
+  onBrowseSemanticDomainsClick?: () => void;
+
+  // SemanticDomainViewer (centered Dialog) — UI-PKG-007. Opened either from a Dictionary `Domain:`
+  // link (filtered-list mode, FN-021) or from the dictionary tab's "Browse semantic domains"
+  // button (tree-overlay / cold-entry mode). Closes on entry click (BHV-456 displaydomain),
+  // breadcrumb segment navigation re-renders without closing (displaycat).
+  /** Whether the SDV Dialog is open. */
+  semanticDomainViewerOpen?: boolean;
+  /** Resolved breadcrumb path from root to focused domain. Undefined => cold-entry / browse mode. */
+  semanticDomainViewerPath?: SemanticDomain[];
+  /** Full domain hierarchy (root nodes) for the active SDV dictionary (SDBH or SDBG). */
+  semanticDomainViewerAllDomains?: SemanticDomain[];
+  /** Dictionary entries belonging to the focused domain. */
+  semanticDomainViewerFilteredEntries?: SemanticDomainFilteredItem[];
+  /** Loading flag while filtered entries are being fetched. */
+  semanticDomainViewerIsLoading?: boolean;
+  /** Open-state change handler — called by Dialog X / Esc / click-outside. */
+  onSemanticDomainViewerOpenChange?: (open: boolean) => void;
+  /** Domain-path change handler — called when breadcrumb popover navigates within the tree. */
+  onSemanticDomainViewerDomainChange?: (newPath: SemanticDomain[]) => void;
+  /** Click on a filtered entry's source-text Button — BHV-456 displaydomain (closes SDV). */
+  onSemanticDomainViewerEntryClick?: (entry: DictionaryDisplayItemData) => void;
 
   // Encyclopedia tab
   encyclopediaItems?: EncyclopediaDisplayItemData[];
@@ -344,6 +385,17 @@ export function EnhancedResourceWebView({
   onDictionaryFindSense = () => {},
   onDictionaryFindLemma = () => {},
   onDictionaryFindText = () => {},
+  onDictionarySenseDomainClick,
+  onBrowseSemanticDomainsClick,
+
+  semanticDomainViewerOpen = false,
+  semanticDomainViewerPath,
+  semanticDomainViewerAllDomains = [],
+  semanticDomainViewerFilteredEntries = [],
+  semanticDomainViewerIsLoading = false,
+  onSemanticDomainViewerOpenChange = () => {},
+  onSemanticDomainViewerDomainChange = () => {},
+  onSemanticDomainViewerEntryClick = () => {},
 
   encyclopediaItems = [],
   encyclopediaSelectedTokenId,
@@ -513,6 +565,8 @@ export function EnhancedResourceWebView({
                     onSourceTextClick={onDictionarySourceTextClick}
                     onAllOccurrencesClick={onDictionaryAllOccurrencesClick}
                     onSenseOccurrencesClick={onDictionarySenseOccurrencesClick}
+                    onSenseDomainClick={onDictionarySenseDomainClick}
+                    onBrowseSemanticDomainsClick={onBrowseSemanticDomainsClick}
                     onToggleHideLessRelevantSenses={onDictionaryToggleHideLessRelevantSenses}
                     onHelpfulnessAnswer={onDictionaryHelpfulnessAnswer}
                     onGiveFeedback={onDictionaryGiveFeedback}
@@ -593,6 +647,25 @@ export function EnhancedResourceWebView({
         onNext={onMaximizedMediaNext}
         localizedStringsWithLoadingState={childStrings}
       />
+      {/*
+       * UI-PKG-007: SemanticDomainViewer (centered Dialog) - opened either by clicking a sense
+       * `Domain:` link in the Dictionary tab (filtered-list mode, FN-021) or by the dictionary
+       * tab header's "Browse semantic domains" button (tree-overlay / cold-entry mode). The
+       * wiring layer drives `open`, `domainPath`, `allDomains`, and `filteredEntries` from real
+       * PAPI data; click on a filtered entry routes through `onSemanticDomainViewerEntryClick`
+       * which sets `filteredTokenId` and closes the dialog (BHV-456 displaydomain).
+       */}
+      <SemanticDomainViewer
+        open={semanticDomainViewerOpen}
+        domainPath={semanticDomainViewerPath}
+        allDomains={semanticDomainViewerAllDomains}
+        filteredEntries={semanticDomainViewerFilteredEntries}
+        isLoading={semanticDomainViewerIsLoading}
+        onOpenChange={onSemanticDomainViewerOpenChange}
+        onDomainChange={onSemanticDomainViewerDomainChange}
+        onEntryClick={onSemanticDomainViewerEntryClick}
+        localizedStringsWithLoadingState={childStrings}
+      />
       <ArticleViewer
         open={activeArticleId !== undefined}
         articleId={activeArticleId}
@@ -648,6 +721,7 @@ const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   ...MEDIA_MAPS_TAB_STRING_KEYS,
   ...MEDIA_VIEWER_STRING_KEYS,
   ...ARTICLE_VIEWER_STRING_KEYS,
+  ...SEMANTIC_DOMAIN_VIEWER_STRING_KEYS,
   // Toolbar / scope labels surface in empty-state templates.
   '%enhancedResources_toolbar_scope_currentVerse%',
   '%enhancedResources_toolbar_scope_currentSection%',
@@ -922,14 +996,19 @@ function isOldTestamentBook(bookNum: number): boolean {
   return bookNum >= 1 && bookNum <= 39;
 }
 
-/** Adapt the presenter's DomainLink to the UI's lighter DictionarySenseDomain (id + label only). */
+/**
+ * Adapt the presenter's DomainLink shape into the UI's `DictionarySenseDomain`. Forwards the full
+ * {id, label, domainPath, dictionaryId} payload so `DictionarySenseItem` can render each row as a
+ * clickable Button (UI-PKG-007 / FN-021) and the parent webview can dispatch a
+ * SemanticDomainViewer-open with a real filtered-list target.
+ */
 function senseDisplaysFromPresentation(
   senses: {
     id: string;
     senseNumber: number;
     definition: string;
     glosses: string;
-    domains: { id: string; label: string }[];
+    domains: { id: string; label: string; domainPath: string; dictionaryId: 'SDBH' | 'SDBG' }[];
     notes: string;
     comment: string;
     commentsAndNotes: string;
@@ -943,7 +1022,14 @@ function senseDisplaysFromPresentation(
     definition: s.definition,
     glosses: s.glosses || undefined,
     domains:
-      s.domains.length > 0 ? s.domains.map((d) => ({ id: d.id, label: d.label })) : undefined,
+      s.domains.length > 0
+        ? s.domains.map((d) => ({
+            id: d.id,
+            label: d.label,
+            domainPath: d.domainPath,
+            dictionaryId: d.dictionaryId,
+          }))
+        : undefined,
     notes: s.notes || undefined,
     comment: s.comment || undefined,
     commentsAndNotes: s.commentsAndNotes || undefined,
@@ -1667,6 +1753,308 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   ]);
 
   // ---------------------------------------------------------------------------
+  // SemanticDomainViewer wiring (UI-PKG-007)
+  // ---------------------------------------------------------------------------
+  // SDV opens via two paths (FN-021 + cold-entry):
+  //   (a) filtered-list mode  - click on a `Domain:` link in the dictionary tab. We receive the
+  //       full DomainLink payload (id, label, domainPath, dictionaryId) and open the dialog
+  //       with the breadcrumb resolved to that path.
+  //   (b) tree-overlay mode   - click "Browse semantic domains" in the dictionary tab header.
+  //       We open with no preselected path; the SemanticDomainViewer falls back to the first
+  //       top-level domain so the breadcrumb popovers are usable from root.
+  //
+  // BHV-456 distinguishes:
+  //   - `displaycat` - breadcrumb-driven domain change. Re-renders the tree without closing
+  //     (handled by `handleSDVDomainChange` setting `sdvDomainPath` only).
+  //   - `displaydomain` - filtered-entry click. Closes SDV and routes to the dictionary entry
+  //     by setting `filteredTokenId` (parent flow re-uses the existing FN-020 propagation).
+  //
+  // Backend status [Forward note]: the C# `EnhancedResourceFactory` does not yet expose a
+  // dedicated "load semantic domain hierarchy" method - the tree must be derived from data we
+  // already have. We assemble it on the fly from the DomainLinks emitted by the dictionary
+  // presenter for whichever entries are currently loaded. This keeps SDV functional with the
+  // current backend; the breadcrumb popovers expand to show only the branches we have observed
+  // (a real tree-load API is the next backend task: see strategic-plan-ui.md UI-PKG-007 PAPI
+  // integration row + ui-spec-semantic-domain-viewer.md). The filtered-entries listbox uses
+  // the same `loadDictionary` PAPI call already used by the dictionary tab, then narrows on
+  // the focused domain locally.
+
+  const [sdvOpen, setSdvOpen] = useState(false);
+  const [sdvDomainPath, setSdvDomainPath] = useState<SemanticDomain[] | undefined>(undefined);
+  const [sdvDictionaryId, setSdvDictionaryId] = useState<'SDBH' | 'SDBG' | undefined>(undefined);
+  const [sdvFilteredEntries, setSdvFilteredEntries] = useState<SemanticDomainFilteredItem[]>([]);
+  const [sdvIsLoading, setSdvIsLoading] = useState(false);
+  /**
+   * Map of `dictionaryId -> domainId -> SemanticDomain`. Populated lazily as DomainLinks come in
+   * from the presenter. Used to (a) build the `allDomains` tree forwarded to SDV and (b) resolve a
+   * `domainPath` (slash-delimited) into the full ancestor chain when SDV opens in filtered-list
+   * mode. Path strings come straight from `DomainLink.domainPath`; the catalog is a flat lookup.
+   */
+  const [sdvDomainCatalog, setSdvDomainCatalog] = useState<{
+    SDBH: Map<string, { id: string; label: string; parentId: string | undefined }>;
+    SDBG: Map<string, { id: string; label: string; parentId: string | undefined }>;
+  }>({ SDBH: new Map(), SDBG: new Map() });
+
+  /**
+   * Folds the DomainLinks from a presented entry into the catalog. Each link contributes its leaf
+   * node and (best-effort) its ancestor chain via the slash-delimited `domainPath`. We synthesize
+   * ancestor labels from the last `.`-segment of each path piece (e.g. the path `5/5.1/5.1.1`
+   * produces labels `5`, `5.1`, `5.1.1`); the leaf's real label always wins for its own slot. This
+   * keeps the SDV breadcrumb tree usable even before the backend exposes a full hierarchy load.
+   */
+  const ingestDomainsIntoCatalog = useCallback(
+    (links: { id: string; label: string; domainPath: string; dictionaryId: 'SDBH' | 'SDBG' }[]) => {
+      if (links.length === 0) return;
+      setSdvDomainCatalog((prev) => {
+        const next = {
+          SDBH: new Map(prev.SDBH),
+          SDBG: new Map(prev.SDBG),
+        };
+        links.forEach((link) => {
+          const dictMap = next[link.dictionaryId];
+          // Path may be like "5/5.1/5.1.1" - walk segments, register each as id/label with the
+          // immediate predecessor as parent.
+          const parts = link.domainPath.split('/').filter((p) => p.length > 0);
+          let parentId: string | undefined;
+          parts.forEach((part, i) => {
+            const isLeaf = i === parts.length - 1;
+            const id = part;
+            const label = isLeaf ? link.label : (dictMap.get(id)?.label ?? part);
+            const existing = dictMap.get(id);
+            // Only overwrite when the new entry adds parent info or upgrades the leaf label.
+            if (
+              !existing ||
+              (isLeaf && existing.label !== link.label) ||
+              (existing.parentId === undefined && parentId !== undefined)
+            ) {
+              dictMap.set(id, { id, label, parentId });
+            }
+            parentId = id;
+          });
+        });
+        return next;
+      });
+    },
+    [],
+  );
+
+  /**
+   * Build a SemanticDomain[] tree (root nodes with nested `children`) from the flat catalog for the
+   * active SDV dictionary. Roots are catalog entries with `parentId === undefined`; the recursion
+   * follows `parentId -> children` chains. Returns an empty array when the catalog has not seen any
+   * links for that dictionary yet.
+   */
+  const sdvAllDomains = useMemo<SemanticDomain[]>(() => {
+    if (!sdvDictionaryId) return [];
+    const flat = sdvDomainCatalog[sdvDictionaryId];
+    if (flat.size === 0) return [];
+
+    // Index children by parentId for one-shot traversal.
+    const childrenByParent = new Map<string | undefined, { id: string; label: string }[]>();
+    flat.forEach((entry) => {
+      const arr = childrenByParent.get(entry.parentId) ?? [];
+      arr.push({ id: entry.id, label: entry.label });
+      childrenByParent.set(entry.parentId, arr);
+    });
+
+    const buildNode = (id: string, label: string): SemanticDomain => {
+      const kids = childrenByParent.get(id) ?? [];
+      return {
+        id,
+        label,
+        children: kids
+          .slice()
+          .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }))
+          .map((c) => buildNode(c.id, c.label)),
+      };
+    };
+
+    return (childrenByParent.get(undefined) ?? [])
+      .slice()
+      .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }))
+      .map((root) => buildNode(root.id, root.label));
+  }, [sdvDictionaryId, sdvDomainCatalog]);
+
+  /**
+   * Resolve a slash-delimited DomainLink.domainPath into the SemanticDomain[] ancestor chain rooted
+   * at a top-level node. Returns undefined when the path is empty or any segment is missing from
+   * the catalog (caller falls back to cold-entry / first-root behaviour).
+   */
+  const resolveDomainPath = useCallback(
+    (dictionaryId: 'SDBH' | 'SDBG', pathString: string): SemanticDomain[] | undefined => {
+      const flat = sdvDomainCatalog[dictionaryId];
+      const segments = pathString.split('/').filter((p) => p.length > 0);
+      if (segments.length === 0) return undefined;
+      const chain: SemanticDomain[] = [];
+      const allFound = segments.every((segment) => {
+        const entry = flat.get(segment);
+        if (!entry) return false;
+        chain.push({ id: entry.id, label: entry.label, children: [] });
+        return true;
+      });
+      return allFound ? chain : undefined;
+    },
+    [sdvDomainCatalog],
+  );
+
+  /**
+   * Filtered-list entry handler (FN-021). Open SDV pre-positioned at the clicked DomainLink.
+   * `domains` carries the full {id, label, domainPath, dictionaryId} payload - we resolve the path
+   * against the catalog (the link itself was just ingested before the click fired) and fall back to
+   * a single-segment path when ancestor lookup fails (transient state on first click before catalog
+   * population).
+   */
+  const handleSenseDomainClick = useCallback(
+    (domain: DictionarySenseDomain) => {
+      if (!domain.dictionaryId || !domain.domainPath) return;
+      ingestDomainsIntoCatalog([
+        {
+          id: domain.id,
+          label: domain.label,
+          domainPath: domain.domainPath,
+          dictionaryId: domain.dictionaryId,
+        },
+      ]);
+      setSdvDictionaryId(domain.dictionaryId);
+      const resolved = resolveDomainPath(domain.dictionaryId, domain.domainPath);
+      // If catalog lookup fails (race between ingest + read), fall back to a single-segment
+      // path containing just the leaf so the dialog still opens at a sensible breadcrumb.
+      setSdvDomainPath(resolved ?? [{ id: domain.id, label: domain.label, children: [] }]);
+      setSdvOpen(true);
+    },
+    [ingestDomainsIntoCatalog, resolveDomainPath],
+  );
+
+  /**
+   * Cold-entry handler. Opens SDV with no preselected domain so the component falls back to the
+   * first top-level domain. We pick the dictionary that matches the current book (SDBH for OT, SDBG
+   * for NT/DC) so the user sees the relevant tree.
+   */
+  const handleBrowseSemanticDomains = useCallback(() => {
+    setSdvDictionaryId(isOldTestamentBook(bookNum) ? 'SDBH' : 'SDBG');
+    setSdvDomainPath(undefined);
+    setSdvOpen(true);
+  }, [bookNum]);
+
+  /**
+   * Breadcrumb-driven domain change (BHV-456 displaycat). Updates the path so the filtered list
+   *
+   * - Breadcrumbs re-render; does NOT close the dialog.
+   */
+  const handleSDVDomainChange = useCallback((newPath: SemanticDomain[]) => {
+    setSdvDomainPath(newPath);
+  }, []);
+
+  /**
+   * Open-state change. When the dialog closes (X / Esc / click-outside) clear the focused domain so
+   * the next open with the same path doesn't see stale state.
+   */
+  const handleSDVOpenChange = useCallback((nextOpen: boolean) => {
+    setSdvOpen(nextOpen);
+    if (!nextOpen) {
+      setSdvDomainPath(undefined);
+      setSdvDictionaryId(undefined);
+      setSdvFilteredEntries([]);
+    }
+  }, []);
+
+  /**
+   * Filtered-entry click (BHV-456 displaydomain). Closes SDV, routes to the dictionary entry by
+   * setting `filteredTokenId` (the existing FN-020 propagation surfaces it in the dictionary tab
+   * and scripture pane).
+   */
+  const handleSDVEntryClick = useCallback(
+    (entry: DictionaryDisplayItemData) => {
+      setSdvOpen(false);
+      setSdvDomainPath(undefined);
+      setSdvDictionaryId(undefined);
+      setSdvFilteredEntries([]);
+      setFilteredTokenId(entry.tokenId);
+      setDictionarySelectedTokenId(entry.tokenId);
+      // Make sure the dictionary tab is showing so the user sees the routed entry.
+      setActiveTab('dictionary');
+    },
+    [setActiveTab, setDictionarySelectedTokenId, setFilteredTokenId],
+  );
+
+  // Effect: whenever the dictionary tab loads new senses, fold their DomainLinks into the
+  // catalog so SDV's tree grows organically as the user explores entries. This is the only
+  // way to populate the catalog today (no dedicated tree-load PAPI yet).
+  useEffect(() => {
+    const links: {
+      id: string;
+      label: string;
+      domainPath: string;
+      dictionaryId: 'SDBH' | 'SDBG';
+    }[] = [];
+    dictionaryItems.forEach((item) => {
+      (item.senses ?? []).forEach((sense) => {
+        (sense.domains ?? []).forEach((domain) => {
+          if (domain.domainPath !== undefined && domain.dictionaryId !== undefined) {
+            links.push({
+              id: domain.id,
+              label: domain.label,
+              domainPath: domain.domainPath,
+              dictionaryId: domain.dictionaryId,
+            });
+          }
+        });
+      });
+    });
+    if (links.length > 0) ingestDomainsIntoCatalog(links);
+  }, [dictionaryItems, ingestDomainsIntoCatalog]);
+
+  // Effect: when SDV is open with a focused domain, fetch the dictionary entries belonging to
+  // it. We reuse `loadDictionary` (the same PAPI command the dictionary tab uses) and narrow
+  // the result locally to entries whose senses carry a domain matching the focused
+  // domainPath. Without a dedicated `loadDomainEntries` backend method this is the closest we
+  // can get with current data; it surfaces every entry currently loaded for the active scope
+  // that has at least one sense in the focused domain.
+  //
+  // Each entry must also have its sense data hydrated (lazy `readDictionaryEntry`); we trigger
+  // that opportunistically by reading senses already on the row. Entries without senses loaded
+  // yet are simply not included until the user opens them in the regular dictionary tab.
+  useEffect(() => {
+    if (!sdvOpen) {
+      return;
+    }
+    // Cold-entry / no path => no filtered list yet; SDV's component falls back to the first
+    // top-level domain visually but the listbox is empty until the user navigates.
+    if (!sdvDomainPath || sdvDomainPath.length === 0) {
+      setSdvFilteredEntries([]);
+      setSdvIsLoading(false);
+      return;
+    }
+    setSdvIsLoading(true);
+    // Use the focused domain's leaf id as the match key; an entry "belongs to" the domain if
+    // any of its loaded senses carry a domain whose id (or domainPath ending) matches.
+    const focusedLeaf = sdvDomainPath[sdvDomainPath.length - 1];
+    const focusedLeafId = focusedLeaf.id;
+    const matched: SemanticDomainFilteredItem[] = [];
+    dictionaryItems.forEach((item) => {
+      const senses = item.senses ?? [];
+      const hit = senses.some((sense) =>
+        (sense.domains ?? []).some(
+          (d) =>
+            d.id === focusedLeafId ||
+            (d.domainPath !== undefined && d.domainPath.split('/').includes(focusedLeafId)),
+        ),
+      );
+      if (hit) {
+        matched.push({
+          id: item.tokenId,
+          primaryText: item.sourceText,
+          sourceLanguageText: item.sourceText,
+          transliteration: item.translit,
+          ...item,
+        });
+      }
+    });
+    setSdvFilteredEntries(matched);
+    setSdvIsLoading(false);
+  }, [sdvOpen, sdvDomainPath, dictionaryItems]);
+
+  // ---------------------------------------------------------------------------
   // Media tabs wiring (UI-PKG-004)
   // ---------------------------------------------------------------------------
   // Two near-identical effects, one per tab, each calling the same backend method `loadMedia` with
@@ -2226,6 +2614,16 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       onDictionarySelectionChange={setDictionarySelectedTokenId}
       onDictionarySourceTextClick={handleDictionarySourceTextClick}
       onDictionaryToggleHideLessRelevantSenses={setDictionaryHideLessRelevantSenses}
+      onDictionarySenseDomainClick={handleSenseDomainClick}
+      onBrowseSemanticDomainsClick={handleBrowseSemanticDomains}
+      semanticDomainViewerOpen={sdvOpen}
+      semanticDomainViewerPath={sdvDomainPath}
+      semanticDomainViewerAllDomains={sdvAllDomains}
+      semanticDomainViewerFilteredEntries={sdvFilteredEntries}
+      semanticDomainViewerIsLoading={sdvIsLoading}
+      onSemanticDomainViewerOpenChange={handleSDVOpenChange}
+      onSemanticDomainViewerDomainChange={handleSDVDomainChange}
+      onSemanticDomainViewerEntryClick={handleSDVEntryClick}
       encyclopediaItems={encyclopediaItems}
       encyclopediaSelectedTokenId={encyclopediaSelectedTokenId}
       encyclopediaIsLoading={encyclopediaIsLoading}

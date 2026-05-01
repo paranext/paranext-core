@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { SourceLanguageIndexedList, type IndexedListItem } from 'platform-bible-react';
+import { Button, SourceLanguageIndexedList, type IndexedListItem } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatReplacementString } from 'platform-bible-utils';
 import {
@@ -12,6 +12,7 @@ import {
   DICTIONARY_ENTRY_DETAIL_STRING_KEYS,
   type DictionaryEntryRef,
 } from './dictionary-entry-detail.component';
+import type { DictionarySenseDomain } from '../shared/dictionary-sense-item.component';
 
 /** Object containing all keys used for localization in this component. */
 export const DICTIONARY_TAB_STRING_KEYS = Object.freeze([
@@ -20,6 +21,7 @@ export const DICTIONARY_TAB_STRING_KEYS = Object.freeze([
   '%enhancedResources_dictionary_emptyState_wordNotInScope%',
   '%enhancedResources_dictionary_dictionaryLabel_sdbh%',
   '%enhancedResources_dictionary_dictionaryLabel_sdbg%',
+  '%enhancedResources_dictionary_browseSemanticDomains%',
   ...DICTIONARY_DISPLAY_ITEM_STRING_KEYS,
   ...DICTIONARY_ENTRY_DETAIL_STRING_KEYS,
 ] as const);
@@ -72,6 +74,18 @@ export type DictionaryTabProps = {
   onAllOccurrencesClick?: (tokenId: string) => void;
   /** Click on a sense's "Occurrences in all books" link inside the detail panel. */
   onSenseOccurrencesClick?: (senseId: string) => void;
+  /**
+   * FN-021 [UI-PKG-007]: click on a Domain row inside a sense definition table. When provided each
+   * Domain row renders as a clickable link; parent dispatches a SemanticDomainViewer-open with the
+   * full DomainLink payload.
+   */
+  onSenseDomainClick?: (domain: DictionarySenseDomain) => void;
+  /**
+   * UI-PKG-007 cold-entry: click on the "Browse semantic domains" button in the tab header. When
+   * provided the button renders; otherwise the header omits it (component-only stories should leave
+   * it undefined).
+   */
+  onBrowseSemanticDomainsClick?: () => void;
   onToggleHideLessRelevantSenses?: (hide: boolean) => void;
 
   /** Helpfulness flow (Theme 13b; backend FN-018). */
@@ -124,6 +138,8 @@ export function DictionaryTab({
   onSourceTextClick = () => {},
   onAllOccurrencesClick = () => {},
   onSenseOccurrencesClick = () => {},
+  onSenseDomainClick,
+  onBrowseSemanticDomainsClick,
   onToggleHideLessRelevantSenses = () => {},
 
   onHelpfulnessAnswer = () => {},
@@ -146,6 +162,9 @@ export function DictionaryTab({
         ? '%enhancedResources_dictionary_dictionaryLabel_sdbh%'
         : '%enhancedResources_dictionary_dictionaryLabel_sdbg%',
     ),
+  );
+  const browseSemanticDomainsLabel = String(
+    getLocalizedString('%enhancedResources_dictionary_browseSemanticDomains%'),
   );
 
   const emptyMessageRaw = (() => {
@@ -206,10 +225,28 @@ export function DictionaryTab({
       data-testid="dictionary-tab"
       aria-label={dictionaryLabel}
     >
-      <div className="tw-flex tw-shrink-0 tw-items-center tw-border-b tw-border-border tw-px-2 tw-py-1">
+      <div className="tw-flex tw-shrink-0 tw-items-center tw-justify-between tw-gap-2 tw-border-b tw-border-border tw-px-2 tw-py-1">
         <span className="tw-text-xs tw-font-semibold tw-uppercase tw-text-muted-foreground">
           {dictionaryLabel}
         </span>
+        {/*
+         * UI-PKG-007 cold-entry trigger - "Browse semantic domains". Mounted in the dictionary
+         * tab header because that is the only research surface where browsing the SDBH/SDBG
+         * domain hierarchy makes sense (other tabs do not surface domain links). Hidden when
+         * the parent does not supply a handler so the per-component story (which renders the
+         * tab in isolation) does not gain a non-functional button.
+         */}
+        {onBrowseSemanticDomainsClick && (
+          <Button
+            variant="link"
+            size="sm"
+            className="tw-h-auto tw-p-0 tw-text-xs"
+            onClick={onBrowseSemanticDomainsClick}
+            data-testid="dictionary-browse-semantic-domains"
+          >
+            {browseSemanticDomainsLabel}
+          </Button>
+        )}
       </div>
       <div className="tw-flex tw-min-h-0 tw-flex-1">
         <SourceLanguageIndexedList
@@ -244,6 +281,7 @@ export function DictionaryTab({
               onSourceTextClick={onSourceTextClick}
               onAllOccurrencesClick={onAllOccurrencesClick}
               onSenseOccurrencesClick={onSenseOccurrencesClick}
+              onSenseDomainClick={onSenseDomainClick}
               onHelpfulnessAnswer={(answer) => onHelpfulnessAnswer(item.tokenId, answer)}
               onGiveFeedback={() => onGiveFeedback(item.tokenId)}
               onCopySurfaceForm={handleDetailCopySurfaceForm}

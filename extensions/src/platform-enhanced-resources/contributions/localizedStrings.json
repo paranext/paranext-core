@@ -162,6 +162,9 @@
     "%enhancedResources_dictionary_dictionaryLabel_sdbg%": {
       "notes": "Heading shown when the active dictionary is SDBG (Greek)."
     },
+    "%enhancedResources_dictionary_browseSemanticDomains%": {
+      "notes": "Cold-entry button label that opens the SemanticDomainViewer in tree-overlay (browse-from-root) mode."
+    },
     "%enhancedResources_dictionary_occurrenceCountTooltip%": {
       "notes": "Tooltip / ARIA label for the per-entry occurrence count badge."
     },
@@ -480,6 +483,7 @@
       "%enhancedResources_dictionary_emptyState_wordNotInScope%": "\"{word}\" does not occur in {scope}.",
       "%enhancedResources_dictionary_dictionaryLabel_sdbh%": "SDBH (Hebrew)",
       "%enhancedResources_dictionary_dictionaryLabel_sdbg%": "SDBG (Greek)",
+      "%enhancedResources_dictionary_browseSemanticDomains%": "Browse semantic domains",
       "%enhancedResources_dictionary_occurrenceCountTooltip%": "Occurrences in current scope (click to navigate)",
       "%enhancedResources_dictionary_sourceTextTooltip%": "Filter on this word",
       "%enhancedResources_dictionary_copySurfaceForm%": "Copy surface form",

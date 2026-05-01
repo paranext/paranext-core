@@ -25,10 +25,22 @@ type DictionarySenseItemLocalizedStrings = {
   [key in DictionarySenseItemLocalizedStringKey]?: LocalizedStringValue;
 };
 
-/** A semantic-domain reference label (display-only at the sense level). */
+/**
+ * A semantic-domain reference label rendered inside a sense row [Revised: UI-PKG-007].
+ *
+ * `id` and `label` drive the visible display. The optional `domainPath` and `dictionaryId` carry
+ * the full {@link DomainLink} payload (FN-021) so the parent can dispatch a
+ * SemanticDomainViewer-open with a real filtered-list target. When both are present AND the parent
+ * provides `onDomainClick`, the domain row becomes a clickable Button (variant=link) with a stable
+ * `data-testid` per row; otherwise the row falls back to plain text (legacy behaviour).
+ */
 export type DictionarySenseDomain = {
   id: string;
   label: string;
+  /** Slash-delimited path from root to this domain (e.g. "5/5.1/5.1.1"). */
+  domainPath?: string;
+  /** Which marble dictionary this domain belongs to. */
+  dictionaryId?: 'SDBH' | 'SDBG';
 };
 
 /**
@@ -84,9 +96,48 @@ export type DictionarySenseItemProps = {
   hideLessRelevant?: boolean;
   /** Callback when the "Occurrences in all books" link is clicked - parent routes to MarbleForm. */
   onSenseOccurrencesClick?: (senseId: string) => void;
+  /**
+   * FN-021 [UI-PKG-007]: callback fired when a Domain row in the sense definition table is clicked.
+   * When provided AND the domain carries `domainPath` + `dictionaryId`, each Domain row renders as
+   * a clickable Button (variant=link) instead of plain text. Parents typically dispatch a
+   * SemanticDomainViewer-open with the full DomainLink payload.
+   */
+  onDomainClick?: (domain: DictionarySenseDomain) => void;
   /** Forwarded localized strings. */
   localizedStringsWithLoadingState?: [DictionarySenseItemLocalizedStrings, boolean];
 };
+
+/**
+ * Render the value cell of a single row in the sense definition table. Domain rows render as a
+ * clickable Button (variant=link) when the parent supplies `onDomainClick` AND the domain carries
+ * the full {domainPath, dictionaryId} payload (FN-021 / UI-PKG-007). All other rows render as plain
+ * text. Extracted into a helper to avoid nested-ternary lint violations and keep the JSX in
+ * `DictionarySenseItem` shallow.
+ */
+function renderRowValue(
+  row:
+    | { kind: 'text'; value: string }
+    | { kind: 'domain'; index: number; domain: DictionarySenseDomain },
+  senseId: string,
+  onDomainClick: ((domain: DictionarySenseDomain) => void) | undefined,
+) {
+  if (row.kind === 'text') return row.value;
+  const isClickable =
+    onDomainClick !== undefined &&
+    row.domain.domainPath !== undefined &&
+    row.domain.dictionaryId !== undefined;
+  if (!isClickable) return row.domain.label;
+  return (
+    <Button
+      variant="link"
+      className="tw-h-auto tw-p-0 tw-text-xs"
+      data-testid={`dictionary-sense-domain-${senseId}-${row.index}`}
+      onClick={() => onDomainClick?.(row.domain)}
+    >
+      {row.domain.label}
+    </Button>
+  );
+}
 
 /**
  * Pure presentational sense row used by DictionaryEntryDetail. [Revised: 2026-04-29 Theme 5]
@@ -106,6 +157,7 @@ export function DictionarySenseItem({
   sense,
   hideLessRelevant = false,
   onSenseOccurrencesClick = () => {},
+  onDomainClick,
   localizedStringsWithLoadingState = [{}, false],
 }: DictionarySenseItemProps) {
   const getLocalizedString = (key: DictionarySenseItemLocalizedStringKey) =>
@@ -150,29 +202,44 @@ export function DictionarySenseItem({
     linkText = occurrencesLinkLabel;
   }
 
-  // Build the table rows declaratively so optional rows are conditionally rendered.
-  type Row = { key: string; label: string; value: string };
+  // Build the table rows declaratively so optional rows are conditionally rendered. Domain rows
+  // carry the full DictionarySenseDomain payload so the value cell can render as a clickable
+  // Button (FN-021 / UI-PKG-007) when the parent supplies an `onDomainClick` and the domain has
+  // a `domainPath` + `dictionaryId`. All other rows are plain text.
+  type TextRow = { kind: 'text'; key: string; label: string; value: string };
+  type DomainRow = {
+    kind: 'domain';
+    key: string;
+    label: string;
+    domain: DictionarySenseDomain;
+    /** Stable index inside the row's sense block; drives `data-testid` and React keys. */
+    index: number;
+  };
+  type Row = TextRow | DomainRow;
   const tableRows: Row[] = [];
   if (sense.glosses) {
-    tableRows.push({ key: 'glosses', label: glossesLabel, value: sense.glosses });
+    tableRows.push({ kind: 'text', key: 'glosses', label: glossesLabel, value: sense.glosses });
   }
   (sense.domains ?? []).forEach((domain, idx) => {
     tableRows.push({
+      kind: 'domain',
       // domain.id may repeat across senses, so include the local index for stability inside
       // this sense block.
       key: `domain-${idx}-${domain.id}`,
       label: domainLabel,
-      value: domain.label,
+      domain,
+      index: idx,
     });
   });
   if (sense.notes) {
-    tableRows.push({ key: 'notes', label: notesLabel, value: sense.notes });
+    tableRows.push({ kind: 'text', key: 'notes', label: notesLabel, value: sense.notes });
   }
   if (sense.comment) {
-    tableRows.push({ key: 'comment', label: commentLabel, value: sense.comment });
+    tableRows.push({ kind: 'text', key: 'comment', label: commentLabel, value: sense.comment });
   }
   if (sense.commentsAndNotes) {
     tableRows.push({
+      kind: 'text',
       key: 'comments-and-notes',
       label: commentsAndNotesLabel,
       value: sense.commentsAndNotes,
@@ -227,7 +294,7 @@ export function DictionarySenseItem({
           {tableRows.map((row) => (
             <Fragment key={row.key}>
               <dt className="tw-font-semibold tw-text-muted-foreground">{row.label}</dt>
-              <dd className="tw-m-0">{row.value}</dd>
+              <dd className="tw-m-0">{renderRowValue(row, sense.id, onDomainClick)}</dd>
             </Fragment>
           ))}
         </dl>
