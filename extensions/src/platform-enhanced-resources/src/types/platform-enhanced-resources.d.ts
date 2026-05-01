@@ -36,9 +36,26 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Opens (or focuses) the MarbleGuide dialog. Wired by UI-PKG-008. The Enhanced Resource shell
-     * dispatches this command from its info-icon button (FN-016).
+     * Asks the extension whether the MarbleGuide ("Getting started in Enhanced Resources") tutorial
+     * should auto-show on this Enhanced Resource open. Returns `true` only on the first call per
+     * application session AND only when the `platformEnhancedResources.showMarbleGuide` setting is
+     * `true`. Subsequent calls within the same session always return `false` (per BHV-461 /
+     * TS-067).
+     *
+     * The Enhanced Resource web view dispatches this on mount; a `true` response opens the guide
+     * locally inside the web view (UI-PKG-008).
      */
-    'platformEnhancedResources.openGuide': () => Promise<void>;
+    'platformEnhancedResources.requestAutoShowGuide': () => Promise<boolean>;
+  }
+
+  export interface SettingTypes {
+    /**
+     * Whether the MarbleGuide ("Getting started in enhanced resources") tutorial dialog should
+     * auto-show the first time the user opens an Enhanced Resource each application session. The
+     * user can flip this off via the "Don't show this again" checkbox inside the guide; toggling it
+     * off and clicking Close persists `false`. The user can re-enable from inside the guide by
+     * unchecking the box and clicking Close. Per BHV-461.
+     */
+    'platformEnhancedResources.showMarbleGuide': boolean;
   }
 }

@@ -399,6 +399,18 @@
     },
     "%enhancedResources_marbleGuide_neverShowAgain%": {
       "notes": "Label for the 'Don't show this again' checkbox in the MarbleGuide dialog footer."
+    },
+    "%settings_platformEnhancedResources_group_label%": {
+      "notes": "Settings UI group heading for Enhanced Resources extension settings."
+    },
+    "%settings_platformEnhancedResources_group_description%": {
+      "notes": "Settings UI group description for Enhanced Resources extension settings."
+    },
+    "%settings_platformEnhancedResources_showMarbleGuide_label%": {
+      "notes": "Settings UI label for the boolean controlling whether the 'Getting started' guide auto-shows on first ER open per session."
+    },
+    "%settings_platformEnhancedResources_showMarbleGuide_description%": {
+      "notes": "Settings UI description for the showMarbleGuide boolean."
     }
   },
   "localizedStrings": {
@@ -563,6 +575,10 @@
       "%enhancedResources_marbleGuide_moreHelp%": "More help...",
       "%enhancedResources_marbleGuide_close%": "Close",
       "%enhancedResources_marbleGuide_neverShowAgain%": "Don't show this again",
+      "%settings_platformEnhancedResources_group_label%": "Enhanced Resources",
+      "%settings_platformEnhancedResources_group_description%": "Settings for the Enhanced Resources extension.",
+      "%settings_platformEnhancedResources_showMarbleGuide_label%": "Show \"Getting started\" guide for Enhanced Resources",
+      "%settings_platformEnhancedResources_showMarbleGuide_description%": "When enabled, the \"Getting started in Enhanced Resources\" tutorial guide auto-shows the first time you open an Enhanced Resource each application session.",
       "%platformEnhancedResources_mainMenu_openEnhancedResource%": "Open Enhanced Resource",
       "%platformEnhancedResources_title_enhancedResource%": "Enhanced Resource"
     },

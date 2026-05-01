@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import papi, { logger } from '@papi/frontend';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import type { WebViewProps } from '@papi/core';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -14,7 +14,7 @@ import {
   type SemanticDomain,
 } from 'platform-bible-react';
 import type { LocalizeKey, LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
-import { formatScrRef, formatScrRefRange } from 'platform-bible-utils';
+import { formatScrRef, formatScrRefRange, isPlatformError } from 'platform-bible-utils';
 import { convertMarbleChapterXml, type MarbleAnnotation } from '../lib/marble-converter';
 import {
   TempScripturePane,
@@ -96,6 +96,7 @@ import {
   type MediaDisplayItemInput,
   type MediaTabType,
 } from '../presenters/media-presenter';
+import { MarbleGuide, MARBLE_GUIDE_STRING_KEYS } from '../components/guide/marble-guide.component';
 
 /** Object containing all keys used for localization in this component. */
 export const ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS = Object.freeze([
@@ -311,6 +312,22 @@ export type EnhancedResourceWebViewProps = {
    * STRING_KEYS const each child exports. The wiring layer fetches them in one batch.
    */
   localizedStringsWithLoadingState?: [Record<string, LocalizedStringValue | undefined>, boolean];
+
+  // MarbleGuide ("Getting started in Enhanced Resources") — UI-PKG-008. Rendered as a sibling-level
+  // shadcn Dialog whose visibility is fully controlled by the wiring layer. The guide auto-shows
+  // once per app session on the first ER open (BHV-461 / BHV-463) when the
+  // `platformEnhancedResources.showMarbleGuide` setting is true. The toolbar info-icon
+  // (FN-016) toggles it on demand. The guide's "Don't show this again" checkbox value, plus its
+  // change/close callbacks, are driven from the wiring layer so settings persistence and session
+  // suppression live in one place.
+  /** Whether the MarbleGuide Dialog is open. */
+  marbleGuideOpen?: boolean;
+  /** "Don't show this again" checkbox state — controlled. */
+  marbleGuideNeverShowAgain?: boolean;
+  /** Close handler. Wiring layer persists `showMarbleGuide = !neverShowAgain` and closes. */
+  onMarbleGuideClose?: () => void;
+  /** Checkbox-toggle handler. */
+  onMarbleGuideNeverShowAgainChange?: (next: boolean) => void;
 };
 
 /**
@@ -441,6 +458,11 @@ export function EnhancedResourceWebView({
   onMaximizedMediaOpenChange = () => {},
   onMaximizedMediaPrev,
   onMaximizedMediaNext,
+
+  marbleGuideOpen = false,
+  marbleGuideNeverShowAgain = false,
+  onMarbleGuideClose = () => {},
+  onMarbleGuideNeverShowAgainChange = () => {},
 
   localizedStringsWithLoadingState = [{}, false],
 }: EnhancedResourceWebViewProps) {
@@ -690,6 +712,20 @@ export function EnhancedResourceWebView({
         }}
         localizedStringsWithLoadingState={childStrings}
       />
+      {/*
+       * UI-PKG-008: MarbleGuide ("Getting started in Enhanced Resources") rendered as a sibling
+       * Dialog. Visibility is fully controlled by the wiring layer (see `marbleGuideOpen`). The
+       * inner shadcn Dialog handles Escape, click-outside, focus management, and its own close
+       * button — `onClose` runs when any of those fire so the wiring layer can persist the
+       * "Don't show this again" preference.
+       */}
+      <MarbleGuide
+        open={marbleGuideOpen}
+        neverShowAgain={marbleGuideNeverShowAgain}
+        onClose={onMarbleGuideClose}
+        onNeverShowAgainChange={onMarbleGuideNeverShowAgainChange}
+        localizedStringsWithLoadingState={childStrings}
+      />
     </div>
   );
 }
@@ -722,6 +758,7 @@ const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   ...MEDIA_VIEWER_STRING_KEYS,
   ...ARTICLE_VIEWER_STRING_KEYS,
   ...SEMANTIC_DOMAIN_VIEWER_STRING_KEYS,
+  ...MARBLE_GUIDE_STRING_KEYS,
   // Toolbar / scope labels surface in empty-state templates.
   '%enhancedResources_toolbar_scope_currentVerse%',
   '%enhancedResources_toolbar_scope_currentSection%',
@@ -2533,18 +2570,96 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     [scope, setFilteredTokenId, setScope],
   );
 
-  // FN-016: info-icon → dispatch the registered guide-open command. The actual MarbleGuide dialog
-  // is owned by UI-PKG-008 - the wiring layer just dispatches the command. If the command is not
-  // yet registered (UI-PKG-008 hasn't shipped), log and continue.
-  const handleInfoClick = useCallback(() => {
-    papi.commands.sendCommand('platformEnhancedResources.openGuide').catch((err) => {
-      logger.info(
-        `Enhanced Resources: openGuide command not yet available: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+  // UI-PKG-008: MarbleGuide ("Getting started in Enhanced Resources") wiring.
+  //
+  // Visibility is local to this web view — info-icon click toggles the dialog directly, and the
+  // first ER open per app session asks the backend `requestAutoShowGuide` command whether it
+  // should auto-show. The backend owns the cross-tab session-flag (so opening a second ER tab in
+  // the same session does NOT re-trigger the guide — TS-067).
+  //
+  // Persistence: `useSetting('platformEnhancedResources.showMarbleGuide')` reads the boolean
+  // (default true). The "Don't show this again" checkbox starts at `!showMarbleGuide` so a
+  // previously-suppressed user sees it pre-checked when they reopen via info-icon. On Close, the
+  // wiring layer writes `showMarbleGuide = !neverShowAgain`, then closes the dialog.
+  const [showMarbleGuidePossiblyError, setShowMarbleGuide] = useSetting(
+    'platformEnhancedResources.showMarbleGuide',
+    true,
+  );
+  const showMarbleGuide = useMemo(() => {
+    if (isPlatformError(showMarbleGuidePossiblyError)) {
+      logger.warn(
+        'Failed to load setting platformEnhancedResources.showMarbleGuide; treating as true',
+        showMarbleGuidePossiblyError,
       );
-    });
+      return true;
+    }
+    return showMarbleGuidePossiblyError;
+  }, [showMarbleGuidePossiblyError]);
+
+  const [marbleGuideOpen, setMarbleGuideOpen] = useState<boolean>(false);
+  const [marbleGuideNeverShowAgain, setMarbleGuideNeverShowAgain] = useState<boolean>(false);
+  // Track whether THIS web-view instance has already attempted the auto-show check, so a re-render
+  // doesn't fire the command twice (the backend session flag is the cross-tab guard, but this
+  // ref also prevents intra-tab duplicate dispatches before the first response returns).
+  const autoShowCheckedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (autoShowCheckedRef.current) return;
+    autoShowCheckedRef.current = true;
+    (async () => {
+      try {
+        const shouldShow = await papi.commands.sendCommand(
+          'platformEnhancedResources.requestAutoShowGuide',
+        );
+        if (shouldShow) {
+          // Sync the checkbox to the persisted preference at open time (auto-show implies
+          // showMarbleGuide===true, so the checkbox is unchecked — but we still re-derive it from
+          // the current setting to be defensive in case the setting flipped between the request
+          // and the response).
+          setMarbleGuideNeverShowAgain(!showMarbleGuide);
+          setMarbleGuideOpen(true);
+        }
+      } catch (err) {
+        logger.info(
+          `Enhanced Resources: requestAutoShowGuide command not yet available: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    })();
+    // showMarbleGuide is read inside the effect as the latest value at first-mount only;
+    // intentionally not a dependency because we never want to re-run the auto-show check.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // FN-016: info-icon click toggles the MarbleGuide dialog locally (no PAPI round-trip needed —
+  // the dialog lives inside this web view). When opening, sync the checkbox state to the current
+  // persisted preference so a re-enable-from-suppression flow shows it pre-checked.
+  const handleInfoClick = useCallback(() => {
+    setMarbleGuideOpen((prevOpen) => {
+      const nextOpen = !prevOpen;
+      if (nextOpen) {
+        setMarbleGuideNeverShowAgain(!showMarbleGuide);
+      }
+      return nextOpen;
+    });
+  }, [showMarbleGuide]);
+
+  const handleMarbleGuideClose = useCallback(() => {
+    const nextShowMarbleGuide = !marbleGuideNeverShowAgain;
+    if (nextShowMarbleGuide !== showMarbleGuide) {
+      // Fire-and-forget: setting writes return a DataProviderUpdateInstructions promise we don't
+      // need to await — the inner Dialog has already closed visually by the time this resolves.
+      Promise.resolve(setShowMarbleGuide(nextShowMarbleGuide)).catch((err) => {
+        logger.warn(
+          `Failed to persist platformEnhancedResources.showMarbleGuide: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      });
+    }
+    setMarbleGuideOpen(false);
+  }, [marbleGuideNeverShowAgain, setShowMarbleGuide, showMarbleGuide]);
 
   // Compute the BCV button label - keeps display logic out of the toolbar. Falls back to the
   // saved scripture reference if Canon can't resolve the book id.
@@ -2662,6 +2777,10 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       onMaximizedMediaOpenChange={handleMaximizedMediaOpenChange}
       onMaximizedMediaPrev={handleMaximizedMediaPrev}
       onMaximizedMediaNext={handleMaximizedMediaNext}
+      marbleGuideOpen={marbleGuideOpen}
+      marbleGuideNeverShowAgain={marbleGuideNeverShowAgain}
+      onMarbleGuideClose={handleMarbleGuideClose}
+      onMarbleGuideNeverShowAgainChange={setMarbleGuideNeverShowAgain}
       localizedStringsWithLoadingState={[stringsForShell, isLoadingStrings]}
     />
   );
