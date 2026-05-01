@@ -68,10 +68,8 @@ describe('isValidResourceReference', () => {
 });
 
 describe('resourceReferenceListValidator', () => {
-  const noCurrentValue = validList({ dataVersion: 'not-parseable' });
-
   it('accepts a valid empty list', async () => {
-    expect(await resourceReferenceListValidator(validList(), noCurrentValue, {})).toBe(true);
+    expect(await resourceReferenceListValidator(validList(), validList(), {})).toBe(true);
   });
 
   it('accepts a list with valid mixed items', async () => {
@@ -81,35 +79,51 @@ describe('resourceReferenceListValidator', () => {
         { type: 'enhancedResource', name: 'E' },
       ],
     });
-    expect(await resourceReferenceListValidator(newValue, noCurrentValue, {})).toBe(true);
+    expect(await resourceReferenceListValidator(newValue, validList(), {})).toBe(true);
   });
 
-  it('rejects when items is not an array', async () => {
+  it('throws when currentValue is null', async () => {
+    // Runtime data could be null even though the type says otherwise
+    const nullCurrent = null as unknown as ResourceReferenceList;
+    await expect(resourceReferenceListValidator(validList(), nullCurrent, {})).rejects.toThrow(
+      /current value is missing/i,
+    );
+  });
+
+  it('throws when items is not an array', async () => {
     // Runtime data could have wrong shape
     const badValue = {
       dataVersion: '1.0.0',
       items: 'not-array',
     } as unknown as ResourceReferenceList;
-    expect(await resourceReferenceListValidator(badValue, noCurrentValue, {})).toBe(false);
+    await expect(resourceReferenceListValidator(badValue, validList(), {})).rejects.toThrow(
+      /`items` must be an array/,
+    );
   });
 
-  it('rejects when an item has the wrong shape for its known type', async () => {
+  it('throws when an item has the wrong shape for its known type', async () => {
     const newValue = {
       dataVersion: '1.0.0',
       items: [{ type: 'project', name: 'No ID' }], // missing required `id`
     } as unknown as ResourceReferenceList;
-    expect(await resourceReferenceListValidator(newValue, noCurrentValue, {})).toBe(false);
+    await expect(resourceReferenceListValidator(newValue, validList(), {})).rejects.toThrow(
+      /index 0 has an invalid shape/,
+    );
   });
 
-  it('rejects a malformed dataVersion string', async () => {
+  it('throws on a malformed new dataVersion string', async () => {
     const newValue = validList({ dataVersion: 'not-semver' });
-    expect(await resourceReferenceListValidator(newValue, noCurrentValue, {})).toBe(false);
+    await expect(resourceReferenceListValidator(newValue, validList(), {})).rejects.toThrow(
+      /new `dataVersion` "not-semver" is malformed/i,
+    );
   });
 
-  it('accepts when current dataVersion is not parseable (no stored version to compare)', async () => {
+  it('throws when current dataVersion cannot be parsed', async () => {
     const newValue = validList({ dataVersion: '2.0.0' });
     const current = validList({ dataVersion: 'garbage' });
-    expect(await resourceReferenceListValidator(newValue, current, {})).toBe(true);
+    await expect(resourceReferenceListValidator(newValue, current, {})).rejects.toThrow(
+      /current `dataVersion` "garbage" is malformed/i,
+    );
   });
 
   it('accepts a same-version write', async () => {
@@ -124,16 +138,20 @@ describe('resourceReferenceListValidator', () => {
     expect(await resourceReferenceListValidator(newValue, current, {})).toBe(true);
   });
 
-  it('rejects a minor version downgrade', async () => {
+  it('throws on a minor version downgrade', async () => {
     const current = validList({ dataVersion: '1.2.0' });
     const newValue = validList({ dataVersion: '1.1.0' });
-    expect(await resourceReferenceListValidator(newValue, current, {})).toBe(false);
+    await expect(resourceReferenceListValidator(newValue, current, {})).rejects.toThrow(
+      /refusing to downgrade/i,
+    );
   });
 
-  it('rejects a major version downgrade', async () => {
+  it('throws on a major version downgrade', async () => {
     const current = validList({ dataVersion: '2.0.0' });
     const newValue = validList({ dataVersion: '1.9.9' });
-    expect(await resourceReferenceListValidator(newValue, current, {})).toBe(false);
+    await expect(resourceReferenceListValidator(newValue, current, {})).rejects.toThrow(
+      /refusing to downgrade/i,
+    );
   });
 
   it('accepts a patch version downgrade', async () => {
