@@ -30,7 +30,8 @@ jobs:
     strategy:
       matrix:
         # Make sure these match with the env values above
-        os: [windows-latest, macos-latest, ubuntu-22.04]
+        # TEMPORARY: Ubuntu removed due to snapcraft outage on 5/1/26. Revert once outage is over.
+        os: [windows-latest, macos-latest]
         dotnet_version: [8.0.x]
 
     steps:
