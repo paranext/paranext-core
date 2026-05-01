@@ -583,7 +583,12 @@
       "%platformEnhancedResources_title_enhancedResource%": "Enhanced Resource"
     },
     "es": {
-      "%platformEnhancedResources_mainMenu_openEnhancedResource%": "Abrir recurso mejorado"
+      "%platformEnhancedResources_mainMenu_openEnhancedResource%": "Abrir recurso mejorado",
+      "%enhancedResources_ribbon_updateAvailable_title%": "Actualizacion disponible",
+      "%enhancedResources_ribbon_updateAvailable_description%": "La verificacion de actualizaciones de recursos estara disponible en una version futura.",
+      "%enhancedResources_ribbon_updateAvailable_downloadDisabled%": "Descargar ahora (deshabilitado)",
+      "%enhancedResources_ribbon_imageWarning_title%": "Solo imagenes en miniatura",
+      "%enhancedResources_ribbon_imageWarning_description%": "Solo las imagenes en miniatura estan instaladas. La descarga de imagenes estara disponible en una version futura."
     }
   }
 }

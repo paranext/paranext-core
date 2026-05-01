@@ -732,7 +732,10 @@ export function EnhancedResourceWebView({
 
 export default EnhancedResourceWebView;
 
-const EMPTY_RIBBON_STATES: RibbonStates = {
+// Retained for stories/tests as the canonical "all-off" baseline; the wiring layer now derives
+// real ribbon states (GAP-002) but tooling and Storybook still import this constant when they
+// want a known-empty starting point.
+export const EMPTY_RIBBON_STATES: RibbonStates = {
   missingBook: false,
   reviewStatus: { visible: false, dismissed: false },
   imageWarning: false,
@@ -2668,6 +2671,216 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     return `${bookId} ${scrRef.chapterNum}:${scrRef.verseNum}`;
   }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
+  // GAP-002: Warning ribbon state. Until the backend exposes
+  // `enhancedResources.getResourceWarnings`, ribbon visibility is derived from the locally
+  // available signals (scripturePaneError implies missingBook). Dismissed flags persist across
+  // window reopens via useWebViewState. Replace the constant `false` defaults with the real
+  // backend subscription once `getResourceWarnings` is wired (see post-phase-3-followups.md).
+  const [reviewStatusDismissed, setReviewStatusDismissed] = useWebViewState<boolean>(
+    'reviewStatusDismissed',
+    false,
+  );
+  const [copyrightDismissed, setCopyrightDismissed] = useWebViewState<boolean>(
+    'copyrightDismissed',
+    false,
+  );
+  const [updateAvailableDismissed, setUpdateAvailableDismissed] = useWebViewState<boolean>(
+    'updateAvailableDismissed',
+    false,
+  );
+
+  // TODO: replace these no-op `false` literals with the real backend wiring once
+  // `enhancedResources.getResourceWarnings` is available. The shape mirrors RibbonStates so
+  // that wiring will be a one-line swap.
+  const ribbonVisibility = useMemo(
+    () => ({
+      missingBook: scripturePaneError !== undefined && resourceId !== undefined,
+      reviewStatusVisible: false, // TODO: backend `getResourceWarnings.reviewStatusVisible`
+      imageWarning: false, // TODO: backend `getResourceWarnings.imageWarning`
+      copyrightVisible: false, // TODO: backend `getResourceWarnings.copyrightVisible`
+      updateRequiredData: false, // TODO: backend `getResourceWarnings.updateRequiredData`
+      updateAvailableVisible: false, // TODO: backend `getResourceWarnings.updateAvailableVisible`
+    }),
+    [scripturePaneError, resourceId],
+  );
+
+  const ribbonStates: RibbonStates = useMemo(
+    () => ({
+      missingBook: ribbonVisibility.missingBook,
+      reviewStatus: {
+        visible: ribbonVisibility.reviewStatusVisible,
+        dismissed: reviewStatusDismissed,
+      },
+      imageWarning: ribbonVisibility.imageWarning,
+      copyright: {
+        visible: ribbonVisibility.copyrightVisible,
+        dismissed: copyrightDismissed,
+      },
+      updateRequiredData: ribbonVisibility.updateRequiredData,
+      updateAvailable: {
+        visible: ribbonVisibility.updateAvailableVisible,
+        dismissed: updateAvailableDismissed,
+      },
+    }),
+    [ribbonVisibility, reviewStatusDismissed, copyrightDismissed, updateAvailableDismissed],
+  );
+
+  const handleDismissReviewStatus = useCallback(() => {
+    setReviewStatusDismissed(true);
+  }, [setReviewStatusDismissed]);
+  const handleDismissCopyright = useCallback(() => {
+    setCopyrightDismissed(true);
+  }, [setCopyrightDismissed]);
+  const handleDismissUpdateAvailable = useCallback(() => {
+    setUpdateAvailableDismissed(true);
+  }, [setUpdateAvailableDismissed]);
+  const handleMetadataUpdate = useCallback(() => {
+    // TODO: dispatch backend `enhancedResources.updateResourceMetadata` once the command exists.
+    logger.info('Enhanced Resources: metadata-update action triggered (backend wiring pending)');
+  }, []);
+
+  // GAP-013: Copyright "More info..." opens the CopyrightOverlay. Both the ribbon action and
+  // the view-menu "Copyright info" item route through the same setter.
+  const [copyrightOverlayVisible, setCopyrightOverlayVisible] = useState<boolean>(false);
+  const handleCopyrightMoreInfo = useCallback(() => {
+    setCopyrightOverlayVisible(true);
+  }, []);
+  const handleCopyrightOverlayDismiss = useCallback(() => {
+    setCopyrightOverlayVisible(false);
+  }, []);
+
+  // GAP-007: Dictionary / Encyclopedia copy + find handlers. Copy uses navigator.clipboard;
+  // find sets the filteredTokenId so the scripture pane + research tabs converge.
+  const handleDictionaryCopySurfaceForm = useCallback(
+    (item: DictionaryDisplayItemData, variant: 'original' | 'transliteration') => {
+      // Dictionary items only carry sourceText (original script) and translit. The "lemma" and
+      // "surface" distinction collapses for the dictionary tab — both menu items copy the same
+      // pair, with `variant` choosing original vs transliteration.
+      const text = variant === 'transliteration' ? item.translit : item.sourceText;
+      if (text) {
+        navigator.clipboard.writeText(text).catch((err) => {
+          logger.warn('Enhanced Resources: clipboard write failed', err);
+        });
+      }
+    },
+    [],
+  );
+  const handleDictionaryCopyLemma = useCallback(
+    (item: DictionaryDisplayItemData, variant: 'original' | 'transliteration') => {
+      const text = variant === 'transliteration' ? item.translit : item.sourceText;
+      if (text) {
+        navigator.clipboard.writeText(text).catch((err) => {
+          logger.warn('Enhanced Resources: clipboard write failed', err);
+        });
+      }
+    },
+    [],
+  );
+  const handleDictionaryFindSense = useCallback(
+    (item: DictionaryDisplayItemData) => {
+      // BHV-308: "Find sense" puts that token's id into the filter so the scripture pane and
+      // other research tabs all narrow to that lemma.
+      setFilteredTokenId(item.tokenId);
+    },
+    [setFilteredTokenId],
+  );
+  const handleDictionaryFindLemma = useCallback(
+    (item: DictionaryDisplayItemData) => {
+      setFilteredTokenId(item.tokenId);
+    },
+    [setFilteredTokenId],
+  );
+  const handleDictionaryFindText = useCallback(
+    (item: DictionaryDisplayItemData) => {
+      setFilteredTokenId(item.tokenId);
+    },
+    [setFilteredTokenId],
+  );
+  const handleEncyclopediaCopySurfaceForm = useCallback((item: EncyclopediaDisplayItemData) => {
+    const text = item.sourceText ?? '';
+    if (text) {
+      navigator.clipboard.writeText(text).catch((err) => {
+        logger.warn('Enhanced Resources: clipboard write failed', err);
+      });
+    }
+  }, []);
+  const handleEncyclopediaCopyLemma = useCallback((item: EncyclopediaDisplayItemData) => {
+    const text = item.lemma ?? '';
+    if (text) {
+      navigator.clipboard.writeText(text).catch((err) => {
+        logger.warn('Enhanced Resources: clipboard write failed', err);
+      });
+    }
+  }, []);
+
+  // GAP-008: Helpfulness Yes/No + give-feedback handlers. FN-018 forward dependency: the
+  // backend feedback collector does not yet exist, so we log to console for now.
+  const handleDictionaryHelpfulnessAnswer = useCallback(
+    (entryTokenId: string, answer: 'yes' | 'no') => {
+      // FN-018 forward: dispatch real `enhancedResources.recordHelpfulnessAnswer` once shipped.
+      logger.info(
+        `Enhanced Resources: helpfulness=${answer} for entry=${entryTokenId} (FN-018 backend pending)`,
+      );
+    },
+    [],
+  );
+  const handleDictionaryGiveFeedback = useCallback((entryTokenId: string) => {
+    // FN-018 forward: open the feedback panel/dialog once FN-018 ships.
+    logger.info(
+      `Enhanced Resources: give-feedback clicked for entry=${entryTokenId} (FN-018 backend pending)`,
+    );
+  }, []);
+
+  // GAP-012: Keyboard shortcuts. F7 toggles footnotes; Ctrl+Plus / Ctrl+Minus / Ctrl+0 adjust
+  // the scripture pane zoom. Listener is attached to window so it works regardless of focus
+  // within the iframe. Cleanup on unmount per BHV-451.
+  // useWebViewState setters take a plain value (not React's functional updater), so we read
+  // the latest state via refs to avoid stale closures inside the keydown handler.
+  const showFootnotesRef = useRef(showFootnotes);
+  const scripturePaneZoomRef = useRef(scripturePaneZoom);
+  useEffect(() => {
+    showFootnotesRef.current = showFootnotes;
+  }, [showFootnotes]);
+  useEffect(() => {
+    scripturePaneZoomRef.current = scripturePaneZoom;
+  }, [scripturePaneZoom]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // F7: toggle showFootnotes (no modifiers).
+      if (
+        event.key === 'F7' &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        setShowFootnotes(!showFootnotesRef.current);
+        return;
+      }
+
+      // Ctrl/Cmd + Plus / Equals (zoom in), Minus (zoom out), 0 (reset).
+      if (event.ctrlKey || event.metaKey) {
+        if (event.key === '+' || event.key === '=') {
+          event.preventDefault();
+          setScripturePaneZoom(Math.min(scripturePaneZoomRef.current + 0.1, 3));
+        } else if (event.key === '-' || event.key === '_') {
+          event.preventDefault();
+          setScripturePaneZoom(Math.max(scripturePaneZoomRef.current - 0.1, 0.5));
+        } else if (event.key === '0') {
+          event.preventDefault();
+          setScripturePaneZoom(1);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [setShowFootnotes, setScripturePaneZoom]);
+
   // The filter input shows the transliterated form of the clicked word; until the wiring layer
   // is hooked up to the tooltip service we use the token id as the visible value.
   const searchValue = filteredTokenId ?? '';
@@ -2685,6 +2898,9 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     onToggleShowTranslations: setShowTranslations,
     onHebrewDisplayModeChange: setHebrewDisplayMode,
     onGreekDisplayModeChange: setGreekDisplayMode,
+    // GAP-013: hamburger "Copyright info" menu item also opens the overlay, alongside the
+    // ribbon "More info..." action.
+    onShowCopyrightInfo: handleCopyrightMoreInfo,
     onZoomIn: () => setScripturePaneZoom(Math.min(scripturePaneZoom + 0.1, 3)),
     onZoomOut: () => setScripturePaneZoom(Math.max(scripturePaneZoom - 0.1, 0.5)),
     onZoomReset: () => setScripturePaneZoom(1),
@@ -2716,7 +2932,14 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       currentReferenceLabel={currentReferenceLabel}
       viewMenu={viewMenu}
       viewMenuHandlers={viewMenuHandlers}
-      ribbons={EMPTY_RIBBON_STATES}
+      ribbons={ribbonStates}
+      onDismissReviewStatus={handleDismissReviewStatus}
+      onDismissCopyright={handleDismissCopyright}
+      onDismissUpdateAvailable={handleDismissUpdateAvailable}
+      onCopyrightMoreInfo={handleCopyrightMoreInfo}
+      onMetadataUpdate={handleMetadataUpdate}
+      copyrightOverlayVisible={copyrightOverlayVisible}
+      onCopyrightOverlayDismiss={handleCopyrightOverlayDismiss}
       splitterPercentage={splitterPercentage}
       dictionaryItems={dictionaryItems}
       dictionarySelectedTokenId={dictionarySelectedTokenId}
@@ -2729,6 +2952,13 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       onDictionarySelectionChange={setDictionarySelectedTokenId}
       onDictionarySourceTextClick={handleDictionarySourceTextClick}
       onDictionaryToggleHideLessRelevantSenses={setDictionaryHideLessRelevantSenses}
+      onDictionaryHelpfulnessAnswer={handleDictionaryHelpfulnessAnswer}
+      onDictionaryGiveFeedback={handleDictionaryGiveFeedback}
+      onDictionaryCopySurfaceForm={handleDictionaryCopySurfaceForm}
+      onDictionaryCopyLemma={handleDictionaryCopyLemma}
+      onDictionaryFindSense={handleDictionaryFindSense}
+      onDictionaryFindLemma={handleDictionaryFindLemma}
+      onDictionaryFindText={handleDictionaryFindText}
       onDictionarySenseDomainClick={handleSenseDomainClick}
       onBrowseSemanticDomainsClick={handleBrowseSemanticDomains}
       semanticDomainViewerOpen={sdvOpen}
@@ -2748,6 +2978,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       encyclopediaArticleDataMap={encyclopediaArticleDataMap}
       onEncyclopediaSelectionChange={setEncyclopediaSelectedTokenId}
       onEncyclopediaSourceTextClick={handleEncyclopediaSourceTextClick}
+      onEncyclopediaCopySurfaceForm={handleEncyclopediaCopySurfaceForm}
+      onEncyclopediaCopyLemma={handleEncyclopediaCopyLemma}
       onEncyclopediaArticleLinkClick={handleEncyclopediaArticleLinkClick}
       activeArticleId={activeArticleId}
       activeArticleData={activeArticleData}

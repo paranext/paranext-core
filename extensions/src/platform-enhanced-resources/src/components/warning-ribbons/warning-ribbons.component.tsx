@@ -181,6 +181,9 @@ export function WarningRibbons({
           onDismiss={onDismissReviewStatus}
         />
       )}
+      {/* DEF-UI-002: Image Download Ribbon Link — disabled per deferred-functionality.md.
+          The ribbon renders the "thumbnail images only" warning, but the "Download a set of images
+          and maps..." link is omitted. Replace when ER download/installation feature is ported. */}
       {ribbons.imageWarning && (
         <RibbonShell
           title={String(getLocalizedString('%enhancedResources_ribbon_imageWarning_title%'))}
@@ -213,6 +216,10 @@ export function WarningRibbons({
           onAction={onMetadataUpdate}
         />
       )}
+      {/* DEF-UI-001: Update Available Ribbon — disabled per deferred-functionality.md.
+          Ribbon renders so the user is aware an update exists, but "Download now..." action is
+          rendered as a disabled button (actionDisabled) until the ER download/installation feature
+          is ported to PT10. */}
       {showUpdateAvailable && (
         <RibbonShell
           title={String(getLocalizedString('%enhancedResources_ribbon_updateAvailable_title%'))}

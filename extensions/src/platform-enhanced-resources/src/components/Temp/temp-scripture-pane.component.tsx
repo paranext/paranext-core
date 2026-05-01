@@ -1,3 +1,9 @@
+// DEF-UI-006: Right-click context menu on scripture-pane linked words (BHV-308: Find sense /
+// Find lemma / Find text) is deferred to FN-001 - the real platform-scripture-editor read-only
+// mode with annotation support. The wiring layer already exposes onDictionaryFindSense /
+// onDictionaryFindLemma / onDictionaryFindText handlers, but TempScripturePane does not surface
+// them via a context menu. When the real scripture editor lands, route its annotation
+// context-menu actions to those handlers.
 import { Alert, AlertDescription, AlertTitle, Card, Skeleton, cn } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import type { MouseEvent as ReactMouseEvent } from 'react';
