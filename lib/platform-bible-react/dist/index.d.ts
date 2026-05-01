@@ -764,6 +764,14 @@ export type ManageBooksDialogProps = {
 	 */
 	localizedStrings?: ManageBooksDialogLocalizedStrings;
 };
+/**
+ * Unified Manage Books dialog for create / delete / copy / import / view of project books, plus a
+ * View action toggle that surfaces the project's current book inventory. The dialog is
+ * presentational: callers wire `loadBooks`, `loadProjects`, `loadVersification`, and the four
+ * `onCreateBooks` / `onDeleteBooks` / `onCopyBooks` / `onImportBooks` handlers to PAPI in the
+ * extension layer. See `manage-books-dialog.types.ts` for the full props contract and the FN-008
+ * spec in `.context/features/manage-books/` for behavior catalog references.
+ */
 export declare function ManageBooksDialog({ open, onOpenChange, projectId, onProjectIdChange, loadProjects, loadBooks, loadVersification, onOpenScriptureReferenceSettings, onOpenProjectCanons, onOpenRegistry, onCreateBooks, onImportBooks, onCopyBooks, onDeleteBooks, onOpenEstherPicker, onPickImportFiles, onMutationResult, isSharedProject, bookIds, localizedStrings, }: ManageBooksDialogProps): import("react/jsx-runtime").JSX.Element;
 interface MarkdownRendererProps {
 	/** Optional unique identifier */

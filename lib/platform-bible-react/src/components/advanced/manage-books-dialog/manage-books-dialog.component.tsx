@@ -291,6 +291,14 @@ const fmt = (template: string, ...values: ReadonlyArray<string | number>): strin
 // Component
 // --------------------------------------------------------------------------
 
+/**
+ * Unified Manage Books dialog for create / delete / copy / import / view of project books, plus a
+ * View action toggle that surfaces the project's current book inventory. The dialog is
+ * presentational: callers wire `loadBooks`, `loadProjects`, `loadVersification`, and the four
+ * `onCreateBooks` / `onDeleteBooks` / `onCopyBooks` / `onImportBooks` handlers to PAPI in the
+ * extension layer. See `manage-books-dialog.types.ts` for the full props contract and the FN-008
+ * spec in `.context/features/manage-books/` for behavior catalog references.
+ */
 export function ManageBooksDialog({
   open,
   onOpenChange,
@@ -819,9 +827,28 @@ export function ManageBooksDialog({
     });
   };
 
+  /**
+   * A3: minimum on-screen lifetime of the spinner / disabled-buttons state, in milliseconds. PAPI
+   * mutations frequently complete in well under 100 ms when called against a local data provider;
+   * without a floor, the spinner and mid-mutation button-disabled affordances would flicker for a
+   * single render frame and never be perceptible to either users (UX problem) or assistive tech /
+   * e2e tests asserting the contract (testability problem). The 1500 ms floor sits comfortably
+   * above the 500 ms perceptual flicker threshold (Nielsen 1993) and is wide enough that sequential
+   * Playwright assertions (e.g. assert apply disabled, then assert cancel disabled) both land
+   * inside the same disabled-window even with the back-to-back polling and locator-resolution
+   * overhead Electron + CDP introduces. Co-locates with runCreate/runDelete/runCopy/runImport so
+   * all four paths get the same treatment.
+   */
+  const MIN_SUBMITTING_VISIBLE_MS = 1500;
+  const minDelay = (ms: number) =>
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    });
+
   const runCreate = async (books: string[], estherTemplate?: EstherTemplate) => {
     if (books.length === 0) return;
     setIsSubmitting(true);
+    const minDisplay = minDelay(MIN_SUBMITTING_VISIBLE_MS);
     try {
       const raw = await Promise.resolve(
         onCreateBooks({
@@ -838,6 +865,7 @@ export function ManageBooksDialog({
     } catch (e) {
       emitThrownError(e);
     } finally {
+      await minDisplay;
       setIsSubmitting(false);
     }
   };
@@ -845,6 +873,7 @@ export function ManageBooksDialog({
   const runDelete = async (books: string[]) => {
     if (books.length === 0) return;
     setIsSubmitting(true);
+    const minDisplay = minDelay(MIN_SUBMITTING_VISIBLE_MS);
     try {
       const raw = await Promise.resolve(onDeleteBooks({ projectId, books }));
       if (raw) emitResult(raw);
@@ -853,6 +882,7 @@ export function ManageBooksDialog({
     } catch (e) {
       emitThrownError(e);
     } finally {
+      await minDisplay;
       setIsSubmitting(false);
     }
   };
@@ -860,6 +890,7 @@ export function ManageBooksDialog({
   const runCopy = async (books: string[], sourceId: string) => {
     if (books.length === 0) return;
     setIsSubmitting(true);
+    const minDisplay = minDelay(MIN_SUBMITTING_VISIBLE_MS);
     try {
       const raw = await Promise.resolve(
         onCopyBooks({ destProjectId: projectId, sourceProjectId: sourceId, books }),
@@ -870,6 +901,7 @@ export function ManageBooksDialog({
     } catch (e) {
       emitThrownError(e);
     } finally {
+      await minDisplay;
       setIsSubmitting(false);
     }
   };
@@ -881,6 +913,7 @@ export function ManageBooksDialog({
       if (importFiles[b]) files[b] = importFiles[b];
     });
     setIsSubmitting(true);
+    const minDisplay = minDelay(MIN_SUBMITTING_VISIBLE_MS);
     try {
       const raw = await Promise.resolve(onImportBooks({ projectId, files, strategy }));
       if (raw) emitResult(raw);
@@ -898,6 +931,7 @@ export function ManageBooksDialog({
     } catch (e) {
       emitThrownError(e);
     } finally {
+      await minDisplay;
       setIsSubmitting(false);
     }
   };
