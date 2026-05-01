@@ -31,7 +31,8 @@ export interface PlatformNotification {
   /** Optional ID of a previous notification to update instead of showing a new notification */
   notificationId?: string | number;
   /**
-   * Optional duration in milliseconds for how long the notification is displayed. If the value `
+   * Optional duration in milliseconds for how long the notification is displayed. To make the
+   * notification show indefinitely, specify a `duration` of `0` or less.
    *
    * When omitted, duration is computed from message length (minimum 10 seconds, maximum 35
    * seconds).

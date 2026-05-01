@@ -32,6 +32,9 @@ async function send(notification: PlatformNotification): Promise<string | number
   // be definitely assigned before we can assign effectiveNotificationId, so we use a let and
   // assign it after the switch.
   let effectiveNotificationId: number | string;
+  let duration = Math.min(Math.max(localizedMessage.length * 265, 10000), 35000);
+  if (notification.duration)
+    duration = notification.duration <= 0 ? Infinity : notification.duration;
   const toastOptions = {
     action:
       clickCommandLabel && clickCommand
@@ -42,8 +45,7 @@ async function send(notification: PlatformNotification): Promise<string | number
           }
         : undefined,
     // Duration calc from https://paratextstudio.atlassian.net/browse/PT-2196?focusedCommentId=13075
-    duration:
-      notification.duration ?? Math.min(Math.max(localizedMessage.length * 265, 10000), 35000),
+    duration,
   };
   switch (severity) {
     case 'info':
