@@ -84,6 +84,8 @@ export type EncyclopediaDisplayItemProps = {
  * Body layout:
  *
  * - Translit (clickable - routes to MarbleForm) acting as the headline
+ * - Optional original-script lemma row (FN-023 — present when `item.lemma` carries Hebrew/Greek
+ *   characters and the active display mode is `script` or `both`)
  * - Optional teaser line: first article's preview text, truncated to ~80 chars
  *
  * Right-clicking opens the ContextMenu (BHV-353: Copy surface form / Copy lemma) — preserved.
@@ -91,6 +93,7 @@ export type EncyclopediaDisplayItemProps = {
  * Selectors for tests:
  *
  * - `data-testid="encyclopedia-entry-{tokenId}"` (root)
+ * - `[data-source-language-text]` (the original-script lemma element used by FN-023 e2e tests)
  */
 export function EncyclopediaDisplayItem({
   item,
@@ -119,6 +122,13 @@ export function EncyclopediaDisplayItem({
       ? `${fullTeaser.slice(0, TEASER_PREVIEW_CHAR_LIMIT).trimEnd()}…`
       : fullTeaser;
 
+  // FN-023 — render the original-script lemma alongside the translit headline so the row matches
+  // the dictionary tab's source-language-aware shape. We render this whenever the lemma differs
+  // from the translit (i.e., the row carries an actual original-script form). The presenter +
+  // wiring layer drive whether the lemma is shown/hidden per the active display-mode setting; the
+  // component only suppresses the row when the lemma is empty.
+  const showSourceScript = item.lemma && item.lemma.length > 0 && item.lemma !== item.translit;
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -137,6 +147,15 @@ export function EncyclopediaDisplayItem({
           >
             <span className="tw-truncate tw-font-semibold">{item.translit}</span>
           </Button>
+          {showSourceScript && (
+            <span
+              data-source-language-text
+              aria-label={sourceTextTooltip}
+              className="tw-truncate tw-text-xs tw-text-muted-foreground"
+            >
+              {item.lemma}
+            </span>
+          )}
           {teaserPreview && (
             <p className="tw-line-clamp-1 tw-text-xs tw-text-muted-foreground">{teaserPreview}</p>
           )}

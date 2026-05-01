@@ -45,11 +45,24 @@ import {
   type DictionaryEntryDataInput,
 } from '../presenters/dictionary-presenter';
 import {
+  presentEncyclopediaItems,
+  type EncyclopediaDisplayItemInput,
+} from '../presenters/encyclopedia-presenter';
+import {
   EncyclopediaTab,
+  ENCYCLOPEDIA_TAB_STRING_KEYS,
   type EncyclopediaEmptyStateVariant,
 } from '../components/encyclopedia-tab/encyclopedia-tab.component';
-import type { EncyclopediaDisplayItemData } from '../components/encyclopedia-tab/encyclopedia-display-item.component';
-import type { ArticleRendererData } from '../components/shared/article-renderer.component';
+import type {
+  EncyclopediaDisplayItemData,
+  EncyclopediaEntryRefData,
+} from '../components/encyclopedia-tab/encyclopedia-display-item.component';
+import type {
+  ArticleRendererData,
+  ArticleParagraphData,
+  ArticleVerseLinkData,
+  ArticleCrossRefData,
+} from '../components/shared/article-renderer.component';
 import { MediaImagesTab } from '../components/media-tab/media-images-tab.component';
 import { MediaMapsTab } from '../components/media-tab/media-maps-tab.component';
 import type { MediaEntryRowData } from '../components/media-tab/media-entry-row.component';
@@ -569,6 +582,7 @@ const EMPTY_RIBBON_STATES: RibbonStates = {
 const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   ...ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS,
   ...DICTIONARY_TAB_STRING_KEYS,
+  ...ENCYCLOPEDIA_TAB_STRING_KEYS,
   // Toolbar / scope labels surface in empty-state templates.
   '%enhancedResources_toolbar_scope_currentVerse%',
   '%enhancedResources_toolbar_scope_currentSection%',
@@ -662,6 +676,92 @@ type DictionaryEntryDataDto = {
 };
 
 /**
+ * Input for the `loadEncyclopedia` PAPI command (mirrors C# `EncyclopediaLoadInput`).
+ *
+ * Note: the C# record uses `CurrentReference` (full word), not `currentRef` like some other inputs.
+ * Wire-side keys are camelCase per the data-provider's JSON serializer.
+ */
+type EncyclopediaLoadInputDto = {
+  currentReference: VerseRefDto;
+  scope: 'CurrentVerse' | 'CurrentSection' | 'CurrentChapter';
+  filter: WordFilterInputDto | undefined;
+  userLanguage: string;
+  resourceId: string;
+};
+
+/** Mirror of C# `EncyclopediaEntryRef` (data-contracts.md §3.8). */
+type EncyclopediaEntryRefDto = {
+  articleId: string;
+  key: string;
+  title: string;
+  teaserText: string;
+  formatVersion: 1 | 2;
+  inlineImageIds?: string[] | null;
+};
+
+/** Mirror of C# `EncyclopediaDisplayItem`. */
+type EncyclopediaDisplayItemDto = {
+  tokenId: string;
+  lemma: string;
+  sourceText: string;
+  translit: string;
+  glosses: string[];
+  entries: EncyclopediaEntryRefDto[];
+  imageIds: string[];
+  collection: string;
+};
+
+/** Mirror of C# `EncyclopediaLoadResult`. */
+type EncyclopediaLoadResultDto = {
+  items: EncyclopediaDisplayItemDto[];
+  emptyStateMessage: string | null | undefined;
+};
+
+/** Mirror of C# `ArticleInput`. */
+type ArticleInputDto = {
+  articleId: string;
+  resourceId: string;
+  userLanguage: string;
+};
+
+/** Mirror of C# `ArticleVerseLink` — verse refs use `book` / `chapter` / `verse` int trio. */
+type ArticleVerseLinkDto = {
+  reference: { book: number; chapter: number; verse: number };
+  displayText: string;
+  rawReference: string;
+};
+
+/** Mirror of C# `ArticleAbbreviation`. */
+type ArticleAbbreviationDto = {
+  abbrev: string;
+  fullText: string;
+};
+
+/** Mirror of C# `ArticleParagraph`. */
+type ArticleParagraphDto = {
+  text: string;
+  verseLinks: ArticleVerseLinkDto[];
+  abbreviations: ArticleAbbreviationDto[];
+  inlineImageIds: string[];
+};
+
+/** Mirror of C# `ArticleCrossRef`. */
+type ArticleCrossRefDto = {
+  targetArticleId: string;
+  displayText: string;
+  type: 'seealso' | 'launchViewer' | string;
+};
+
+/** Mirror of C# `ArticleData`. */
+type ArticleDataDto = {
+  articleId: string;
+  title: string;
+  paragraphs: ArticleParagraphDto[];
+  crossReferences: ArticleCrossRefDto[];
+  imageIds: string[];
+};
+
+/**
  * Subset of the network-object proxy we care about. `papi.networkObjects.get` returns the proxy
  * typed as a generic `NetworkObject<object>`; we narrow with a structural cast to the methods this
  * web view uses. All cross-process calls return promises.
@@ -670,6 +770,8 @@ type EnhancedResourcesNetworkObject = {
   loadMarbleChapterXml: (input: LoadMarbleChapterXmlInput) => Promise<string>;
   loadDictionary: (input: DictionaryLoadInputDto) => Promise<DictionaryLoadResultDto>;
   readDictionaryEntry: (input: DictionaryEntryInputDto) => Promise<DictionaryEntryDataDto>;
+  loadEncyclopedia: (input: EncyclopediaLoadInputDto) => Promise<EncyclopediaLoadResultDto>;
+  readArticle: (input: ArticleInputDto) => Promise<ArticleDataDto>;
 };
 
 /**
@@ -762,6 +864,95 @@ function entryDtoToPresenterInput(dto: DictionaryEntryDataDto): DictionaryEntryD
       glosses: s.glosses.map((g) => ({ language: g.language, text: g.text })),
       // FN-019 forward fields are absent in today's C# DTO — presenter emits blank rows.
     })),
+  };
+}
+
+/**
+ * Adapt the C# `EncyclopediaDisplayItem` DTO into the presenter input. The DTO is camelCase on the
+ * wire so the conversion is mostly a passthrough; we normalize `inlineImageIds` from null/undefined
+ * to an explicit `undefined` so the presenter's optional field stays clean.
+ */
+function encyclopediaDtoToPresenterInput(
+  dto: EncyclopediaDisplayItemDto,
+): EncyclopediaDisplayItemInput {
+  return {
+    tokenId: dto.tokenId,
+    lemma: dto.lemma,
+    sourceText: dto.sourceText,
+    translit: dto.translit,
+    glosses: dto.glosses,
+    entries: dto.entries.map((e) => ({
+      articleId: e.articleId,
+      key: e.key,
+      title: e.title,
+      teaserText: e.teaserText,
+      formatVersion: e.formatVersion,
+      inlineImageIds: e.inlineImageIds ?? undefined,
+    })),
+    imageIds: dto.imageIds,
+    collection: dto.collection,
+  };
+}
+
+/** Adapt the C# `ArticleData` DTO to the React `ArticleRendererData` shape. */
+function articleDtoToRendererData(dto: ArticleDataDto): ArticleRendererData {
+  const paragraphs: ArticleParagraphData[] = dto.paragraphs.map((p) => ({
+    text: p.text,
+    verseLinks: p.verseLinks.map<ArticleVerseLinkData>((v) => ({
+      reference: { book: v.reference.book, chapter: v.reference.chapter, verse: v.reference.verse },
+      displayText: v.displayText,
+      rawReference: v.rawReference,
+    })),
+    abbreviations: p.abbreviations.map((a) => ({ abbrev: a.abbrev, fullText: a.fullText })),
+    inlineImageIds: p.inlineImageIds,
+  }));
+  const crossReferences: ArticleCrossRefData[] = dto.crossReferences.map((c) => ({
+    targetArticleId: c.targetArticleId,
+    displayText: c.displayText,
+    // Narrow the wire 'string' type to the presenter union; unknown values fall through as
+    // 'launchViewer' so the renderer doesn't blow up on a future backend extension.
+    type: c.type === 'seealso' ? 'seealso' : 'launchViewer',
+  }));
+  return {
+    articleId: dto.articleId,
+    title: dto.title,
+    paragraphs,
+    crossReferences,
+    imageIds: dto.imageIds,
+  };
+}
+
+/** Map the row-level `EncyclopediaItemPresentation` into the component's prop shape. */
+function presentationToItemData(p: {
+  tokenId: string;
+  lemma: string;
+  sourceText: string;
+  translit: string;
+  displaySource: string;
+  entries: EncyclopediaDisplayItemInput['entries'];
+  imageIds: string[];
+  collection: string;
+}): EncyclopediaDisplayItemData {
+  const entries: EncyclopediaEntryRefData[] = p.entries.map((e) => ({
+    articleId: e.articleId,
+    key: e.key,
+    title: e.title,
+    teaserText: e.teaserText,
+    formatVersion: e.formatVersion,
+    inlineImageIds: e.inlineImageIds,
+  }));
+  return {
+    tokenId: p.tokenId,
+    lemma: p.lemma,
+    // sourceText holds the source-language form rendered into the row; the FN-023 e2e test
+    // matches on the original-script element (data-source-language-text) which the component
+    // now renders from `item.lemma`. We forward the loader's sourceText unchanged so PT9's
+    // related-form pattern (e.g., "beker, bikrah") is preserved.
+    sourceText: p.sourceText,
+    translit: p.translit,
+    entries,
+    imageIds: p.imageIds,
+    collection: p.collection,
   };
 }
 
@@ -1122,6 +1313,185 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     EMPTY_VERSE_OCCURRENCES,
   ]);
 
+  // ---------------------------------------------------------------------------
+  // Encyclopedia tab wiring (UI-PKG-003)
+  // ---------------------------------------------------------------------------
+  // Mirrors the dictionary tab pattern: `loadEncyclopedia` returns the row list (one entry per
+  // scoped token with thematic links); `readArticle` is fired lazily per selected row to populate
+  // the side-drawer detail panel. The pure `presentEncyclopediaItems` adapter resolves FN-023
+  // source-language-aware rendering before the data hits the component.
+
+  const [encyclopediaItems, setEncyclopediaItems] = useState<EncyclopediaDisplayItemData[]>([]);
+  const [encyclopediaIsLoading, setEncyclopediaIsLoading] = useState(false);
+  const [encyclopediaSelectedTokenId, setEncyclopediaSelectedTokenId] = useWebViewState<
+    string | undefined
+  >('encyclopediaSelectedTokenId', undefined);
+  const [encyclopediaArticleDataMap, setEncyclopediaArticleDataMap] = useState<
+    Record<string, ArticleRendererData | undefined>
+  >({});
+
+  // Effect: load encyclopedia rows whenever (resourceId, BCV, scope, filter) changes.
+  useEffect(() => {
+    let cancelled = false;
+    if (!resourceId || bookNum <= 0) {
+      setEncyclopediaItems([]);
+      setEncyclopediaIsLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const filter: WordFilterInputDto | undefined = filteredTokenId
+      ? {
+          tokenId: filteredTokenId,
+          lemma: '',
+          source: '',
+          translit: filteredTokenId,
+          senses: '',
+          targetLinks: '',
+          clickOrigin: 'ScripturePane',
+        }
+      : undefined;
+
+    const input: EncyclopediaLoadInputDto = {
+      currentReference: {
+        bookNum,
+        chapterNum: scrRef.chapterNum,
+        verseNum: scrRef.verseNum,
+      },
+      scope: marbleScopeToBackend(scope),
+      filter,
+      userLanguage: glossLanguage,
+      resourceId,
+    };
+
+    setEncyclopediaIsLoading(true);
+    (async () => {
+      try {
+        const proxy =
+          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
+        if (!proxy) {
+          if (!cancelled) setEncyclopediaItems([]);
+          return;
+        }
+        const result = await proxy.loadEncyclopedia(input);
+        if (cancelled) return;
+
+        // Resource language drives the FN-023 display-mode selection. The encyclopedia loader
+        // routes through SDBH for OT books and SDBG for NT books, mirroring the dictionary
+        // active-dictionary heuristic.
+        const resourceLanguage: 'heb' | 'grc' = isOldTestamentBook(bookNum) ? 'heb' : 'grc';
+
+        const presentations = presentEncyclopediaItems(
+          result.items.map(encyclopediaDtoToPresenterInput),
+          {
+            resourceLanguage,
+            hebrewDisplayMode: toPresenterMode(hebrewDisplayMode),
+            greekDisplayMode: toPresenterMode(greekDisplayMode),
+            // No live transliteration service yet; presenter falls back to the row's translit
+            // when present (which the C# loader populates from MarbleEntry.Transliteration), and
+            // returns '' for rows without one. FN-017 follow-up wires a real transliterator.
+            transliterate: () => '',
+          },
+        );
+
+        setEncyclopediaItems(presentations.map(presentationToItemData));
+      } catch (err) {
+        if (cancelled) return;
+        logger.warn(
+          `Enhanced Resources: loadEncyclopedia failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        setEncyclopediaItems([]);
+      } finally {
+        if (!cancelled) setEncyclopediaIsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    resourceId,
+    bookNum,
+    scrRef.chapterNum,
+    scrRef.verseNum,
+    scope,
+    filteredTokenId,
+    hebrewDisplayMode,
+    greekDisplayMode,
+  ]);
+
+  // Effect: load article data for the selected encyclopedia row's first article reference. Only
+  // fires when the cache doesn't already have it (each article is keyed by tokenId so the panel
+  // re-renders without refetching when the user reopens an entry).
+  useEffect(() => {
+    let cancelled = false;
+    if (!encyclopediaSelectedTokenId || !resourceId) return () => {};
+    const target = encyclopediaItems.find((i) => i.tokenId === encyclopediaSelectedTokenId);
+    if (!target) return () => {};
+    // Already loaded? bail.
+    if (encyclopediaArticleDataMap[encyclopediaSelectedTokenId]) return () => {};
+    const firstEntry = target.entries[0];
+    if (!firstEntry) return () => {};
+
+    (async () => {
+      try {
+        const proxy =
+          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
+        if (!proxy) return;
+        const dto = await proxy.readArticle({
+          articleId: firstEntry.articleId,
+          resourceId,
+          userLanguage: glossLanguage,
+        });
+        if (cancelled) return;
+        const rendererData = articleDtoToRendererData(dto);
+        setEncyclopediaArticleDataMap((prev) => ({
+          ...prev,
+          [encyclopediaSelectedTokenId]: rendererData,
+        }));
+      } catch (err) {
+        logger.warn(
+          `Enhanced Resources: readArticle failed for ${firstEntry.articleId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [encyclopediaSelectedTokenId, encyclopediaItems, encyclopediaArticleDataMap, resourceId]);
+
+  // FN-020(d) — when filteredTokenId changes (scripture-pane click or cross-tab propagation),
+  // automatically open the matching encyclopedia row's detail drawer if there's a row for that
+  // token. Symmetrical to the dictionary tab's selection semantics.
+  useEffect(() => {
+    if (!filteredTokenId) return;
+    const match = encyclopediaItems.find((i) => i.tokenId === filteredTokenId);
+    if (match && encyclopediaSelectedTokenId !== match.tokenId) {
+      setEncyclopediaSelectedTokenId(match.tokenId);
+    }
+  }, [
+    filteredTokenId,
+    encyclopediaItems,
+    encyclopediaSelectedTokenId,
+    setEncyclopediaSelectedTokenId,
+  ]);
+
+  // Empty-state classification for encyclopedia (BHV-352, three variants).
+  let encyclopediaEmptyState: EncyclopediaEmptyStateVariant;
+  if (encyclopediaItems.length > 0) {
+    encyclopediaEmptyState = 'none';
+  } else if (filteredTokenId) {
+    encyclopediaEmptyState = 'word-not-in-scope';
+  } else {
+    encyclopediaEmptyState = 'no-data';
+  }
+
   // Empty-state classification — three variants per BHV-352.
   let dictionaryEmptyState: DictionaryEmptyStateVariant;
   if (dictionaryItems.length > 0) {
@@ -1160,6 +1530,16 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   // the scripture pane (and other research tabs) propagate. We reuse the existing token-click
   // handler — both paths terminate in `setFilteredTokenId`.
   const handleDictionarySourceTextClick = useCallback(
+    (tokenId: string) => {
+      setFilteredTokenId(tokenId);
+    },
+    [setFilteredTokenId],
+  );
+
+  // FN-020 (c) — encyclopedia variant. Clicking the translit headline in an encyclopedia row
+  // sets the filter to that token so the scripture pane and dictionary tab propagate the same
+  // way they do from a dictionary click.
+  const handleEncyclopediaSourceTextClick = useCallback(
     (tokenId: string) => {
       setFilteredTokenId(tokenId);
     },
@@ -1261,6 +1641,15 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       onDictionarySelectionChange={setDictionarySelectedTokenId}
       onDictionarySourceTextClick={handleDictionarySourceTextClick}
       onDictionaryToggleHideLessRelevantSenses={setDictionaryHideLessRelevantSenses}
+      encyclopediaItems={encyclopediaItems}
+      encyclopediaSelectedTokenId={encyclopediaSelectedTokenId}
+      encyclopediaIsLoading={encyclopediaIsLoading}
+      encyclopediaEmptyState={encyclopediaEmptyState}
+      encyclopediaFilterWord={filteredTokenId}
+      encyclopediaScopeLabel={dictionaryScopeLabel}
+      encyclopediaArticleDataMap={encyclopediaArticleDataMap}
+      onEncyclopediaSelectionChange={setEncyclopediaSelectedTokenId}
+      onEncyclopediaSourceTextClick={handleEncyclopediaSourceTextClick}
       localizedStringsWithLoadingState={[stringsForShell, isLoadingStrings]}
     />
   );
