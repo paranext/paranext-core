@@ -79,6 +79,10 @@ import {
   type MediaViewerItem,
 } from '../components/media-viewer/media-viewer.component';
 import {
+  ArticleViewer,
+  ARTICLE_VIEWER_STRING_KEYS,
+} from '../components/article-viewer/article-viewer.component';
+import {
   presentMediaItems,
   type MediaDisplayItemInput,
   type MediaTabType,
@@ -204,6 +208,29 @@ export type EnhancedResourceWebViewProps = {
   onEncyclopediaSourceTextClick?: (tokenId: string) => void;
   onEncyclopediaCopySurfaceForm?: (item: EncyclopediaDisplayItemData) => void;
   onEncyclopediaCopyLemma?: (item: EncyclopediaDisplayItemData) => void;
+  /**
+   * Click handler for the "View article" link inside an encyclopedia entry detail panel. The wiring
+   * layer routes this to `setActiveArticleId` which opens the ArticleViewer Dialog (UI-PKG-006).
+   */
+  onEncyclopediaArticleLinkClick?: (articleId: string) => void;
+
+  // ArticleViewer (centered Dialog) — opened by the encyclopedia entry detail's "View article"
+  // link. Surface for full-article reading; reachable from any encyclopedia entry. Article
+  // cross-references (seealso) re-enter the same dialog with a different articleId.
+  /** Currently active article id; undefined keeps the Dialog closed. */
+  activeArticleId?: string;
+  /** Loaded article data; undefined while a fetch is in flight (Dialog shows skeleton). */
+  activeArticleData?: ArticleRendererData;
+  /** FN-009 image URL resolver forwarded to ArticleRenderer for inline article images. */
+  articleViewerImageUrlResolver?: (imageId: string) => string;
+  /** Open-state change handler. When closing, the wiring layer clears activeArticleId. */
+  onArticleViewerOpenChange?: (open: boolean) => void;
+  /** Verse-link click — wiring layer dispatches to scroll-group via useWebViewScrollGroupScrRef. */
+  onArticleVerseLinkClick?: (link: ArticleVerseLinkData) => void;
+  /** Cross-reference click — `seealso` re-enters dialog; `launchViewer` opens MediaViewer. */
+  onArticleCrossReferenceClick?: (ref: ArticleCrossRefData) => void;
+  /** Inline image click — opens MediaViewer with the clicked image id. */
+  onArticleImageClick?: (imageId: string) => void;
 
   // Media (Images) tab
   mediaImagesItems?: MediaEntryRowData[];
@@ -329,6 +356,15 @@ export function EnhancedResourceWebView({
   onEncyclopediaSourceTextClick = () => {},
   onEncyclopediaCopySurfaceForm = () => {},
   onEncyclopediaCopyLemma = () => {},
+  onEncyclopediaArticleLinkClick,
+
+  activeArticleId,
+  activeArticleData,
+  articleViewerImageUrlResolver,
+  onArticleViewerOpenChange = () => {},
+  onArticleVerseLinkClick = () => {},
+  onArticleCrossReferenceClick = () => {},
+  onArticleImageClick = () => {},
 
   mediaImagesItems = [],
   mediaImagesSelectedItemId,
@@ -505,6 +541,7 @@ export function EnhancedResourceWebView({
                     onSourceTextClick={onEncyclopediaSourceTextClick}
                     onCopySurfaceForm={onEncyclopediaCopySurfaceForm}
                     onCopyLemma={onEncyclopediaCopyLemma}
+                    onArticleLinkClick={onEncyclopediaArticleLinkClick}
                     localizedStringsWithLoadingState={childStrings}
                   />
                 </TabsContent>
@@ -556,6 +593,17 @@ export function EnhancedResourceWebView({
         onNext={onMaximizedMediaNext}
         localizedStringsWithLoadingState={childStrings}
       />
+      <ArticleViewer
+        open={activeArticleId !== undefined}
+        articleId={activeArticleId}
+        articleData={activeArticleData}
+        imageUrlResolver={articleViewerImageUrlResolver}
+        onOpenChange={onArticleViewerOpenChange}
+        onVerseLinkClick={onArticleVerseLinkClick}
+        onCrossReferenceClick={onArticleCrossReferenceClick}
+        onImageClick={onArticleImageClick}
+        localizedStringsWithLoadingState={childStrings}
+      />
       {/*
        * Theme 12 — CopyrightOverlay is always mounted as a sibling-level Dialog (no longer
        * conditionally rendered, no longer nested next to WarningRibbons). The Dialog manages its
@@ -599,6 +647,7 @@ const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   ...MEDIA_IMAGES_TAB_STRING_KEYS,
   ...MEDIA_MAPS_TAB_STRING_KEYS,
   ...MEDIA_VIEWER_STRING_KEYS,
+  ...ARTICLE_VIEWER_STRING_KEYS,
   // Toolbar / scope labels surface in empty-state templates.
   '%enhancedResources_toolbar_scope_currentVerse%',
   '%enhancedResources_toolbar_scope_currentSection%',
@@ -1138,7 +1187,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   const stringsForShell: Record<string, LocalizedStringValue | undefined> = { ...stringsBag };
 
   // BCV reference + scroll-group sync (FN-015 / BHV-317).
-  const [scrRef, , scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
 
   // Memento fields - BHV-319 (23-field round-trip). The functional test for TS-055 customizes
   // tab + scope + highlight, closes/reopens the window, and asserts the values come back.
@@ -1834,10 +1883,15 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
 
   // MediaViewer (centered Dialog) state. Driven by either tab's Maximize button via the
   // `onMaximize` callback. Tracks which tab the maximized item came from so prev/next cycles
-  // through the right list.
+  // through the right list. A parallel `maximizedMediaAdHoc` state holds single-image entries
+  // surfaced from the ArticleViewer (inline image clicks + `launchViewer` cross-references) which
+  // do not exist in the Images / Maps tab lists.
   const [maximizedMediaContext, setMaximizedMediaContext] = useState<
     { tab: MediaTabType; index: number } | undefined
   >(undefined);
+  const [maximizedMediaAdHoc, setMaximizedMediaAdHoc] = useState<MediaViewerItem | undefined>(
+    undefined,
+  );
 
   const handleMediaImagesMaximize = useCallback(
     (id: string) => {
@@ -1863,6 +1917,9 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   }, [maximizedMediaContext, mediaImagesItems, mediaMapsItems]);
 
   const maximizedMediaItem: MediaViewerItem | undefined = useMemo(() => {
+    // Ad-hoc items (article inline images / launchViewer cross-refs) take precedence — they only
+    // appear when there is no indexed context.
+    if (maximizedMediaAdHoc) return maximizedMediaAdHoc;
     if (!maximizedMediaContext || !maximizedMediaList) return undefined;
     const entry = maximizedMediaList[maximizedMediaContext.index];
     if (!entry) return undefined;
@@ -1872,27 +1929,32 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       mediaType: entry.mediaType,
       caption: entry.referenceLabel,
     };
-  }, [maximizedMediaContext, maximizedMediaList]);
+  }, [maximizedMediaContext, maximizedMediaList, maximizedMediaAdHoc]);
 
   const handleMaximizedMediaOpenChange = useCallback((open: boolean) => {
-    if (!open) setMaximizedMediaContext(undefined);
+    if (!open) {
+      setMaximizedMediaContext(undefined);
+      setMaximizedMediaAdHoc(undefined);
+    }
   }, []);
 
   // Prev / next through the active list. Returning `undefined` from these callbacks disables the
-  // Dialog button (component contract).
+  // Dialog button (component contract). Ad-hoc items always disable both buttons (single image).
   const handleMaximizedMediaPrev = useMemo(() => {
+    if (maximizedMediaAdHoc) return undefined;
     if (!maximizedMediaContext || !maximizedMediaList) return undefined;
     if (maximizedMediaContext.index <= 0) return undefined;
     return () =>
       setMaximizedMediaContext((prev) => (prev ? { tab: prev.tab, index: prev.index - 1 } : prev));
-  }, [maximizedMediaContext, maximizedMediaList]);
+  }, [maximizedMediaContext, maximizedMediaList, maximizedMediaAdHoc]);
 
   const handleMaximizedMediaNext = useMemo(() => {
+    if (maximizedMediaAdHoc) return undefined;
     if (!maximizedMediaContext || !maximizedMediaList) return undefined;
     if (maximizedMediaContext.index >= maximizedMediaList.length - 1) return undefined;
     return () =>
       setMaximizedMediaContext((prev) => (prev ? { tab: prev.tab, index: prev.index + 1 } : prev));
-  }, [maximizedMediaContext, maximizedMediaList]);
+  }, [maximizedMediaContext, maximizedMediaList, maximizedMediaAdHoc]);
 
   // FN-009 resolvers: thumbnails (tab + drawer) and full-size image (MediaViewer Dialog).
   const mediaThumbnailUrlResolver = useCallback(
@@ -1903,6 +1965,107 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     (imageId: string) => buildPapiErImageUrl(imageId, 'full'),
     [],
   );
+
+  // ---------------------------------------------------------------------------
+  // ArticleViewer (centered Dialog) wiring (UI-PKG-006)
+  // ---------------------------------------------------------------------------
+  // Triggered by the "View article" link inside an encyclopedia entry detail panel. The flat state
+  // model holds a single `activeArticleId` (no sequence prev/next per Theme 14); cross-references
+  // (`seealso`) re-enter the same dialog by setting a new id while clearing the data so the user
+  // sees a loading skeleton between articles. `launchViewer` cross-refs and inline-image clicks
+  // dispatch into the MediaViewer ad-hoc state defined above.
+  const [activeArticleId, setActiveArticleId] = useState<string | undefined>(undefined);
+  const [activeArticleData, setActiveArticleData] = useState<ArticleRendererData | undefined>(
+    undefined,
+  );
+
+  // Effect: fetch article data whenever activeArticleId changes. Clears existing data on every
+  // change so the dialog shows a skeleton between articles (matches the controlled-Dialog
+  // contract — parent owns `articleData` and it's allowed to be undefined while loading).
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeArticleId || !resourceId) {
+      setActiveArticleData(undefined);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setActiveArticleData(undefined);
+    (async () => {
+      try {
+        const proxy =
+          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
+        if (!proxy) return;
+        const dto = await proxy.readArticle({
+          articleId: activeArticleId,
+          resourceId,
+          userLanguage: glossLanguage,
+        });
+        if (cancelled) return;
+        setActiveArticleData(articleDtoToRendererData(dto));
+      } catch (err) {
+        if (cancelled) return;
+        logger.warn(
+          `Enhanced Resources: ArticleViewer readArticle failed for ${activeArticleId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeArticleId, resourceId]);
+
+  const handleEncyclopediaArticleLinkClick = useCallback((articleId: string) => {
+    setActiveArticleId(articleId);
+  }, []);
+
+  const handleArticleViewerOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setActiveArticleId(undefined);
+      setActiveArticleData(undefined);
+    }
+  }, []);
+
+  // Verse-link click → drive the platform scroll-group via setScrRef. The article verse link
+  // carries (book, chapter, verse) ints; we project them to the SerializedVerseRef shape that
+  // useWebViewScrollGroupScrRef expects via Canon.bookNumberToId.
+  const handleArticleVerseLinkClick = useCallback(
+    (link: ArticleVerseLinkData) => {
+      const bookId = Canon.bookNumberToId(link.reference.book);
+      if (!bookId) return;
+      setScrRef({
+        book: bookId,
+        chapterNum: link.reference.chapter,
+        verseNum: link.reference.verse,
+      });
+    },
+    [setScrRef],
+  );
+
+  const handleArticleCrossReferenceClick = useCallback((ref: ArticleCrossRefData) => {
+    if (ref.type === 'seealso') {
+      // Re-enter the dialog with the new article id. The fetch effect above clears
+      // activeArticleData and reloads.
+      setActiveArticleId(ref.targetArticleId);
+      return;
+    }
+    // launchViewer: surface the targetArticleId as an ad-hoc image in MediaViewer.
+    setMaximizedMediaAdHoc({
+      imageId: ref.targetArticleId,
+      title: ref.displayText,
+      mediaType: 'image',
+    });
+  }, []);
+
+  const handleArticleImageClick = useCallback((imageId: string) => {
+    setMaximizedMediaAdHoc({
+      imageId,
+      title: imageId,
+      mediaType: 'image',
+    });
+  }, []);
 
   // Empty-state classification for encyclopedia (BHV-352, three variants).
   let encyclopediaEmptyState: EncyclopediaEmptyStateVariant;
@@ -2072,6 +2235,14 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       encyclopediaArticleDataMap={encyclopediaArticleDataMap}
       onEncyclopediaSelectionChange={setEncyclopediaSelectedTokenId}
       onEncyclopediaSourceTextClick={handleEncyclopediaSourceTextClick}
+      onEncyclopediaArticleLinkClick={handleEncyclopediaArticleLinkClick}
+      activeArticleId={activeArticleId}
+      activeArticleData={activeArticleData}
+      articleViewerImageUrlResolver={mediaThumbnailUrlResolver}
+      onArticleViewerOpenChange={handleArticleViewerOpenChange}
+      onArticleVerseLinkClick={handleArticleVerseLinkClick}
+      onArticleCrossReferenceClick={handleArticleCrossReferenceClick}
+      onArticleImageClick={handleArticleImageClick}
       mediaImagesItems={mediaImagesItems}
       mediaImagesSelectedItemId={mediaImagesSelectedItemId}
       mediaImagesIsLoading={mediaImagesIsLoading}

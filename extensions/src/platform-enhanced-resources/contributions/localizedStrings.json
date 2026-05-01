@@ -241,6 +241,9 @@
     "%enhancedResources_encyclopedia_emptyDetail%": {
       "notes": "Placeholder when an expanded encyclopedia entry has no article data to display."
     },
+    "%enhancedResources_encyclopedia_viewArticle%": {
+      "notes": "Label of the link inside the encyclopedia entry detail panel that opens the full article in the ArticleViewer Dialog (UI-PKG-006)."
+    },
     "%enhancedResources_encyclopedia_formatVersionLabel%": {
       "notes": "Reserved label for V1/V2 format indicator (currently unused; backend abstracts the difference)."
     },
@@ -504,6 +507,7 @@
       "%enhancedResources_encyclopedia_sourceTextTooltip%": "Filter on this word",
       "%enhancedResources_encyclopedia_articleLoading%": "Loading article",
       "%enhancedResources_encyclopedia_emptyDetail%": "No article content available.",
+      "%enhancedResources_encyclopedia_viewArticle%": "View full article",
       "%enhancedResources_encyclopedia_formatVersionLabel%": "Format",
       "%enhancedResources_article_seeAlsoHeader%": "See also",
       "%enhancedResources_article_referencesHeader%": "References",

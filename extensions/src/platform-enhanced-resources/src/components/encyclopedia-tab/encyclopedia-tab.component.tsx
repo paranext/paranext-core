@@ -76,6 +76,12 @@ export type EncyclopediaTabProps = {
   onCopySurfaceForm?: (item: EncyclopediaDisplayItemData) => void;
   onCopyLemma?: (item: EncyclopediaDisplayItemData) => void;
 
+  /**
+   * Click handler for the "View article" link inside the entry detail panel. Surfaces the
+   * ArticleViewer Dialog (UI-PKG-006). When omitted the link is hidden.
+   */
+  onArticleLinkClick?: (articleId: string) => void;
+
   localizedStringsWithLoadingState?: [EncyclopediaTabLocalizedStrings, boolean];
 };
 
@@ -119,6 +125,8 @@ export function EncyclopediaTab({
   onSourceTextClick = () => {},
   onCopySurfaceForm = () => {},
   onCopyLemma = () => {},
+
+  onArticleLinkClick,
 
   localizedStringsWithLoadingState = [{}, false],
 }: EncyclopediaTabProps) {
@@ -192,6 +200,7 @@ export function EncyclopediaTab({
                   entry={entryRef}
                   articleData={articleDataMap[item.tokenId]}
                   previewParagraphCount={previewParagraphCount}
+                  onArticleLinkClick={onArticleLinkClick}
                   localizedStringsWithLoadingState={childStrings}
                 />
               ))}

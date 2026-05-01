@@ -1,4 +1,4 @@
-import { Skeleton } from 'platform-bible-react';
+import { Button, Skeleton } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import type { ArticleRendererData } from '../shared/article-renderer.component';
 import type { EncyclopediaEntryRefData } from './encyclopedia-display-item.component';
@@ -7,6 +7,7 @@ import type { EncyclopediaEntryRefData } from './encyclopedia-display-item.compo
 export const ENCYCLOPEDIA_ENTRY_DETAIL_STRING_KEYS = Object.freeze([
   '%enhancedResources_encyclopedia_articleLoading%',
   '%enhancedResources_encyclopedia_emptyDetail%',
+  '%enhancedResources_encyclopedia_viewArticle%',
 ] as const);
 
 type EncyclopediaEntryDetailLocalizedStringKey =
@@ -26,6 +27,12 @@ export type EncyclopediaEntryDetailProps = {
   articleData?: ArticleRendererData;
   /** Number of preview paragraphs to show (default 2). */
   previewParagraphCount?: number;
+
+  /**
+   * Click handler for the "View article" link that surfaces the full ArticleViewer Dialog
+   * (UI-PKG-006). When omitted, the link is hidden.
+   */
+  onArticleLinkClick?: (articleId: string) => void;
 
   localizedStringsWithLoadingState?: [EncyclopediaEntryDetailLocalizedStrings, boolean];
 };
@@ -49,6 +56,8 @@ export function EncyclopediaEntryDetail({
   articleData,
   previewParagraphCount = 2,
 
+  onArticleLinkClick,
+
   localizedStringsWithLoadingState = [{}, false],
 }: EncyclopediaEntryDetailProps) {
   const getLocalizedString = (key: EncyclopediaEntryDetailLocalizedStringKey) =>
@@ -58,6 +67,9 @@ export function EncyclopediaEntryDetail({
     getLocalizedString('%enhancedResources_encyclopedia_articleLoading%'),
   );
   const emptyDetail = String(getLocalizedString('%enhancedResources_encyclopedia_emptyDetail%'));
+  const viewArticleLabel = String(
+    getLocalizedString('%enhancedResources_encyclopedia_viewArticle%'),
+  );
 
   const renderBody = () => {
     if (!articleData) {
@@ -100,6 +112,18 @@ export function EncyclopediaEntryDetail({
       </header>
 
       {renderBody()}
+
+      {onArticleLinkClick ? (
+        <Button
+          variant="link"
+          size="sm"
+          data-testid={`encyclopedia-article-link-${entry.articleId}`}
+          className="tw-h-auto tw-self-start tw-p-0 tw-text-sm"
+          onClick={() => onArticleLinkClick(entry.articleId)}
+        >
+          {viewArticleLabel}
+        </Button>
+      ) : undefined}
     </div>
   );
 }
