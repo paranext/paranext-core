@@ -164,6 +164,27 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
       // eslint-disable-next-line no-await-in-loop
       await mainPage.waitForTimeout(500);
     }
+
+    // WF-003 (P3U.1 verdict): assert deterministic clean state before declaring the next test
+    // ready. Earlier observations showed test 2 (render-radios) flaking when prior-test state
+    // bled in — the renderer would still have a stale dialog mounted by the time the next
+    // beforeEach finished, masking sensible cleanup as visual-vibes flakiness. Two checks:
+    //   (a) only the Home tab remains in the dock — no orphaned web-view tabs
+    //   (b) zero open Radix Dialog overlays — no `[role="dialog"][data-state="open"]` left over
+    // Either failure produces a precise diagnostic before the test body runs, instead of a
+    // mysterious DevTools-screenshot failure mid-test.
+    await expect(
+      mainPage.locator('.dock-tab').filter({ hasNotText: 'Home' }),
+      'WF-003: stale dock-tab(s) remain after beforeEach cleanup — prior test left a web view ' +
+        'open. Check that the prior test closed its dialog/web-view via Cancel, Escape, or the ' +
+        'tab close button.',
+    ).toHaveCount(0, { timeout: 5_000 });
+    await expect(
+      mainPage.locator('[role="dialog"][data-state="open"]'),
+      'WF-003: stale Radix Dialog overlay remains after beforeEach cleanup. Escape pumping ' +
+        'and overlay-removal evaluate() did not fully tear down the dialog tree. Increase the ' +
+        'Escape iteration count or investigate whether a non-Radix overlay is responsible.',
+    ).toHaveCount(0, { timeout: 5_000 });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

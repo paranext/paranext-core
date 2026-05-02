@@ -528,6 +528,25 @@ export function ManageBooksDialog({
     if (createReferenceId === projectId) setCreateReferenceId(undefined);
   }, [copySourceId, createReferenceId, projectId]);
 
+  // GAP-002 (P3U.1 ui-spec-validator): when the user picks a "Based on" reference project in
+  // Create mode, eagerly load that project's book set so EXT-102's missing-model pre-flight
+  // prompt can compare the user's selection against a real book inventory. Without this, the
+  // first call to `createReferenceBookState` returns an empty `present` set (because
+  // booksByProjectId never populated for the reference project), making every selected book
+  // appear "missing" — EXT-102 then fires with bogus data, or worse, fires when it shouldn't.
+  useEffect(() => {
+    if (!open || !createReferenceId) return;
+    refreshBooks(createReferenceId).catch(() => undefined);
+  }, [open, createReferenceId, refreshBooks]);
+
+  // Same lazy-load pattern for the Copy-mode source project so the comparison grid has the
+  // source's book set without waiting for the user to interact further. Mirrors the
+  // createReferenceId fix and reduces surprise for downstream comparison-grid logic.
+  useEffect(() => {
+    if (!open || !copySourceId) return;
+    refreshBooks(copySourceId).catch(() => undefined);
+  }, [open, copySourceId, refreshBooks]);
+
   // Mirror the ToggleGroup width for the create-mode method-row sizing.
   useLayoutEffect(() => {
     const el = toggleGroupRef.current;
