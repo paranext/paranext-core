@@ -1,6 +1,6 @@
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs } from './test-helpers';
+import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 
 // Feature: enhanced-resources
 // Work Package: UI-PKG-003: EncyclopediaTab (Research Pane)
@@ -47,8 +47,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
 
       // Open the Enhanced Resource window via the platform menu (UI-PKG-009 registers this
       // command; once wired, the menu path opens the ER WebView).
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
 
       // Verify the dock tab appeared
       const tab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
@@ -81,8 +80,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
       await waitForAppReady(mainPage);
 
       // Navigate to ER window and Encyclopedia tab
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -123,8 +121,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -166,8 +163,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -219,8 +215,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -256,8 +251,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -288,8 +282,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -324,8 +317,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -361,8 +353,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -411,8 +402,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -446,8 +436,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -479,8 +468,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -514,8 +502,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /View/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });

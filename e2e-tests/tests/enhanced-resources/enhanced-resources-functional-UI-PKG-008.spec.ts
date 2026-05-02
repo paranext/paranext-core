@@ -1,6 +1,9 @@
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs } from './test-helpers';
+import {
+  closeAllNonHomeDockTabs,
+  openEnhancedResource as sharedOpenEnhancedResource,
+} from './test-helpers';
 
 // Feature: enhanced-resources
 // Work Package: UI-PKG-008: MarbleGuideForm (Getting Started Guide)
@@ -41,36 +44,24 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
     await closeAllNonHomeDockTabs(mainPage);
   });
 
-  // Reusable helper: open an Enhanced Resource window so the toolbar (and its info-icon button)
-  // exists. The exact menu pathway is owned by UI-PKG-009 (ERWindowLauncher); this helper
-  // encodes the assumption that an ER can be opened via the platform "Open Resource" menu and
-  // a known sample ER (e.g. UBSDIC) is available in the test environment.
-  const openEnhancedResource = async (mainPage: import('@playwright/test').Page) => {
-    // Implementation will navigate via the registered ER menu entry (UI-PKG-009).
-    await mainPage
-      .getByRole('menuitem', { name: /Paratext|Open|Resources?/i })
-      .first()
-      .click();
-    await mainPage
-      .getByRole('menuitem', { name: /Open Enhanced Resource|Enhanced Resources?/i })
-      .first()
-      .click();
-    // Pick the first available ER (test environment provides at least one).
-    await mainPage
-      .getByRole('button', { name: /Enhanced Resource|UBSDIC|UBSEC/i })
-      .first()
-      .click();
-    // Confirm the ER tab is open before continuing.
-    await expect(
-      mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i }).first(),
-    ).toBeVisible({ timeout: 15_000 });
-  };
+  /**
+   * Opens an Enhanced Resource window. Delegates to the shared helper which uses the hardcoded
+   * ESV16UK+ default (TODO(GAP-001)) and dismisses the auto-shown MarbleGuide if it appears.
+   *
+   * UI-PKG-008 specifically wants to OBSERVE the MarbleGuide auto-show, so it disables the
+   * automatic dismissal by passing `dismissGuide: false`.
+   */
+  const openEnhancedResource = (
+    mainPage: import('@playwright/test').Page,
+    options: { dismissGuide?: boolean } = { dismissGuide: false },
+  ) => sharedOpenEnhancedResource(mainPage, options);
 
   // ═══════════════════════════════════════════════
   // Category 1: Navigation
   // ═══════════════════════════════════════════════
 
   // @scenario TS-065
+  // Session-state limitation: haveShownMarbleGuide in extension-host memory persists across tests; only the FIRST test in a fresh app session can observe the auto-show. Re-activate after a per-test extension-host reset hook lands.
   test.fixme(
     'should auto-show MarbleGuide on first Enhanced Resource open per session',
     async ({ mainPage }) => {
@@ -99,6 +90,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
   // ═══════════════════════════════════════════════
 
   // @scenario TS-065
+  // Session-state limitation: haveShownMarbleGuide in extension-host memory persists across tests; only the FIRST test in a fresh app session can observe the auto-show. Re-activate after a per-test extension-host reset hook lands.
   test.fixme(
     'should render all required guide sections (title, content, color chips, tab grid, close, checkbox)',
     async ({ mainPage }) => {
@@ -148,6 +140,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
   // ═══════════════════════════════════════════════
 
   // @scenario TS-065
+  // Session-state limitation: haveShownMarbleGuide in extension-host memory persists across tests; only the FIRST test in a fresh app session can observe the auto-show. Re-activate after a per-test extension-host reset hook lands.
   test.fixme(
     'should populate localized strings (title and content not empty / placeholder keys)',
     async ({ mainPage }) => {

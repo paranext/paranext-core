@@ -30,7 +30,7 @@
 
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs } from './test-helpers';
+import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 
 // ---------------------------------------------------------------------------------------------
 // Selectors derived from the Test Contract in ui-spec-semantic-domain-viewer.md and the actual
@@ -71,8 +71,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
 
       // Step 1: Open the Enhanced Resource webview (covered by UI-PKG-009 menu wiring).
       // Open the resource the same way a user does: via the registered menu entry / command.
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
 
       // Step 2: Wait for the Enhanced Resource dock tab.
       const erTab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
@@ -114,8 +113,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -146,8 +144,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
       await waitForAppReady(mainPage);
 
       // Open the SDV via the filtered-list path (same as Navigation test 1).
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -189,8 +186,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -229,8 +225,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -265,8 +260,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -315,8 +309,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -354,8 +347,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
   test.fixme('should dismiss the dialog via the close X button', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
-    await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-    await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+    await openEnhancedResource(mainPage);
     await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
       timeout: 15_000,
     });
@@ -376,8 +368,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
   test.fixme('should dismiss the dialog when Escape is pressed', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
-    await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-    await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+    await openEnhancedResource(mainPage);
     await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
       timeout: 15_000,
     });
@@ -400,8 +391,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -460,8 +450,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -500,8 +489,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -537,8 +525,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -577,8 +564,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Resources?/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });

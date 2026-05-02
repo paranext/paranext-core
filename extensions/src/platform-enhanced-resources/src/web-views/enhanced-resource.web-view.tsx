@@ -483,7 +483,7 @@ export function EnhancedResourceWebView({
       <div
         aria-busy="true"
         aria-label={resourceName}
-        className="tw-flex tw-h-full tw-flex-col tw-gap-3 tw-p-4"
+        className="tw-flex tw-h-[100dvh] tw-flex-col tw-gap-3 tw-p-4"
       >
         <Skeleton className="tw-h-8 tw-w-full" />
         <Skeleton className="tw-h-8 tw-w-full" />
@@ -496,7 +496,7 @@ export function EnhancedResourceWebView({
   const showShellEmpty = tokens === undefined && !scripturePaneError;
 
   return (
-    <div className={cn('tw-flex tw-h-full tw-flex-col tw-bg-background')}>
+    <div className={cn('tw-flex tw-h-[100dvh] tw-flex-col tw-bg-background')}>
       <WarningRibbons
         ribbons={ribbons}
         resourceName={resourceName}

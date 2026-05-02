@@ -1,6 +1,6 @@
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs } from './test-helpers';
+import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 
 // Feature: enhanced-resources
 // Work Package: UI-PKG-002: DictionaryTab (Research Pane)
@@ -37,26 +37,12 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
    * to match the registered command name.
    */
   async function openDictionaryTab(mainPage: import('@playwright/test').Page) {
-    await waitForAppReady(mainPage);
-
-    // Open the Enhanced Resource window through visible main menu.
-    await mainPage.getByRole('menuitem', { name: /Resources/i }).click();
-    await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
-
-    // Wait for the webview tab to appear in the dock.
-    const dockTab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
-    await expect(dockTab).toBeVisible({ timeout: 15_000 });
-
-    // Frame for the webview body. The title comes from %enhancedResources_shell_title% so we
-    // match loosely on "Enhanced Resource".
-    const frame = mainPage.frameLocator('iframe[title*="Enhanced Resource"]');
-
+    await openEnhancedResource(mainPage);
+    const frame = mainPage.frameLocator('iframe[title="Enhanced Resource"]');
     // Lower-toolbar tab trigger; aria-label is the localized "Dictionary" string.
     await frame.getByRole('tab', { name: /Dictionary/i }).click();
-
     // Confirm the tab body mounted.
     await expect(frame.getByTestId('dictionary-tab')).toBeVisible({ timeout: 10_000 });
-
     return frame;
   }
 
@@ -66,38 +52,34 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
 
   // @scenario TS-060
   // BHV-354 (BeforeNavigate URL Routing — entry into the tab via main menu navigation)
-  test.fixme(
-    'should reach DictionaryTab through the Enhanced Resource window menu',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should reach DictionaryTab through the Enhanced Resource window menu', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      // Step 1: Open the menu group that hosts the Enhanced Resource launcher (UI-PKG-009).
-      await mainPage.getByRole('menuitem', { name: /Resources/i }).click();
-      // EVD-020 (pre): menu opened with launcher visible.
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-002/EVD-020a-menu-open.png',
-      });
+    // Step 1: Open the menu group that hosts the Enhanced Resource launcher (UI-PKG-009).
+    await mainPage.getByRole('menuitem', { name: /^Platform$/i }).click();
+    // EVD-020 (pre): menu opened with launcher visible.
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-002/EVD-020a-menu-open.png',
+    });
+    await mainPage.keyboard.press('Escape');
 
-      // Step 2: Click the Enhanced Resource launcher.
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+    // Step 2 & 3: Open ER (helper handles menu navigation + auto-show guide dismissal).
+    await openEnhancedResource(mainPage);
 
-      // Step 3: Webview dock tab appears.
-      const dockTab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
-      await expect(dockTab).toBeVisible({ timeout: 15_000 });
+    // Step 4: Switch to the Dictionary tab via visible UI (lower toolbar tabs).
+    const frame = mainPage.frameLocator('iframe[title*="Enhanced Resource"]');
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
 
-      // Step 4: Switch to the Dictionary tab via visible UI (lower toolbar tabs).
-      const frame = mainPage.frameLocator('iframe[title*="Enhanced Resource"]');
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    // Step 5: Dictionary tab body is visible.
+    await expect(frame.getByTestId('dictionary-tab')).toBeVisible({ timeout: 10_000 });
 
-      // Step 5: Dictionary tab body is visible.
-      await expect(frame.getByTestId('dictionary-tab')).toBeVisible({ timeout: 10_000 });
-
-      // EVD-020: Dictionary tab active with header visible.
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-002/EVD-020-tab-active.png',
-      });
-    },
-  );
+    // EVD-020: Dictionary tab active with header visible.
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-002/EVD-020-tab-active.png',
+    });
+  });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Category 2: Render
@@ -105,7 +87,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
 
   // @scenario TS-060, TS-069
   // BHV-353/-354/-364 (DictionaryTab structure + dictionary label visible)
-  test.fixme('should render the Dictionary tab structural elements', async ({ mainPage }) => {
+  test('should render the Dictionary tab structural elements', async ({ mainPage }) => {
     const frame = await openDictionaryTab(mainPage);
 
     // Tab container present.

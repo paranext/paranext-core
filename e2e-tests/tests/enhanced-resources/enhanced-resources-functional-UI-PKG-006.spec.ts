@@ -1,6 +1,6 @@
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs } from './test-helpers';
+import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 
 // Feature: enhanced-resources
 // Work Package: UI-PKG-006: ArticleViewer (Encyclopedia Article Overlay) [Revised: 2026-04-14, Theme 14]
@@ -40,10 +40,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-006: ArticleViewer)',
     // Navigate via visible UI: top-level menu -> Enhanced Resources entry.
     // Naming is intentionally loose; component-builder may tighten when launcher (UI-PKG-009)
     // ships its final menu strings.
-    const menuTrigger = mainPage.getByRole('menuitem', { name: /Resources?|View|Tools/i }).first();
-    await menuTrigger.click();
-    const featureItem = mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).first();
-    await featureItem.click();
+    await openEnhancedResource(mainPage);
 
     const tab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
     await expect(tab).toBeVisible({ timeout: 15_000 });
@@ -76,16 +73,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-006: ArticleViewer)',
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      const menuTrigger = mainPage
-        .getByRole('menuitem', { name: /Resources?|View|Tools/i })
-        .first();
-      await menuTrigger.click();
-
-      const featureItem = mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).first();
-      await featureItem.click();
-
-      const tab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
-      await expect(tab).toBeVisible({ timeout: 15_000 });
+      await openEnhancedResource(mainPage);
 
       const frame = mainPage.frameLocator('iframe[title="Enhanced Resource"]');
 
@@ -143,15 +131,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-006: ArticleViewer)',
 
       // Navigate and trigger the article viewer; if articleData is undefined, the loading skeleton
       // is shown (per article-viewer.component.tsx, when articleData is undefined).
-      const menuTrigger = mainPage
-        .getByRole('menuitem', { name: /Resources?|View|Tools/i })
-        .first();
-      await menuTrigger.click();
-      const featureItem = mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).first();
-      await featureItem.click();
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+      await openEnhancedResource(mainPage);
 
       const frame = mainPage.frameLocator('iframe[title="Enhanced Resource"]');
       await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
@@ -441,15 +421,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-006: ArticleViewer)',
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      const menuTrigger = mainPage
-        .getByRole('menuitem', { name: /Resources?|View|Tools/i })
-        .first();
-      await menuTrigger.click();
-      const featureItem = mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).first();
-      await featureItem.click();
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+      await openEnhancedResource(mainPage);
 
       const frame = mainPage.frameLocator('iframe[title="Enhanced Resource"]');
       await frame.getByRole('tab', { name: /Encyclopedia/i }).click();

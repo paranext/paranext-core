@@ -40,23 +40,17 @@
  *   nature of media entries (BHV-612) means lemma/translit fields aren't required, but we assert
  *   the parent-formatted `referenceLabel` is rendered.
  *
- * Pre-implementation: every test is wrapped in `test.fixme()` until the wiring + menu registration
- * lands. The test bodies are complete - component-builder activates them by removing `.fixme`.
+ * Pre-implementation: every test is wrapped in `test()` until the wiring + menu registration lands.
+ * The test bodies are complete - component-builder activates them by removing `.fixme`.
  */
 
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs } from './test-helpers';
+import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 
 // ============================================================================
 // Constants - selectors and labels used across multiple tests
 // ============================================================================
-
-/** Menu trigger that opens the Enhanced Resource window. Wired in UI-PKG-009. */
-const PARATEXT_MENU_LABEL = /Paratext|Enhanced Resources/i;
-
-/** Menu item that opens the ER window for the active project. Wired in UI-PKG-009. */
-const OPEN_ER_MENU_ITEM_LABEL = /Enhanced Resource|Open Enhanced Resource/i;
 
 /** Title attribute on the WebView iframe (Test Contract: ui-spec-marble-form.md line 585). */
 const ER_WEBVIEW_TITLE = 'Enhanced Resource';
@@ -74,7 +68,7 @@ const SCREENSHOT_DIR = 'proofs/component-evidence/UI-PKG-004';
  * Open the Enhanced Resource window via the visible Paratext menu.
  *
  * Expects the menu wiring from UI-PKG-009 to be active. Until that lands the test will fail at the
- * menu-click step - which is why every test in this file is `test.fixme()`.
+ * menu-click step - which is why every test in this file is `test()`.
  */
 async function openEnhancedResourceWindow(
   // Playwright `Page` type is reachable via the `cdp.fixture` typing, but importing it here would
@@ -83,8 +77,7 @@ async function openEnhancedResourceWindow(
   mainPage: any,
 ) {
   await waitForAppReady(mainPage);
-  await mainPage.getByRole('menuitem', { name: PARATEXT_MENU_LABEL }).click();
-  await mainPage.getByRole('menuitem', { name: OPEN_ER_MENU_ITEM_LABEL }).click();
+  await openEnhancedResource(mainPage);
   const tab = mainPage.locator('.dock-tab', { hasText: ER_DOCK_TAB_LABEL });
   await expect(tab).toBeVisible({ timeout: 15_000 });
 }

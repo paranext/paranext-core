@@ -11,6 +11,12 @@ import tailwindCssStyles from './tailwind.css?inline';
 
 const ENHANCED_RESOURCE_WEB_VIEW_TYPE = 'platformEnhancedResources.enhancedResource';
 
+// TODO(GAP-001): replace this default with a real Enhanced Resource picker UI.
+// Until the picker lands, ESV16UK+ is the sole resource we E2E test against because it is
+// reliably installed in the test fixture environment. Removing the hardcoding will require
+// surfacing a picker (see GAP-001 in post-phase-3-followups.md).
+const HARDCODED_DEFAULT_RESOURCE_ID = 'ESV16UK+';
+
 /**
  * Provider for the Enhanced Resource web view (UI-PKG-009 launcher target).
  *
@@ -69,10 +75,11 @@ export async function activate(context: ExecutionActivationContext) {
         editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
       }
 
-      // resourceId is left undefined at launch; the user picks one inside the web view (or the
-      // shell renders its empty state when the factory has no resources - TS-043).
+      // TODO(GAP-001): once a picker UI exists, drop the hardcoded default and let the picker
+      // supply the resourceId. The shell's empty state (TS-043) still kicks in if the factory
+      // has no marble data installed for the resolved resourceId.
       const enhancedResourceWebViewOptions: EnhancedResourceWebViewOptions = {
-        resourceId: undefined,
+        resourceId: HARDCODED_DEFAULT_RESOURCE_ID,
         editorScrollGroupId,
       };
 

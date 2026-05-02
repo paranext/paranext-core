@@ -1,7 +1,7 @@
 /**
  * Functional E2E tests for UI-PKG-005: MediaViewer (In-Tab Image Viewer).
  *
- * RED phase — every test uses `test.fixme()` until the integration wiring lands.
+ * RED phase — every test uses `test()` until the integration wiring lands.
  *
  * The MediaViewer is a centered shadcn Dialog (per-PR-2209 / Theme 14 revision: an in-tab Drawer
  * was the original spec, now superseded by a centered Dialog so the image fills the viewport). It
@@ -27,7 +27,7 @@
  */
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs } from './test-helpers';
+import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 
 const SCREENSHOT_DIR = 'proofs/component-evidence/UI-PKG-005';
 const ENHANCED_RESOURCE_FRAME_TITLE = 'Enhanced Resource';
@@ -46,8 +46,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
     await waitForAppReady(mainPage);
 
     // Open the Enhanced Resource window from the main Platform.Bible menu (UI-PKG-009).
-    await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-    await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+    await openEnhancedResource(mainPage);
 
     // The ER window appears as a dock tab.
     const erTab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
@@ -89,8 +88,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
       await waitForAppReady(mainPage);
 
       // Open ER → Media tab → first entry → Maximize.
-      await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -132,8 +130,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -174,8 +171,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -217,8 +213,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -247,8 +242,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
   test.fixme('should zoom in when Zoom In is clicked (BHV-453)', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
-    await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-    await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+    await openEnhancedResource(mainPage);
     await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
       timeout: 15_000,
     });
@@ -287,8 +281,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
   test.fixme('should zoom out when Zoom Out is clicked', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
-    await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-    await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+    await openEnhancedResource(mainPage);
     await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
       timeout: 15_000,
     });
@@ -317,8 +310,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -349,8 +341,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
   test.fixme('should disable Zoom Out at 100% (zoomLevel <= 1.0)', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
-    await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-    await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+    await openEnhancedResource(mainPage);
     await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
       timeout: 15_000,
     });
@@ -371,8 +362,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -397,8 +387,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
@@ -431,8 +420,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
     async ({ mainPage }) => {
       await waitForAppReady(mainPage);
 
-      await mainPage.getByRole('menuitem', { name: /Platform\.bible/i }).click();
-      await mainPage.getByRole('menuitem', { name: /Enhanced Resource/i }).click();
+      await openEnhancedResource(mainPage);
       await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
         timeout: 15_000,
       });
