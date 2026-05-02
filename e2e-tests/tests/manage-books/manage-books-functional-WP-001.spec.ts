@@ -19,16 +19,15 @@
  * - `extensions/src/platform-scripture/src/types/platform-scripture.d.ts` (open-command declaration)
  * - `extensions/src/platform-scripture/contributions/localizedStrings.json`
  *
- * Selector strategy: The cherry-picked component does NOT define `data-testid` attributes. Tests
- * therefore rely on: - Accessible names: button text, `aria-label`, `role="listbox"` /
- * `role="option"` for the grid. - The `data-book="{BOOK_ID}"` attribute on each grid pill `<li>`
- * (line 1846 of the component). - The `role="alertdialog"` attribute on the destructive-confirm /
- * preflight / overlap modals. - ToggleGroupItem `value=` attributes for the action toggle
- * (view/create/import/copy/delete). Follow-up for component-builder: add
- * `data-testid="manage-books-dialog"` (root), `action-toggle`,
- * `action-toggle-{view|create|import|copy|delete}`, `book-pill-{ID}`, `apply-button`,
- * `cancel-button`, `delete-confirm-dialog`, `usx-confirm-dialog`, `overlap-error-dialog`,
- * `result-panel` so tests can become more resilient. Recorded in functional-test-plan-WP-001.md.
+ * Selector strategy: The rebuilt sidebar-driven component exposes `data-testid` hooks on the
+ * sidebar rows, so tests target action modes via:
+ * `manage-books-sidebar-section-{show|create|copy|import|delete}` (one row per mode; `show` is the
+ * View-mode entry). Other elements still rely on accessible names / roles:
+ *
+ * - Accessible names: button text, `aria-label`, `role="listbox"` / `role="option"` for the grid.
+ * - The `data-book="{BOOK_ID}"` attribute on each grid pill `<li>`.
+ * - The `role="alertdialog"` attribute on the destructive-confirm / preflight / overlap modals.
+ * - Project picker: `data-testid="manage-books-sidebar-project-trigger"`.
  *
  * Conventions:
  *

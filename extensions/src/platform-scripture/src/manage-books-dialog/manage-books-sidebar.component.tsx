@@ -234,10 +234,12 @@ export function ManageBooksSidebar({
             isDisabled={isSubmitting}
             ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
             // Fallback when the project list is still loading or the active projectId hasn't
-            // landed in the list yet — show the projectId itself so the trigger is never blank.
-            buttonPlaceholder={
-              projectId || t('%manageBooks_copy_sourcePlaceholder%', 'Select project')
-            }
+            // landed in the list yet. We deliberately do NOT echo `projectId` here — projectIds
+            // are GUIDs and would render as a 32-char hex string in the trigger, which the
+            // verifier flagged as unreadable. The localized "Select project" string is the
+            // correct momentary fallback; once `projects` resolves and contains `projectId`,
+            // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16").
+            buttonPlaceholder={t('%manageBooks_copy_sourcePlaceholder%', 'Select project')}
           />
         </div>
       </div>
