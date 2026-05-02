@@ -1168,7 +1168,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 };
             }
 
-            // Check if extension setting is a non-string type
+            // Check if extension setting is a supported non-string type
             bool? defaultBool = null;
             try
             {
@@ -1189,7 +1189,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     "FALSE" => false,
                     "T" => true,
                     "TRUE" => true,
-                    _ => defaultBool,
+                    _ => settingValue,
                 };
             }
 
