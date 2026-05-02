@@ -25,6 +25,9 @@
  * pattern from WP-001 tests). The "method" Select dropdown has no aria-label; we identify it via
  * the `id="af-method"` button. Behavioral assertions are unchanged.
  */
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type { FrameLocator, Locator, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
@@ -32,6 +35,45 @@ import { waitForAppReady } from '../../fixtures/helpers';
 const EVIDENCE_DIR = 'proofs/component-evidence/WP-002';
 const MANAGE_BOOKS_FRAME = 'iframe[title*="Manage Books" i]';
 const MENU_LABEL_REGEX = /Manage Books/i;
+
+/**
+ * WF-002 (P3U.1 verdict): The four Category 9 mutating tests rely on specific rotation projects
+ * starting WITHOUT the book each test creates (so the book is in the Create universe). The
+ * `manageBooks.createBooks` PAPI command writes USFM stub files to disk that PERSIST across
+ * `./.erb/scripts/refresh.sh` restarts (refresh only clears in-memory app state, not the project
+ * filesystem under `~/.platform.bible/projects/Paratext 9 Projects/`). After a previous full-suite
+ * run, those stubs leak into subsequent runs and break the ESG-missing / GEN-missing precondition.
+ *
+ * Each entry maps a rotation project to the SFM file the test would create. If the file already
+ * exists the test would mis-route (ESG already present → ESG hidden from Create universe → click
+ * fails with a confusing locator-timeout). This pre-flight check converts that silent failure into
+ * a precise skip with a remediation hint.
+ *
+ * Cleanup procedure (manual; matches the WF-002 task in the verdict):
+ *
+ * ```bash
+ * rm -v "~/.platform.bible/projects/Paratext 9 Projects/RH2/70ESGRH2.SFM"
+ * rm -v "~/.platform.bible/projects/Paratext 9 Projects/ROT/01GENROT.SFM"
+ * cp "~/.platform.bible/projects/Paratext 9 Projects/RH2/Settings.xml.BAK" \
+ *    "~/.platform.bible/projects/Paratext 9 Projects/RH2/Settings.xml"
+ * cp "~/.platform.bible/projects/Paratext 9 Projects/ROT/Settings.xml.BAK" \
+ *    "~/.platform.bible/projects/Paratext 9 Projects/ROT/Settings.xml"
+ * # then restart: ./.erb/scripts/refresh.sh
+ * ```
+ *
+ * Listed projects are the rotation fixtures from Category 9 tests (lines 524, 545, 567, 588). Each
+ * Category 9 test must use a project distinct from the others to avoid in-suite cross-contamination
+ * — the cleanup above handles cross-suite contamination from earlier runs.
+ */
+const ROTATION_FIXTURES_REQUIRING_MISSING_BOOK: ReadonlyArray<{
+  project: string;
+  bookFile: string;
+}> = [
+  { project: 'MP1', bookFile: '70ESGMP1.SFM' },
+  { project: 'wgPIDGIN', bookFile: '70ESGwgPIDGIN.SFM' },
+  { project: 'RH2', bookFile: '70ESGRH2.SFM' },
+  { project: 'ROT', bookFile: '01GENROT.SFM' },
+];
 
 /**
  * Open the unified Manage Books dialog from the Tools/Project menu, switch the project header to
@@ -118,6 +160,30 @@ async function openPickerFromCreateFlow(mainPage: Page, frame: FrameLocator): Pr
 }
 
 test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
+  /**
+   * WF-002 fixture-state pre-flight (defensive). Detects rotation-project pollution from prior test
+   * runs and skips the entire describe with a clear remediation message rather than letting
+   * individual Category 9 tests fail with mysterious locator timeouts. See
+   * ROTATION_FIXTURES_REQUIRING_MISSING_BOOK above for the cleanup procedure.
+   */
+  test.beforeAll(() => {
+    const projectsRoot = join(homedir(), '.platform.bible', 'projects', 'Paratext 9 Projects');
+    const polluted = ROTATION_FIXTURES_REQUIRING_MISSING_BOOK.filter(({ project, bookFile }) =>
+      existsSync(join(projectsRoot, project, bookFile)),
+    );
+    if (polluted.length > 0) {
+      const detail = polluted.map((p) => `  - ${p.project}/${p.bookFile}`).join('\n');
+      // The skip reason is surfaced in Playwright's report and the terminal output, so the
+      // remediation hint is visible without a separate console.warn.
+      const reason =
+        `WF-002: rotation fixture pollution detected — prior test run left USFM stubs on disk:\n${detail}\n` +
+        `These break the missing-book precondition for Category 9 mutating tests. ` +
+        `Delete the stub files (and restore Settings.xml from .BAK) before re-running. ` +
+        `See block comment on ROTATION_FIXTURES_REQUIRING_MISSING_BOOK for the cleanup procedure.`;
+      test.skip(true, reason);
+    }
+  });
+
   /**
    * Close all non-Home tabs before each test so dock layout state from a previous test does not
    * leak in (Platform.Bible persists dock layout per user-data dir). Press Escape first to dismiss
