@@ -22,10 +22,14 @@ const config = defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    // Default viewport for screenshots — matches the visual-verification skill's pw-server.mjs and
-    // is enforced by cdp.fixture.ts. Anything smaller produces reviews-by-vibes (a tiny screenshot
-    // can pass `toBeVisible` checks but hides most of the UI). See cdp.fixture.ts module docblock.
-    viewport: { width: 1920, height: 1080 },
+    // NOTE: a `viewport: { width: 1920, height: 1080 }` setting was previously here. Playwright's
+    // `use.viewport` is applied to pages CREATED by the test framework inside a browser context.
+    // For pages obtained via `connectOverCDP` (already-running Electron renderer), the config
+    // viewport is NOT retroactively applied — Playwright never gets to call `setViewportSize`
+    // during page creation because the page already exists. Viewport enforcement therefore happens
+    // exclusively in `cdp.fixture.ts` via an explicit `setViewportSize` + an `evaluate()`
+    // verification that reads the renderer's actual `window.innerWidth` / `innerHeight`. See
+    // `cdp.fixture.ts` module docblock for the full enforcement chain.
   },
   outputDir: './test-results',
   // NO globalSetup/globalTeardown — app is already running

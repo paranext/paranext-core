@@ -24,11 +24,20 @@
  *
  * - The fixture explicitly excludes `devtools://` URLs when finding the renderer page (so connecting
  *   to a DevTools page is impossible).
- * - The fixture calls `setViewportSize({ width: 1920, height: 1080 })` after connecting so
- *   screenshots capture the Full HD layout regardless of the underlying Electron window size.
- * - Tests can call `assertFullHdScreenshot(path)` after a `screenshot()` to guarantee evidence
- *   dimensions are at least 1920x1080. Smaller PNGs FAIL the test, no matter how nice the partial
- *   UI looks.
+ * - The fixture calls `setViewportSize({ width: 1920, height: 1080 })` after connecting AND verifies
+ *   the actual rendered viewport via `page.evaluate(() => ({ width: window.innerWidth, height:
+ *   window.innerHeight }))`. The `evaluate()` reading runs IN the renderer and reflects the real
+ *   constrained-by-OS-window viewport, unlike `page.viewportSize()` which only echoes Playwright's
+ *   cached requested-value.
+ * - The fixture wraps `page.screenshot` to auto-validate PNG dimensions against the Full HD minimum
+ *   the moment the file lands on disk. Tests do NOT need to call `assertFullHdScreenshot` manually
+ *   — it runs automatically for every `screenshot({ path })` whose path is OUTSIDE Playwright's
+ *   `test-results/` output directory (failure-capture screenshots that Playwright takes via
+ *   `screenshot: 'only-on-failure'` are intentionally exempted so the dimension assertion never
+ *   masks the real failure cause).
+ * - The exported `assertFullHdScreenshot(path)` helper remains available for ad-hoc validation of
+ *   PNGs written outside the fixture (e.g. from the visual-verification skill or from CI artifact
+ *   checks). Inside the fixture's `screenshot()` calls, it is already automatic.
  *
  * Prerequisite: Platform.Bible running with --remote-debugging-port=9223
  */
@@ -83,8 +92,19 @@ function readPngDimensions(filePath: string): { width: number; height: number } 
  * the assertion regardless of UI content — this defends against reviews-by-vibes when
  * DevTools-shrunk or default-window-sized screenshots slip into the evidence directory.
  *
- * @example Await mainPage.screenshot({ path: 'proofs/foo.png' });
- * assertFullHdScreenshot('proofs/foo.png');
+ * Inside the fixture, the wrapped `page.screenshot()` calls this automatically for every
+ * evidence-path screenshot. Use this helper directly only for PNGs written **outside** the fixture
+ * (e.g. from the `visual-verification` skill, post-test CI artifact validators, or other tooling
+ * that produces PNGs without going through `mainPage.screenshot()`).
+ *
+ * @example
+ *
+ * ```ts
+ * import { assertFullHdScreenshot } from './fixtures/cdp.fixture';
+ *
+ * // Validating a PNG produced outside the cdp.fixture page.screenshot() wrapper:
+ * assertFullHdScreenshot('/path/to/external-tool-output.png');
+ * ```
  */
 export function assertFullHdScreenshot(filePath: string): void {
   const { width, height } = readPngDimensions(filePath);
@@ -101,6 +121,21 @@ export function assertFullHdScreenshot(filePath: string): void {
       `Likely cause: the renderer window is smaller than 1920x1080 OR DevTools is docked. ` +
       `Resize the Electron window OR close DevTools and re-run. Tiny screenshots always FAIL.`,
   ).toBeGreaterThanOrEqual(MIN_SCREENSHOT_HEIGHT);
+}
+
+/**
+ * Decide whether a screenshot path should be dimension-validated. Returns `false` when the path is
+ * inside Playwright's test-output directory (`test-results/`, `playwright-report/`) — those are
+ * diagnostic captures from the test runner (e.g. `screenshot: 'only-on-failure'`) which we do NOT
+ * want to fail on a dimension mismatch (that would mask the real failure cause). Every other path —
+ * relative or absolute, in `proofs/`, `/tmp/`, or anywhere else a caller chose — IS validated.
+ */
+function shouldValidateScreenshotPath(path: string): boolean {
+  // Normalise separators so the same check works on Windows + POSIX.
+  const normalised = path.replace(/\\/g, '/');
+  if (normalised.includes('/test-results/')) return false;
+  if (normalised.includes('/playwright-report/')) return false;
+  return true;
 }
 
 export interface CdpFixtures {
@@ -163,17 +198,19 @@ export const test = base.extend<CdpFixtures>({
     // docblock for the full failure-mode discussion.
     await page.setViewportSize({ width: MIN_SCREENSHOT_WIDTH, height: MIN_SCREENSHOT_HEIGHT });
 
-    // Sanity check: confirm the viewport actually applied. setViewportSize on a CDP-connected page
-    // can silently fail under certain configurations; better to throw here than to silently accept
-    // tiny screenshots downstream.
-    const actualSize = page.viewportSize();
-    if (
-      !actualSize ||
-      actualSize.width < MIN_SCREENSHOT_WIDTH ||
-      actualSize.height < MIN_SCREENSHOT_HEIGHT
-    ) {
+    // Sanity check: confirm the viewport ACTUALLY applied at the renderer level — not just at
+    // Playwright's bookkeeping. `page.viewportSize()` returns the cached requested-value (it just
+    // echoes back what we asked for), so it cannot detect the case where the OS window is smaller
+    // than the requested viewport (CDP can't grow a viewport past the OS window size). The only
+    // reliable signal is reading `window.innerWidth` / `window.innerHeight` IN the renderer via
+    // `page.evaluate()` — those properties reflect the actual rendered viewport.
+    const actualSize = await page.evaluate(() => ({
+      width: window.innerWidth,
+      height: window.innerHeight,
+    }));
+    if (actualSize.width < MIN_SCREENSHOT_WIDTH || actualSize.height < MIN_SCREENSHOT_HEIGHT) {
       throw new Error(
-        `cdp.fixture: viewport enforcement failed — page reports ${actualSize?.width}x${actualSize?.height}, ` +
+        `cdp.fixture: viewport enforcement failed — renderer reports ${actualSize.width}x${actualSize.height}, ` +
           `expected at least ${MIN_SCREENSHOT_WIDTH}x${MIN_SCREENSHOT_HEIGHT}. Likely cause: the ` +
           `Electron window itself is smaller than the requested viewport (CDP cannot grow a viewport ` +
           `past the OS window size). Resize the Electron window before running tests, or restart the ` +
@@ -187,8 +224,19 @@ export const test = base.extend<CdpFixtures>({
     // with a precise dimension report. This enforces "small screenshots are failures, no matter
     // how nice the UI looks" without requiring per-test assertion calls.
     //
-    // Only screenshots written to a `path` are validated (returned-buffer screenshots have no file
-    // to dimension-check; those are typically used for inline diff snapshots, not evidence).
+    // Two important exemptions:
+    //
+    //   (1) Screenshots without a `path` (returned-buffer screenshots — typically used for inline
+    //       diff snapshots, not evidence) are not file-system-validated.
+    //   (2) Playwright's `screenshot: 'only-on-failure'` test-runner feature uses the public
+    //       `page.screenshot()` API, which our wrapper would otherwise intercept. Failure-capture
+    //       screenshots are diagnostic, not evidence — and if a test failure happens BEFORE the
+    //       fixture's viewport-set completes, the failure-capture would be small and our assertion
+    //       would mask the real failure cause. We therefore skip the dimension assertion when the
+    //       path falls inside Playwright's `test-results/` output directory (the configured
+    //       outputDir in `playwright-cdp.config.ts`). Evidence screenshots all live in `proofs/`
+    //       OR another caller-chosen path, so this exemption only catches Playwright's internal
+    //       failure captures.
     //
     // Implementation note: Playwright's `Page.screenshot` overloads (with-options vs no-args, with
     // and without `path`) make a fully-typed wrapper noisy. We reuse Playwright's exported
@@ -199,7 +247,11 @@ export const test = base.extend<CdpFixtures>({
       options?: PageScreenshotOptions,
     ): Promise<Buffer> {
       const result = await originalScreenshot(options);
-      if (options && typeof options.path === 'string') {
+      if (
+        options &&
+        typeof options.path === 'string' &&
+        shouldValidateScreenshotPath(options.path)
+      ) {
         assertFullHdScreenshot(options.path);
       }
       return result;
