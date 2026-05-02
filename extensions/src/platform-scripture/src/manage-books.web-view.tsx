@@ -20,20 +20,22 @@
 import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
+import { Canon } from '@sillsdev/scripture';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ProjectSelectorProject } from 'platform-bible-react';
+import { getErrorMessage } from 'platform-bible-utils';
 import {
-  ManageBooksAlertEntry as AlertEntry,
+  AlertEntry,
+  EstherTemplate,
   ManageBooksCreateMethod,
   ManageBooksDialog,
   ManageBooksDialogBookInfo,
   ManageBooksDialogProject,
-  ManageBooksEstherTemplate as EstherTemplate,
   ManageBooksImportFile,
   ManageBooksImportStrategy,
-  ManageBooksMutationResult as MutationResult,
+  MutationResult,
   MANAGE_BOOKS_DIALOG_STRING_KEYS,
-} from 'platform-bible-react';
-import { Canon } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+} from './manage-books-dialog/manage-books-dialog.component';
 import {
   GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS,
   GreekEstherTemplate,
@@ -408,6 +410,45 @@ global.webViewComponent = function ManageBooksWebView({
     };
   }, [manageBooksApi, projectId]);
 
+  // ===== Sidebar projects (via ProjectSelector) ==============================
+  // The rebuilt sidebar uses the cherry-picked `<ProjectSelector>` (commit `555de7cfdd`)
+  // for the project picker. ProjectSelector consumes a richer `ProjectSelectorProject`
+  // shape than `ManageBooksDialogProject`, so we wrap `manageBooksApi.filterProjects` —
+  // the same source the original `loadProjects` callback uses, ensuring the sidebar list
+  // and the dialog's internal project list stay in lockstep (e.g. ESVUS16 / shared
+  // scripture projects show up in both).
+  const [sidebarProjects, setSidebarProjects] = useState<readonly ProjectSelectorProject[]>([]);
+  useEffect(() => {
+    if (!manageBooksApi) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await manageBooksApi.filterProjects({ purpose: 'AllScripture' });
+        const enriched: ProjectSelectorProject[] = await Promise.all(
+          result.projects.map(async (p) => {
+            // Mirror loadProjects: try platform.fullName for the human-friendly long name; fall
+            // back to the wire short name when unavailable.
+            let fullName = p.name;
+            try {
+              const pdp = await papi.projectDataProviders.get('platform.base', p.projectId);
+              const fnSetting = await pdp.getSetting('platform.fullName');
+              if (typeof fnSetting === 'string' && fnSetting.length > 0) fullName = fnSetting;
+            } catch {
+              // best-effort; fall through with wire-name as full name
+            }
+            return { id: p.projectId, shortName: p.name, fullName };
+          }),
+        );
+        if (!cancelled) setSidebarProjects(enriched);
+      } catch (err) {
+        logger.warn(`manage-books: sidebarProjects fetch failed: ${getErrorMessage(err)}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [manageBooksApi]);
+
   // ===== Mutation result routing → toasts ====================================
   const onMutationResult = useCallback((result: MutationResult) => {
     const entries: AlertEntry[] = [...result.errors, ...result.warnings];
@@ -618,6 +659,7 @@ global.webViewComponent = function ManageBooksWebView({
         onOpenEstherPicker={onOpenEstherPicker}
         isSharedProject={isSharedProject}
         localizedStrings={localizedStrings}
+        sidebarProjects={sidebarProjects}
       />
       <GreekEstherTemplatePicker
         open={pickerOpen}

@@ -158,11 +158,17 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
 
     // Action toggle: 5 ToggleGroupItems (view/create/import/copy/delete). Each renders the
     // localized label as button text; default is `view`.
-    await expect(frame.locator('[data-testid="action-toggle-view"]')).toBeVisible();
-    await expect(frame.locator('[data-testid="action-toggle-create"]')).toBeVisible();
-    await expect(frame.locator('[data-testid="action-toggle-import"]')).toBeVisible();
-    await expect(frame.locator('[data-testid="action-toggle-copy"]')).toBeVisible();
-    await expect(frame.locator('[data-testid="action-toggle-delete"]')).toBeVisible();
+    await expect(frame.locator('[data-testid="manage-books-sidebar-section-show"]')).toBeVisible();
+    await expect(
+      frame.locator('[data-testid="manage-books-sidebar-section-create"]'),
+    ).toBeVisible();
+    await expect(
+      frame.locator('[data-testid="manage-books-sidebar-section-import"]'),
+    ).toBeVisible();
+    await expect(frame.locator('[data-testid="manage-books-sidebar-section-copy"]')).toBeVisible();
+    await expect(
+      frame.locator('[data-testid="manage-books-sidebar-section-delete"]'),
+    ).toBeVisible();
 
     // Filter input always present (placeholder "Filter books…", aria-label "Filter books").
     await expect(frame.getByRole('textbox', { name: /Filter books/i })).toBeVisible();
@@ -289,7 +295,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame.locator('[data-testid="action-toggle-delete"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').first().click();
 
     // The footer button label adapts: Delete-mode shows "Delete N books from {shortName}"
     // when at least one book is selected, and is disabled when no selection.
@@ -314,7 +320,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
 
     // Switch to Delete mode (universe = present books, so GEN is selectable in any project
     // that has Genesis).
-    await frame.locator('[data-testid="action-toggle-delete"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').first().click();
 
     // The Delete-mode apply footer button should be DISABLED when no books are selected
     // (VAL-103 / TS-056).
@@ -347,7 +353,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
     // Switch to Delete mode and select GEN.
-    await frame.locator('[data-testid="action-toggle-delete"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').first().click();
     await frame.locator('ul[role="listbox"] li[data-book="GEN"]').click();
 
     // Click footer apply -> destructive-confirm modal opens (does NOT fire onDeleteBooks
@@ -392,7 +398,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame.locator('[data-testid="action-toggle-delete"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').first().click();
     await frame.locator('ul[role="listbox"] li[data-book="GEN"]').click();
     await frame
       .locator('footer button')
@@ -427,7 +433,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame.locator('[data-testid="action-toggle-create"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
 
     // Method dropdown (id="af-method") visible in Create mode.
     const methodSelect = frame.locator('#af-method');
@@ -451,7 +457,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame.locator('[data-testid="action-toggle-create"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
 
     // Universe in Create mode is books NOT yet present. We click the first selectable
     // pill instead of hard-coding GEN (which may already exist in every test project).
@@ -483,7 +489,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame.locator('[data-testid="action-toggle-create"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
 
     // Open the method Select and pick "Based on" (referenceText / fromTemplate).
     const methodSelect = frame.locator('#af-method');
@@ -514,7 +520,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame.locator('[data-testid="action-toggle-copy"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-copy"]').click();
 
     // Source-project Select placeholder is "Select project" (per
     // %manageBooks_copy_sourcePlaceholder%).
@@ -544,7 +550,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame.locator('[data-testid="action-toggle-copy"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-copy"]').click();
 
     // Open source picker and pick the first available scripture project (different from
     // current). Copy filterProjects purpose='copySource' will exclude self.
@@ -578,7 +584,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame.locator('[data-testid="action-toggle-copy"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-copy"]').click();
     const sourceTrigger = frame
       .locator('button[role="combobox"]')
       .filter({ hasText: /Select project/i });
@@ -619,12 +625,13 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     // expectation here is that switching to Import mode does NOT immediately revert (per A8
     // — "auto-cancel on no files" only fires AFTER the user cancels the picker; until the
     // picker is dismissed, Import mode is sticky).
-    await frame.locator('[data-testid="action-toggle-import"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-import"]').first().click();
 
-    // The Import action toggle is now active (data-state=on). The action-specific input
-    // area is empty initially (no files loaded).
-    const importToggle = frame.locator('[data-testid="action-toggle-import"]');
-    await expect(importToggle).toHaveAttribute('data-state', 'on');
+    // The Import sidebar section is now the active one. The new sidebar uses
+    // `data-active="true"` (and `aria-current="page"`) for the highlighted row, replacing the
+    // ToggleGroup's `data-state="on"` attribute that the original cherry-pick used.
+    const importToggle = frame.locator('[data-testid="manage-books-sidebar-section-import"]');
+    await expect(importToggle).toHaveAttribute('data-active', 'true');
 
     // EVD-040 / EVD-041 placeholder: Import mode entered, file-picker handed off to host.
     await mainPage.screenshot({
@@ -646,7 +653,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
       await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-      await frame.locator('[data-testid="action-toggle-import"]').first().click();
+      await frame.locator('[data-testid="manage-books-sidebar-section-import"]').first().click();
 
       // Once the file-picker spike lands, this test populates files and verifies the
       // "clear filter" button (the Clear-list affordance, mapped to BHV-320 in the unified
@@ -682,7 +689,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     // selection-preservation contract just as well — the assertion isn't
     // about GEN specifically, it's about selectionsByAction[mode] surviving
     // a mode toggle.
-    await frame.locator('[data-testid="action-toggle-delete"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').first().click();
     const firstDeletablePill = frame.locator('ul[role="listbox"] li[data-book]').first();
     await expect(firstDeletablePill).toBeVisible({ timeout: 10_000 });
     const bookId = await firstDeletablePill.getAttribute('data-book');
@@ -693,7 +700,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
 
     // Switch to Create — selection should not bleed across (selectionsByAction is
     // per-mode).
-    await frame.locator('[data-testid="action-toggle-create"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
     const sameBookInCreate = frame.locator(bookSelector);
     // The book may not even appear in Create mode (universe = books not present).
     // Whatever appears must NOT be aria-checked.
@@ -702,7 +709,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     }
 
     // Switch back to Delete — selection preserved.
-    await frame.locator('[data-testid="action-toggle-delete"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').first().click();
     await expect(frame.locator(bookSelector)).toHaveAttribute('aria-checked', 'true');
   });
 
@@ -722,7 +729,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame.locator('[data-testid="action-toggle-create"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
 
     // Select only a non-canonical book (e.g. XXA / XXB / XXC if present in the universe;
     // they're available in Canon as "extras"). Falls back to selecting "FRT" (Front Matter)
@@ -758,7 +765,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame.locator('[data-testid="action-toggle-create"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
 
     // Pick an arbitrary creatable book.
     const firstCreatablePill = frame.locator('ul[role="listbox"] li[data-book]').first();
@@ -811,7 +818,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
       await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-      await frame.locator('[data-testid="action-toggle-create"]').first().click();
+      await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
 
       // Pick multiple creatable books — at least one of which is unlikely to exist in the
       // chosen model project (the wiring layer fans out validateCreateBooks which surfaces
@@ -871,7 +878,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
       await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-      await frame.locator('[data-testid="action-toggle-create"]').first().click();
+      await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
 
       const firstCreatablePill = frame.locator('ul[role="listbox"] li[data-book]').first();
       await firstCreatablePill.click();
@@ -919,7 +926,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
       await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-      await frame.locator('[data-testid="action-toggle-import"]').first().click();
+      await frame.locator('[data-testid="manage-books-sidebar-section-import"]').first().click();
 
       // The wiring layer's parseImportFiles + checkOverlappingFiles flow surfaces the
       // overlap-error alertdialog when two files claim the same book number. Title key is
@@ -949,7 +956,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
       await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-      await frame.locator('[data-testid="action-toggle-import"]').first().click();
+      await frame.locator('[data-testid="manage-books-sidebar-section-import"]').first().click();
 
       // The USX-confirm dialog (role="alertdialog", title key
       // %manageBooks_import_usxConfirmTitle% — "Import USX files?") fires when any selected
@@ -979,7 +986,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
       await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
       const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-      await frame.locator('[data-testid="action-toggle-import"]').first().click();
+      await frame.locator('[data-testid="manage-books-sidebar-section-import"]').first().click();
 
       // After an import that hits a per-book permission gate, the wiring layer maps
       // result.errors AlertEntry[] into either toasts (per A5 canonical surface) or the
@@ -1064,7 +1071,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame.locator('[data-testid="action-toggle-create"]').first().click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').first().click();
     const firstCreatablePill = frame.locator('ul[role="listbox"] li[data-book]').first();
     await firstCreatablePill.click();
     const createApply = frame

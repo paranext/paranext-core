@@ -9,7 +9,6 @@ import {
   useState,
 } from 'react';
 import {
-  BookOpenCheck,
   BookPlus,
   Copy,
   Download,
@@ -20,34 +19,35 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Canon } from '@sillsdev/scripture';
-import { Dialog, DialogContent } from '@/components/shadcn-ui/dialog';
-import { Button } from '@/components/shadcn-ui/button';
-import { Input } from '@/components/shadcn-ui/input';
-import { Label } from '@/components/shadcn-ui/label';
-import { Checkbox } from '@/components/shadcn-ui/checkbox';
-import { Badge } from '@/components/shadcn-ui/badge';
 import {
+  Badge,
+  Button,
+  Checkbox,
+  cn,
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  Dialog,
+  DialogContent,
+  Input,
+  Label,
+  ProjectSelectorProject,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/shadcn-ui/select';
-import {
+  Sonner,
+  sonner,
+  ToggleGroup,
+  ToggleGroupItem,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/shadcn-ui/tooltip';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from '@/components/shadcn-ui/context-menu';
-import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
-import { Sonner, sonner } from '@/components/shadcn-ui/sonner';
-import { cn } from '@/utils/shadcn-ui.util';
+} from 'platform-bible-react';
+import { ManageBooksSidebar } from './manage-books-sidebar.component';
 import {
   EstherTemplate,
   ManageBooksAction,
@@ -180,6 +180,13 @@ export type ManageBooksDialogProps = {
    * English copy embedded inline.
    */
   localizedStrings?: ManageBooksDialogLocalizedStrings;
+
+  /**
+   * Project list passed to the sidebar's `<ProjectSelector>`. The wiring layer typically derives
+   * this from `papi.projectLookup.getMetadataForAllProjects` and filters to scripture projects.
+   * Defaults to an empty array, which makes the ProjectSelector render an empty popover.
+   */
+  sidebarProjects?: readonly ProjectSelectorProject[];
 };
 
 // --------------------------------------------------------------------------
@@ -243,10 +250,6 @@ const isUsxFileName = (name: string): boolean => {
   const lower = name.toLowerCase();
   return lower.endsWith('.usx') || lower.endsWith('.xml');
 };
-
-/** Narrow runtime check for an action toggle value. */
-const isAction = (v: string): v is ManageBooksAction =>
-  v === 'view' || v === 'create' || v === 'import' || v === 'copy' || v === 'delete';
 
 /** Narrow runtime check for a create-method dropdown value. */
 const isCreateMethod = (v: string): v is ManageBooksCreateMethod =>
@@ -320,6 +323,7 @@ export function ManageBooksDialog({
   isSharedProject = false,
   bookIds,
   localizedStrings = {},
+  sidebarProjects = [],
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
 
@@ -1397,152 +1401,72 @@ export function ManageBooksDialog({
     );
   })();
 
+  if (!open) {
+    // The web view stays mounted but we render nothing when the dialog is "closed".
+    // (In tab mode `open` is always true; this guard preserves the legacy storybook contract.)
+    return undefined;
+  }
   return (
     <>
-      <Dialog
-        open={open}
-        onOpenChange={(v) => (isSubmitting ? undefined : onOpenChange(v))}
-        modal={false}
+      <div
+        className="tw-flex tw-h-full tw-min-h-0"
+        data-testid="manage-books-dialog"
+        data-action={action}
       >
-        <DialogContent
-          className="tw-h-[80vh] tw-w-[95vw] tw-max-w-4xl tw-gap-0 tw-overflow-hidden tw-p-0"
-          onInteractOutside={(e) => e.preventDefault()}
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onFocusOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => {
-            const wrapper = document.querySelector(
-              '[data-radix-popper-content-wrapper][data-state="open"]',
-            );
-            if (wrapper) e.preventDefault();
-          }}
-        >
-          <TooltipProvider delayDuration={200}>
-            <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col">
-              <header className="tw-flex tw-items-center tw-gap-3 tw-border-b tw-px-6 tw-py-4">
-                <BookOpenCheck className="tw-h-5 tw-w-5 tw-text-muted-foreground" aria-hidden />
-                <div className="tw-flex tw-flex-col">
-                  <h2 className="tw-text-lg tw-font-semibold">
-                    {t('%manageBooks_dialog_title%', 'Manage Books')}
-                  </h2>
-                  <p className="tw-text-xs tw-text-muted-foreground">{headerSubtitle}</p>
-                </div>
-                <div className="tw-ml-auto tw-mr-8 tw-flex tw-items-center tw-gap-2">
-                  <Label htmlFor="af-project" className="tw-text-xs tw-text-muted-foreground">
-                    {t('%manageBooks_header_projectLabel%', 'Project')}
-                  </Label>
-                  <Select
-                    value={projectId}
-                    onValueChange={onProjectIdChange}
-                    disabled={isSubmitting}
-                  >
-                    <SelectTrigger id="af-project" className="tw-h-8 tw-w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.shortName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </header>
+        <TooltipProvider delayDuration={200}>
+          <ManageBooksSidebar
+            active={action}
+            onSelectAction={(next) => {
+              if (!isSubmitting) setAction(next);
+            }}
+            projects={sidebarProjects}
+            projectId={projectId}
+            onProjectIdChange={onProjectIdChange}
+            isSubmitting={isSubmitting}
+            t={t}
+          />
+          <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col">
+            <header className="tw-flex tw-items-center tw-gap-3 tw-border-b tw-px-6 tw-py-4">
+              <div className="tw-flex tw-flex-col">
+                <h2 className="tw-text-lg tw-font-semibold">
+                  {t('%manageBooks_dialog_title%', 'Manage Books')}
+                </h2>
+                <p className="tw-text-xs tw-text-muted-foreground">{headerSubtitle}</p>
+              </div>
+            </header>
 
-              <div className="tw-flex tw-flex-col tw-items-start tw-gap-2 tw-border-b tw-px-6 tw-py-3 tw-@container/actions">
-                <ToggleGroup
-                  ref={toggleGroupRef}
-                  type="single"
-                  variant="outline"
-                  value={action}
-                  onValueChange={(v) => {
-                    if (v && !isSubmitting && isAction(v)) setAction(v);
-                  }}
-                  className="tw-gap-0"
-                  data-testid="action-toggle"
-                >
-                  <ToggleGroupItem
-                    value="view"
-                    data-testid="action-toggle-view"
-                    className="tw-h-9 tw-gap-1.5 !tw-rounded-r-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
+            <div
+              ref={toggleGroupRef}
+              className="tw-flex tw-flex-col tw-items-start tw-gap-2 tw-border-b tw-px-6 tw-py-3 tw-@container/actions"
+            >
+              {action === 'view' && (
+                <div className="tw-flex tw-items-center tw-gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="tw-h-8 tw-px-2 tw-text-xs"
+                    onClick={() => onOpenScriptureReferenceSettings(projectId)}
                   >
-                    <BookOpenCheck
-                      className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline"
-                      aria-hidden
-                    />
-                    {t('%manageBooks_action_view%', 'View')}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="create"
-                    data-testid="action-toggle-create"
-                    className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
+                    {t('%manageBooks_view_openScrRefSettings%', 'Scripture reference settings…')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="tw-h-8 tw-px-2 tw-text-xs"
+                    onClick={() => onOpenProjectCanons(projectId)}
                   >
-                    <BookPlus
-                      className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline"
-                      aria-hidden
-                    />
-                    {t('%manageBooks_action_create%', 'Create')}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="import"
-                    data-testid="action-toggle-import"
-                    className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
+                    {t('%manageBooks_view_openProjectCanons%', 'Project canons…')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="tw-h-8 tw-gap-1.5 tw-px-2 tw-text-xs"
+                    onClick={() => onOpenRegistry(projectId)}
                   >
-                    <Download
-                      className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline"
-                      aria-hidden
-                    />
-                    {t('%manageBooks_action_import%', 'Import')}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="copy"
-                    data-testid="action-toggle-copy"
-                    className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
-                  >
-                    <Copy className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline" aria-hidden />
-                    {t('%manageBooks_action_copy%', 'Copy')}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="delete"
-                    data-testid="action-toggle-delete"
-                    className="tw-ml-[-1px] tw-h-9 tw-gap-1.5 !tw-rounded-l-none tw-px-3 data-[state=on]:tw-z-10 data-[state=on]:!tw-bg-primary data-[state=on]:!tw-text-primary-foreground"
-                  >
-                    <Trash2 className="tw-hidden tw-h-4 tw-w-4 @md/actions:tw-inline" aria-hidden />
-                    {t('%manageBooks_action_delete%', 'Delete')}
-                  </ToggleGroupItem>
-                </ToggleGroup>
-
-                {action === 'view' && (
-                  <div className="tw-flex tw-items-center tw-gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="tw-h-8 tw-px-2 tw-text-xs"
-                      onClick={() => onOpenScriptureReferenceSettings(projectId)}
-                    >
-                      {t('%manageBooks_view_openScrRefSettings%', 'Scripture reference settings…')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="tw-h-8 tw-px-2 tw-text-xs"
-                      onClick={() => onOpenProjectCanons(projectId)}
-                    >
-                      {t('%manageBooks_view_openProjectCanons%', 'Project canons…')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="tw-h-8 tw-gap-1.5 tw-px-2 tw-text-xs"
-                      onClick={() => onOpenRegistry(projectId)}
-                    >
-                      {t('%manageBooks_view_openRegistry%', 'Registry')}
-                      <ExternalLink
-                        className="tw-h-3 tw-w-3 tw-text-muted-foreground"
-                        aria-hidden
-                      />
-                    </Button>
-                    {/* F1: DEF-UI-001 stub for "View differences" — Theme C3
+                    {t('%manageBooks_view_openRegistry%', 'Registry')}
+                    <ExternalLink className="tw-h-3 tw-w-3 tw-text-muted-foreground" aria-hidden />
+                  </Button>
+                  {/* F1: DEF-UI-001 stub for "View differences" — Theme C3
                         (FN-008 v2.6.0+, 2026-05-01) replaced the
                         Tooltip-wrapped empty-onClick Button with a true
                         shadcn ContextMenu containing a disabled
@@ -1550,140 +1474,106 @@ export function ManageBooksDialog({
                         affordance; right-click opens the menu, which conveys
                         "not yet available" through a disabled item rather
                         than via a Tooltip on a no-op left-click. */}
-                    <ContextMenu>
-                      <ContextMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="tw-h-8 tw-px-2 tw-text-xs"
-                          aria-haspopup="menu"
-                        >
-                          {t('%manageBooks_view_diff_label%', 'View differences')}
-                        </Button>
-                      </ContextMenuTrigger>
-                      <ContextMenuContent>
-                        <ContextMenuItem disabled>
-                          {t(
-                            '%manageBooks_view_diff_tooltip%',
-                            'View differences (not yet available)',
-                          )}
-                        </ContextMenuItem>
-                      </ContextMenuContent>
-                    </ContextMenu>
-                  </div>
-                )}
-
-                {action === 'create' && (
-                  <div
-                    className="tw-flex tw-items-center tw-gap-2"
-                    style={{ width: toggleGroupWidth }}
-                  >
-                    <Select
-                      value={createMethod}
-                      onValueChange={(v) => {
-                        if (isCreateMethod(v)) setCreateMethod(v);
-                      }}
-                      disabled={isSubmitting}
-                    >
-                      <SelectTrigger id="af-method" className="tw-h-8 tw-min-w-0 tw-flex-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="empty">
-                          {t('%manageBooks_create_method_empty%', 'Empty book')}
-                        </SelectItem>
-                        <SelectItem
-                          value="chapterVerse"
-                          disabled={!cvAllowed}
-                          aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
-                        >
-                          {t(
-                            '%manageBooks_create_method_chapterVerse%',
-                            'With all chapter and verse numbers',
-                          )}
-                        </SelectItem>
-                        <SelectItem value="fromTemplate">
-                          {t('%manageBooks_create_method_referenceText%', 'Based on')}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {!cvAllowed && (
-                      <span id={cvDisabledHintId} className="tw-sr-only">
-                        {t(
-                          '%manageBooks_create_method_chapterVerse_disabledTooltip%',
-                          'Disabled because the selection contains only non-canonical books.',
-                        )}
-                      </span>
-                    )}
-                    {createMethod === 'fromTemplate' && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info
-                            className="tw-h-4 tw-w-4 tw-shrink-0 tw-text-muted-foreground"
-                            aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
-                          />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {t(
-                            '%manageBooks_create_basedOnInfo%',
-                            'Prefill with the same markers as a selected project',
-                          )}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    {createMethod === 'fromTemplate' && (
-                      <Select
-                        value={createReferenceId ?? ''}
-                        onValueChange={(v) => setCreateReferenceId(v || undefined)}
-                        disabled={isSubmitting}
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="tw-h-8 tw-px-2 tw-text-xs"
+                        aria-haspopup="menu"
                       >
-                        <SelectTrigger
-                          id="af-reference"
-                          className={cn(
-                            'tw-h-8 tw-min-w-0 tw-flex-1',
-                            !createReferenceId &&
-                              'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90 [&>span]:tw-text-primary-foreground [&_svg]:tw-text-primary-foreground',
-                          )}
-                        >
-                          <SelectValue
-                            placeholder={t(
-                              '%manageBooks_create_referenceProjectPlaceholder%',
-                              'Select reference project',
-                            )}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {otherProjects.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>
-                              {p.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                )}
+                        {t('%manageBooks_view_diff_label%', 'View differences')}
+                      </Button>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem disabled>
+                        {t(
+                          '%manageBooks_view_diff_tooltip%',
+                          'View differences (not yet available)',
+                        )}
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                </div>
+              )}
 
-                {action === 'copy' && (
-                  <div className="tw-flex tw-items-center tw-gap-2">
-                    <Label htmlFor="af-source" className="tw-text-xs tw-text-muted-foreground">
-                      {t('%manageBooks_copy_fromLabel%', 'From')}
-                    </Label>
+              {action === 'create' && (
+                <div
+                  className="tw-flex tw-items-center tw-gap-2"
+                  style={{ width: toggleGroupWidth }}
+                >
+                  <Select
+                    value={createMethod}
+                    onValueChange={(v) => {
+                      if (isCreateMethod(v)) setCreateMethod(v);
+                    }}
+                    disabled={isSubmitting}
+                  >
+                    <SelectTrigger id="af-method" className="tw-h-8 tw-min-w-0 tw-flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="empty">
+                        {t('%manageBooks_create_method_empty%', 'Empty book')}
+                      </SelectItem>
+                      <SelectItem
+                        value="chapterVerse"
+                        disabled={!cvAllowed}
+                        aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
+                      >
+                        {t(
+                          '%manageBooks_create_method_chapterVerse%',
+                          'With all chapter and verse numbers',
+                        )}
+                      </SelectItem>
+                      <SelectItem value="fromTemplate">
+                        {t('%manageBooks_create_method_referenceText%', 'Based on')}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!cvAllowed && (
+                    <span id={cvDisabledHintId} className="tw-sr-only">
+                      {t(
+                        '%manageBooks_create_method_chapterVerse_disabledTooltip%',
+                        'Disabled because the selection contains only non-canonical books.',
+                      )}
+                    </span>
+                  )}
+                  {createMethod === 'fromTemplate' && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info
+                          className="tw-h-4 tw-w-4 tw-shrink-0 tw-text-muted-foreground"
+                          aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {t(
+                          '%manageBooks_create_basedOnInfo%',
+                          'Prefill with the same markers as a selected project',
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  {createMethod === 'fromTemplate' && (
                     <Select
-                      value={copySourceId ?? ''}
-                      onValueChange={(v) => setCopySourceId(v || undefined)}
+                      value={createReferenceId ?? ''}
+                      onValueChange={(v) => setCreateReferenceId(v || undefined)}
                       disabled={isSubmitting}
                     >
                       <SelectTrigger
-                        id="af-source"
+                        id="af-reference"
                         className={cn(
-                          'tw-h-8 tw-w-52',
-                          !copySourceId &&
+                          'tw-h-8 tw-min-w-0 tw-flex-1',
+                          !createReferenceId &&
                             'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90 [&>span]:tw-text-primary-foreground [&_svg]:tw-text-primary-foreground',
                         )}
                       >
                         <SelectValue
-                          placeholder={t('%manageBooks_copy_sourcePlaceholder%', 'Select project')}
+                          placeholder={t(
+                            '%manageBooks_create_referenceProjectPlaceholder%',
+                            'Select reference project',
+                          )}
                         />
                       </SelectTrigger>
                       <SelectContent>
@@ -1694,435 +1584,463 @@ export function ManageBooksDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                )}
-
-                {action === 'import' && (
-                  <div className="tw-flex tw-items-center tw-gap-2">
-                    <input
-                      ref={importFileInputRef}
-                      type="file"
-                      multiple
-                      accept=".sfm,.usfm,.usx,.xml"
-                      className="tw-hidden"
-                      onChange={(e) => {
-                        handleImportFilesPicked(e.target.files);
-                        e.target.value = '';
-                      }}
-                      aria-hidden
-                    />
-                    <Button
-                      variant={hasInlineFiles ? 'outline' : 'default'}
-                      size="sm"
-                      className="tw-h-8"
-                      onClick={() => {
-                        triggerFileBrowser().catch(() => undefined);
-                      }}
-                      disabled={isSubmitting}
-                    >
-                      <FolderOpen className="tw-mr-1.5 tw-h-3.5 tw-w-3.5" aria-hidden />
-                      {hasInlineFiles
-                        ? t('%manageBooks_import_addMore%', 'Add files…')
-                        : t('%manageBooks_import_choose%', 'Choose files…')}
-                    </Button>
-                    {hasInlineFiles && (
-                      <>
-                        <span className="tw-text-xs tw-text-muted-foreground">
-                          {Object.keys(importFiles).length === 1
-                            ? t('%manageBooks_import_filesMatched_one%', '1 file matched')
-                            : fmt(
-                                t('%manageBooks_import_filesMatched_other%', '{0} files matched'),
-                                Object.keys(importFiles).length,
-                              )}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="tw-h-8"
-                          onClick={() => setImportFiles({})}
-                          disabled={isSubmitting}
-                        >
-                          {t('%manageBooks_import_clearFiles%', 'Clear')}
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="tw-flex tw-flex-nowrap tw-items-center tw-gap-2 tw-border-b tw-px-6 tw-py-2 tw-@container/filterbar">
-                {action !== 'view' && (action !== 'import' || hasInlineFiles) && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span>
-                        <Checkbox
-                          id="af-sel-all"
-                          checked={headerSelectState}
-                          disabled={selectableVisibleBooks.length === 0 || isSubmitting}
-                          onCheckedChange={toggleAllVisible}
-                          aria-label={
-                            visibleSelectedCount > 0
-                              ? fmt(
-                                  t('%manageBooks_selection_xSelected%', '{0} selected'),
-                                  visibleSelectedCount,
-                                )
-                              : t('%manageBooks_selection_selectAll%', 'Select all')
-                          }
-                        />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {visibleSelectedCount > 0
-                        ? fmt(
-                            t('%manageBooks_selection_xSelected%', '{0} selected'),
-                            visibleSelectedCount,
-                          )
-                        : t('%manageBooks_selection_selectAll%', 'Select all')}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                <Input
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                  placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
-                  className="tw-h-8 tw-min-w-0 tw-max-w-xs tw-flex-1 tw-basis-24"
-                  aria-label={t('%manageBooks_filter_books%', 'Filter books')}
-                  disabled={isSubmitting}
-                />
-                <span
-                  className={cn(
-                    'tw-whitespace-nowrap tw-text-xs tw-text-muted-foreground',
-                    action === 'copy' && 'tw-hidden @md/filterbar:tw-inline',
                   )}
-                >
-                  {universe.length === 0
-                    ? t('%manageBooks_filter_zero%', '0 books')
-                    : fmt(
-                        t('%manageBooks_filter_count%', '{0} of {1}'),
-                        visibleBooks.length,
-                        universe.length,
+                </div>
+              )}
+
+              {action === 'copy' && (
+                <div className="tw-flex tw-items-center tw-gap-2">
+                  <Label htmlFor="af-source" className="tw-text-xs tw-text-muted-foreground">
+                    {t('%manageBooks_copy_fromLabel%', 'From')}
+                  </Label>
+                  <Select
+                    value={copySourceId ?? ''}
+                    onValueChange={(v) => setCopySourceId(v || undefined)}
+                    disabled={isSubmitting}
+                  >
+                    <SelectTrigger
+                      id="af-source"
+                      className={cn(
+                        'tw-h-8 tw-w-52',
+                        !copySourceId &&
+                          'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90 [&>span]:tw-text-primary-foreground [&_svg]:tw-text-primary-foreground',
                       )}
-                </span>
-                {action === 'view' && (
-                  <ToggleGroup
-                    type="single"
-                    value={viewPresenceFilter}
-                    onValueChange={(v) => {
-                      if (v && isPresenceFilter(v)) setViewPresenceFilter(v);
-                    }}
-                    className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
-                    data-testid="presence-filter"
-                  >
-                    {(['all', 'new', 'existing'] as const).map((s) => (
-                      <ToggleGroupItem
-                        key={s}
-                        value={s}
-                        data-testid={`presence-filter-${s}`}
-                        className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
-                      >
-                        {filterChipLabel(s)}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
-                )}
-                {action === 'copy' && copySourceId && (
-                  <ToggleGroup
-                    type="single"
-                    value={copyStateFilter}
-                    onValueChange={(v) => {
-                      if (v && isCopyStateFilter(v)) setCopyStateFilter(v);
-                    }}
-                    className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
-                    data-testid="copy-state-filter"
-                  >
-                    {(['all', 'new', 'newer', 'older', 'same', 'undetermined'] as const).map(
-                      (s) => (
-                        <ToggleGroupItem
-                          key={s}
-                          value={s}
-                          data-testid={`copy-state-filter-${s}`}
-                          className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
-                        >
-                          {filterChipLabel(s)}
-                        </ToggleGroupItem>
-                      ),
-                    )}
-                  </ToggleGroup>
-                )}
-                {action === 'import' && (
-                  <ToggleGroup
-                    type="single"
-                    value={importPresenceFilter}
-                    onValueChange={(v) => {
-                      if (v && isPresenceFilter(v)) setImportPresenceFilter(v);
-                    }}
-                    className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
-                    data-testid="import-presence-filter"
-                  >
-                    {(['all', 'new', 'existing'] as const).map((s) => (
-                      <ToggleGroupItem
-                        key={s}
-                        value={s}
-                        data-testid={`import-presence-filter-${s}`}
-                        className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
-                      >
-                        {filterChipLabel(s)}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
-                )}
-              </div>
+                    >
+                      <SelectValue
+                        placeholder={t('%manageBooks_copy_sourcePlaceholder%', 'Select project')}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {otherProjects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-              <div className="tw-min-h-0 tw-flex-1 tw-overflow-auto tw-px-3 tw-py-2">
-                {visibleBooks.length === 0 ? (
-                  <div className="tw-flex tw-min-h-40 tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-text-center tw-text-sm tw-text-muted-foreground">
-                    <span>{emptyStateMessage}</span>
-                    {isFilterEmptyState && (
-                      <Button variant="outline" size="sm" onClick={clearActiveFilters}>
-                        {t('%manageBooks_filter_clearButton%', 'Clear filter')}
-                      </Button>
-                    )}
-                  </div>
-                ) : (
-                  <ul
-                    ref={gridRef}
-                    role="listbox"
-                    aria-multiselectable={action !== 'view'}
-                    aria-label={fmt(
-                      t('%manageBooks_grid_label%', 'Books in {0}'),
-                      project.shortName,
-                    )}
-                    className="tw-flex tw-flex-col tw-gap-0.5 tw-outline-none"
-                    onKeyDown={handleGridKeyDown}
+              {action === 'import' && (
+                <div className="tw-flex tw-items-center tw-gap-2">
+                  <input
+                    ref={importFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".sfm,.usfm,.usx,.xml"
+                    className="tw-hidden"
+                    onChange={(e) => {
+                      handleImportFilesPicked(e.target.files);
+                      e.target.value = '';
+                    }}
+                    aria-hidden
+                  />
+                  <Button
+                    variant={hasInlineFiles ? 'outline' : 'default'}
+                    size="sm"
+                    className="tw-h-8"
+                    onClick={() => {
+                      triggerFileBrowser().catch(() => undefined);
+                    }}
+                    disabled={isSubmitting}
                   >
-                    {visibleBooks.map((book) => {
-                      const isSelected = selected.has(book);
-                      const showCheckbox =
-                        action === 'create' ||
-                        action === 'delete' ||
-                        action === 'copy' ||
-                        (action === 'import' && !!importFiles[book]);
-                      const showCheckboxPlaceholder = action === 'import' && !importFiles[book];
-                      const isMissingInView = action === 'view' && !current.present.has(book);
-                      const compState = getBookComparisonState(book);
-                      // A7 row coloring: greyed for identical, highlight for to-newer.
-                      let rowClass = '';
-                      if (action === 'copy' && compState === 'filesAreSame') {
-                        rowClass = 'tw-text-muted-foreground tw-opacity-60';
-                      } else if (action === 'copy' && compState === 'sourceIsOlder') {
-                        rowClass = 'tw-bg-amber-50 dark:tw-bg-amber-900/20';
-                      }
-                      const focusable =
-                        focusedBook === book ||
-                        (focusedBook === undefined && book === visibleBooks[0]);
-                      return (
-                        <li
-                          key={book}
-                          data-book={book}
-                          role="option"
-                          aria-selected={showCheckbox ? isSelected : undefined}
-                          aria-checked={showCheckbox ? isSelected : undefined}
-                          aria-label={
-                            showCheckbox
-                              ? fmt(
-                                  t('%manageBooks_selection_selectBook%', 'Select {0}'),
-                                  Canon.bookIdToEnglishName(book),
-                                )
-                              : undefined
-                          }
-                          tabIndex={focusable ? 0 : -1}
-                          onFocus={() => setFocusedBook(book)}
-                          onClick={() => {
-                            if (showCheckbox) toggleOne(book);
-                          }}
-                          onKeyDown={(e) => {
-                            if (showCheckbox && (e.key === ' ' || e.key === 'Enter')) {
-                              e.preventDefault();
-                              toggleOne(book);
-                            }
-                          }}
-                          className={cn(
-                            'tw-flex tw-items-center tw-gap-2 tw-rounded-md tw-px-3 tw-py-1.5 tw-text-sm hover:tw-bg-accent/60 focus:tw-outline-2 focus:tw-outline-primary',
-                            isSelected && 'tw-bg-accent',
-                            showCheckbox && 'tw-cursor-pointer',
-                            rowClass,
-                          )}
-                        >
-                          {showCheckbox && (
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => toggleOne(book)}
-                              onClick={(e) => e.stopPropagation()}
-                              aria-label={fmt(
-                                t('%manageBooks_selection_selectBook%', 'Select {0}'),
-                                book,
-                              )}
-                              tabIndex={-1}
-                            />
-                          )}
-                          {showCheckboxPlaceholder && (
-                            <span className="tw-h-4 tw-w-4 tw-shrink-0" aria-hidden />
-                          )}
-                          <div
-                            className={cn(
-                              'tw-flex tw-min-w-0 tw-flex-1 tw-items-baseline tw-gap-2',
-                              isMissingInView && 'tw-text-muted-foreground tw-line-through',
+                    <FolderOpen className="tw-mr-1.5 tw-h-3.5 tw-w-3.5" aria-hidden />
+                    {hasInlineFiles
+                      ? t('%manageBooks_import_addMore%', 'Add files…')
+                      : t('%manageBooks_import_choose%', 'Choose files…')}
+                  </Button>
+                  {hasInlineFiles && (
+                    <>
+                      <span className="tw-text-xs tw-text-muted-foreground">
+                        {Object.keys(importFiles).length === 1
+                          ? t('%manageBooks_import_filesMatched_one%', '1 file matched')
+                          : fmt(
+                              t('%manageBooks_import_filesMatched_other%', '{0} files matched'),
+                              Object.keys(importFiles).length,
                             )}
-                          >
-                            <span className="tw-font-medium">{book}</span>
-                            <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
-                              {Canon.bookIdToEnglishName(book)}
-                            </span>
-                          </div>
-                          <div className="tw-flex tw-shrink-0 tw-items-center tw-gap-2">
-                            {renderMeta(book)}
-                            {action === 'view' &&
-                              (current.present.has(book) ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="tw-h-7 tw-w-7 tw-p-0"
-                                      aria-label={fmt(
-                                        t('%manageBooks_view_inlineDeleteAria%', 'Delete {0}'),
-                                        book,
-                                      )}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectionsByAction((prev) => ({
-                                          ...prev,
-                                          delete: new Set([book]),
-                                        }));
-                                        setAction('delete');
-                                      }}
-                                    >
-                                      <Trash2 className="tw-h-3.5 tw-w-3.5" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="left">
-                                    {t(
-                                      '%manageBooks_view_inlineDeleteTooltip%',
-                                      'Go to Delete screen',
-                                    )}
-                                  </TooltipContent>
-                                </Tooltip>
-                              ) : (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="tw-h-7 tw-px-2 tw-text-xs"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectionsByAction((prev) => ({
-                                          ...prev,
-                                          create: new Set([book]),
-                                        }));
-                                        setAction('create');
-                                      }}
-                                    >
-                                      {t('%manageBooks_view_inlineCreateButton%', 'Create')}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="left">
-                                    {t(
-                                      '%manageBooks_view_inlineCreateTooltip%',
-                                      'Go to Create screen',
-                                    )}
-                                  </TooltipContent>
-                                </Tooltip>
-                              ))}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="tw-h-8"
+                        onClick={() => setImportFiles({})}
+                        disabled={isSubmitting}
+                      >
+                        {t('%manageBooks_import_clearFiles%', 'Clear')}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
 
-              {/* Theme C1 (FN-008 v2.6.0+, 2026-05-01): the in-dialog
+            <div className="tw-flex tw-flex-nowrap tw-items-center tw-gap-2 tw-border-b tw-px-6 tw-py-2 tw-@container/filterbar">
+              {action !== 'view' && (action !== 'import' || hasInlineFiles) && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Checkbox
+                        id="af-sel-all"
+                        checked={headerSelectState}
+                        disabled={selectableVisibleBooks.length === 0 || isSubmitting}
+                        onCheckedChange={toggleAllVisible}
+                        aria-label={
+                          visibleSelectedCount > 0
+                            ? fmt(
+                                t('%manageBooks_selection_xSelected%', '{0} selected'),
+                                visibleSelectedCount,
+                              )
+                            : t('%manageBooks_selection_selectAll%', 'Select all')
+                        }
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {visibleSelectedCount > 0
+                      ? fmt(
+                          t('%manageBooks_selection_xSelected%', '{0} selected'),
+                          visibleSelectedCount,
+                        )
+                      : t('%manageBooks_selection_selectAll%', 'Select all')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              <Input
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
+                className="tw-h-8 tw-min-w-0 tw-max-w-xs tw-flex-1 tw-basis-24"
+                aria-label={t('%manageBooks_filter_books%', 'Filter books')}
+                disabled={isSubmitting}
+              />
+              <span
+                className={cn(
+                  'tw-whitespace-nowrap tw-text-xs tw-text-muted-foreground',
+                  action === 'copy' && 'tw-hidden @md/filterbar:tw-inline',
+                )}
+              >
+                {universe.length === 0
+                  ? t('%manageBooks_filter_zero%', '0 books')
+                  : fmt(
+                      t('%manageBooks_filter_count%', '{0} of {1}'),
+                      visibleBooks.length,
+                      universe.length,
+                    )}
+              </span>
+              {action === 'view' && (
+                <ToggleGroup
+                  type="single"
+                  value={viewPresenceFilter}
+                  onValueChange={(v) => {
+                    if (v && isPresenceFilter(v)) setViewPresenceFilter(v);
+                  }}
+                  className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
+                  data-testid="presence-filter"
+                >
+                  {(['all', 'new', 'existing'] as const).map((s) => (
+                    <ToggleGroupItem
+                      key={s}
+                      value={s}
+                      data-testid={`presence-filter-${s}`}
+                      className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
+                    >
+                      {filterChipLabel(s)}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              )}
+              {action === 'copy' && copySourceId && (
+                <ToggleGroup
+                  type="single"
+                  value={copyStateFilter}
+                  onValueChange={(v) => {
+                    if (v && isCopyStateFilter(v)) setCopyStateFilter(v);
+                  }}
+                  className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
+                  data-testid="copy-state-filter"
+                >
+                  {(['all', 'new', 'newer', 'older', 'same', 'undetermined'] as const).map((s) => (
+                    <ToggleGroupItem
+                      key={s}
+                      value={s}
+                      data-testid={`copy-state-filter-${s}`}
+                      className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
+                    >
+                      {filterChipLabel(s)}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              )}
+              {action === 'import' && (
+                <ToggleGroup
+                  type="single"
+                  value={importPresenceFilter}
+                  onValueChange={(v) => {
+                    if (v && isPresenceFilter(v)) setImportPresenceFilter(v);
+                  }}
+                  className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
+                  data-testid="import-presence-filter"
+                >
+                  {(['all', 'new', 'existing'] as const).map((s) => (
+                    <ToggleGroupItem
+                      key={s}
+                      value={s}
+                      data-testid={`import-presence-filter-${s}`}
+                      className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
+                    >
+                      {filterChipLabel(s)}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              )}
+            </div>
+
+            <div className="tw-min-h-0 tw-flex-1 tw-overflow-auto tw-px-3 tw-py-2">
+              {visibleBooks.length === 0 ? (
+                <div className="tw-flex tw-min-h-40 tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-text-center tw-text-sm tw-text-muted-foreground">
+                  <span>{emptyStateMessage}</span>
+                  {isFilterEmptyState && (
+                    <Button variant="outline" size="sm" onClick={clearActiveFilters}>
+                      {t('%manageBooks_filter_clearButton%', 'Clear filter')}
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <ul
+                  ref={gridRef}
+                  role="listbox"
+                  aria-multiselectable={action !== 'view'}
+                  aria-label={fmt(t('%manageBooks_grid_label%', 'Books in {0}'), project.shortName)}
+                  className="tw-flex tw-flex-col tw-gap-0.5 tw-outline-none"
+                  onKeyDown={handleGridKeyDown}
+                >
+                  {visibleBooks.map((book) => {
+                    const isSelected = selected.has(book);
+                    const showCheckbox =
+                      action === 'create' ||
+                      action === 'delete' ||
+                      action === 'copy' ||
+                      (action === 'import' && !!importFiles[book]);
+                    const showCheckboxPlaceholder = action === 'import' && !importFiles[book];
+                    const isMissingInView = action === 'view' && !current.present.has(book);
+                    const compState = getBookComparisonState(book);
+                    // A7 row coloring: greyed for identical, highlight for to-newer.
+                    let rowClass = '';
+                    if (action === 'copy' && compState === 'filesAreSame') {
+                      rowClass = 'tw-text-muted-foreground tw-opacity-60';
+                    } else if (action === 'copy' && compState === 'sourceIsOlder') {
+                      rowClass = 'tw-bg-amber-50 dark:tw-bg-amber-900/20';
+                    }
+                    const focusable =
+                      focusedBook === book ||
+                      (focusedBook === undefined && book === visibleBooks[0]);
+                    return (
+                      <li
+                        key={book}
+                        data-book={book}
+                        role="option"
+                        aria-selected={showCheckbox ? isSelected : undefined}
+                        aria-checked={showCheckbox ? isSelected : undefined}
+                        aria-label={
+                          showCheckbox
+                            ? fmt(
+                                t('%manageBooks_selection_selectBook%', 'Select {0}'),
+                                Canon.bookIdToEnglishName(book),
+                              )
+                            : undefined
+                        }
+                        tabIndex={focusable ? 0 : -1}
+                        onFocus={() => setFocusedBook(book)}
+                        onClick={() => {
+                          if (showCheckbox) toggleOne(book);
+                        }}
+                        onKeyDown={(e) => {
+                          if (showCheckbox && (e.key === ' ' || e.key === 'Enter')) {
+                            e.preventDefault();
+                            toggleOne(book);
+                          }
+                        }}
+                        className={cn(
+                          'tw-flex tw-items-center tw-gap-2 tw-rounded-md tw-px-3 tw-py-1.5 tw-text-sm hover:tw-bg-accent/60 focus:tw-outline-2 focus:tw-outline-primary',
+                          isSelected && 'tw-bg-accent',
+                          showCheckbox && 'tw-cursor-pointer',
+                          rowClass,
+                        )}
+                      >
+                        {showCheckbox && (
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleOne(book)}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={fmt(
+                              t('%manageBooks_selection_selectBook%', 'Select {0}'),
+                              book,
+                            )}
+                            tabIndex={-1}
+                          />
+                        )}
+                        {showCheckboxPlaceholder && (
+                          <span className="tw-h-4 tw-w-4 tw-shrink-0" aria-hidden />
+                        )}
+                        <div
+                          className={cn(
+                            'tw-flex tw-min-w-0 tw-flex-1 tw-items-baseline tw-gap-2',
+                            isMissingInView && 'tw-text-muted-foreground tw-line-through',
+                          )}
+                        >
+                          <span className="tw-font-medium">{book}</span>
+                          <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
+                            {Canon.bookIdToEnglishName(book)}
+                          </span>
+                        </div>
+                        <div className="tw-flex tw-shrink-0 tw-items-center tw-gap-2">
+                          {renderMeta(book)}
+                          {action === 'view' &&
+                            (current.present.has(book) ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="tw-h-7 tw-w-7 tw-p-0"
+                                    aria-label={fmt(
+                                      t('%manageBooks_view_inlineDeleteAria%', 'Delete {0}'),
+                                      book,
+                                    )}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectionsByAction((prev) => ({
+                                        ...prev,
+                                        delete: new Set([book]),
+                                      }));
+                                      setAction('delete');
+                                    }}
+                                  >
+                                    <Trash2 className="tw-h-3.5 tw-w-3.5" aria-hidden />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  {t(
+                                    '%manageBooks_view_inlineDeleteTooltip%',
+                                    'Go to Delete screen',
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="tw-h-7 tw-px-2 tw-text-xs"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectionsByAction((prev) => ({
+                                        ...prev,
+                                        create: new Set([book]),
+                                      }));
+                                      setAction('create');
+                                    }}
+                                  >
+                                    {t('%manageBooks_view_inlineCreateButton%', 'Create')}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  {t(
+                                    '%manageBooks_view_inlineCreateTooltip%',
+                                    'Go to Create screen',
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                            ))}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {/* Theme C1 (FN-008 v2.6.0+, 2026-05-01): the in-dialog
                   role="alert" result panel was removed. AlertEntry warnings
                   and errors now flow through the `onMutationResult` callback
                   prop and are surfaced as toasts by the wiring layer. */}
 
-              <footer className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-px-6 tw-py-3">
-                <span className="tw-text-xs tw-text-muted-foreground">{summaryText}</span>
-                {/* C4: aria-live region for selection-count + status */}
-                <span id={liveRegionId} aria-live="polite" className="tw-sr-only">
-                  {liveAnnouncement}
-                </span>
-                <div className="tw-flex tw-items-center tw-gap-2">
-                  {isSubmitting && (
-                    <span className="tw-flex tw-items-center tw-gap-1.5 tw-text-xs tw-text-muted-foreground">
-                      <Loader2 className="tw-h-3.5 tw-w-3.5 tw-animate-spin" aria-hidden />
-                      {liveAnnouncement}
-                    </span>
-                  )}
-                  <Button
-                    variant="outline"
-                    onClick={() => onOpenChange(false)}
-                    disabled={isSubmitting}
-                  >
-                    {action === 'view'
-                      ? t('%manageBooks_footer_close%', 'Close')
-                      : t('%manageBooks_footer_cancel%', 'Cancel')}
-                  </Button>
-                  {action !== 'view' &&
-                    (() => {
-                      const disabled = !canApply;
-                      const renderActionIcon = () => {
-                        if (isSubmitting)
-                          return (
-                            <Loader2
-                              className="tw-mr-1.5 tw-h-4 tw-w-4 tw-animate-spin"
-                              aria-hidden
-                            />
-                          );
-                        if (action === 'create')
-                          return <BookPlus className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
-                        if (action === 'delete')
-                          return <Trash2 className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
-                        if (action === 'copy')
-                          return <Copy className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
-                        if (action === 'import')
-                          return <Download className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
-                        return undefined;
-                      };
-                      const actionButton = (
-                        <Button
-                          variant={action === 'delete' ? 'destructive' : 'default'}
-                          aria-disabled={disabled}
-                          aria-describedby={disabled ? applyDisabledHintId : undefined}
-                          disabled={disabled}
-                          onClick={apply}
-                        >
-                          {renderActionIcon()}
-                          {applyButtonLabel}
-                        </Button>
-                      );
-                      if (!disabledTooltip) return actionButton;
-                      return (
-                        <>
-                          <span id={applyDisabledHintId} className="tw-sr-only">
-                            {disabledTooltip}
-                          </span>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>{actionButton}</span>
-                            </TooltipTrigger>
-                            <TooltipContent>{disabledTooltip}</TooltipContent>
-                          </Tooltip>
-                        </>
-                      );
-                    })()}
-                </div>
-              </footer>
-            </div>
-          </TooltipProvider>
-        </DialogContent>
-      </Dialog>
+            <footer className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-px-6 tw-py-3">
+              <span className="tw-text-xs tw-text-muted-foreground">{summaryText}</span>
+              {/* C4: aria-live region for selection-count + status */}
+              <span id={liveRegionId} aria-live="polite" className="tw-sr-only">
+                {liveAnnouncement}
+              </span>
+              <div className="tw-flex tw-items-center tw-gap-2">
+                {isSubmitting && (
+                  <span className="tw-flex tw-items-center tw-gap-1.5 tw-text-xs tw-text-muted-foreground">
+                    <Loader2 className="tw-h-3.5 tw-w-3.5 tw-animate-spin" aria-hidden />
+                    {liveAnnouncement}
+                  </span>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isSubmitting}
+                >
+                  {action === 'view'
+                    ? t('%manageBooks_footer_close%', 'Close')
+                    : t('%manageBooks_footer_cancel%', 'Cancel')}
+                </Button>
+                {action !== 'view' &&
+                  (() => {
+                    const disabled = !canApply;
+                    const renderActionIcon = () => {
+                      if (isSubmitting)
+                        return (
+                          <Loader2
+                            className="tw-mr-1.5 tw-h-4 tw-w-4 tw-animate-spin"
+                            aria-hidden
+                          />
+                        );
+                      if (action === 'create')
+                        return <BookPlus className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                      if (action === 'delete')
+                        return <Trash2 className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                      if (action === 'copy')
+                        return <Copy className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                      if (action === 'import')
+                        return <Download className="tw-mr-1.5 tw-h-4 tw-w-4" aria-hidden />;
+                      return undefined;
+                    };
+                    const actionButton = (
+                      <Button
+                        variant={action === 'delete' ? 'destructive' : 'default'}
+                        aria-disabled={disabled}
+                        aria-describedby={disabled ? applyDisabledHintId : undefined}
+                        disabled={disabled}
+                        onClick={apply}
+                      >
+                        {renderActionIcon()}
+                        {applyButtonLabel}
+                      </Button>
+                    );
+                    if (!disabledTooltip) return actionButton;
+                    return (
+                      <>
+                        <span id={applyDisabledHintId} className="tw-sr-only">
+                          {disabledTooltip}
+                        </span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>{actionButton}</span>
+                          </TooltipTrigger>
+                          <TooltipContent>{disabledTooltip}</TooltipContent>
+                        </Tooltip>
+                      </>
+                    );
+                  })()}
+              </div>
+            </footer>
+          </div>
+        </TooltipProvider>
+      </div>
 
       {/* A2 — Delete confirmation prompt */}
       <Dialog

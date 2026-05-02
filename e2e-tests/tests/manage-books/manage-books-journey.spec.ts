@@ -12,7 +12,7 @@
  *   manage-books-functional-WP-001.spec.ts. The role+name pattern would have matched the toggle
  *   button (its accessible name comes from the inner text node "Create" / "Delete" / etc.) but the
  *   data-testid is the explicit, stable contract the component now exposes.
- * - View toggle data-state assertion uses `[data-testid="action-toggle-view"]`.
+ * - View toggle data-state assertion uses `[data-testid="manage-books-sidebar-section-show"]`.
  * - Picker selector kept as `getByRole('dialog', { name: /Greek Esther/i })` — proven by
  *   manage-books-functional-WP-002.spec.ts which uses the same pattern.
  * - Confirmation modals scoped to `[role="alertdialog"]` (proven in WP-001).
@@ -120,8 +120,8 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     candidate: string,
     bookId: string,
   ): Promise<boolean> {
-    await frame.locator('#af-project').click();
-    const option = frame.locator(`[role="option"]`, { hasText: new RegExp(`^${candidate}$`) });
+    await frame.locator('[data-testid="manage-books-sidebar-project-trigger"]').click();
+    const option = frame.locator('[cmdk-item]', { hasText: new RegExp(candidate) });
     const optionVisible = await option
       .first()
       .isVisible()
@@ -156,7 +156,7 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
 
     // Ensure we are in Create mode (the universe we need to test against). Switch toggles do
     // not change the active project, so this is safe.
-    await frame.locator('[data-testid="action-toggle-create"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
 
     // Sequential reduce-with-promise pattern: walks candidates one at a time, short-circuits as
     // soon as one matches. Avoids `for...of` (no-restricted-syntax) while keeping per-step
@@ -212,8 +212,8 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     // project (BHV-300). The fixture-rotated default may not always have GEN, so we resolve
     // the first creatable pill dynamically below.
     await expect(frame.getByText(/Manage Books/i).first()).toBeVisible({ timeout: 10_000 });
-    const viewToggle = frame.locator('[data-testid="action-toggle-view"]');
-    await expect(viewToggle).toHaveAttribute('data-state', 'on');
+    const viewToggle = frame.locator('[data-testid="manage-books-sidebar-section-show"]');
+    await expect(viewToggle).toHaveAttribute('data-active', 'true');
 
     // EVD-J-001-a: starting state — View mode, default project.
     await mainPage.screenshot({
@@ -222,7 +222,7 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
 
     // Step 2: Switch to Create mode. Universe flips to "books NOT yet present". Pick the first
     // creatable pill (whatever it is — the test fixture decides).
-    await frame.locator('[data-testid="action-toggle-create"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
     const creatablePill = frame.locator('ul[role="listbox"] li[data-book]').first();
     await expect(creatablePill).toBeVisible({ timeout: 10_000 });
     const creatableBookId = (await creatablePill.getAttribute('data-book')) ?? '';
@@ -234,7 +234,7 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     // (selectionsByAction) so the Create selection MUST NOT bleed into Delete. Pick the first
     // present-book pill (resolved dynamically — any non-empty fixture always has at least one
     // present book in delete-mode universe).
-    await frame.locator('[data-testid="action-toggle-delete"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').click();
     const firstDeletablePill = frame.locator('ul[role="listbox"] li[data-book]').first();
     await expect(firstDeletablePill).toBeVisible({ timeout: 10_000 });
     const deletableBookId = (await firstDeletablePill.getAttribute('data-book')) ?? '';
@@ -246,7 +246,7 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
 
     // Step 4: Switch back to Create mode. The original creatable selection MUST still be
     // present (selectionsByAction preserves it).
-    await frame.locator('[data-testid="action-toggle-create"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
     const creatableAfterReturn = frame.locator(
       `ul[role="listbox"] li[data-book="${creatableBookId}"]`,
     );
@@ -256,7 +256,7 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
 
     // Step 5: Switch back to Delete mode. The previously-selected present book must still be
     // selected.
-    await frame.locator('[data-testid="action-toggle-delete"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').click();
     await expect(
       frame.locator(`ul[role="listbox"] li[data-book="${deletableBookId}"]`),
     ).toHaveAttribute('aria-checked', 'true', { timeout: 10_000 });
@@ -284,11 +284,11 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     await filterInput.fill('Gen');
 
     // Switch View → Create — filter persists across the toggle.
-    await frame.locator('[data-testid="action-toggle-create"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
     await expect(filterInput).toHaveValue('Gen');
 
     // Switch Create → Delete — filter still persists.
-    await frame.locator('[data-testid="action-toggle-delete"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').click();
     await expect(filterInput).toHaveValue('Gen');
   });
 
@@ -423,7 +423,9 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
 
     // Cross-WP cancel-aborts evidence:
     // 1. The parent dialog stays open (modal-on-modal — only the inner picker dismissed).
-    await expect(frame.locator('[data-testid="action-toggle-create"]')).toBeVisible();
+    await expect(
+      frame.locator('[data-testid="manage-books-sidebar-section-create"]'),
+    ).toBeVisible();
     // 2. The ESG selection is preserved (the cancel doesn't clear the user's Create work).
     await expect(esgPill).toHaveAttribute('aria-checked', 'true');
     // 3. Most importantly: the apply button is back to ENABLED (no in-flight mutation).
@@ -454,7 +456,7 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     const frame = await openManageBooks(mainPage);
 
     // Step 1: Switch to Copy mode. Apply is disabled (no source picked).
-    await frame.locator('[data-testid="action-toggle-copy"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-copy"]').click();
     const copyApply = frame.locator('footer button').filter({ hasText: /Copy/i }).last();
     await expect(copyApply).toBeDisabled({ timeout: 5_000 });
 
@@ -510,7 +512,7 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     // the freshly copied books — proving the wiring layer's
     // `useProjectSetting('platformScripture.booksPresent')` subscription refreshed after the
     // mutation. We assert at least one book pill renders in View mode after the copy.
-    await frame.locator('[data-testid="action-toggle-view"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-show"]').click();
     const viewBooks = grid.locator('li[data-book]');
     await expect(viewBooks.first()).toBeVisible({ timeout: 10_000 });
     const viewBookCount = await viewBooks.count();
@@ -541,7 +543,7 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     // Step 1: Switch to Delete mode and pick the first present-book pill (resolved dynamically;
     // the active fixture project rotates and may not always have GEN as the first pill, but
     // any non-empty project will have at least one deletable book).
-    await frame.locator('[data-testid="action-toggle-delete"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').click();
     const firstDeletablePill = frame.locator('ul[role="listbox"] li[data-book]').first();
     await expect(firstDeletablePill).toBeVisible({ timeout: 10_000 });
     const deletableBookId = (await firstDeletablePill.getAttribute('data-book')) ?? '';
@@ -595,7 +597,7 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
 
     // Step 1: Pick the LAST present-book pill in Delete mode (Delete universe = books currently
     // present; the test asserts on the chosen ID symbolically — whatever the fixture has).
-    await frame.locator('[data-testid="action-toggle-delete"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-delete"]').click();
     const presentPills = frame.locator('ul[role="listbox"] li[data-book]');
     await expect(presentPills.first()).toBeVisible({ timeout: 10_000 });
     const presentCount = await presentPills.count();
@@ -640,7 +642,7 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     // lines 1147-1150: `if (action === 'view' && !isPresent) return undefined;` skips the
     // Present badge for missing books). The strict cross-mode-refresh contract is: the
     // book that was just deleted in Delete mode no longer appears as Present in View mode.
-    await frame.locator('[data-testid="action-toggle-view"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-show"]').click();
     const viewDeletedBook = frame.locator(`ul[role="listbox"] li[data-book="${targetBookId}"]`);
     await expect(viewDeletedBook).toBeVisible({ timeout: 10_000 });
     // The deleted book's pill must NOT contain the "Present" badge. We check that the pill
@@ -669,7 +671,7 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     const frame = await openManageBooks(mainPage);
 
     // Step 1: Switch to Create and pick a creatable book.
-    await frame.locator('[data-testid="action-toggle-create"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
     const creatablePill = frame.locator('ul[role="listbox"] li[data-book]').first();
     await expect(creatablePill).toBeVisible({ timeout: 10_000 });
     const creatableBookId = (await creatablePill.getAttribute('data-book')) ?? '';
@@ -687,11 +689,13 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     // spec: "The dialog opens with View as the default action") with no leftover selection
     // from the previous session — selection state is per-instance, not per-user.
     const reopened = await openManageBooks(mainPage);
-    const reopenedViewToggle = reopened.locator('[data-testid="action-toggle-view"]');
-    await expect(reopenedViewToggle).toHaveAttribute('data-state', 'on', { timeout: 10_000 });
+    const reopenedViewToggle = reopened.locator(
+      '[data-testid="manage-books-sidebar-section-show"]',
+    );
+    await expect(reopenedViewToggle).toHaveAttribute('data-active', 'true', { timeout: 10_000 });
 
     // Step 4: Switch to Create — the previously selected pill must NOT be checked anymore.
-    await reopened.locator('[data-testid="action-toggle-create"]').click();
+    await reopened.locator('[data-testid="manage-books-sidebar-section-create"]').click();
     const reopenedPill = reopened.locator(`ul[role="listbox"] li[data-book="${creatableBookId}"]`);
     // The pill may not even appear (universe could differ if the project changed), but if
     // it does it must not be checked.

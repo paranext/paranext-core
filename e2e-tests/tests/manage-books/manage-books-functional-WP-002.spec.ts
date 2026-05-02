@@ -63,12 +63,14 @@ async function openManageBooksDialog(
   });
   const frame = mainPage.frameLocator(MANAGE_BOOKS_FRAME);
 
-  // Switch to the requested fixture project. The header project Select carries id="af-project".
-  // The dropdown options render as `<div role="option">` in the iframe.
-  await frame.locator('#af-project').click();
+  // Switch to the requested fixture project. The sidebar uses ProjectSelector — its trigger
+  // is wrapped in [data-testid="manage-books-sidebar-project-trigger"] and rows render as
+  // <div cmdk-item> elements inside a popover.
+  await frame.locator('[data-testid="manage-books-sidebar-project-trigger"]').click();
   await frame
-    .locator('div[role="option"]')
-    .filter({ hasText: new RegExp(`^${projectName}$`) })
+    .locator('[cmdk-item]')
+    .filter({ hasText: new RegExp(projectName) })
+    .first()
     .click();
   // Brief settle so the booksPresent subscription has time to swap maps before the test
   // proceeds (otherwise the listbox can render with the previous project's universe).
@@ -88,7 +90,7 @@ async function openManageBooksDialog(
  */
 async function openPickerFromCreateFlow(mainPage: Page, frame: FrameLocator): Promise<Locator> {
   // Switch to Create mode (use data-testid — proven stable pattern from WP-001).
-  await frame.locator('[data-testid="action-toggle-create"]').click();
+  await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
 
   // Click the ESG book pill. Pills are <li role="option"> with `data-book` attr.
   await frame.locator('ul[role="listbox"] li[data-book="ESG"]').click();
@@ -324,7 +326,9 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
 
     // Picker dismisses; parent ManageBooksDialog still visible (Create selections preserved)
     await expect(picker).toBeHidden({ timeout: 5_000 });
-    await expect(frame.locator('[data-testid="action-toggle-create"]')).toBeVisible();
+    await expect(
+      frame.locator('[data-testid="manage-books-sidebar-section-create"]'),
+    ).toBeVisible();
 
     // The ESG row in the listbox should remain selected (Cancel aborts the flow but does not
     // clear selection). Selection state on book pills is reflected via aria-selected.
@@ -349,7 +353,9 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
 
     await expect(picker).toBeHidden({ timeout: 5_000 });
     // Parent dialog still visible — modal-on-modal stacking
-    await expect(frame.locator('[data-testid="action-toggle-create"]')).toBeVisible();
+    await expect(
+      frame.locator('[data-testid="manage-books-sidebar-section-create"]'),
+    ).toBeVisible();
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -440,7 +446,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
 
     // Drive the navigation up to the apply button manually so we can capture a Locator handle
     // for it. This duplicates the helper's first lines but lets us assert focus on it later.
-    await frame.locator('[data-testid="action-toggle-create"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
     await frame.locator('ul[role="listbox"] li[data-book="ESG"]').click();
     await frame.locator('#af-method').click();
     await frame.getByRole('option', { name: /Based on|Reference text|From template/i }).click();
@@ -527,7 +533,9 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
 
     // The parent ManageBooksDialog should still be visible (modal-on-modal — only the inner
     // dialog dismissed). We assert the action toggle remains visible inside the parent frame.
-    await expect(frame.locator('[data-testid="action-toggle-create"]')).toBeVisible();
+    await expect(
+      frame.locator('[data-testid="manage-books-sidebar-section-create"]'),
+    ).toBeVisible();
   });
 
   // @scenario TS-WP-002-derived (acceptance: OK with non-default selection still resolves)
@@ -542,7 +550,9 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
 
     // Picker dismisses; parent dialog stays
     await expect(picker).toBeHidden({ timeout: 5_000 });
-    await expect(frame.locator('[data-testid="action-toggle-create"]')).toBeVisible();
+    await expect(
+      frame.locator('[data-testid="manage-books-sidebar-section-create"]'),
+    ).toBeVisible();
   });
 
   // @scenario TS-WP-002-derived (acceptance: picker is NOT shown when Create is submitted
@@ -556,7 +566,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage, 'RH2');
 
-    await frame.locator('[data-testid="action-toggle-create"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
     await frame.locator('ul[role="listbox"] li[data-book="ESG"]').click();
 
     // Empty-book method (the default) — picker MUST NOT open. The default createMethod is
@@ -577,7 +587,7 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
     await waitForAppReady(mainPage);
     const frame = await openManageBooksDialog(mainPage, 'ROT');
 
-    await frame.locator('[data-testid="action-toggle-create"]').click();
+    await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
 
     // Select GEN (not ESG)
     await frame.locator('ul[role="listbox"] li[data-book="GEN"]').click();

@@ -266,6 +266,30 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   // web view layer for cross-launch and file-picker stub notifications.
   '%manageBooks_crossLaunch_notYetAvailable%',
   '%manageBooks_filePicker_notYetAvailable%',
+  // Sidebar (rebuild — ViewListSelect layout, 2026-05-02)
+  '%manageBooks_sidebar_heading%',
+  '%manageBooks_sidebar_group_manage%',
+  '%manageBooks_sidebar_group_reference%',
+  '%manageBooks_sidebar_show_label%',
+  '%manageBooks_sidebar_show_subtitle%',
+  '%manageBooks_sidebar_create_label%',
+  '%manageBooks_sidebar_create_subtitle%',
+  '%manageBooks_sidebar_copy_label%',
+  '%manageBooks_sidebar_copy_subtitle%',
+  '%manageBooks_sidebar_import_label%',
+  '%manageBooks_sidebar_import_subtitle%',
+  '%manageBooks_sidebar_delete_label%',
+  '%manageBooks_sidebar_delete_subtitle%',
+  // Disabled future sections (DEF-UI-011/012/013)
+  '%manageBooks_progressTracking_label%',
+  '%manageBooks_progressTracking_subtitle%',
+  '%manageBooks_progressTracking_notYetAvailable%',
+  '%manageBooks_bookNames_label%',
+  '%manageBooks_bookNames_subtitle%',
+  '%manageBooks_bookNames_notYetAvailable%',
+  '%manageBooks_introductions_label%',
+  '%manageBooks_introductions_subtitle%',
+  '%manageBooks_introductions_notYetAvailable%',
 ] as const);
 
 /** Localized strings consumed by `ManageBooksDialog`. */

@@ -39,22 +39,8 @@ export type {
   SortDirection,
   TableContents,
 } from './components/advanced/data-table/data-table.component';
-export {
-  ManageBooksDialog,
-  MANAGE_BOOKS_DIALOG_STRING_KEYS,
-  type AlertEntry as ManageBooksAlertEntry,
-  type EstherTemplate as ManageBooksEstherTemplate,
-  type ManageBooksAction,
-  type ManageBooksComparisonState,
-  type ManageBooksCreateMethod,
-  type ManageBooksDialogBookInfo,
-  type ManageBooksDialogLocalizedStrings,
-  type ManageBooksDialogProject,
-  type ManageBooksDialogProps,
-  type ManageBooksImportFile,
-  type ManageBooksImportStrategy,
-  type MutationResult as ManageBooksMutationResult,
-} from './components/advanced/manage-books-dialog/manage-books-dialog.component';
+// ManageBooksDialog moved to extensions/src/platform-scripture/src/manage-books-dialog/ (FN-009).
+// The unified Paratext-specific dialog is no longer part of the platform-bible-react surface.
 export {
   default as ProjectSelector,
   scrollGroupLetter,
