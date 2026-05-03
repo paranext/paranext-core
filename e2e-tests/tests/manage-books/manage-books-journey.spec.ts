@@ -323,12 +323,18 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     await frame.locator('#af-method').click();
     await frame.getByRole('option', { name: /Based on|From template|Reference text/i }).click();
 
-    // Step 3: Pick the first available reference / model project so the Create-mode
-    // pre-flight passes the model-required gate (VAL-100). Without a model selected the apply
-    // button stays disabled. Scope the option lookup to the open Radix popper to avoid matching
-    // book-grid options (those also have role="option").
+    // Step 3: Pick a reference / model project that has ESG so the Create-mode pre-flight
+    // passes the model-required gate (VAL-100) without showing the missing-book prompt that
+    // would block this test's expected path. Filter to TPTS (a known ESG-having model project)
+    // rather than `.first()`, since the first option may be a project without ESG and the
+    // ordering is environment-dependent. Scope the option lookup to the open Radix popper to
+    // avoid matching book-grid options (those also have role="option").
     await frame.locator('#af-reference').click();
-    await frame.locator('[data-radix-popper-content-wrapper] [role="option"]').first().click();
+    await frame
+      .locator('[data-radix-popper-content-wrapper] [role="option"]')
+      .filter({ hasText: /TPTS/ })
+      .first()
+      .click();
 
     // EVD-J-002-a: Create form populated with ESG + fromTemplate + reference picked.
     await mainPage.screenshot({
@@ -406,7 +412,12 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     await frame.locator('#af-method').click();
     await frame.getByRole('option', { name: /Based on|From template|Reference text/i }).click();
     await frame.locator('#af-reference').click();
-    await frame.locator('[data-radix-popper-content-wrapper] [role="option"]').first().click();
+    // Filter to TPTS (ESG-having model) — see Journey 2 comment.
+    await frame
+      .locator('[data-radix-popper-content-wrapper] [role="option"]')
+      .filter({ hasText: /TPTS/ })
+      .first()
+      .click();
 
     const createApply = frame
       .locator('footer button')
