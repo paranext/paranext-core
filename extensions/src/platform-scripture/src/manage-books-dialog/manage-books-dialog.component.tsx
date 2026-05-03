@@ -1,13 +1,4 @@
-import {
-  KeyboardEvent as ReactKeyboardEvent,
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   BookPlus,
   Copy,
@@ -20,7 +11,6 @@ import {
 } from 'lucide-react';
 import { Canon } from '@sillsdev/scripture';
 import {
-  Badge,
   Button,
   Checkbox,
   cn,
@@ -48,6 +38,14 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { ManageBooksSidebar } from './manage-books-sidebar.component';
+import {
+  BookGridGroupBy,
+  BookGridGroupByToggle,
+  BookGridItem,
+  BookGridLocalizedStrings,
+  BookGridSelector,
+  toneForComparisonState,
+} from './book-grid.component';
 import {
   EstherTemplate,
   ManageBooksAction,
@@ -192,22 +190,6 @@ export type ManageBooksDialogProps = {
 // --------------------------------------------------------------------------
 // Helpers
 // --------------------------------------------------------------------------
-
-const comparisonVariant = (
-  state: ManageBooksComparisonState,
-): 'default' | 'secondary' | 'destructive' | 'outline' => {
-  switch (state) {
-    case 'filesAreSame':
-      return 'secondary';
-    case 'sourceIsNewer':
-    case 'destDoesNotExist':
-      return 'default';
-    case 'sourceIsOlder':
-      return 'destructive';
-    default:
-      return 'outline';
-  }
-};
 
 const computeCompareState = (
   sourceDate: string | undefined,
@@ -395,6 +377,10 @@ export function ManageBooksDialog({
     'all',
   );
   const [viewPresenceFilter, setViewPresenceFilter] = useState<'all' | 'new' | 'existing'>('all');
+  // BookGridSelector grouping state. Defaults to canon grouping in View mode (so
+  // the user reads "OT / NT / DC" at a glance) and to status grouping in
+  // Create/Copy/Import (so the comparison badges drive the section ordering).
+  const [gridGroupBy, setGridGroupBy] = useState<BookGridGroupBy>('canon');
   // Using null for React ref compatibility
   // eslint-disable-next-line no-null/no-null
   const importFileInputRef = useRef<HTMLInputElement>(null);
@@ -428,12 +414,6 @@ export function ManageBooksDialog({
   );
   // A8: track auto-browse to fire only once per Import-mode entry
   const importAutoBrowseFired = useRef(false);
-  // C3: roving tabindex for keyboard navigation
-  const [focusedBook, setFocusedBook] = useState<string | undefined>(undefined);
-  // Using null for React ref compatibility
-  // eslint-disable-next-line no-null/no-null
-  const gridRef = useRef<HTMLUListElement>(null);
-
   // -- Load source-project books on demand when Copy picks a source --------
   useEffect(() => {
     if (!open) return;
@@ -519,6 +499,10 @@ export function ManageBooksDialog({
     setCopyStateFilter('all');
     setImportPresenceFilter('all');
     setViewPresenceFilter('all');
+    // Default View grouping to canon (OT/NT/DC reads naturally as a "what's in
+    // this project" overview). Mutation modes default to status grouping so
+    // comparison badges (Newer/Older/New/Same) drive the section order.
+    setGridGroupBy(action === 'view' ? 'canon' : 'status');
   }, [action]);
 
   // Clear the reference project when the creation method is no longer referenceText.
@@ -1042,52 +1026,6 @@ export function ManageBooksDialog({
     ? fmt(subtitleTemplate, totalPresent, canonicalBooks.length, project.shortName, versification)
     : fmt(subtitleTemplate, totalPresent, canonicalBooks.length, project.shortName);
 
-  const pillStateLabel = (state: ManageBooksComparisonState): string => {
-    switch (state) {
-      case 'filesAreSame':
-        return t('%manageBooks_pill_state_same%', 'Same');
-      case 'sourceIsNewer':
-        return t('%manageBooks_pill_state_newer%', 'Newer');
-      case 'sourceIsOlder':
-        return t('%manageBooks_pill_state_older%', 'Older');
-      case 'sourceDoesNotExist':
-        return t('%manageBooks_pill_state_missing%', 'Missing');
-      case 'destDoesNotExist':
-        return t('%manageBooks_pill_new%', 'New');
-      case 'undetermined':
-      default:
-        return t('%manageBooks_pill_state_undetermined%', 'Undetermined');
-    }
-  };
-
-  const renderComparisonBadge = (
-    state: ManageBooksComparisonState,
-    sideALabel: string,
-    sideADate: string | undefined,
-    sideBLabel: string,
-    sideBDate: string | undefined,
-  ) => (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Badge variant={comparisonVariant(state)}>{pillStateLabel(state)}</Badge>
-      </TooltipTrigger>
-      <TooltipContent>
-        <div>{`${sideALabel}: ${sideADate ?? '—'}`}</div>
-        <div>{`${sideBLabel}: ${sideBDate ?? '—'}`}</div>
-      </TooltipContent>
-    </Tooltip>
-  );
-
-  const getBookComparisonState = useCallback(
-    (book: string): ManageBooksComparisonState | undefined => {
-      if (action !== 'copy' || !copySource) return undefined;
-      const destDate = current.dates[book];
-      const isPresent = current.present.has(book);
-      return computeCompareState(copySource.dates[book], isPresent ? destDate : undefined);
-    },
-    [action, copySource, current],
-  );
-
   const filterChipLabel = (s: string): string => {
     switch (s) {
       case 'all':
@@ -1107,76 +1045,6 @@ export function ManageBooksDialog({
       default:
         return s;
     }
-  };
-
-  const renderMeta = (book: string) => {
-    const isPresent = current.present.has(book);
-    const destDate = current.dates[book];
-    if (action === 'copy' && copySource && copySourceProject) {
-      const sourceDate = copySource.dates[book];
-      const state = computeCompareState(sourceDate, isPresent ? destDate : undefined);
-      if (state === 'destDoesNotExist') {
-        return (
-          <Badge variant="outline" className="tw-font-normal tw-text-muted-foreground">
-            {t('%manageBooks_pill_new%', 'New')}
-          </Badge>
-        );
-      }
-      return renderComparisonBadge(
-        state,
-        copySourceProject.shortName,
-        sourceDate,
-        project.shortName,
-        isPresent ? destDate : undefined,
-      );
-    }
-    if (action === 'delete') {
-      return (
-        <Badge variant="secondary" className="tw-font-normal">
-          {destDate ?? t('%manageBooks_pill_present%', 'Present')}
-        </Badge>
-      );
-    }
-    if (action === 'create') {
-      return (
-        <Badge variant="outline" className="tw-font-normal tw-text-muted-foreground">
-          {t('%manageBooks_pill_new%', 'New')}
-        </Badge>
-      );
-    }
-    if (action === 'import') {
-      const pick = importFiles[book];
-      if (pick) {
-        const state = computeCompareState(pick.date, isPresent ? destDate : undefined);
-        return (
-          <>
-            <span
-              className="tw-max-w-[12rem] tw-truncate tw-text-xs tw-text-muted-foreground"
-              title={pick.file}
-            >
-              {pick.file}
-            </span>
-            {renderComparisonBadge(
-              state,
-              'File',
-              pick.date,
-              project.shortName,
-              isPresent ? destDate : undefined,
-            )}
-          </>
-        );
-      }
-    }
-    if (action === 'view' && !isPresent) return undefined;
-    return isPresent ? (
-      <Badge variant="secondary" className="tw-font-normal">
-        {destDate ?? t('%manageBooks_pill_present%', 'Present')}
-      </Badge>
-    ) : (
-      <Badge variant="outline" className="tw-font-normal tw-text-muted-foreground">
-        {t('%manageBooks_pill_new%', 'New')}
-      </Badge>
-    );
   };
 
   const isFilterEmptyState =
@@ -1209,6 +1077,149 @@ export function ManageBooksDialog({
     setImportPresenceFilter('all');
     setViewPresenceFilter('all');
   };
+
+  // -- BookGridSelector wiring --------------------------------------------
+  // Derive the localized strings the BookGrid itself consumes (group-by
+  // toggle labels, canon/status group headers, select-all aria template).
+  const bookGridStrings = useMemo<BookGridLocalizedStrings>(
+    () => ({
+      groupByCanon: t('%manageBooks_grid_groupBy_canon%', 'Canon'),
+      groupByStatus: t('%manageBooks_grid_groupBy_status%', 'Status'),
+      groupByNone: t('%manageBooks_grid_groupBy_none%', 'None'),
+      groupByLabel: t('%manageBooks_grid_groupBy_label%', 'Group by'),
+      canonGroupOT: t('%manageBooks_grid_canonGroup_OT%', 'Old Testament'),
+      canonGroupNT: t('%manageBooks_grid_canonGroup_NT%', 'New Testament'),
+      canonGroupDC: t('%manageBooks_grid_canonGroup_DC%', 'Deuterocanon'),
+      canonGroupExtra: t('%manageBooks_grid_canonGroup_Extra%', 'Extra'),
+      selectAllInGroup: t('%manageBooks_grid_selectAll%', 'Select all in {0}'),
+      outOfScope: t('%manageBooks_grid_outOfScope%', 'Out of scope'),
+      untracked: t('%manageBooks_grid_untracked%', 'Untracked'),
+      filterPlaceholder: t('%manageBooks_filter_placeholder%', 'Filter books…'),
+    }),
+    [t],
+  );
+
+  // Build per-pill BookGridItem rows from the orchestrator's existing universe
+  // + selection state. We map the per-action `compState` (Copy/Import) into
+  // both a `tone` (drives the badge color) and a `statusLabel` (drives the
+  // status-grouping section header AND the badge text). For Show / Create /
+  // Delete the badge is suppressed via `tone: 'neutral'` and the status
+  // section header reads "In project" / "Not in project".
+  const gridItems = useMemo<BookGridItem[]>(() => {
+    const inProjectLabel = t('%manageBooks_grid_statusGroup_inProject%', 'In project');
+    const notInProjectLabel = t('%manageBooks_grid_statusGroup_notInProject%', 'Not in project');
+    const newerLabel = t('%manageBooks_grid_statusGroup_newer%', 'Newer');
+    const olderLabel = t('%manageBooks_grid_statusGroup_older%', 'Older');
+    const newLabel = t('%manageBooks_grid_statusGroup_new%', 'New');
+    const sameLabel = t('%manageBooks_grid_statusGroup_same%', 'Same');
+
+    return visibleBooks.map<BookGridItem>((book) => {
+      const present = current.present.has(book);
+      const destDate = current.dates[book];
+      let tone: BookGridItem['tone'] = 'neutral';
+      let statusLabel: string = present ? inProjectLabel : notInProjectLabel;
+      let primaryDate: string | undefined;
+      let secondaryDate: string | undefined;
+
+      if (action === 'copy' && copySource) {
+        const sourceDate = copySource.dates[book];
+        const compState = computeCompareState(sourceDate, present ? destDate : undefined);
+        const t1 = toneForComparisonState(compState);
+        if (t1 !== 'hidden') tone = t1;
+        switch (compState) {
+          case 'sourceIsNewer':
+            statusLabel = newerLabel;
+            break;
+          case 'sourceIsOlder':
+            statusLabel = olderLabel;
+            break;
+          case 'destDoesNotExist':
+            statusLabel = newLabel;
+            break;
+          case 'filesAreSame':
+            statusLabel = sameLabel;
+            break;
+          default:
+            // sourceDoesNotExist / undetermined keep the present/absent label
+            statusLabel = present ? inProjectLabel : notInProjectLabel;
+            break;
+        }
+        primaryDate = present ? destDate : undefined;
+        secondaryDate = sourceDate;
+      } else if (action === 'import') {
+        const pick = importFiles[book];
+        if (pick) {
+          const compState = computeCompareState(pick.date, present ? destDate : undefined);
+          const t1 = toneForComparisonState(compState);
+          if (t1 !== 'hidden') tone = t1;
+          switch (compState) {
+            case 'sourceIsNewer':
+              statusLabel = newerLabel;
+              break;
+            case 'sourceIsOlder':
+              statusLabel = olderLabel;
+              break;
+            case 'destDoesNotExist':
+              statusLabel = newLabel;
+              break;
+            case 'filesAreSame':
+              statusLabel = sameLabel;
+              break;
+            default:
+              statusLabel = present ? inProjectLabel : notInProjectLabel;
+              break;
+          }
+          primaryDate = present ? destDate : undefined;
+          secondaryDate = pick.date;
+        } else {
+          primaryDate = present ? destDate : undefined;
+        }
+      } else if (action === 'create') {
+        statusLabel = newLabel;
+        primaryDate = undefined;
+      } else {
+        // view + delete: just show the destination date in the tooltip
+        primaryDate = destDate;
+      }
+
+      return {
+        book,
+        present,
+        tone,
+        statusLabel,
+        primaryDate,
+        secondaryDate,
+      };
+    });
+  }, [action, visibleBooks, current, copySource, importFiles, t]);
+
+  // Per-pill aria label, mirroring what the previous inline `<li>` provided.
+  // Workflows where the row isn't toggleable still get the english book name
+  // so screen readers announce something meaningful.
+  const gridRowAriaLabel = useCallback(
+    (item: BookGridItem) => {
+      const showCheckbox =
+        action === 'create' ||
+        action === 'delete' ||
+        action === 'copy' ||
+        (action === 'import' && !!importFiles[item.book]);
+      const englishName = Canon.bookIdToEnglishName(item.book) || item.book;
+      if (showCheckbox) {
+        return fmt(t('%manageBooks_selection_selectBook%', 'Select {0}'), englishName);
+      }
+      return englishName;
+    },
+    [action, importFiles, t],
+  );
+
+  // Primary date label used in the tooltip — the destination project's short
+  // name. For Copy/Import we want "From: <date>" / "File: <date>" too.
+  const primaryDateLabel = project.shortName;
+  const secondaryDateLabel = (() => {
+    if (action === 'copy' && copySourceProject) return copySourceProject.shortName;
+    if (action === 'import') return 'File';
+    return undefined;
+  })();
 
   // -- Footer apply-button label ------------------------------------------
   const applyButtonLabel = (() => {
@@ -1312,44 +1323,6 @@ export function ManageBooksDialog({
     }
     return '';
   })();
-
-  // -- C3 grid keyboard navigation (roving tabindex) -----------------------
-  const handleGridKeyDown = (e: ReactKeyboardEvent<HTMLUListElement>) => {
-    if (visibleBooks.length === 0) return;
-    const activeBook = focusedBook ?? visibleBooks[0];
-    const idx = visibleBooks.indexOf(activeBook);
-    if (idx === -1) return;
-    let nextIdx: number | undefined;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-      nextIdx = Math.min(visibleBooks.length - 1, idx + 1);
-    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-      nextIdx = Math.max(0, idx - 1);
-    } else if (e.key === 'Home') {
-      nextIdx = 0;
-    } else if (e.key === 'End') {
-      nextIdx = visibleBooks.length - 1;
-    } else if (e.key === ' ' || e.key === 'Enter') {
-      const showCheckbox =
-        action === 'create' ||
-        action === 'delete' ||
-        action === 'copy' ||
-        (action === 'import' && !!importFiles[activeBook]);
-      if (showCheckbox) {
-        e.preventDefault();
-        toggleOne(activeBook);
-      }
-      return;
-    } else {
-      return;
-    }
-    if (nextIdx !== undefined) {
-      e.preventDefault();
-      const nextBook = visibleBooks[nextIdx];
-      setFocusedBook(nextBook);
-      const next = gridRef.current?.querySelector<HTMLLIElement>(`[data-book="${nextBook}"]`);
-      next?.focus();
-    }
-  };
 
   // -- Disabled-button tooltip --------------------------------------------
   const disabledTooltip = (() => {
@@ -1793,6 +1766,11 @@ export function ManageBooksDialog({
                   ))}
                 </ToggleGroup>
               )}
+              <BookGridGroupByToggle
+                value={gridGroupBy}
+                onChange={setGridGroupBy}
+                localizedStrings={bookGridStrings}
+              />
             </div>
 
             <div className="tw-min-h-0 tw-flex-1 tw-overflow-auto tw-px-3 tw-py-2">
@@ -1806,158 +1784,27 @@ export function ManageBooksDialog({
                   )}
                 </div>
               ) : (
-                <ul
-                  ref={gridRef}
-                  role="listbox"
-                  aria-multiselectable={action !== 'view'}
-                  aria-label={fmt(t('%manageBooks_grid_label%', 'Books in {0}'), project.shortName)}
-                  className="tw-flex tw-flex-col tw-gap-0.5 tw-outline-none"
-                  onKeyDown={handleGridKeyDown}
-                >
-                  {visibleBooks.map((book) => {
-                    const isSelected = selected.has(book);
+                <BookGridSelector
+                  items={gridItems}
+                  selected={selected}
+                  onToggle={(book) => {
                     const showCheckbox =
                       action === 'create' ||
                       action === 'delete' ||
                       action === 'copy' ||
                       (action === 'import' && !!importFiles[book]);
-                    const showCheckboxPlaceholder = action === 'import' && !importFiles[book];
-                    const isMissingInView = action === 'view' && !current.present.has(book);
-                    const compState = getBookComparisonState(book);
-                    // A7 row coloring: greyed for identical, highlight for to-newer.
-                    let rowClass = '';
-                    if (action === 'copy' && compState === 'filesAreSame') {
-                      rowClass = 'tw-text-muted-foreground tw-opacity-60';
-                    } else if (action === 'copy' && compState === 'sourceIsOlder') {
-                      rowClass = 'tw-bg-amber-50 dark:tw-bg-amber-900/20';
-                    }
-                    const focusable =
-                      focusedBook === book ||
-                      (focusedBook === undefined && book === visibleBooks[0]);
-                    return (
-                      <li
-                        key={book}
-                        data-book={book}
-                        role="option"
-                        aria-selected={showCheckbox ? isSelected : undefined}
-                        aria-checked={showCheckbox ? isSelected : undefined}
-                        aria-label={
-                          showCheckbox
-                            ? fmt(
-                                t('%manageBooks_selection_selectBook%', 'Select {0}'),
-                                Canon.bookIdToEnglishName(book),
-                              )
-                            : undefined
-                        }
-                        tabIndex={focusable ? 0 : -1}
-                        onFocus={() => setFocusedBook(book)}
-                        onClick={() => {
-                          if (showCheckbox) toggleOne(book);
-                        }}
-                        onKeyDown={(e) => {
-                          if (showCheckbox && (e.key === ' ' || e.key === 'Enter')) {
-                            e.preventDefault();
-                            toggleOne(book);
-                          }
-                        }}
-                        className={cn(
-                          'tw-flex tw-items-center tw-gap-2 tw-rounded-md tw-px-3 tw-py-1.5 tw-text-sm hover:tw-bg-accent/60 focus:tw-outline-2 focus:tw-outline-primary',
-                          isSelected && 'tw-bg-accent',
-                          showCheckbox && 'tw-cursor-pointer',
-                          rowClass,
-                        )}
-                      >
-                        {showCheckbox && (
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => toggleOne(book)}
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={fmt(
-                              t('%manageBooks_selection_selectBook%', 'Select {0}'),
-                              book,
-                            )}
-                            tabIndex={-1}
-                          />
-                        )}
-                        {showCheckboxPlaceholder && (
-                          <span className="tw-h-4 tw-w-4 tw-shrink-0" aria-hidden />
-                        )}
-                        <div
-                          className={cn(
-                            'tw-flex tw-min-w-0 tw-flex-1 tw-items-baseline tw-gap-2',
-                            isMissingInView && 'tw-text-muted-foreground tw-line-through',
-                          )}
-                        >
-                          <span className="tw-font-medium">{book}</span>
-                          <span className="tw-truncate tw-text-xs tw-text-muted-foreground">
-                            {Canon.bookIdToEnglishName(book)}
-                          </span>
-                        </div>
-                        <div className="tw-flex tw-shrink-0 tw-items-center tw-gap-2">
-                          {renderMeta(book)}
-                          {action === 'view' &&
-                            (current.present.has(book) ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="tw-h-7 tw-w-7 tw-p-0"
-                                    aria-label={fmt(
-                                      t('%manageBooks_view_inlineDeleteAria%', 'Delete {0}'),
-                                      book,
-                                    )}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectionsByAction((prev) => ({
-                                        ...prev,
-                                        delete: new Set([book]),
-                                      }));
-                                      setAction('delete');
-                                    }}
-                                  >
-                                    <Trash2 className="tw-h-3.5 tw-w-3.5" aria-hidden />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="left">
-                                  {t(
-                                    '%manageBooks_view_inlineDeleteTooltip%',
-                                    'Go to Delete screen',
-                                  )}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="tw-h-7 tw-px-2 tw-text-xs"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectionsByAction((prev) => ({
-                                        ...prev,
-                                        create: new Set([book]),
-                                      }));
-                                      setAction('create');
-                                    }}
-                                  >
-                                    {t('%manageBooks_view_inlineCreateButton%', 'Create')}
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="left">
-                                  {t(
-                                    '%manageBooks_view_inlineCreateTooltip%',
-                                    'Go to Create screen',
-                                  )}
-                                </TooltipContent>
-                              </Tooltip>
-                            ))}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                    if (showCheckbox) toggleOne(book);
+                  }}
+                  groupBy={gridGroupBy}
+                  ariaLabel={fmt(t('%manageBooks_grid_label%', 'Books in {0}'), project.shortName)}
+                  ariaMultiselectable={action !== 'view'}
+                  primaryDateLabel={primaryDateLabel}
+                  secondaryDateLabel={secondaryDateLabel}
+                  interactive={action !== 'view'}
+                  localizedStrings={bookGridStrings}
+                  getRowAriaLabel={gridRowAriaLabel}
+                  contentClassName="tw-px-0 tw-py-0"
+                />
               )}
             </div>
 

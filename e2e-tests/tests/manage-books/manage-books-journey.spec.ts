@@ -481,7 +481,11 @@ test.describe('Manage Books Journey Tests (Cross-WP / Cross-Mode)', () => {
     });
 
     // Step 4: Bulk-select via the "Select all visible" checkbox (BHV-314 / TS-062).
-    const selectAll = frame.getByRole('checkbox', { name: /Select all/i });
+    // After the BookGridSelector port (2026-05-03) the per-group select-all
+    // checkboxes also use aria-label="Select all in {group}", so we anchor on
+    // the bare "Select all" name with `exact: true` to disambiguate the outer
+    // filter-bar checkbox from the per-group ones.
+    const selectAll = frame.getByRole('checkbox', { name: 'Select all', exact: true });
     await expect(selectAll).toBeVisible({ timeout: 10_000 });
     await selectAll.click();
 

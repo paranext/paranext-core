@@ -172,11 +172,15 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     // Filter input always present (placeholder "Filter books…", aria-label "Filter books").
     await expect(frame.getByRole('textbox', { name: /Filter books/i })).toBeVisible();
 
-    // Grid: role="listbox" with role="option" children, each carrying data-book="{ID}".
-    const grid = frame.locator('ul[role="listbox"]');
+    // Grid: role="listbox" UL(s) with role="option" children, each carrying data-book="{ID}".
+    // After the BookGridSelector port (2026-05-03) the grid is split per group
+    // (OT/NT/DC/Extra in canon-grouping mode), so multiple `<ul role="listbox">`
+    // elements coexist in the dialog. Use `.first()` to assert at least one is
+    // visible; the per-pill `data-book` lookup remains a stable contract.
+    const grid = frame.locator('ul[role="listbox"]').first();
     await expect(grid).toBeVisible();
     // GEN is in every canon — should always be present in the View universe.
-    await expect(grid.locator('li[data-book="GEN"]')).toBeVisible();
+    await expect(frame.locator('li[data-book="GEN"]')).toBeVisible();
 
     // Footer: Close button (View mode shows Close, not Cancel).
     // Scoped to the footer to avoid matching the Radix Dialog's built-in
@@ -591,7 +595,11 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await frame.locator('[role="option"]').first().click();
 
     // The grid filter-bar exposes a "Select all" checkbox tooltip-trigger. Click it.
-    const selectAll = frame.getByRole('checkbox', { name: /Select all/i });
+    // After the BookGridSelector port (2026-05-03) the per-group select-all
+    // checkboxes also use aria-label="Select all in {group}", so we anchor on
+    // the bare "Select all" name with `exact: true` to disambiguate the outer
+    // filter-bar checkbox from the per-group ones.
+    const selectAll = frame.getByRole('checkbox', { name: 'Select all', exact: true });
     await expect(selectAll).toBeVisible({ timeout: 10_000 });
     await selectAll.click();
 
