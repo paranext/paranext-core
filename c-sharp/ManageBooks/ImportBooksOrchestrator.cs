@@ -188,7 +188,13 @@ public static class ImportBooksOrchestrator
         List<BookComparisonEntry> entries
     )
     {
-        string usfmContent = file.Content;
+        // Defense-in-depth: a buggy or malformed wire client may omit `content`
+        // (NRT is a compile-time hint, not a runtime guard, and System.Text.Json
+        // happily deserializes a missing property to `null` for non-nullable
+        // reference fields). Treat null as empty so extraction fails with
+        // VAL-006 ("no \id line") instead of NRE on `content.TrimStart()` —
+        // matches the BHV-106 partial-success contract. Bug fix 2026-05-03.
+        string usfmContent = file.Content ?? string.Empty;
 
         // USX → USFM conversion. Malformed XML or normalization failures
         // skip the file (BHV-106 partial-success at the parse layer;
@@ -741,7 +747,10 @@ public static class ImportBooksOrchestrator
         List<AlertEntry> domainErrors
     )
     {
-        string usfmContent = file.Content;
+        // Defense-in-depth (see ProcessFile): null content from a malformed wire
+        // request becomes empty string here so ExtractBooks fails cleanly with
+        // zero books instead of NRE on `content.TrimStart()`. Bug fix 2026-05-03.
+        string usfmContent = file.Content ?? string.Empty;
 
         // USX → USFM conversion. Malformed XML / normalization failures skip
         // the file silently (mirrors PT9 UsxImporter behavior for the parse
@@ -849,7 +858,11 @@ public static class ImportBooksOrchestrator
         var result = new List<OverlapCheckEntry>();
         foreach (ImportFileEntry file in files)
         {
-            string usfmContent = file.Content;
+            // Defense-in-depth (see ProcessFile): tolerate null Content from a
+            // malformed wire request. The downstream ExtractBooks returns an
+            // empty list when fed empty content, so the overlap-entry array
+            // simply omits the bad file rather than crashing with NRE.
+            string usfmContent = file.Content ?? string.Empty;
             if (IsUsxContent(file.FileName, usfmContent))
             {
                 if (!TryConvertUsxToUsfm(scrText, usfmContent, out usfmContent))

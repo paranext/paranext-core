@@ -560,6 +560,125 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         // =====================================================================
+        // Regression — Bug 2026-05-03 (NRE on null Content)
+        //
+        // The TypeScript wiring layer used to omit `content` from the wire
+        // payload (it sent `{projectId, fileName, bookNumber, replaceEntireBook}`
+        // instead of the data-contracts §2.5 shape `{fileName, content,
+        // included}`). System.Text.Json deserialized the missing field as
+        // `null` even though `ImportFileEntry.Content` is non-nullable at
+        // compile time, and `IsUsxContent` then crashed on `content.TrimStart()`
+        // with `NullReferenceException`. Defensive guards in `ProcessFile`,
+        // `ImportOneFile`, and `BuildOverlapEntries` now treat a null Content
+        // as empty so extraction fails cleanly with zero books rather than
+        // surfacing a JSON-RPC -32000 to the user.
+        // =====================================================================
+
+        [Test]
+        [Category("Regression")]
+        [Property("CapabilityId", "CAP-009")]
+        [Property("BehaviorId", "BHV-106")]
+        [Property("BugReport", "manage-books-import-NRE-2026-05-03")]
+        [Description(
+            "Regression: an ImportFileEntry deserialized from a malformed wire "
+                + "request may have null Content (the field was omitted on the "
+                + "wire). The orchestrator must not throw NullReferenceException; "
+                + "it should treat null Content as empty and produce zero entries "
+                + "for that file (BHV-106 partial-success)."
+        )]
+        public void ParseImportFiles_NullContent_DoesNotThrow_AndYieldsNoEntries()
+        {
+            // Construct an entry with explicit null Content. The non-nullable
+            // record positional parameter is bypassed via `null!` because that
+            // is exactly the runtime shape System.Text.Json produces when the
+            // wire client omits the `content` JSON field.
+            var files = new[]
+            {
+                new ImportFileEntry(FileName: "gen.sfm", Content: null!, Included: true),
+            };
+
+            BookComparisonResult? result = null;
+            Assert.DoesNotThrow(
+                () => result = ImportBooksOrchestrator.ParseImportFiles(_scrText, files)
+            );
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result!.Entries, Is.Empty, "null Content yields zero books, never throws");
+        }
+
+        [Test]
+        [Category("Regression")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-106")]
+        [Property("BugReport", "manage-books-import-NRE-2026-05-03")]
+        [Description(
+            "Regression: BuildOverlapEntries must tolerate ImportFileEntry "
+                + "instances with null Content (malformed wire payload) without "
+                + "throwing NullReferenceException. The bad file is skipped; "
+                + "well-formed files still contribute entries."
+        )]
+        public void BuildOverlapEntries_NullContent_DoesNotThrow_AndSkipsBadFile()
+        {
+            var files = new[]
+            {
+                new ImportFileEntry(FileName: "bad.sfm", Content: null!, Included: true),
+                new ImportFileEntry(
+                    FileName: "good.sfm",
+                    Content: "\\id GEN\n\\c 1\n\\v 1 text",
+                    Included: true
+                ),
+            };
+
+            OverlapCheckEntry[]? entries = null;
+            Assert.DoesNotThrow(
+                () => entries = ImportBooksOrchestrator.BuildOverlapEntries(_scrText, files)
+            );
+            Assert.That(entries, Is.Not.Null);
+
+            // The "good" file produces one entry (GEN); the "bad" file is silently
+            // skipped because it has no content to extract.
+            Assert.That(entries!, Has.Length.EqualTo(1));
+            Assert.That(entries![0].FileName, Is.EqualTo("good.sfm"));
+            Assert.That(entries![0].BookNum, Is.EqualTo(1));
+        }
+
+        [Test]
+        [Category("Regression")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-106")]
+        [Property("BugReport", "manage-books-import-NRE-2026-05-03")]
+        [Description(
+            "Regression: ImportBooks (the execution path) must tolerate null "
+                + "Content without throwing NullReferenceException. The bad file "
+                + "produces zero books imported and zero error AlertEntries — "
+                + "matches BHV-106 partial-success semantics."
+        )]
+        public void ImportBooks_NullContent_DoesNotThrow_AndReportsZeroImported()
+        {
+            var files = new[]
+            {
+                new ImportFileEntry(FileName: "bad.sfm", Content: null!, Included: true),
+            };
+
+            ImportBooksResult? result = null;
+            Assert.DoesNotThrow(
+                () =>
+                    result = ImportBooksOrchestrator.ImportBooks(
+                        _scrText,
+                        files,
+                        replaceEntireBook: true
+                    )
+            );
+            Assert.That(result, Is.Not.Null);
+
+            Assert.That(result!.ImportedCount, Is.EqualTo(0));
+            Assert.That(
+                result!.Success,
+                Is.True,
+                "no errors → Success=true even with zero imports"
+            );
+        }
+
+        // =====================================================================
         // CheckOverlappingFiles — TS-085 / BHV-318 / VAL-012 / gm-012
         // =====================================================================
 
