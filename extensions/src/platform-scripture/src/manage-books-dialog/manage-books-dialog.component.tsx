@@ -241,6 +241,29 @@ const isUsxFileName = (name: string): boolean => {
   return lower.endsWith('.usx') || lower.endsWith('.xml');
 };
 
+/**
+ * Reads the text contents of a picked file when it is a real `File` / `Blob` (browser-native picker
+ * or `onPickImportFiles` returning `File[]`). Returns `undefined` for plain `{name}` shapes
+ * (Storybook decorators) or when the underlying `text()` call rejects (e.g. permission denied, file
+ * deleted between pick and read). The undefined branch lets the wiring layer skip / report the
+ * entry as a per-file ENCODING_ERROR rather than crashing the import.
+ */
+async function readFileTextIfAvailable(
+  picked: File | { name: string },
+): Promise<string | undefined> {
+  // `File extends Blob` exposes `.text()`; story-shape objects do not. The structural narrowing
+  // `'text' in picked` would itself be `as`-equivalent here, so we use the union-type discriminant
+  // (presence of `.text` as a function on `File`) which TypeScript narrows safely.
+  if ('text' in picked && typeof picked.text === 'function') {
+    try {
+      return await picked.text();
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 /** Narrow runtime check for a create-method dropdown value. */
 const isCreateMethod = (v: string): v is ManageBooksCreateMethod =>
   v === 'empty' || v === 'chapterVerse' || v === 'fromTemplate';
@@ -586,11 +609,24 @@ export function ManageBooksDialog({
    * (A10) Ingest a list of picked files into the import grid. Detects the book ID per file,
    * surfaces unmatched files via a sonner warning, and rejects the addition with an in-dialog
    * validation error if two files map to the same book.
+   *
+   * When the picked entries are real `File` objects (browser native picker or `onPickImportFiles`
+   * returning `File[]`), the file's text contents are read via `File.text()` and stored alongside
+   * the display name on the resulting `ManageBooksImportFile`. The wiring layer forwards `content`
+   * to the C# `importBooks` orchestrator (`ImportFileEntry.content` per data-contracts.md §2.5).
+   * Story decorators that pass plain `{name}` objects still work — the resulting entries simply
+   * omit `content`, which the wiring layer treats as an empty file.
    */
   const ingestImportFiles = useCallback(
-    (picked: { name: string }[]): { addedBooks: string[] } => {
+    async (picked: ReadonlyArray<File | { name: string }>): Promise<{ addedBooks: string[] }> => {
       const emptyResult: { addedBooks: string[] } = { addedBooks: [] };
       if (picked.length === 0) return emptyResult;
+      // Pre-read each picked file's text contents in parallel. A failure to read (e.g. permission
+      // denied, race with file deletion) yields `undefined` so the entry still appears in the grid
+      // but with no content; the wiring layer's wire call surfaces the empty content as an
+      // "ENCODING_ERROR" / "MISSING_ID_LINE" via the orchestrator's per-file error path rather
+      // than crashing.
+      const contents = await Promise.all(picked.map(readFileTextIfAvailable));
       const additions: Record<string, ManageBooksImportFile> = {};
       const addedBooks: string[] = [];
       const unmatched: string[] = [];
@@ -598,7 +634,7 @@ export function ManageBooksDialog({
       // A10: guard against two files mapping to the same book within this batch.
       const seenInBatch: Record<string, string> = {};
       let aborted = false;
-      picked.forEach((f) => {
+      picked.forEach((f, idx) => {
         if (aborted) return;
         const book = detectBookId(f.name);
         if (!book) {
@@ -618,7 +654,7 @@ export function ManageBooksDialog({
           return;
         }
         seenInBatch[book] = f.name;
-        additions[book] = { file: f.name, date: todayISO() };
+        additions[book] = { file: f.name, date: todayISO(), content: contents[idx] };
         addedBooks.push(book);
         if (isUsxFileName(f.name)) usxFiles.push(f.name);
       });
@@ -662,14 +698,16 @@ export function ManageBooksDialog({
 
   const handleImportFilesPicked = (picked: FileList | null) => {
     if (!picked || picked.length === 0) return;
-    ingestImportFiles(Array.from(picked));
+    // Fire-and-forget: ingestImportFiles's async work is internally tracked via setImportFiles;
+    // callers don't need to await here (the auto-browse path uses triggerFileBrowser, which does).
+    ingestImportFiles(Array.from(picked)).catch(() => undefined);
   };
 
   const triggerFileBrowser = useCallback(async (): Promise<{ pickedAny: boolean }> => {
     if (onPickImportFiles) {
       const files = await onPickImportFiles();
       if (!files || files.length === 0) return { pickedAny: false };
-      const { addedBooks } = ingestImportFiles(files);
+      const { addedBooks } = await ingestImportFiles(files);
       return { pickedAny: addedBooks.length > 0 };
     }
     importFileInputRef.current?.click();

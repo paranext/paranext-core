@@ -74,6 +74,13 @@ export type ManageBooksImportFile = {
   file: string;
   /** ISO date representing the picked file's last-modified timestamp. */
   date: string;
+  /**
+   * The picked file's already-decoded text contents. Required by the C# orchestrator on the wire
+   * (`ImportFileEntry.content`). The dialog itself is presentational and does not require this
+   * field, so it remains optional on the type — wiring layers that drive a real import MUST
+   * populate it (story decorators omit it because they never call the orchestrator).
+   */
+  content?: string;
 };
 
 /* ------------------------------------------------------------------ */

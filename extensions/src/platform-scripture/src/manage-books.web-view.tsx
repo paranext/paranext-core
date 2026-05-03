@@ -48,13 +48,20 @@ const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
 
 /**
  * Wire-shape of a single import file as the C# orchestrator expects to receive it. Mirrors
- * `ImportFileEntry.cs` in c-sharp/ManageBooks/.
+ * `ImportFileEntry.cs` in c-sharp/ManageBooks/ and the canonical `ImportFileEntry` definition in
+ * `.context/features/manage-books/data-contracts.md` Section 2.5.
+ *
+ * Bug fix (2026-05-03): the prior shape `{projectId, fileName, bookNumber, replaceEntireBook}` did
+ * not match the data-contracts wire shape — `Content` was missing entirely, leading to a
+ * `NullReferenceException` inside `ImportBooksOrchestrator.IsUsxContent` (`content.TrimStart()` on
+ * `null`), and `Included` was also absent (causing every file to be silently treated as
+ * `Included=false` and skipped). The corrected shape matches both the C# `ImportFileEntry` record
+ * and the e2e `manage-books-commands.spec.ts` "M-011 importBooks" payload exactly.
  */
 type ImportFileEntry = {
-  projectId: string;
   fileName: string;
-  bookNumber?: number;
-  replaceEntireBook: boolean;
+  content: string;
+  included: boolean;
 };
 
 /**
@@ -79,7 +86,7 @@ interface ManageBooksNetworkObject {
   createBooks: (request: {
     projectId: string;
     bookNumbers: number[];
-    method: string;
+    creationMethod: string;
     modelProjectId?: string;
     estherTemplate?: string;
   }) => Promise<MutationResult>;
@@ -92,7 +99,7 @@ interface ManageBooksNetworkObject {
   importBooks: (input: {
     projectId: string;
     files: ImportFileEntry[];
-    strategy: string;
+    replaceEntireBook: boolean;
   }) => Promise<MutationResult>;
 }
 
@@ -116,46 +123,48 @@ function decodeBooksPresent(booksPresent: string): ManageBooksDialogBookInfo[] {
 
 /**
  * Convert the dialog's `Record<bookId, ManageBooksImportFile>` shape into the wire-shape
- * `ImportFileEntry[]` the C# `ImportBooksOrchestrator` expects.
+ * `ImportFileEntry[]` the C# `ImportBooksOrchestrator` expects (data-contracts §2.5).
+ *
+ * `entry.content` is populated by the dialog's file picker (it reads `File.text()` at pick time).
+ * If a story / decorator omits content, we forward an empty string — the orchestrator's parse
+ * pipeline surfaces missing-content as a per-file MISSING_ID_LINE error rather than crashing, which
+ * is the documented contract.
  */
 function componentToImportFileEntries(
   files: Record<string, ManageBooksImportFile>,
-  projectId: string,
-  strategy: ManageBooksImportStrategy,
 ): ImportFileEntry[] {
-  return Object.entries(files).map(([bookId, entry]) => ({
-    projectId,
+  return Object.entries(files).map(([, entry]) => ({
     fileName: entry.file,
-    bookNumber: Canon.bookIdToNumber(bookId) || undefined,
-    replaceEntireBook: strategy === 'replaceEntireBooks',
+    content: entry.content ?? '',
+    included: true,
   }));
 }
 
 /**
  * Map the unified dialog's createMethod TS union into the wire-shape token the C# `CreationMethod`
- * enum accepts.
+ * enum accepts. The C# JSON deserializer is configured with `JsonStringEnumConverter` +
+ * `JsonNamingPolicy.CamelCase` (see `c-sharp/JsonUtils/SerializationOptions.cs`), so the wire
+ * tokens are the camelCase forms `'empty' | 'chapterVerse' | 'fromTemplate'` — matching the
+ * canonical shape in `.context/features/manage-books/data-contracts.md` Section 2.2 and the e2e
+ * `manage-books-commands.spec.ts` "M-004 createBooks" payload.
+ *
+ * Bug fix (2026-05-03): the prior mapping returned `'Empty' | 'ChapterAndVerseNumbers' |
+ * 'FromTemplate'`, which the C# converter rejected and silently fell back to `Empty` (enum 0). That
+ * produced an empty book regardless of the user's "Based on" / "With all chapter and verse numbers"
+ * selection.
  */
 function createMethodToWire(method: ManageBooksCreateMethod): string {
   switch (method) {
     case 'empty':
-      return 'Empty';
+      return 'empty';
     case 'chapterVerse':
-      return 'ChapterAndVerseNumbers';
+      return 'chapterVerse';
     case 'fromTemplate':
-      return 'FromTemplate';
+      return 'fromTemplate';
     default:
       // Exhaustiveness check; if a new method lands the type system will flag.
-      return 'Empty';
+      return 'empty';
   }
-}
-
-/**
- * Map the import strategy TS union into the wire-shape token. Currently the orchestrator accepts
- * the same string we use; this indirection exists so a future spec drift can be absorbed in one
- * place.
- */
-function importStrategyToWire(strategy: ManageBooksImportStrategy): string {
-  return strategy;
 }
 
 /** Convert AlertEntry.level → platform notification severity. */
@@ -479,7 +488,7 @@ global.webViewComponent = function ManageBooksWebView({
       return manageBooksApi.createBooks({
         projectId: args.projectId,
         bookNumbers: booksToNumbers(args.books),
-        method: createMethodToWire(args.method),
+        creationMethod: createMethodToWire(args.method),
         modelProjectId: args.referenceProjectId,
         estherTemplate: args.estherTemplate,
       });
@@ -521,11 +530,11 @@ global.webViewComponent = function ManageBooksWebView({
       strategy: ManageBooksImportStrategy;
     }): Promise<MutationResult | undefined> => {
       if (!manageBooksApi) return undefined;
-      const fileEntries = componentToImportFileEntries(args.files, args.projectId, args.strategy);
+      const fileEntries = componentToImportFileEntries(args.files);
       return manageBooksApi.importBooks({
         projectId: args.projectId,
         files: fileEntries,
-        strategy: importStrategyToWire(args.strategy),
+        replaceEntireBook: args.strategy === 'replaceEntireBooks',
       });
     },
     [manageBooksApi],
