@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { ResourceReferenceList } from 'platform-scripture';
 import {
   isValidResourceReference,
   resourceReferenceListValidator,
 } from './resource-reference-list.utils';
-import type { ResourceReferenceList } from 'platform-scripture';
 
 const validList = (overrides?: Partial<ResourceReferenceList>): ResourceReferenceList => ({
   dataVersion: '1.0.0',
@@ -55,7 +55,8 @@ describe('isValidResourceReference', () => {
   });
 
   it('rejects null', () => {
-    expect(isValidResourceReference(null)).toBe(false);
+    const nullValue: unknown = JSON.parse('null');
+    expect(isValidResourceReference(nullValue)).toBe(false);
   });
 
   it('rejects an item without a type field', () => {
@@ -83,29 +84,25 @@ describe('resourceReferenceListValidator', () => {
   });
 
   it('throws when currentValue is null', async () => {
-    // Runtime data could be null even though the type says otherwise
-    const nullCurrent = null as unknown as ResourceReferenceList;
+    const nullCurrent: ResourceReferenceList = JSON.parse('null');
     await expect(resourceReferenceListValidator(validList(), nullCurrent, {})).rejects.toThrow(
       /current value is missing/i,
     );
   });
 
   it('throws when items is not an array', async () => {
-    // Runtime data could have wrong shape
-    const badValue = {
-      dataVersion: '1.0.0',
-      items: 'not-array',
-    } as unknown as ResourceReferenceList;
+    const badValue: ResourceReferenceList = JSON.parse(
+      '{"dataVersion":"1.0.0","items":"not-array"}',
+    );
     await expect(resourceReferenceListValidator(badValue, validList(), {})).rejects.toThrow(
       /`items` must be an array/,
     );
   });
 
   it('throws when an item has the wrong shape for its known type', async () => {
-    const newValue = {
-      dataVersion: '1.0.0',
-      items: [{ type: 'project', name: 'No ID' }], // missing required `id`
-    } as unknown as ResourceReferenceList;
+    const newValue: ResourceReferenceList = JSON.parse(
+      '{"dataVersion":"1.0.0","items":[{"type":"project","name":"No ID"}]}',
+    );
     await expect(resourceReferenceListValidator(newValue, validList(), {})).rejects.toThrow(
       /index 0 has an invalid shape/,
     );

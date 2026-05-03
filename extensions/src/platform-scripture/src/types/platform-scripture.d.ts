@@ -1637,10 +1637,10 @@ declare module 'platform-scripture' {
    * round-trip them unchanged.
    */
   export type UnknownResourceReference = {
-    /** Unrecognized type discriminant */
-    type: string;
     /** Additional properties preserved from the stored JSON */
     [key: string]: unknown;
+    /** Unrecognized type discriminant */
+    type: string;
   };
 
   /** Discriminated union of all project/resource reference types */

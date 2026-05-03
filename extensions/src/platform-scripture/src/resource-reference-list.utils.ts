@@ -1,17 +1,20 @@
 import type { ProjectSettingValidator } from '@papi/core';
 
 export const isValidResourceReference = (item: unknown): boolean => {
-  if (typeof item !== 'object' || item === null) return false;
-  const ref = item as Record<string, unknown>;
-  if (typeof ref['type'] !== 'string') return false;
-  switch (ref['type']) {
+  if (typeof item !== 'object' || !item) return false;
+  if (!('type' in item) || typeof item.type !== 'string') return false;
+  switch (item.type) {
     case 'project':
-    case 'dblResource':
-      return typeof ref['name'] === 'string' && typeof ref['id'] === 'string';
+    case 'dblResource': {
+      if (!('name' in item) || !('id' in item)) return false;
+      return typeof item.name === 'string' && typeof item.id === 'string';
+    }
     case 'enhancedResource':
     case 'xmlResource':
-    case 'sourceLanguageResource':
-      return typeof ref['name'] === 'string';
+    case 'sourceLanguageResource': {
+      if (!('name' in item)) return false;
+      return typeof item.name === 'string';
+    }
     default:
       return true; // unknown types are valid — UnknownResourceReference accepts any shape
   }
@@ -26,7 +29,7 @@ const parseVersion = (v: string) => {
 export const resourceReferenceListValidator: ProjectSettingValidator<
   'platformScripture.modelTexts' | 'platformScripture.referencedProjectsAndResources'
 > = async (newValue, currentValue) => {
-  if (currentValue === null || currentValue === undefined)
+  if (!currentValue)
     throw new Error('Current value is missing; cannot validate resource reference list.');
 
   // Shape validation
