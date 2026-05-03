@@ -1,15 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useCallback, useMemo, useState } from 'react';
 import type { SemanticDomain } from 'platform-bible-react';
+import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import {
   MOCK_FILTERED_TOKEN_ID,
-  MOCK_GEN_1_TOKENS,
   MOCK_RIBBONS_ALL,
   MOCK_RIBBONS_NONE,
   MOCK_COPYRIGHT_TEXT,
 } from '../data/marble-form.story-data';
-import { TEMP_SCRIPTURE_PANE_STRING_KEYS } from '../components/Temp/temp-scripture-pane.component';
+import { ENHANCED_SCRIPTURE_PANE_STRING_KEYS } from '../components/scripture-pane/scripture-pane.component';
 import {
   TOOLBAR_STRING_KEYS,
   type HighlightMode,
@@ -64,7 +64,7 @@ import {
 
 const allKeys = [
   ...ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS,
-  ...TEMP_SCRIPTURE_PANE_STRING_KEYS,
+  ...ENHANCED_SCRIPTURE_PANE_STRING_KEYS,
   ...TOOLBAR_STRING_KEYS,
   ...WARNING_RIBBONS_STRING_KEYS,
   ...COPYRIGHT_OVERLAY_STRING_KEYS,
@@ -78,6 +78,38 @@ const allKeys = [
   ...MARBLE_GUIDE_STRING_KEYS,
 ];
 const localizedStrings = getLocalizedStrings(allKeys);
+
+/**
+ * Minimal mock USJ document used by stories so the EnhancedScripturePane has _something_ to render.
+ * The annotations array is empty - the stories don't exercise marble overlays directly; the
+ * dictionary / encyclopedia tabs and ribbons are the focus of the shell stories. Component-level
+ * overlay behavior is covered by the EnhancedScripturePane's own Storybook + Vitest suites.
+ */
+const MOCK_USJ: Usj = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    {
+      type: 'book',
+      marker: 'id',
+      code: 'GEN',
+      content: [],
+    },
+    {
+      type: 'chapter',
+      marker: 'c',
+      number: '1',
+    },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1' },
+        'In the beginning, God created the heavens and the earth.',
+      ],
+    },
+  ],
+};
 
 /**
  * Story-only placeholder for handlers that phase-3-ui will wire to real PAPI commands or webView
@@ -300,7 +332,8 @@ export const Default: Story = {
             onZoomReset: () => placeholderAction('Zoom reset (wired in phase-3-ui).'),
           }}
           ribbons={MOCK_RIBBONS_NONE}
-          tokens={MOCK_GEN_1_TOKENS}
+          usj={MOCK_USJ}
+          annotations={[]}
           filteredTokenId={undefined}
           showFootnotes={state.viewMenu.showFootnotes}
           hebrewDisplayMode={state.viewMenu.hebrewDisplayMode}
@@ -399,7 +432,8 @@ export const Loading: Story = {
     scope: 'current-verse',
     onScopeChange: () => {},
     ribbons: MOCK_RIBBONS_NONE,
-    tokens: MOCK_GEN_1_TOKENS,
+    usj: MOCK_USJ,
+    annotations: [],
     filteredTokenId: undefined,
   },
 };
@@ -415,7 +449,8 @@ export const WithAllRibbons: Story = {
     onScopeChange: () => {},
     currentReferenceLabel: 'GEN 1:1',
     ribbons: MOCK_RIBBONS_ALL,
-    tokens: MOCK_GEN_1_TOKENS,
+    usj: MOCK_USJ,
+    annotations: [],
     filteredTokenId: undefined,
     dictionaryItems: MOCK_DICT_ENTRIES_HEBREW,
     dictionaryActiveDictionary: 'SDBH',
@@ -443,7 +478,8 @@ export const Empty: Story = {
     scope: 'current-verse',
     onScopeChange: () => {},
     ribbons: MOCK_RIBBONS_NONE,
-    tokens: undefined,
+    usj: undefined,
+    annotations: [],
     filteredTokenId: undefined,
   },
 };
@@ -467,7 +503,8 @@ export const WithFilterAndFootnotes: Story = {
     showFootnotes: true,
     currentReferenceLabel: 'GEN 1:1',
     ribbons: MOCK_RIBBONS_NONE,
-    tokens: MOCK_GEN_1_TOKENS,
+    usj: MOCK_USJ,
+    annotations: [],
     filteredTokenId: MOCK_FILTERED_TOKEN_ID,
     dictionaryItems: MOCK_DICT_ENTRIES_HEBREW,
     dictionaryActiveDictionary: 'SDBH',

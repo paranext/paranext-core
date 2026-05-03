@@ -15,11 +15,9 @@ import {
 } from 'platform-bible-react';
 import type { LocalizeKey, LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
 import { formatScrRef, formatScrRefRange, isPlatformError } from 'platform-bible-utils';
+import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { convertMarbleChapterXml, type MarbleAnnotation } from '../lib/marble-converter';
-import {
-  TempScripturePane,
-  type MarbleTokenLike,
-} from '../components/Temp/temp-scripture-pane.component';
+import { EnhancedScripturePane } from '../components/scripture-pane/scripture-pane.component';
 import {
   EnhancedResourceTabBar,
   EnhancedResourceTopToolbar,
@@ -122,14 +120,15 @@ export type EnhancedResourceWebViewProps = {
   isLoading?: boolean;
 
   // Scripture pane
-  tokens: MarbleTokenLike[] | undefined;
+  usj: Usj | undefined;
+  annotations: MarbleAnnotation[];
   filteredTokenId: string | undefined;
   hebrewDisplayMode?: ScriptDisplayMode;
   greekDisplayMode?: ScriptDisplayMode;
   showFootnotes?: boolean;
   scripturePaneZoom?: number;
   scripturePaneError?: string;
-  onTokenClick?: (tokenId: string, token: MarbleTokenLike) => void;
+  onTokenClick?: (tokenId: string, annotation: MarbleAnnotation) => void;
 
   // Toolbar
   activeTab: ResearchTab;
@@ -153,6 +152,8 @@ export type EnhancedResourceWebViewProps = {
   scrollGroupId?: ScrollGroupId | undefined;
   onScrollGroupChange?: (newScrollGroupId: ScrollGroupId | undefined) => void;
   currentReferenceLabel?: string;
+  /** Current scripture reference - forwarded to the scripture pane for Editorial scrRef wiring. */
+  scrRef?: SerializedVerseRef;
   /**
    * View-menu state surface (Show footnotes, Show translations, H/G display modes). Theme 10 +
    * forward-note FN-017 — display-mode controls moved from the (now-removed) scripture-pane header
@@ -332,8 +333,8 @@ export type EnhancedResourceWebViewProps = {
 
 /**
  * Pure presentational shell for the Enhanced Resource window. Composes WarningRibbons, Toolbar,
- * TempScripturePane (placeholder per FN-001/013/014), and the four research-pane tab content
- * slots.
+ * EnhancedScripturePane (FN-001/013/014 — wraps the platform-scripture-editor in read-only mode
+ * with marble word/note overlay), and the four research-pane tab content slots.
  *
  * The shell is data-agnostic: every piece of state arrives via props and every interaction fires a
  * callback. Phase-3-ui wires PAPI hooks and the real scripture editor.
@@ -346,7 +347,8 @@ export function EnhancedResourceWebView({
 
   isLoading = false,
 
-  tokens,
+  usj,
+  annotations,
   filteredTokenId,
   hebrewDisplayMode = 'both',
   greekDisplayMode = 'both',
@@ -370,6 +372,7 @@ export function EnhancedResourceWebView({
   scrollGroupId,
   onScrollGroupChange = () => {},
   currentReferenceLabel,
+  scrRef,
   viewMenu,
   viewMenuHandlers,
 
@@ -493,7 +496,7 @@ export function EnhancedResourceWebView({
     );
   }
 
-  const showShellEmpty = tokens === undefined && !scripturePaneError;
+  const showShellEmpty = usj === undefined && !scripturePaneError;
 
   return (
     <div className={cn('tw-flex tw-h-[100dvh] tw-flex-col tw-bg-background')}>
@@ -539,13 +542,15 @@ export function EnhancedResourceWebView({
               minSize={20}
               className="tw-flex tw-flex-col"
             >
-              <TempScripturePane
-                tokens={tokens}
+              <EnhancedScripturePane
+                usj={usj}
+                annotations={annotations}
                 filteredTokenId={filteredTokenId}
                 showFootnotes={showFootnotes}
                 scripturePaneZoom={scripturePaneZoom}
                 errorMessage={scripturePaneError}
                 highlightAllResearchTerms={highlightMode === 'all-research-terms'}
+                scrRef={scrRef}
                 onTokenClick={onTokenClick}
                 localizedStringsWithLoadingState={childStrings}
               />
@@ -1267,32 +1272,6 @@ function formatMediaReferenceLabel(
 }
 
 /**
- * Convert annotation metadata produced by the marble-aware USX→USJ converter into the
- * `MarbleTokenLike[]` shape the placeholder ScripturePane consumes. This is the FN-013 → FN-014
- * connection point: the `wg` markers are preserved by the editor via __unknownAttributes, so the
- * annotation indices stay aligned with what the real read-only editor will display once it lands.
- */
-function annotationsToTokens(annotations: MarbleAnnotation[]): MarbleTokenLike[] {
-  return annotations
-    .filter((a) => a.kind === 'word')
-    .map((a, index) => ({
-      type: 'TextLink' as const,
-      // The annotation id is the marble `<wg id="...">` value (typically "Greek 1234" or
-      // "Hebrew 5678"). The placeholder pane displays the id as the visible text - the real
-      // platform-scripture-editor will instead render the underlying scripture word. The visible
-      // label here is just a stand-in until FN-001 ships read-only mode in the editor.
-      text: a.annotationId,
-      index,
-      strongNumber: a.metadata.strong,
-      targetLinks: a.metadata.targetLinks,
-      thematicLinks: a.metadata.thematicLinks,
-      lexicalLinks: a.metadata.lexicalLinks,
-      imageLinks: a.metadata.imageLinks,
-      mapLinks: a.metadata.mapLinks,
-    }));
-}
-
-/**
  * Web view entry point. Wires PAPI hooks (`useWebViewScrollGroupScrRef`, `useWebViewState`),
  * dispatches PAPI commands for chapter loads + guide-open, and hosts the FN-020 integrated state
  * machine (linked-word click → filter; tab-switch + clear-filter propagation; BCV change → chapter
@@ -1351,8 +1330,9 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       ? savedWebViewState.resourceId
       : undefined;
 
-  // Chapter token state - drives the scripture pane.
-  const [tokens, setTokens] = useState<MarbleTokenLike[] | undefined>(undefined);
+  // Chapter USJ + annotations state - drives the scripture pane.
+  const [usj, setUsj] = useState<Usj | undefined>(undefined);
+  const [annotations, setAnnotations] = useState<MarbleAnnotation[]>([]);
   const [scripturePaneError, setScripturePaneError] = useState<string | undefined>(undefined);
 
   // Load chapter XML when (resourceId, bookId, chapterNum) changes. resourceId may be undefined
@@ -1363,7 +1343,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   useEffect(() => {
     let cancelled = false;
     if (resourceId === undefined) {
-      setTokens(undefined);
+      setUsj(undefined);
+      setAnnotations([]);
       setScripturePaneError(undefined);
       return () => {
         cancelled = true;
@@ -1373,7 +1354,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const bookNum = Canon.bookIdToNumber(scrRef.book);
     if (bookNum <= 0) {
       // Unknown book id - leave the empty state in place rather than blow up.
-      setTokens(undefined);
+      setUsj(undefined);
+      setAnnotations([]);
       setScripturePaneError(undefined);
       return () => {
         cancelled = true;
@@ -1386,7 +1368,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
           await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
         if (!proxy) {
           if (!cancelled) {
-            setTokens(undefined);
+            setUsj(undefined);
+            setAnnotations([]);
             setScripturePaneError('Enhanced Resources backend is not available.');
           }
           return;
@@ -1397,8 +1380,10 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
           chapterNumber: scrRef.chapterNum,
         });
         if (cancelled) return;
-        const { annotations } = convertMarbleChapterXml(xml);
-        setTokens(annotationsToTokens(annotations));
+        const { usj: convertedUsj, annotations: convertedAnnotations } =
+          convertMarbleChapterXml(xml);
+        setUsj(convertedUsj);
+        setAnnotations(convertedAnnotations);
         setScripturePaneError(undefined);
       } catch (err) {
         if (cancelled) return;
@@ -1407,7 +1392,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
             err instanceof Error ? err.message : String(err)
           }`,
         );
-        setTokens(undefined);
+        setUsj(undefined);
+        setAnnotations([]);
         // Surface a user-visible error only for unexpected failures - missing-book / missing-data
         // resolutions belong to the warning-ribbon system (BHV-310).
         setScripturePaneError(undefined);
@@ -2909,7 +2895,9 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   return (
     <EnhancedResourceWebView
       resourceName={resourceId}
-      tokens={tokens}
+      usj={usj}
+      annotations={annotations}
+      scrRef={scrRef}
       filteredTokenId={filteredTokenId}
       hebrewDisplayMode={hebrewDisplayMode}
       greekDisplayMode={greekDisplayMode}
