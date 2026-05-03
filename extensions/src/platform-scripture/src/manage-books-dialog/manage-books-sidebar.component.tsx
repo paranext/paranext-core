@@ -213,10 +213,7 @@ export function ManageBooksSidebar({
       className="tw-flex tw-w-64 tw-shrink-0 tw-flex-col tw-gap-1 tw-overflow-y-auto tw-border-r tw-bg-muted/40 tw-p-3"
       data-testid="manage-books-sidebar"
     >
-      <div className="tw-px-2 tw-pb-2 tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground">
-        {t('%manageBooks_sidebar_heading%', 'Manage Books')}
-      </div>
-      <div className="tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-pb-3">
+      <div className="tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-pt-2 tw-pb-3">
         <Label
           htmlFor="manage-books-sidebar-project"
           className="tw-text-xs tw-text-muted-foreground"

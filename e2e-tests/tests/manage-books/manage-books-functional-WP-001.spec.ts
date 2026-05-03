@@ -182,10 +182,13 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     // GEN is in every canon — should always be present in the View universe.
     await expect(frame.locator('li[data-book="GEN"]')).toBeVisible();
 
-    // Footer: Close button (View mode shows Close, not Cancel).
-    // Scoped to the footer to avoid matching the Radix Dialog's built-in
-    // top-right X close button.
-    await expect(frame.locator('footer').getByRole('button', { name: /^Close$/i })).toBeVisible();
+    // Footer: View mode has NO action buttons. The footer-row Cancel/Close was
+    // removed in the 2026-05-03 UI polish pass — the dock-tab X is the only
+    // close affordance, and View mode has no Apply action. The footer renders
+    // only the summary line ("Viewing {project}") and the aria-live region.
+    await expect(
+      frame.locator('footer').getByRole('button', { name: /^Close|^Cancel$/i }),
+    ).toHaveCount(0);
 
     // EVD-002: dialog fully loaded in default View action mode.
     await mainPage.screenshot({
@@ -1039,7 +1042,7 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
   });
 
   // @scenario TS-049, TS-089
-  test('should close the dialog (web view tab dismissed) when Close is clicked from View mode (EVD-003)', async ({
+  test('should close the dialog (web view tab dismissed) when the dock-tab X is clicked (EVD-003)', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
@@ -1050,12 +1053,13 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await mainPage.getByRole('menuitem', { name: MENU_LABEL_REGEX }).click();
     const tab = mainPage.locator('.dock-tab', { hasText: WEB_VIEW_TITLE_REGEX });
     await expect(tab).toBeVisible({ timeout: 15_000 });
-    const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    await frame
-      .locator('footer')
-      .getByRole('button', { name: /^Close$/i })
-      .click();
+    // 2026-05-03 UI polish removed the in-component Cancel/Close button — the
+    // dock-tab X is the only close affordance. Click it directly. The Manage
+    // Books tab's close button is the `.dock-tab-close-btn` inside the active
+    // tab whose label matches "Manage Books".
+    const closeBtn = tab.locator('.dock-tab-close-btn');
+    await closeBtn.click();
 
     // Tab is removed from the dock.
     await expect(tab).toBeHidden({ timeout: 10_000 });
@@ -1087,11 +1091,11 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
       .last();
     await createApply.click();
 
-    // While createBooks is pending, the apply button must be disabled and the cancel
-    // button must be disabled (A3 acceptance — isSubmitting state).
+    // While createBooks is pending, the apply button must be disabled
+    // (A3 acceptance — isSubmitting state). The companion Cancel/Close
+    // button assertion was dropped 2026-05-03 along with the in-footer
+    // Cancel button itself; the dock-tab X remains the only close affordance.
     await expect(createApply).toBeDisabled({ timeout: 5_000 });
-    const cancelBtn = frame.getByRole('button', { name: /Cancel/i });
-    await expect(cancelBtn).toBeDisabled();
 
     // Live region announces "Creating books...". The footer renders the message twice — once
     // in an aria-live sr-only span (for screen readers) and once in a visible span next to

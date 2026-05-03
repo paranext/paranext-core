@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   BookPlus,
   Copy,
@@ -20,6 +20,9 @@ import {
   ContextMenuTrigger,
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   Input,
   Label,
   ProjectSelectorProject,
@@ -79,8 +82,13 @@ export { MANAGE_BOOKS_DIALOG_STRING_KEYS } from './manage-books-dialog.types';
 export type ManageBooksDialogProps = {
   /** Whether the dialog is open. */
   open: boolean;
-  /** Called when the dialog requests to be closed. */
-  onOpenChange: (open: boolean) => void;
+  /*
+   * NOTE: `onOpenChange` was previously part of this interface (Cancel/Close
+   * footer button + close-self DOM walk). It was removed 2026-05-03 along with
+   * the in-component close buttons — the dock-tab X is the canonical close
+   * affordance for the web view, and sub-modal dismissals use local state
+   * setters. Storybook stories now omit the prop too.
+   */
 
   /** Id of the project currently being managed (controlled). */
   projectId: string;
@@ -286,7 +294,6 @@ const fmt = (template: string, ...values: ReadonlyArray<string | number>): strin
  */
 export function ManageBooksDialog({
   open,
-  onOpenChange,
   projectId,
   onProjectIdChange,
   loadProjects,
@@ -384,10 +391,6 @@ export function ManageBooksDialog({
   // Using null for React ref compatibility
   // eslint-disable-next-line no-null/no-null
   const importFileInputRef = useRef<HTMLInputElement>(null);
-  // Using null for React ref compatibility
-  // eslint-disable-next-line no-null/no-null
-  const toggleGroupRef = useRef<HTMLDivElement>(null);
-  const [toggleGroupWidth, setToggleGroupWidth] = useState<number | undefined>(undefined);
 
   // A2: delete confirm state
   const [deleteConfirm, setDeleteConfirm] = useState<{ books: string[] } | undefined>(undefined);
@@ -534,20 +537,6 @@ export function ManageBooksDialog({
     if (!open || !copySourceId) return;
     refreshBooks(copySourceId).catch(() => undefined);
   }, [open, copySourceId, refreshBooks]);
-
-  // Mirror the ToggleGroup width for the create-mode method-row sizing.
-  useLayoutEffect(() => {
-    const el = toggleGroupRef.current;
-    if (!el) return undefined;
-    const update = () => {
-      const rect = el.getBoundingClientRect();
-      setToggleGroupWidth(rect.width);
-    };
-    update();
-    const obs = new ResizeObserver(update);
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [action, open]);
 
   const universe = useMemo<string[]>(() => {
     switch (action) {
@@ -1408,10 +1397,7 @@ export function ManageBooksDialog({
               </div>
             </header>
 
-            <div
-              ref={toggleGroupRef}
-              className="tw-flex tw-flex-col tw-items-start tw-gap-2 tw-border-b tw-px-6 tw-py-3 tw-@container/actions"
-            >
+            <div className="tw-flex tw-flex-col tw-items-start tw-gap-2 tw-border-b tw-px-6 tw-py-3 tw-@container/actions">
               {action === 'view' && (
                 <div className="tw-flex tw-items-center tw-gap-1">
                   <Button
@@ -1471,10 +1457,7 @@ export function ManageBooksDialog({
               )}
 
               {action === 'create' && (
-                <div
-                  className="tw-flex tw-items-center tw-gap-2"
-                  style={{ width: toggleGroupWidth }}
-                >
+                <div className="tw-flex tw-w-full tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-2">
                   <Select
                     value={createMethod}
                     onValueChange={(v) => {
@@ -1482,7 +1465,10 @@ export function ManageBooksDialog({
                     }}
                     disabled={isSubmitting}
                   >
-                    <SelectTrigger id="af-method" className="tw-h-8 tw-min-w-0 tw-flex-1">
+                    <SelectTrigger
+                      id="af-method"
+                      className="tw-h-8 tw-min-w-0 tw-flex-1 tw-basis-48"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1537,7 +1523,7 @@ export function ManageBooksDialog({
                       <SelectTrigger
                         id="af-reference"
                         className={cn(
-                          'tw-h-8 tw-min-w-0 tw-flex-1',
+                          'tw-h-8 tw-min-w-0 tw-flex-1 tw-basis-48',
                           !createReferenceId &&
                             'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90 [&>span]:tw-text-primary-foreground [&_svg]:tw-text-primary-foreground',
                         )}
@@ -1826,15 +1812,6 @@ export function ManageBooksDialog({
                     {liveAnnouncement}
                   </span>
                 )}
-                <Button
-                  variant="outline"
-                  onClick={() => onOpenChange(false)}
-                  disabled={isSubmitting}
-                >
-                  {action === 'view'
-                    ? t('%manageBooks_footer_close%', 'Close')
-                    : t('%manageBooks_footer_cancel%', 'Cancel')}
-                </Button>
                 {action !== 'view' &&
                   (() => {
                     const disabled = !canApply;
@@ -1898,15 +1875,15 @@ export function ManageBooksDialog({
       >
         <DialogContent className="tw-max-w-md" role="alertdialog">
           <div className="tw-flex tw-flex-col tw-gap-4">
-            <div className="tw-flex tw-flex-col tw-gap-1">
-              <h2 className="tw-text-base tw-font-semibold">
+            <DialogHeader>
+              <DialogTitle>
                 {fmt(
                   t('%manageBooks_delete_confirmTitle%', 'Delete books from {0}?'),
                   project.shortName,
                 )}
-              </h2>
-              <p className="tw-text-sm tw-text-muted-foreground">{deleteConfirmBody}</p>
-            </div>
+              </DialogTitle>
+              <DialogDescription>{deleteConfirmBody}</DialogDescription>
+            </DialogHeader>
             <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
               <Button variant="outline" autoFocus onClick={() => setDeleteConfirm(undefined)}>
                 {t('%manageBooks_delete_confirmCancel%', 'Cancel')}
@@ -1939,16 +1916,16 @@ export function ManageBooksDialog({
       >
         <DialogContent className="tw-max-w-md" role="alertdialog">
           <div className="tw-flex tw-flex-col tw-gap-4">
-            <div className="tw-flex tw-flex-col tw-gap-1">
-              <h2 className="tw-text-base tw-font-semibold">
+            <DialogHeader>
+              <DialogTitle>
                 {createPrompt?.kind === 'missing-model'
                   ? t(
                       '%manageBooks_create_missingModelBooksTitle%',
                       'Some books are not in the model project',
                     )
                   : t('%manageBooks_create_versificationMismatchTitle%', 'Versification mismatch')}
-              </h2>
-              <p className="tw-text-sm tw-text-muted-foreground">
+              </DialogTitle>
+              <DialogDescription>
                 {(() => {
                   if (createPrompt?.kind === 'missing-model')
                     return fmt(
@@ -1973,8 +1950,8 @@ export function ManageBooksDialog({
                     );
                   return '';
                 })()}
-              </p>
-            </div>
+              </DialogDescription>
+            </DialogHeader>
             <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
               <Button
                 variant="outline"
@@ -2030,11 +2007,11 @@ export function ManageBooksDialog({
       >
         <DialogContent className="tw-max-w-md" role="alertdialog">
           <div className="tw-flex tw-flex-col tw-gap-4">
-            <div className="tw-flex tw-flex-col tw-gap-1">
-              <h2 className="tw-text-base tw-font-semibold">
+            <DialogHeader>
+              <DialogTitle>
                 {t('%manageBooks_import_usxConfirmTitle%', 'Import USX files?')}
-              </h2>
-              <p className="tw-text-sm tw-text-muted-foreground">
+              </DialogTitle>
+              <DialogDescription>
                 {fmt(
                   t(
                     '%manageBooks_import_usxConfirmBody%',
@@ -2042,11 +2019,11 @@ export function ManageBooksDialog({
                   ),
                   project.name,
                 )}
-              </p>
-              <ul className="tw-mt-1 tw-flex tw-flex-col tw-gap-0.5 tw-pl-5 tw-text-xs tw-text-muted-foreground">
-                {usxConfirm?.files.map((f) => <li key={f}>{f}</li>)}
-              </ul>
-            </div>
+              </DialogDescription>
+            </DialogHeader>
+            <ul className="tw-flex tw-flex-col tw-gap-0.5 tw-pl-5 tw-text-xs tw-text-muted-foreground">
+              {usxConfirm?.files.map((f) => <li key={f}>{f}</li>)}
+            </ul>
             <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
               <Button
                 variant="outline"
@@ -2097,31 +2074,31 @@ export function ManageBooksDialog({
       >
         <DialogContent className="tw-max-w-md" role="alertdialog">
           <div className="tw-flex tw-flex-col tw-gap-4">
-            <div className="tw-flex tw-flex-col tw-gap-1">
-              <h2 className="tw-text-base tw-font-semibold">
+            <DialogHeader>
+              <DialogTitle>
                 {t('%manageBooks_import_overlapTitle%', 'Two files map to the same book')}
-              </h2>
-              <p className="tw-text-sm tw-text-muted-foreground">
+              </DialogTitle>
+              <DialogDescription>
                 {/* B2 — reuse existing backend key for the canonical message, augmented with file names */}
                 {t(
                   '%manageBooks_import_errorOverlappingFiles%',
                   'Two files contain information for the same book. They can not both be selected.',
                 )}
+              </DialogDescription>
+            </DialogHeader>
+            {overlapError && (
+              <p className="tw-text-sm tw-text-muted-foreground">
+                {fmt(
+                  t(
+                    '%manageBooks_import_overlapBody%',
+                    'Cannot import: {0} would be supplied by both "{1}" and "{2}".',
+                  ),
+                  overlapError.book,
+                  overlapError.existingFile,
+                  overlapError.newFile,
+                )}
               </p>
-              {overlapError && (
-                <p className="tw-text-sm tw-text-muted-foreground">
-                  {fmt(
-                    t(
-                      '%manageBooks_import_overlapBody%',
-                      'Cannot import: {0} would be supplied by both "{1}" and "{2}".',
-                    ),
-                    overlapError.book,
-                    overlapError.existingFile,
-                    overlapError.newFile,
-                  )}
-                </p>
-              )}
-            </div>
+            )}
             <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
               <Button autoFocus onClick={() => setOverlapError(undefined)}>
                 {t('%manageBooks_import_overlapDismiss%', 'OK')}
@@ -2140,11 +2117,11 @@ export function ManageBooksDialog({
       >
         <DialogContent className="tw-max-w-md">
           <div className="tw-flex tw-flex-col tw-gap-4">
-            <div className="tw-flex tw-flex-col tw-gap-1">
-              <h2 className="tw-text-base tw-font-semibold">
+            <DialogHeader>
+              <DialogTitle>
                 {t('%manageBooks_import_conflictTitle%', 'Books already exist')}
-              </h2>
-              <p className="tw-text-sm tw-text-muted-foreground">
+              </DialogTitle>
+              <DialogDescription>
                 {importConflict
                   ? fmt(
                       t(
@@ -2156,14 +2133,14 @@ export function ManageBooksDialog({
                       importConflict.existing.join(', '),
                     )
                   : ''}
-              </p>
-              <p className="tw-text-sm tw-text-muted-foreground">
-                {t(
-                  '%manageBooks_import_conflictBody2%',
-                  'Choose how to proceed with the import or close to cancel.',
-                )}
-              </p>
-            </div>
+              </DialogDescription>
+            </DialogHeader>
+            <p className="tw-text-sm tw-text-muted-foreground">
+              {t(
+                '%manageBooks_import_conflictBody2%',
+                'Choose how to proceed with the import or close to cancel.',
+              )}
+            </p>
             <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
               <Button
                 variant="outline"

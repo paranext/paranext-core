@@ -45,7 +45,7 @@ const SAMPLE_BOOKS: Record<string, ManageBooksDialogBookInfo[]> = {
 /** A stateful harness so the dialog is fully interactive in Storybook. */
 function StatefulHarness(props: Partial<ManageBooksDialogProps>) {
   const [projectId, setProjectId] = useState('WEB');
-  const [open, setOpen] = useState(true);
+  const [open] = useState(true);
 
   const loadProjects = useCallback(() => SAMPLE_PROJECTS, []);
   const loadBooks = useCallback((pid: string) => SAMPLE_BOOKS[pid] ?? [], []);
@@ -61,7 +61,6 @@ function StatefulHarness(props: Partial<ManageBooksDialogProps>) {
     <div className="tw-h-[600px] tw-w-full">
       <ManageBooksDialog
         open={open}
-        onOpenChange={setOpen}
         projectId={projectId}
         onProjectIdChange={setProjectId}
         loadProjects={loadProjects}

@@ -531,7 +531,24 @@ global.webViewComponent = function ManageBooksWebView({
     [manageBooksApi],
   );
 
-  // ===== Cross-launch stubs (DEF-UI-006/007/008) =============================
+  // ===== Cross-launch: Scripture Reference Settings (DEF-UI-006 — ADDRESSED 2026-05-03)
+  // The `platform.openSettings` command opens the platform settings tab and reads the
+  // calling web-view's `projectId` via `getOpenWebViewDefinition(webViewId)` — see
+  // `src/renderer/services/web-view.service-host.ts:openSettingsTab`. Passing
+  // `globalThis.webViewId` therefore scopes the resulting settings tab to the
+  // currently-selected manage-books project (we keep the saved-definition's projectId
+  // in sync via `updateWebViewDefinition` above).
+  const onOpenScriptureReferenceSettings = useCallback(() => {
+    papi.commands
+      .sendCommand('platform.openSettings', globalThis.webViewId)
+      .catch((e) =>
+        logger.warn(
+          `manage-books: platform.openSettings failed: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
+  }, []);
+
+  // ===== Cross-launch stubs (DEF-UI-007/008) =================================
   // No discovered platform commands ship today; surface info notifications.
   const sendCrossLaunchStub = useCallback(() => {
     const message =
@@ -604,51 +621,22 @@ global.webViewComponent = function ManageBooksWebView({
   }, []);
 
   // ===== Open/close ==========================================================
-  // PAPI does not expose a "close my own web view" method (no `closeSelf`,
-  // `removeWebView`, etc. on @papi/frontend), so we close the dock-tab from
-  // inside the iframe by reaching `top.document` (web views render as
-  // same-origin `srcdoc` iframes — `top.document.querySelectorAll` works).
-  // We locate the iframe whose `contentWindow === window`, walk up to its
-  // dock-panel, and click the active tab's close button — exactly what a
-  // user-initiated X click does. This is fragile against dock-framework DOM
-  // changes; if the structure shifts, fall back to leaving the dialog open
-  // (the X on the tab itself remains the user-visible affordance).
-  const close = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const topDoc = window.top?.document;
-      if (!topDoc) return;
-      const iframes = Array.from(topDoc.querySelectorAll('iframe'));
-      const myIframe = iframes.find((f) => f.contentWindow === window);
-      if (!myIframe) return;
-      let panel: Element | null = myIframe.parentElement;
-      while (panel && !panel.classList.contains('dock-panel')) {
-        panel = panel.parentElement;
-      }
-      const closeBtn =
-        panel?.querySelector<HTMLElement>('.dock-tab-active .dock-tab-close-btn') ??
-        panel?.querySelector<HTMLElement>('.dock-tab-close-btn');
-      closeBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    } catch (e) {
-      logger.debug(
-        `manage-books: close-self DOM walk failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
-  }, []);
+  // The web-view's only close affordance is the dock-tab X in the platform-
+  // managed tab header. The in-component Cancel/Close buttons that previously
+  // routed through `onOpenChange(false)` were removed (UI polish 2026-05-03)
+  // because they duplicated the dock-tab X. ManageBooksDialog no longer accepts
+  // an `onOpenChange` prop — sub-modals use local state setters internally.
 
   return (
     <>
       <ManageBooksDialog
         open
-        onOpenChange={(o) => {
-          if (!o) close();
-        }}
         projectId={projectId}
         onProjectIdChange={setProjectIdLocal}
         loadProjects={loadProjects}
         loadBooks={loadBooks}
         loadVersification={loadVersification}
-        onOpenScriptureReferenceSettings={sendCrossLaunchStub}
+        onOpenScriptureReferenceSettings={onOpenScriptureReferenceSettings}
         onOpenProjectCanons={sendCrossLaunchStub}
         onOpenRegistry={sendCrossLaunchStub}
         onCreateBooks={onCreateBooks}
