@@ -749,8 +749,24 @@ export function ManageBooksDialog({
           copySource.dates[b],
           destHas ? current.dates[b] : undefined,
         );
-        if (copyStateFilter === 'undetermined') return state === 'undetermined';
-        return state.toLowerCase() === copyStateFilter;
+        // Map ComparisonState (camelCase from data-contracts.md) to the chip token
+        // used by the filter UI. Keep this switch in sync with the chips rendered
+        // around line 1752 (`copyStateFilter` ToggleGroup values: all/new/newer/
+        // older/same/undetermined).
+        switch (copyStateFilter) {
+          case 'new':
+            return state === 'destDoesNotExist';
+          case 'newer':
+            return state === 'sourceIsNewer';
+          case 'older':
+            return state === 'sourceIsOlder';
+          case 'same':
+            return state === 'filesAreSame';
+          case 'undetermined':
+            return state === 'undetermined';
+          default:
+            return true;
+        }
       });
     }
     if (action === 'import' && importPresenceFilter !== 'all') {
