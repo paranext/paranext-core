@@ -371,6 +371,8 @@
   "%theme_label_paratext_light%": "Paratext Light",
   "%theme_label_user_dark%": "User-Defined Dark",
   "%theme_label_user_light%": "User-Defined Light",
+  "%toolbar_sync%": "Sync",
+  "%toolbar_sync_projects%": "Sync open projects and linked resources",
   "%toolbar_theme_change_to_dark%": "Change to Dark theme",
   "%toolbar_theme_change_to_light%": "Change to Light theme",
   "%toolbar_theme_loading_error%": "There was a problem loading the theme",
