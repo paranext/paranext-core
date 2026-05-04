@@ -19,6 +19,17 @@ import { formatScrRef, formatScrRefRange, isPlatformError } from 'platform-bible
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { convertMarbleChapterXml, type MarbleAnnotation } from '../lib/marble-converter';
 import {
+  useEnhancedResourcesProxy,
+  type WordFilterInputDto,
+  type DictionaryLoadInputDto,
+  type DictionaryEntryDataDto,
+  type EncyclopediaLoadInputDto,
+  type EncyclopediaDisplayItemDto,
+  type ArticleDataDto,
+  type MediaLoadInputDto,
+  type MediaDisplayItemDto,
+} from '../lib/use-enhanced-resources-proxy';
+import {
   EnhancedScripturePane,
   ENHANCED_SCRIPTURE_PANE_STRING_KEYS,
 } from '../components/scripture-pane/scripture-pane.component';
@@ -783,235 +794,13 @@ const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   ...MARBLE_GUIDE_STRING_KEYS,
 ];
 
-/** Network object id for the Enhanced Resources composition root (see EnhancedResourceFactory.cs). */
-const ER_NETWORK_OBJECT_ID = 'platform.enhancedResources';
-
-/**
- * Shape of the chapter input for the `loadMarbleChapterXml` PAPI command, mirroring
- * `LoadMarbleChapterXmlInput` in C#.
+/*
+ * Network-object id, the `EnhancedResourcesNetworkObject` proxy type, and all PAPI DTO types
+ * (`LoadMarbleChapterXmlInput`, `*LoadInputDto`, `*ResultDto`, etc.) live in
+ * `../lib/use-enhanced-resources-proxy.ts`. The `useEnhancedResourcesProxy()` hook resolves the
+ * proxy once per webview and shares it across all consumer effects, replacing the previous
+ * per-effect `papi.networkObjects.get<...>(ER_NETWORK_OBJECT_ID)` calls.
  */
-type LoadMarbleChapterXmlInput = {
-  resourceId: string;
-  bookNum: number;
-  chapterNumber: number;
-};
-
-/**
- * VerseRef wire shape consumed by the C# Enhanced Resources network object methods. Mirrors
- * `SIL.Scripture.VerseRef` JSON serialization (the .NET data provider uses `BookNum`, `ChapterNum`,
- * `VerseNum` PascalCase keys).
- */
-type VerseRefDto = {
-  bookNum: number;
-  chapterNum: number;
-  verseNum: number;
-};
-
-/** Mirror of the C# `WordFilterInput` record (data-contracts.md §2.7), camelCase on the wire. */
-type WordFilterInputDto = {
-  tokenId: string;
-  lemma: string;
-  source: string;
-  translit: string;
-  senses: string;
-  targetLinks: string;
-  clickOrigin: 'ScripturePane' | 'DictionaryTab' | 'OtherTab';
-};
-
-/** Input for the `loadDictionary` PAPI command (mirrors C# `DictionaryLoadInput`). */
-type DictionaryLoadInputDto = {
-  currentReference: VerseRefDto;
-  scope: 'CurrentVerse' | 'CurrentSection' | 'CurrentChapter';
-  filter: WordFilterInputDto | undefined;
-  showTranslations: boolean;
-  glossLanguage: string;
-  resourceId: string;
-};
-
-/** Output of `loadDictionary` (mirrors C# `DictionaryDisplayItem`). */
-type DictionaryDisplayItemDto = {
-  tokenId: string;
-  entryId: string;
-  term: string;
-  sourceText: string;
-  translit: string;
-  glosses: string[];
-  partOfSpeech: string;
-  occurrenceCount: number;
-  definition?: string | null;
-};
-
-type DictionaryLoadResultDto = {
-  items: DictionaryDisplayItemDto[];
-  activeDictionary: string;
-  emptyStateMessage: string | null | undefined;
-};
-
-/** Mirror of C# `DictionaryEntryInput`. */
-type DictionaryEntryInputDto = {
-  entryId: string;
-  glossLanguage: string;
-  subItemId?: string;
-};
-
-/** Mirror of C# `DictionaryEntryData` (no FN-019 forward fields yet — presenter handles absence). */
-type DictionaryEntryDataDto = {
-  entryId: string;
-  lemma: string;
-  senses: {
-    senseId: string;
-    glosses: { language: string; text: string }[];
-    definition: string;
-  }[];
-  semanticDomains: string[];
-  relatedLexemes: { lemma: string; entryId: string; relationship: string; gloss: string }[];
-  morphology: string;
-};
-
-/**
- * Input for the `loadEncyclopedia` PAPI command (mirrors C# `EncyclopediaLoadInput`).
- *
- * Note: the C# record uses `CurrentReference` (full word), not `currentRef` like some other inputs.
- * Wire-side keys are camelCase per the data-provider's JSON serializer.
- */
-type EncyclopediaLoadInputDto = {
-  currentReference: VerseRefDto;
-  scope: 'CurrentVerse' | 'CurrentSection' | 'CurrentChapter';
-  filter: WordFilterInputDto | undefined;
-  userLanguage: string;
-  resourceId: string;
-};
-
-/** Mirror of C# `EncyclopediaEntryRef` (data-contracts.md §3.8). */
-type EncyclopediaEntryRefDto = {
-  articleId: string;
-  key: string;
-  title: string;
-  teaserText: string;
-  formatVersion: 1 | 2;
-  inlineImageIds?: string[] | null;
-};
-
-/** Mirror of C# `EncyclopediaDisplayItem`. */
-type EncyclopediaDisplayItemDto = {
-  tokenId: string;
-  lemma: string;
-  sourceText: string;
-  translit: string;
-  glosses: string[];
-  entries: EncyclopediaEntryRefDto[];
-  imageIds: string[];
-  collection: string;
-};
-
-/** Mirror of C# `EncyclopediaLoadResult`. */
-type EncyclopediaLoadResultDto = {
-  items: EncyclopediaDisplayItemDto[];
-  emptyStateMessage: string | null | undefined;
-};
-
-/** Mirror of C# `ArticleInput`. */
-type ArticleInputDto = {
-  articleId: string;
-  resourceId: string;
-  userLanguage: string;
-};
-
-/** Mirror of C# `ArticleVerseLink` — verse refs use `book` / `chapter` / `verse` int trio. */
-type ArticleVerseLinkDto = {
-  reference: { book: number; chapter: number; verse: number };
-  displayText: string;
-  rawReference: string;
-};
-
-/** Mirror of C# `ArticleAbbreviation`. */
-type ArticleAbbreviationDto = {
-  abbrev: string;
-  fullText: string;
-};
-
-/** Mirror of C# `ArticleParagraph`. */
-type ArticleParagraphDto = {
-  text: string;
-  verseLinks: ArticleVerseLinkDto[];
-  abbreviations: ArticleAbbreviationDto[];
-  inlineImageIds: string[];
-};
-
-/** Mirror of C# `ArticleCrossRef`. */
-type ArticleCrossRefDto = {
-  targetArticleId: string;
-  displayText: string;
-  type: 'seealso' | 'launchViewer' | string;
-};
-
-/** Mirror of C# `ArticleData`. */
-type ArticleDataDto = {
-  articleId: string;
-  title: string;
-  paragraphs: ArticleParagraphDto[];
-  crossReferences: ArticleCrossRefDto[];
-  imageIds: string[];
-};
-
-/**
- * Mirror of C# `MediaLoadInput` (data-contracts.md §2.9). The C# enum `MediaTabType` serializes as
- * the literal strings `"Images"` and `"Maps"` via the System.Text.Json default converter.
- */
-type MediaLoadInputDto = {
-  currentReference: VerseRefDto;
-  scope: 'CurrentVerse' | 'CurrentSection' | 'CurrentChapter';
-  filter: WordFilterInputDto | undefined;
-  tabType: MediaTabType;
-  userLanguage: string;
-  resourceId: string;
-};
-
-/**
- * Mirror of C# `MediaDisplayItem` (data-contracts.md §3.9). `startRef` / `endRef` carry the full
- * SIL `VerseRef` shape (incl. `book` id, `chapterNum`, `verseNum`); the wiring layer narrows them
- * to the presenter's `MediaVerseRefInput` shape before passing them in. `path` and `fileName` are
- * back-end internals used by `fetchImageBytes` and are ignored here.
- */
-type MediaDisplayItemDto = {
-  imageId: string;
-  imageSource: string;
-  title: string;
-  thumbnailSource: string;
-  startRef: SerializedVerseRef;
-  endRef: SerializedVerseRef;
-  collection: string;
-  languageCode: string;
-  displayIndex: number;
-  path?: string;
-  fileName?: string;
-};
-
-/** Mirror of C# `MediaLoadResult` (data-contracts.md §3.9). */
-type MediaLoadResultDto = {
-  items: MediaDisplayItemDto[];
-  countLabel: string;
-  emptyStateMessage: string | null | undefined;
-};
-
-/**
- * Subset of the network-object proxy we care about. `papi.networkObjects.get` returns the proxy
- * typed as a generic `NetworkObject<object>`; we narrow with a structural cast to the methods this
- * web view uses. All cross-process calls return promises.
- */
-type EnhancedResourcesNetworkObject = {
-  loadMarbleChapterXml: (input: LoadMarbleChapterXmlInput) => Promise<string>;
-  loadDictionary: (input: DictionaryLoadInputDto) => Promise<DictionaryLoadResultDto>;
-  readDictionaryEntry: (input: DictionaryEntryInputDto) => Promise<DictionaryEntryDataDto>;
-  loadEncyclopedia: (input: EncyclopediaLoadInputDto) => Promise<EncyclopediaLoadResultDto>;
-  readArticle: (input: ArticleInputDto) => Promise<ArticleDataDto>;
-  /**
-   * Backend method registered as `"loadMedia"` (NOT `"loadMediaResources"`) in
-   * `EnhancedResourceFactory.BuildFunctionList`. The factory routes to
-   * `MediaService.LoadResources(input)` which applies the SBA filter server-side per `tabType`.
-   */
-  loadMedia: (input: MediaLoadInputDto) => Promise<MediaLoadResultDto>;
-};
 
 /**
  * Adapt the toolbar's `ScriptDisplayMode` (`'transliteration'`) to the presenter's narrower mode
@@ -1300,6 +1089,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   const [stringsBag, isLoadingStrings] = useLocalizedStrings(WIRING_LOCALIZED_STRING_KEYS);
   const stringsForShell: Record<string, LocalizedStringValue | undefined> = { ...stringsBag };
 
+  // Resolve the Enhanced Resources network-object proxy once per webview. Replaces eight
+  // per-effect `await papi.networkObjects.get<...>(...)` calls that previously fired on every
+  // BCV move (Fix 3 of UI Performance Fix plan).
+  const erProxy = useEnhancedResourcesProxy();
+
   // BCV reference + scroll-group sync (FN-015 / BHV-317).
   const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
 
@@ -1371,19 +1165,18 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       };
     }
 
+    if (!erProxy) {
+      setUsj(undefined);
+      setAnnotations([]);
+      setScripturePaneError('Enhanced Resources backend is not available.');
+      return () => {
+        cancelled = true;
+      };
+    }
+
     (async () => {
       try {
-        const proxy =
-          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
-        if (!proxy) {
-          if (!cancelled) {
-            setUsj(undefined);
-            setAnnotations([]);
-            setScripturePaneError('Enhanced Resources backend is not available.');
-          }
-          return;
-        }
-        const xml = await proxy.loadMarbleChapterXml({
+        const xml = await erProxy.loadMarbleChapterXml({
           resourceId,
           bookNum,
           chapterNumber: scrRef.chapterNum,
@@ -1412,7 +1205,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     return () => {
       cancelled = true;
     };
-  }, [resourceId, scrRef.book, scrRef.chapterNum]);
+  }, [erProxy, resourceId, scrRef.book, scrRef.chapterNum]);
 
   // ---------------------------------------------------------------------------
   // Dictionary tab wiring (UI-PKG-002)
@@ -1481,19 +1274,18 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       resourceId,
     };
 
+    if (!erProxy) {
+      setDictionaryItems([]);
+      setDictionaryActiveDictionary(isOldTestamentBook(bookNum) ? 'SDBH' : 'SDBG');
+      return () => {
+        cancelled = true;
+      };
+    }
+
     setDictionaryIsLoading(true);
     (async () => {
       try {
-        const proxy =
-          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
-        if (!proxy) {
-          if (!cancelled) {
-            setDictionaryItems([]);
-            setDictionaryActiveDictionary(isOldTestamentBook(bookNum) ? 'SDBH' : 'SDBG');
-          }
-          return;
-        }
-        const result = await proxy.loadDictionary(input);
+        const result = await erProxy.loadDictionary(input);
         if (cancelled) return;
 
         const mapped: DictionaryDisplayItemData[] = result.items.map((it) => ({
@@ -1529,6 +1321,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       cancelled = true;
     };
   }, [
+    erProxy,
     resourceId,
     bookNum,
     scrRef.chapterNum,
@@ -1546,13 +1339,14 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     if (!targetItem) return () => {};
     // If senses already loaded for this token, no-op.
     if (targetItem.senses && targetItem.senses.length > 0) return () => {};
+    if (!erProxy)
+      return () => {
+        cancelled = true;
+      };
 
     (async () => {
       try {
-        const proxy =
-          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
-        if (!proxy) return;
-        const dto = await proxy.readDictionaryEntry({
+        const dto = await erProxy.readDictionaryEntry({
           entryId: dictionarySelectedTokenId,
           glossLanguage,
         });
@@ -1609,6 +1403,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       cancelled = true;
     };
   }, [
+    erProxy,
     dictionarySelectedTokenId,
     dictionaryItems,
     dictionaryActiveDictionary,
@@ -1670,16 +1465,17 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       resourceId,
     };
 
+    if (!erProxy) {
+      setEncyclopediaItems([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     setEncyclopediaIsLoading(true);
     (async () => {
       try {
-        const proxy =
-          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
-        if (!proxy) {
-          if (!cancelled) setEncyclopediaItems([]);
-          return;
-        }
-        const result = await proxy.loadEncyclopedia(input);
+        const result = await erProxy.loadEncyclopedia(input);
         if (cancelled) return;
 
         // Resource language drives the FN-023 display-mode selection. The encyclopedia loader
@@ -1718,6 +1514,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       cancelled = true;
     };
   }, [
+    erProxy,
     resourceId,
     bookNum,
     scrRef.chapterNum,
@@ -1740,13 +1537,14 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     if (encyclopediaArticleDataMap[encyclopediaSelectedTokenId]) return () => {};
     const firstEntry = target.entries[0];
     if (!firstEntry) return () => {};
+    if (!erProxy)
+      return () => {
+        cancelled = true;
+      };
 
     (async () => {
       try {
-        const proxy =
-          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
-        if (!proxy) return;
-        const dto = await proxy.readArticle({
+        const dto = await erProxy.readArticle({
           articleId: firstEntry.articleId,
           resourceId,
           userLanguage: glossLanguage,
@@ -1769,7 +1567,13 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     return () => {
       cancelled = true;
     };
-  }, [encyclopediaSelectedTokenId, encyclopediaItems, encyclopediaArticleDataMap, resourceId]);
+  }, [
+    erProxy,
+    encyclopediaSelectedTokenId,
+    encyclopediaItems,
+    encyclopediaArticleDataMap,
+    resourceId,
+  ]);
 
   // FN-020(d) — when filteredTokenId changes (scripture-pane click or cross-tab propagation),
   // automatically open the matching encyclopedia row's detail drawer if there's a row for that
@@ -2170,20 +1974,19 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       resourceId,
     };
 
+    if (!erProxy) {
+      setMediaImagesItems([]);
+      setMediaImagesLoaded(true);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     setMediaImagesIsLoading(true);
     setMediaImagesLoaded(false);
     (async () => {
       try {
-        const proxy =
-          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
-        if (!proxy) {
-          if (!cancelled) {
-            setMediaImagesItems([]);
-            setMediaImagesLoaded(true);
-          }
-          return;
-        }
-        const result = await proxy.loadMedia(input);
+        const result = await erProxy.loadMedia(input);
         if (cancelled) return;
         const presentations = presentMediaItems(result.items.map(mediaDtoToPresenterInput), {
           tabType: 'Images',
@@ -2209,6 +2012,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       cancelled = true;
     };
   }, [
+    erProxy,
     mediaImagesEverActivated,
     resourceId,
     bookNum,
@@ -2256,20 +2060,19 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       resourceId,
     };
 
+    if (!erProxy) {
+      setMediaMapsItems([]);
+      setMediaMapsLoaded(true);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     setMediaMapsIsLoading(true);
     setMediaMapsLoaded(false);
     (async () => {
       try {
-        const proxy =
-          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
-        if (!proxy) {
-          if (!cancelled) {
-            setMediaMapsItems([]);
-            setMediaMapsLoaded(true);
-          }
-          return;
-        }
-        const result = await proxy.loadMedia(input);
+        const result = await erProxy.loadMedia(input);
         if (cancelled) return;
         const presentations = presentMediaItems(result.items.map(mediaDtoToPresenterInput), {
           tabType: 'Maps',
@@ -2295,6 +2098,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       cancelled = true;
     };
   }, [
+    erProxy,
     mediaMapsEverActivated,
     resourceId,
     bookNum,
@@ -2414,12 +2218,13 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       };
     }
     setActiveArticleData(undefined);
+    if (!erProxy)
+      return () => {
+        cancelled = true;
+      };
     (async () => {
       try {
-        const proxy =
-          await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
-        if (!proxy) return;
-        const dto = await proxy.readArticle({
+        const dto = await erProxy.readArticle({
           articleId: activeArticleId,
           resourceId,
           userLanguage: glossLanguage,
@@ -2438,7 +2243,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     return () => {
       cancelled = true;
     };
-  }, [activeArticleId, resourceId]);
+  }, [erProxy, activeArticleId, resourceId]);
 
   const handleEncyclopediaArticleLinkClick = useCallback((articleId: string) => {
     setActiveArticleId(articleId);
