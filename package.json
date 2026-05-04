@@ -99,6 +99,7 @@
     "test:e2e:all": "playwright test --config e2e-tests/playwright.config.ts",
     "test:e2e:isolated": "playwright test --config e2e-tests/playwright.config.ts --project=isolated",
     "test:e2e:smoke": "playwright test --config e2e-tests/playwright.config.ts --project=smoke",
+    "test:e2e:enhanced-resources": "playwright test --config e2e-tests/playwright.config.ts --project=enhanced-resources",
     "test:e2e:smoke-wsl": "e2e-tests/run-e2e-wsl.sh",
     "typecheck": "npm run typecheck:core && npm run typecheck --workspaces --if-present",
     "typecheck:core": "tsc -p ./tsconfig.json",
