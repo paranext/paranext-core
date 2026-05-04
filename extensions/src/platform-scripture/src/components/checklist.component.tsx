@@ -14,7 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { AlertTriangle, Eye, EyeOff, Pencil, X } from 'lucide-react';
+import { AlertTriangle, Book, BookOpen, Eye, EyeOff, Pencil, X } from 'lucide-react';
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import type {
   ChecklistCell,
@@ -491,11 +491,12 @@ export function ChecklistTool({
     <>
       {/*
        * View toggles as inline ToggleGroup (per Sebastian PR #2219 #3137366113: "View menu should
-       * be an eye icon toggle group button"). Each toggle is a single icon button — `EyeOff` for
-       * "Hide Matches" (hiding matching rows = eye crossed out), `Eye` for "Show Verse Text"
-       * (revealing verse content). ToggleGroup's `data-[state=on]` styling handles the active
-       * indicator naturally; tooltips supply the accessible label/description without crowding
-       * the toolbar with text labels.
+       * be an eye icon toggle group button"). Each toggle uses a distinct icon family so the two
+       * buttons are recognizable at a glance, and each swaps between an "on" and "off" variant so
+       * the current state is legible even before the active-background highlight is read:
+       *  - Hide Matches uses `Eye` (matches visible) ↔ `EyeOff` (matches hidden).
+       *  - Show Verse Text uses `BookOpen` (text visible) ↔ `Book` (text hidden — closed book).
+       * Tooltips supply the accessible label/description without crowding the toolbar with text.
        *
        * `type="multiple"` allows both toggles to be active independently. The
        * `value` array reflects which toggles are currently on; we map onValueChange to two
@@ -549,12 +550,10 @@ export function ChecklistTool({
                 aria-label={getLocalizedString('%markersChecklist_toolbar_showVerseText%')}
                 data-testid="checklist-show-verse-text-item"
               >
-                {/* Icon swaps with state for symmetry with Hide Matches: when verse text is
-                    shown, show Eye; when hidden, show EyeOff. */}
                 {showVerseText ? (
-                  <Eye className="tw-h-4 tw-w-4" aria-hidden="true" />
+                  <BookOpen className="tw-h-4 tw-w-4" aria-hidden="true" />
                 ) : (
-                  <EyeOff className="tw-h-4 tw-w-4" aria-hidden="true" />
+                  <Book className="tw-h-4 tw-w-4" aria-hidden="true" />
                 )}
               </ToggleGroupItem>
             </TooltipTrigger>
