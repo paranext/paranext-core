@@ -14,10 +14,6 @@ import {
   Button,
   Checkbox,
   cn,
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -106,10 +102,18 @@ export type ManageBooksDialogProps = {
 
   /** Cross-launch: open scripture reference settings for this project. */
   onOpenScriptureReferenceSettings: (projectId: string) => void;
-  /** Cross-launch: open project canons for this project. */
-  onOpenProjectCanons: (projectId: string) => void;
-  /** Cross-launch: open registry for this project. */
-  onOpenRegistry: (projectId: string) => void;
+  /**
+   * Cross-launch: open project canons for this project. Optional — when omitted the corresponding
+   * View-mode toolbar button renders disabled with a "Not yet available — coming soon" tooltip
+   * (Phase 3 UI Decision 28, 2026-05-04).
+   */
+  onOpenProjectCanons?: (projectId: string) => void;
+  /**
+   * Cross-launch: open registry for this project. Optional — when omitted the corresponding
+   * View-mode toolbar button renders disabled with a "Not yet available — coming soon" tooltip
+   * (Phase 3 UI Decision 28, 2026-05-04).
+   */
+  onOpenRegistry?: (projectId: string) => void;
 
   /**
    * Commit a Create-books operation. Optional return shape carries `AlertEntry[]` warnings/errors
@@ -348,6 +352,9 @@ export function ManageBooksDialog({
   const liveRegionId = useId();
   const cvDisabledHintId = useId();
   const applyDisabledHintId = useId();
+  const projectCanonsDisabledHintId = useId();
+  const registryDisabledHintId = useId();
+  const viewDiffDisabledHintId = useId();
 
   // -- Loaded data ---------------------------------------------------------
   const [projects, setProjects] = useState<ManageBooksDialogProject[]>([]);
@@ -1462,51 +1469,113 @@ export function ManageBooksDialog({
                   >
                     {t('%manageBooks_view_openScrRefSettings%', 'Scripture reference settings…')}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="tw-h-8 tw-px-2 tw-text-xs"
-                    onClick={() => onOpenProjectCanons(projectId)}
-                  >
-                    {t('%manageBooks_view_openProjectCanons%', 'Project canons…')}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="tw-h-8 tw-gap-1.5 tw-px-2 tw-text-xs"
-                    onClick={() => onOpenRegistry(projectId)}
-                  >
-                    {t('%manageBooks_view_openRegistry%', 'Registry')}
-                    <ExternalLink className="tw-h-3 tw-w-3 tw-text-muted-foreground" aria-hidden />
-                  </Button>
-                  {/* F1: DEF-UI-001 stub for "View differences" — Theme C3
-                        (FN-008 v2.6.0+, 2026-05-01) replaced the
-                        Tooltip-wrapped empty-onClick Button with a true
-                        shadcn ContextMenu containing a disabled
-                        ContextMenuItem. The trigger button keeps the visible
-                        affordance; right-click opens the menu, which conveys
-                        "not yet available" through a disabled item rather
-                        than via a Tooltip on a no-op left-click. */}
-                  <ContextMenu>
-                    <ContextMenuTrigger asChild>
+                  {/*
+                    DEF-UI-007 / DEF-UI-008 / DEF-UI-001 stub buttons (Phase 3 UI Decision 13,
+                    2026-05-04): Project canons, Registry, and View differences are not yet
+                    implemented in PT10. We render each as a disabled Button wrapped in a Tooltip
+                    so hover surfaces "Not yet available — coming soon" — the convention used
+                    elsewhere in this dialog (e.g., the apply button when invalid). The handler
+                    props are optional in ManageBooksDialogProps; when an `onOpen*` handler is
+                    eventually supplied, the corresponding button auto-enables and wires the
+                    real cross-launch.
+                  */}
+                  {(() => {
+                    const stubTooltip = t(
+                      '%manageBooks_view_disabledStub_notYetAvailable%',
+                      'Not yet available — coming soon',
+                    );
+                    const enableProjectCanons = Boolean(onOpenProjectCanons);
+                    const enableRegistry = Boolean(onOpenRegistry);
+                    const projectCanonsButton = (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="tw-h-8 tw-px-2 tw-text-xs"
-                        aria-haspopup="menu"
+                        disabled={!enableProjectCanons}
+                        aria-disabled={!enableProjectCanons}
+                        aria-describedby={
+                          !enableProjectCanons ? projectCanonsDisabledHintId : undefined
+                        }
+                        onClick={
+                          enableProjectCanons ? () => onOpenProjectCanons?.(projectId) : undefined
+                        }
+                      >
+                        {t('%manageBooks_view_openProjectCanons%', 'Project canons…')}
+                      </Button>
+                    );
+                    const registryButton = (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="tw-h-8 tw-gap-1.5 tw-px-2 tw-text-xs"
+                        disabled={!enableRegistry}
+                        aria-disabled={!enableRegistry}
+                        aria-describedby={!enableRegistry ? registryDisabledHintId : undefined}
+                        onClick={enableRegistry ? () => onOpenRegistry?.(projectId) : undefined}
+                      >
+                        {t('%manageBooks_view_openRegistry%', 'Registry')}
+                        <ExternalLink
+                          className="tw-h-3 tw-w-3 tw-text-muted-foreground"
+                          aria-hidden
+                        />
+                      </Button>
+                    );
+                    const viewDiffButton = (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="tw-h-8 tw-px-2 tw-text-xs"
+                        disabled
+                        aria-disabled
+                        aria-describedby={viewDiffDisabledHintId}
                       >
                         {t('%manageBooks_view_diff_label%', 'View differences')}
                       </Button>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent>
-                      <ContextMenuItem disabled>
-                        {t(
-                          '%manageBooks_view_diff_tooltip%',
-                          'View differences (not yet available)',
+                    );
+                    return (
+                      <>
+                        {!enableProjectCanons ? (
+                          <>
+                            <span id={projectCanonsDisabledHintId} className="tw-sr-only">
+                              {stubTooltip}
+                            </span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>{projectCanonsButton}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>{stubTooltip}</TooltipContent>
+                            </Tooltip>
+                          </>
+                        ) : (
+                          projectCanonsButton
                         )}
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
+                        {!enableRegistry ? (
+                          <>
+                            <span id={registryDisabledHintId} className="tw-sr-only">
+                              {stubTooltip}
+                            </span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>{registryButton}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>{stubTooltip}</TooltipContent>
+                            </Tooltip>
+                          </>
+                        ) : (
+                          registryButton
+                        )}
+                        <span id={viewDiffDisabledHintId} className="tw-sr-only">
+                          {stubTooltip}
+                        </span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>{viewDiffButton}</span>
+                          </TooltipTrigger>
+                          <TooltipContent>{stubTooltip}</TooltipContent>
+                        </Tooltip>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 

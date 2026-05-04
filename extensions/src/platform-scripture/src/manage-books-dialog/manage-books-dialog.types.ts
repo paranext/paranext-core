@@ -213,8 +213,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_view_inlineCreateTooltip%',
   '%manageBooks_view_inlineDeleteTooltip%',
   '%manageBooks_view_inlineDeleteAria%',
-  '%manageBooks_view_diff_tooltip%',
   '%manageBooks_view_diff_label%',
+  '%manageBooks_view_disabledStub_notYetAvailable%',
   // Import flow
   '%manageBooks_import_choose%',
   '%manageBooks_import_addMore%',
@@ -288,9 +288,10 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_create_warningModelMissingBooks%',
   '%manageBooks_create_errorVersificationMismatch%',
   '%manageBooks_import_errorOverlappingFiles%',
-  // Wiring-layer toast strings (FN-008 v2.6.0+, 2026-05-01) — used by the
-  // web view layer for cross-launch and file-picker stub notifications.
-  '%manageBooks_crossLaunch_notYetAvailable%',
+  // Wiring-layer toast string — file-picker stub notification (DEF-UI-009).
+  // (The DEF-UI-007/008 cross-launch toast key was retired in Phase 3 UI
+  // Decision 28, 2026-05-04, when those stubs converged on disabled+tooltip
+  // via the new shared key declared earlier in this tuple.)
   '%manageBooks_filePicker_notYetAvailable%',
   // Sidebar (rebuild — ViewListSelect layout, 2026-05-02)
   '%manageBooks_sidebar_heading%',

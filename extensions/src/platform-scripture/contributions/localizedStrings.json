@@ -298,7 +298,7 @@
       "%manageBooks_selection_selectBook%": "Select {0}",
       "%manageBooks_selection_xSelected%": "{0} selected",
       "%manageBooks_view_diff_label%": "View differences",
-      "%manageBooks_view_diff_tooltip%": "View differences (not yet available)",
+      "%manageBooks_view_disabledStub_notYetAvailable%": "Not yet available — coming soon",
       "%manageBooks_view_inlineCreateButton%": "Create",
       "%manageBooks_view_inlineCreateTooltip%": "Go to Create screen",
       "%manageBooks_view_inlineDeleteAria%": "Delete {0}",
@@ -520,7 +520,6 @@
       "%webView_platformScripture_markersChecklist_settings%": "Settings",
       "%manageBooks_openMenuItem%": "Manage Books…",
       "%manageBooks_toolsMenuColumn%": "Tools",
-      "%manageBooks_crossLaunch_notYetAvailable%": "Not yet available — coming soon",
       "%manageBooks_filePicker_notYetAvailable%": "Importing files is not yet available in Platform.Bible. Coming soon."
     },
     "es": {
@@ -716,8 +715,8 @@
       "%markersChecklist_emptyResult_identicalMarkers%": "Textos comparativos tienen marcadores idénticos.",
       "%manageBooks_openMenuItem%": "Administrar libros…",
       "%manageBooks_toolsMenuColumn%": "Herramientas",
-      "%manageBooks_crossLaunch_notYetAvailable%": "Aún no disponible — próximamente",
       "%manageBooks_filePicker_notYetAvailable%": "La importación de archivos aún no está disponible en Platform.Bible. Próximamente.",
+      "%manageBooks_view_disabledStub_notYetAvailable%": "Aún no disponible — próximamente",
       "%manageBooks_grid_canonGroup_DC%": "Deuterocanónicos",
       "%manageBooks_grid_canonGroup_Extra%": "Extras",
       "%manageBooks_grid_canonGroup_NT%": "Nuevo Testamento",

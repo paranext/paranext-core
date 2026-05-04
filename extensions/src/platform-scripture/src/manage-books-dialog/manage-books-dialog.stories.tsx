@@ -67,8 +67,10 @@ function StatefulHarness(props: Partial<ManageBooksDialogProps>) {
         loadBooks={loadBooks}
         loadVersification={loadVersification}
         onOpenScriptureReferenceSettings={() => undefined}
-        onOpenProjectCanons={() => undefined}
-        onOpenRegistry={() => undefined}
+        // onOpenProjectCanons / onOpenRegistry intentionally omitted — Decision 28
+        // (2026-05-04) renders these as disabled stubs with "Not yet available" tooltips
+        // when no handler is provided. Pass real handlers from a story to demonstrate
+        // the enabled state.
         onCreateBooks={noopMutation}
         onDeleteBooks={noopMutation}
         onCopyBooks={noopMutation}

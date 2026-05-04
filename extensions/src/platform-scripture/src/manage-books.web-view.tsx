@@ -558,17 +558,14 @@ global.webViewComponent = function ManageBooksWebView({
   }, []);
 
   // ===== Cross-launch stubs (DEF-UI-007/008) =================================
-  // No discovered platform commands ship today; surface info notifications.
-  const sendCrossLaunchStub = useCallback(() => {
-    const message =
-      localizedStrings['%manageBooks_crossLaunch_notYetAvailable%'] ??
-      'Not yet available — coming soon';
-    try {
-      papi.notifications.send({ message, severity: 'info' });
-    } catch {
-      // notification service unavailable in tests — ignore
-    }
-  }, [localizedStrings]);
+  // Project canons and Registry have no PT10 cross-launch target yet. Per Phase 3 UI
+  // Decision 13 (2026-05-04), the wiring layer simply omits the `onOpenProjectCanons` /
+  // `onOpenRegistry` props from <ManageBooksDialog>. The dialog renders each button as
+  // disabled with a "Not yet available — coming soon" tooltip on hover (the convention
+  // used elsewhere in the dialog for not-yet-implemented affordances). When real
+  // platform commands ship, replace the omission with `useCallback` handlers that route
+  // to those commands — the buttons will auto-enable and the disabled+tooltip stub
+  // disappears.
 
   // ===== File picker stub (DEF-UI-009 / FN-010 spike) ========================
   // No platform multi-file picker exists in PT10. We deliberately do NOT
@@ -646,8 +643,6 @@ global.webViewComponent = function ManageBooksWebView({
         loadBooks={loadBooks}
         loadVersification={loadVersification}
         onOpenScriptureReferenceSettings={onOpenScriptureReferenceSettings}
-        onOpenProjectCanons={sendCrossLaunchStub}
-        onOpenRegistry={sendCrossLaunchStub}
         onCreateBooks={onCreateBooks}
         onDeleteBooks={onDeleteBooks}
         onCopyBooks={onCopyBooks}
