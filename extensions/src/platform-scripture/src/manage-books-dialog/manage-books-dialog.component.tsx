@@ -14,11 +14,6 @@ import {
   Button,
   Checkbox,
   cn,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
   Input,
   Label,
   ProjectSelectorProject,
@@ -57,6 +52,12 @@ import {
   ManageBooksImportStrategy,
   MutationResult,
 } from './manage-books-dialog.types';
+import { fmtTemplate } from './manage-books-dialog.utils';
+import { DeleteConfirmPrompt } from './delete-confirm-prompt.component';
+import { CreatePreflightPrompt } from './create-preflight-prompt.component';
+import { UsxConfirmPrompt } from './usx-confirm-prompt.component';
+import { OverlapErrorPrompt } from './overlap-error-prompt.component';
+import { ImportConflictPrompt } from './import-conflict-prompt.component';
 
 // Re-export the public types for backwards compatibility with the original cherry-pick.
 export type {
@@ -299,13 +300,6 @@ const toProjectBookState = (books: ManageBooksDialogBookInfo[] | undefined): Pro
   });
   return { present, dates };
 };
-
-/** Format a localized template string by substituting positional `{0}`, `{1}`, … placeholders. */
-const fmt = (template: string, ...values: ReadonlyArray<string | number>): string =>
-  template.replace(/\{(\d+)\}/g, (_, idx) => {
-    const v = values[Number(idx)];
-    return v === undefined ? '' : String(v);
-  });
 
 // --------------------------------------------------------------------------
 // Component
@@ -669,11 +663,11 @@ export function ManageBooksDialog({
       if (unmatched.length > 0) {
         sonner.warning(
           unmatched.length === 1
-            ? fmt(
+            ? fmtTemplate(
                 t('%manageBooks_import_unmatchedOne%', 'Could not detect a matching book in "{0}"'),
                 unmatched[0],
               )
-            : fmt(
+            : fmtTemplate(
                 t(
                   '%manageBooks_import_unmatchedMany%',
                   'Could not detect a matching book in {0} files',
@@ -1073,8 +1067,14 @@ export function ManageBooksDialog({
     ? t('%manageBooks_header_subtitle%', '{0} of {1} canonical books in {2} ({3})')
     : t('%manageBooks_header_subtitleNoVersification%', '{0} of {1} canonical books in {2}');
   const headerSubtitle = versification
-    ? fmt(subtitleTemplate, totalPresent, canonicalBooks.length, project.shortName, versification)
-    : fmt(subtitleTemplate, totalPresent, canonicalBooks.length, project.shortName);
+    ? fmtTemplate(
+        subtitleTemplate,
+        totalPresent,
+        canonicalBooks.length,
+        project.shortName,
+        versification,
+      )
+    : fmtTemplate(subtitleTemplate, totalPresent, canonicalBooks.length, project.shortName);
 
   const filterChipLabel = (s: string): string => {
     switch (s) {
@@ -1255,7 +1255,7 @@ export function ManageBooksDialog({
         (action === 'import' && !!importFiles[item.book]);
       const englishName = Canon.bookIdToEnglishName(item.book) || item.book;
       if (showCheckbox) {
-        return fmt(t('%manageBooks_selection_selectBook%', 'Select {0}'), englishName);
+        return fmtTemplate(t('%manageBooks_selection_selectBook%', 'Select {0}'), englishName);
       }
       return englishName;
     },
@@ -1292,27 +1292,43 @@ export function ManageBooksDialog({
     const single = n === 1;
     if (action === 'create')
       return single
-        ? fmt(t('%manageBooks_footer_apply_create_one%', 'Create 1 book in {0}'), dest)
-        : fmt(t('%manageBooks_footer_apply_create_many%', 'Create {0} books in {1}'), n, dest);
+        ? fmtTemplate(t('%manageBooks_footer_apply_create_one%', 'Create 1 book in {0}'), dest)
+        : fmtTemplate(
+            t('%manageBooks_footer_apply_create_many%', 'Create {0} books in {1}'),
+            n,
+            dest,
+          );
     if (action === 'delete')
       return single
-        ? fmt(t('%manageBooks_footer_apply_delete_one%', 'Delete 1 book from {0}'), dest)
-        : fmt(t('%manageBooks_footer_apply_delete_many%', 'Delete {0} books from {1}'), n, dest);
+        ? fmtTemplate(t('%manageBooks_footer_apply_delete_one%', 'Delete 1 book from {0}'), dest)
+        : fmtTemplate(
+            t('%manageBooks_footer_apply_delete_many%', 'Delete {0} books from {1}'),
+            n,
+            dest,
+          );
     if (action === 'copy')
       return single
-        ? fmt(t('%manageBooks_footer_apply_copy_one%', 'Copy 1 book into {0}'), dest)
-        : fmt(t('%manageBooks_footer_apply_copy_many%', 'Copy {0} books into {1}'), n, dest);
+        ? fmtTemplate(t('%manageBooks_footer_apply_copy_one%', 'Copy 1 book into {0}'), dest)
+        : fmtTemplate(
+            t('%manageBooks_footer_apply_copy_many%', 'Copy {0} books into {1}'),
+            n,
+            dest,
+          );
     if (action === 'import')
       return single
-        ? fmt(t('%manageBooks_footer_apply_import_one%', 'Import 1 book into {0}'), dest)
-        : fmt(t('%manageBooks_footer_apply_import_many%', 'Import {0} books into {1}'), n, dest);
+        ? fmtTemplate(t('%manageBooks_footer_apply_import_one%', 'Import 1 book into {0}'), dest)
+        : fmtTemplate(
+            t('%manageBooks_footer_apply_import_many%', 'Import {0} books into {1}'),
+            n,
+            dest,
+          );
     return '';
   })();
 
   // -- Footer summary line ------------------------------------------------
   const summaryText = (() => {
     if (action === 'view')
-      return fmt(t('%manageBooks_footer_summary_view%', 'Viewing {0}'), project.shortName);
+      return fmtTemplate(t('%manageBooks_footer_summary_view%', 'Viewing {0}'), project.shortName);
     if (action === 'create') {
       let methodLabel = t('%manageBooks_create_method_referenceText%', 'Based on');
       if (createMethod === 'empty') {
@@ -1323,28 +1339,34 @@ export function ManageBooksDialog({
           'With all chapter and verse numbers',
         );
       }
-      return fmt(
+      return fmtTemplate(
         t('%manageBooks_footer_summary_create%', 'Create in {0} — {1}'),
         project.shortName,
         methodLabel,
       );
     }
     if (action === 'delete')
-      return fmt(t('%manageBooks_footer_summary_delete%', 'Delete from {0}'), project.shortName);
+      return fmtTemplate(
+        t('%manageBooks_footer_summary_delete%', 'Delete from {0}'),
+        project.shortName,
+      );
     if (action === 'copy') {
       if (copySourceProject)
-        return fmt(
+        return fmtTemplate(
           t('%manageBooks_footer_summary_copy_with%', 'Copy from {0} into {1}'),
           copySourceProject.shortName,
           project.shortName,
         );
-      return fmt(
+      return fmtTemplate(
         t('%manageBooks_footer_summary_copy_without%', 'Copy into {0}'),
         project.shortName,
       );
     }
     if (action === 'import')
-      return fmt(t('%manageBooks_footer_summary_import%', 'Import into {0}'), project.shortName);
+      return fmtTemplate(
+        t('%manageBooks_footer_summary_import%', 'Import into {0}'),
+        project.shortName,
+      );
     return '';
   })();
 
@@ -1365,7 +1387,7 @@ export function ManageBooksDialog({
       }
     }
     if (action !== 'view' && selectableVisibleBooks.length > 0) {
-      return fmt(
+      return fmtTemplate(
         t('%manageBooks_selection_announcement%', '{0} of {1} books selected'),
         visibleSelectedCount,
         selectableVisibleBooks.length,
@@ -1398,7 +1420,7 @@ export function ManageBooksDialog({
     const dest = project.shortName;
     const allSelected = n === current.present.size;
     if (allSelected)
-      return fmt(
+      return fmtTemplate(
         t(
           '%manageBooks_delete_confirmBodyAll%',
           'All books will be deleted from {0}. The project itself will not be deleted. This cannot be undone.',
@@ -1406,7 +1428,7 @@ export function ManageBooksDialog({
         dest,
       );
     if (isSharedProject)
-      return fmt(
+      return fmtTemplate(
         t(
           '%manageBooks_delete_confirmBodyShared%',
           '{0} book(s) will be deleted from {1}, which is shared with other users. They will see this change immediately. This cannot be undone.',
@@ -1414,7 +1436,7 @@ export function ManageBooksDialog({
         n,
         dest,
       );
-    return fmt(
+    return fmtTemplate(
       t(
         '%manageBooks_delete_confirmBodyPartial%',
         '{0} book(s) will be deleted from {1}. This cannot be undone.',
@@ -1452,7 +1474,7 @@ export function ManageBooksDialog({
             <header className="tw-flex tw-items-center tw-gap-3 tw-border-b tw-px-6 tw-py-4">
               <div className="tw-flex tw-flex-col">
                 <h2 className="tw-text-lg tw-font-semibold">
-                  {t('%manageBooks_dialog_title%', 'Manage Books')}
+                  {t('%manageBooks_dialog_title%', 'Manage books')}
                 </h2>
                 <p className="tw-text-xs tw-text-muted-foreground">{headerSubtitle}</p>
               </div>
@@ -1736,7 +1758,7 @@ export function ManageBooksDialog({
                       <span className="tw-text-xs tw-text-muted-foreground">
                         {Object.keys(importFiles).length === 1
                           ? t('%manageBooks_import_filesMatched_one%', '1 file matched')
-                          : fmt(
+                          : fmtTemplate(
                               t('%manageBooks_import_filesMatched_other%', '{0} files matched'),
                               Object.keys(importFiles).length,
                             )}
@@ -1768,7 +1790,7 @@ export function ManageBooksDialog({
                         onCheckedChange={toggleAllVisible}
                         aria-label={
                           visibleSelectedCount > 0
-                            ? fmt(
+                            ? fmtTemplate(
                                 t('%manageBooks_selection_xSelected%', '{0} selected'),
                                 visibleSelectedCount,
                               )
@@ -1779,7 +1801,7 @@ export function ManageBooksDialog({
                   </TooltipTrigger>
                   <TooltipContent>
                     {visibleSelectedCount > 0
-                      ? fmt(
+                      ? fmtTemplate(
                           t('%manageBooks_selection_xSelected%', '{0} selected'),
                           visibleSelectedCount,
                         )
@@ -1803,7 +1825,7 @@ export function ManageBooksDialog({
               >
                 {universe.length === 0
                   ? t('%manageBooks_filter_zero%', '0 books')
-                  : fmt(
+                  : fmtTemplate(
                       t('%manageBooks_filter_count%', '{0} of {1}'),
                       visibleBooks.length,
                       universe.length,
@@ -1905,7 +1927,10 @@ export function ManageBooksDialog({
                     if (showCheckbox) toggleOne(book);
                   }}
                   groupBy={gridGroupBy}
-                  ariaLabel={fmt(t('%manageBooks_grid_label%', 'Books in {0}'), project.shortName)}
+                  ariaLabel={fmtTemplate(
+                    t('%manageBooks_grid_label%', 'Books in {0}'),
+                    project.shortName,
+                  )}
                   ariaMultiselectable={action !== 'view'}
                   primaryDateLabel={primaryDateLabel}
                   secondaryDateLabel={secondaryDateLabel}
@@ -1989,305 +2014,95 @@ export function ManageBooksDialog({
         </TooltipProvider>
       </div>
 
-      {/* A2 — Delete confirmation prompt */}
-      <Dialog
-        open={!!deleteConfirm}
-        onOpenChange={(v) => {
-          if (!v) setDeleteConfirm(undefined);
+      <DeleteConfirmPrompt
+        confirm={deleteConfirm}
+        body={deleteConfirmBody}
+        projectShortName={project.shortName}
+        t={t}
+        onCancel={() => setDeleteConfirm(undefined)}
+        onConfirm={(books) => {
+          setDeleteConfirm(undefined);
+          runDelete(books).catch(() => undefined);
         }}
-      >
-        <DialogContent className="tw-max-w-md" role="alertdialog">
-          <div className="tw-flex tw-flex-col tw-gap-4">
-            <DialogHeader>
-              <DialogTitle>
-                {fmt(
-                  t('%manageBooks_delete_confirmTitle%', 'Delete books from {0}?'),
-                  project.shortName,
-                )}
-              </DialogTitle>
-              <DialogDescription>{deleteConfirmBody}</DialogDescription>
-            </DialogHeader>
-            <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
-              <Button variant="outline" autoFocus onClick={() => setDeleteConfirm(undefined)}>
-                {t('%manageBooks_delete_confirmCancel%', 'Cancel')}
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  if (!deleteConfirm) return;
-                  const { books } = deleteConfirm;
-                  setDeleteConfirm(undefined);
-                  runDelete(books).catch(() => undefined);
-                }}
-              >
-                {t('%manageBooks_delete_confirmAccept%', 'Delete')}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      />
 
-      {/* A4 — Create pre-flight prompts (missing model / versification mismatch) */}
-      <Dialog
-        open={!!createPrompt}
-        onOpenChange={(v) => {
-          if (!v) {
-            setCreatePrompt(undefined);
+      <CreatePreflightPrompt
+        prompt={createPrompt}
+        projectShortName={project.shortName}
+        referenceProject={createReferenceProject}
+        t={t}
+        onCancel={() => {
+          setCreatePrompt(undefined);
+          pendingEstherRef.current = undefined;
+        }}
+        onContinue={async (prompt) => {
+          setCreatePrompt(undefined);
+          if (prompt.kind === 'missing-model') {
+            // Continue versification check next.
+            const destVrs = versification ?? '';
+            const modelVrs = createReferenceId
+              ? await Promise.resolve(loadVersification(createReferenceId)).catch(() => '')
+              : '';
+            if (destVrs && modelVrs && destVrs !== modelVrs) {
+              setCreatePrompt({
+                kind: 'versification',
+                destVrs,
+                modelVrs,
+                books: prompt.available,
+              });
+              return;
+            }
+            runCreate(prompt.available, pendingEstherRef.current).catch(() => undefined);
             pendingEstherRef.current = undefined;
+            return;
           }
+          runCreate(prompt.books, pendingEstherRef.current).catch(() => undefined);
+          pendingEstherRef.current = undefined;
         }}
-      >
-        <DialogContent className="tw-max-w-md" role="alertdialog">
-          <div className="tw-flex tw-flex-col tw-gap-4">
-            <DialogHeader>
-              <DialogTitle>
-                {createPrompt?.kind === 'missing-model'
-                  ? t(
-                      '%manageBooks_create_missingModelBooksTitle%',
-                      'Some books are not in the model project',
-                    )
-                  : t('%manageBooks_create_versificationMismatchTitle%', 'Versification mismatch')}
-              </DialogTitle>
-              <DialogDescription>
-                {(() => {
-                  if (createPrompt?.kind === 'missing-model')
-                    return fmt(
-                      t(
-                        '%manageBooks_create_missingModelBooksBody%',
-                        '{0} of the selected books are not in the model project {1}. Proceed with the {2} book(s) that are available?',
-                      ),
-                      createPrompt.missing.length,
-                      createReferenceProject?.name ?? '',
-                      createPrompt.available.length,
-                    );
-                  if (createPrompt?.kind === 'versification')
-                    return fmt(
-                      t(
-                        '%manageBooks_create_versificationMismatchBody%',
-                        '{0} uses {1} versification but the model project {2} uses {3}. Continue?',
-                      ),
-                      project.shortName,
-                      createPrompt.destVrs,
-                      createReferenceProject?.shortName ?? '',
-                      createPrompt.modelVrs,
-                    );
-                  return '';
-                })()}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
-              <Button
-                variant="outline"
-                autoFocus
-                onClick={() => {
-                  setCreatePrompt(undefined);
-                  pendingEstherRef.current = undefined;
-                }}
-              >
-                {t('%manageBooks_prompt_cancel%', 'Cancel')}
-              </Button>
-              <Button
-                onClick={async () => {
-                  const prompt = createPrompt;
-                  if (!prompt) return;
-                  setCreatePrompt(undefined);
-                  if (prompt.kind === 'missing-model') {
-                    // Continue versification check next.
-                    const destVrs = versification ?? '';
-                    const modelVrs = createReferenceId
-                      ? await Promise.resolve(loadVersification(createReferenceId)).catch(() => '')
-                      : '';
-                    if (destVrs && modelVrs && destVrs !== modelVrs) {
-                      setCreatePrompt({
-                        kind: 'versification',
-                        destVrs,
-                        modelVrs,
-                        books: prompt.available,
-                      });
-                      return;
-                    }
-                    runCreate(prompt.available, pendingEstherRef.current).catch(() => undefined);
-                    pendingEstherRef.current = undefined;
-                    return;
-                  }
-                  runCreate(prompt.books, pendingEstherRef.current).catch(() => undefined);
-                  pendingEstherRef.current = undefined;
-                }}
-              >
-                {t('%manageBooks_prompt_continue%', 'Continue')}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      />
 
-      {/* A9 — USX confirmation prompt */}
-      <Dialog
-        open={!!usxConfirm}
-        onOpenChange={(v) => {
-          if (!v) setUsxConfirm(undefined);
+      <UsxConfirmPrompt
+        confirm={usxConfirm}
+        projectName={project.name}
+        t={t}
+        onCancel={() => {
+          // A9: cancel removes the USX files from the grid.
+          if (usxConfirm) {
+            const fileSet = new Set(usxConfirm.files);
+            setImportFiles((prev) => {
+              const next = { ...prev };
+              Object.keys(next).forEach((book) => {
+                if (fileSet.has(next[book].file)) delete next[book];
+              });
+              return next;
+            });
+          }
+          setUsxConfirm(undefined);
         }}
-      >
-        <DialogContent className="tw-max-w-md" role="alertdialog">
-          <div className="tw-flex tw-flex-col tw-gap-4">
-            <DialogHeader>
-              <DialogTitle>
-                {t('%manageBooks_import_usxConfirmTitle%', 'Import USX files?')}
-              </DialogTitle>
-              <DialogDescription>
-                {fmt(
-                  t(
-                    '%manageBooks_import_usxConfirmBody%',
-                    'Import the following USX files into project {0}?',
-                  ),
-                  project.name,
-                )}
-              </DialogDescription>
-            </DialogHeader>
-            <ul className="tw-flex tw-flex-col tw-gap-0.5 tw-pl-5 tw-text-xs tw-text-muted-foreground">
-              {usxConfirm?.files.map((f) => <li key={f}>{f}</li>)}
-            </ul>
-            <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
-              <Button
-                variant="outline"
-                autoFocus
-                onClick={() => {
-                  // A9: cancel removes the USX files from the grid.
-                  if (usxConfirm) {
-                    const fileSet = new Set(usxConfirm.files);
-                    setImportFiles((prev) => {
-                      const next = { ...prev };
-                      Object.keys(next).forEach((book) => {
-                        if (fileSet.has(next[book].file)) delete next[book];
-                      });
-                      return next;
-                    });
-                  }
-                  setUsxConfirm(undefined);
-                }}
-              >
-                {t('%manageBooks_import_usxConfirmCancel%', 'Cancel')}
-              </Button>
-              <Button
-                onClick={() => {
-                  if (!usxConfirm) return;
-                  // A9: Confirm imports immediately. Find the books mapped to these USX files.
-                  const fileSet = new Set(usxConfirm.files);
-                  const usxBooks = Object.keys(importFiles).filter((book) =>
-                    fileSet.has(importFiles[book].file),
-                  );
-                  setUsxConfirm(undefined);
-                  if (usxBooks.length > 0)
-                    runImport(usxBooks, 'replaceEntireBooks').catch(() => undefined);
-                }}
-              >
-                {t('%manageBooks_import_usxConfirmAccept%', 'Import')}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+        onConfirm={() => {
+          if (!usxConfirm) return;
+          // A9: Confirm imports immediately. Find the books mapped to these USX files.
+          const fileSet = new Set(usxConfirm.files);
+          const usxBooks = Object.keys(importFiles).filter((book) =>
+            fileSet.has(importFiles[book].file),
+          );
+          setUsxConfirm(undefined);
+          if (usxBooks.length > 0) runImport(usxBooks, 'replaceEntireBooks').catch(() => undefined);
+        }}
+      />
 
-      {/* A10 — Overlap validation error */}
-      <Dialog
-        open={!!overlapError}
-        onOpenChange={(v) => {
-          if (!v) setOverlapError(undefined);
-        }}
-      >
-        <DialogContent className="tw-max-w-md" role="alertdialog">
-          <div className="tw-flex tw-flex-col tw-gap-4">
-            <DialogHeader>
-              <DialogTitle>
-                {t('%manageBooks_import_overlapTitle%', 'Two files map to the same book')}
-              </DialogTitle>
-              <DialogDescription>
-                {/* B2 — reuse existing backend key for the canonical message, augmented with file names */}
-                {t(
-                  '%manageBooks_import_errorOverlappingFiles%',
-                  'Two files contain information for the same book. They can not both be selected.',
-                )}
-              </DialogDescription>
-            </DialogHeader>
-            {overlapError && (
-              <p className="tw-text-sm tw-text-muted-foreground">
-                {fmt(
-                  t(
-                    '%manageBooks_import_overlapBody%',
-                    'Cannot import: {0} would be supplied by both "{1}" and "{2}".',
-                  ),
-                  overlapError.book,
-                  overlapError.existingFile,
-                  overlapError.newFile,
-                )}
-              </p>
-            )}
-            <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
-              <Button autoFocus onClick={() => setOverlapError(undefined)}>
-                {t('%manageBooks_import_overlapDismiss%', 'OK')}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <OverlapErrorPrompt error={overlapError} t={t} onDismiss={() => setOverlapError(undefined)} />
 
-      {/* Existing import-conflict prompt (replace-entire vs non-existing) */}
-      <Dialog
-        open={!!importConflict}
-        onOpenChange={(v) => {
-          if (!v) setImportConflict(undefined);
+      <ImportConflictPrompt
+        conflict={importConflict}
+        projectName={project.name}
+        t={t}
+        onCancel={() => setImportConflict(undefined)}
+        onChoose={(strategy, books) => {
+          runImport(books, strategy).catch(() => undefined);
+          setImportConflict(undefined);
         }}
-      >
-        <DialogContent className="tw-max-w-md">
-          <div className="tw-flex tw-flex-col tw-gap-4">
-            <DialogHeader>
-              <DialogTitle>
-                {t('%manageBooks_import_conflictTitle%', 'Books already exist')}
-              </DialogTitle>
-              <DialogDescription>
-                {importConflict
-                  ? fmt(
-                      t(
-                        '%manageBooks_import_conflictBody%',
-                        '{0} book(s) already exist in {1}: {2}',
-                      ),
-                      importConflict.existing.length,
-                      project.name,
-                      importConflict.existing.join(', '),
-                    )
-                  : ''}
-              </DialogDescription>
-            </DialogHeader>
-            <p className="tw-text-sm tw-text-muted-foreground">
-              {t(
-                '%manageBooks_import_conflictBody2%',
-                'Choose how to proceed with the import or close to cancel.',
-              )}
-            </p>
-            <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (!importConflict) return;
-                  runImport(importConflict.books, 'replaceEntireBooks').catch(() => undefined);
-                  setImportConflict(undefined);
-                }}
-              >
-                {t('%manageBooks_import_replaceEntireBooks%', 'Replace entire books')}
-              </Button>
-              <Button
-                onClick={() => {
-                  if (!importConflict) return;
-                  runImport(importConflict.books, 'nonExistingChapters').catch(() => undefined);
-                  setImportConflict(undefined);
-                }}
-              >
-                {t('%manageBooks_import_nonExistingChapters%', 'Import non-existing chapters')}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      />
       <Sonner position="top-center" />
     </>
   );

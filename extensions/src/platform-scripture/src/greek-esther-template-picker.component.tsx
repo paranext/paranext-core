@@ -83,11 +83,11 @@ export type GreekEstherTemplatePickerProps = {
 };
 
 const ENGLISH_FALLBACKS: Record<GreekEstherTemplatePickerLocalizedStringKey, string> = {
-  '%manageBooks_createEsther_dialogTitle%': 'Greek Esther: Choose Template',
+  '%manageBooks_createEsther_dialogTitle%': 'Greek Esther: Choose template',
   '%manageBooks_createEsther_dialogDescription%':
     'ESG contains material from the Hebrew text and additional material from the Greek LXX text. ' +
     'Projects usually follow one of three models. Please select the model you wish to use.',
-  '%manageBooks_createEsther_lxx%': 'Septuagint (LXX) — verse subdivisions: 1a, 1b, 1c...',
+  '%manageBooks_createEsther_lxx%': 'Septuagint (LXX) — verse subdivisions: 1a, 1b, 1c…',
   '%manageBooks_createEsther_vulgate%': 'Vulgate — additional chapters 11 through 16',
   '%manageBooks_createEsther_modernScholars%': 'Modern Scholars — additional chapters A through F',
   '%manageBooks_createEsther_okButton%': 'OK',

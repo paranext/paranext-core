@@ -1,23 +1,13 @@
 {
   "mainMenu": {
-    "columns": {
-      "platformScripture.tools": {
-        "label": "%manageBooks_toolsMenuColumn%",
-        "order": 2
-      }
-    },
-    "groups": {
-      "platformScripture.toolsManageBooks": {
-        "column": "platformScripture.tools",
-        "order": 1
-      }
-    },
+    "columns": {},
+    "groups": {},
     "items": [
       {
         "label": "%manageBooks_openMenuItem%",
-        "localizeNotes": "Application main menu > Tools > Manage Books…",
-        "group": "platformScripture.toolsManageBooks",
-        "order": 1,
+        "localizeNotes": "Application main menu > Project > Manage books…",
+        "group": "platform.projectResources",
+        "order": 100,
         "command": "platformScripture.openManageBooks"
       }
     ]

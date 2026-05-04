@@ -132,7 +132,7 @@ const SAMPLE_FRENCH_STRINGS: GreekEstherTemplatePickerLocalizedStrings = {
   '%manageBooks_createEsther_dialogDescription%':
     'ESG contient du matériel du texte hébreu et du matériel supplémentaire du texte grec de la LXX. ' +
     'Les projets suivent généralement l’un des trois modèles. Veuillez sélectionner le modèle que vous souhaitez utiliser.',
-  '%manageBooks_createEsther_lxx%': 'Septante (LXX) — subdivisions de versets : 1a, 1b, 1c...',
+  '%manageBooks_createEsther_lxx%': 'Septante (LXX) — subdivisions de versets : 1a, 1b, 1c…',
   '%manageBooks_createEsther_vulgate%': 'Vulgate — chapitres supplémentaires 11 à 16',
   '%manageBooks_createEsther_modernScholars%': 'Érudits modernes — chapitres supplémentaires A à F',
   // okButton intentionally omitted to prove English fallback works.

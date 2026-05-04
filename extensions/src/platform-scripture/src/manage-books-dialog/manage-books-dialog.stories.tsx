@@ -1,9 +1,12 @@
-/* eslint-disable -- Frozen from rebuild iteration 1: a minimal production stories surface that
- * exercises the new ViewListSelect layout. The story file's primary job is to render the
- * orchestrator with a stateful harness so reviewers can see all 5 sidebar sections and the 3
- * disabled future ones. We do NOT replicate the 6-variant exploration that the deleted
- * `lib/platform-bible-react/src/stories/advanced/manage-books-dialog.stories.tsx` contained — that
- * was design-exploration scaffolding. */
+/**
+ * Stories for the manage-books-dialog component (the new ViewListSelect layout). Renders the
+ * orchestrator inside a stateful harness so reviewers can exercise all 5 sidebar sections and see
+ * the 3 disabled future-section rows.
+ *
+ * Replaced the 6-variant exploration that lived in
+ * `lib/platform-bible-react/src/stories/advanced/manage-books-dialog.stories.tsx` (deleted) — that
+ * was design-exploration scaffolding, not the production stories surface.
+ */
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSelectorProject } from 'platform-bible-react';

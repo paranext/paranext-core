@@ -13,7 +13,7 @@
  * The disabled sections render as muted, non-clickable rows with a tooltip explaining that the
  * functionality is not yet available in Platform.Bible.
  */
-import { Fragment } from 'react';
+import { Fragment, useMemo } from 'react';
 import {
   BarChart3,
   BookA,
@@ -25,7 +25,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
-  ProjectSelector,
+  ComboBox,
   ProjectSelectorProject,
   Tooltip,
   TooltipContent,
@@ -80,27 +80,27 @@ function getSectionLabels(
   switch (id) {
     case 'show':
       return {
-        label: t('%manageBooks_sidebar_show_label%', 'Show Books'),
+        label: t('%manageBooks_sidebar_show_label%', 'Show books'),
         subtitle: t('%manageBooks_sidebar_show_subtitle%', 'View books in this project'),
       };
     case 'create':
       return {
-        label: t('%manageBooks_sidebar_create_label%', 'Create Books'),
+        label: t('%manageBooks_sidebar_create_label%', 'Create books'),
         subtitle: t('%manageBooks_sidebar_create_subtitle%', 'Add new books'),
       };
     case 'copy':
       return {
-        label: t('%manageBooks_sidebar_copy_label%', 'Copy Books'),
+        label: t('%manageBooks_sidebar_copy_label%', 'Copy books'),
         subtitle: t('%manageBooks_sidebar_copy_subtitle%', 'Copy between projects'),
       };
     case 'import':
       return {
-        label: t('%manageBooks_sidebar_import_label%', 'Import Books'),
+        label: t('%manageBooks_sidebar_import_label%', 'Import books'),
         subtitle: t('%manageBooks_sidebar_import_subtitle%', 'Import from files'),
       };
     case 'delete':
       return {
-        label: t('%manageBooks_sidebar_delete_label%', 'Delete Books'),
+        label: t('%manageBooks_sidebar_delete_label%', 'Delete books'),
         subtitle: t('%manageBooks_sidebar_delete_subtitle%', 'Remove books'),
       };
     case 'progress-tracking':
@@ -109,16 +109,16 @@ function getSectionLabels(
         subtitle: t('%manageBooks_progressTracking_subtitle%', 'Start, stop, and review tracking'),
         tooltip: t(
           '%manageBooks_progressTracking_notYetAvailable%',
-          'Progress tracking is not yet available in Platform.Bible. Coming soon.',
+          'Progress tracking is not yet available — coming soon.',
         ),
       };
     case 'book-names':
       return {
-        label: t('%manageBooks_bookNames_label%', 'Book Names'),
+        label: t('%manageBooks_bookNames_label%', 'Book names'),
         subtitle: t('%manageBooks_bookNames_subtitle%', 'Edit short and long book names (TOC1–3)'),
         tooltip: t(
           '%manageBooks_bookNames_notYetAvailable%',
-          'Book Names editing is not yet available in Platform.Bible. Coming soon.',
+          'Book names editing is not yet available — coming soon.',
         ),
       };
     case 'introductions':
@@ -130,7 +130,7 @@ function getSectionLabels(
         ),
         tooltip: t(
           '%manageBooks_introductions_notYetAvailable%',
-          'Introductions are not yet available in Platform.Bible. Coming soon.',
+          'Introductions are not yet available — coming soon.',
         ),
       };
     default: {
@@ -197,6 +197,11 @@ function actionToSectionId(action: ManageBooksAction): ManageBooksSidebarSection
   }
 }
 
+/** Local row shape for the project picker. Extends `ComboBoxLabelOption`. */
+type ProjectComboOption = ProjectSelectorProject & {
+  label: string;
+};
+
 export function ManageBooksSidebar({
   active,
   onSelectAction,
@@ -207,9 +212,14 @@ export function ManageBooksSidebar({
   t,
 }: ManageBooksSidebarProps) {
   const activeSectionId = actionToSectionId(active);
+  const comboOptions = useMemo<ProjectComboOption[]>(
+    () => projects.map((p) => ({ ...p, label: p.shortName })),
+    [projects],
+  );
+  const comboValue = comboOptions.find((p) => p.id === projectId);
   return (
     <nav
-      aria-label={t('%manageBooks_sidebar_heading%', 'Manage Books')}
+      aria-label={t('%manageBooks_sidebar_heading%', 'Manage books')}
       className="tw-flex tw-w-64 tw-shrink-0 tw-flex-col tw-gap-1 tw-overflow-y-auto tw-border-r tw-bg-muted/40 tw-p-3"
       data-testid="manage-books-sidebar"
     >
@@ -221,12 +231,11 @@ export function ManageBooksSidebar({
           {t('%manageBooks_header_projectLabel%', 'Project')}
         </Label>
         <div data-testid="manage-books-sidebar-project-trigger">
-          <ProjectSelector
-            mode="project"
-            projects={projects}
-            openTabs={[]}
-            selection={{ projectId }}
-            onChangeSelection={(next: { projectId: string }) => onProjectIdChange(next.projectId)}
+          <ComboBox<ProjectComboOption>
+            options={comboOptions}
+            value={comboValue}
+            onChange={(next) => onProjectIdChange(next.id)}
+            getButtonLabel={(p) => p.shortName}
             buttonClassName="tw-h-8 tw-w-full tw-font-normal"
             isDisabled={isSubmitting}
             ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
@@ -235,8 +244,8 @@ export function ManageBooksSidebar({
             // are GUIDs and would render as a 32-char hex string in the trigger, which the
             // verifier flagged as unreadable. The localized "Select project" string is the
             // correct momentary fallback; once `projects` resolves and contains `projectId`,
-            // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16").
-            buttonPlaceholder={t('%manageBooks_copy_sourcePlaceholder%', 'Select project')}
+            // ComboBox renders the matching `shortName` (e.g. "ESVUS16") via getButtonLabel.
+            buttonPlaceholder={t('%manageBooks_sidebar_projectPlaceholder%', 'Select project')}
           />
         </div>
       </div>
@@ -247,7 +256,7 @@ export function ManageBooksSidebar({
 
         let groupHeading: string | undefined;
         if (groupStart === 'manage') {
-          groupHeading = t('%manageBooks_sidebar_group_manage%', 'Manage Project Books');
+          groupHeading = t('%manageBooks_sidebar_group_manage%', 'Manage project books');
         } else if (groupStart === 'reference') {
           groupHeading = t('%manageBooks_sidebar_group_reference%', 'Reference');
         }

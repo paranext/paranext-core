@@ -136,12 +136,6 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_header_projectLabel%',
   '%manageBooks_header_subtitle%',
   '%manageBooks_header_subtitleNoVersification%',
-  // Action toggles
-  '%manageBooks_action_view%',
-  '%manageBooks_action_create%',
-  '%manageBooks_action_import%',
-  '%manageBooks_action_copy%',
-  '%manageBooks_action_delete%',
   // View-mode cross-launch buttons
   '%manageBooks_view_openScrRefSettings%',
   '%manageBooks_view_openProjectCanons%',
@@ -199,20 +193,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_grid_outOfScope%',
   '%manageBooks_grid_untracked%',
   '%manageBooks_grid_selectAll%',
-  '%manageBooks_grid_groupCount%',
-  // Pill / per-row badges
-  '%manageBooks_pill_present%',
-  '%manageBooks_pill_new%',
-  '%manageBooks_pill_state_same%',
-  '%manageBooks_pill_state_newer%',
-  '%manageBooks_pill_state_older%',
-  '%manageBooks_pill_state_missing%',
-  '%manageBooks_pill_state_undetermined%',
-  // Per-row inline buttons (View mode shortcuts)
-  '%manageBooks_view_inlineCreateButton%',
-  '%manageBooks_view_inlineCreateTooltip%',
-  '%manageBooks_view_inlineDeleteTooltip%',
-  '%manageBooks_view_inlineDeleteAria%',
+  // View-mode shared stub label
   '%manageBooks_view_diff_label%',
   '%manageBooks_view_disabledStub_notYetAvailable%',
   // Import flow
@@ -250,8 +231,6 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_prompt_continue%',
   '%manageBooks_prompt_cancel%',
   // Footer
-  '%manageBooks_footer_close%',
-  '%manageBooks_footer_cancel%',
   '%manageBooks_footer_summary_view%',
   '%manageBooks_footer_summary_create%',
   '%manageBooks_footer_summary_delete%',
@@ -279,22 +258,17 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_footer_loading_delete%',
   '%manageBooks_footer_loading_copy%',
   '%manageBooks_footer_loading_import%',
-  // Result panel (AlertEntry rendering)
-  '%manageBooks_results_errorsTitle%',
-  '%manageBooks_results_warningsTitle%',
-  '%manageBooks_results_dismiss%',
-  '%manageBooks_results_success%',
   // Existing backend keys directly referenced by in-dialog prompts (B2)
   '%manageBooks_create_warningModelMissingBooks%',
   '%manageBooks_create_errorVersificationMismatch%',
   '%manageBooks_import_errorOverlappingFiles%',
-  // Wiring-layer toast string — file-picker stub notification (DEF-UI-009).
-  // (The DEF-UI-007/008 cross-launch toast key was retired in Phase 3 UI
-  // Decision 28, 2026-05-04, when those stubs converged on disabled+tooltip
-  // via the new shared key declared earlier in this tuple.)
-  '%manageBooks_filePicker_notYetAvailable%',
+  // (The DEF-UI-007/008 cross-launch toast key and the DEF-UI-009 file-picker
+  // toast key were retired in Phase 3 UI Decision 28, 2026-05-04, when those
+  // stubs converged on disabled+tooltip via the new shared key declared earlier
+  // in this tuple.)
   // Sidebar (rebuild — ViewListSelect layout, 2026-05-02)
   '%manageBooks_sidebar_heading%',
+  '%manageBooks_sidebar_projectPlaceholder%',
   '%manageBooks_sidebar_group_manage%',
   '%manageBooks_sidebar_group_reference%',
   '%manageBooks_sidebar_show_label%',

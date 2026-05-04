@@ -211,11 +211,11 @@ async function openMarkersChecklistSettings(): Promise<void> {
 }
 
 /**
- * FN-008 (2026-05-01): Open the unified Manage Books dialog as a float web view. The optional
- * `webViewId` parameter is the active editor's web view id — when provided we resolve its
- * `projectId` from the saved definition so the dialog opens pre-targeted at the user's current
- * project. When the caller provides no id (e.g. main-menu invocation) the dialog opens with the
- * project picker visible.
+ * FN-008 (2026-05-01): Open the unified Manage Books dialog as a tab web view. The optional
+ * argument is either an editor's `webViewId` (from a scripture-editor menu) or a literal project id
+ * — we probe with `papi.webViews.getOpenWebViewDefinition` and fall back to treating the value as a
+ * project id when the probe returns `undefined`. When the caller provides no id (e.g. main-menu
+ * invocation) the dialog opens with the project picker visible.
  */
 async function openManageBooks(
   webViewIdOrProjectId: string | undefined,
@@ -224,8 +224,8 @@ async function openManageBooks(
 
   if (webViewIdOrProjectId) {
     // Try to resolve as a web view id first; if that fails treat the value
-    // as a literal project id (the .d.ts declares the parameter as
-    // `projectId?: string` so callers may pass either).
+    // as a literal project id. The .d.ts parameter name is
+    // `webViewIdOrProjectId?: string` to reflect both forms.
     try {
       const def = await papi.webViews.getOpenWebViewDefinition(webViewIdOrProjectId);
       projectId = def?.projectId ?? webViewIdOrProjectId;

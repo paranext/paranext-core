@@ -10,8 +10,7 @@
  * Adaptations from the storybook source:
  *
  * - Replaced inline mock book constants with the canonical `OT_BOOK_IDS` / `NT_BOOK_IDS` /
- *   `DC_BOOK_IDS` from `platform-bible-utils` plus an `EXTRA_BOOKS` derivation from
- *   `Canon.allBookIds`.
+ *   `DC_BOOK_IDS` from `platform-bible-utils`.
  * - All user-facing text is sourced from a `localizedStrings` map (no hard- coded English) so the
  *   component participates in PT10 localization.
  * - The pill `<li>` carries the canonical `data-book` / `aria-checked` / `role="option"` attributes
@@ -40,7 +39,6 @@ import {
   Checkbox,
   cn,
   Label,
-  SearchBar,
   ToggleGroup,
   ToggleGroupItem,
   Tooltip,
@@ -106,14 +104,14 @@ export type BookGridItem = {
  * render a non-toggleable variant of the pill (e.g. inside a tooltip preview) can stay visually
  * consistent.
  */
-export const BOOK_PILL_BASE_CLASS =
+const BOOK_PILL_BASE_CLASS =
   'tw-flex tw-w-full tw-items-center tw-gap-2 tw-rounded tw-border tw-px-2 tw-py-1 tw-text-start';
 
 /**
  * Compose the pill's color/border classes for a given `present` flag. Present books get the primary
  * tint; absent books get a dashed primary outline plus muted text.
  */
-export const bookPillClasses = (present: boolean): string =>
+const bookPillClasses = (present: boolean): string =>
   cn(
     BOOK_PILL_BASE_CLASS,
     'tw-transition-colors hover:tw-bg-accent hover:tw-text-accent-foreground',
@@ -131,7 +129,7 @@ export const bookPillClasses = (present: boolean): string =>
  * be rendered as a defensive default — Copy/Import normally suppress the badge entirely when `tone
  * === 'neutral'`.
  */
-export const STATUS_BADGE_VARIANT: Record<
+const STATUS_BADGE_VARIANT: Record<
   BookGridTone,
   'default' | 'secondary' | 'destructive' | 'outline'
 > = {
@@ -147,7 +145,7 @@ export const STATUS_BADGE_VARIANT: Record<
  * first when grouping by status. Labels not present here default to 50 and keep first-encountered
  * order. The keys match the orchestrator's pre-localized `statusLabel` values.
  */
-export const STATUS_GROUP_PRIORITY: Record<string, number> = {
+const STATUS_GROUP_PRIORITY: Record<string, number> = {
   // English
   'In project, tracked': 0,
   'In project, untracked': 1,
@@ -305,9 +303,6 @@ export function BookGridGroupByToggle({
 /* ------------------------------------------------------------------ */
 /* BookGridSelector — multi-column pill grid                          */
 /* ------------------------------------------------------------------ */
-
-const KNOWN_BOOK_IDS = new Set([...OT_BOOK_IDS, ...NT_BOOK_IDS, ...DC_BOOK_IDS]);
-const EXTRA_BOOKS: string[] = Canon.allBookIds.filter((id) => !KNOWN_BOOK_IDS.has(id));
 
 export type BookGridSelectorProps = {
   items: BookGridItem[];
@@ -858,96 +853,3 @@ export function BookGridSelector({
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* BookGridWithControls                                               */
-/* ------------------------------------------------------------------ */
-
-export type BookGridWithControlsProps = {
-  /** Visible label rendered to the left of the filter input. */
-  label?: string;
-  filterText: string;
-  setFilterText: (next: string) => void;
-  groupBy: BookGridGroupBy;
-  setGroupBy: (next: BookGridGroupBy) => void;
-  items: BookGridItem[];
-  selected: Set<string>;
-  onToggle: (book: string) => void;
-  onRangeToggle?: (books: string[], select: boolean) => void;
-  primaryDateLabel?: string;
-  secondaryDateLabel?: string;
-  interactive?: boolean;
-  ariaLabel?: string;
-  ariaMultiselectable?: boolean;
-  hideGroupSelectAll?: (label: string | undefined) => boolean;
-  renderGroupCount?: (label: string, filteredItems: BookGridItem[]) => ReactNode;
-  /** Localized strings consumed by the grid chrome (group-by toggle, etc.). */
-  localizedStrings?: BookGridLocalizedStrings;
-  getRowAriaLabel?: (item: BookGridItem) => string;
-};
-
-/**
- * Sugar wrapper that bundles the filter input, group-by toggle, and the grid itself in one
- * component. Mirrors the source story's `BookGridWithControls`.
- */
-export function BookGridWithControls({
-  label,
-  filterText,
-  setFilterText,
-  groupBy,
-  setGroupBy,
-  items,
-  selected,
-  onToggle,
-  onRangeToggle,
-  primaryDateLabel,
-  secondaryDateLabel,
-  interactive = true,
-  ariaLabel,
-  ariaMultiselectable,
-  hideGroupSelectAll,
-  renderGroupCount,
-  localizedStrings,
-  getRowAriaLabel,
-}: BookGridWithControlsProps) {
-  return (
-    <>
-      <div className="tw-flex tw-shrink-0 tw-items-center tw-gap-2">
-        {label && <Label className="tw-shrink-0">{label}</Label>}
-        <div className="tw-min-w-0 tw-flex-1 [&_input]:tw-h-7">
-          <SearchBar
-            value={filterText}
-            onSearch={setFilterText}
-            placeholder={localizedStrings?.filterPlaceholder ?? 'Filter books…'}
-            isFullWidth
-          />
-        </div>
-        <BookGridGroupByToggle
-          value={groupBy}
-          onChange={setGroupBy}
-          localizedStrings={localizedStrings}
-        />
-      </div>
-      <BookGridSelector
-        items={items}
-        selected={selected}
-        onToggle={onToggle}
-        groupBy={groupBy}
-        ariaLabel={ariaLabel}
-        ariaMultiselectable={ariaMultiselectable}
-        primaryDateLabel={primaryDateLabel}
-        secondaryDateLabel={secondaryDateLabel}
-        interactive={interactive}
-        hideGroupSelectAll={hideGroupSelectAll}
-        onRangeToggle={onRangeToggle}
-        renderGroupCount={renderGroupCount}
-        localizedStrings={localizedStrings}
-        getRowAriaLabel={getRowAriaLabel}
-      />
-    </>
-  );
-}
-
-// Re-export the "extras" canon for callers that need the same exhaustive
-// universe used by the story.
-export { EXTRA_BOOKS };
