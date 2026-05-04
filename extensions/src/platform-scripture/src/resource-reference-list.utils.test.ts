@@ -112,6 +112,7 @@ describe('resourceReferenceListValidator', () => {
     ['not-semver'],
     ['1.'], // trailing empty segment — caught by the empty-segment check
     ['..'], // all empty segments
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     [undefined as unknown as string], // non-string dataVersion — would crash parseVersion without a type guard
   ])('throws on malformed new dataVersion "%s"', async (dataVersion) => {
     const newValue = validList({ dataVersion });
@@ -120,6 +121,8 @@ describe('resourceReferenceListValidator', () => {
     );
   });
 
+  // `undefined as unknown as string` simulates a non-string runtime value to test the type guard
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   it.each([['garbage'], ['1.'], ['..'], [undefined as unknown as string]])(
     'throws when current dataVersion "%s" cannot be parsed',
     async (dataVersion) => {

@@ -115,7 +115,7 @@ Tooltips are required for every icon button and any control without a visible la
     previewClassName="tw-pb-8"
     preview={
 <Button variant="outline" size="icon" aria-label="Save" >
-  <Save />
+<Save />
 </Button>
 }
   >
@@ -128,12 +128,12 @@ Tooltips are required for every icon button and any control without a visible la
     previewClassName="tw-pb-8"
     preview={
 <TooltipProvider>
-  <Tooltip open>
-    <TooltipTrigger asChild>
-      <Button>Save</Button>
-    </TooltipTrigger>
-    <TooltipContent side="bottom">Save</TooltipContent>
-  </Tooltip>
+<Tooltip open>
+  <TooltipTrigger asChild>
+    <Button>Save</Button>
+  </TooltipTrigger>
+  <TooltipContent side="bottom">Save</TooltipContent>
+</Tooltip>
 </TooltipProvider>
 }
   >
@@ -149,14 +149,14 @@ Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an 
     previewClassName="tw-pb-16"
     preview={
 <TooltipProvider>
-  <Tooltip open>
-    <TooltipTrigger asChild>
-      <Button variant="outline" size="icon" aria-label="Save">
-        <Save />
-      </Button>
-    </TooltipTrigger>
-    <TooltipContent side="bottom" className="tw-max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
-  </Tooltip>
+<Tooltip open>
+  <TooltipTrigger asChild>
+    <Button variant="outline" size="icon" aria-label="Save">
+      <Save />
+    </Button>
+  </TooltipTrigger>
+  <TooltipContent side="bottom" className="tw-max-w-[200px]">Click this button to apply your changes and save the current document</TooltipContent>
+</Tooltip>
 </TooltipProvider>
 }
   >
@@ -168,14 +168,14 @@ Keep tooltip text short enough to scan at a glance. A tooltip is a hint, not an 
     previewClassName="tw-pb-16"
     preview={
 <TooltipProvider>
-  <Tooltip open>
-    <TooltipTrigger asChild>
-      <Button variant="outline" size="icon" aria-label="Save">
-        <Save />
-      </Button>
-    </TooltipTrigger>
-    <TooltipContent side="bottom">Save changes</TooltipContent>
-  </Tooltip>
+<Tooltip open>
+  <TooltipTrigger asChild>
+    <Button variant="outline" size="icon" aria-label="Save">
+      <Save />
+    </Button>
+  </TooltipTrigger>
+  <TooltipContent side="bottom">Save changes</TooltipContent>
+</Tooltip>
 </TooltipProvider>
 }
   >

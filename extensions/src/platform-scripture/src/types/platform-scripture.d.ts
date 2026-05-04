@@ -1696,13 +1696,6 @@ declare module 'papi-shared-types' {
     CheckDetails,
     CheckCreatorFunction,
     CheckResultsInvalidated,
-    ResourceReference,
-    ProjectReference,
-    DblResourceReference,
-    EnhancedResourceReference,
-    XmlResourceReference,
-    SourceLanguageResourceReference,
-    UnknownResourceReference,
     ResourceReferenceList,
   } from 'platform-scripture';
 
