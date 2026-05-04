@@ -402,6 +402,63 @@ describe('EnhancedScripturePane', () => {
     );
   });
 
+  it('chunks setAnnotation calls across animation frames so the JS thread can service other work', async () => {
+    // 120 annotations exceeds the CHUNK_SIZE of 50, forcing at least two RAF yields.
+    const annotations: MarbleAnnotation[] = Array.from({ length: 120 }, (_, i) => ({
+      usjPath: `$.content[0].content[${i}]`,
+      kind: 'word',
+      annotationId: `wg-${i}`,
+      metadata: {},
+    }));
+    // Spy on requestAnimationFrame to confirm the effect yielded.
+    const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={annotations}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await vi.waitFor(() => {
+      expect(setAnnotationSpy).toHaveBeenCalledTimes(120);
+    });
+    expect(rafSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    rafSpy.mockRestore();
+  });
+
+  it('aborts mid-apply if the component unmounts during the chunked loop', async () => {
+    const annotations: MarbleAnnotation[] = Array.from({ length: 200 }, (_, i) => ({
+      usjPath: `$.content[0].content[${i}]`,
+      kind: 'word',
+      annotationId: `wg-${i}`,
+      metadata: {},
+    }));
+    // Stub requestAnimationFrame so we can intercept the first yield and unmount before chunk 2.
+    let rafCallback: FrameRequestCallback | undefined;
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+      rafCallback = cb;
+      return 0;
+    });
+    const { unmount } = render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={annotations}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    // First chunk applied synchronously (50 calls), then RAF was registered.
+    await vi.waitFor(() => {
+      expect(setAnnotationSpy).toHaveBeenCalledTimes(50);
+      expect(rafCallback).toBeDefined();
+    });
+    unmount();
+    // Now release the RAF gate. Cancellation should short-circuit before chunk 2 runs.
+    if (rafCallback) rafCallback(performance.now());
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    // Total setAnnotation calls should not have grown past the first chunk.
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(50);
+  });
+
   it('removes all applied annotations on unmount', () => {
     const { unmount } = render(
       <EnhancedScripturePane

@@ -192,34 +192,53 @@ export function EnhancedScripturePane({
   }, [onTokenClick, onTokenContextMenu]);
 
   // Effect A — base marble-word / marble-note annotations.
-  // Re-runs only when the chapter content or annotation set changes.
+  // Chunked apply: 50 annotations per RAF tick so mousedown / setFocus and
+  // other UI events can be serviced between batches. The cancellation flag
+  // protects against stale applies if the chapter changes mid-loop.
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !usj) return undefined;
 
     const annotationsById = new Map(annotations.map((a) => [a.annotationId, a]));
+    let cancelled = false;
+    const CHUNK_SIZE = 50;
 
-    annotations.forEach((annotation) => {
-      const range = annotationToRange(annotation);
-      const baseType = annotationTypeFor(annotation.kind);
-      editor.setAnnotation(range, baseType, annotation.annotationId, (event, _type, id) => {
-        const annotationForId = annotationsById.get(id);
-        if (!annotationForId) return;
-        const { onTokenClick: latestClick, onTokenContextMenu: latestContextMenu } =
-          handlersRef.current;
-        if (event.button === RIGHT_MOUSE_BUTTON) {
-          // Editorial gives us a DOM MouseEvent; consumers expect the React
-          // MouseEvent surface (only `.button`, `.preventDefault()`, etc are
-          // read), so a structural cast is correct.
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          latestContextMenu(id, annotationForId, event as unknown as ReactMouseEvent);
-        } else {
-          latestClick(id, annotationForId);
+    const applyChunked = async () => {
+      for (let i = 0; i < annotations.length; i += CHUNK_SIZE) {
+        if (cancelled) return;
+        const slice = annotations.slice(i, i + CHUNK_SIZE);
+        for (const annotation of slice) {
+          const range = annotationToRange(annotation);
+          const baseType = annotationTypeFor(annotation.kind);
+          editor.setAnnotation(range, baseType, annotation.annotationId, (event, _type, id) => {
+            const annotationForId = annotationsById.get(id);
+            if (!annotationForId) return;
+            const { onTokenClick: latestClick, onTokenContextMenu: latestContextMenu } =
+              handlersRef.current;
+            if (event.button === RIGHT_MOUSE_BUTTON) {
+              // Editorial gives us a DOM MouseEvent; consumers expect the React
+              // MouseEvent surface (only `.button`, `.preventDefault()`, etc are
+              // read), so a structural cast is correct.
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              latestContextMenu(id, annotationForId, event as unknown as ReactMouseEvent);
+            } else {
+              latestClick(id, annotationForId);
+            }
+          });
         }
-      });
-    });
+        if (i + CHUNK_SIZE < annotations.length) {
+          // Yield to the event loop so mousedown / setFocus / paint can run.
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => resolve());
+          });
+        }
+      }
+    };
+    applyChunked();
 
     return () => {
+      cancelled = true;
       annotations.forEach((a) => {
         editor.removeAnnotation(annotationTypeFor(a.kind), a.annotationId);
       });
