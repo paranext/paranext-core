@@ -12,7 +12,7 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { formatScrRef, getSectionForBook, Section } from 'platform-bible-utils';
+import { formatScrRef, formatScrRefRange, getSectionForBook, Section } from 'platform-bible-utils';
 import {
   getSectionLongName,
   getLocalizedBookName,
@@ -287,10 +287,13 @@ export function BookChapterControl({
       ? getLocalizedBookName(scrRef.book, localizedBookNames)
       : 'English';
     if (hideVerse) {
-      // formatScrRef has no option to omit the verse, so we strip the trailing ":<verse>"
-      // produced with the default chapter/verse separator. The book name itself never
-      // ends with ":<digits>", so this is unambiguous.
-      return formatScrRef(scrRef, bookName).replace(/:\d+$/, '');
+      // formatScrRefRange omits the verse part when verseNum is negative, and collapses
+      // start==end into a single ref. Using it with verseNum: -1 yields "<book> <chapter>"
+      // in a locale-safe way (no regex on the formatted string).
+      const refWithoutVerse: SerializedVerseRef = { ...scrRef, verseNum: -1 };
+      return formatScrRefRange(refWithoutVerse, refWithoutVerse, {
+        optionOrLocalizedBookName: bookName,
+      });
     }
     return formatScrRef(scrRef, bookName);
   }, [scrRef, localizedBookNames, hideVerse]);
