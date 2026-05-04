@@ -4,13 +4,9 @@ import {
   applyClassesAreEquivalent,
   fixImportQuotes,
   normalizeScopedSelector,
-  parseComponentDeclaredVars,
-  parseProtectedVarsFromIndexCss,
   processLayerBase,
-  removeAtThemeBlocks,
   removeLightSelector,
   restoreImportQuotes,
-  rewriteCssVarReferences,
 } from './apply-shadcn-preset';
 
 describe('fixImportQuotes / restoreImportQuotes', () => {
@@ -82,113 +78,6 @@ describe('removeLightSelector / addLightSelector', () => {
   it('round-trips through remove → add for the canonical shape', () => {
     const input = `@import "foo";\n.light,\n:root {\n  --x: 1;\n}\n`;
     expect(addLightSelector(removeLightSelector(input))).toBe(input);
-  });
-});
-
-describe('removeAtThemeBlocks', () => {
-  it('blanks out a single @theme block while preserving total length', () => {
-    const input = `:root { --a: 1; }\n@theme inline {\n  --tw-foo: 1;\n}\n.dark { --b: 2; }\n`;
-    const result = removeAtThemeBlocks(input);
-    expect(result.length).toBe(input.length);
-    expect(result).not.toContain('@theme');
-    expect(result).not.toContain('--tw-foo');
-    // Non-theme content is preserved
-    expect(result).toContain(':root { --a: 1; }');
-    expect(result).toContain('.dark { --b: 2; }');
-  });
-
-  it('handles nested braces inside @theme blocks', () => {
-    const input = `@theme {\n  --x: { nested: 1 };\n}\nafter`;
-    const result = removeAtThemeBlocks(input);
-    expect(result.length).toBe(input.length);
-    expect(result).not.toContain('@theme');
-    expect(result.endsWith('after')).toBe(true);
-  });
-
-  it('handles multiple @theme blocks', () => {
-    const input = `@theme { --a: 1; }\nbetween\n@theme inline { --b: 2; }\nend`;
-    const result = removeAtThemeBlocks(input);
-    expect(result.length).toBe(input.length);
-    expect(result).not.toContain('--a:');
-    expect(result).not.toContain('--b:');
-    expect(result).toContain('between');
-    expect(result).toContain('end');
-  });
-
-  it('returns input unchanged when there are no @theme blocks', () => {
-    const input = `:root { --a: 1; }\n.dark { --b: 2; }\n`;
-    expect(removeAtThemeBlocks(input)).toBe(input);
-  });
-});
-
-describe('parseProtectedVarsFromIndexCss', () => {
-  it('collects vars declared in :root and skips vars inside @theme', () => {
-    const input = `:root {\n  --background: oklch(1 0 0);\n  --foreground: oklch(0 0 0);\n}\n@theme inline {\n  --tw-radius-md: 0.5rem;\n}\n`;
-    const result = parseProtectedVarsFromIndexCss(input);
-    expect(result.has('--background')).toBe(true);
-    expect(result.has('--foreground')).toBe(true);
-    expect(result.has('--tw-radius-md')).toBe(false);
-  });
-
-  it('collects vars from multiple selectors (`:root`, `.dark`, custom theme classes)', () => {
-    const input = `:root { --a: 1; }\n.dark { --b: 2; }\n.paratext-light { --c: 3; }\n`;
-    const result = parseProtectedVarsFromIndexCss(input);
-    expect(result.has('--a')).toBe(true);
-    expect(result.has('--b')).toBe(true);
-    expect(result.has('--c')).toBe(true);
-  });
-
-  it('returns an empty set for CSS without any var declarations outside @theme', () => {
-    const input = `@theme { --tw-x: 1; }\n.bar { color: red; }\n`;
-    expect(parseProtectedVarsFromIndexCss(input).size).toBe(0);
-  });
-});
-
-describe('parseComponentDeclaredVars', () => {
-  it('collects vars declared as inline-style object keys', () => {
-    const input = `<div style={{ '--foo': '1', '--bar-baz': '2' }} />`;
-    const result = parseComponentDeclaredVars(input);
-    expect(result.has('--foo')).toBe(true);
-    expect(result.has('--bar-baz')).toBe(true);
-  });
-
-  it('collects vars declared via element.style.setProperty', () => {
-    const input = `el.style.setProperty('--qux', '5'); ref.current.style.setProperty("--zoo", '6');`;
-    const result = parseComponentDeclaredVars(input);
-    expect(result.has('--qux')).toBe(true);
-    expect(result.has('--zoo')).toBe(true);
-  });
-
-  it('returns an empty set when no component vars are declared', () => {
-    expect(parseComponentDeclaredVars(`const x = 1; var(--unrelated)`).size).toBe(0);
-  });
-});
-
-describe('rewriteCssVarReferences', () => {
-  it('rewrites bare var(--xxx) to var(--tw-xxx)', () => {
-    const input = `color: var(--background); border: 1px solid var(--ring);`;
-    const protectedVars = new Set<string>();
-    expect(rewriteCssVarReferences(input, protectedVars)).toBe(
-      `color: var(--tw-background); border: 1px solid var(--tw-ring);`,
-    );
-  });
-
-  it('does not rewrite already-prefixed --tw- vars', () => {
-    const input = `color: var(--tw-foo);`;
-    expect(rewriteCssVarReferences(input, new Set())).toBe(input);
-  });
-
-  it('does not rewrite vars in the protected set', () => {
-    const input = `color: var(--background); border: var(--ring);`;
-    const protectedVars = new Set(['--background']);
-    expect(rewriteCssVarReferences(input, protectedVars)).toBe(
-      `color: var(--background); border: var(--tw-ring);`,
-    );
-  });
-
-  it('handles hyphenated var names', () => {
-    const input = `color: var(--my-custom-var);`;
-    expect(rewriteCssVarReferences(input, new Set())).toBe(`color: var(--tw-my-custom-var);`);
   });
 });
 

@@ -18,7 +18,7 @@ if (!commitBody.trim()) {
   process.exit(1);
 }
 
-const match = commitBody.match(/npx shadcn apply --preset\s+(\S+)/);
+const match = commitBody.match(/npx shadcn apply --preset\s+([\w\d]+)/);
 if (!match) {
   process.stderr.write(`Could not extract preset from commit message:\n${commitBody}\n`);
   process.exit(1);
