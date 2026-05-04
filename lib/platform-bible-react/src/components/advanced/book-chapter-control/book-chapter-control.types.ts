@@ -11,6 +11,12 @@ export const BOOK_CHAPTER_CONTROL_STRING_KEYS = Object.freeze([
   '%scripture_section_nt_long%',
   '%scripture_section_dc_long%',
   '%scripture_section_extra_long%',
+  // Locale-specific scripture-reference separators. Defaults (used when the
+  // active locale does not define a value) are " " between book and chapter
+  // and ":" between chapter and verse. Locales such as French set the
+  // chapter/verse separator to ".".
+  '%scripture_book_chapter_separator%',
+  '%scripture_chapter_verse_separator%',
   '%history_recent%',
   '%history_recentSearches_ariaLabel%',
 ] as const);

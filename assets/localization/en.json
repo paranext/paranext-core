@@ -300,6 +300,8 @@
   "%project_settings_project_group1_label%": "Project properties",
   "%redoButton_tooltip%": "Redo",
   "%resources_deprecated_any%": "Any",
+  "%scripture_book_chapter_separator%": " ",
+  "%scripture_chapter_verse_separator%": ":",
   "%scripture_section_dc_long%": "Deuterocanon",
   "%scripture_section_dc_short%": "DC",
   "%scripture_section_extra_long%": "Extra material",
