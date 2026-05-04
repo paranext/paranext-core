@@ -33,6 +33,7 @@ import {
   useEvent,
   usePromise,
 } from 'platform-bible-react';
+import type { NetworkEventHandlers } from 'papi-shared-types';
 import {
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
@@ -72,7 +73,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_theme_loading%',
   '%toolbar_theme_loading_error%',
   '%toolbar_sync%',
-  '%toolbar_sync_projects%',
+  '%toolbar_sync_open_status%',
   '%toolbar_sync_status_synced%',
   '%toolbar_sync_status_syncing%',
 ];
@@ -165,7 +166,10 @@ export function PlatformBibleToolbar() {
   );
 
   const onSyncStateChanged = useMemo(
-    () => getNetworkEvent<{ isSyncing: boolean }>('paratextBibleSendReceive.onSyncStateChanged'),
+    () =>
+      getNetworkEvent<NetworkEventHandlers['paratextBibleSendReceive.onSyncStateChanged']>(
+        'paratextBibleSendReceive.onSyncStateChanged',
+      ),
     [],
   );
   useEvent(onSyncStateChanged, handleSyncStateChanged);
@@ -268,7 +272,7 @@ export function PlatformBibleToolbar() {
                   >
                     {syncState === 'syncing' && <Spinner className="tw-h-4 tw-w-4" />}
                     {syncState === 'synced' && (
-                      <CircleCheck className="tw-h-4 tw-w-4 tw-text-green-500" />
+                      <CircleCheck className="tw-h-4 tw-w-4 tw-text-success" />
                     )}
                     {
                       {
@@ -280,7 +284,7 @@ export function PlatformBibleToolbar() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="tw-font-light">{localizedStrings['%toolbar_sync_projects%']}</p>
+                  <p className="tw-font-light">{localizedStrings['%toolbar_sync_open_status%']}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

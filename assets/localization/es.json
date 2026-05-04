@@ -492,7 +492,7 @@
   "%theme_label_user_dark%": "Oscuro definido por el usuario",
   "%theme_label_user_light%": "Claro definido por el usuario",
   "%toolbar_sync%": "Sincronizar",
-  "%toolbar_sync_projects%": "Sincroniza los proyectos abiertos y sus recursos vinculados",
+  "%toolbar_sync_open_status%": "Abrir el estado de sincronización",
   "%toolbar_sync_status_synced%": "Sincronizado",
   "%toolbar_sync_status_syncing%": "Sincronizando",
   "%toolbar_theme_change_to_dark%": "Cambiar al tema Oscuro",

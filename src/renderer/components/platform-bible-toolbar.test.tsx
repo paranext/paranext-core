@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
@@ -17,7 +17,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%toolbar_sync%': 'Sync',
-      '%toolbar_sync_projects%': 'Sync open projects and linked resources',
+      '%toolbar_sync_open_status%': 'Open sync status',
+      '%toolbar_sync_status_synced%': 'Synced',
+      '%toolbar_sync_status_syncing%': 'Syncing',
       '%mainMenu_openHome%': 'Home',
       '%mainMenu_openParatextRegistration%': 'Registration',
       '%mainMenu_openInternetSettings%': 'Internet Settings',
@@ -215,6 +217,82 @@ describe('PlatformBibleToolbar — Sync button', () => {
           .mock.calls.filter(([cmd]) => cmd === 'platformGetResources.isSendReceiveAvailable')
           .length,
       ).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  it('shows Syncing label when onSyncStateChanged fires with isSyncing: true', async () => {
+    let capturedSyncStateCallback: ((arg: { isSyncing: boolean }) => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      // getNetworkEvent has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      ((eventName: string) => {
+        if (eventName === 'paratextBibleSendReceive.onSyncStateChanged')
+          return vi.fn((cb: (arg: { isSyncing: boolean }) => void) => {
+            capturedSyncStateCallback = cb;
+            return vi.fn();
+          });
+        return vi.fn(() => vi.fn());
+        // getNetworkEvent has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+
+    mockSendCommand(true);
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    });
+
+    expect(capturedSyncStateCallback).toBeDefined();
+    if (!capturedSyncStateCallback)
+      throw new Error('capturedSyncStateCallback was not set by mock');
+
+    const syncStateCallback = capturedSyncStateCallback;
+    act(() => {
+      syncStateCallback({ isSyncing: true });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Syncing' })).toBeInTheDocument();
+    });
+  });
+
+  it('shows Synced label when onSyncStateChanged fires with isSyncing: false', async () => {
+    let capturedSyncStateCallback: ((arg: { isSyncing: boolean }) => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      // getNetworkEvent has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      ((eventName: string) => {
+        if (eventName === 'paratextBibleSendReceive.onSyncStateChanged')
+          return vi.fn((cb: (arg: { isSyncing: boolean }) => void) => {
+            capturedSyncStateCallback = cb;
+            return vi.fn();
+          });
+        return vi.fn(() => vi.fn());
+        // getNetworkEvent has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+
+    mockSendCommand(true);
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    });
+
+    expect(capturedSyncStateCallback).toBeDefined();
+    if (!capturedSyncStateCallback)
+      throw new Error('capturedSyncStateCallback was not set by mock');
+
+    const syncStateCallback = capturedSyncStateCallback;
+    act(() => {
+      syncStateCallback({ isSyncing: false });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Synced' })).toBeInTheDocument();
     });
   });
 

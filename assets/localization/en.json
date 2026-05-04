@@ -372,7 +372,7 @@
   "%theme_label_user_dark%": "User-Defined Dark",
   "%theme_label_user_light%": "User-Defined Light",
   "%toolbar_sync%": "Sync",
-  "%toolbar_sync_projects%": "Sync open projects and linked resources",
+  "%toolbar_sync_open_status%": "Open sync status",
   "%toolbar_sync_status_synced%": "Synced",
   "%toolbar_sync_status_syncing%": "Syncing",
   "%toolbar_theme_change_to_dark%": "Change to Dark theme",
