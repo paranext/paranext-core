@@ -45,14 +45,17 @@ export const resourceReferenceListValidator: ProjectSettingValidator<
       `New \`dataVersion\` "${newValue.dataVersion}" is malformed; expected "major.minor[.patch]".`,
     );
 
-  // Downgrade protection: skip when currentValue is unavailable (e.g. corrupt or missing stored data)
-  if (currentValue) {
-    const curV = parseVersion(currentValue.dataVersion);
-    if (curV && (newV.major < curV.major || (newV.major === curV.major && newV.minor < curV.minor)))
-      throw new Error(
-        `Refusing to downgrade resource reference list from \`dataVersion\` "${currentValue.dataVersion}" to "${newValue.dataVersion}".`,
-      );
-  }
+  // Downgrade protection
+  if (!currentValue) throw new Error('Current value is missing; cannot validate version upgrade.');
+  const curV = parseVersion(currentValue.dataVersion);
+  if (!curV)
+    throw new Error(
+      `Current \`dataVersion\` "${currentValue.dataVersion}" is malformed; expected "major.minor[.patch]".`,
+    );
+  if (newV.major < curV.major || (newV.major === curV.major && newV.minor < curV.minor))
+    throw new Error(
+      `Refusing to downgrade resource reference list from \`dataVersion\` "${currentValue.dataVersion}" to "${newValue.dataVersion}".`,
+    );
 
   return true;
 };
