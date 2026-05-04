@@ -18,6 +18,7 @@ import type { LocalizeKey, LocalizedStringValue, ScrollGroupId } from 'platform-
 import { formatScrRef, formatScrRefRange, isPlatformError } from 'platform-bible-utils';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { convertMarbleChapterXml, type MarbleAnnotation } from '../lib/marble-converter';
+import { computeScopeKeyedRefKey } from '../lib/scope-keyed-ref-key';
 import {
   useEnhancedResourcesProxy,
   type WordFilterInputDto,
@@ -1238,6 +1239,33 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   // whether the active dictionary should default to SDBH or SDBG when the backend returns empty.
   const bookNum = useMemo(() => Canon.bookIdToNumber(scrRef.book), [scrRef.book]);
 
+  // PT9 Scope semantics: research-tab effects key on this single value rather
+  // than putting scrRef.verseNum in their dep arrays. At scope=current-chapter
+  // (and larger) cursor moves within the chapter no longer fan out to four
+  // concurrent backend loads. Reconstruct a minimal ref object inside the memo
+  // so the dep array can list the primitive fields directly (avoids stale
+  // reads if the parent passes a new scrRef reference with unchanged fields).
+  const scrRefBook = scrRef.book;
+  const scrRefChapterNum = scrRef.chapterNum;
+  const scrRefVerseNum = scrRef.verseNum;
+  const scopeKeyedRefKey = useMemo(
+    () =>
+      computeScopeKeyedRefKey(scope, {
+        book: scrRefBook,
+        chapterNum: scrRefChapterNum,
+        verseNum: scrRefVerseNum,
+      }),
+    [scope, scrRefBook, scrRefChapterNum, scrRefVerseNum],
+  );
+
+  // The current verseNum is still needed when constructing the load input
+  // (every backend method takes a `currentReference`). Read it through a ref
+  // inside each effect so the effect's dep array stays clean.
+  const scrRefRef = useRef(scrRef);
+  useEffect(() => {
+    scrRefRef.current = scrRef;
+  }, [scrRef]);
+
   // Effect: load the dictionary entry list whenever the relevant inputs change.
   useEffect(() => {
     let cancelled = false;
@@ -1248,6 +1276,10 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
         cancelled = true;
       };
     }
+
+    // Read the live scrRef through the ref so the effect's dep array can stay
+    // keyed on `scopeKeyedRefKey` (PT9-faithful) rather than scrRef.verseNum.
+    const currentRef = scrRefRef.current;
 
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
@@ -1264,8 +1296,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const input: DictionaryLoadInputDto = {
       currentReference: {
         bookNum,
-        chapterNum: scrRef.chapterNum,
-        verseNum: scrRef.verseNum,
+        chapterNum: currentRef.chapterNum,
+        verseNum: currentRef.verseNum,
       },
       scope: marbleScopeToBackend(scope),
       filter,
@@ -1320,16 +1352,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     return () => {
       cancelled = true;
     };
-  }, [
-    erProxy,
-    resourceId,
-    bookNum,
-    scrRef.chapterNum,
-    scrRef.verseNum,
-    scope,
-    filteredTokenId,
-    showTranslations,
-  ]);
+  }, [erProxy, resourceId, bookNum, scopeKeyedRefKey, scope, filteredTokenId, showTranslations]);
 
   // Effect: load entry detail (senses + presentation) whenever the user selects a row.
   useEffect(() => {
@@ -1441,6 +1464,10 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       };
     }
 
+    // Read the live scrRef through the ref so the effect's dep array can stay
+    // keyed on `scopeKeyedRefKey` (PT9-faithful) rather than scrRef.verseNum.
+    const currentRef = scrRefRef.current;
+
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
           tokenId: filteredTokenId,
@@ -1456,8 +1483,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const input: EncyclopediaLoadInputDto = {
       currentReference: {
         bookNum,
-        chapterNum: scrRef.chapterNum,
-        verseNum: scrRef.verseNum,
+        chapterNum: currentRef.chapterNum,
+        verseNum: currentRef.verseNum,
       },
       scope: marbleScopeToBackend(scope),
       filter,
@@ -1517,8 +1544,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     erProxy,
     resourceId,
     bookNum,
-    scrRef.chapterNum,
-    scrRef.verseNum,
+    scopeKeyedRefKey,
     scope,
     filteredTokenId,
     hebrewDisplayMode,
@@ -1949,6 +1975,10 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       };
     }
 
+    // Read the live scrRef through the ref so the effect's dep array can stay
+    // keyed on `scopeKeyedRefKey` (PT9-faithful) rather than scrRef.verseNum.
+    const currentRef = scrRefRef.current;
+
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
           tokenId: filteredTokenId,
@@ -1964,8 +1994,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const input: MediaLoadInputDto = {
       currentReference: {
         bookNum,
-        chapterNum: scrRef.chapterNum,
-        verseNum: scrRef.verseNum,
+        chapterNum: currentRef.chapterNum,
+        verseNum: currentRef.verseNum,
       },
       scope: marbleScopeToBackend(scope),
       filter,
@@ -2016,8 +2046,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     mediaImagesEverActivated,
     resourceId,
     bookNum,
-    scrRef.chapterNum,
-    scrRef.verseNum,
+    scopeKeyedRefKey,
     scope,
     filteredTokenId,
   ]);
@@ -2035,6 +2064,10 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       };
     }
 
+    // Read the live scrRef through the ref so the effect's dep array can stay
+    // keyed on `scopeKeyedRefKey` (PT9-faithful) rather than scrRef.verseNum.
+    const currentRef = scrRefRef.current;
+
     const filter: WordFilterInputDto | undefined = filteredTokenId
       ? {
           tokenId: filteredTokenId,
@@ -2050,8 +2083,8 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     const input: MediaLoadInputDto = {
       currentReference: {
         bookNum,
-        chapterNum: scrRef.chapterNum,
-        verseNum: scrRef.verseNum,
+        chapterNum: currentRef.chapterNum,
+        verseNum: currentRef.verseNum,
       },
       scope: marbleScopeToBackend(scope),
       filter,
@@ -2102,8 +2135,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     mediaMapsEverActivated,
     resourceId,
     bookNum,
-    scrRef.chapterNum,
-    scrRef.verseNum,
+    scopeKeyedRefKey,
     scope,
     filteredTokenId,
   ]);
