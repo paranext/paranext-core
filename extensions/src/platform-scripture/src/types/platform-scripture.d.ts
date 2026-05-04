@@ -1706,17 +1706,6 @@ declare module 'papi-shared-types' {
     ResourceReferenceList,
   } from 'platform-scripture';
 
-  export type {
-    ResourceReference,
-    ProjectReference,
-    DblResourceReference,
-    EnhancedResourceReference,
-    XmlResourceReference,
-    SourceLanguageResourceReference,
-    UnknownResourceReference,
-    ResourceReferenceList,
-  };
-
   export interface ProjectDataProviderInterfaces {
     'platformScripture.USFM_Book': IUSFMBookProjectDataProvider;
     'platformScripture.USFM_Chapter': IUSFMChapterProjectDataProvider;

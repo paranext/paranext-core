@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
@@ -5,6 +6,7 @@ using Paranext.DataProvider.Projects;
 namespace TestParanextDataProvider.Projects;
 
 [TestFixture]
+[ExcludeFromCodeCoverage]
 public class ResourceReferenceListTests
 {
     #region Serialization — ResourceReferenceList constants

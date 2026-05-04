@@ -110,7 +110,7 @@ describe('resourceReferenceListValidator', () => {
 
   it.each([
     ['not-semver'],
-    ['1.'], // trailing empty segment — Number('') === 0, not NaN
+    ['1.'], // trailing empty segment — caught by the empty-segment check
     ['..'], // all empty segments
     [undefined as unknown as string], // non-string dataVersion — would crash parseVersion without a type guard
   ])('throws on malformed new dataVersion "%s"', async (dataVersion) => {
