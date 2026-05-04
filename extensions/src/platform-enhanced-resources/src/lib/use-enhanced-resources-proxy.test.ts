@@ -6,16 +6,18 @@ import { useEnhancedResourcesProxy } from './use-enhanced-resources-proxy';
 // `vi.hoisted` lifts the spy declaration above the (also hoisted) `vi.mock` factory so the mock
 // can close over a stable spy reference even though `vi.mock` runs before module-level
 // statements at runtime.
-const { networkObjectsGetSpy, onDidCreateNetworkObjectSpy } = vi.hoisted(() => ({
+const { networkObjectsGetSpy, waitForNetworkObjectSpy } = vi.hoisted(() => ({
   networkObjectsGetSpy: vi.fn(),
-  onDidCreateNetworkObjectSpy: vi.fn(),
+  waitForNetworkObjectSpy: vi.fn(),
 }));
 
 vi.mock('@papi/frontend', () => ({
   default: {
     networkObjects: {
       get: (...args: unknown[]) => networkObjectsGetSpy(...args),
-      onDidCreateNetworkObject: (...args: unknown[]) => onDidCreateNetworkObjectSpy(...args),
+    },
+    networkObjectStatus: {
+      waitForNetworkObject: (...args: unknown[]) => waitForNetworkObjectSpy(...args),
     },
   },
   logger: {
@@ -27,9 +29,7 @@ vi.mock('@papi/frontend', () => ({
 
 beforeEach(() => {
   networkObjectsGetSpy.mockReset();
-  onDidCreateNetworkObjectSpy.mockReset();
-  // Default: subscribing returns a no-op unsubscribe; tests can override per-case.
-  onDidCreateNetworkObjectSpy.mockImplementation(() => () => {});
+  waitForNetworkObjectSpy.mockReset();
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -37,13 +37,14 @@ afterEach(() => {
 
 describe('useEnhancedResourcesProxy', () => {
   it('returns undefined while the proxy is pending', () => {
-    networkObjectsGetSpy.mockImplementation(() => new Promise(() => {})); // never resolves
+    waitForNetworkObjectSpy.mockReturnValue(new Promise(() => {})); // never resolves
     const { result } = renderHook(() => useEnhancedResourcesProxy());
     expect(result.current).toBeUndefined();
   });
 
-  it('returns the resolved proxy once papi.networkObjects.get settles', async () => {
+  it('returns the resolved proxy once the network object exists and get settles', async () => {
     const proxy = { loadDictionary: vi.fn() };
+    waitForNetworkObjectSpy.mockResolvedValue({ id: 'platform.enhancedResources' });
     networkObjectsGetSpy.mockResolvedValue(proxy);
     const { result } = renderHook(() => useEnhancedResourcesProxy());
     expect(result.current).toBeUndefined();
@@ -52,6 +53,7 @@ describe('useEnhancedResourcesProxy', () => {
 
   it('calls papi.networkObjects.get exactly once across multiple consumer renders of the same hook instance', async () => {
     const proxy = { loadDictionary: vi.fn() };
+    waitForNetworkObjectSpy.mockResolvedValue({ id: 'platform.enhancedResources' });
     networkObjectsGetSpy.mockResolvedValue(proxy);
     const { result, rerender } = renderHook(() => useEnhancedResourcesProxy());
     await waitFor(() => expect(result.current).toBe(proxy));
@@ -61,9 +63,9 @@ describe('useEnhancedResourcesProxy', () => {
     expect(networkObjectsGetSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('returns undefined and logs a warning if papi.networkObjects.get rejects', async () => {
-    const error = new Error('backend unavailable');
-    networkObjectsGetSpy.mockRejectedValue(error);
+  it('returns undefined and logs a warning if get rejects', async () => {
+    waitForNetworkObjectSpy.mockResolvedValue({ id: 'platform.enhancedResources' });
+    networkObjectsGetSpy.mockRejectedValue(new Error('backend unavailable'));
     const { result } = renderHook(() => useEnhancedResourcesProxy());
     await waitFor(() =>
       expect(networkObjectsGetSpy).toHaveBeenCalledWith('platform.enhancedResources'),
@@ -71,82 +73,34 @@ describe('useEnhancedResourcesProxy', () => {
     expect(result.current).toBeUndefined();
   });
 
-  it('subscribes to onDidCreateNetworkObject and resolves the proxy when the ER network object is created later', async () => {
-    // First papi.networkObjects.get returns undefined (network object not yet registered).
-    networkObjectsGetSpy.mockResolvedValueOnce(undefined);
-    // Second get (after the event fires) returns the resolved proxy.
+  it('waits for the ER network object to exist before calling get', async () => {
     const proxy = { loadDictionary: vi.fn() };
-    networkObjectsGetSpy.mockResolvedValueOnce(proxy);
-
-    let capturedListener: ((details: { id: string }) => void) | undefined;
-    onDidCreateNetworkObjectSpy.mockImplementation(
-      (listener: (details: { id: string }) => void) => {
-        capturedListener = listener;
-        return () => {};
-      },
-    );
-
-    const { result } = renderHook(() => useEnhancedResourcesProxy());
-
-    // First get resolves to undefined - proxy stays undefined; subscription happens.
-    await waitFor(() => expect(onDidCreateNetworkObjectSpy).toHaveBeenCalledTimes(1));
-    expect(networkObjectsGetSpy).toHaveBeenCalledTimes(1);
-    expect(result.current).toBeUndefined();
-    expect(capturedListener).toBeDefined();
-
-    // Simulate the ER network object being registered.
-    capturedListener?.({ id: 'platform.enhancedResources' });
-
-    // The hook should re-attempt and resolve.
-    await waitFor(() => expect(result.current).toBe(proxy));
-    expect(networkObjectsGetSpy).toHaveBeenCalledTimes(2);
-  });
-
-  it('ignores onDidCreateNetworkObject events for unrelated network objects', async () => {
-    networkObjectsGetSpy.mockResolvedValueOnce(undefined);
-
-    let capturedListener: ((details: { id: string }) => void) | undefined;
-    onDidCreateNetworkObjectSpy.mockImplementation(
-      (listener: (details: { id: string }) => void) => {
-        capturedListener = listener;
-        return () => {};
-      },
-    );
-
-    const { result } = renderHook(() => useEnhancedResourcesProxy());
-    await waitFor(() => expect(onDidCreateNetworkObjectSpy).toHaveBeenCalledTimes(1));
-    expect(networkObjectsGetSpy).toHaveBeenCalledTimes(1);
-
-    // Fire the event for a DIFFERENT network object.
-    capturedListener?.({ id: 'someOtherNetworkObject' });
-
-    // Allow microtasks to drain. The hook should NOT have re-attempted.
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
-    expect(networkObjectsGetSpy).toHaveBeenCalledTimes(1);
-    expect(result.current).toBeUndefined();
-  });
-
-  it('does not subscribe if the first get resolves successfully', async () => {
-    const proxy = { loadDictionary: vi.fn() };
+    // waitForNetworkObject resolves once the network object is "available"
+    waitForNetworkObjectSpy.mockResolvedValueOnce({ id: 'platform.enhancedResources' });
     networkObjectsGetSpy.mockResolvedValueOnce(proxy);
 
     const { result } = renderHook(() => useEnhancedResourcesProxy());
     await waitFor(() => expect(result.current).toBe(proxy));
-    // No subscription needed because we resolved on first attempt.
-    expect(onDidCreateNetworkObjectSpy).not.toHaveBeenCalled();
+
+    // Confirms call ordering: waitForNetworkObject must be called before get.
+    expect(waitForNetworkObjectSpy).toHaveBeenCalledWith({ id: 'platform.enhancedResources' });
+    expect(networkObjectsGetSpy).toHaveBeenCalledWith('platform.enhancedResources');
   });
 
-  it('unsubscribes on unmount when subscription was active', async () => {
+  it('returns undefined and logs a warning if waitForNetworkObject rejects', async () => {
+    waitForNetworkObjectSpy.mockRejectedValueOnce(new Error('timeout'));
+    const { result } = renderHook(() => useEnhancedResourcesProxy());
+    await waitFor(() => expect(waitForNetworkObjectSpy).toHaveBeenCalled());
+    // Get should NOT have been called - we bailed out at the wait step.
+    expect(networkObjectsGetSpy).not.toHaveBeenCalled();
+    expect(result.current).toBeUndefined();
+  });
+
+  it('returns undefined if waitForNetworkObject resolves but get returns undefined (defensive)', async () => {
+    waitForNetworkObjectSpy.mockResolvedValueOnce({ id: 'platform.enhancedResources' });
     networkObjectsGetSpy.mockResolvedValueOnce(undefined);
-    const unsubSpy = vi.fn();
-    onDidCreateNetworkObjectSpy.mockImplementation(() => unsubSpy);
-
-    const { unmount } = renderHook(() => useEnhancedResourcesProxy());
-    await waitFor(() => expect(onDidCreateNetworkObjectSpy).toHaveBeenCalledTimes(1));
-
-    unmount();
-    expect(unsubSpy).toHaveBeenCalledTimes(1);
+    const { result } = renderHook(() => useEnhancedResourcesProxy());
+    await waitFor(() => expect(networkObjectsGetSpy).toHaveBeenCalled());
+    expect(result.current).toBeUndefined();
   });
 });

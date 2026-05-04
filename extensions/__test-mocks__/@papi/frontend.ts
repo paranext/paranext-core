@@ -19,7 +19,9 @@ export const logger = {
 const papi = {
   networkObjects: {
     get: vi.fn().mockResolvedValue(undefined),
-    onDidCreateNetworkObject: vi.fn(() => () => {}),
+  },
+  networkObjectStatus: {
+    waitForNetworkObject: vi.fn().mockResolvedValue({ id: 'mock-network-object' }),
   },
 };
 

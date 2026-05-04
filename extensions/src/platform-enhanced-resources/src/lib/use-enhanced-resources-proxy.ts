@@ -70,39 +70,34 @@ export type EnhancedResourcesNetworkObject = {
  * pattern that previously fired 8 separate proxy lookups every time any tab effect fan-out
  * triggered.
  *
- * Returns `undefined` while pending, after a rejection, or until the backend registers the network
- * object. Consumers should `if (!proxy) return` inside their effects (mirroring the existing
- * per-call guard).
+ * Uses `papi.networkObjectStatus.waitForNetworkObject` to handle the cold-start race: at app
+ * startup the renderer can mount the ER webview from saved state before the C# data provider has
+ * registered the network object. `waitForNetworkObject` subscribes to creation events FIRST, then
+ * checks the current snapshot, so it never misses a registration that happens between subscription
+ * and check (a race that bare `get` + `onDidCreateNetworkObject` would lose).
  *
- * Cold-start race handling: `papi.networkObjects.get` returns `undefined` immediately when the
- * target network object is not yet registered (it does not wait). At app startup the renderer can
- * mount this hook from saved web-view state before the C# data provider has registered the ER
- * network object, so the first `get` returns `undefined`. To recover, when the initial `get`
- * resolves to `undefined` the hook subscribes to `papi.networkObjects.onDidCreateNetworkObject` and
- * re-attempts resolution on creation events whose `id` matches `ER_NETWORK_OBJECT_ID`. The
- * subscription is removed once a re-attempt succeeds, and on unmount.
+ * Returns `undefined` until the network object exists and `get` returns its proxy.
  *
- * Known limitation: if the backend is unregistered or restarted after the first successful
- * resolution, the hook keeps returning the stale proxy reference until the web view remounts.
- * Revisit if/when ER needs hot-restart resilience.
+ * Known limitation: does not handle backend hot-restart after first successful resolution. If the
+ * C# data provider is unregistered after this hook resolves, the cached proxy goes stale until the
+ * webview remounts. Acceptable for the UI Performance Fix scope.
  */
 export function useEnhancedResourcesProxy(): EnhancedResourcesNetworkObject | undefined {
   const [proxy, setProxy] = useState<EnhancedResourcesNetworkObject | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
 
-    const tryResolve = async (): Promise<boolean> => {
+    (async () => {
       try {
+        // Race-free: subscribe-then-check inside waitForNetworkObject.
+        await papi.networkObjectStatus.waitForNetworkObject({ id: ER_NETWORK_OBJECT_ID });
+        if (cancelled) return;
         const resolved =
           await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
-        if (cancelled) return false;
-        if (resolved) {
+        if (!cancelled && resolved) {
           setProxy(resolved);
-          return true;
         }
-        return false;
       } catch (err) {
         if (!cancelled) {
           logger.warn(
@@ -111,31 +106,11 @@ export function useEnhancedResourcesProxy(): EnhancedResourcesNetworkObject | un
             }`,
           );
         }
-        return false;
       }
-    };
-
-    (async () => {
-      const resolved = await tryResolve();
-      if (resolved || cancelled) return;
-
-      // Initial get returned undefined (cold-start race) - subscribe and retry on creation.
-      unsubscribe = papi.networkObjects.onDidCreateNetworkObject((details) => {
-        if (cancelled) return;
-        if (details.id !== ER_NETWORK_OBJECT_ID) return;
-        // Don't await inside the listener; fire-and-forget the re-resolve.
-        tryResolve().then((ok) => {
-          if (ok && unsubscribe) {
-            unsubscribe();
-            unsubscribe = undefined;
-          }
-        });
-      });
     })();
 
     return () => {
       cancelled = true;
-      unsubscribe?.();
     };
   }, []);
 
