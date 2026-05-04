@@ -33,7 +33,7 @@ async function send(notification: PlatformNotification): Promise<string | number
   // assign it after the switch.
   let effectiveNotificationId: number | string;
   let duration = Math.min(Math.max(localizedMessage.length * 265, 10000), 35000);
-  if (notification.duration)
+  if (notification.duration !== undefined)
     duration = notification.duration <= 0 ? Infinity : notification.duration;
   const toastOptions = {
     action:
