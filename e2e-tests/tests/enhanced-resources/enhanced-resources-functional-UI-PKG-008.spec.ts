@@ -60,8 +60,8 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
   // Category 1: Navigation
   // ═══════════════════════════════════════════════
 
+  // FIXME(GAP-guide-reset): per-test extension-host reset hook missing - haveShownMarbleGuide in extension-host memory persists across tests; only the FIRST test in a fresh app session can observe the auto-show.
   // @scenario TS-065
-  // Session-state limitation: haveShownMarbleGuide in extension-host memory persists across tests; only the FIRST test in a fresh app session can observe the auto-show. Re-activate after a per-test extension-host reset hook lands.
   test.fixme(
     'should auto-show MarbleGuide on first Enhanced Resource open per session',
     async ({ mainPage }) => {
@@ -89,8 +89,8 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
   // Category 2: Render
   // ═══════════════════════════════════════════════
 
+  // FIXME(GAP-guide-reset): per-test extension-host reset hook missing - relies on auto-show that only fires on first ER open per session.
   // @scenario TS-065
-  // Session-state limitation: haveShownMarbleGuide in extension-host memory persists across tests; only the FIRST test in a fresh app session can observe the auto-show. Re-activate after a per-test extension-host reset hook lands.
   test.fixme(
     'should render all required guide sections (title, content, color chips, tab grid, close, checkbox)',
     async ({ mainPage }) => {
@@ -139,8 +139,8 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
   // Category 3: Data Wiring
   // ═══════════════════════════════════════════════
 
+  // FIXME(GAP-guide-reset): per-test extension-host reset hook missing - relies on auto-show that only fires on first ER open per session.
   // @scenario TS-065
-  // Session-state limitation: haveShownMarbleGuide in extension-host memory persists across tests; only the FIRST test in a fresh app session can observe the auto-show. Re-activate after a per-test extension-host reset hook lands.
   test.fixme(
     'should populate localized strings (title and content not empty / placeholder keys)',
     async ({ mainPage }) => {
@@ -167,6 +167,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
     },
   );
 
+  // FIXME(GAP-guide-reset): relies on auto-show that only fires on first ER open per session.
   // @scenario TS-065
   test.fixme(
     'should reflect persisted ShowMarbleGuide setting in checkbox initial state',
@@ -188,43 +189,43 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
   // ═══════════════════════════════════════════════
 
   // @scenario TS-065 (covers FN-016 toggle)
-  test.fixme(
-    'should toggle MarbleGuide open/closed via info-icon button on the MarbleForm toolbar',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      await openEnhancedResource(mainPage);
+  test('should toggle MarbleGuide open/closed via info-icon button on the MarbleForm toolbar', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    await openEnhancedResource(mainPage);
 
-      const guide = mainPage.getByTestId('marble-guide');
+    const guide = mainPage.getByTestId('marble-guide');
 
-      // First-open auto-show — close it so we can test the toggle.
-      if (await guide.isVisible().catch(() => false)) {
-        await mainPage.getByTestId('marble-guide-close').click();
-        await expect(guide).toBeHidden({ timeout: 5_000 });
-      }
-
-      // Click the info-icon button on the upper toolbar (FN-016) — should open the guide.
-      const infoBtn = mainPage
-        .getByRole('button', { name: /Show.*Hide.*Enhanced Resource Guide|Info|Guide/i })
-        .first();
-      await infoBtn.click();
-      await expect(guide).toBeVisible({ timeout: 5_000 });
-
-      // EVD-011: Guide opened by info button click.
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-008/EVD-011-guide-toggled-on.png',
-      });
-
-      // Click info-icon again — should close the guide.
-      await infoBtn.click();
+    // First-open auto-show — close it so we can test the toggle.
+    if (await guide.isVisible().catch(() => false)) {
+      await mainPage.getByTestId('marble-guide-close').click();
       await expect(guide).toBeHidden({ timeout: 5_000 });
+    }
 
-      // EVD-011: Guide closed by info button click again.
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-008/EVD-011-guide-toggled-off.png',
-      });
-    },
-  );
+    // Click the info-icon button on the upper toolbar (FN-016) — should open the guide.
+    const infoBtn = mainPage
+      .getByRole('button', { name: /Show.*Hide.*Enhanced Resource Guide|Info|Guide/i })
+      .first();
+    await infoBtn.click();
+    await expect(guide).toBeVisible({ timeout: 5_000 });
 
+    // EVD-011: Guide opened by info button click.
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-008/EVD-011-guide-toggled-on.png',
+    });
+
+    // Click info-icon again — should close the guide.
+    await infoBtn.click();
+    await expect(guide).toBeHidden({ timeout: 5_000 });
+
+    // EVD-011: Guide closed by info button click again.
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-008/EVD-011-guide-toggled-off.png',
+    });
+  });
+
+  // FIXME(GAP-guide-reset): test depends on auto-show being visible at start; only fires on first ER open per session.
   // @scenario TS-065
   test.fixme('should close MarbleGuide via the Close button', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
@@ -237,6 +238,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
     await expect(guide).toBeHidden({ timeout: 5_000 });
   });
 
+  // FIXME(GAP-guide-reset): test depends on auto-show being visible at start; only fires on first ER open per session.
   // @scenario TS-065
   test.fixme('should close MarbleGuide when Escape is pressed', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
@@ -249,6 +251,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
     await expect(guide).toBeHidden({ timeout: 5_000 });
   });
 
+  // FIXME(GAP-guide-reset): test depends on auto-show being visible at start; only fires on first ER open per session.
   // @scenario TS-065
   test.fixme(
     'should toggle the "Don\'t show this again" checkbox state when clicked',
@@ -274,6 +277,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
   // Category 5: Edge Cases (covers TS-066, TS-067)
   // ═══════════════════════════════════════════════
 
+  // FIXME(GAP-guide-reset): per-test extension-host reset hook missing; cannot reliably test the suppress-then-reopen flow without state isolation.
   // @scenario TS-066 (BHV-461 + BHV-465)
   test.fixme(
     'should persist ShowMarbleGuide=false when "Don\'t show this again" is checked and Close is clicked, and not auto-show on next ER open',
@@ -318,6 +322,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
     },
   );
 
+  // FIXME(GAP-guide-reset): per-test extension-host reset hook missing; depends on first-open auto-show behavior.
   // @scenario TS-067 (BHV-461 session flag)
   test.fixme(
     'should NOT auto-show MarbleGuide on second Enhanced Resource open in same session',
@@ -357,6 +362,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-008)', () => {
     },
   );
 
+  // FIXME(GAP-guide-reset): per-test extension-host reset hook missing; cannot reliably test re-enable flow.
   // @scenario TS-066 (re-enable path — edge case from edge-cases.md "Guide Never Show Again Re-Enable")
   test.fixme(
     'should re-enable ShowMarbleGuide when user opens guide via info button and unchecks "Don\'t show this again"',

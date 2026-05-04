@@ -7,7 +7,14 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import type { ContentJsonPath, Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import { Alert, AlertDescription, AlertTitle, Card, Skeleton } from 'platform-bible-react';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Card,
+  Skeleton,
+  useStylesheet,
+} from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { MarbleAnnotation } from '../../lib/marble-converter';
@@ -75,9 +82,50 @@ const ANNOTATION_TYPE_FILTER = 'marble-filter';
 const ANNOTATION_TYPE_HIGHLIGHT = 'marble-highlight';
 const RIGHT_MOUSE_BUTTON = 2;
 
+/**
+ * CSS for marble annotation marks.
+ *
+ * Editorial renders `setAnnotation(range, type, id)` calls as `<mark>` elements with class
+ * `.editor-typed-mark-external-${type}`. Editorial itself provides no visual treatment for these
+ * classes - that's the host extension's responsibility (see Editorial README "Annotation Styles").
+ *
+ * - Marble-word: linked research term (BHV-301/302). Click to filter the dictionary / open tooltip.
+ * - Marble-note: linked study/cross-ref note. Renders as a footnote-style affordance.
+ * - Marble-filter: the single token the user has filtered to (BHV-307).
+ * - Marble-highlight: applied to every word annotation when "Highlight all research terms" is on.
+ *
+ * Filter trumps highlight trumps base style; CSS rule order + `:is()` specificity handles that.
+ */
+const MARBLE_ANNOTATION_STYLES = `
+.editor-typed-mark-external-marble-word {
+  cursor: pointer;
+  text-decoration: underline dotted hsl(var(--primary) / 0.55);
+  text-underline-offset: 2px;
+}
+.editor-typed-mark-external-marble-word:hover {
+  background-color: hsl(var(--accent));
+  text-decoration-color: hsl(var(--primary));
+}
+.editor-typed-mark-external-marble-note {
+  cursor: pointer;
+  color: hsl(var(--primary));
+}
+.editor-typed-mark-external-marble-highlight {
+  background-color: hsl(210 100% 90%);
+  border-radius: 2px;
+}
+.editor-typed-mark-external-marble-filter {
+  background-color: hsl(45 100% 75%);
+  border-radius: 2px;
+}
+`;
+
 // The marble-converter emits paths shaped like `$.content[N]...` which match ContentJsonPath at
-// runtime; the type narrows from `string` here. We use start === end at the wg / note marker
-// because each marble annotation points at a single MarkerObject, not a span.
+// runtime; the type narrows from `string` here. The annotation's `usjPath` points at the wg / note
+// MarkerObject; we span its full text by pairing a marker-location start (resolves to the first
+// text child at offset 0) with a closing-marker-location end (resolves to the last text child at
+// its full length). A collapsed marker-location range produces a zero-length selection, which
+// Editorial silently drops without rendering a `<mark>` - so the range MUST be non-collapsed.
 function annotationToRange(annotation: MarbleAnnotation): AnnotationRange {
   // ContentJsonPath is a literal-template type; the marble-converter produces matching strings
   // at runtime but TypeScript can't prove it from `string`, so an assertion is the cleanest fix.
@@ -85,7 +133,7 @@ function annotationToRange(annotation: MarbleAnnotation): AnnotationRange {
   const jsonPath = annotation.usjPath as ContentJsonPath;
   return {
     start: { jsonPath },
-    end: { jsonPath },
+    end: { jsonPath, closingMarkerOffset: 0 },
   };
 }
 
@@ -110,6 +158,10 @@ export function EnhancedScripturePane({
   // Editorial's forwarded ref is typed `EditorRef | null`; we match that to satisfy the prop type.
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+  // Inject the marble annotation stylesheet so the `<mark>` elements Editorial creates have a
+  // visible treatment. The stylesheet is static; useStylesheet adds a single `<style>` tag for
+  // the lifetime of this component.
+  useStylesheet(MARBLE_ANNOTATION_STYLES);
   const getLocalizedString = (key: ScripturePaneLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 

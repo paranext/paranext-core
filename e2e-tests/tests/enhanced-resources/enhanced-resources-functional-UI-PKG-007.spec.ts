@@ -64,287 +64,280 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
   // ===============================================================================================
 
   // @scenario TS-063
-  test.fixme(
-    'should open SemanticDomainViewer in filtered-list mode after clicking a dictionary Domain link',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should open SemanticDomainViewer in filtered-list mode after clicking a dictionary Domain link', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      // Step 1: Open the Enhanced Resource webview (covered by UI-PKG-009 menu wiring).
-      // Open the resource the same way a user does: via the registered menu entry / command.
-      await openEnhancedResource(mainPage);
+    // Step 1: Open the Enhanced Resource webview (covered by UI-PKG-009 menu wiring).
+    // Open the resource the same way a user does: via the registered menu entry / command.
+    await openEnhancedResource(mainPage);
 
-      // Step 2: Wait for the Enhanced Resource dock tab.
-      const erTab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
-      await expect(erTab).toBeVisible({ timeout: 15_000 });
+    // Step 2: Wait for the Enhanced Resource dock tab.
+    const erTab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
+    await expect(erTab).toBeVisible({ timeout: 15_000 });
 
-      // Step 3: Switch to the WebView frame.
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    // Step 3: Switch to the WebView frame.
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
 
-      // Step 4: Open the Dictionary tab and select an entry to expose its sense rows.
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
-      // Click the first dictionary entry in the indexed list to reveal its detail panel.
-      await frame.getByRole('option').first().click();
+    // Step 4: Open the Dictionary tab and select an entry to expose its sense rows.
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    // Click the first dictionary entry in the indexed list to reveal its detail panel.
+    await frame.getByRole('option').first().click();
 
-      // Step 5: Click a `Domain:` link inside the sense detail. Per FN-021 each Domain row in the
-      // definition table must be a clickable Button variant=link that triggers `onDomainClick`.
-      const domainLinkInDictionary = frame
-        .locator('[data-testid^="dictionary-sense-domain-"]')
-        .first();
-      await domainLinkInDictionary.click();
+    // Step 5: Click a `Domain:` link inside the sense detail. Per FN-021 each Domain row in the
+    // definition table must be a clickable Button variant=link that triggers `onDomainClick`.
+    const domainLinkInDictionary = frame
+      .locator('[data-testid^="dictionary-sense-domain-"]')
+      .first();
+    await domainLinkInDictionary.click();
 
-      // Step 6: SDV Dialog should open in filtered-list mode (domainPath populated).
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    // Step 6: SDV Dialog should open in filtered-list mode (domainPath populated).
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      // EVD-050: After clicking semantic domain link in Dictionary -- SemanticDomainViewer open
-      // with target domain selected and breadcrumb showing path.
-      await mainPage.screenshot({
-        path: `${EVIDENCE_DIR}/EVD-050-filtered-list-open.png`,
-      });
+    // EVD-050: After clicking semantic domain link in Dictionary -- SemanticDomainViewer open
+    // with target domain selected and breadcrumb showing path.
+    await mainPage.screenshot({
+      path: `${EVIDENCE_DIR}/EVD-050-filtered-list-open.png`,
+    });
 
-      // Filtered entries list should be visible (non-empty for a domain with words).
-      await expect(sdvDialog.getByRole('listbox')).toBeVisible();
-    },
-  );
+    // Filtered entries list should be visible (non-empty for a domain with words).
+    await expect(sdvDialog.getByRole('listbox')).toBeVisible();
+  });
 
   // @scenario TS-063
-  test.fixme(
-    'should open SemanticDomainViewer in tree-overlay (cold-entry) mode without a preselected domain',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should open SemanticDomainViewer in tree-overlay (cold-entry) mode without a preselected domain', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
 
-      // Trigger the cold-entry path: a "Browse semantic domains" action surfaced by the toolbar
-      // or dictionary header. With no domainPath supplied, the component falls back to the first
-      // top-level domain so the breadcrumb tree is browsable from root.
-      await frame.getByRole('button', { name: /Browse semantic domains/i }).click();
+    // Trigger the cold-entry path: a "Browse semantic domains" action surfaced by the toolbar
+    // or dictionary header. With no domainPath supplied, the component falls back to the first
+    // top-level domain so the breadcrumb tree is browsable from root.
+    await frame.getByRole('button', { name: /Browse semantic domains/i }).click();
 
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      // Breadcrumb should be present; its first segment is the default top-level root domain.
-      await expect(sdvDialog.getByRole('navigation')).toBeVisible();
-    },
-  );
+    // Breadcrumb should be present; its first segment is the default top-level root domain.
+    await expect(sdvDialog.getByRole('navigation')).toBeVisible();
+  });
 
   // ===============================================================================================
   // Category 2: Render
   // ===============================================================================================
 
   // @scenario TS-063
-  test.fixme(
-    'should render Dialog with breadcrumb navigation, entries listbox, and Close button',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should render Dialog with breadcrumb navigation, entries listbox, and Close button', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      // Open the SDV via the filtered-list path (same as Navigation test 1).
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    // Open the SDV via the filtered-list path (same as Navigation test 1).
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
-      await frame.getByRole('option').first().click();
-      await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    await frame.getByRole('option').first().click();
+    await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
 
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      // Required elements per Test Contract + component contract:
-      //   - Dialog surface (data-testid="semantic-domain-viewer")
-      //   - Breadcrumb navigation (role="navigation")
-      //   - Entries listbox (role="listbox", from ErDictionaryFilteredList)
-      //   - Close X button (Radix Dialog auto-rendered, role="button" name="Close")
-      await expect(sdvDialog.getByRole('navigation')).toBeVisible();
-      await expect(sdvDialog.getByRole('listbox')).toBeVisible();
-      await expect(sdvDialog.getByRole('button', { name: /Close/i })).toBeVisible();
+    // Required elements per Test Contract + component contract:
+    //   - Dialog surface (data-testid="semantic-domain-viewer")
+    //   - Breadcrumb navigation (role="navigation")
+    //   - Entries listbox (role="listbox", from ErDictionaryFilteredList)
+    //   - Close X button (Radix Dialog auto-rendered, role="button" name="Close")
+    await expect(sdvDialog.getByRole('navigation')).toBeVisible();
+    await expect(sdvDialog.getByRole('listbox')).toBeVisible();
+    await expect(sdvDialog.getByRole('button', { name: /Close/i })).toBeVisible();
 
-      // Dialog must have an accessible name (DialogTitle is sr-only but present).
-      await expect(sdvDialog).toHaveAttribute('role', 'dialog');
+    // Dialog must have an accessible name (DialogTitle is sr-only but present).
+    await expect(sdvDialog).toHaveAttribute('role', 'dialog');
 
-      // EVD-050 (render coverage): SemanticDomainViewer fully loaded.
-      await mainPage.screenshot({
-        path: `${EVIDENCE_DIR}/EVD-050-fully-rendered.png`,
-      });
-    },
-  );
+    // EVD-050 (render coverage): SemanticDomainViewer fully loaded.
+    await mainPage.screenshot({
+      path: `${EVIDENCE_DIR}/EVD-050-fully-rendered.png`,
+    });
+  });
 
   // ===============================================================================================
   // Category 3: Data Wiring
   // ===============================================================================================
 
   // @scenario TS-063
-  test.fixme(
-    'should display real domain hierarchy and filtered dictionary entries from backend',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should display real domain hierarchy and filtered dictionary entries from backend', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
-      await frame.getByRole('option').first().click();
-      await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    await frame.getByRole('option').first().click();
+    await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
 
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      // Breadcrumb: at least one segment is rendered with non-empty label text. Real backend
-      // (loadDictionary -> CAP-007) supplies localized domain labels.
-      const breadcrumb = sdvDialog.getByRole('navigation');
-      const breadcrumbText = (await breadcrumb.textContent()) ?? '';
-      expect(breadcrumbText.trim().length).toBeGreaterThan(0);
+    // Breadcrumb: at least one segment is rendered with non-empty label text. Real backend
+    // (loadDictionary -> CAP-007) supplies localized domain labels.
+    const breadcrumb = sdvDialog.getByRole('navigation');
+    const breadcrumbText = (await breadcrumb.textContent()) ?? '';
+    expect(breadcrumbText.trim().length).toBeGreaterThan(0);
 
-      // Filtered entries list: the listbox should contain at least one option corresponding to a
-      // real dictionary entry that belongs to this domain. We assert non-empty rather than a
-      // specific count because the dataset may evolve.
-      const entryOptions = sdvDialog.getByRole('option');
-      await expect(entryOptions.first()).toBeVisible();
-      expect(await entryOptions.count()).toBeGreaterThan(0);
+    // Filtered entries list: the listbox should contain at least one option corresponding to a
+    // real dictionary entry that belongs to this domain. We assert non-empty rather than a
+    // specific count because the dataset may evolve.
+    const entryOptions = sdvDialog.getByRole('option');
+    await expect(entryOptions.first()).toBeVisible();
+    expect(await entryOptions.count()).toBeGreaterThan(0);
 
-      // Each option should render real source text -- not a placeholder or empty string.
-      const firstEntryText = (await entryOptions.first().textContent()) ?? '';
-      expect(firstEntryText.trim().length).toBeGreaterThan(0);
-      expect(firstEntryText).not.toMatch(/^\s*(loading|placeholder|--|…|\.\.\.)\s*$/i);
-    },
-  );
+    // Each option should render real source text -- not a placeholder or empty string.
+    const firstEntryText = (await entryOptions.first().textContent()) ?? '';
+    expect(firstEntryText.trim().length).toBeGreaterThan(0);
+    expect(firstEntryText).not.toMatch(/^\s*(loading|placeholder|--|…|\.\.\.)\s*$/i);
+  });
 
   // @scenario TS-063
-  test.fixme(
-    'should pass resourceLanguage through so domain labels render in the resource language',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should pass resourceLanguage through so domain labels render in the resource language', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
-      await frame.getByRole('option').first().click();
-      await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    await frame.getByRole('option').first().click();
+    await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
 
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      // Resource language is part of SemanticDomainViewerInput (heb | grc). When a Hebrew resource
-      // is open, source-text columns should contain Hebrew script; for a Greek resource, Greek.
-      // The test asserts characters in the expected Unicode range appear somewhere in the
-      // filtered entries list.
-      const entryOptions = sdvDialog.getByRole('option');
-      const allEntriesText = (await entryOptions.allTextContents()).join(' ');
-      const hasHebrewScript = /[֐-׿]/.test(allEntriesText);
-      const hasGreekScript = /[Ͱ-Ͽἀ-῿]/.test(allEntriesText);
-      expect(hasHebrewScript || hasGreekScript).toBe(true);
-    },
-  );
+    // Resource language is part of SemanticDomainViewerInput (heb | grc). When a Hebrew resource
+    // is open, source-text columns should contain Hebrew script; for a Greek resource, Greek.
+    // The test asserts characters in the expected Unicode range appear somewhere in the
+    // filtered entries list.
+    const entryOptions = sdvDialog.getByRole('option');
+    const allEntriesText = (await entryOptions.allTextContents()).join(' ');
+    const hasHebrewScript = /[֐-׿]/.test(allEntriesText);
+    const hasGreekScript = /[Ͱ-Ͽἀ-῿]/.test(allEntriesText);
+    expect(hasHebrewScript || hasGreekScript).toBe(true);
+  });
 
   // ===============================================================================================
   // Category 4: Interaction
   // ===============================================================================================
 
   // @scenario TS-063 (covers BHV-456 displaycat path)
-  test.fixme(
-    'should re-render tree at the clicked category level when a breadcrumb segment is clicked (displaycat)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should re-render tree at the clicked category level when a breadcrumb segment is clicked (displaycat)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
-      await frame.getByRole('option').first().click();
-      await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    await frame.getByRole('option').first().click();
+    await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
 
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      // Capture breadcrumb text before navigation.
-      const breadcrumb = sdvDialog.getByRole('navigation');
-      const initialBreadcrumb = (await breadcrumb.textContent()) ?? '';
+    // Capture breadcrumb text before navigation.
+    const breadcrumb = sdvDialog.getByRole('navigation');
+    const initialBreadcrumb = (await breadcrumb.textContent()) ?? '';
 
-      // Click the first breadcrumb segment to open its tree popover (depth-0 = expand-only per
-      // Theme 17 #11a). The popover then exposes deeper-level entries that ARE selectable.
-      const firstSegment = breadcrumb.getByRole('button').first();
-      await firstSegment.click();
+    // Click the first breadcrumb segment to open its tree popover (depth-0 = expand-only per
+    // Theme 17 #11a). The popover then exposes deeper-level entries that ARE selectable.
+    const firstSegment = breadcrumb.getByRole('button').first();
+    await firstSegment.click();
 
-      // EVD-051: After expanding a tree node -- child nodes visible beneath parent.
-      await mainPage.screenshot({
-        path: `${EVIDENCE_DIR}/EVD-051-segment-popover-open.png`,
-      });
+    // EVD-051: After expanding a tree node -- child nodes visible beneath parent.
+    await mainPage.screenshot({
+      path: `${EVIDENCE_DIR}/EVD-051-segment-popover-open.png`,
+    });
 
-      // The popover surfaces a tree/list of children. Click a depth-1 child to navigate.
-      const popoverChild = mainPage.getByRole('menuitem').first();
-      await popoverChild.click();
+    // The popover surfaces a tree/list of children. Click a depth-1 child to navigate.
+    const popoverChild = mainPage.getByRole('menuitem').first();
+    await popoverChild.click();
 
-      // Breadcrumb should change to reflect the new path (displaycat re-render).
-      await expect(async () => {
-        const newBreadcrumb = (await breadcrumb.textContent()) ?? '';
-        expect(newBreadcrumb).not.toEqual(initialBreadcrumb);
-      }).toPass({ timeout: 3_000 });
+    // Breadcrumb should change to reflect the new path (displaycat re-render).
+    await expect(async () => {
+      const newBreadcrumb = (await breadcrumb.textContent()) ?? '';
+      expect(newBreadcrumb).not.toEqual(initialBreadcrumb);
+    }).toPass({ timeout: 3_000 });
 
-      // The dialog itself should remain open (displaycat does NOT close the overlay -- only
-      // displaydomain closes it; that is the contract of BHV-456).
-      await expect(sdvDialog).toBeVisible();
-    },
-  );
+    // The dialog itself should remain open (displaycat does NOT close the overlay -- only
+    // displaydomain closes it; that is the contract of BHV-456).
+    await expect(sdvDialog).toBeVisible();
+  });
 
   // @scenario TS-063 (covers BHV-456 displaydomain path -- core scenario)
-  test.fixme(
-    'should close SDV and forward entry click to ArticleViewer/MarbleForm when a domain entry is clicked (displaydomain)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should close SDV and forward entry click to ArticleViewer/MarbleForm when a domain entry is clicked (displaydomain)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
-      await frame.getByRole('option').first().click();
-      await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    await frame.getByRole('option').first().click();
+    await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
 
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      // Click the first filtered entry in the listbox. Per BHV-456 the entry's source-text button
-      // fires `onEntryClick` which the parent webview routes to `MarbleForm` (and dismisses SDV).
-      const firstEntryRow = sdvDialog.getByRole('option').first();
-      await firstEntryRow.click();
-      // Inside the row, the source-text Button is the actionable element.
-      await firstEntryRow.getByRole('button').first().click();
+    // Click the first filtered entry in the listbox. Per BHV-456 the entry's source-text button
+    // fires `onEntryClick` which the parent webview routes to `MarbleForm` (and dismisses SDV).
+    const firstEntryRow = sdvDialog.getByRole('option').first();
+    await firstEntryRow.click();
+    // Inside the row, the source-text Button is the actionable element.
+    await firstEntryRow.getByRole('button').first().click();
 
-      // EVD-052: After clicking a domain entry -- ArticleViewer opens, SemanticDomainViewer closes.
-      await mainPage.screenshot({
-        path: `${EVIDENCE_DIR}/EVD-052-after-displaydomain-click.png`,
-      });
+    // EVD-052: After clicking a domain entry -- ArticleViewer opens, SemanticDomainViewer closes.
+    await mainPage.screenshot({
+      path: `${EVIDENCE_DIR}/EVD-052-after-displaydomain-click.png`,
+    });
 
-      // SDV should close.
-      await expect(sdvDialog).toBeHidden({ timeout: 5_000 });
+    // SDV should close.
+    await expect(sdvDialog).toBeHidden({ timeout: 5_000 });
 
-      // The downstream surface (ArticleViewer or MarbleForm scripture pane) takes focus. The
-      // exact target is parent-routed; this assertion is intentionally tolerant and just confirms
-      // SDV no longer occupies the modal layer.
-    },
-  );
+    // The downstream surface (ArticleViewer or MarbleForm scripture pane) takes focus. The
+    // exact target is parent-routed; this assertion is intentionally tolerant and just confirms
+    // SDV no longer occupies the modal layer.
+  });
 
   // @scenario TS-063 (close affordances)
-  test.fixme('should dismiss the dialog via the close X button', async ({ mainPage }) => {
+  test('should dismiss the dialog via the close X button', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     await openEnhancedResource(mainPage);
@@ -365,7 +358,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
   });
 
   // @scenario TS-063 (close affordances)
-  test.fixme('should dismiss the dialog when Escape is pressed', async ({ mainPage }) => {
+  test('should dismiss the dialog when Escape is pressed', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     await openEnhancedResource(mainPage);
@@ -386,52 +379,51 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
   });
 
   // @scenario TS-063 (keyboard navigation contract from acceptance criteria)
-  test.fixme(
-    'should move list selection with ArrowUp / ArrowDown inside the entries listbox',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should move list selection with ArrowUp / ArrowDown inside the entries listbox', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
-      await frame.getByRole('option').first().click();
-      await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    await frame.getByRole('option').first().click();
+    await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
 
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      const listbox = sdvDialog.getByRole('listbox');
-      await expect(listbox).toBeFocused({ timeout: 2_000 });
+    const listbox = sdvDialog.getByRole('listbox');
+    await expect(listbox).toBeFocused({ timeout: 2_000 });
 
-      // Capture the currently aria-selected option's text, advance with ArrowDown, then verify
-      // the active selection moved.
-      const options = sdvDialog.getByRole('option');
-      const initialSelectedText = await options
-        .filter({ has: mainPage.locator('[aria-selected="true"]') })
-        .first()
-        .textContent();
+    // Capture the currently aria-selected option's text, advance with ArrowDown, then verify
+    // the active selection moved.
+    const options = sdvDialog.getByRole('option');
+    const initialSelectedText = await options
+      .filter({ has: mainPage.locator('[aria-selected="true"]') })
+      .first()
+      .textContent();
 
-      await mainPage.keyboard.press('ArrowDown');
-      await mainPage.waitForTimeout(150);
-      const nextSelectedText = await options
-        .filter({ has: mainPage.locator('[aria-selected="true"]') })
-        .first()
-        .textContent();
-      expect(nextSelectedText).not.toEqual(initialSelectedText);
+    await mainPage.keyboard.press('ArrowDown');
+    await mainPage.waitForTimeout(150);
+    const nextSelectedText = await options
+      .filter({ has: mainPage.locator('[aria-selected="true"]') })
+      .first()
+      .textContent();
+    expect(nextSelectedText).not.toEqual(initialSelectedText);
 
-      await mainPage.keyboard.press('ArrowUp');
-      await mainPage.waitForTimeout(150);
-      const restoredSelectedText = await options
-        .filter({ has: mainPage.locator('[aria-selected="true"]') })
-        .first()
-        .textContent();
-      expect(restoredSelectedText).toEqual(initialSelectedText);
-    },
-  );
+    await mainPage.keyboard.press('ArrowUp');
+    await mainPage.waitForTimeout(150);
+    const restoredSelectedText = await options
+      .filter({ has: mainPage.locator('[aria-selected="true"]') })
+      .first()
+      .textContent();
+    expect(restoredSelectedText).toEqual(initialSelectedText);
+  });
 
   // ===============================================================================================
   // Category 5: Validation
@@ -445,148 +437,144 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-007)', () => {
   // ===============================================================================================
 
   // @scenario TS-063 (empty filtered-entries contract)
-  test.fixme(
-    'should render an empty listbox without crashing when the focused domain has no words',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should render an empty listbox without crashing when the focused domain has no words', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
 
-      // Open the SDV in cold-entry / browse mode.
-      await frame.getByRole('button', { name: /Browse semantic domains/i }).click();
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    // Open the SDV in cold-entry / browse mode.
+    await frame.getByRole('button', { name: /Browse semantic domains/i }).click();
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      // Navigate to a deep, terminal node that may have no words. Open the first breadcrumb
-      // segment, drill into a leaf.
-      const breadcrumb = sdvDialog.getByRole('navigation');
-      await breadcrumb.getByRole('button').first().click();
-      const popoverChildren = mainPage.getByRole('menuitem');
-      // Drill twice to reach a likely leaf-or-near-leaf depth.
-      await popoverChildren.last().click();
+    // Navigate to a deep, terminal node that may have no words. Open the first breadcrumb
+    // segment, drill into a leaf.
+    const breadcrumb = sdvDialog.getByRole('navigation');
+    await breadcrumb.getByRole('button').first().click();
+    const popoverChildren = mainPage.getByRole('menuitem');
+    // Drill twice to reach a likely leaf-or-near-leaf depth.
+    await popoverChildren.last().click();
 
-      // Listbox must still be present (may be empty).
-      const listbox = sdvDialog.getByRole('listbox');
-      await expect(listbox).toBeVisible();
+    // Listbox must still be present (may be empty).
+    const listbox = sdvDialog.getByRole('listbox');
+    await expect(listbox).toBeVisible();
 
-      // Dialog must not have crashed/closed.
-      await expect(sdvDialog).toBeVisible();
-    },
-  );
+    // Dialog must not have crashed/closed.
+    await expect(sdvDialog).toBeVisible();
+  });
 
   // ===============================================================================================
   // Category 6: Edge Cases
   // ===============================================================================================
 
   // @scenario TS-063 (deep hierarchy edge case)
-  test.fixme(
-    'should support 4-5 level deep semantic domain hierarchies without breadcrumb overflow',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should support 4-5 level deep semantic domain hierarchies without breadcrumb overflow', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
-      await frame.getByRole('option').first().click();
-      await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    await frame.getByRole('option').first().click();
+    await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
 
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      // The breadcrumb must collapse to ellipsis instead of overlapping the close-X (Theme 17
-      // #11b). We assert the breadcrumb's right edge is strictly to the LEFT of the close button's
-      // left edge.
-      const breadcrumb = sdvDialog.getByRole('navigation');
-      const closeBtn = sdvDialog.getByRole('button', { name: /Close/i });
+    // The breadcrumb must collapse to ellipsis instead of overlapping the close-X (Theme 17
+    // #11b). We assert the breadcrumb's right edge is strictly to the LEFT of the close button's
+    // left edge.
+    const breadcrumb = sdvDialog.getByRole('navigation');
+    const closeBtn = sdvDialog.getByRole('button', { name: /Close/i });
 
-      const breadcrumbBox = await breadcrumb.boundingBox();
-      const closeBox = await closeBtn.boundingBox();
-      expect(breadcrumbBox).not.toBeNull();
-      expect(closeBox).not.toBeNull();
-      if (breadcrumbBox && closeBox) {
-        const breadcrumbRightEdge = breadcrumbBox.x + breadcrumbBox.width;
-        expect(breadcrumbRightEdge).toBeLessThanOrEqual(closeBox.x);
-      }
-    },
-  );
+    const breadcrumbBox = await breadcrumb.boundingBox();
+    const closeBox = await closeBtn.boundingBox();
+    expect(breadcrumbBox).not.toBeNull();
+    expect(closeBox).not.toBeNull();
+    if (breadcrumbBox && closeBox) {
+      const breadcrumbRightEdge = breadcrumbBox.x + breadcrumbBox.width;
+      expect(breadcrumbRightEdge).toBeLessThanOrEqual(closeBox.x);
+    }
+  });
 
   // @scenario TS-063 (leaf node edge case from strategic plan)
-  test.fixme(
-    'should render leaf nodes without an expand toggle (no children to disclose)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should render leaf nodes without an expand toggle (no children to disclose)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
-      await frame.getByRole('option').first().click();
-      await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    await frame.getByRole('option').first().click();
+    await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
 
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      // Open the deepest breadcrumb segment to expose the children popover.
-      const breadcrumb = sdvDialog.getByRole('navigation');
-      await breadcrumb.getByRole('button').last().click();
+    // Open the deepest breadcrumb segment to expose the children popover.
+    const breadcrumb = sdvDialog.getByRole('navigation');
+    await breadcrumb.getByRole('button').last().click();
 
-      // Within the popover, leaf nodes (no children) must not render an expand chevron. We assert
-      // that at least one menuitem in the popover has aria-expanded absent OR equal to "false"
-      // AND no chevron icon child.
-      const menuItems = mainPage.getByRole('menuitem');
-      const count = await menuItems.count();
-      expect(count).toBeGreaterThan(0);
+    // Within the popover, leaf nodes (no children) must not render an expand chevron. We assert
+    // that at least one menuitem in the popover has aria-expanded absent OR equal to "false"
+    // AND no chevron icon child.
+    const menuItems = mainPage.getByRole('menuitem');
+    const count = await menuItems.count();
+    expect(count).toBeGreaterThan(0);
 
-      // For a leaf, the toggle affordance (chevron icon) must not be present. We sample the last
-      // menuitem (deepest) and assert its accessible structure does not advertise expandability.
-      const lastItem = menuItems.last();
-      const ariaExpanded = await lastItem.getAttribute('aria-expanded');
-      // aria-expanded should either be missing entirely or equal to a value indicating leaf.
-      expect(!ariaExpanded || ariaExpanded === 'false').toBe(true);
-    },
-  );
+    // For a leaf, the toggle affordance (chevron icon) must not be present. We sample the last
+    // menuitem (deepest) and assert its accessible structure does not advertise expandability.
+    const lastItem = menuItems.last();
+    const ariaExpanded = await lastItem.getAttribute('aria-expanded');
+    // aria-expanded should either be missing entirely or equal to a value indicating leaf.
+    expect(!ariaExpanded || ariaExpanded === 'false').toBe(true);
+  });
 
   // @scenario TS-063 (loading edge case visible in component contract via isLoading prop)
-  test.fixme(
-    'should display a loading skeleton while filtered entries are still being fetched',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should display a loading skeleton while filtered entries are still being fetched', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
-      await frame.getByRole('option').first().click();
-      await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    await frame.getByRole('option').first().click();
+    await frame.locator('[data-testid^="dictionary-sense-domain-"]').first().click();
 
-      const sdvDialog = frame.getByTestId(SDV_TESTID);
-      await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
+    const sdvDialog = frame.getByTestId(SDV_TESTID);
+    await expect(sdvDialog).toBeVisible({ timeout: 5_000 });
 
-      // While `isLoading` is true, the listbox should render skeleton placeholders rather than
-      // real options. The component contract uses `isLoading` from
-      // `SemanticDomainViewerProps`; when true the listbox renders skeletons (a stable hook
-      // surface that shouldn't enumerate as real options).
-      // We can only observe this transiently on a real backend call; this test asserts that the
-      // dialog reaches a stable populated state without throwing.
-      const listbox = sdvDialog.getByRole('listbox');
-      await expect(listbox).toBeVisible();
-      // Once stable, real options should appear.
-      await expect(sdvDialog.getByRole('option').first()).toBeVisible({ timeout: 10_000 });
-    },
-  );
+    // While `isLoading` is true, the listbox should render skeleton placeholders rather than
+    // real options. The component contract uses `isLoading` from
+    // `SemanticDomainViewerProps`; when true the listbox renders skeletons (a stable hook
+    // surface that shouldn't enumerate as real options).
+    // We can only observe this transiently on a real backend call; this test asserts that the
+    // dialog reaches a stable populated state without throwing.
+    const listbox = sdvDialog.getByRole('listbox');
+    await expect(listbox).toBeVisible();
+    // Once stable, real options should appear.
+    await expect(sdvDialog.getByRole('option').first()).toBeVisible({ timeout: 10_000 });
+  });
 });

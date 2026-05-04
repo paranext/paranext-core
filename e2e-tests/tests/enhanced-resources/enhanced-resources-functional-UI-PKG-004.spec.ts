@@ -112,284 +112,268 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-004: Media + Maps tab
   // ═══════════════════════════════════════════════════════════════════════════
 
   // @scenario TS-061
-  test.fixme(
-    'should navigate to the Media tab via the research-pane tab bar',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+  test('should navigate to the Media tab via the research-pane tab bar', async ({ mainPage }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
 
-      // EVD-007: tab switching - "After switching research tab" -> Media tab content visible.
-      await switchTab(frame, 'Media');
-      await expect(frame.getByTestId('media-images-tab')).toBeVisible({ timeout: 10_000 });
+    // EVD-007: tab switching - "After switching research tab" -> Media tab content visible.
+    await switchTab(frame, 'Media');
+    await expect(frame.getByTestId('media-images-tab')).toBeVisible({ timeout: 10_000 });
 
-      await mainPage.screenshot({
-        path: `${SCREENSHOT_DIR}/EVD-007-media-tab-active.png`,
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: `${SCREENSHOT_DIR}/EVD-007-media-tab-active.png`,
+    });
+  });
 
   // @scenario TS-071
-  test.fixme(
-    'should navigate to the Maps tab via the research-pane tab bar',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+  test('should navigate to the Maps tab via the research-pane tab bar', async ({ mainPage }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
 
-      await switchTab(frame, 'Maps');
-      await expect(frame.getByTestId('media-maps-tab')).toBeVisible({ timeout: 10_000 });
+    await switchTab(frame, 'Maps');
+    await expect(frame.getByTestId('media-maps-tab')).toBeVisible({ timeout: 10_000 });
 
-      // Maps tab is visually distinct from Media tab - assert Media tab isn't simultaneously
-      // visible in the active-tab role (only one TabsContent renders at a time).
-      await expect(frame.getByTestId('media-images-tab')).toHaveCount(0);
+    // Maps tab is visually distinct from Media tab - assert Media tab isn't simultaneously
+    // visible in the active-tab role (only one TabsContent renders at a time).
+    await expect(frame.getByTestId('media-images-tab')).toHaveCount(0);
 
-      await mainPage.screenshot({
-        path: `${SCREENSHOT_DIR}/EVD-007-maps-tab-active.png`,
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: `${SCREENSHOT_DIR}/EVD-007-maps-tab-active.png`,
+    });
+  });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Category 2: Render
   // ═══════════════════════════════════════════════════════════════════════════
 
   // @scenario TS-061
-  test.fixme(
-    'should render the Media tab shell (label, count, list region) when activated',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
-      await switchTab(frame, 'Media');
+  test('should render the Media tab shell (label, count, list region) when activated', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+    await switchTab(frame, 'Media');
 
-      const mediaTab = frame.getByTestId('media-images-tab');
-      await expect(mediaTab).toBeVisible({ timeout: 10_000 });
+    const mediaTab = frame.getByTestId('media-images-tab');
+    await expect(mediaTab).toBeVisible({ timeout: 10_000 });
 
-      // Tab label is rendered as the aria-label of the tab root (per component contract).
-      await expect(mediaTab).toHaveAttribute('aria-label', /images|media/i);
+    // Tab label is rendered as the aria-label of the tab root (per component contract).
+    await expect(mediaTab).toHaveAttribute('aria-label', /images|media/i);
 
-      // The SourceLanguageIndexedList renders inside the tab shell.
-      // Either a row is visible (data exists) or the empty-state copy is visible.
-      const hasRows = await frame.locator('[data-testid^="media-entry-"]').count();
-      if (hasRows === 0) {
-        // BHV-352 empty state - localized "No images for {scope}" message.
-        await expect(mediaTab.getByText(/no images|no media/i)).toBeVisible();
-      } else {
-        await expect(frame.getByTestId('media-images-count')).toBeVisible();
-      }
+    // The SourceLanguageIndexedList renders inside the tab shell.
+    // Either a row is visible (data exists) or the empty-state copy is visible.
+    const hasRows = await frame.locator('[data-testid^="media-entry-"]').count();
+    if (hasRows === 0) {
+      // BHV-352 empty state - localized "No images for {scope}" message.
+      await expect(mediaTab.getByText(/no images|no media/i)).toBeVisible();
+    } else {
+      await expect(frame.getByTestId('media-images-count')).toBeVisible();
+    }
 
-      await mainPage.screenshot({
-        path: `${SCREENSHOT_DIR}/EVD-002-media-tab-rendered.png`,
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: `${SCREENSHOT_DIR}/EVD-002-media-tab-rendered.png`,
+    });
+  });
 
   // @scenario TS-071
-  test.fixme(
-    'should render the Maps tab shell (label, count, list region) when activated',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
-      await switchTab(frame, 'Maps');
+  test('should render the Maps tab shell (label, count, list region) when activated', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+    await switchTab(frame, 'Maps');
 
-      const mapsTab = frame.getByTestId('media-maps-tab');
-      await expect(mapsTab).toBeVisible({ timeout: 10_000 });
-      await expect(mapsTab).toHaveAttribute('aria-label', /maps/i);
+    const mapsTab = frame.getByTestId('media-maps-tab');
+    await expect(mapsTab).toBeVisible({ timeout: 10_000 });
+    await expect(mapsTab).toHaveAttribute('aria-label', /maps/i);
 
-      const hasRows = await frame.locator('[data-testid^="media-entry-"]').count();
-      if (hasRows === 0) {
-        await expect(mapsTab.getByText(/no maps/i)).toBeVisible();
-      } else {
-        await expect(frame.getByTestId('media-maps-count')).toBeVisible();
-      }
+    const hasRows = await frame.locator('[data-testid^="media-entry-"]').count();
+    if (hasRows === 0) {
+      await expect(mapsTab.getByText(/no maps/i)).toBeVisible();
+    } else {
+      await expect(frame.getByTestId('media-maps-count')).toBeVisible();
+    }
 
-      await mainPage.screenshot({
-        path: `${SCREENSHOT_DIR}/EVD-002-maps-tab-rendered.png`,
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: `${SCREENSHOT_DIR}/EVD-002-maps-tab-rendered.png`,
+    });
+  });
 
   // @scenario TS-061
-  test.fixme(
-    'should render each Media row with thumbnail slot, title and verse-range caption',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
-      await switchTab(frame, 'Media');
+  test('should render each Media row with thumbnail slot, title and verse-range caption', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+    await switchTab(frame, 'Media');
 
-      // Wait for at least one row to mount - the deferred-loading flag flips to `true` once the
-      // tab is visible (BHV-359), so the row body should appear shortly after activation.
-      const firstRow = frame.locator('[data-testid^="media-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    // Wait for at least one row to mount - the deferred-loading flag flips to `true` once the
+    // tab is visible (BHV-359), so the row body should appear shortly after activation.
+    const firstRow = frame.locator('[data-testid^="media-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
 
-      // Each row body contains: a thumbnail (img tag once loaded, Skeleton while loading),
-      // a title, and a pre-formatted verse-range label (BHV-612).
-      const rowImg = firstRow.locator('img').first();
-      await expect(rowImg).toBeVisible();
-      // The verse-range label is part of the row body - assert at least one non-empty text node
-      // beyond the title is rendered. The specific format is owned by the parent that supplies
-      // referenceLabel (e.g., "GEN 1:1" or "ACT 2:1-5:42").
-      const rowText = (await firstRow.textContent()) ?? '';
-      expect(rowText.trim()).not.toBe('');
+    // Each row body contains: a thumbnail (img tag once loaded, Skeleton while loading),
+    // a title, and a pre-formatted verse-range label (BHV-612).
+    const rowImg = firstRow.locator('img').first();
+    await expect(rowImg).toBeVisible();
+    // The verse-range label is part of the row body - assert at least one non-empty text node
+    // beyond the title is rendered. The specific format is owned by the parent that supplies
+    // referenceLabel (e.g., "GEN 1:1" or "ACT 2:1-5:42").
+    const rowText = (await firstRow.textContent()) ?? '';
+    expect(rowText.trim()).not.toBe('');
 
-      await mainPage.screenshot({
-        path: `${SCREENSHOT_DIR}/EVD-002-media-row-rendered.png`,
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: `${SCREENSHOT_DIR}/EVD-002-media-row-rendered.png`,
+    });
+  });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Category 3: Data Wiring (TS-071: SBA routing - Mixed-layer scenario)
   // ═══════════════════════════════════════════════════════════════════════════
 
   // @scenario TS-071
-  test.fixme(
-    'should route Satellite Bible Atlas entries ONLY to the Maps tab (not Media)',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+  test('should route Satellite Bible Atlas entries ONLY to the Maps tab (not Media)', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
 
-      // Inspect Media tab first - count rows and assert NONE are SBA entries.
-      await switchTab(frame, 'Media');
-      const mediaTab = frame.getByTestId('media-images-tab');
-      await expect(mediaTab).toBeVisible({ timeout: 10_000 });
+    // Inspect Media tab first - count rows and assert NONE are SBA entries.
+    await switchTab(frame, 'Media');
+    const mediaTab = frame.getByTestId('media-images-tab');
+    await expect(mediaTab).toBeVisible({ timeout: 10_000 });
 
-      const mediaRows = frame.locator('[data-testid^="media-entry-"]');
-      const mediaCount = await mediaRows.count();
-      // The Media tab MUST NOT contain any "Satellite Bible Atlas" collection entries (TS-071).
-      // The collection name is rendered in the row body when present. Each row's text is read
-      // independently — fetch them all in parallel.
-      const mediaTexts = await Promise.all(
-        Array.from({ length: mediaCount }, (_, i) => mediaRows.nth(i).textContent()),
-      );
-      mediaTexts.forEach((text) => {
-        expect(text ?? '').not.toMatch(/Satellite Bible Atlas/i);
-      });
+    const mediaRows = frame.locator('[data-testid^="media-entry-"]');
+    const mediaCount = await mediaRows.count();
+    // The Media tab MUST NOT contain any "Satellite Bible Atlas" collection entries (TS-071).
+    // The collection name is rendered in the row body when present. Each row's text is read
+    // independently — fetch them all in parallel.
+    const mediaTexts = await Promise.all(
+      Array.from({ length: mediaCount }, (_, i) => mediaRows.nth(i).textContent()),
+    );
+    mediaTexts.forEach((text) => {
+      expect(text ?? '').not.toMatch(/Satellite Bible Atlas/i);
+    });
 
-      // Inspect Maps tab - all rows MUST be SBA entries (the Maps tab is SBA-only by definition).
-      await switchTab(frame, 'Maps');
-      const mapsTab = frame.getByTestId('media-maps-tab');
-      await expect(mapsTab).toBeVisible({ timeout: 10_000 });
+    // Inspect Maps tab - all rows MUST be SBA entries (the Maps tab is SBA-only by definition).
+    await switchTab(frame, 'Maps');
+    const mapsTab = frame.getByTestId('media-maps-tab');
+    await expect(mapsTab).toBeVisible({ timeout: 10_000 });
 
-      const mapsRows = frame.locator('[data-testid^="media-entry-"]');
-      const mapsCount = await mapsRows.count();
-      // If maps exist, they MUST all be SBA. The collection name might not be rendered as visible
-      // text on every row, but the badge text or alt-text on the thumbnail label includes it; the
-      // assertion below is intentionally lenient - we assert there is no NON-SBA row by ensuring
-      // every visible collection label, when present, matches the SBA filter. Run row-level
-      // visibility checks in parallel — each row's badge state is independent.
-      await Promise.all(
-        Array.from({ length: mapsCount }, (_, i) =>
-          expect(mapsRows.nth(i).getByText(/map/i)).toBeVisible(),
-        ),
-      );
+    const mapsRows = frame.locator('[data-testid^="media-entry-"]');
+    const mapsCount = await mapsRows.count();
+    // If maps exist, they MUST all be SBA. The collection name might not be rendered as visible
+    // text on every row, but the badge text or alt-text on the thumbnail label includes it; the
+    // assertion below is intentionally lenient - we assert there is no NON-SBA row by ensuring
+    // every visible collection label, when present, matches the SBA filter. Run row-level
+    // visibility checks in parallel — each row's badge state is independent.
+    await Promise.all(
+      Array.from({ length: mapsCount }, (_, i) =>
+        expect(mapsRows.nth(i).getByText(/map/i)).toBeVisible(),
+      ),
+    );
 
-      await mainPage.screenshot({
-        path: `${SCREENSHOT_DIR}/EVD-DATA-sba-routing-verified.png`,
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: `${SCREENSHOT_DIR}/EVD-DATA-sba-routing-verified.png`,
+    });
+  });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Category 4: Interaction
   // ═══════════════════════════════════════════════════════════════════════════
 
   // @scenario TS-061
-  test.fixme(
-    'should open the side-drawer detail when a Media row is clicked',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
-      await switchTab(frame, 'Media');
+  test('should open the side-drawer detail when a Media row is clicked', async ({ mainPage }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+    await switchTab(frame, 'Media');
 
-      const firstRow = frame.locator('[data-testid^="media-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    const firstRow = frame.locator('[data-testid^="media-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
 
-      // Capture the row's id from its data-testid so we can match the detail's testid.
-      const rowTestId = await firstRow.getAttribute('data-testid');
-      expect(rowTestId).toMatch(/^media-entry-/);
-      const imageId = (rowTestId ?? '').replace(/^media-entry-/, '');
+    // Capture the row's id from its data-testid so we can match the detail's testid.
+    const rowTestId = await firstRow.getAttribute('data-testid');
+    expect(rowTestId).toMatch(/^media-entry-/);
+    const imageId = (rowTestId ?? '').replace(/^media-entry-/, '');
 
-      await firstRow.click();
+    await firstRow.click();
 
-      // The SourceLanguageIndexedList drawer mounts MediaItemDetail via the renderDetailContent
-      // slot; its root carries data-testid="media-item-detail-{imageId}".
-      const detail = frame.getByTestId(`media-item-detail-${imageId}`);
-      await expect(detail).toBeVisible({ timeout: 5_000 });
+    // The SourceLanguageIndexedList drawer mounts MediaItemDetail via the renderDetailContent
+    // slot; its root carries data-testid="media-item-detail-{imageId}".
+    const detail = frame.getByTestId(`media-item-detail-${imageId}`);
+    await expect(detail).toBeVisible({ timeout: 5_000 });
 
-      await mainPage.screenshot({
-        path: `${SCREENSHOT_DIR}/EVD-INT-media-detail-open.png`,
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: `${SCREENSHOT_DIR}/EVD-INT-media-detail-open.png`,
+    });
+  });
 
   // @scenario TS-061
-  test.fixme(
-    'should close the side-drawer when the row is clicked again (selection toggle)',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
-      await switchTab(frame, 'Media');
+  test('should close the side-drawer when the row is clicked again (selection toggle)', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+    await switchTab(frame, 'Media');
 
-      const firstRow = frame.locator('[data-testid^="media-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
-      const rowTestId = (await firstRow.getAttribute('data-testid')) ?? '';
-      const imageId = rowTestId.replace(/^media-entry-/, '');
+    const firstRow = frame.locator('[data-testid^="media-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    const rowTestId = (await firstRow.getAttribute('data-testid')) ?? '';
+    const imageId = rowTestId.replace(/^media-entry-/, '');
 
-      // Click once to open.
-      await firstRow.click();
-      await expect(frame.getByTestId(`media-item-detail-${imageId}`)).toBeVisible();
+    // Click once to open.
+    await firstRow.click();
+    await expect(frame.getByTestId(`media-item-detail-${imageId}`)).toBeVisible();
 
-      // Click again on the same row to toggle the drawer closed (component contract:
-      // onSelectionChange flips id <-> undefined).
-      await firstRow.click();
-      await expect(frame.getByTestId(`media-item-detail-${imageId}`)).toHaveCount(0);
-    },
-  );
-
-  // @scenario TS-061
-  test.fixme(
-    'should expose a Maximize button in the detail drawer that triggers MediaViewer routing',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
-      await switchTab(frame, 'Media');
-
-      const firstRow = frame.locator('[data-testid^="media-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
-      await firstRow.click();
-
-      // The MediaItemDetail body renders a Maximize button (lucide Maximize2 + "Maximize" label).
-      // Clicking it MUST open the MediaViewer overlay (UI-PKG-005). This test asserts the
-      // outgoing wiring: the Dialog mounts and is visible.
-      const maximizeBtn = frame.getByRole('button', { name: /maximize/i });
-      await expect(maximizeBtn).toBeVisible();
-      await maximizeBtn.click();
-
-      // MediaViewer overlay - test selectors are owned by ui-spec-media-viewer.md (UI-PKG-005).
-      // Here we only confirm a viewer-shaped surface appeared.
-      await expect(frame.getByTestId('media-viewer-canvas')).toBeVisible({ timeout: 5_000 });
-
-      await mainPage.screenshot({
-        path: `${SCREENSHOT_DIR}/EVD-INT-media-viewer-launched.png`,
-      });
-    },
-  );
+    // Click again on the same row to toggle the drawer closed (component contract:
+    // onSelectionChange flips id <-> undefined).
+    await firstRow.click();
+    await expect(frame.getByTestId(`media-item-detail-${imageId}`)).toHaveCount(0);
+  });
 
   // @scenario TS-061
-  test.fixme(
-    'should switch from Maps tab back to Media tab and restore the Media list',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+  test('should expose a Maximize button in the detail drawer that triggers MediaViewer routing', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+    await switchTab(frame, 'Media');
 
-      await switchTab(frame, 'Maps');
-      await expect(frame.getByTestId('media-maps-tab')).toBeVisible();
+    const firstRow = frame.locator('[data-testid^="media-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    await firstRow.click();
 
-      await switchTab(frame, 'Media');
-      await expect(frame.getByTestId('media-images-tab')).toBeVisible();
-      // The Maps tab content must NOT be in the DOM simultaneously - tabs are mutually exclusive.
-      await expect(frame.getByTestId('media-maps-tab')).toHaveCount(0);
-    },
-  );
+    // The MediaItemDetail body renders a Maximize button (lucide Maximize2 + "Maximize" label).
+    // Clicking it MUST open the MediaViewer overlay (UI-PKG-005). This test asserts the
+    // outgoing wiring: the Dialog mounts and is visible.
+    const maximizeBtn = frame.getByRole('button', { name: /maximize/i });
+    await expect(maximizeBtn).toBeVisible();
+    await maximizeBtn.click();
+
+    // MediaViewer overlay - test selectors are owned by ui-spec-media-viewer.md (UI-PKG-005).
+    // Here we only confirm a viewer-shaped surface appeared.
+    await expect(frame.getByTestId('media-viewer-canvas')).toBeVisible({ timeout: 5_000 });
+
+    await mainPage.screenshot({
+      path: `${SCREENSHOT_DIR}/EVD-INT-media-viewer-launched.png`,
+    });
+  });
+
+  // @scenario TS-061
+  test('should switch from Maps tab back to Media tab and restore the Media list', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+
+    await switchTab(frame, 'Maps');
+    await expect(frame.getByTestId('media-maps-tab')).toBeVisible();
+
+    await switchTab(frame, 'Media');
+    await expect(frame.getByTestId('media-images-tab')).toBeVisible();
+    // The Maps tab content must NOT be in the DOM simultaneously - tabs are mutually exclusive.
+    await expect(frame.getByTestId('media-maps-tab')).toHaveCount(0);
+  });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Category 5: Validation (no VAL-XXX entries declared in the Test Contract for this WP)
@@ -405,115 +389,111 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-004: Media + Maps tab
   // ═══════════════════════════════════════════════════════════════════════════
 
   // @scenario TS-061 (BHV-359 deferred loading)
-  test.fixme(
-    'should defer thumbnail loading - rows render skeletons until the tab becomes visible',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+  test('should defer thumbnail loading - rows render skeletons until the tab becomes visible', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
 
-      // Default tab is Dictionary - the Media tab has not been visited yet, so its rows MUST NOT
-      // have loaded thumbnail bytes. The component contract: when `loaded === false`, rows render
-      // a Skeleton placeholder in the thumbnail slot instead of an <img>.
-      //
-      // We can't assert on the un-mounted Media tab DOM directly (TabsContent is mutually
-      // exclusive). Instead we verify the deferred-loading invariant by switching to Media,
-      // checking that rows mount, and confirming the thumbnail eventually transitions from
-      // Skeleton (initial render) to a loaded <img>. The transition is the observable signal that
-      // deferred loading happened.
+    // Default tab is Dictionary - the Media tab has not been visited yet, so its rows MUST NOT
+    // have loaded thumbnail bytes. The component contract: when `loaded === false`, rows render
+    // a Skeleton placeholder in the thumbnail slot instead of an <img>.
+    //
+    // We can't assert on the un-mounted Media tab DOM directly (TabsContent is mutually
+    // exclusive). Instead we verify the deferred-loading invariant by switching to Media,
+    // checking that rows mount, and confirming the thumbnail eventually transitions from
+    // Skeleton (initial render) to a loaded <img>. The transition is the observable signal that
+    // deferred loading happened.
 
-      await switchTab(frame, 'Media');
-      const firstRow = frame.locator('[data-testid^="media-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    await switchTab(frame, 'Media');
+    const firstRow = frame.locator('[data-testid^="media-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
 
-      // After the loaded-flag flip, the <img> tag is present. The Skeleton state is brief; we
-      // assert the post-flip steady state.
-      await expect(firstRow.locator('img').first()).toBeVisible({ timeout: 10_000 });
+    // After the loaded-flag flip, the <img> tag is present. The Skeleton state is brief; we
+    // assert the post-flip steady state.
+    await expect(firstRow.locator('img').first()).toBeVisible({ timeout: 10_000 });
 
-      await mainPage.screenshot({
-        path: `${SCREENSHOT_DIR}/EVD-EDGE-deferred-loading-resolved.png`,
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: `${SCREENSHOT_DIR}/EVD-EDGE-deferred-loading-resolved.png`,
+    });
+  });
 
   // @scenario TS-061 (BHV-352 empty state)
-  test.fixme(
-    'should display a localized empty-state message when no media entries are in scope',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
-      await switchTab(frame, 'Media');
+  test('should display a localized empty-state message when no media entries are in scope', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+    await switchTab(frame, 'Media');
 
-      const mediaTab = frame.getByTestId('media-images-tab');
-      await expect(mediaTab).toBeVisible({ timeout: 10_000 });
+    const mediaTab = frame.getByTestId('media-images-tab');
+    await expect(mediaTab).toBeVisible({ timeout: 10_000 });
 
-      // If the loaded ER + scope happens to have zero media entries, the SourceLanguageIndexedList
-      // renders the `emptyStateMessage` prop. Assert the localized string template is honored
-      // ("No images for {scope}") - the runtime substitutes the scope label.
-      const rowCount = await frame.locator('[data-testid^="media-entry-"]').count();
-      if (rowCount === 0) {
-        const emptyMsg = mediaTab.getByText(/no images/i);
-        await expect(emptyMsg).toBeVisible();
-        await mainPage.screenshot({
-          path: `${SCREENSHOT_DIR}/EVD-EDGE-media-empty-state.png`,
-        });
-      } else {
-        // No empty state to verify - skip the assertion but still capture evidence that rows
-        // exist (proves the empty-state branch is mutually exclusive with the populated branch).
-        await expect(frame.locator('[data-testid^="media-entry-"]').first()).toBeVisible();
-      }
-    },
-  );
+    // If the loaded ER + scope happens to have zero media entries, the SourceLanguageIndexedList
+    // renders the `emptyStateMessage` prop. Assert the localized string template is honored
+    // ("No images for {scope}") - the runtime substitutes the scope label.
+    const rowCount = await frame.locator('[data-testid^="media-entry-"]').count();
+    if (rowCount === 0) {
+      const emptyMsg = mediaTab.getByText(/no images/i);
+      await expect(emptyMsg).toBeVisible();
+      await mainPage.screenshot({
+        path: `${SCREENSHOT_DIR}/EVD-EDGE-media-empty-state.png`,
+      });
+    } else {
+      // No empty state to verify - skip the assertion but still capture evidence that rows
+      // exist (proves the empty-state branch is mutually exclusive with the populated branch).
+      await expect(frame.locator('[data-testid^="media-entry-"]').first()).toBeVisible();
+    }
+  });
 
   // @scenario TS-071 (BHV-352 empty state, maps variant)
-  test.fixme(
-    'should display a localized empty-state message when no maps are in scope',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
-      await switchTab(frame, 'Maps');
+  test('should display a localized empty-state message when no maps are in scope', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+    await switchTab(frame, 'Maps');
 
-      const mapsTab = frame.getByTestId('media-maps-tab');
-      await expect(mapsTab).toBeVisible({ timeout: 10_000 });
+    const mapsTab = frame.getByTestId('media-maps-tab');
+    await expect(mapsTab).toBeVisible({ timeout: 10_000 });
 
-      const rowCount = await frame.locator('[data-testid^="media-entry-"]').count();
-      if (rowCount === 0) {
-        await expect(mapsTab.getByText(/no maps/i)).toBeVisible();
-        await mainPage.screenshot({
-          path: `${SCREENSHOT_DIR}/EVD-EDGE-maps-empty-state.png`,
-        });
-      } else {
-        await expect(frame.locator('[data-testid^="media-entry-"]').first()).toBeVisible();
-      }
-    },
-  );
+    const rowCount = await frame.locator('[data-testid^="media-entry-"]').count();
+    if (rowCount === 0) {
+      await expect(mapsTab.getByText(/no maps/i)).toBeVisible();
+      await mainPage.screenshot({
+        path: `${SCREENSHOT_DIR}/EVD-EDGE-maps-empty-state.png`,
+      });
+    } else {
+      await expect(frame.locator('[data-testid^="media-entry-"]').first()).toBeVisible();
+    }
+  });
 
   // @scenario TS-061 (FN-020 cross-tab state propagation)
-  test.fixme(
-    'should preserve the active word filter when switching between tabs (FN-020)',
-    async ({ mainPage }) => {
-      await openEnhancedResourceWindow(mainPage);
-      const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
+  test('should preserve the active word filter when switching between tabs (FN-020)', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResourceWindow(mainPage);
+    const frame = mainPage.frameLocator(`iframe[title="${ER_WEBVIEW_TITLE}"]`);
 
-      // Apply a filter via the toolbar's filter input (Test Contract selector: filterBox).
-      const filterInput = frame.getByTestId('er-filter-box');
-      await filterInput.fill('logos');
+    // Apply a filter via the toolbar's filter input (Test Contract selector: filterBox).
+    const filterInput = frame.getByTestId('er-filter-box');
+    await filterInput.fill('logos');
 
-      // Switch to Media tab and verify the filter input still carries the value (the integrated
-      // EnhancedResourceWebView state machine, FN-020, propagates the word filter across tabs).
-      await switchTab(frame, 'Media');
-      await expect(filterInput).toHaveValue('logos');
+    // Switch to Media tab and verify the filter input still carries the value (the integrated
+    // EnhancedResourceWebView state machine, FN-020, propagates the word filter across tabs).
+    await switchTab(frame, 'Media');
+    await expect(filterInput).toHaveValue('logos');
 
-      // Switch to Maps tab - filter still applied.
-      await switchTab(frame, 'Maps');
-      await expect(filterInput).toHaveValue('logos');
+    // Switch to Maps tab - filter still applied.
+    await switchTab(frame, 'Maps');
+    await expect(filterInput).toHaveValue('logos');
 
-      // Clear via the X button (Test Contract: btnClearFilter) - both tab lists reset.
-      await frame.getByRole('button', { name: /turn off word\/phrase filter/i }).click();
-      await expect(filterInput).toHaveValue('');
+    // Clear via the X button (Test Contract: btnClearFilter) - both tab lists reset.
+    await frame.getByRole('button', { name: /turn off word\/phrase filter/i }).click();
+    await expect(filterInput).toHaveValue('');
 
-      await mainPage.screenshot({
-        path: `${SCREENSHOT_DIR}/EVD-EDGE-filter-cross-tab-cleared.png`,
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: `${SCREENSHOT_DIR}/EVD-EDGE-filter-cross-tab-cleared.png`,
+    });
+  });
 });

@@ -65,59 +65,56 @@ test.describe('Enhanced Resources Journey Tests', () => {
 
   // @scenario TS-J-001 (covers TS-043, TS-044, EVD-001)
   // WPs: UI-PKG-009 (menu/command) → UI-PKG-001 (window shell)
-  test.fixme(
-    'opens ER window from app menu and renders main shell with default state',
-    async ({ mainPage }) => {
-      await openEnhancedResource(mainPage);
+  test('opens ER window from app menu and renders main shell with default state', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResource(mainPage);
 
-      const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
 
-      // Scripture pane present (ui-spec-marble-form: data-testid er-scripture-pane)
-      await expect(er.getByTestId('er-scripture-pane')).toBeVisible({ timeout: 15_000 });
+    // Scripture pane present (ui-spec-marble-form: data-testid er-scripture-pane)
+    await expect(er.getByTestId('er-scripture-pane')).toBeVisible({ timeout: 15_000 });
 
-      // All four research tabs are present, dictionary is the default-active tab
-      // (ui-spec-marble-form Default State Wireframe; TS-058 default-active dictionary).
-      await expect(er.getByRole('tab', { name: /Dictionary/i })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
-      await expect(er.getByRole('tab', { name: /Encyclopedia/i })).toBeVisible();
-      await expect(er.getByRole('tab', { name: /Media/i })).toBeVisible();
-      await expect(er.getByRole('tab', { name: /Maps/i })).toBeVisible();
+    // All four research tabs are present, dictionary is the default-active tab
+    // (ui-spec-marble-form Default State Wireframe; TS-058 default-active dictionary).
+    await expect(er.getByRole('tab', { name: /Dictionary/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(er.getByRole('tab', { name: /Encyclopedia/i })).toBeVisible();
+    await expect(er.getByRole('tab', { name: /Media/i })).toBeVisible();
+    await expect(er.getByRole('tab', { name: /Maps/i })).toBeVisible();
 
-      // Dictionary tab has a populated entry list (UI-PKG-002 entryList testid).
-      await expect(er.getByTestId('dictionary-entry-list')).toBeVisible();
+    // Dictionary tab has a populated entry list (UI-PKG-002 entryList testid).
+    await expect(er.getByTestId('dictionary-entry-list')).toBeVisible();
 
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/journey/JEVD-001-er-default-shell.png',
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/journey/JEVD-001-er-default-shell.png',
+    });
+  });
 
   // @scenario TS-J-002 (covers TS-044, BHV-616)
   // WPs: UI-PKG-009 (menu) → UI-PKG-001 (window reuse)
-  test.fixme(
-    'reuses existing ER tab when menu invoked again for same resource',
-    async ({ mainPage }) => {
-      await openEnhancedResource(mainPage);
-      const initialTabCount = await mainPage
-        .locator('.dock-tab', { hasText: /Enhanced Resource/i })
-        .count();
-      expect(initialTabCount).toBe(1);
+  test('reuses existing ER tab when menu invoked again for same resource', async ({ mainPage }) => {
+    await openEnhancedResource(mainPage);
+    const initialTabCount = await mainPage
+      .locator('.dock-tab', { hasText: /Enhanced Resource/i })
+      .count();
+    expect(initialTabCount).toBe(1);
 
-      // Re-invoke the menu — should activate, not duplicate.
-      await openEnhancedResource(mainPage);
-      const finalTabCount = await mainPage
-        .locator('.dock-tab', { hasText: /Enhanced Resource/i })
-        .count();
-      expect(finalTabCount).toBe(1);
-    },
-  );
+    // Re-invoke the menu — should activate, not duplicate.
+    await openEnhancedResource(mainPage);
+    const finalTabCount = await mainPage
+      .locator('.dock-tab', { hasText: /Enhanced Resource/i })
+      .count();
+    expect(finalTabCount).toBe(1);
+  });
 
   // ═══════════════════════════════════════════════════════════════
   // Cross-WP Data Flow — Word filter propagation (FN-020)
   // ═══════════════════════════════════════════════════════════════
 
+  // FIXME(GAP-token-attr-mapping): Editorial does not render words as `<a>` role=link; uses `mark.editor-typed-mark-external-marble-word` instead.
   // @scenario TS-J-010 (covers FN-020 sub-task c, BHV-302, BHV-601, EVD-002, EVD-022)
   // WPs: UI-PKG-001 (scripture pane + lower toolbar filter) → UI-PKG-002 (DictionaryTab SLI filtering)
   test.fixme(
@@ -156,6 +153,7 @@ test.describe('Enhanced Resources Journey Tests', () => {
     },
   );
 
+  // FIXME(GAP-token-attr-mapping): Editorial does not render words as role=link; word-click filter setup unavailable until alternate selector adopted.
   // @scenario TS-J-011 (covers FN-020 sub-task d, BHV-601)
   // WPs: UI-PKG-001 (filter state owner) → UI-PKG-002 → UI-PKG-003 → UI-PKG-004
   test.fixme(
@@ -190,6 +188,7 @@ test.describe('Enhanced Resources Journey Tests', () => {
     },
   );
 
+  // FIXME(GAP-token-attr-mapping): Word-click filter setup uses Editorial role=link selector that's not emitted.
   // @scenario TS-J-012 (covers FN-020 sub-task e, EVD-005)
   // WPs: UI-PKG-001 (clear filter button) → UI-PKG-002 (SLI clears + collapses detail)
   test.fixme(
@@ -219,6 +218,7 @@ test.describe('Enhanced Resources Journey Tests', () => {
   // Cross-WP Data Flow — Scope dropdown (BHV-305, BHV-601)
   // ═══════════════════════════════════════════════════════════════
 
+  // FIXME(GAP-scope-selector-wiring): Scope-selector combobox not wired in lower toolbar; scope change cannot be exercised via visible UI.
   // @scenario TS-J-020 (covers TS-048, BHV-305, BHV-601, EVD-003)
   // WPs: UI-PKG-001 (scope selector) → UI-PKG-002/003/004 (tabs reload)
   test.fixme('scope change propagates to research tabs', async ({ mainPage }) => {
@@ -257,44 +257,43 @@ test.describe('Enhanced Resources Journey Tests', () => {
 
   // @scenario TS-J-030 (covers FN-021, BHV-456, EVD-050)
   // WPs: UI-PKG-002 (DictionarySenseItem domain link) → UI-PKG-007 (SDV filtered)
-  test.fixme(
-    'clicking a dictionary domain row opens SemanticDomainViewer filtered by that domain',
-    async ({ mainPage }) => {
-      await openEnhancedResource(mainPage);
-      const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+  test('clicking a dictionary domain row opens SemanticDomainViewer filtered by that domain', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResource(mainPage);
+    const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
 
-      // Expand the first dictionary entry to surface the sense rows.
-      const firstEntry = er
-        .getByTestId('dictionary-entry-list')
-        .locator('[data-testid^="dictionary-entry-"]')
-        .first();
-      await firstEntry.click();
+    // Expand the first dictionary entry to surface the sense rows.
+    const firstEntry = er
+      .getByTestId('dictionary-entry-list')
+      .locator('[data-testid^="dictionary-entry-"]')
+      .first();
+    await firstEntry.click();
 
-      // Click the first Domain row. Per FN-021, the Domain value cell is
-      // wrapped in a Button variant=link; we locate by its accessible row
-      // label "Domain:" + a sibling link.
-      const domainRow = firstEntry.getByRole('row', { name: /Domain:?/i }).first();
-      const domainLink = domainRow.getByRole('link').first();
-      await domainLink.click();
+    // Click the first Domain row. Per FN-021, the Domain value cell is
+    // wrapped in a Button variant=link; we locate by its accessible row
+    // label "Domain:" + a sibling link.
+    const domainRow = firstEntry.getByRole('row', { name: /Domain:?/i }).first();
+    const domainLink = domainRow.getByRole('link').first();
+    await domainLink.click();
 
-      // SemanticDomainViewer opens (overlay Drawer/Dialog inside the same
-      // iframe). Per ui-spec-semantic-domain-viewer Test Contract:
-      //   - role="navigation" breadcrumb, role="tree" container
-      //   - the dictionary entries pane rendered via SLI
-      await expect(er.getByRole('navigation')).toBeVisible();
-      await expect(er.getByRole('tree')).toBeVisible();
+    // SemanticDomainViewer opens (overlay Drawer/Dialog inside the same
+    // iframe). Per ui-spec-semantic-domain-viewer Test Contract:
+    //   - role="navigation" breadcrumb, role="tree" container
+    //   - the dictionary entries pane rendered via SLI
+    await expect(er.getByRole('navigation')).toBeVisible();
+    await expect(er.getByRole('tree')).toBeVisible();
 
-      // The breadcrumb shows the path to the clicked domain — i.e., it
-      // contains text (we don't assert exact path because that depends on
-      // backend data; we only assert the cross-component handoff worked).
-      const breadcrumbItems = er.getByRole('navigation').getByRole('listitem');
-      await expect(breadcrumbItems.first()).toBeVisible();
+    // The breadcrumb shows the path to the clicked domain — i.e., it
+    // contains text (we don't assert exact path because that depends on
+    // backend data; we only assert the cross-component handoff worked).
+    const breadcrumbItems = er.getByRole('navigation').getByRole('listitem');
+    await expect(breadcrumbItems.first()).toBeVisible();
 
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/journey/JEVD-030-domain-row-opens-sdv.png',
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/journey/JEVD-030-domain-row-opens-sdv.png',
+    });
+  });
 
   // ═══════════════════════════════════════════════════════════════
   // Cross-WP Overlay Launch — Encyclopedia → ArticleViewer
@@ -302,78 +301,76 @@ test.describe('Enhanced Resources Journey Tests', () => {
 
   // @scenario TS-J-040 (covers TS-064, BHV-457, EVD-032, EVD-060)
   // WPs: UI-PKG-003 (encyclopedia entry list) → UI-PKG-006 (ArticleViewer)
-  test.fixme(
-    'clicking an encyclopedia article title opens ArticleViewer with article content',
-    async ({ mainPage }) => {
-      await openEnhancedResource(mainPage);
-      const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+  test('clicking an encyclopedia article title opens ArticleViewer with article content', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResource(mainPage);
+    const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
 
-      // Switch to Encyclopedia tab.
-      await er.getByRole('tab', { name: /Encyclopedia/i }).click();
-      const encyclopediaList = er.getByTestId('encyclopedia-entry-list');
-      await expect(encyclopediaList).toBeVisible();
+    // Switch to Encyclopedia tab.
+    await er.getByRole('tab', { name: /Encyclopedia/i }).click();
+    const encyclopediaList = er.getByTestId('encyclopedia-entry-list');
+    await expect(encyclopediaList).toBeVisible();
 
-      // Click the first article title link. Per ui-spec-encyclopedia-tab
-      // Test Contract, articleLink uses role=link inside an entry row.
-      const firstArticleLink = encyclopediaList
-        .locator('[data-testid^="encyclopedia-entry-"]')
-        .first()
-        .getByRole('link')
-        .first();
-      await firstArticleLink.click();
+    // Click the first article title link. Per ui-spec-encyclopedia-tab
+    // Test Contract, articleLink uses role=link inside an entry row.
+    const firstArticleLink = encyclopediaList
+      .locator('[data-testid^="encyclopedia-entry-"]')
+      .first()
+      .getByRole('link')
+      .first();
+    await firstArticleLink.click();
 
-      // ArticleViewer drawer opens with rendered article content
-      // (ui-spec-article-viewer: data-testid article-viewer-content).
-      const articleContent = er.getByTestId('article-viewer-content');
-      await expect(articleContent).toBeVisible();
-      // Article must have actual content (more than the loading skeleton).
-      const articleText = await articleContent.textContent();
-      expect((articleText ?? '').trim().length).toBeGreaterThan(0);
+    // ArticleViewer drawer opens with rendered article content
+    // (ui-spec-article-viewer: data-testid article-viewer-content).
+    const articleContent = er.getByTestId('article-viewer-content');
+    await expect(articleContent).toBeVisible();
+    // Article must have actual content (more than the loading skeleton).
+    const articleText = await articleContent.textContent();
+    expect((articleText ?? '').trim().length).toBeGreaterThan(0);
 
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/journey/JEVD-040-encyclopedia-opens-article-viewer.png',
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/journey/JEVD-040-encyclopedia-opens-article-viewer.png',
+    });
+  });
 
   // @scenario TS-J-041 (covers BHV-457, EVD-061)
   // WPs: UI-PKG-006 (ArticleViewer verse link) → UI-PKG-001 (scripture pane navigates)
-  test.fixme(
-    'clicking a verse link in ArticleViewer navigates the scripture pane',
-    async ({ mainPage }) => {
-      await openEnhancedResource(mainPage);
-      const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+  test('clicking a verse link in ArticleViewer navigates the scripture pane', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResource(mainPage);
+    const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
 
-      // Open an article (setup — same as TS-J-040)
-      await er.getByRole('tab', { name: /Encyclopedia/i }).click();
-      const encyclopediaList = er.getByTestId('encyclopedia-entry-list');
-      await expect(encyclopediaList).toBeVisible();
-      await encyclopediaList
-        .locator('[data-testid^="encyclopedia-entry-"]')
-        .first()
-        .getByRole('link')
-        .first()
-        .click();
+    // Open an article (setup — same as TS-J-040)
+    await er.getByRole('tab', { name: /Encyclopedia/i }).click();
+    const encyclopediaList = er.getByTestId('encyclopedia-entry-list');
+    await expect(encyclopediaList).toBeVisible();
+    await encyclopediaList
+      .locator('[data-testid^="encyclopedia-entry-"]')
+      .first()
+      .getByRole('link')
+      .first()
+      .click();
 
-      const articleContent = er.getByTestId('article-viewer-content');
-      await expect(articleContent).toBeVisible();
+    const articleContent = er.getByTestId('article-viewer-content');
+    await expect(articleContent).toBeVisible();
 
-      // Click the first verse-reference link inside the article. Per
-      // ui-spec-article-viewer, verseLink uses data-testid="verse-link-{ref}".
-      const verseLink = articleContent.locator('[data-testid^="verse-link-"]').first();
-      const verseRefAttr = await verseLink.getAttribute('data-testid');
-      expect(verseRefAttr).toMatch(/^verse-link-/);
-      await verseLink.click();
+    // Click the first verse-reference link inside the article. Per
+    // ui-spec-article-viewer, verseLink uses data-testid="verse-link-{ref}".
+    const verseLink = articleContent.locator('[data-testid^="verse-link-"]').first();
+    const verseRefAttr = await verseLink.getAttribute('data-testid');
+    expect(verseRefAttr).toMatch(/^verse-link-/);
+    await verseLink.click();
 
-      // Scripture pane should now reflect the navigated reference. The
-      // simplest cross-WP assertion is that the BCV reference label in the
-      // upper toolbar updates to a non-empty value (FN-015 wires this).
-      // The exact selector here matches the BCV slot once FN-015 is wired;
-      // if reconciliation finds a different slot during verify, update.
-      const scripturePane = er.getByTestId('er-scripture-pane');
-      await expect(scripturePane).toBeVisible();
-    },
-  );
+    // Scripture pane should now reflect the navigated reference. The
+    // simplest cross-WP assertion is that the BCV reference label in the
+    // upper toolbar updates to a non-empty value (FN-015 wires this).
+    // The exact selector here matches the BCV slot once FN-015 is wired;
+    // if reconciliation finds a different slot during verify, update.
+    const scripturePane = er.getByTestId('er-scripture-pane');
+    await expect(scripturePane).toBeVisible();
+  });
 
   // ═══════════════════════════════════════════════════════════════
   // Cross-WP Overlay Launch — Media tab → MediaViewer
@@ -381,41 +378,40 @@ test.describe('Enhanced Resources Journey Tests', () => {
 
   // @scenario TS-J-050 (covers TS-062, EVD-040)
   // WPs: UI-PKG-004 (MediaImagesTab thumbnails) → UI-PKG-005 (MediaViewer)
-  test.fixme(
-    'clicking a media thumbnail opens MediaViewer with image and controls',
-    async ({ mainPage }) => {
-      await openEnhancedResource(mainPage);
-      const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+  test('clicking a media thumbnail opens MediaViewer with image and controls', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResource(mainPage);
+    const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
 
-      // Switch to Media tab — UI-PKG-004 deferred-loading: thumbnails only
-      // render once tab is visible (BHV-359).
-      await er.getByRole('tab', { name: /Media/i }).click();
+    // Switch to Media tab — UI-PKG-004 deferred-loading: thumbnails only
+    // render once tab is visible (BHV-359).
+    await er.getByRole('tab', { name: /Media/i }).click();
 
-      // Click the first thumbnail. Media entry rows are rendered through
-      // ResourceList (thumbnail variant); the role of the thumbnail is button.
-      const thumbnails = er.locator('[data-testid^="media-entry-"]');
-      // Skip if the test verse has no media — this is acceptable for a
-      // first-pass journey but during verify the test data should be chosen
-      // to ensure at least one media entry exists.
-      if ((await thumbnails.count()) === 0) {
-        test.skip(
-          true,
-          'No media entries for the default ER reference; choose a verse with media for verify.',
-        );
-        return;
-      }
-      await thumbnails.first().click();
+    // Click the first thumbnail. Media entry rows are rendered through
+    // ResourceList (thumbnail variant); the role of the thumbnail is button.
+    const thumbnails = er.locator('[data-testid^="media-entry-"]');
+    // Skip if the test verse has no media — this is acceptable for a
+    // first-pass journey but during verify the test data should be chosen
+    // to ensure at least one media entry exists.
+    if ((await thumbnails.count()) === 0) {
+      test.skip(
+        true,
+        'No media entries for the default ER reference; choose a verse with media for verify.',
+      );
+      return;
+    }
+    await thumbnails.first().click();
 
-      // MediaViewer opens with the image, title, prev/next/zoom controls.
-      await expect(er.getByTestId('media-viewer-image')).toBeVisible();
-      await expect(er.getByTestId('media-viewer-zoom-in')).toBeVisible();
-      await expect(er.getByTestId('media-viewer-zoom-out')).toBeVisible();
+    // MediaViewer opens with the image, title, prev/next/zoom controls.
+    await expect(er.getByTestId('media-viewer-image')).toBeVisible();
+    await expect(er.getByTestId('media-viewer-zoom-in')).toBeVisible();
+    await expect(er.getByTestId('media-viewer-zoom-out')).toBeVisible();
 
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/journey/JEVD-050-media-thumbnail-opens-viewer.png',
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/journey/JEVD-050-media-thumbnail-opens-viewer.png',
+    });
+  });
 
   // ═══════════════════════════════════════════════════════════════
   // Info-icon → MarbleGuideForm (FN-016)
@@ -423,7 +419,7 @@ test.describe('Enhanced Resources Journey Tests', () => {
 
   // @scenario TS-J-060 (covers TS-065, FN-016, BHV-461, EVD-011)
   // WPs: UI-PKG-001 (info button + command) → UI-PKG-008 (Guide dialog)
-  test.fixme('clicking the info icon toggles MarbleGuideForm visibility', async ({ mainPage }) => {
+  test('clicking the info icon toggles MarbleGuideForm visibility', async ({ mainPage }) => {
     await openEnhancedResource(mainPage);
     const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
 
@@ -454,6 +450,7 @@ test.describe('Enhanced Resources Journey Tests', () => {
     });
   });
 
+  // FIXME(GAP-guide-reset): per-test extension-host reset hook missing; cannot reliably test persist-across-relaunch flow.
   // @scenario TS-J-061 (covers TS-066, BHV-461, BHV-465, EVD-012)
   // WPs: UI-PKG-008 (Guide checkbox + persistence) → UI-PKG-009 (relaunch path)
   test.fixme(
@@ -493,28 +490,27 @@ test.describe('Enhanced Resources Journey Tests', () => {
 
   // @scenario TS-J-070 (covers FN-017, FN-020 (b), BHV-319, EVD-004)
   // WPs: UI-PKG-001 (hamburger menu + ScripturePane reactivity)
-  test.fixme(
-    'toggling "Show footnotes" in hamburger menu shows the footnote pane',
-    async ({ mainPage }) => {
-      await openEnhancedResource(mainPage);
-      const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+  test('toggling "Show footnotes" in hamburger menu shows the footnote pane', async ({
+    mainPage,
+  }) => {
+    await openEnhancedResource(mainPage);
+    const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
 
-      // Open hamburger (TabMenu Button) in upper toolbar.
-      const hamburger = er.getByRole('button', { name: /Menu|More options|Hamburger/i }).first();
-      await hamburger.click();
+    // Open hamburger (TabMenu Button) in upper toolbar.
+    const hamburger = er.getByRole('button', { name: /Menu|More options|Hamburger/i }).first();
+    await hamburger.click();
 
-      // Click the "Show footnotes" menu item (toggle).
-      await er.getByRole('menuitem', { name: /Show footnotes/i }).click();
+    // Click the "Show footnotes" menu item (toggle).
+    await er.getByRole('menuitem', { name: /Show footnotes/i }).click();
 
-      // Footnote pane (ui-spec-marble-form: data-testid er-footnotes-pane)
-      // becomes visible.
-      await expect(er.getByTestId('er-footnotes-pane')).toBeVisible();
+    // Footnote pane (ui-spec-marble-form: data-testid er-footnotes-pane)
+    // becomes visible.
+    await expect(er.getByTestId('er-footnotes-pane')).toBeVisible();
 
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/journey/JEVD-070-footnotes-toggled.png',
-      });
-    },
-  );
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/journey/JEVD-070-footnotes-toggled.png',
+    });
+  });
 
   // ═══════════════════════════════════════════════════════════════
   // Smoke: cross-component render without console errors
@@ -522,36 +518,35 @@ test.describe('Enhanced Resources Journey Tests', () => {
 
   // @scenario TS-J-080 (covers EVD-001 + EVD-020 + EVD-030 cross-render smoke)
   // WPs: UI-PKG-001 + UI-PKG-002 + UI-PKG-003 + UI-PKG-004 (all tabs render together)
-  test.fixme(
-    'switching across all four research tabs renders without console errors',
-    async ({ mainPage }) => {
-      const consoleErrors: string[] = [];
-      mainPage.on('console', (msg) => {
-        if (msg.type() === 'error') consoleErrors.push(msg.text());
-      });
+  test('switching across all four research tabs renders without console errors', async ({
+    mainPage,
+  }) => {
+    const consoleErrors: string[] = [];
+    mainPage.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
 
-      await openEnhancedResource(mainPage);
-      const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await openEnhancedResource(mainPage);
+    const er = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
 
-      // Visit each tab and let it settle. Sequential by intent — each tab
-      // must finish settling before the next click — so we await inside
-      // reduce(). Using `reduce` instead of a for-of loop satisfies the
-      // project's no-restricted-syntax rule.
-      const tabNames = ['Dictionary', 'Encyclopedia', 'Media', 'Maps'] as const;
-      await tabNames.reduce<Promise<void>>(async (prev, tabName) => {
-        await prev;
-        await er.getByRole('tab', { name: new RegExp(tabName, 'i') }).click();
-        await mainPage.waitForTimeout(750);
-      }, Promise.resolve());
+    // Visit each tab and let it settle. Sequential by intent — each tab
+    // must finish settling before the next click — so we await inside
+    // reduce(). Using `reduce` instead of a for-of loop satisfies the
+    // project's no-restricted-syntax rule.
+    const tabNames = ['Dictionary', 'Encyclopedia', 'Media', 'Maps'] as const;
+    await tabNames.reduce<Promise<void>>(async (prev, tabName) => {
+      await prev;
+      await er.getByRole('tab', { name: new RegExp(tabName, 'i') }).click();
+      await mainPage.waitForTimeout(750);
+    }, Promise.resolve());
 
-      const criticalErrors = consoleErrors.filter(
-        (e) =>
-          !e.includes('DevTools') &&
-          !e.includes('favicon') &&
-          !e.includes('source map') &&
-          !e.includes('net::ERR_'),
-      );
-      expect(criticalErrors).toEqual([]);
-    },
-  );
+    const criticalErrors = consoleErrors.filter(
+      (e) =>
+        !e.includes('DevTools') &&
+        !e.includes('favicon') &&
+        !e.includes('source map') &&
+        !e.includes('net::ERR_'),
+    );
+    expect(criticalErrors).toEqual([]);
+  });
 });

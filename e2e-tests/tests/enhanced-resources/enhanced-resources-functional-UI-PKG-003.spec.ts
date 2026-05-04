@@ -40,33 +40,32 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
   // @scenario TS-060
   // BHV-354: BeforeNavigate URL routing - verifies the Encyclopedia tab can be reached via the
   // toolbar tab control once the Enhanced Resource window is opened.
-  test.fixme(
-    'should switch to Encyclopedia tab from toolbar after opening Enhanced Resource window',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should switch to Encyclopedia tab from toolbar after opening Enhanced Resource window', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      // Open the Enhanced Resource window via the platform menu (UI-PKG-009 registers this
-      // command; once wired, the menu path opens the ER WebView).
-      await openEnhancedResource(mainPage);
+    // Open the Enhanced Resource window via the platform menu (UI-PKG-009 registers this
+    // command; once wired, the menu path opens the ER WebView).
+    await openEnhancedResource(mainPage);
 
-      // Verify the dock tab appeared
-      const tab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
-      await expect(tab).toBeVisible({ timeout: 15_000 });
+    // Verify the dock tab appeared
+    const tab = mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i });
+    await expect(tab).toBeVisible({ timeout: 15_000 });
 
-      // Switch to the Encyclopedia tab inside the WebView
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      const encyclopediaTabTrigger = frame.getByRole('tab', { name: /Encyclopedia/i });
-      await encyclopediaTabTrigger.click();
+    // Switch to the Encyclopedia tab inside the WebView
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    const encyclopediaTabTrigger = frame.getByRole('tab', { name: /Encyclopedia/i });
+    await encyclopediaTabTrigger.click();
 
-      // Verify the EncyclopediaTab root is visible
-      await expect(frame.getByTestId(ENCYCLOPEDIA_TAB_TESTID)).toBeVisible({ timeout: 10_000 });
+    // Verify the EncyclopediaTab root is visible
+    await expect(frame.getByTestId(ENCYCLOPEDIA_TAB_TESTID)).toBeVisible({ timeout: 10_000 });
 
-      // EVD-030: Encyclopedia tab loaded — entries with article titles, teaser text
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-003/EVD-030-encyclopedia-tab-active.png',
-      });
-    },
-  );
+    // EVD-030: Encyclopedia tab loaded — entries with article titles, teaser text
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-003/EVD-030-encyclopedia-tab-active.png',
+    });
+  });
 
   // ═══════════════════════════════════════════════
   // Category 2: Render
@@ -74,39 +73,38 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
 
   // @scenario TS-060 (covers BHV-354: encyclopedia tab UI structure)
   // Verifies the static structure of the EncyclopediaTab renders correctly.
-  test.fixme(
-    'should render Encyclopedia tab root, header, and entry list when data is loaded',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should render Encyclopedia tab root, header, and entry list when data is loaded', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      // Navigate to ER window and Encyclopedia tab
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    // Navigate to ER window and Encyclopedia tab
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
 
-      // Verify EncyclopediaTab root and label
-      const tabRoot = frame.getByTestId(ENCYCLOPEDIA_TAB_TESTID);
-      await expect(tabRoot).toBeVisible();
-      await expect(tabRoot).toHaveAttribute('aria-label', /Encyclopedia/i);
+    // Verify EncyclopediaTab root and label
+    const tabRoot = frame.getByTestId(ENCYCLOPEDIA_TAB_TESTID);
+    await expect(tabRoot).toBeVisible();
+    await expect(tabRoot).toHaveAttribute('aria-label', /Encyclopedia/i);
 
-      // Verify the in-tab heading (small uppercase label) renders the localized tab name
-      await expect(tabRoot.getByText(/Encyclopedia/i).first()).toBeVisible();
+    // Verify the in-tab heading (small uppercase label) renders the localized tab name
+    await expect(tabRoot.getByText(/Encyclopedia/i).first()).toBeVisible();
 
-      // Verify at least one entry row renders. We don't assert a specific tokenId here —
-      // any encyclopedia-entry-* row matches the data-testid prefix.
-      const anyEntry = tabRoot.locator('[data-testid^="encyclopedia-entry-"]');
-      await expect(anyEntry.first()).toBeVisible({ timeout: 10_000 });
+    // Verify at least one entry row renders. We don't assert a specific tokenId here —
+    // any encyclopedia-entry-* row matches the data-testid prefix.
+    const anyEntry = tabRoot.locator('[data-testid^="encyclopedia-entry-"]');
+    await expect(anyEntry.first()).toBeVisible({ timeout: 10_000 });
 
-      // EVD-030: entries with article titles, teaser text
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-003/EVD-030-entry-list-rendered.png',
-      });
-    },
-  );
+    // EVD-030: entries with article titles, teaser text
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-003/EVD-030-entry-list-rendered.png',
+    });
+  });
 
   // ═══════════════════════════════════════════════
   // Category 3: Data Wiring
@@ -116,40 +114,39 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
   // Verifies entries are populated from real backend data (loadEncyclopedia + readArticle),
   // not stubbed/empty placeholders. Each entry row should show a transliteration headline and
   // a teaser preview pulled from the V1/V2-aware encyclopedia loader.
-  test.fixme(
-    'should display real encyclopedia entries with transliteration headline and teaser preview',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should display real encyclopedia entries with transliteration headline and teaser preview', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
 
-      const tabRoot = frame.getByTestId(ENCYCLOPEDIA_TAB_TESTID);
-      const firstEntry = tabRoot.locator('[data-testid^="encyclopedia-entry-"]').first();
-      await expect(firstEntry).toBeVisible({ timeout: 10_000 });
+    const tabRoot = frame.getByTestId(ENCYCLOPEDIA_TAB_TESTID);
+    const firstEntry = tabRoot.locator('[data-testid^="encyclopedia-entry-"]').first();
+    await expect(firstEntry).toBeVisible({ timeout: 10_000 });
 
-      // Headline (transliteration) — rendered as a clickable link inside the row.
-      const headline = firstEntry.getByRole('button').first();
-      const headlineText = (await headline.textContent())?.trim() ?? '';
-      expect(headlineText.length).toBeGreaterThan(0);
+    // Headline (transliteration) — rendered as a clickable link inside the row.
+    const headline = firstEntry.getByRole('button').first();
+    const headlineText = (await headline.textContent())?.trim() ?? '';
+    expect(headlineText.length).toBeGreaterThan(0);
 
-      // Teaser preview is rendered as a <p> following the headline; it should be non-empty
-      // (BHV-606 paragraph HTML formatting + BHV-358 truncation pattern).
-      const teaser = firstEntry.locator('p').first();
-      // Teaser is optional (only present when the first article has teaserText) — when it
-      // renders, it must contain real text (not an empty string or only whitespace).
-      const teaserCount = await teaser.count();
-      if (teaserCount > 0) {
-        const teaserText = (await teaser.textContent())?.trim() ?? '';
-        expect(teaserText.length).toBeGreaterThan(0);
-      }
-    },
-  );
+    // Teaser preview is rendered as a <p> following the headline; it should be non-empty
+    // (BHV-606 paragraph HTML formatting + BHV-358 truncation pattern).
+    const teaser = firstEntry.locator('p').first();
+    // Teaser is optional (only present when the first article has teaserText) — when it
+    // renders, it must contain real text (not an empty string or only whitespace).
+    const teaserCount = await teaser.count();
+    if (teaserCount > 0) {
+      const teaserText = (await teaser.textContent())?.trim() ?? '';
+      expect(teaserText.length).toBeGreaterThan(0);
+    }
+  });
 
   // ═══════════════════════════════════════════════
   // Category 4: Interaction
@@ -158,57 +155,57 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
   // @scenario TS-060 (BHV-354 expand handler) — selection opens the side-drawer detail
   // and the EncyclopediaEntryDetail panel renders the article title and a paragraph preview
   // (BHV-606 paragraph HTML formatting / BHV-604 V1/V2 format compatibility).
-  test.fixme(
-    'should open entry detail drawer and render article title + paragraph preview when an entry is selected',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should open entry detail drawer and render article title + paragraph preview when an entry is selected', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
-      await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
+    const frame = mainPage.frameLocator(`iframe[title*="Enhanced Resource"]`);
+    await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
 
-      const tabRoot = frame.getByTestId(ENCYCLOPEDIA_TAB_TESTID);
-      const firstEntry = tabRoot.locator('[data-testid^="encyclopedia-entry-"]').first();
-      await expect(firstEntry).toBeVisible({ timeout: 10_000 });
+    const tabRoot = frame.getByTestId(ENCYCLOPEDIA_TAB_TESTID);
+    const firstEntry = tabRoot.locator('[data-testid^="encyclopedia-entry-"]').first();
+    await expect(firstEntry).toBeVisible({ timeout: 10_000 });
 
-      // Click the entry row to select it (SourceLanguageIndexedList toggles drawer on row click;
-      // the headline button inside the row stops propagation, so click the row container itself).
-      await firstEntry.click();
+    // Click the entry row to select it (SourceLanguageIndexedList toggles drawer on row click;
+    // the headline button inside the row stops propagation, so click the row container itself).
+    await firstEntry.click();
 
-      // Detail panel should appear — at least one EncyclopediaEntryDetail with a title.
-      const anyDetail = tabRoot.locator('[data-testid^="encyclopedia-entry-detail-"]').first();
-      await expect(anyDetail).toBeVisible({ timeout: 10_000 });
+    // Detail panel should appear — at least one EncyclopediaEntryDetail with a title.
+    const anyDetail = tabRoot.locator('[data-testid^="encyclopedia-entry-detail-"]').first();
+    await expect(anyDetail).toBeVisible({ timeout: 10_000 });
 
-      // Article title (h4) is non-empty
-      const detailTitle = anyDetail.locator('h4').first();
-      const titleText = (await detailTitle.textContent())?.trim() ?? '';
-      expect(titleText.length).toBeGreaterThan(0);
+    // Article title (h4) is non-empty
+    const detailTitle = anyDetail.locator('h4').first();
+    const titleText = (await detailTitle.textContent())?.trim() ?? '';
+    expect(titleText.length).toBeGreaterThan(0);
 
-      // EVD-031: Expanded article preview with full content
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-003/EVD-031-entry-expanded.png',
-      });
+    // EVD-031: Expanded article preview with full content
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-003/EVD-031-entry-expanded.png',
+    });
 
-      // Eventually paragraph text loads (article fetch resolves) — verify at least one <p>
-      // appears under the detail panel and is non-empty (BHV-606).
-      const paragraph = anyDetail.locator('p').first();
-      await expect(paragraph).toBeVisible({ timeout: 10_000 });
-      const paragraphText = (await paragraph.textContent())?.trim() ?? '';
-      expect(paragraphText.length).toBeGreaterThan(0);
+    // Eventually paragraph text loads (article fetch resolves) — verify at least one <p>
+    // appears under the detail panel and is non-empty (BHV-606).
+    const paragraph = anyDetail.locator('p').first();
+    await expect(paragraph).toBeVisible({ timeout: 10_000 });
+    const paragraphText = (await paragraph.textContent())?.trim() ?? '';
+    expect(paragraphText.length).toBeGreaterThan(0);
 
-      // "Back to list" button is present at the top of the drawer; clicking it dismisses
-      // the detail panel and restores the list-only layout.
-      const backButton = frame.getByRole('button', { name: /Back to list/i });
-      await expect(backButton).toBeVisible();
-      await backButton.click();
-      await expect(anyDetail).toBeHidden({ timeout: 5_000 });
-    },
-  );
+    // "Back to list" button is present at the top of the drawer; clicking it dismisses
+    // the detail panel and restores the list-only layout.
+    const backButton = frame.getByRole('button', { name: /Back to list/i });
+    await expect(backButton).toBeVisible();
+    await backButton.click();
+    await expect(anyDetail).toBeHidden({ timeout: 5_000 });
+  });
 
+  // FIXME(GAP-context-menu-wiring): Right-click context menu requires upstream Editorial change or DOM-level delegation.
   // @scenario TS-058 (BHV-353: Copy surface form via right-click context menu)
   test.fixme(
     'should expose Copy surface form context menu item on right-click of encyclopedia entry',
@@ -245,6 +242,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     },
   );
 
+  // FIXME(GAP-context-menu-wiring): Right-click context menu requires upstream Editorial change or DOM-level delegation.
   // @scenario TS-059 (BHV-353: Copy lemma)
   test.fixme(
     'should expose Copy lemma context menu item on right-click of encyclopedia entry',
@@ -273,6 +271,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     },
   );
 
+  // FIXME(GAP-token-attr-mapping): Test references `[data-marble-token-id]` selector which Editorial does not emit; uses `mark.editor-typed-mark-external-marble-word` instead. Also depends on left-click word filter wiring.
   // FN-020(c): Word-overlay click in scripture pane → search bar + SLI propagation.
   // Clicking a word in the scripture pane submits that word into the toolbar filter input AND
   // applies it to the active tab's SourceLanguageIndexedList, opening detail for that word.
@@ -309,6 +308,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     },
   );
 
+  // FIXME(GAP-token-attr-mapping): Test references `[data-marble-token-id]` selector which Editorial does not emit; uses `mark.editor-typed-mark-external-marble-word` instead.
   // FN-020(d): Tab-switch propagation. With a word filter active, switching tabs preserves the
   // filter and re-opens the detail in the new tab. Variant: switch from Dictionary into
   // Encyclopedia with an active filter.
@@ -347,6 +347,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     },
   );
 
+  // FIXME(GAP-token-attr-mapping): Test references `[data-marble-token-id]` selector which Editorial does not emit.
   // FN-020(e): Clear-filter X button must clear input AND SLI filter AND hide detail.
   test.fixme(
     'should clear word filter and hide Encyclopedia detail when toolbar clear-filter button is clicked',
@@ -395,6 +396,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
   // Category 6: Edge Cases
   // ═══════════════════════════════════════════════
 
+  // FIXME(GAP-bcv-control-wiring): Empty-state requires navigating to a verse without entries; BCV control not yet wired (FN-015).
   // @scenario TS-056 (BHV-352: empty state - no data for scope)
   // Empty state variant: "no-data" -> "No data found for {scope}."
   test.fixme(
@@ -429,6 +431,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     },
   );
 
+  // FIXME(GAP-bcv-control-wiring): Driving "word-not-in-scope" requires navigating between verses; BCV control not yet wired.
   // @scenario TS-057 (BHV-352: empty state - filtered word not in verse range)
   // Empty state variant: "word-not-in-scope" -> "{word} does not occur in {scope}."
   test.fixme(
@@ -461,6 +464,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     },
   );
 
+  // FIXME(GAP-no-match-state): Driving the "no-match" empty state requires a filter input that matches a word with no encyclopedia entries; needs filter wiring + fixture word selection.
   // BHV-352 third variant: "no-match" -> "No data found for "{word}" in {scope}."
   // The filter word IS present in scope, but no encyclopedia entries match it.
   test.fixme(
@@ -492,6 +496,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-003 EncyclopediaTab)'
     },
   );
 
+  // FIXME(GAP-fn-023-source-language-rendering): FN-023 (per-row script + translation) is not yet implemented; presentational component still renders only transliteration headline.
   // FN-023: Encyclopedia rows must be rendered in source-language-aware form (Hebrew/Greek
   // script + transliteration + translation per hamburger-menu display-mode settings). The
   // current presentational EncyclopediaDisplayItem renders only the transliteration headline;

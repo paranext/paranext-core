@@ -42,7 +42,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
   // ═══════════════════════════════════════════════
 
   // @scenario TS-062
-  test.fixme('should open MediaViewer from Media tab via Maximize button', async ({ mainPage }) => {
+  test('should open MediaViewer from Media tab via Maximize button', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     // Open the Enhanced Resource window from the main Platform.Bible menu (UI-PKG-009).
@@ -57,7 +57,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
     await frame.getByRole('tab', { name: /Media/i }).click();
 
     // Click the first media entry to open the SourceLanguageIndexedList side drawer.
-    const firstMediaEntry = frame.locator('[data-testid^="media-entry-row-"]').first();
+    const firstMediaEntry = frame.locator('[data-testid^="media-entry-"]').first();
     await expect(firstMediaEntry).toBeVisible({ timeout: 15_000 });
     await firstMediaEntry.click();
 
@@ -82,164 +82,51 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
   // ═══════════════════════════════════════════════
 
   // @scenario TS-062
-  test.fixme(
-    'should display all expected controls (image, title, prev, next, zoom in/out, zoom percent, close)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should display all expected controls (image, title, prev, next, zoom in/out, zoom percent, close)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      // Open ER → Media tab → first entry → Maximize.
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    // Open ER → Media tab → first entry → Maximize.
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
-      await frame.getByRole('tab', { name: /Media/i }).click();
-      await frame.locator('[data-testid^="media-entry-row-"]').first().click();
-      await frame.getByRole('button', { name: /Maximize/i }).click();
+    const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
+    await frame.getByRole('tab', { name: /Media/i }).click();
+    await frame.locator('[data-testid^="media-entry-"]').first().click();
+    await frame.getByRole('button', { name: /Maximize/i }).click();
 
-      const viewer = frame.locator('[data-testid="media-viewer"]');
-      await expect(viewer).toBeVisible({ timeout: 5_000 });
+    const viewer = frame.locator('[data-testid="media-viewer"]');
+    await expect(viewer).toBeVisible({ timeout: 5_000 });
 
-      // Required selectors from Test Contract + media-viewer.component.tsx data-testids.
-      await expect(frame.locator('[data-testid="media-viewer-image"]')).toBeVisible();
-      await expect(frame.locator('[data-testid="media-viewer-zoom-percent"]')).toBeVisible();
-      await expect(frame.getByRole('button', { name: /Previous/i })).toBeVisible();
-      await expect(frame.getByRole('button', { name: /Next/i })).toBeVisible();
-      await expect(frame.getByRole('button', { name: /Zoom in/i })).toBeVisible();
-      await expect(frame.getByRole('button', { name: /Zoom out/i })).toBeVisible();
+    // Required selectors from Test Contract + media-viewer.component.tsx data-testids.
+    await expect(frame.locator('[data-testid="media-viewer-image"]')).toBeVisible();
+    await expect(frame.locator('[data-testid="media-viewer-zoom-percent"]')).toBeVisible();
+    await expect(frame.getByRole('button', { name: /Previous/i })).toBeVisible();
+    await expect(frame.getByRole('button', { name: /Next/i })).toBeVisible();
+    await expect(frame.getByRole('button', { name: /Zoom in/i })).toBeVisible();
+    await expect(frame.getByRole('button', { name: /Zoom out/i })).toBeVisible();
 
-      // Title is rendered via the shadcn DialogTitle slot — verify a non-empty title appears.
-      const dialogTitle = viewer.locator('[role="heading"]').first();
-      await expect(dialogTitle).toBeVisible();
-      const titleText = (await dialogTitle.textContent())?.trim() ?? '';
-      expect(titleText.length).toBeGreaterThan(0);
+    // Title is rendered via the shadcn DialogTitle slot — verify a non-empty title appears.
+    const dialogTitle = viewer.locator('[role="heading"]').first();
+    await expect(dialogTitle).toBeVisible();
+    const titleText = (await dialogTitle.textContent())?.trim() ?? '';
+    expect(titleText.length).toBeGreaterThan(0);
 
-      // DEF-UI-005: No video controls (image-only).
-      await expect(frame.locator('video')).toHaveCount(0);
-    },
-  );
+    // DEF-UI-005: No video controls (image-only).
+    await expect(frame.locator('video')).toHaveCount(0);
+  });
 
   // ═══════════════════════════════════════════════
   // Category 3: Data Wiring — real backend image bytes, real title, real grouping
   // ═══════════════════════════════════════════════
 
   // @scenario TS-062
-  test.fixme(
-    'should render real image bytes and real title from backend (BHV-612)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
-
-      const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
-      await frame.getByRole('tab', { name: /Media/i }).click();
-      await frame.locator('[data-testid^="media-entry-row-"]').first().click();
-      await frame.getByRole('button', { name: /Maximize/i }).click();
-
-      const image = frame.locator('[data-testid="media-viewer-image"]');
-      await expect(image).toBeVisible();
-
-      // The image src is wired to the `papi-er://images/{imageId}` protocol handler.
-      // (FN-009: connect-src is intentionally NOT permitted; img-src/media-src are.)
-      const src = await image.getAttribute('src');
-      expect(src).toBeTruthy();
-      expect(src).toMatch(/^papi-er:\/\/images\//);
-
-      // The image has a non-empty alt text (accessibility + data wiring proof).
-      const alt = await image.getAttribute('alt');
-      expect((alt ?? '').trim().length).toBeGreaterThan(0);
-
-      // Initial zoom percent reads 100% on first open (zoom resets when item changes).
-      const zoomPercent = await frame
-        .locator('[data-testid="media-viewer-zoom-percent"]')
-        .textContent();
-      expect(zoomPercent?.trim()).toBe('100%');
-    },
-  );
-
-  // ═══════════════════════════════════════════════
-  // Category 4: Interaction — prev/next navigation, zoom in/out, close
-  // ═══════════════════════════════════════════════
-
-  // @scenario TS-062
-  test.fixme(
-    'should advance to next image when Next is clicked (BHV-452)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
-
-      const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
-      await frame.getByRole('tab', { name: /Media/i }).click();
-      await frame.locator('[data-testid^="media-entry-row-"]').first().click();
-      await frame.getByRole('button', { name: /Maximize/i }).click();
-
-      const image = frame.locator('[data-testid="media-viewer-image"]');
-      await expect(image).toBeVisible();
-      const initialSrc = await image.getAttribute('src');
-
-      // Click Next — image src must change (BHV-452: cross-display-index navigation).
-      await frame.getByRole('button', { name: /Next/i }).click();
-
-      // Wait for the image src to change.
-      await expect.poll(async () => image.getAttribute('src')).not.toBe(initialSrc);
-
-      // After Next, the Previous button must be enabled (currentIndex > 0).
-      await expect(frame.getByRole('button', { name: /Previous/i })).toBeEnabled();
-
-      // Zoom must reset to 100% on navigation.
-      const zoomPercent = await frame
-        .locator('[data-testid="media-viewer-zoom-percent"]')
-        .textContent();
-      expect(zoomPercent?.trim()).toBe('100%');
-
-      // EVD-041: Next image displayed; prev button enabled.
-      await mainPage.screenshot({
-        path: `${SCREENSHOT_DIR}/EVD-041-after-next.png`,
-      });
-    },
-  );
-
-  // @scenario TS-062
-  test.fixme(
-    'should return to previous image when Previous is clicked (BHV-452)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
-
-      const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
-      await frame.getByRole('tab', { name: /Media/i }).click();
-      await frame.locator('[data-testid^="media-entry-row-"]').first().click();
-      await frame.getByRole('button', { name: /Maximize/i }).click();
-
-      const image = frame.locator('[data-testid="media-viewer-image"]');
-      const firstSrc = await image.getAttribute('src');
-
-      // Move forward then back.
-      await frame.getByRole('button', { name: /Next/i }).click();
-      await expect.poll(async () => image.getAttribute('src')).not.toBe(firstSrc);
-
-      await frame.getByRole('button', { name: /Previous/i }).click();
-      await expect.poll(async () => image.getAttribute('src')).toBe(firstSrc);
-
-      // Back at index 0: Previous becomes disabled (currentIndex === 0).
-      await expect(frame.getByRole('button', { name: /Previous/i })).toBeDisabled();
-    },
-  );
-
-  // @scenario TS-062
-  test.fixme('should zoom in when Zoom In is clicked (BHV-453)', async ({ mainPage }) => {
+  test('should render real image bytes and real title from backend (BHV-612)', async ({
+    mainPage,
+  }) => {
     await waitForAppReady(mainPage);
 
     await openEnhancedResource(mainPage);
@@ -249,7 +136,114 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
 
     const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
     await frame.getByRole('tab', { name: /Media/i }).click();
-    await frame.locator('[data-testid^="media-entry-row-"]').first().click();
+    await frame.locator('[data-testid^="media-entry-"]').first().click();
+    await frame.getByRole('button', { name: /Maximize/i }).click();
+
+    const image = frame.locator('[data-testid="media-viewer-image"]');
+    await expect(image).toBeVisible();
+
+    // The image src is wired to the `papi-er://images/{imageId}` protocol handler.
+    // (FN-009: connect-src is intentionally NOT permitted; img-src/media-src are.)
+    const src = await image.getAttribute('src');
+    expect(src).toBeTruthy();
+    expect(src).toMatch(/^papi-er:\/\/images\//);
+
+    // The image has a non-empty alt text (accessibility + data wiring proof).
+    const alt = await image.getAttribute('alt');
+    expect((alt ?? '').trim().length).toBeGreaterThan(0);
+
+    // Initial zoom percent reads 100% on first open (zoom resets when item changes).
+    const zoomPercent = await frame
+      .locator('[data-testid="media-viewer-zoom-percent"]')
+      .textContent();
+    expect(zoomPercent?.trim()).toBe('100%');
+  });
+
+  // ═══════════════════════════════════════════════
+  // Category 4: Interaction — prev/next navigation, zoom in/out, close
+  // ═══════════════════════════════════════════════
+
+  // @scenario TS-062
+  test('should advance to next image when Next is clicked (BHV-452)', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
+
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
+    await frame.getByRole('tab', { name: /Media/i }).click();
+    await frame.locator('[data-testid^="media-entry-"]').first().click();
+    await frame.getByRole('button', { name: /Maximize/i }).click();
+
+    const image = frame.locator('[data-testid="media-viewer-image"]');
+    await expect(image).toBeVisible();
+    const initialSrc = await image.getAttribute('src');
+
+    // Click Next — image src must change (BHV-452: cross-display-index navigation).
+    await frame.getByRole('button', { name: /Next/i }).click();
+
+    // Wait for the image src to change.
+    await expect.poll(async () => image.getAttribute('src')).not.toBe(initialSrc);
+
+    // After Next, the Previous button must be enabled (currentIndex > 0).
+    await expect(frame.getByRole('button', { name: /Previous/i })).toBeEnabled();
+
+    // Zoom must reset to 100% on navigation.
+    const zoomPercent = await frame
+      .locator('[data-testid="media-viewer-zoom-percent"]')
+      .textContent();
+    expect(zoomPercent?.trim()).toBe('100%');
+
+    // EVD-041: Next image displayed; prev button enabled.
+    await mainPage.screenshot({
+      path: `${SCREENSHOT_DIR}/EVD-041-after-next.png`,
+    });
+  });
+
+  // @scenario TS-062
+  test('should return to previous image when Previous is clicked (BHV-452)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
+    await frame.getByRole('tab', { name: /Media/i }).click();
+    await frame.locator('[data-testid^="media-entry-"]').first().click();
+    await frame.getByRole('button', { name: /Maximize/i }).click();
+
+    const image = frame.locator('[data-testid="media-viewer-image"]');
+    const firstSrc = await image.getAttribute('src');
+
+    // Move forward then back.
+    await frame.getByRole('button', { name: /Next/i }).click();
+    await expect.poll(async () => image.getAttribute('src')).not.toBe(firstSrc);
+
+    await frame.getByRole('button', { name: /Previous/i }).click();
+    await expect.poll(async () => image.getAttribute('src')).toBe(firstSrc);
+
+    // Back at index 0: Previous becomes disabled (currentIndex === 0).
+    await expect(frame.getByRole('button', { name: /Previous/i })).toBeDisabled();
+  });
+
+  // @scenario TS-062
+  test('should zoom in when Zoom In is clicked (BHV-453)', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
+
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
+    await frame.getByRole('tab', { name: /Media/i }).click();
+    await frame.locator('[data-testid^="media-entry-"]').first().click();
     await frame.getByRole('button', { name: /Maximize/i }).click();
 
     const zoomLabel = frame.locator('[data-testid="media-viewer-zoom-percent"]');
@@ -278,7 +272,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
   });
 
   // @scenario TS-062
-  test.fixme('should zoom out when Zoom Out is clicked', async ({ mainPage }) => {
+  test('should zoom out when Zoom Out is clicked', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 
     await openEnhancedResource(mainPage);
@@ -288,7 +282,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
 
     const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
     await frame.getByRole('tab', { name: /Media/i }).click();
-    await frame.locator('[data-testid^="media-entry-row-"]').first().click();
+    await frame.locator('[data-testid^="media-entry-"]').first().click();
     await frame.getByRole('button', { name: /Maximize/i }).click();
 
     const zoomLabel = frame.locator('[data-testid="media-viewer-zoom-percent"]');
@@ -305,40 +299,9 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
   });
 
   // @scenario TS-062
-  test.fixme(
-    'should close MediaViewer when the Dialog close affordance is used (BHV-452)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
-
-      const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
-      await frame.getByRole('tab', { name: /Media/i }).click();
-      await frame.locator('[data-testid^="media-entry-row-"]').first().click();
-      await frame.getByRole('button', { name: /Maximize/i }).click();
-
-      const viewer = frame.locator('[data-testid="media-viewer"]');
-      await expect(viewer).toBeVisible();
-
-      // Press Escape — shadcn Dialog closes on Escape with focus management.
-      await mainPage.keyboard.press('Escape');
-      await expect(viewer).toBeHidden();
-
-      // Returning to the underlying Media tab — the entry list is still visible.
-      await expect(frame.locator('[data-testid^="media-entry-row-"]').first()).toBeVisible();
-    },
-  );
-
-  // ═══════════════════════════════════════════════
-  // Category 5: Validation / Boundary states
-  // (No VAL-XXX entries in ui-spec; boundary states from Conditional UI Rules instead.)
-  // ═══════════════════════════════════════════════
-
-  // @scenario TS-062
-  test.fixme('should disable Zoom Out at 100% (zoomLevel <= 1.0)', async ({ mainPage }) => {
+  test('should close MediaViewer when the Dialog close affordance is used (BHV-452)', async ({
+    mainPage,
+  }) => {
     await waitForAppReady(mainPage);
 
     await openEnhancedResource(mainPage);
@@ -348,7 +311,37 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
 
     const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
     await frame.getByRole('tab', { name: /Media/i }).click();
-    await frame.locator('[data-testid^="media-entry-row-"]').first().click();
+    await frame.locator('[data-testid^="media-entry-"]').first().click();
+    await frame.getByRole('button', { name: /Maximize/i }).click();
+
+    const viewer = frame.locator('[data-testid="media-viewer"]');
+    await expect(viewer).toBeVisible();
+
+    // Press Escape — shadcn Dialog closes on Escape with focus management.
+    await mainPage.keyboard.press('Escape');
+    await expect(viewer).toBeHidden();
+
+    // Returning to the underlying Media tab — the entry list is still visible.
+    await expect(frame.locator('[data-testid^="media-entry-"]').first()).toBeVisible();
+  });
+
+  // ═══════════════════════════════════════════════
+  // Category 5: Validation / Boundary states
+  // (No VAL-XXX entries in ui-spec; boundary states from Conditional UI Rules instead.)
+  // ═══════════════════════════════════════════════
+
+  // @scenario TS-062
+  test('should disable Zoom Out at 100% (zoomLevel <= 1.0)', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
+
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
+    await frame.getByRole('tab', { name: /Media/i }).click();
+    await frame.locator('[data-testid^="media-entry-"]').first().click();
     await frame.getByRole('button', { name: /Maximize/i }).click();
 
     // Initial state: 100% — zoom-out disabled.
@@ -357,96 +350,91 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-005: MediaViewer)', (
   });
 
   // @scenario TS-062
-  test.fixme(
-    'should disable Previous at first image (currentIndex === 0)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should disable Previous at first image (currentIndex === 0)', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
-      await frame.getByRole('tab', { name: /Media/i }).click();
-      await frame.locator('[data-testid^="media-entry-row-"]').first().click();
-      await frame.getByRole('button', { name: /Maximize/i }).click();
+    const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
+    await frame.getByRole('tab', { name: /Media/i }).click();
+    await frame.locator('[data-testid^="media-entry-"]').first().click();
+    await frame.getByRole('button', { name: /Maximize/i }).click();
 
-      // First image: Previous must be disabled.
-      await expect(frame.getByRole('button', { name: /Previous/i })).toBeDisabled();
-    },
-  );
+    // First image: Previous must be disabled.
+    await expect(frame.getByRole('button', { name: /Previous/i })).toBeDisabled();
+  });
 
   // ═══════════════════════════════════════════════
   // Category 6: Edge Cases
   // ═══════════════════════════════════════════════
 
   // @scenario TS-062
-  test.fixme(
-    'should disable Next at last image (currentIndex === imageCount - 1)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should disable Next at last image (currentIndex === imageCount - 1)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
-      await frame.getByRole('tab', { name: /Media/i }).click();
-      await frame.locator('[data-testid^="media-entry-row-"]').first().click();
-      await frame.getByRole('button', { name: /Maximize/i }).click();
+    const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
+    await frame.getByRole('tab', { name: /Media/i }).click();
+    await frame.locator('[data-testid^="media-entry-"]').first().click();
+    await frame.getByRole('button', { name: /Maximize/i }).click();
 
-      // Click Next until the button disables — at most a small bounded loop. Each iteration must
-      // wait for the previous click to settle before checking enabled state, so awaits inside the
-      // loop are required (Playwright UI clicks are not parallelizable on a single page).
-      const nextButton = frame.getByRole('button', { name: /Next/i });
-      const MAX_STEPS = 50;
-      for (let i = 0; i < MAX_STEPS; i += 1) {
-        // sequential UI poll — must read state after each click before deciding to click again
-        // eslint-disable-next-line no-await-in-loop
-        if (!(await nextButton.isEnabled())) break;
-        // sequential UI click — must settle before checking enabled state on next iteration
-        // eslint-disable-next-line no-await-in-loop
-        await nextButton.click();
-      }
-      await expect(nextButton).toBeDisabled();
-    },
-  );
+    // Click Next until the button disables — at most a small bounded loop. Each iteration must
+    // wait for the previous click to settle before checking enabled state, so awaits inside the
+    // loop are required (Playwright UI clicks are not parallelizable on a single page).
+    const nextButton = frame.getByRole('button', { name: /Next/i });
+    const MAX_STEPS = 50;
+    for (let i = 0; i < MAX_STEPS; i += 1) {
+      // sequential UI poll — must read state after each click before deciding to click again
+      // eslint-disable-next-line no-await-in-loop
+      if (!(await nextButton.isEnabled())) break;
+      // sequential UI click — must settle before checking enabled state on next iteration
+      // eslint-disable-next-line no-await-in-loop
+      await nextButton.click();
+    }
+    await expect(nextButton).toBeDisabled();
+  });
 
   // @scenario TS-062
-  test.fixme(
-    'should not crash and should disable both nav buttons for a single-image group (imageCount === 1)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should not crash and should disable both nav buttons for a single-image group (imageCount === 1)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
-      await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
-        timeout: 15_000,
-      });
+    await openEnhancedResource(mainPage);
+    await expect(mainPage.locator('.dock-tab', { hasText: /Enhanced Resource/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
-      const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
-      await frame.getByRole('tab', { name: /Media/i }).click();
+    const frame = mainPage.frameLocator(`iframe[title="${ENHANCED_RESOURCE_FRAME_TITLE}"]`);
+    await frame.getByRole('tab', { name: /Media/i }).click();
 
-      // Find an entry whose group has exactly one image. The MediaEntryRow renders an occurrences
-      // count badge — entries with `(1)` are single-image groups.
-      const singletonEntry = frame
-        .locator('[data-testid^="media-entry-row-"]')
-        .filter({ hasText: /\(1\)/ })
-        .first();
+    // Find an entry whose group has exactly one image. The MediaEntryRow renders an occurrences
+    // count badge — entries with `(1)` are single-image groups.
+    const singletonEntry = frame
+      .locator('[data-testid^="media-entry-"]')
+      .filter({ hasText: /\(1\)/ })
+      .first();
 
-      // Skip if no single-image groups exist in this fixture.
-      if ((await singletonEntry.count()) === 0) {
-        test.skip(true, 'No single-image media group available in current fixture.');
-      }
+    // Skip if no single-image groups exist in this fixture.
+    if ((await singletonEntry.count()) === 0) {
+      test.skip(true, 'No single-image media group available in current fixture.');
+    }
 
-      await singletonEntry.click();
-      await frame.getByRole('button', { name: /Maximize/i }).click();
+    await singletonEntry.click();
+    await frame.getByRole('button', { name: /Maximize/i }).click();
 
-      // imageCount === 1 -> per spec, prev/next either hidden or disabled.
-      // The implementation chooses disabled (parent omits onPrev/onNext handlers).
-      await expect(frame.getByRole('button', { name: /Previous/i })).toBeDisabled();
-      await expect(frame.getByRole('button', { name: /Next/i })).toBeDisabled();
-    },
-  );
+    // imageCount === 1 -> per spec, prev/next either hidden or disabled.
+    // The implementation chooses disabled (parent omits onPrev/onNext handlers).
+    await expect(frame.getByRole('button', { name: /Previous/i })).toBeDisabled();
+    await expect(frame.getByRole('button', { name: /Next/i })).toBeDisabled();
+  });
 });

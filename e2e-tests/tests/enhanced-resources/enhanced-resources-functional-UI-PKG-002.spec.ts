@@ -112,20 +112,20 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
 
   // @scenario TS-069
   // BHV-353/-364 — SDBH dictionary selected for OT books
-  test.fixme(
-    'should display the SDBH dictionary label when navigated to an OT book',
-    async ({ mainPage }) => {
-      const frame = await openDictionaryTab(mainPage);
+  test('should display the SDBH dictionary label when navigated to an OT book', async ({
+    mainPage,
+  }) => {
+    const frame = await openDictionaryTab(mainPage);
 
-      // The webview is opened against the platform's current scroll-group reference. By default
-      // the test profile starts in Genesis (OT) so SDBH is expected. Component-builder phase will
-      // wire `useWebViewScrollGroupScrRef` (FN-015) to seed this.
-      const dictionaryTab = frame.getByTestId('dictionary-tab');
-      const ariaLabel = await dictionaryTab.getAttribute('aria-label');
-      expect(ariaLabel).toMatch(/SDBH/i);
-    },
-  );
+    // The webview is opened against the platform's current scroll-group reference. By default
+    // the test profile starts in Genesis (OT) so SDBH is expected. Component-builder phase will
+    // wire `useWebViewScrollGroupScrRef` (FN-015) to seed this.
+    const dictionaryTab = frame.getByTestId('dictionary-tab');
+    const ariaLabel = await dictionaryTab.getAttribute('aria-label');
+    expect(ariaLabel).toMatch(/SDBH/i);
+  });
 
+  // FIXME(GAP-bcv-control-wiring): BCV combobox to switch reference is not yet wired (FN-015).
   // @scenario TS-070
   // BHV-353/-364 — SDBG dictionary selected for NT/DC books
   test.fixme(
@@ -155,41 +155,40 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
   // @scenario TS-060, TS-069
   // BHV-601 (Scope-Based Link Filtering — entries reflect current scope)
   // BHV-615 (POS translation — translated POS visible on detail rows)
-  test.fixme(
-    'should populate dictionary entries from backend for current scope',
-    async ({ mainPage }) => {
-      const frame = await openDictionaryTab(mainPage);
+  test('should populate dictionary entries from backend for current scope', async ({
+    mainPage,
+  }) => {
+    const frame = await openDictionaryTab(mainPage);
 
-      // At least one entry row must appear (default scope = current verse, default ref = Gen 1:1
-      // which has multiple linked words — TS-069 / BHV-601). Entries are addressed by tokenId via
-      // data-testid="dictionary-entry-{tokenId}".
-      const anyEntryRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
-      await expect(anyEntryRow).toBeVisible({ timeout: 15_000 });
+    // At least one entry row must appear (default scope = current verse, default ref = Gen 1:1
+    // which has multiple linked words — TS-069 / BHV-601). Entries are addressed by tokenId via
+    // data-testid="dictionary-entry-{tokenId}".
+    const anyEntryRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
+    await expect(anyEntryRow).toBeVisible({ timeout: 15_000 });
 
-      // The entry row's source-language word is non-empty (real lemma text from backend).
-      const sourceText = await anyEntryRow.locator('button[aria-label]').first().innerText();
-      expect(sourceText.trim().length).toBeGreaterThan(0);
+    // The entry row's source-language word is non-empty (real lemma text from backend).
+    const sourceText = await anyEntryRow.locator('button[aria-label]').first().innerText();
+    expect(sourceText.trim().length).toBeGreaterThan(0);
 
-      // Open the detail panel by clicking the row body (single-select expansion).
-      await anyEntryRow.click();
+    // Open the detail panel by clicking the row body (single-select expansion).
+    await anyEntryRow.click();
 
-      // Detail panel must mount with at least one sense; sense IDs come from backend
-      // (DictionaryEntryData via M-006 readDictionaryEntry).
-      const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
-      await expect(detail).toBeVisible({ timeout: 10_000 });
-      const senseRow = detail.locator('[data-testid^="dictionary-sense-"]').first();
-      await expect(senseRow).toBeVisible();
+    // Detail panel must mount with at least one sense; sense IDs come from backend
+    // (DictionaryEntryData via M-006 readDictionaryEntry).
+    const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
+    await expect(detail).toBeVisible({ timeout: 10_000 });
+    const senseRow = detail.locator('[data-testid^="dictionary-sense-"]').first();
+    await expect(senseRow).toBeVisible();
 
-      // Sense definition text non-empty.
-      const senseDefinition = await senseRow.innerText();
-      expect(senseDefinition.trim().length).toBeGreaterThan(0);
+    // Sense definition text non-empty.
+    const senseDefinition = await senseRow.innerText();
+    expect(senseDefinition.trim().length).toBeGreaterThan(0);
 
-      // EVD-021: expanded entry detail with senses visible.
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-002/EVD-021-entry-expanded.png',
-      });
-    },
-  );
+    // EVD-021: expanded entry detail with senses visible.
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-002/EVD-021-entry-expanded.png',
+    });
+  });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Category 4: Interaction
@@ -197,99 +196,95 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
 
   // @scenario TS-060
   // BHV-354 — clicking source word filters MarbleForm + opens detail (FN-020 c)
-  test.fixme(
-    'clicking a source-language word should filter MarbleForm to that word',
-    async ({ mainPage }) => {
-      const frame = await openDictionaryTab(mainPage);
+  test('clicking a source-language word should filter MarbleForm to that word', async ({
+    mainPage,
+  }) => {
+    const frame = await openDictionaryTab(mainPage);
 
-      // Click the source-text button on the first entry row.
-      const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
-      const sourceWordBtn = firstRow.locator('button[aria-label]').first();
-      const lemma = (await sourceWordBtn.innerText()).trim();
-      expect(lemma.length).toBeGreaterThan(0);
+    // Click the source-text button on the first entry row.
+    const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    const sourceWordBtn = firstRow.locator('button[aria-label]').first();
+    const lemma = (await sourceWordBtn.innerText()).trim();
+    expect(lemma.length).toBeGreaterThan(0);
 
-      await sourceWordBtn.click();
+    await sourceWordBtn.click();
 
-      // The lower-toolbar filter input (search bar) must reflect the clicked lemma. The filter
-      // input lives in the EnhancedResourceTabBar (UI-PKG-001) — selector by role=searchbox or
-      // textbox with the localized "Filter" placeholder.
-      const filterInput = frame
-        .getByRole('searchbox')
-        .or(frame.getByRole('textbox', { name: /Filter|Search/i }));
-      await expect(filterInput.first()).toHaveValue(new RegExp(lemma, 'i'), { timeout: 5_000 });
+    // The lower-toolbar filter input (search bar) must reflect the clicked lemma. The filter
+    // input lives in the EnhancedResourceTabBar (UI-PKG-001) — selector by role=searchbox or
+    // textbox with the localized "Filter" placeholder.
+    const filterInput = frame
+      .getByRole('searchbox')
+      .or(frame.getByRole('textbox', { name: /Filter|Search/i }));
+    await expect(filterInput.first()).toHaveValue(new RegExp(lemma, 'i'), { timeout: 5_000 });
 
-      // EVD-022: filter applied — only matching entries visible.
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-002/EVD-022-filter-applied.png',
-      });
-    },
-  );
+    // EVD-022: filter applied — only matching entries visible.
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-002/EVD-022-filter-applied.png',
+    });
+  });
 
   // @scenario TS-060
   // BHV-354 — entry-level "Occurrences in all books" link routes to MarbleForm reference change
-  test.fixme(
-    'clicking entry-level all-occurrences link should navigate MarbleForm',
-    async ({ mainPage }) => {
-      const frame = await openDictionaryTab(mainPage);
+  test('clicking entry-level all-occurrences link should navigate MarbleForm', async ({
+    mainPage,
+  }) => {
+    const frame = await openDictionaryTab(mainPage);
 
-      // Open detail panel for first entry.
-      const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
-      await firstRow.click();
+    // Open detail panel for first entry.
+    const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    await firstRow.click();
 
-      const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
-      await expect(detail).toBeVisible({ timeout: 10_000 });
+    const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
+    await expect(detail).toBeVisible({ timeout: 10_000 });
 
-      const allOccLink = detail.locator(
-        '[data-testid^="dictionary-entry-detail-all-occurrences-"]',
-      );
-      await expect(allOccLink).toBeVisible();
+    const allOccLink = detail.locator('[data-testid^="dictionary-entry-detail-all-occurrences-"]');
+    await expect(allOccLink).toBeVisible();
 
-      // The link label includes the total count, e.g. "Occurrences in all books (24)".
-      const linkText = await allOccLink.innerText();
-      expect(linkText).toMatch(/\d+/); // contains a number (count)
+    // The link label includes the total count, e.g. "Occurrences in all books (24)".
+    const linkText = await allOccLink.innerText();
+    expect(linkText).toMatch(/\d+/); // contains a number (count)
 
-      // Clicking it triggers a navigation through onAllOccurrencesClick — verified by the
-      // BCV/reference indicator updating. The MarbleForm reference indicator selector is
-      // owned by UI-PKG-001 — assert generic visibility of detail closing or filter dropping.
-      await allOccLink.click();
-      // Expect we have navigated (detail panel may or may not stay; key invariant is no error
-      // banner appeared).
-      await expect(detail).toBeVisible({ timeout: 5_000 });
-    },
-  );
+    // Clicking it triggers a navigation through onAllOccurrencesClick — verified by the
+    // BCV/reference indicator updating. The MarbleForm reference indicator selector is
+    // owned by UI-PKG-001 — assert generic visibility of detail closing or filter dropping.
+    await allOccLink.click();
+    // Expect we have navigated (detail panel may or may not stay; key invariant is no error
+    // banner appeared).
+    await expect(detail).toBeVisible({ timeout: 5_000 });
+  });
 
   // @scenario TS-060
   // BHV-354 / FN-022 — sense-level occurrences (number-only label + tooltip)
-  test.fixme(
-    'sense-level occurrences link should show count-only with descriptive tooltip',
-    async ({ mainPage }) => {
-      const frame = await openDictionaryTab(mainPage);
+  test('sense-level occurrences link should show count-only with descriptive tooltip', async ({
+    mainPage,
+  }) => {
+    const frame = await openDictionaryTab(mainPage);
 
-      const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
-      await firstRow.click();
+    const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    await firstRow.click();
 
-      const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
-      await expect(detail).toBeVisible({ timeout: 10_000 });
+    const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
+    await expect(detail).toBeVisible({ timeout: 10_000 });
 
-      const senseOccLink = detail.locator('[data-testid^="dictionary-sense-occurrences-"]').first();
-      await expect(senseOccLink).toBeVisible();
+    const senseOccLink = detail.locator('[data-testid^="dictionary-sense-occurrences-"]').first();
+    await expect(senseOccLink).toBeVisible();
 
-      // FN-022: visible label is "(N)" — number only, wrapped in parentheses.
-      const linkText = (await senseOccLink.innerText()).trim();
-      expect(linkText).toMatch(/^\(\d+\)$/);
+    // FN-022: visible label is "(N)" — number only, wrapped in parentheses.
+    const linkText = (await senseOccLink.innerText()).trim();
+    expect(linkText).toMatch(/^\(\d+\)$/);
 
-      // FN-022: hover tooltip text matches "Find sense {n} of {lexeme} in all books ({x} occurrences)".
-      await senseOccLink.hover();
-      const tooltip = frame.getByRole('tooltip');
-      await expect(tooltip).toBeVisible();
-      const tooltipText = await tooltip.innerText();
-      expect(tooltipText).toMatch(/Find sense \d+ of .+ in all books \(\d+ occurrences\)/i);
-    },
-  );
+    // FN-022: hover tooltip text matches "Find sense {n} of {lexeme} in all books ({x} occurrences)".
+    await senseOccLink.hover();
+    const tooltip = frame.getByRole('tooltip');
+    await expect(tooltip).toBeVisible();
+    const tooltipText = await tooltip.innerText();
+    expect(tooltipText).toMatch(/Find sense \d+ of .+ in all books \(\d+ occurrences\)/i);
+  });
 
+  // FIXME(GAP-context-menu-wiring): Editorial's onClick fires on left-click only; right-click context menu requires upstream Editorial change or DOM-level delegation.
   // @scenario TS-058
   // BHV-353 — Right-click + Copy surface form (Original / Hebrew script for OT books)
   test.fixme(
@@ -330,6 +325,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
     },
   );
 
+  // FIXME(GAP-context-menu-wiring): Editorial's onClick fires on left-click only; right-click context menu requires upstream Editorial change or DOM-level delegation. Also depends on GAP-bcv-control-wiring.
   // @scenario TS-059
   // BHV-353 — Right-click + Copy lemma (Greek lemma + transliteration for NT books)
   test.fixme(
@@ -365,122 +361,118 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
 
   // @scenario TS-060 (cross-component propagation)
   // FN-020 (d) — switching tabs propagates the active filter to the new tab's SLI
-  test.fixme(
-    'switching tabs after a word click should retain the word filter on the new tab',
-    async ({ mainPage }) => {
-      const frame = await openDictionaryTab(mainPage);
+  test('switching tabs after a word click should retain the word filter on the new tab', async ({
+    mainPage,
+  }) => {
+    const frame = await openDictionaryTab(mainPage);
 
-      // Click a source word in the dictionary tab to set the filter.
-      const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
-      const sourceWordBtn = firstRow.locator('button[aria-label]').first();
-      const lemma = (await sourceWordBtn.innerText()).trim();
-      await sourceWordBtn.click();
+    // Click a source word in the dictionary tab to set the filter.
+    const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    const sourceWordBtn = firstRow.locator('button[aria-label]').first();
+    const lemma = (await sourceWordBtn.innerText()).trim();
+    await sourceWordBtn.click();
 
-      // Switch to Encyclopedia tab. The same lemma must be applied to its filter input.
-      await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
+    // Switch to Encyclopedia tab. The same lemma must be applied to its filter input.
+    await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
 
-      const filterInput = frame
-        .getByRole('searchbox')
-        .or(frame.getByRole('textbox', { name: /Filter|Search/i }));
-      await expect(filterInput.first()).toHaveValue(new RegExp(lemma, 'i'), { timeout: 5_000 });
+    const filterInput = frame
+      .getByRole('searchbox')
+      .or(frame.getByRole('textbox', { name: /Filter|Search/i }));
+    await expect(filterInput.first()).toHaveValue(new RegExp(lemma, 'i'), { timeout: 5_000 });
 
-      // Return to Dictionary; filter still applied (filtered list visible).
-      await frame.getByRole('tab', { name: /Dictionary/i }).click();
-      await expect(frame.getByTestId('dictionary-tab')).toBeVisible();
-      await expect(filterInput.first()).toHaveValue(new RegExp(lemma, 'i'));
-    },
-  );
+    // Return to Dictionary; filter still applied (filtered list visible).
+    await frame.getByRole('tab', { name: /Dictionary/i }).click();
+    await expect(frame.getByTestId('dictionary-tab')).toBeVisible();
+    await expect(filterInput.first()).toHaveValue(new RegExp(lemma, 'i'));
+  });
 
   // @scenario TS-060
   // FN-020 (e) — clear-filter button clears input and dismisses any open detail
-  test.fixme(
-    'clearing the filter should reset the dictionary list and hide the open detail',
-    async ({ mainPage }) => {
-      const frame = await openDictionaryTab(mainPage);
+  test('clearing the filter should reset the dictionary list and hide the open detail', async ({
+    mainPage,
+  }) => {
+    const frame = await openDictionaryTab(mainPage);
 
-      const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
-      await firstRow.locator('button[aria-label]').first().click();
+    const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    await firstRow.locator('button[aria-label]').first().click();
 
-      // Detail open after click.
-      const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
-      await expect(detail).toBeVisible({ timeout: 10_000 });
+    // Detail open after click.
+    const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
+    await expect(detail).toBeVisible({ timeout: 10_000 });
 
-      // Clear filter via the X button on the search input.
-      const filterInput = frame
-        .getByRole('searchbox')
-        .or(frame.getByRole('textbox', { name: /Filter|Search/i }));
-      const clearBtn = frame.getByRole('button', { name: /Clear filter|Clear/i });
-      await clearBtn.click();
+    // Clear filter via the X button on the search input.
+    const filterInput = frame
+      .getByRole('searchbox')
+      .or(frame.getByRole('textbox', { name: /Filter|Search/i }));
+    const clearBtn = frame.getByRole('button', { name: /Clear filter|Clear/i });
+    await clearBtn.click();
 
-      await expect(filterInput.first()).toHaveValue('');
-      // Detail panel must have closed.
-      await expect(detail).toBeHidden({ timeout: 5_000 });
-    },
-  );
+    await expect(filterInput.first()).toHaveValue('');
+    // Detail panel must have closed.
+    await expect(detail).toBeHidden({ timeout: 5_000 });
+  });
 
   // @scenario TS-060 / FN-021
   // Domain row in detail's sense table is clickable → opens SDV filtered-by-domain
-  test.fixme(
-    'clicking a Domain link in a sense row should open the SemanticDomainViewer dialog',
-    async ({ mainPage }) => {
-      const frame = await openDictionaryTab(mainPage);
+  test('clicking a Domain link in a sense row should open the SemanticDomainViewer dialog', async ({
+    mainPage,
+  }) => {
+    const frame = await openDictionaryTab(mainPage);
 
-      const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
-      await firstRow.click();
+    const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    await firstRow.click();
 
-      const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
-      await expect(detail).toBeVisible({ timeout: 10_000 });
+    const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
+    await expect(detail).toBeVisible({ timeout: 10_000 });
 
-      // First sense's Domain link (FN-021: per-row Button variant=link). The text comes from the
-      // backend SemanticDomainRef name; we match by the Domain row's visible <dt> label and click
-      // the adjacent <dd> button.
-      const senseRow = detail.locator('[data-testid^="dictionary-sense-"]').first();
-      const domainBtn = senseRow
-        .getByRole('button')
-        .filter({ hasNotText: /^\(\d+\)$/ })
-        .first();
-      await expect(domainBtn).toBeVisible();
-      await domainBtn.click();
+    // First sense's Domain link (FN-021: per-row Button variant=link). The text comes from the
+    // backend SemanticDomainRef name; we match by the Domain row's visible <dt> label and click
+    // the adjacent <dd> button.
+    const senseRow = detail.locator('[data-testid^="dictionary-sense-"]').first();
+    const domainBtn = senseRow
+      .getByRole('button')
+      .filter({ hasNotText: /^\(\d+\)$/ })
+      .first();
+    await expect(domainBtn).toBeVisible();
+    await domainBtn.click();
 
-      // SDV dialog opens (UI-PKG-007). Use generic Dialog role with accessible name pattern.
-      const sdvDialog = mainPage.getByRole('dialog', { name: /Semantic Domain/i });
-      await expect(sdvDialog).toBeVisible({ timeout: 10_000 });
-    },
-  );
+    // SDV dialog opens (UI-PKG-007). Use generic Dialog role with accessible name pattern.
+    const sdvDialog = mainPage.getByRole('dialog', { name: /Semantic Domain/i });
+    await expect(sdvDialog).toBeVisible({ timeout: 10_000 });
+  });
 
   // @scenario TS-060 / FN-018
   // Helpfulness Yes/No + "Give feedback..." link become visible after answering
-  test.fixme(
-    'answering "Was this helpful?" should reveal the Give feedback link',
-    async ({ mainPage }) => {
-      const frame = await openDictionaryTab(mainPage);
+  test('answering "Was this helpful?" should reveal the Give feedback link', async ({
+    mainPage,
+  }) => {
+    const frame = await openDictionaryTab(mainPage);
 
-      const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
-      await expect(firstRow).toBeVisible({ timeout: 15_000 });
-      await firstRow.click();
+    const firstRow = frame.locator('[data-testid^="dictionary-entry-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    await firstRow.click();
 
-      const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
-      await expect(detail).toBeVisible({ timeout: 10_000 });
+    const detail = frame.locator('[data-testid^="dictionary-entry-detail-"]').first();
+    await expect(detail).toBeVisible({ timeout: 10_000 });
 
-      // The Give feedback link is hidden until an answer is given.
-      const giveFeedbackInitial = detail.locator(
-        '[data-testid^="dictionary-entry-detail-give-feedback-"]',
-      );
-      await expect(giveFeedbackInitial).toHaveCount(0);
+    // The Give feedback link is hidden until an answer is given.
+    const giveFeedbackInitial = detail.locator(
+      '[data-testid^="dictionary-entry-detail-give-feedback-"]',
+    );
+    await expect(giveFeedbackInitial).toHaveCount(0);
 
-      // Click the "Yes" radio of the helpfulness RadioGroup (label match).
-      await detail.getByRole('radio', { name: /Yes/i }).click();
+    // Click the "Yes" radio of the helpfulness RadioGroup (label match).
+    await detail.getByRole('radio', { name: /Yes/i }).click();
 
-      // Now the give-feedback link appears.
-      const giveFeedbackAfter = detail.locator(
-        '[data-testid^="dictionary-entry-detail-give-feedback-"]',
-      );
-      await expect(giveFeedbackAfter).toBeVisible();
-    },
-  );
+    // Now the give-feedback link appears.
+    const giveFeedbackAfter = detail.locator(
+      '[data-testid^="dictionary-entry-detail-give-feedback-"]',
+    );
+    await expect(giveFeedbackAfter).toBeVisible();
+  });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Category 5: Validation
@@ -494,6 +486,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
   // Category 6: Edge Cases
   // ═══════════════════════════════════════════════════════════════════════════
 
+  // FIXME(GAP-bcv-control-wiring): BCV combobox to switch reference is not yet wired (FN-015) - needed to drive empty-state.
   // @scenario TS-056
   // BHV-352 — empty state when no data found in current scope
   test.fixme(
@@ -526,29 +519,29 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-002 DictionaryTab)', 
 
   // @scenario TS-057
   // BHV-352 — empty state when filtered word does not occur in current scope
-  test.fixme(
-    'should display "word not in scope" empty state when filter matches no entries',
-    async ({ mainPage }) => {
-      const frame = await openDictionaryTab(mainPage);
+  test('should display "word not in scope" empty state when filter matches no entries', async ({
+    mainPage,
+  }) => {
+    const frame = await openDictionaryTab(mainPage);
 
-      // Type a word into the lower-toolbar filter that cannot occur in Genesis 1:1.
-      const filterInput = frame
-        .getByRole('searchbox')
-        .or(frame.getByRole('textbox', { name: /Filter|Search/i }));
-      await filterInput.first().fill('zzznotaword');
+    // Type a word into the lower-toolbar filter that cannot occur in Genesis 1:1.
+    const filterInput = frame
+      .getByRole('searchbox')
+      .or(frame.getByRole('textbox', { name: /Filter|Search/i }));
+    await filterInput.first().fill('zzznotaword');
 
-      // The empty-state message appears with the localized template
-      // "{word} does not occur in {scope}".
-      const tab = frame.getByTestId('dictionary-tab');
-      await expect(tab.getByText(/zzznotaword.*does not occur/i)).toBeVisible({ timeout: 10_000 });
+    // The empty-state message appears with the localized template
+    // "{word} does not occur in {scope}".
+    const tab = frame.getByTestId('dictionary-tab');
+    await expect(tab.getByText(/zzznotaword.*does not occur/i)).toBeVisible({ timeout: 10_000 });
 
-      // EVD-023: filtered empty state visible.
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-002/EVD-023-empty-state-no-match.png',
-      });
-    },
-  );
+    // EVD-023: filtered empty state visible.
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-002/EVD-023-empty-state-no-match.png',
+    });
+  });
 
+  // FIXME(GAP-context-menu-wiring): Right-click context menu requires upstream Editorial change or DOM-level delegation.
   // @scenario TS-051 (multi-lemma context-menu grouping)
   // BHV-308 / BHV-353 — words linked to multiple lemmas produce per-lemma submenus
   test.fixme(

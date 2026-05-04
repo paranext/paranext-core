@@ -17,10 +17,14 @@ import type { LocalizeKey, LocalizedStringValue, ScrollGroupId } from 'platform-
 import { formatScrRef, formatScrRefRange, isPlatformError } from 'platform-bible-utils';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { convertMarbleChapterXml, type MarbleAnnotation } from '../lib/marble-converter';
-import { EnhancedScripturePane } from '../components/scripture-pane/scripture-pane.component';
+import {
+  EnhancedScripturePane,
+  ENHANCED_SCRIPTURE_PANE_STRING_KEYS,
+} from '../components/scripture-pane/scripture-pane.component';
 import {
   EnhancedResourceTabBar,
   EnhancedResourceTopToolbar,
+  TOOLBAR_STRING_KEYS,
   type HighlightMode,
   type MarbleScope,
   type ResearchTab,
@@ -759,6 +763,8 @@ export const EMPTY_RIBBON_STATES: RibbonStates = {
  */
 const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   ...ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS,
+  ...ENHANCED_SCRIPTURE_PANE_STRING_KEYS,
+  ...TOOLBAR_STRING_KEYS,
   ...DICTIONARY_TAB_STRING_KEYS,
   ...ENCYCLOPEDIA_TAB_STRING_KEYS,
   ...MEDIA_IMAGES_TAB_STRING_KEYS,
@@ -767,11 +773,6 @@ const WIRING_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   ...ARTICLE_VIEWER_STRING_KEYS,
   ...SEMANTIC_DOMAIN_VIEWER_STRING_KEYS,
   ...MARBLE_GUIDE_STRING_KEYS,
-  // Toolbar / scope labels surface in empty-state templates.
-  '%enhancedResources_toolbar_scope_currentVerse%',
-  '%enhancedResources_toolbar_scope_currentSection%',
-  '%enhancedResources_toolbar_scope_currentChapter%',
-  '%enhancedResources_toolbar_scope_currentSense%',
 ];
 
 /** Network object id for the Enhanced Resources composition root (see EnhancedResourceFactory.cs). */
@@ -1287,7 +1288,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   useWebViewState,
   state: savedWebViewState,
 }: WebViewProps) {
-  // The keys reference must be stable across renders - WIRING_LOCALIZED_STRING_KEYS is module-level.
+  // The keys reference must be stable across renders. WIRING_LOCALIZED_STRING_KEYS is module-level.
   const [stringsBag, isLoadingStrings] = useLocalizedStrings(WIRING_LOCALIZED_STRING_KEYS);
   const stringsForShell: Record<string, LocalizedStringValue | undefined> = { ...stringsBag };
 

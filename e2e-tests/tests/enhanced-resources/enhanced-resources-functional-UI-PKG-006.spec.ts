@@ -68,272 +68,256 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-006: ArticleViewer)',
   // ===============================================
 
   // @scenario TS-064
-  test.fixme(
-    'should open ArticleViewer dialog from encyclopedia entry article link',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should open ArticleViewer dialog from encyclopedia entry article link', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
+    await openEnhancedResource(mainPage);
 
-      const frame = mainPage.frameLocator('iframe[title="Enhanced Resource"]');
+    const frame = mainPage.frameLocator('iframe[title="Enhanced Resource"]');
 
-      // Switch to Encyclopedia tab and click an article link.
-      await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
-      await expect(frame.locator('[data-testid="encyclopedia-tab"]')).toBeVisible();
+    // Switch to Encyclopedia tab and click an article link.
+    await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
+    await expect(frame.locator('[data-testid="encyclopedia-tab"]')).toBeVisible();
 
-      const firstEntry = frame.locator('[data-testid^="encyclopedia-entry-"]').first();
-      await firstEntry.click();
+    const firstEntry = frame.locator('[data-testid^="encyclopedia-entry-"]').first();
+    await firstEntry.click();
 
-      const articleLink = frame.locator('[data-testid^="encyclopedia-article-link-"]').first();
-      await articleLink.click();
+    const articleLink = frame.locator('[data-testid^="encyclopedia-article-link-"]').first();
+    await articleLink.click();
 
-      // ArticleViewer dialog appears. Dialog renders into the same WebView document.
-      const articleViewer = frame.locator('[data-testid="article-viewer"]');
-      await expect(articleViewer).toBeVisible({ timeout: 10_000 });
+    // ArticleViewer dialog appears. Dialog renders into the same WebView document.
+    const articleViewer = frame.locator('[data-testid="article-viewer"]');
+    await expect(articleViewer).toBeVisible({ timeout: 10_000 });
 
-      // EVD-060: ArticleViewer open with full article rendered
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-006/EVD-060-article-viewer-open.png',
-      });
-    },
-  );
+    // EVD-060: ArticleViewer open with full article rendered
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-006/EVD-060-article-viewer-open.png',
+    });
+  });
 
   // ===============================================
   // Category 2: Render
   // ===============================================
 
   // @scenario TS-064
-  test.fixme(
-    'should display all expected article viewer elements (title, content area, close)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      const frame = await openArticleViewer(mainPage);
+  test('should display all expected article viewer elements (title, content area, close)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const frame = await openArticleViewer(mainPage);
 
-      // Test Contract selectors must all be present.
-      await expect(frame.locator('[data-testid="article-viewer"]')).toBeVisible();
-      await expect(frame.locator('[data-testid="article-viewer-title"]')).toBeVisible();
-      await expect(frame.locator('[data-testid="article-viewer-content"]')).toBeVisible();
+    // Test Contract selectors must all be present.
+    await expect(frame.locator('[data-testid="article-viewer"]')).toBeVisible();
+    await expect(frame.locator('[data-testid="article-viewer-title"]')).toBeVisible();
+    await expect(frame.locator('[data-testid="article-viewer-content"]')).toBeVisible();
 
-      // The Dialog provides a built-in close (X) button (Theme 14 - replaces back-arrow chrome).
-      await expect(frame.getByRole('button', { name: /Close/i })).toBeVisible();
+    // The Dialog provides a built-in close (X) button (Theme 14 - replaces back-arrow chrome).
+    await expect(frame.getByRole('button', { name: /Close/i })).toBeVisible();
 
-      // EVD-060: Article viewer fully rendered with all chrome
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-006/EVD-060-article-viewer-rendered.png',
-      });
-    },
-  );
+    // EVD-060: Article viewer fully rendered with all chrome
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-006/EVD-060-article-viewer-rendered.png',
+    });
+  });
 
-  test.fixme(
-    'should render skeleton loading state while article data loads',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should render skeleton loading state while article data loads', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
 
-      // Navigate and trigger the article viewer; if articleData is undefined, the loading skeleton
-      // is shown (per article-viewer.component.tsx, when articleData is undefined).
-      await openEnhancedResource(mainPage);
+    // Navigate and trigger the article viewer; if articleData is undefined, the loading skeleton
+    // is shown (per article-viewer.component.tsx, when articleData is undefined).
+    await openEnhancedResource(mainPage);
 
-      const frame = mainPage.frameLocator('iframe[title="Enhanced Resource"]');
-      await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
+    const frame = mainPage.frameLocator('iframe[title="Enhanced Resource"]');
+    await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
 
-      // Click an article link; in real implementation, articleData is fetched async, so the
-      // loading skeleton appears briefly before content renders.
-      const firstEntry = frame.locator('[data-testid^="encyclopedia-entry-"]').first();
-      await firstEntry.click();
-      const articleLink = frame.locator('[data-testid^="encyclopedia-article-link-"]').first();
-      await articleLink.click();
+    // Click an article link; in real implementation, articleData is fetched async, so the
+    // loading skeleton appears briefly before content renders.
+    const firstEntry = frame.locator('[data-testid^="encyclopedia-entry-"]').first();
+    await firstEntry.click();
+    const articleLink = frame.locator('[data-testid^="encyclopedia-article-link-"]').first();
+    await articleLink.click();
 
-      // Either the loading skeleton or the content should be visible (skeleton during fetch).
-      const loading = frame.locator('[data-testid="article-viewer-loading"]');
-      const content = frame.locator('[data-testid="article-viewer-content"]');
-      await expect(loading.or(content)).toBeVisible();
-    },
-  );
+    // Either the loading skeleton or the content should be visible (skeleton during fetch).
+    const loading = frame.locator('[data-testid="article-viewer-loading"]');
+    const content = frame.locator('[data-testid="article-viewer-content"]');
+    await expect(loading.or(content)).toBeVisible();
+  });
 
   // ===============================================
   // Category 3: Data Wiring
   // ===============================================
 
   // @scenario TS-064
-  test.fixme(
-    'should display real article data from backend (title and HTML content)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      const frame = await openArticleViewer(mainPage);
+  test('should display real article data from backend (title and HTML content)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const frame = await openArticleViewer(mainPage);
 
-      // Title must be populated with real data from the readArticle PAPI command.
-      const title = frame.locator('[data-testid="article-viewer-title"]');
-      await expect(title).toBeVisible();
-      const titleText = (await title.textContent()) ?? '';
-      expect(titleText.trim()).not.toBe('');
-      // Title should not be the localized fallback ("Article" or the raw key) when real data loads.
-      expect(titleText.trim()).not.toMatch(/^%enhancedResources_articleViewer_title%$/);
+    // Title must be populated with real data from the readArticle PAPI command.
+    const title = frame.locator('[data-testid="article-viewer-title"]');
+    await expect(title).toBeVisible();
+    const titleText = (await title.textContent()) ?? '';
+    expect(titleText.trim()).not.toBe('');
+    // Title should not be the localized fallback ("Article" or the raw key) when real data loads.
+    expect(titleText.trim()).not.toMatch(/^%enhancedResources_articleViewer_title%$/);
 
-      // Content area must contain rendered article paragraphs.
-      const content = frame.locator('[data-testid="article-viewer-content"]');
-      const contentText = (await content.textContent()) ?? '';
-      expect(contentText.trim().length).toBeGreaterThan(0);
+    // Content area must contain rendered article paragraphs.
+    const content = frame.locator('[data-testid="article-viewer-content"]');
+    const contentText = (await content.textContent()) ?? '';
+    expect(contentText.trim().length).toBeGreaterThan(0);
 
-      // BHV-606: paragraph HTML formatting - content should include at least one paragraph.
-      await expect(content.locator('p').first()).toBeVisible();
-    },
-  );
+    // BHV-606: paragraph HTML formatting - content should include at least one paragraph.
+    await expect(content.locator('p').first()).toBeVisible();
+  });
 
-  test.fixme(
-    'should render verse reference links as clickable elements (BHV-607)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      const frame = await openArticleViewer(mainPage);
+  test('should render verse reference links as clickable elements (BHV-607)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const frame = await openArticleViewer(mainPage);
 
-      // BHV-607: verse references in the article render as clickable links.
-      // Test Contract selector: data-testid="verse-link-{reference}"
-      const verseLinks = frame.locator('[data-testid^="verse-link-"]');
-      // Articles typically reference at least one verse (Gen 1:1, John 3:16, etc.)
-      await expect(verseLinks.first()).toBeVisible({ timeout: 10_000 });
+    // BHV-607: verse references in the article render as clickable links.
+    // Test Contract selector: data-testid="verse-link-{reference}"
+    const verseLinks = frame.locator('[data-testid^="verse-link-"]');
+    // Articles typically reference at least one verse (Gen 1:1, John 3:16, etc.)
+    await expect(verseLinks.first()).toBeVisible({ timeout: 10_000 });
 
-      // Verse links must be interactive (not plain text).
-      const role = await verseLinks.first().evaluate((el) => el.getAttribute('role') ?? el.tagName);
-      expect(['link', 'BUTTON', 'A']).toContain(role);
-    },
-  );
+    // Verse links must be interactive (not plain text).
+    const role = await verseLinks.first().evaluate((el) => el.getAttribute('role') ?? el.tagName);
+    expect(['link', 'BUTTON', 'A']).toContain(role);
+  });
 
-  test.fixme(
-    'should render see-also cross-reference links (BHV-457 seealso)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      const frame = await openArticleViewer(mainPage);
+  test('should render see-also cross-reference links (BHV-457 seealso)', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
+    const frame = await openArticleViewer(mainPage);
 
-      // Test Contract selector: data-testid="see-also-{articleId}"
-      // Most encyclopedia articles include at least one cross-reference. If the chosen article
-      // has none, this test will visibly fail and the implementer must pick a fixture article
-      // that has see-also links.
-      const seeAlsoLinks = frame.locator('[data-testid^="see-also-"]');
-      await expect(seeAlsoLinks.first()).toBeVisible({ timeout: 10_000 });
-    },
-  );
+    // Test Contract selector: data-testid="see-also-{articleId}"
+    // Most encyclopedia articles include at least one cross-reference. If the chosen article
+    // has none, this test will visibly fail and the implementer must pick a fixture article
+    // that has see-also links.
+    const seeAlsoLinks = frame.locator('[data-testid^="see-also-"]');
+    await expect(seeAlsoLinks.first()).toBeVisible({ timeout: 10_000 });
+  });
 
-  test.fixme(
-    'should render inline images as clickable elements (BHV-457 launchViewer)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      const frame = await openArticleViewer(mainPage);
+  test('should render inline images as clickable elements (BHV-457 launchViewer)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const frame = await openArticleViewer(mainPage);
 
-      // Test Contract selector: data-testid="article-image-{imageId}"
-      const imageLinks = frame.locator('[data-testid^="article-image-"]');
-      // Not every article has inline images; assertion is conditional. If no images exist,
-      // log a warning (the encyclopedia fixture should contain at least one article with
-      // inline images for full coverage).
-      const count = await imageLinks.count();
-      if (count > 0) {
-        await expect(imageLinks.first()).toBeVisible();
-      } else {
-        // Diagnostic: surface this in the test log so future fixture authors know to pick an
-        // article with imageIds; soft-failing here is preferable to skipping silently.
-        // eslint-disable-next-line no-console
-        console.warn(
-          'No inline images present in test article - select fixture article with imageIds for full BHV-457 coverage.',
-        );
-      }
-    },
-  );
+    // Test Contract selector: data-testid="article-image-{imageId}"
+    const imageLinks = frame.locator('[data-testid^="article-image-"]');
+    // Not every article has inline images; assertion is conditional. If no images exist,
+    // log a warning (the encyclopedia fixture should contain at least one article with
+    // inline images for full coverage).
+    const count = await imageLinks.count();
+    if (count > 0) {
+      await expect(imageLinks.first()).toBeVisible();
+    } else {
+      // Diagnostic: surface this in the test log so future fixture authors know to pick an
+      // article with imageIds; soft-failing here is preferable to skipping silently.
+      // eslint-disable-next-line no-console
+      console.warn(
+        'No inline images present in test article - select fixture article with imageIds for full BHV-457 coverage.',
+      );
+    }
+  });
 
   // ===============================================
   // Category 4: Interaction
   // ===============================================
 
   // @scenario TS-064 (BHV-457: goto)
-  test.fixme(
-    'should navigate MarbleForm to verse when verse reference link is clicked',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      const frame = await openArticleViewer(mainPage);
+  test('should navigate MarbleForm to verse when verse reference link is clicked', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const frame = await openArticleViewer(mainPage);
 
-      const verseLink = frame.locator('[data-testid^="verse-link-"]').first();
-      await expect(verseLink).toBeVisible({ timeout: 10_000 });
+    const verseLink = frame.locator('[data-testid^="verse-link-"]').first();
+    await expect(verseLink).toBeVisible({ timeout: 10_000 });
 
-      // Capture the verse reference from the test id (e.g. verse-link-GEN.1.1).
-      const linkTestId = (await verseLink.getAttribute('data-testid')) ?? '';
-      const verseRef = linkTestId.replace(/^verse-link-/, '');
-      expect(verseRef).not.toBe('');
+    // Capture the verse reference from the test id (e.g. verse-link-GEN.1.1).
+    const linkTestId = (await verseLink.getAttribute('data-testid')) ?? '';
+    const verseRef = linkTestId.replace(/^verse-link-/, '');
+    expect(verseRef).not.toBe('');
 
-      await verseLink.click();
+    await verseLink.click();
 
-      // After click, the MarbleForm scripture pane should reflect the new reference via scroll
-      // group sync. The BCV control should display the navigated reference.
-      const bcvLabel = frame.locator('[data-testid="bcv-current-reference"], .bcv-label').first();
-      // Loose match: at least the book code should appear in the BCV display.
-      await expect(bcvLabel).toContainText(/GEN|JHN|MAT|LUK|MRK|ISA|ROM|REV/i, { timeout: 10_000 });
+    // After click, the MarbleForm scripture pane should reflect the new reference via scroll
+    // group sync. The BCV control should display the navigated reference.
+    const bcvLabel = frame.locator('[data-testid="bcv-current-reference"], .bcv-label').first();
+    // Loose match: at least the book code should appear in the BCV display.
+    await expect(bcvLabel).toContainText(/GEN|JHN|MAT|LUK|MRK|ISA|ROM|REV/i, { timeout: 10_000 });
 
-      // EVD-061: MarbleForm navigated after verse link click
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-006/EVD-061-verse-link-navigation.png',
-      });
-    },
-  );
+    // EVD-061: MarbleForm navigated after verse link click
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-006/EVD-061-verse-link-navigation.png',
+    });
+  });
 
   // @scenario TS-064 (BHV-457: seealso)
-  test.fixme(
-    'should load new article in same dialog when see-also link is clicked',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      const frame = await openArticleViewer(mainPage);
+  test('should load new article in same dialog when see-also link is clicked', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const frame = await openArticleViewer(mainPage);
 
-      // Capture initial article title.
-      const titleEl = frame.locator('[data-testid="article-viewer-title"]');
-      const initialTitle = (await titleEl.textContent())?.trim() ?? '';
-      expect(initialTitle).not.toBe('');
+    // Capture initial article title.
+    const titleEl = frame.locator('[data-testid="article-viewer-title"]');
+    const initialTitle = (await titleEl.textContent())?.trim() ?? '';
+    expect(initialTitle).not.toBe('');
 
-      // Click first see-also link.
-      const seeAlsoLink = frame.locator('[data-testid^="see-also-"]').first();
-      await expect(seeAlsoLink).toBeVisible({ timeout: 10_000 });
-      await seeAlsoLink.click();
+    // Click first see-also link.
+    const seeAlsoLink = frame.locator('[data-testid^="see-also-"]').first();
+    await expect(seeAlsoLink).toBeVisible({ timeout: 10_000 });
+    await seeAlsoLink.click();
 
-      // Dialog stays open; title changes to the referenced article.
-      await expect(frame.locator('[data-testid="article-viewer"]')).toBeVisible();
+    // Dialog stays open; title changes to the referenced article.
+    await expect(frame.locator('[data-testid="article-viewer"]')).toBeVisible();
 
-      // Title must update to the new article (different from the original).
-      await expect
-        .poll(async () => (await titleEl.textContent())?.trim() ?? '', { timeout: 10_000 })
-        .not.toBe(initialTitle);
+    // Title must update to the new article (different from the original).
+    await expect
+      .poll(async () => (await titleEl.textContent())?.trim() ?? '', { timeout: 10_000 })
+      .not.toBe(initialTitle);
 
-      // EVD-062: New article loaded after see-also click
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-006/EVD-062-see-also-loaded.png',
-      });
-    },
-  );
+    // EVD-062: New article loaded after see-also click
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-006/EVD-062-see-also-loaded.png',
+    });
+  });
 
   // @scenario TS-064 (BHV-457: launchViewer)
-  test.fixme(
-    'should open MediaViewer when inline article image is clicked',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      const frame = await openArticleViewer(mainPage);
+  test('should open MediaViewer when inline article image is clicked', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
+    const frame = await openArticleViewer(mainPage);
 
-      const imageLink = frame.locator('[data-testid^="article-image-"]').first();
-      // Skip the test gracefully if the fixture article has no inline images. The implementer
-      // should pick or seed a fixture article that has imageIds for full coverage.
-      const hasImage = (await imageLink.count()) > 0;
-      test.skip(
-        !hasImage,
-        'Fixture article has no inline images; BHV-457 launchViewer needs an article with imageIds.',
-      );
+    const imageLink = frame.locator('[data-testid^="article-image-"]').first();
+    // Skip the test gracefully if the fixture article has no inline images. The implementer
+    // should pick or seed a fixture article that has imageIds for full coverage.
+    const hasImage = (await imageLink.count()) > 0;
+    test.skip(
+      !hasImage,
+      'Fixture article has no inline images; BHV-457 launchViewer needs an article with imageIds.',
+    );
 
-      await imageLink.click();
+    await imageLink.click();
 
-      // MediaViewer (UI-PKG-005) should open with the clicked image.
-      const mediaViewer = frame.locator('[data-testid="media-viewer"]');
-      await expect(mediaViewer).toBeVisible({ timeout: 10_000 });
+    // MediaViewer (UI-PKG-005) should open with the clicked image.
+    const mediaViewer = frame.locator('[data-testid="media-viewer"]');
+    await expect(mediaViewer).toBeVisible({ timeout: 10_000 });
 
-      // EVD-063: MediaViewer opened from inline image click
-      await mainPage.screenshot({
-        path: 'proofs/component-evidence/UI-PKG-006/EVD-063-media-viewer-opened.png',
-      });
-    },
-  );
+    // EVD-063: MediaViewer opened from inline image click
+    await mainPage.screenshot({
+      path: 'proofs/component-evidence/UI-PKG-006/EVD-063-media-viewer-opened.png',
+    });
+  });
 
   // @scenario TS-064 (BHV-457: close)
-  test.fixme('should close dialog when close button (X) is clicked', async ({ mainPage }) => {
+  test('should close dialog when close button (X) is clicked', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const frame = await openArticleViewer(mainPage);
 
@@ -343,7 +327,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-006: ArticleViewer)',
     await expect(frame.locator('[data-testid="article-viewer"]')).toBeHidden({ timeout: 5_000 });
   });
 
-  test.fixme('should close dialog when Escape key is pressed', async ({ mainPage }) => {
+  test('should close dialog when Escape key is pressed', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const frame = await openArticleViewer(mainPage);
 
@@ -355,7 +339,7 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-006: ArticleViewer)',
     await expect(frame.locator('[data-testid="article-viewer"]')).toBeHidden({ timeout: 5_000 });
   });
 
-  test.fixme('should close dialog when clicking outside (overlay)', async ({ mainPage }) => {
+  test('should close dialog when clicking outside (overlay)', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const frame = await openArticleViewer(mainPage);
 
@@ -375,72 +359,67 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-006: ArticleViewer)',
   // Category 6: Edge Cases
   // ===============================================
 
-  test.fixme(
-    'should render abbreviation tooltips on hover within article content',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      const frame = await openArticleViewer(mainPage);
+  test('should render abbreviation tooltips on hover within article content', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const frame = await openArticleViewer(mainPage);
 
-      // Abbreviations render as <abbr> elements with title attribute (per spec accessibility).
-      // BHV-608 (covered by BHV-606): abbreviation tooltip resolution.
-      const abbr = frame.locator('[data-testid="article-viewer-content"] abbr').first();
-      const hasAbbr = (await abbr.count()) > 0;
-      test.skip(
-        !hasAbbr,
-        'Test article has no abbreviations; pick a fixture article with abbreviations for full BHV-608 coverage.',
-      );
+    // Abbreviations render as <abbr> elements with title attribute (per spec accessibility).
+    // BHV-608 (covered by BHV-606): abbreviation tooltip resolution.
+    const abbr = frame.locator('[data-testid="article-viewer-content"] abbr').first();
+    const hasAbbr = (await abbr.count()) > 0;
+    test.skip(
+      !hasAbbr,
+      'Test article has no abbreviations; pick a fixture article with abbreviations for full BHV-608 coverage.',
+    );
 
-      const titleAttr = await abbr.getAttribute('title');
-      expect(titleAttr).not.toBeNull();
-      expect((titleAttr ?? '').trim().length).toBeGreaterThan(0);
-    },
-  );
+    const titleAttr = await abbr.getAttribute('title');
+    expect(titleAttr).not.toBeNull();
+    expect((titleAttr ?? '').trim().length).toBeGreaterThan(0);
+  });
 
-  test.fixme(
-    'should remain stable when see-also link points to same article (no infinite loop)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      const frame = await openArticleViewer(mainPage);
+  test('should remain stable when see-also link points to same article (no infinite loop)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    const frame = await openArticleViewer(mainPage);
 
-      // Edge case: clicking a see-also link that resolves to the currently displayed article
-      // should be idempotent (re-render or no-op), not crash, not unmount the dialog.
-      const seeAlsoLinks = frame.locator('[data-testid^="see-also-"]');
-      const count = await seeAlsoLinks.count();
-      test.skip(count === 0, 'No see-also links available in fixture article.');
+    // Edge case: clicking a see-also link that resolves to the currently displayed article
+    // should be idempotent (re-render or no-op), not crash, not unmount the dialog.
+    const seeAlsoLinks = frame.locator('[data-testid^="see-also-"]');
+    const count = await seeAlsoLinks.count();
+    test.skip(count === 0, 'No see-also links available in fixture article.');
 
-      // Click the same link twice to exercise re-entry behavior.
-      await seeAlsoLinks.first().click();
-      await expect(frame.locator('[data-testid="article-viewer"]')).toBeVisible();
-      await seeAlsoLinks.first().click();
-      await expect(frame.locator('[data-testid="article-viewer"]')).toBeVisible();
-    },
-  );
+    // Click the same link twice to exercise re-entry behavior.
+    await seeAlsoLinks.first().click();
+    await expect(frame.locator('[data-testid="article-viewer"]')).toBeVisible();
+    await seeAlsoLinks.first().click();
+    await expect(frame.locator('[data-testid="article-viewer"]')).toBeVisible();
+  });
 
-  test.fixme(
-    'should focus return to triggering element after dialog close',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
+  test('should focus return to triggering element after dialog close', async ({ mainPage }) => {
+    await waitForAppReady(mainPage);
 
-      await openEnhancedResource(mainPage);
+    await openEnhancedResource(mainPage);
 
-      const frame = mainPage.frameLocator('iframe[title="Enhanced Resource"]');
-      await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
-      const firstEntry = frame.locator('[data-testid^="encyclopedia-entry-"]').first();
-      await firstEntry.click();
+    const frame = mainPage.frameLocator('iframe[title="Enhanced Resource"]');
+    await frame.getByRole('tab', { name: /Encyclopedia/i }).click();
+    const firstEntry = frame.locator('[data-testid^="encyclopedia-entry-"]').first();
+    await firstEntry.click();
 
-      const articleLink = frame.locator('[data-testid^="encyclopedia-article-link-"]').first();
-      const triggerTestId = await articleLink.getAttribute('data-testid');
-      await articleLink.click();
+    const articleLink = frame.locator('[data-testid^="encyclopedia-article-link-"]').first();
+    const triggerTestId = await articleLink.getAttribute('data-testid');
+    await articleLink.click();
 
-      await expect(frame.locator('[data-testid="article-viewer"]')).toBeVisible();
+    await expect(frame.locator('[data-testid="article-viewer"]')).toBeVisible();
 
-      // Close via Escape; focus should return to the article link that triggered open.
-      await mainPage.keyboard.press('Escape');
-      await expect(frame.locator('[data-testid="article-viewer"]')).toBeHidden();
+    // Close via Escape; focus should return to the article link that triggered open.
+    await mainPage.keyboard.press('Escape');
+    await expect(frame.locator('[data-testid="article-viewer"]')).toBeHidden();
 
-      // Verify focused element matches the trigger's test id.
-      const focusedTestId = await frame.locator(':focus').getAttribute('data-testid');
-      expect(focusedTestId).toBe(triggerTestId);
-    },
-  );
+    // Verify focused element matches the trigger's test id.
+    const focusedTestId = await frame.locator(':focus').getAttribute('data-testid');
+    expect(focusedTestId).toBe(triggerTestId);
+  });
 });
