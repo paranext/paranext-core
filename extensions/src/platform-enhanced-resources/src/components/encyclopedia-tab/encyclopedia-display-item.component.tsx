@@ -140,8 +140,9 @@ export function EncyclopediaDisplayItem({
             variant="link"
             className="tw-h-auto tw-justify-start tw-p-0 tw-text-start tw-text-sm"
             aria-label={sourceTextTooltip}
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={() => {
+              // FN-020(c): NO stopPropagation - bubble so the SLI listbox option handler
+              // ALSO fires and opens the detail drawer alongside setting the filter.
               onSourceTextClick(item.tokenId);
             }}
           >

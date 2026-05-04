@@ -102,8 +102,11 @@ function previewText(text: string | undefined, maxChars: number): string {
  *
  * <source-language word (clickable)> <first ~80 chars of first sense's definition>
  *
- * `e.stopPropagation()` on the source-text button prevents the row's parent `<li>` selection click
- * from firing when the dedicated source-text handler is invoked.
+ * FN-020(c): the source-text button intentionally allows the click to bubble to the parent row so
+ * the SLI's row-click handler ALSO fires - that's what opens the detail drawer. Sebastian's round-2
+ * feedback: clicking the source-language word should set the filter AND auto-open the detail. The
+ * filter side is driven by the inner `onSourceTextClick`; the open-detail side is driven by the
+ * bubbled row click reaching the SLI's listbox option handler.
  *
  * Right-click anywhere on the row opens the ContextMenu with copySurfaceForm / copyLemma (with
  * Original / Transliteration sub-items) plus findSense / findLemma / findText (Theme 16).
@@ -157,8 +160,9 @@ export function DictionaryDisplayItem({
               variant="link"
               className="tw-h-auto tw-justify-start tw-p-0 tw-text-start tw-text-sm"
               aria-label={sourceTextTooltip}
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={() => {
+                // FN-020(c): NO stopPropagation - we want the click to bubble so the SLI
+                // listbox option handler ALSO fires and opens the detail drawer.
                 onSourceTextClick(item.tokenId);
               }}
             >

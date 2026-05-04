@@ -108,6 +108,9 @@
     "%enhancedResources_toolbar_menu_showTranslations%": {
       "notes": "View-menu item: toggles the translations column in the research pane (BHV-303)."
     },
+    "%enhancedResources_toolbar_menu_showTranslationsWithResource%": {
+      "notes": "View-menu item with the active resource short-name interpolated. {resourceShortName} is required (FN-020(b)). Used when the wiring layer knows the resource id. Falls back to the bare 'Show translations' label when not."
+    },
     "%enhancedResources_toolbar_menu_hebrewHeader%": {
       "notes": "View-menu sub-section header for Hebrew display-mode radio group (BHV-304)."
     },
@@ -469,6 +472,7 @@
       "%enhancedResources_toolbar_tab_maps%": "Maps",
       "%enhancedResources_toolbar_menu_showFootnotes%": "Show footnotes",
       "%enhancedResources_toolbar_menu_showTranslations%": "Show translations",
+      "%enhancedResources_toolbar_menu_showTranslationsWithResource%": "Show translations ({resourceShortName})",
       "%enhancedResources_toolbar_menu_hebrewHeader%": "Hebrew",
       "%enhancedResources_toolbar_menu_greekHeader%": "Greek",
       "%enhancedResources_toolbar_menu_originalScript%": "Original script",

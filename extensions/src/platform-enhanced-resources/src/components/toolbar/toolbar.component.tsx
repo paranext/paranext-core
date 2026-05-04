@@ -1,4 +1,5 @@
 import {
+  BookChapterControl,
   Button,
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -28,7 +29,9 @@ import {
   cn,
 } from 'platform-bible-react';
 import { BookOpen, Book, Image as ImageIcon, Info, MapPin, Menu, X } from 'lucide-react';
+import { formatReplacementString } from 'platform-bible-utils';
 import type { LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
+import type { SerializedVerseRef } from '@sillsdev/scripture';
 
 /** Object containing all keys used for localization in this component. */
 export const TOOLBAR_STRING_KEYS = Object.freeze([
@@ -49,6 +52,9 @@ export const TOOLBAR_STRING_KEYS = Object.freeze([
   '%enhancedResources_toolbar_tab_maps%',
   '%enhancedResources_toolbar_menu_showFootnotes%',
   '%enhancedResources_toolbar_menu_showTranslations%',
+  // FN-020(b): when a resource short-name is supplied, the show-translations label
+  // becomes "Show translations ({resourceShortName})". The template uses {resourceShortName}.
+  '%enhancedResources_toolbar_menu_showTranslationsWithResource%',
   '%enhancedResources_toolbar_menu_hebrewHeader%',
   '%enhancedResources_toolbar_menu_greekHeader%',
   '%enhancedResources_toolbar_menu_originalScript%',
@@ -116,7 +122,33 @@ export type EnhancedResourceTopToolbarProps = {
   onHighlightModeChange?: (mode: HighlightMode) => void;
   /** Info / guide button click handler (FN-016 — opens MarbleGuide Dialog). */
   onInfoClick?: () => void;
-  /** Reference-button click handler (placeholder for BCV control wiring in phase-3-ui — FN-015). */
+  /**
+   * Current scripture reference - drives the `BookChapterControl` selection state. When omitted
+   * (e.g. before the wiring layer has resolved a scroll-group), the placeholder button falls back
+   * to `currentReferenceLabel` so the toolbar still renders.
+   */
+  // eslint-disable-next-line react/no-unused-prop-types
+  scrRef?: SerializedVerseRef;
+  /**
+   * Callback fired when the user picks a new reference via `BookChapterControl`. Wiring layer
+   * routes this through `setScrRef` from `useWebViewScrollGroupScrRef` so the change propagates to
+   * the editor + scroll-group siblings (FN-015).
+   */
+  // eslint-disable-next-line react/no-unused-prop-types
+  onScrRefChange?: (scrRef: SerializedVerseRef) => void;
+  /**
+   * Optional add-recent-search hook. Forwarded straight to `BookChapterControl` so the recent picks
+   * can be persisted across sessions.
+   */
+  // eslint-disable-next-line react/no-unused-prop-types
+  onAddRecentSearch?: (scrRef: SerializedVerseRef) => void;
+  /** Recent scripture references shown above the book list in the BCV popover. */
+  // eslint-disable-next-line react/no-unused-prop-types
+  recentSearches?: SerializedVerseRef[];
+  /**
+   * Reference-button click handler. Retained for stories / fallback when `scrRef` is undefined,
+   * since `BookChapterControl` is only mounted when the wiring layer has supplied a real scrRef.
+   */
   onReferenceClick?: () => void;
   /** Currently selected scroll-group id (or undefined for none). */
   scrollGroupId?: ScrollGroupId | undefined;
@@ -126,6 +158,13 @@ export type EnhancedResourceTopToolbarProps = {
   onScrollGroupChange?: ScrollGroupSelectorProps['onChangeScrollGroupId'];
   /** Optional label of the current verse reference (formatted by parent). */
   currentReferenceLabel?: string;
+  /**
+   * Short-name of the active resource (e.g. "ESV16UK+"). When provided, the hamburger menu "Show
+   * translations" entry renders as "Show translations ({resourceShortName})" per FN-020(b).
+   * Optional - the wiring layer may not have it during loading or for the empty state.
+   */
+  // eslint-disable-next-line react/no-unused-prop-types
+  resourceShortName?: string;
   /** Optional localized strings forwarded to the ScrollGroupSelector. */
   scrollGroupLocalizedStrings?: ScrollGroupSelectorProps['localizedStrings'];
   localizedStringsWithLoadingState?: [ToolbarLocalizedStrings, boolean];
@@ -159,11 +198,16 @@ export function EnhancedResourceTopToolbar({
   highlightMode = 'none',
   onHighlightModeChange = () => {},
   onInfoClick = () => {},
+  scrRef,
+  onScrRefChange,
+  onAddRecentSearch,
+  recentSearches,
   onReferenceClick = () => {},
   scrollGroupId = undefined,
   availableScrollGroupIds = [undefined, 0, 1, 2],
   onScrollGroupChange = () => {},
   currentReferenceLabel,
+  resourceShortName,
   scrollGroupLocalizedStrings,
   localizedStringsWithLoadingState = [{}, false],
 }: EnhancedResourceTopToolbarProps) {
@@ -179,9 +223,19 @@ export function EnhancedResourceTopToolbar({
   const showFootnotesLabel = String(
     getLocalizedString('%enhancedResources_toolbar_menu_showFootnotes%'),
   );
-  const showTranslationsLabel = String(
+  // FN-020(b): when we have a resource short-name, build the "Show translations
+  // ({resourceShortName})" form from the dedicated localization key. Otherwise fall back to the
+  // bare "Show translations" label so the menu still renders during loading.
+  const showTranslationsBare = String(
     getLocalizedString('%enhancedResources_toolbar_menu_showTranslations%'),
   );
+  const showTranslationsTemplate = String(
+    getLocalizedString('%enhancedResources_toolbar_menu_showTranslationsWithResource%'),
+  );
+  const showTranslationsLabel =
+    resourceShortName && showTranslationsTemplate
+      ? formatReplacementString(showTranslationsTemplate, { resourceShortName })
+      : showTranslationsBare;
   const hebrewHeader = String(getLocalizedString('%enhancedResources_toolbar_menu_hebrewHeader%'));
   const greekHeader = String(getLocalizedString('%enhancedResources_toolbar_menu_greekHeader%'));
   const originalScriptLabel = String(
@@ -271,26 +325,42 @@ export function EnhancedResourceTopToolbar({
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onShowCopyrightInfo}>{copyrightInfoLabel}</DropdownMenuItem>
         <DropdownMenuItem onSelect={onFindInResource}>{findLabel}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={onCloseWindow}>{closeLabel}</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onZoomIn}>{zoomInLabel}</DropdownMenuItem>
         <DropdownMenuItem onSelect={onZoomOut}>{zoomOutLabel}</DropdownMenuItem>
         <DropdownMenuItem onSelect={onZoomReset}>{zoomResetLabel}</DropdownMenuItem>
+        {/* FN-020(b): Close is intentionally the LAST entry per Sebastian's round-2 feedback. */}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onCloseWindow}>{closeLabel}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 
+  // FN-015: when the wiring layer supplies a real `scrRef` + `onScrRefChange`, mount the actual
+  // `BookChapterControl` from platform-bible-react. This replaces the placeholder
+  // outline-styled label with a true reference picker that drives scroll-group sync. If `scrRef`
+  // is missing (e.g. before the wiring layer resolves) we fall back to the simple labelled
+  // button so the toolbar still renders.
   const startArea = (
     <div className="tw-flex tw-items-center tw-gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        aria-label={referenceLabel}
-        className="tw-font-mono"
-        onClick={onReferenceClick}
-      >
-        {currentReferenceLabel ?? referenceLabel}
-      </Button>
+      {scrRef && onScrRefChange ? (
+        <BookChapterControl
+          scrRef={scrRef}
+          handleSubmit={onScrRefChange}
+          recentSearches={recentSearches}
+          onAddRecentSearch={onAddRecentSearch}
+        />
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={referenceLabel}
+          className="tw-font-mono"
+          onClick={onReferenceClick}
+        >
+          {currentReferenceLabel ?? referenceLabel}
+        </Button>
+      )}
     </div>
   );
 
@@ -455,55 +525,69 @@ export function EnhancedResourceTabBar({
     }
   };
 
-  const filterVisible = searchValue.length > 0;
-  // Theme 9 — match `filterBox` semantics from ui-spec-marble-form.md line 36:
-  //   green-ish (has matches) vs orange-ish (no matches).
-  const filterTintClass = hasMatches
-    ? 'tw-bg-emerald-100 dark:tw-bg-emerald-900/40'
-    : 'tw-bg-orange-100 dark:tw-bg-orange-900/40';
+  const filterActive = searchValue.length > 0;
+  // FN-024: Sebastian's round-2 feedback ask was for an always-visible filter input with
+  // min-width: 80px so the toolbar shrinks based on real available space rather than hiding
+  // the input until clicked. We render the filter box at all times; the X button only shows when
+  // there's something to clear so the empty input visually matches an idle search bar. The tint
+  // (green when there are matches, orange when no matches) only fires when a filter is active so
+  // the empty state stays visually neutral. (BT integration may consume `hasMatches` later — see
+  // SB#2 / Theme 9 origin notes.)
+  let filterTintClass = 'tw-bg-background';
+  if (filterActive) {
+    filterTintClass = hasMatches
+      ? 'tw-bg-emerald-100 dark:tw-bg-emerald-900/40'
+      : 'tw-bg-orange-100 dark:tw-bg-orange-900/40';
+  }
 
   return (
-    // `@container` enables responsive collapse without any media-query plumbing — the parent panel
-    // resize drives label visibility. At narrow widths (<640px container, the @sm breakpoint) the
-    // tab labels collapse to icon-only and the row stays on a single line. Width 300-400px is
-    // exercised in toolbar.stories.tsx.
-    <div className="tw-@container tw-w-full">
+    // FN-024: `tw-@container/toolbar` establishes a named container-query context so the
+    // `@sm:` variants below resolve against this element's inline-size, not the viewport.
+    // The named form (`tw-@container/toolbar`) is necessary if other ancestors also declare
+    // containers; using a name makes the resolution deterministic.
+    <div className="tw-@container/toolbar tw-w-full">
       <div className="tw-flex tw-flex-nowrap tw-items-center tw-gap-2 tw-overflow-hidden tw-border-b tw-px-2 tw-py-1.5">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="tw-flex-shrink-0">
           <TabsList>
             <TabsTrigger value="dictionary" aria-label={tabDictLabel}>
-              <BookOpen className="tw-h-4 tw-w-4 @sm:tw-me-1" />
-              <span className="tw-hidden @sm:tw-inline">{tabDictLabel}</span>
+              <BookOpen className="tw-h-4 tw-w-4 @sm/toolbar:tw-me-1" />
+              <span className="tw-hidden @sm/toolbar:tw-inline">{tabDictLabel}</span>
             </TabsTrigger>
             <TabsTrigger value="encyclopedia" aria-label={tabEncycLabel}>
-              <Book className="tw-h-4 tw-w-4 @sm:tw-me-1" />
-              <span className="tw-hidden @sm:tw-inline">{tabEncycLabel}</span>
+              <Book className="tw-h-4 tw-w-4 @sm/toolbar:tw-me-1" />
+              <span className="tw-hidden @sm/toolbar:tw-inline">{tabEncycLabel}</span>
             </TabsTrigger>
             <TabsTrigger value="media" aria-label={tabMediaLabel}>
-              <ImageIcon className="tw-h-4 tw-w-4 @sm:tw-me-1" />
-              <span className="tw-hidden @sm:tw-inline">{tabMediaLabel}</span>
+              <ImageIcon className="tw-h-4 tw-w-4 @sm/toolbar:tw-me-1" />
+              <span className="tw-hidden @sm/toolbar:tw-inline">{tabMediaLabel}</span>
             </TabsTrigger>
             <TabsTrigger value="maps" aria-label={tabMapsLabel}>
-              <MapPin className="tw-h-4 tw-w-4 @sm:tw-me-1" />
-              <span className="tw-hidden @sm:tw-inline">{tabMapsLabel}</span>
+              <MapPin className="tw-h-4 tw-w-4 @sm/toolbar:tw-me-1" />
+              <span className="tw-hidden @sm/toolbar:tw-inline">{tabMapsLabel}</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {filterVisible && (
-          <div
-            data-testid="er-filter-box"
-            className={cn(
-              'tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-1 tw-rounded tw-border tw-px-1',
-              filterTintClass,
-            )}
-          >
-            <Input
-              value={searchValue}
-              readOnly
-              aria-label={filterAriaLabel}
-              className="tw-h-7 tw-min-w-0 tw-flex-1 tw-border-0 tw-bg-transparent tw-text-xs focus-visible:tw-ring-0"
-            />
+        {/*
+         * FN-024: filter input is now ALWAYS rendered with min-width: 80px so the toolbar shrinks
+         * based on available space (and the tab labels collapse to icon-only via the @sm/toolbar
+         * container query) rather than hiding the input until the user clicks a word. The X clear
+         * button only appears when there's something to clear so the empty input stays clean.
+         */}
+        <div
+          data-testid="er-filter-box"
+          className={cn(
+            'tw-flex tw-min-w-[80px] tw-flex-1 tw-shrink tw-items-center tw-gap-1 tw-rounded tw-border tw-px-1',
+            filterTintClass,
+          )}
+        >
+          <Input
+            value={searchValue}
+            readOnly
+            aria-label={filterAriaLabel}
+            className="tw-h-7 tw-min-w-0 tw-flex-1 tw-border-0 tw-bg-transparent tw-text-xs focus-visible:tw-ring-0"
+          />
+          {filterActive && (
             <Button
               variant="ghost"
               size="icon"
@@ -513,15 +597,13 @@ export function EnhancedResourceTabBar({
             >
               <X className="tw-h-3.5 tw-w-3.5" />
             </Button>
-          </div>
-        )}
-
-        {!filterVisible && <div className="tw-flex-1" />}
+          )}
+        </div>
 
         <Select value={scope} onValueChange={handleScopeChange}>
           <SelectTrigger
             aria-label={scopeLabel}
-            className="tw-w-32 tw-flex-shrink-0 @sm:tw-w-44"
+            className="tw-w-32 tw-flex-shrink-0 @sm/toolbar:tw-w-44"
             role="combobox"
           >
             <SelectValue />

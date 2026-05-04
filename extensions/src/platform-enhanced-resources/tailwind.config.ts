@@ -4,6 +4,11 @@
 
 import { Config } from 'tailwindcss';
 import typography from '@tailwindcss/typography';
+// FN-024: container-queries plugin so `tw-@container` actually establishes a CSS containment
+// context (`container-type: inline-size`) and `@sm:` etc. variants resolve against it. Without the
+// plugin, `tw-@container` is an unrecognised class and the toolbar's responsive collapse falls
+// back to the viewport-driven `@sm:` breakpoint coincidentally working at narrow widths.
+import containerQueries from '@tailwindcss/container-queries';
 import tailwindCssAnimate from 'tailwindcss-animate';
 
 const config: Config = {
@@ -106,6 +111,9 @@ const config: Config = {
   plugins: [
     // Prose styles as sensible defaults for markdown renderer component
     typography(),
+    // Container queries (FN-024) - provides @container utility + @sm:/@md: variants that resolve
+    // against the nearest container-type ancestor instead of the viewport.
+    containerQueries,
     // Animations in tailwind style
     tailwindCssAnimate,
 

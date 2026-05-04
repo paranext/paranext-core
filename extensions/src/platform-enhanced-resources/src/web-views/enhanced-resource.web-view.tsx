@@ -174,8 +174,26 @@ export type EnhancedResourceWebViewProps = {
   scrollGroupId?: ScrollGroupId | undefined;
   onScrollGroupChange?: (newScrollGroupId: ScrollGroupId | undefined) => void;
   currentReferenceLabel?: string;
+  /**
+   * Short-name of the active resource (e.g. "ESV16UK+"). Threaded through to the toolbar so the
+   * hamburger menu can render "Show translations ({resourceShortName})" per FN-020(b).
+   */
+  resourceShortName?: string;
   /** Current scripture reference - forwarded to the scripture pane for Editorial scrRef wiring. */
   scrRef?: SerializedVerseRef;
+  /**
+   * FN-015: callback to update the scripture reference. Wired to `setScrRef` from
+   * `useWebViewScrollGroupScrRef` so changes via the toolbar's `BookChapterControl` propagate
+   * through the scroll-group to sibling editor windows.
+   */
+  onScrRefChange?: (next: SerializedVerseRef) => void;
+  /**
+   * Optional callback fired when the user picks a recent search inside the BCV control. Forwarded
+   * straight to `BookChapterControl.onAddRecentSearch`.
+   */
+  onAddRecentSearch?: (next: SerializedVerseRef) => void;
+  /** Recent searches surfaced inside the BCV control (FN-015). */
+  recentSearches?: SerializedVerseRef[];
   /**
    * View-menu state surface (Show footnotes, Show translations, H/G display modes). Theme 10 +
    * forward-note FN-017 — display-mode controls moved from the (now-removed) scripture-pane header
@@ -395,7 +413,11 @@ export function EnhancedResourceWebView({
   scrollGroupId,
   onScrollGroupChange = () => {},
   currentReferenceLabel,
+  resourceShortName,
   scrRef,
+  onScrRefChange,
+  onAddRecentSearch,
+  recentSearches,
   viewMenu,
   viewMenuHandlers,
 
@@ -550,6 +572,11 @@ export function EnhancedResourceWebView({
         scrollGroupId={scrollGroupId}
         onScrollGroupChange={onScrollGroupChange}
         currentReferenceLabel={currentReferenceLabel}
+        resourceShortName={resourceShortName}
+        scrRef={scrRef}
+        onScrRefChange={onScrRefChange}
+        onAddRecentSearch={onAddRecentSearch}
+        recentSearches={recentSearches}
         localizedStringsWithLoadingState={childStrings}
       />
       <div className="tw-flex tw-min-h-0 tw-flex-1">
@@ -1624,6 +1651,19 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     encyclopediaSelectedTokenId,
     setEncyclopediaSelectedTokenId,
   ]);
+
+  // FN-020(c) - dictionary auto-open. When the user clicks a word in the scripture pane (or any
+  // other source that sets filteredTokenId), select the matching dictionary row so the detail
+  // panel opens automatically. Sebastian's round-2 ask: "A word filter applied to the list should
+  // filter the list by the selected word and open its details." Auto-selecting the row is the
+  // observable "open its details" behavior.
+  useEffect(() => {
+    if (!filteredTokenId) return;
+    const match = dictionaryItems.find((i) => i.tokenId === filteredTokenId);
+    if (match && dictionarySelectedTokenId !== match.tokenId) {
+      setDictionarySelectedTokenId(match.tokenId);
+    }
+  }, [filteredTokenId, dictionaryItems, dictionarySelectedTokenId, setDictionarySelectedTokenId]);
 
   // ---------------------------------------------------------------------------
   // SemanticDomainViewer wiring (UI-PKG-007)
@@ -2734,9 +2774,19 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     };
   }, [setShowFootnotes, setScripturePaneZoom]);
 
-  // The filter input shows the transliterated form of the clicked word; until the wiring layer
-  // is hooked up to the tooltip service we use the token id as the visible value.
-  const searchValue = filteredTokenId ?? '';
+  // FN-020(c): the filter input shows the actual word text (sourceText) of the clicked token, not
+  // the opaque numeric token id. We look up the matching item in the lemma-keyed lists (dictionary
+  // and encyclopedia). Media rows are verse-ref-keyed (per the round-2 cutoff strategy), so they
+  // don't contribute to the lookup. Falls back to the bare filteredTokenId if no match is found
+  // yet (the data may still be loading).
+  const searchValue = useMemo(() => {
+    if (!filteredTokenId) return '';
+    const dictMatch = dictionaryItems.find((i) => i.tokenId === filteredTokenId);
+    if (dictMatch) return dictMatch.sourceText;
+    const encMatch = encyclopediaItems.find((i) => i.tokenId === filteredTokenId);
+    if (encMatch) return encMatch.sourceText;
+    return filteredTokenId;
+  }, [filteredTokenId, dictionaryItems, encyclopediaItems]);
 
   // ViewMenu state surface (the hamburger menu's checkboxes + radio groups). Persists via
   // useWebViewState so memento fully round-trips (FN-017).
@@ -2765,6 +2815,10 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       usj={usj}
       annotations={annotations}
       scrRef={scrRef}
+      // FN-015: surface the real BookChapterControl in the toolbar via setScrRef from
+      // useWebViewScrollGroupScrRef. Picking a new ref drives the scroll-group, which in turn
+      // updates sibling editor / scripture panes.
+      onScrRefChange={setScrRef}
       filteredTokenId={filteredTokenId}
       hebrewDisplayMode={hebrewDisplayMode}
       greekDisplayMode={greekDisplayMode}
@@ -2786,6 +2840,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       scrollGroupId={scrollGroupId}
       onScrollGroupChange={setScrollGroupId}
       currentReferenceLabel={currentReferenceLabel}
+      // FN-020(b): pass the active resource id as the short-name so the hamburger menu's
+      // "Show translations" entry renders as "Show translations ({resourceShortName})". GAP-019
+      // (resolveResourceInfo) will eventually let us substitute a friendlier display name; for
+      // now resourceId itself is the shortest stable label the wiring layer has.
+      resourceShortName={resourceId}
       viewMenu={viewMenu}
       viewMenuHandlers={viewMenuHandlers}
       ribbons={ribbonStates}
