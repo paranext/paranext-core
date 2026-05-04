@@ -70,41 +70,72 @@ export type EnhancedResourcesNetworkObject = {
  * pattern that previously fired 8 separate proxy lookups every time any tab effect fan-out
  * triggered.
  *
- * Returns `undefined` while pending, after a rejection, or when the backend has not registered the
- * network object yet. Consumers should `if (!proxy) return` inside their effects (mirroring the
- * existing per-call guard).
+ * Returns `undefined` while pending, after a rejection, or until the backend registers the network
+ * object. Consumers should `if (!proxy) return` inside their effects (mirroring the existing
+ * per-call guard).
  *
- * Known limitation: this hook does not subscribe to network-object lifecycle events. If the backend
- * is unregistered or restarted after the first successful resolution, the hook keeps returning the
- * stale proxy reference until the web view remounts. Likewise, if the first
- * `papi.networkObjects.get` call rejects, the hook does not retry - `proxy` stays `undefined` for
- * the lifetime of the web view. Both behaviors are acceptable for the UI Performance Fix scope: the
- * prior per-effect pattern had an implicit retry loop via every BCV-driven effect re-run, but in
- * practice the rejection cases are operational fixtures (backend unavailable at first launch, or
- * persistent failure). Revisit if/when ER needs hot-restart resilience.
+ * Cold-start race handling: `papi.networkObjects.get` returns `undefined` immediately when the
+ * target network object is not yet registered (it does not wait). At app startup the renderer can
+ * mount this hook from saved web-view state before the C# data provider has registered the ER
+ * network object, so the first `get` returns `undefined`. To recover, when the initial `get`
+ * resolves to `undefined` the hook subscribes to `papi.networkObjects.onDidCreateNetworkObject` and
+ * re-attempts resolution on creation events whose `id` matches `ER_NETWORK_OBJECT_ID`. The
+ * subscription is removed once a re-attempt succeeds, and on unmount.
+ *
+ * Known limitation: if the backend is unregistered or restarted after the first successful
+ * resolution, the hook keeps returning the stale proxy reference until the web view remounts.
+ * Revisit if/when ER needs hot-restart resilience.
  */
 export function useEnhancedResourcesProxy(): EnhancedResourcesNetworkObject | undefined {
   const [proxy, setProxy] = useState<EnhancedResourcesNetworkObject | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let unsubscribe: (() => void) | undefined;
+
+    const tryResolve = async (): Promise<boolean> => {
       try {
         const resolved =
           await papi.networkObjects.get<EnhancedResourcesNetworkObject>(ER_NETWORK_OBJECT_ID);
-        if (!cancelled && resolved) {
+        if (cancelled) return false;
+        if (resolved) {
           setProxy(resolved);
+          return true;
         }
+        return false;
       } catch (err) {
-        logger.warn(
-          `useEnhancedResourcesProxy: failed to resolve ${ER_NETWORK_OBJECT_ID}: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
+        if (!cancelled) {
+          logger.warn(
+            `useEnhancedResourcesProxy: failed to resolve ${ER_NETWORK_OBJECT_ID}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+        return false;
       }
+    };
+
+    (async () => {
+      const resolved = await tryResolve();
+      if (resolved || cancelled) return;
+
+      // Initial get returned undefined (cold-start race) - subscribe and retry on creation.
+      unsubscribe = papi.networkObjects.onDidCreateNetworkObject((details) => {
+        if (cancelled) return;
+        if (details.id !== ER_NETWORK_OBJECT_ID) return;
+        // Don't await inside the listener; fire-and-forget the re-resolve.
+        tryResolve().then((ok) => {
+          if (ok && unsubscribe) {
+            unsubscribe();
+            unsubscribe = undefined;
+          }
+        });
+      });
     })();
+
     return () => {
       cancelled = true;
+      unsubscribe?.();
     };
   }, []);
 
