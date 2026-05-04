@@ -7,6 +7,7 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import type { ContentJsonPath, Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
+import { logger } from '@papi/frontend';
 import {
   Alert,
   AlertDescription,
@@ -207,7 +208,7 @@ export function EnhancedScripturePane({
       for (let i = 0; i < annotations.length; i += CHUNK_SIZE) {
         if (cancelled) return;
         const slice = annotations.slice(i, i + CHUNK_SIZE);
-        for (const annotation of slice) {
+        slice.forEach((annotation) => {
           const range = annotationToRange(annotation);
           const baseType = annotationTypeFor(annotation.kind);
           editor.setAnnotation(range, baseType, annotation.annotationId, (event, _type, id) => {
@@ -225,7 +226,7 @@ export function EnhancedScripturePane({
               latestClick(id, annotationForId);
             }
           });
-        }
+        });
         if (i + CHUNK_SIZE < annotations.length) {
           // Yield to the event loop so mousedown / setFocus / paint can run.
           // eslint-disable-next-line no-await-in-loop
@@ -235,7 +236,16 @@ export function EnhancedScripturePane({
         }
       }
     };
-    applyChunked();
+    applyChunked().catch((err) => {
+      // Vendor APIs (Editorial.setAnnotation, requestAnimationFrame) are not
+      // expected to throw, but a future version could - guard against
+      // unhandledrejection escaping the effect.
+      logger.warn(
+        `EnhancedScripturePane: chunked annotation apply failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    });
 
     return () => {
       cancelled = true;

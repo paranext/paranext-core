@@ -57,6 +57,7 @@ const STRINGS_BAG = {
 beforeEach(() => {
   setAnnotationSpy.mockClear();
   removeAnnotationSpy.mockClear();
+  vi.restoreAllMocks();
 });
 
 describe('EnhancedScripturePane', () => {
@@ -423,7 +424,6 @@ describe('EnhancedScripturePane', () => {
       expect(setAnnotationSpy).toHaveBeenCalledTimes(120);
     });
     expect(rafSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
-    rafSpy.mockRestore();
   });
 
   it('aborts mid-apply if the component unmounts during the chunked loop', async () => {
@@ -454,7 +454,9 @@ describe('EnhancedScripturePane', () => {
     unmount();
     // Now release the RAF gate. Cancellation should short-circuit before chunk 2 runs.
     if (rafCallback) rafCallback(performance.now());
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
     // Total setAnnotation calls should not have grown past the first chunk.
     expect(setAnnotationSpy).toHaveBeenCalledTimes(50);
   });
