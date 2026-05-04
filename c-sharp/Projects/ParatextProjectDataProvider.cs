@@ -1250,10 +1250,22 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                                 == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
                         )
                         {
-                            // Validator code should have ensured that value is not null.
-                            var list = value!
-                                .ToString()!
-                                .DeserializeFromJson<ResourceReferenceList>()!;
+                            // Validator code should have ensured that value is not null and
+                            // deserializes cleanly; these checks guard against unexpected states.
+                            if (value is null)
+                                throw new InvalidDataException(
+                                    $"Value for {settingName} must not be null after validation"
+                                );
+                            var serialized =
+                                value.ToString()
+                                ?? throw new InvalidDataException(
+                                    $"Value for {settingName} could not be converted to a string"
+                                );
+                            var list =
+                                serialized.DeserializeFromJson<ResourceReferenceList>()
+                                ?? throw new InvalidDataException(
+                                    $"Value for {settingName} could not be deserialized as a ResourceReferenceList"
+                                );
                             value =
                                 $"{ResourceReferenceList.CurrentFormatVersion} {list.SerializeToJson()}";
                         }

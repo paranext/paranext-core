@@ -29,9 +29,6 @@ const parseVersion = (v: string) => {
 export const resourceReferenceListValidator: ProjectSettingValidator<
   'platformScripture.modelTexts' | 'platformScripture.referencedProjectsAndResources'
 > = async (newValue, currentValue) => {
-  if (!currentValue)
-    throw new Error('Current value is missing; cannot validate resource reference list.');
-
   // Shape validation
   if (!Array.isArray(newValue.items))
     throw new Error('Resource reference list `items` must be an array.');
@@ -41,23 +38,21 @@ export const resourceReferenceListValidator: ProjectSettingValidator<
       `Resource reference at index ${invalidIndex} has an invalid shape for its \`type\`.`,
     );
 
-  // Version downgrade protection
+  // Version format validation
   const newV = parseVersion(newValue.dataVersion);
   if (!newV)
     throw new Error(
       `New \`dataVersion\` "${newValue.dataVersion}" is malformed; expected "major.minor[.patch]".`,
     );
 
-  const curV = parseVersion(currentValue.dataVersion);
-  if (!curV)
-    throw new Error(
-      `Current \`dataVersion\` "${currentValue.dataVersion}" is malformed; expected "major.minor[.patch]".`,
-    );
-
-  if (newV.major < curV.major || (newV.major === curV.major && newV.minor < curV.minor))
-    throw new Error(
-      `Refusing to downgrade resource reference list from \`dataVersion\` "${currentValue.dataVersion}" to "${newValue.dataVersion}".`,
-    );
+  // Downgrade protection: skip when currentValue is unavailable (e.g. corrupt or missing stored data)
+  if (currentValue) {
+    const curV = parseVersion(currentValue.dataVersion);
+    if (curV && (newV.major < curV.major || (newV.major === curV.major && newV.minor < curV.minor)))
+      throw new Error(
+        `Refusing to downgrade resource reference list from \`dataVersion\` "${currentValue.dataVersion}" to "${newValue.dataVersion}".`,
+      );
+  }
 
   return true;
 };

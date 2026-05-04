@@ -118,7 +118,7 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
             extraData[prop.Name] = prop.Value.Clone();
         return new UnknownResourceReference
         {
-            Name = root.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? "" : "",
+            Name = GetString(root, "name"),
             ExtraData = extraData.Count > 0 ? extraData : null,
         };
     }
@@ -133,13 +133,12 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
 
         if (value is UnknownResourceReference unknown)
         {
-            writer.WriteString("name", unknown.Name);
+            // ExtraData holds all original properties; write them back verbatim to avoid
+            // injecting properties (e.g. "name":"") that were absent in the original JSON.
             if (unknown.ExtraData is not null)
             {
                 foreach (var kvp in unknown.ExtraData)
                 {
-                    if (kvp.Key == "name")
-                        continue;
                     writer.WritePropertyName(kvp.Key);
                     kvp.Value.WriteTo(writer);
                 }
