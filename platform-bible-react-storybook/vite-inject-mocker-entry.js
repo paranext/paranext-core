@@ -3759,6 +3759,32 @@ video:where(.pr-twp,.pr-twp *) {
 .tw-group:hover .group-hover\\:tw-opacity-100 {
   opacity: 1;
 }
+.tw-group.tw-toaster .group-\\[\\.tw-toaster\\]\\:tw-border-border {
+  border-color: hsl(var(--border));
+}
+.tw-group.tw-toast .group-\\[\\.tw-toast\\]\\:tw-bg-muted {
+  background-color: hsl(var(--muted));
+}
+.tw-group.tw-toast .group-\\[\\.tw-toast\\]\\:tw-bg-primary {
+  background-color: hsl(var(--primary));
+}
+.tw-group.tw-toaster .group-\\[\\.tw-toaster\\]\\:tw-bg-background {
+  background-color: hsl(var(--background));
+}
+.tw-group.tw-toast .group-\\[\\.tw-toast\\]\\:tw-text-muted-foreground {
+  color: hsl(var(--muted-foreground));
+}
+.tw-group.tw-toast .group-\\[\\.tw-toast\\]\\:tw-text-primary-foreground {
+  color: hsl(var(--primary-foreground));
+}
+.tw-group.tw-toaster .group-\\[\\.tw-toaster\\]\\:tw-text-foreground {
+  color: hsl(var(--foreground));
+}
+.tw-group.tw-toaster .group-\\[\\.tw-toaster\\]\\:tw-shadow-lg {
+  --tw-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --tw-shadow-colored: 0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
 .tw-peer:disabled ~ .peer-disabled\\:tw-cursor-not-allowed {
   cursor: not-allowed;
 }

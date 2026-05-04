@@ -227,3 +227,70 @@ export const Interactive: Story = {
     },
   },
 };
+
+/**
+ * Renders the toaster inside a `light`-classed wrapper, so the toast inherits the light theme's CSS
+ * variables via the cascade. Useful as a Chromatic baseline for the dark counterpart below.
+ */
+export const LightTheme: Story = {
+  render: () => (
+    <div className="light tw-space-y-4 tw-bg-background tw-p-4">
+      <p className="tw-text-sm tw-text-muted-foreground">
+        The toast below should render with light-mode colors (white background, dark text).
+      </p>
+      <Button
+        onClick={() =>
+          sonner('Light theme toast', {
+            description: 'Should have a white background with dark text.',
+          })
+        }
+      >
+        Show light toast
+      </Button>
+      <Sonner />
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Toast inside a `light`-classed wrapper — picks up the light theme via the CSS-variable cascade.',
+      },
+    },
+  },
+};
+
+/**
+ * Renders the toaster inside a `dark`-classed wrapper. The shadcn-style `tw-bg-background` /
+ * `tw-text-foreground` classes on the toast resolve to the dark theme's CSS variables purely via
+ * the cascade — no `theme` prop on `<Toaster>` and no DOM-observing hook required. This is the
+ * regression-guard for the original bug where unprefixed classes meant the toast always rendered in
+ * light mode.
+ */
+export const DarkTheme: Story = {
+  render: () => (
+    <div className="dark tw-space-y-4 tw-bg-background tw-p-4">
+      <p className="tw-text-sm tw-text-muted-foreground">
+        The toast below should render with dark-mode colors (dark background, light text).
+      </p>
+      <Button
+        onClick={() =>
+          sonner('Dark theme toast', {
+            description: 'Should have a dark background with light text.',
+          })
+        }
+      >
+        Show dark toast
+      </Button>
+      <Sonner />
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Toast inside a `dark`-classed wrapper — the toast inherits the dark theme via the same CSS-variable cascade every other shadcn-ui component uses.',
+      },
+    },
+  },
+};

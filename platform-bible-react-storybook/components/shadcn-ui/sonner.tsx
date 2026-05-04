@@ -24,10 +24,11 @@ function Sonner({ ...props }: SonnerProps) {
       toastOptions={{
         classNames: {
           toast:
-            'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg',
-          description: 'group-[.toast]:text-muted-foreground',
-          actionButton: 'group-[.toast]:bg-primary group-[.toast]:text-primary-foreground',
-          cancelButton: 'group-[.toast]:bg-muted group-[.toast]:text-muted-foreground',
+            'tw-group tw-toast group-[.tw-toaster]:tw-bg-background group-[.tw-toaster]:tw-text-foreground group-[.tw-toaster]:tw-border-border group-[.tw-toaster]:tw-shadow-lg',
+          description: 'group-[.tw-toast]:tw-text-muted-foreground',
+          actionButton:
+            'group-[.tw-toast]:tw-bg-primary group-[.tw-toast]:tw-text-primary-foreground',
+          cancelButton: 'group-[.tw-toast]:tw-bg-muted group-[.tw-toast]:tw-text-muted-foreground',
         },
       }}
       {...props}
