@@ -169,14 +169,14 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  it('calls syncOpenProjects command when clicked', async () => {
+  it('calls openSyncStatus command when clicked', async () => {
     mockSendCommand(true);
     render(<PlatformBibleToolbar />);
     const btn = await screen.findByRole('button', { name: 'Sync' });
     fireEvent.click(btn);
     await waitFor(() => {
       expect(vi.mocked(sendCommand)).toHaveBeenLastCalledWith(
-        'paratextBibleSendReceive.syncOpenProjects',
+        'paratextBibleSendReceive.openSyncStatus',
       );
     });
   });
@@ -218,13 +218,13 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  it('logs a warning when syncOpenProjects command fails', async () => {
+  it('logs a warning when openSyncStatus command fails', async () => {
     const { logger } = await import('@shared/services/logger.service');
     vi.mocked(sendCommand).mockImplementation(
       // sendCommand has a complex generic signature; cast is required for the mock implementation
       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
       (async (commandName: string) => {
-        if (commandName === 'paratextBibleSendReceive.syncOpenProjects')
+        if (commandName === 'paratextBibleSendReceive.openSyncStatus')
           throw new Error('Sync failed');
         if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
         if (commandName === 'platform.getOSPlatform') return 'win32';
@@ -239,7 +239,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     fireEvent.click(btn);
     await waitFor(() => {
       expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
-        expect.stringContaining('Toolbar caught an error while trying to sync open projects:'),
+        expect.stringContaining('Toolbar caught an error while trying to open sync status:'),
       );
     });
   });

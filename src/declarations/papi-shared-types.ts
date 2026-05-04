@@ -112,6 +112,11 @@ declare module 'papi-shared-types' {
     // `extension-host.ts`
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
+
+    // These commands are provided by the paratextBibleSendReceive extension. They are declared here
+    // so core renderer code (e.g. toolbar) can call them with type safety.
+    /** Opens the Sync Status floating window. Returns the web view id, or undefined on failure. */
+    'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
   }
 
   /**
@@ -122,6 +127,39 @@ declare module 'papi-shared-types' {
    * @example 'platform.quit';
    */
   export type CommandNames = keyof CommandHandlers;
+
+  /**
+   * Event data types for each network event available on the papi. Each extension can extend this
+   * interface to add events it emits with `papi.network.createNetworkEventEmitter`.
+   *
+   * Note: Event names must consist of two strings separated by at least one period. We recommend
+   * one period and lower camel case in case we expand the api in the future to allow dot notation.
+   *
+   * An extension can extend this interface to add types for the network events it emits by adding
+   * the following to its `.d.ts` file:
+   *
+   * @example
+   *
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export interface NetworkEventHandlers {
+   *     'myExtension.onSomethingChanged': { someData: string };
+   *   }
+   * }
+   * ```
+   */
+  export interface NetworkEventHandlers {
+    /** Fired by paratextBibleSendReceive whenever a sync starts or ends. */
+    'paratextBibleSendReceive.onSyncStateChanged': { isSyncing: boolean };
+  }
+
+  /**
+   * Names for each network event available on the papi.
+   *
+   * Automatically includes all extensions' network events that are added to
+   * {@link NetworkEventHandlers}.
+   */
+  export type NetworkEventNames = keyof NetworkEventHandlers;
 
   // #endregion
 
