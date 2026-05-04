@@ -40,6 +40,13 @@ type DictionaryDisplayItemLocalizedStrings = {
  */
 export type DictionaryDisplayItemData = {
   tokenId: string;
+  /**
+   * Lexicon entry key (NFD-normalized lemma) - the same key the C# loader writes (see
+   * `DictionaryService.GetDictionaryEntry`). Used by the wiring layer when calling
+   * `readDictionaryEntry` to drill into senses. Distinct from `tokenId` (which is the
+   * per-occurrence word-token id from Marble).
+   */
+  entryId: string;
   /** Lemma in original Hebrew/Greek script. */
   sourceText: string;
   /** Transliteration. */

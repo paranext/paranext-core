@@ -1322,6 +1322,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
 
         const mapped: DictionaryDisplayItemData[] = result.items.map((it) => ({
           tokenId: it.tokenId,
+          // GAP-021 fix: pass the lexicon entry key (lemma) through so a later
+          // readDictionaryEntry call can resolve to the right entry. Previously
+          // dropped from the mapping, which made the lookup fall back to tokenId
+          // and the C# service returned "Lexicon entry not found".
+          entryId: it.entryId,
           sourceText: it.sourceText,
           translit: it.translit,
           totalOccurrencesInAllBooks: it.occurrenceCount,
@@ -1370,7 +1375,10 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     (async () => {
       try {
         const dto = await erProxy.readDictionaryEntry({
-          entryId: dictionarySelectedTokenId,
+          // GAP-021 fix: use the lemma from the display item, not the numeric
+          // token id. The C# DictionaryService keys entries by NFD-normalized
+          // lemma; passing tokenId here returned "Lexicon entry not found".
+          entryId: targetItem.entryId,
           glossLanguage,
         });
         if (cancelled) return;

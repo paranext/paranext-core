@@ -26,6 +26,7 @@ export type MockDictionaryEntry = DictionaryDisplayItemData;
 /** Hebrew entry derived from gm-020 (אֱלֹהִים -> "God") */
 export const MOCK_DICT_ENTRY_ELOHIM: MockDictionaryEntry = {
   tokenId: '00100100100008',
+  entryId: 'אֱלֹהִים',
   sourceText: 'אֱלֹהִים',
   translit: 'ʾĕlōhîm',
   totalOccurrencesInAllBooks: 2602,
@@ -58,6 +59,7 @@ export const MOCK_DICT_ENTRY_ELOHIM: MockDictionaryEntry = {
 /** Hebrew entry: bere'shiyt - "in the beginning" (from gm-001 token data) */
 export const MOCK_DICT_ENTRY_BERESHIT: MockDictionaryEntry = {
   tokenId: '00100100100004',
+  entryId: 'רֵאשִׁית',
   sourceText: 'רֵאשִׁית',
   translit: 'rēʾšît',
   totalOccurrencesInAllBooks: 51,
@@ -94,6 +96,7 @@ export const MOCK_DICT_ENTRY_BERESHIT: MockDictionaryEntry = {
 /** Hebrew entry: yasha (verb) - basic shape */
 export const MOCK_DICT_ENTRY_YASHA: MockDictionaryEntry = {
   tokenId: '01900300100008',
+  entryId: 'יָשַׁע',
   sourceText: 'יָשַׁע',
   translit: 'yāšaʿ',
   totalOccurrencesInAllBooks: 205,
@@ -123,6 +126,7 @@ export const MOCK_DICT_ENTRY_YASHA: MockDictionaryEntry = {
 /** Greek entry: logos (derived from gm-023/024 with related lexemes) */
 export const MOCK_DICT_ENTRY_LOGOS: MockDictionaryEntry = {
   tokenId: '04000100100002',
+  entryId: 'λόγος',
   sourceText: 'λόγος',
   translit: 'logos',
   totalOccurrencesInAllBooks: 330,
@@ -161,6 +165,7 @@ export const MOCK_DICT_ENTRY_LOGOS: MockDictionaryEntry = {
 /** Greek entry: agape (love) */
 export const MOCK_DICT_ENTRY_AGAPE: MockDictionaryEntry = {
   tokenId: '04600130100008',
+  entryId: 'ἀγάπη',
   sourceText: 'ἀγάπη',
   translit: 'agapē',
   totalOccurrencesInAllBooks: 116,

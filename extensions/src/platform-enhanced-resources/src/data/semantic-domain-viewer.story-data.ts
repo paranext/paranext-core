@@ -128,6 +128,7 @@ export const MOCK_DICT_ENTRIES_FILTERED: SemanticDomainFilteredItem[] = [
     sourceLanguageText: 'λόγος',
     transliteration: 'logos',
     tokenId: 'logos',
+    entryId: 'λόγος',
     sourceText: 'λόγος',
     translit: 'logos',
     senses: [
@@ -157,6 +158,7 @@ export const MOCK_DICT_ENTRIES_FILTERED: SemanticDomainFilteredItem[] = [
     sourceLanguageText: 'ῥῆμα',
     transliteration: 'rhema',
     tokenId: 'rhema',
+    entryId: 'ῥῆμα',
     sourceText: 'ῥῆμα',
     translit: 'rhema',
     senses: [
@@ -177,6 +179,7 @@ export const MOCK_DICT_ENTRIES_FILTERED: SemanticDomainFilteredItem[] = [
     sourceLanguageText: 'ἀγγελία',
     transliteration: 'aggelia',
     tokenId: 'aggelia',
+    entryId: 'ἀγγελία',
     sourceText: 'ἀγγελία',
     translit: 'aggelia',
     senses: [
