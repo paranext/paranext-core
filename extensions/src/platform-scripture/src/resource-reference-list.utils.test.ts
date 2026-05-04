@@ -108,20 +108,28 @@ describe('resourceReferenceListValidator', () => {
     );
   });
 
-  it('throws on a malformed new dataVersion string', async () => {
-    const newValue = validList({ dataVersion: 'not-semver' });
+  it.each([
+    ['not-semver'],
+    ['1.'], // trailing empty segment — Number('') === 0, not NaN
+    ['..'], // all empty segments
+    [undefined as unknown as string], // non-string dataVersion — would crash parseVersion without a type guard
+  ])('throws on malformed new dataVersion "%s"', async (dataVersion) => {
+    const newValue = validList({ dataVersion });
     await expect(resourceReferenceListValidator(newValue, validList(), {})).rejects.toThrow(
-      /new `dataVersion` "not-semver" is malformed/i,
+      /new `dataVersion` .* is malformed/i,
     );
   });
 
-  it('throws when current dataVersion cannot be parsed', async () => {
-    const newValue = validList({ dataVersion: '2.0.0' });
-    const current = validList({ dataVersion: 'garbage' });
-    await expect(resourceReferenceListValidator(newValue, current, {})).rejects.toThrow(
-      /current `dataVersion` "garbage" is malformed/i,
-    );
-  });
+  it.each([['garbage'], ['1.'], ['..'], [undefined as unknown as string]])(
+    'throws when current dataVersion "%s" cannot be parsed',
+    async (dataVersion) => {
+      const newValue = validList({ dataVersion: '2.0.0' });
+      const current = validList({ dataVersion });
+      await expect(resourceReferenceListValidator(newValue, current, {})).rejects.toThrow(
+        /current `dataVersion` .* is malformed/i,
+      );
+    },
+  );
 
   it('accepts a same-version write', async () => {
     const current = validList({ dataVersion: '1.2.3' });

@@ -21,8 +21,11 @@ export const isValidResourceReference = (item: unknown): boolean => {
 };
 
 const parseVersion = (v: string) => {
-  const parts = v.split('.').map(Number);
-  if (parts.length < 2 || parts.some(Number.isNaN)) return undefined;
+  if (typeof v !== 'string') return undefined;
+  const segments = v.split('.');
+  if (segments.length < 2 || segments.some((s) => s === '')) return undefined;
+  const parts = segments.map(Number);
+  if (parts.some(Number.isNaN)) return undefined;
   return { major: parts[0], minor: parts[1] };
 };
 
@@ -45,14 +48,18 @@ export const resourceReferenceListValidator: ProjectSettingValidator<
       `New \`dataVersion\` "${newValue.dataVersion}" is malformed; expected "major.minor[.patch]".`,
     );
 
-  // Downgrade protection: skip when currentValue is unavailable (e.g. corrupt or missing stored data)
-  if (currentValue) {
-    const curV = parseVersion(currentValue.dataVersion);
-    if (curV && (newV.major < curV.major || (newV.major === curV.major && newV.minor < curV.minor)))
-      throw new Error(
-        `Refusing to downgrade resource reference list from \`dataVersion\` "${currentValue.dataVersion}" to "${newValue.dataVersion}".`,
-      );
-  }
+  // Downgrade protection
+  if (!currentValue)
+    throw new Error('Current value is missing; cannot validate resource reference list.');
+  const curV = parseVersion(currentValue.dataVersion);
+  if (!curV)
+    throw new Error(
+      `Current \`dataVersion\` "${currentValue.dataVersion}" is malformed; expected "major.minor[.patch]".`,
+    );
+  if (newV.major < curV.major || (newV.major === curV.major && newV.minor < curV.minor))
+    throw new Error(
+      `Refusing to downgrade resource reference list from \`dataVersion\` "${currentValue.dataVersion}" to "${newValue.dataVersion}".`,
+    );
 
   return true;
 };
