@@ -147,6 +147,21 @@ public class ResourceReferenceListTests
         Assert.That(reSerialised, Does.Contain("preserved"));
     }
 
+    [Test]
+    public void UnknownType_WithNonStringName_DeserializesToEmptyName()
+    {
+        // A numeric "name" passes the TypeScript validator (unknown types accept any shape)
+        // but previously threw InvalidOperationException in C#. Verify it now deserializes safely.
+        const string json = """{"dataVersion":"1.0.0","items":[{"type":"futureType","name":42}]}""";
+
+        var result = json.DeserializeFromJson<ResourceReferenceList>();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Items, Has.Count.EqualTo(1));
+        var item = result.Items[0] as UnknownResourceReference;
+        Assert.That(item, Is.Not.Null);
+        Assert.That(item!.Name, Is.EqualTo(""));
+    }
     #endregion
 
     #region Serialization — JSON property names are camelCase
