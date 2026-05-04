@@ -279,6 +279,42 @@ describe('EnhancedScripturePane', () => {
     );
   });
 
+  it('does not re-run the annotation effect when re-rendered with the same props (no fake-dep churn)', () => {
+    const annotation: MarbleAnnotation = {
+      usjPath: '$.content[0].content[1]',
+      kind: 'word',
+      annotationId: 'wg-001',
+      metadata: {},
+    };
+    const usj = { type: 'USJ' as const, version: '3.1' as const, content: [] };
+    // Hold every prop reference stable across renders so the only thing that *could* change
+    // is the unstable inline `() => {}` defaults the component itself fabricates.
+    const annotationsArr = [annotation];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+    setAnnotationSpy.mockClear();
+    removeAnnotationSpy.mockClear();
+    // Re-render with the same props. With unstable defaults (`() => {}` recreated each render),
+    // the effect re-runs and calls setAnnotation again. With Fix 1's module-level constants,
+    // the dep array sees identical references and the effect does NOT re-run.
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    expect(setAnnotationSpy).not.toHaveBeenCalled();
+    expect(removeAnnotationSpy).not.toHaveBeenCalled();
+  });
+
   it('removes all applied annotations on unmount', () => {
     const { unmount } = render(
       <EnhancedScripturePane

@@ -141,6 +141,15 @@ function annotationTypeFor(kind: MarbleAnnotation['kind']): string {
   return kind === 'word' ? ANNOTATION_TYPE_MARBLE_WORD : ANNOTATION_TYPE_MARBLE_NOTE;
 }
 
+// Module-level no-op defaults so omitting the callbacks does not generate a fresh
+// function identity on every render (which would falsely invalidate the annotation
+// effect's dependency array). Identity-stable defaults are the cheapest way to
+// guarantee the effect re-runs only when an actual handler changes.
+const NOOP_TOKEN_CLICK: NonNullable<EnhancedScripturePaneProps['onTokenClick']> = () => {};
+const NOOP_TOKEN_CONTEXT_MENU: NonNullable<
+  EnhancedScripturePaneProps['onTokenContextMenu']
+> = () => {};
+
 export function EnhancedScripturePane({
   usj,
   annotations,
@@ -151,8 +160,8 @@ export function EnhancedScripturePane({
   isLoading = false,
   errorMessage,
   scrRef,
-  onTokenClick = () => {},
-  onTokenContextMenu = () => {},
+  onTokenClick = NOOP_TOKEN_CLICK,
+  onTokenContextMenu = NOOP_TOKEN_CONTEXT_MENU,
   localizedStringsWithLoadingState = [{}, false],
 }: EnhancedScripturePaneProps) {
   // Editorial's forwarded ref is typed `EditorRef | null`; we match that to satisfy the prop type.
