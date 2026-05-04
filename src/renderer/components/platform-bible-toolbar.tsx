@@ -12,7 +12,6 @@ import { availableScrollGroupIds } from '@renderer/services/scroll-group.service
 import { localThemeService } from '@renderer/services/theme.service-host';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
-import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
@@ -29,7 +28,6 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  useEvent,
   usePromise,
 } from 'platform-bible-react';
 import {
@@ -70,8 +68,6 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_theme_change_to_dark%',
   '%toolbar_theme_loading%',
   '%toolbar_theme_loading_error%',
-  '%toolbar_sync%',
-  '%toolbar_sync_projects%',
 ];
 
 export function PlatformBibleToolbar() {
@@ -149,33 +145,6 @@ export function PlatformBibleToolbar() {
     'Marketing Version',
   );
 
-  // Default is `undefined` (not yet resolved); the command itself always returns `boolean`.
-  const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
-    undefined,
-  );
-
-  const checkIfSendReceiveAvailable = useCallback(async () => {
-    try {
-      // This command comes from an extension and is not typed in CommandHandlers.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      const isAvailable = await (sendCommand as any)('platformGetResources.isSendReceiveAvailable');
-      setIsSendReceiveAvailable(isAvailable);
-    } catch (e) {
-      logger.warn(`Toolbar could not determine send/receive availability: ${getErrorMessage(e)}`);
-      setIsSendReceiveAvailable(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    checkIfSendReceiveAvailable();
-  }, [checkIfSendReceiveAvailable]);
-
-  const onDidReloadExtensions = useMemo(
-    () => getNetworkEvent('platform.onDidReloadExtensions'),
-    [],
-  );
-  useEvent(onDidReloadExtensions, checkIfSendReceiveAvailable);
-
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);
 
   /** Get the theme on first load so we can show the right symbol on the toolbar */
@@ -223,45 +192,6 @@ export function PlatformBibleToolbar() {
       appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
       configAreaChildren={
         <>
-          {isSendReceiveAvailable !== false && (
-            // While loading (undefined), the button stays in the DOM so layout doesn't shift, but
-            // is hidden via tw-invisible (visual), aria-hidden (accessibility tree), and tabIndex=-1
-            // (keyboard navigation). All three are required: tw-invisible alone is still reachable
-            // by AT and keyboard; aria-hidden alone is still tab-focusable.
-            <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    data-testid="toolbar-sync-button"
-                    variant="ghost"
-                    size="sm"
-                    className={cn(
-                      'pr-twp tw-h-8 tw-flex-shrink-0',
-                      isSendReceiveAvailable === undefined && 'tw-invisible',
-                    )}
-                    // || undefined removes the attribute entirely when visible; aria-hidden="false" has different semantics than omitting it
-                    aria-hidden={isSendReceiveAvailable === undefined || undefined}
-                    tabIndex={isSendReceiveAvailable === undefined ? -1 : undefined}
-                    onClick={() => {
-                      // This command comes from an extension and is not typed in CommandHandlers.
-                      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                      (sendCommand as any)('paratextBibleSendReceive.syncOpenProjects').catch(
-                        (e: unknown) =>
-                          logger.warn(
-                            `Toolbar caught an error while trying to sync open projects: ${getErrorMessage(e)}`,
-                          ),
-                      );
-                    }}
-                  >
-                    {localizedStrings['%toolbar_sync%']}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="tw-font-light">{localizedStrings['%toolbar_sync_projects%']}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
           {marketingVersion !== '' && (
             <TooltipProvider delayDuration={TOOLTIP_DELAY}>
               <Tooltip>
@@ -318,11 +248,7 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() => {
-                    // This command comes from an extension and is not typed in CommandHandlers.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                    (sendCommand as any)('paratextRegistration.showInternetSettings');
-                  }}
+                  onClick={() => sendCommand('paratextRegistration.showInternetSettings')}
                 >
                   <Network />
                 </Button>
@@ -343,11 +269,7 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() => {
-                    // This command comes from an extension and is not typed in CommandHandlers.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                    (sendCommand as any)('paratextRegistration.showParatextRegistration');
-                  }}
+                  onClick={() => sendCommand('paratextRegistration.showParatextRegistration')}
                 >
                   <CircleUserRound />
                 </Button>
@@ -371,11 +293,7 @@ export function PlatformBibleToolbar() {
               variant="ghost"
               size="icon"
               className="tw-h-8"
-              onClick={() => {
-                // This command comes from an extension and is not typed in CommandHandlers.
-                // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                (sendCommand as any)('platformGetResources.openHome');
-              }}
+              onClick={() => sendCommand('platformGetResources.openHome')}
             >
               <HomeIcon />
             </Button>
