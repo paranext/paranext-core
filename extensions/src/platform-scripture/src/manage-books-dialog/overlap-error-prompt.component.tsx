@@ -59,7 +59,7 @@ export function OverlapErrorPrompt({ error, t, onDismiss }: OverlapErrorPromptPr
           )}
           <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
             <Button autoFocus onClick={onDismiss}>
-              {t('%manageBooks_import_overlapDismiss%', 'OK')}
+              {t('%manageBooks_import_overlapDismiss%', 'Got it')}
             </Button>
           </div>
         </div>

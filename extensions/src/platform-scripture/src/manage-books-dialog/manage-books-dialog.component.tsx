@@ -52,7 +52,7 @@ import {
   ManageBooksImportStrategy,
   MutationResult,
 } from './manage-books-dialog.types';
-import { fmtTemplate } from './manage-books-dialog.utils';
+import { computeCompareState, fmtTemplate } from './manage-books-dialog.utils';
 import { DeleteConfirmPrompt } from './delete-confirm-prompt.component';
 import { CreatePreflightPrompt } from './create-preflight-prompt.component';
 import { UsxConfirmPrompt } from './usx-confirm-prompt.component';
@@ -203,17 +203,6 @@ export type ManageBooksDialogProps = {
 // --------------------------------------------------------------------------
 // Helpers
 // --------------------------------------------------------------------------
-
-const computeCompareState = (
-  sourceDate: string | undefined,
-  destDate: string | undefined,
-): ManageBooksComparisonState => {
-  if (!sourceDate && !destDate) return 'undetermined';
-  if (!sourceDate) return 'sourceDoesNotExist';
-  if (!destDate) return 'destDoesNotExist';
-  if (sourceDate === destDate) return 'filesAreSame';
-  return sourceDate > destDate ? 'sourceIsNewer' : 'sourceIsOlder';
-};
 
 /** A7 default-eligibility per comparison state. */
 const isDefaultEligible = (state: ManageBooksComparisonState): boolean => {

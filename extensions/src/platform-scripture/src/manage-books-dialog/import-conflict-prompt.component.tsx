@@ -62,12 +62,12 @@ export function ImportConflictPrompt({
             </DialogDescription>
           </DialogHeader>
           <p className="tw-text-sm tw-text-muted-foreground">
-            {t(
-              '%manageBooks_import_conflictBody2%',
-              'Choose how to proceed with the import or close to cancel.',
-            )}
+            {t('%manageBooks_import_conflictBody2%', 'Choose how to proceed with the import.')}
           </p>
           <div className="tw-flex tw-flex-col tw-gap-2 sm:tw-flex-row sm:tw-justify-end">
+            <Button variant="ghost" onClick={onCancel}>
+              {t('%manageBooks_import_conflictCancel%', 'Cancel')}
+            </Button>
             <Button
               variant="outline"
               onClick={() => {

@@ -207,6 +207,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_import_conflictTitle%',
   '%manageBooks_import_conflictBody%',
   '%manageBooks_import_conflictBody2%',
+  '%manageBooks_import_conflictCancel%',
   '%manageBooks_import_replaceEntireBooks%',
   '%manageBooks_import_nonExistingChapters%',
   '%manageBooks_import_usxConfirmTitle%',

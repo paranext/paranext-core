@@ -90,7 +90,7 @@ const ENGLISH_FALLBACKS: Record<GreekEstherTemplatePickerLocalizedStringKey, str
   '%manageBooks_createEsther_lxx%': 'Septuagint (LXX) — verse subdivisions: 1a, 1b, 1c…',
   '%manageBooks_createEsther_vulgate%': 'Vulgate — additional chapters 11 through 16',
   '%manageBooks_createEsther_modernScholars%': 'Modern Scholars — additional chapters A through F',
-  '%manageBooks_createEsther_okButton%': 'OK',
+  '%manageBooks_createEsther_okButton%': 'Choose',
   '%manageBooks_createEsther_cancelButton%': 'Cancel',
   '%manageBooks_createEsther_radioGroupAriaLabel%': 'Greek Esther template options',
 };
