@@ -315,6 +315,93 @@ describe('EnhancedScripturePane', () => {
     expect(removeAnnotationSpy).not.toHaveBeenCalled();
   });
 
+  it('toggling filteredTokenId does not re-set base annotations', () => {
+    const annotation: MarbleAnnotation = {
+      usjPath: '$.content[0].content[1]',
+      kind: 'word',
+      annotationId: 'wg-001',
+      metadata: {},
+    };
+    const annotationsArr = [annotation];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const usj = { type: 'USJ' as const, version: '3.1' as const, content: [] };
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+    setAnnotationSpy.mockClear();
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        filteredTokenId="wg-001"
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+    expect(setAnnotationSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      'marble-filter',
+      'filter-wg-001',
+    );
+    setAnnotationSpy.mockClear();
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    expect(setAnnotationSpy).not.toHaveBeenCalled();
+    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-filter', 'filter-wg-001');
+  });
+
+  it('toggling highlightAllResearchTerms does not re-set base annotations or filter overlay', () => {
+    const annotation: MarbleAnnotation = {
+      usjPath: '$.content[0].content[1]',
+      kind: 'word',
+      annotationId: 'wg-001',
+      metadata: {},
+    };
+    const annotationsArr = [annotation];
+    const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
+    const usj = { type: 'USJ' as const, version: '3.1' as const, content: [] };
+    const { rerender } = render(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        filteredTokenId="wg-001"
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    // First render: 1 base + 1 filter = 2 calls.
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(2);
+    setAnnotationSpy.mockClear();
+    removeAnnotationSpy.mockClear();
+
+    rerender(
+      <EnhancedScripturePane
+        usj={usj}
+        annotations={annotationsArr}
+        filteredTokenId="wg-001"
+        highlightAllResearchTerms
+        localizedStringsWithLoadingState={localized}
+      />,
+    );
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+    expect(setAnnotationSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      'marble-highlight',
+      'highlight-wg-001',
+    );
+  });
+
   it('removes all applied annotations on unmount', () => {
     const { unmount } = render(
       <EnhancedScripturePane

@@ -181,6 +181,18 @@ export function EnhancedScripturePane({
   const filterActiveLabel = getLocalizedString('%enhancedResources_scripturePane_filterActive%');
   const footnotesHeader = getLocalizedString('%enhancedResources_scripturePane_footnotesHeader%');
 
+  // Hold the latest token-click + context-menu callbacks in a ref so the
+  // annotation effect's onClick closure can read them WITHOUT putting them in
+  // its dep array. Combined with Fix 1's stable defaults, this means the
+  // base-annotation effect only re-fires when the annotation set or the USJ
+  // document actually changes.
+  const handlersRef = useRef({ onTokenClick, onTokenContextMenu });
+  useEffect(() => {
+    handlersRef.current = { onTokenClick, onTokenContextMenu };
+  }, [onTokenClick, onTokenContextMenu]);
+
+  // Effect A — base marble-word / marble-note annotations.
+  // Re-runs only when the chapter content or annotation set changes.
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !usj) return undefined;
@@ -193,63 +205,64 @@ export function EnhancedScripturePane({
       editor.setAnnotation(range, baseType, annotation.annotationId, (event, _type, id) => {
         const annotationForId = annotationsById.get(id);
         if (!annotationForId) return;
+        const { onTokenClick: latestClick, onTokenContextMenu: latestContextMenu } =
+          handlersRef.current;
         if (event.button === RIGHT_MOUSE_BUTTON) {
-          // Editorial gives us a DOM MouseEvent; consumers expect the React MouseEvent surface
-          // (only `.button`, `.preventDefault()`, etc are read), so a structural cast is correct.
+          // Editorial gives us a DOM MouseEvent; consumers expect the React
+          // MouseEvent surface (only `.button`, `.preventDefault()`, etc are
+          // read), so a structural cast is correct.
           // eslint-disable-next-line no-type-assertion/no-type-assertion
-          onTokenContextMenu(id, annotationForId, event as unknown as ReactMouseEvent);
+          latestContextMenu(id, annotationForId, event as unknown as ReactMouseEvent);
         } else {
-          onTokenClick(id, annotationForId);
+          latestClick(id, annotationForId);
         }
       });
     });
-
-    if (filteredTokenId) {
-      const target = annotationsById.get(filteredTokenId);
-      if (target) {
-        editor.setAnnotation(
-          annotationToRange(target),
-          ANNOTATION_TYPE_FILTER,
-          `filter-${filteredTokenId}`,
-        );
-      }
-    }
-
-    if (highlightAllResearchTerms) {
-      annotations
-        .filter((a) => a.kind === 'word')
-        .forEach((a) => {
-          editor.setAnnotation(
-            annotationToRange(a),
-            ANNOTATION_TYPE_HIGHLIGHT,
-            `highlight-${a.annotationId}`,
-          );
-        });
-    }
 
     return () => {
       annotations.forEach((a) => {
         editor.removeAnnotation(annotationTypeFor(a.kind), a.annotationId);
       });
-      if (filteredTokenId) {
-        editor.removeAnnotation(ANNOTATION_TYPE_FILTER, `filter-${filteredTokenId}`);
-      }
-      if (highlightAllResearchTerms) {
-        annotations
-          .filter((a) => a.kind === 'word')
-          .forEach((a) => {
-            editor.removeAnnotation(ANNOTATION_TYPE_HIGHLIGHT, `highlight-${a.annotationId}`);
-          });
-      }
     };
-  }, [
-    usj,
-    annotations,
-    filteredTokenId,
-    highlightAllResearchTerms,
-    onTokenClick,
-    onTokenContextMenu,
-  ]);
+  }, [usj, annotations]);
+
+  // Effect B — single marble-filter overlay.
+  // Re-runs only when the filtered token changes (or when annotations change
+  // and the filter target may have appeared / disappeared).
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !usj || !filteredTokenId) return undefined;
+    const target = annotations.find((a) => a.annotationId === filteredTokenId);
+    if (!target) return undefined;
+    editor.setAnnotation(
+      annotationToRange(target),
+      ANNOTATION_TYPE_FILTER,
+      `filter-${filteredTokenId}`,
+    );
+    return () => {
+      editor.removeAnnotation(ANNOTATION_TYPE_FILTER, `filter-${filteredTokenId}`);
+    };
+  }, [usj, annotations, filteredTokenId]);
+
+  // Effect C — marble-highlight overlays for every word annotation.
+  // Re-runs only when the highlight toggle or annotation set changes.
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !usj || !highlightAllResearchTerms) return undefined;
+    const wordAnnotations = annotations.filter((a) => a.kind === 'word');
+    wordAnnotations.forEach((a) => {
+      editor.setAnnotation(
+        annotationToRange(a),
+        ANNOTATION_TYPE_HIGHLIGHT,
+        `highlight-${a.annotationId}`,
+      );
+    });
+    return () => {
+      wordAnnotations.forEach((a) => {
+        editor.removeAnnotation(ANNOTATION_TYPE_HIGHLIGHT, `highlight-${a.annotationId}`);
+      });
+    };
+  }, [usj, annotations, highlightAllResearchTerms]);
 
   if (errorMessage) {
     return (

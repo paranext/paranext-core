@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import type { WebViewProps } from '@papi/core';
@@ -133,6 +134,11 @@ export type EnhancedResourceWebViewProps = {
   scripturePaneZoom?: number;
   scripturePaneError?: string;
   onTokenClick?: (tokenId: string, annotation: MarbleAnnotation) => void;
+  onTokenContextMenu?: (
+    tokenId: string,
+    annotation: MarbleAnnotation,
+    event: ReactMouseEvent,
+  ) => void;
 
   // Toolbar
   activeTab: ResearchTab;
@@ -360,6 +366,7 @@ export function EnhancedResourceWebView({
   scripturePaneZoom = 1,
   scripturePaneError,
   onTokenClick = () => {},
+  onTokenContextMenu = () => {},
 
   activeTab,
   onTabChange,
@@ -556,6 +563,7 @@ export function EnhancedResourceWebView({
                 highlightAllResearchTerms={highlightMode === 'all-research-terms'}
                 scrRef={scrRef}
                 onTokenClick={onTokenClick}
+                onTokenContextMenu={onTokenContextMenu}
                 localizedStringsWithLoadingState={childStrings}
               />
             </ResizablePanel>
@@ -2526,6 +2534,19 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     [setFilteredTokenId],
   );
 
+  // FN-020 / BHV-308: context-menu placeholder. The real context-menu wiring
+  // will populate this callback in a follow-up; passing a stable useCallback
+  // reference now prevents the EnhancedScripturePane annotation effect from
+  // re-running on every parent re-render. Typed via NonNullable<...> so we can
+  // omit the (currently unused) parameter names without tripping
+  // @typescript-eslint/no-unused-vars - mirrors the NOOP_TOKEN_CONTEXT_MENU
+  // pattern from scripture-pane.component.tsx.
+  const handleTokenContextMenu = useCallback<
+    NonNullable<EnhancedResourceWebViewProps['onTokenContextMenu']>
+  >(() => {
+    // Intentionally empty until BHV-308 lands the context menu.
+  }, []);
+
   // FN-020 (c): clicking a source-language word in DictionaryTab sets the filter to that lemma so
   // the scripture pane (and other research tabs) propagate. We reuse the existing token-click
   // handler — both paths terminate in `setFilteredTokenId`.
@@ -2906,6 +2927,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       scripturePaneZoom={scripturePaneZoom}
       scripturePaneError={scripturePaneError}
       onTokenClick={handleTokenClick}
+      onTokenContextMenu={handleTokenContextMenu}
       activeTab={activeTab}
       onTabChange={setActiveTab}
       scope={scope}
