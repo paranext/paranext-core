@@ -225,6 +225,7 @@
   --sidebar-primary-foreground: oklch(0.279 0.077 45.635); /* slate-900 */
   --sidebar-accent: oklch(0.286 0.016 107.4); /* slate-800 */
   --sidebar-accent-foreground: oklch(0.988 0.003 106.5); /* slate-400 */
+  --sidebar-border: oklch(1 0 0 / 10%); /* slate-800 */
   --sidebar-ring: oklch(0.58 0.031 107.3); /* slate-300 */
 }
 
