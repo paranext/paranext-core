@@ -16,11 +16,12 @@ export interface ScopeKeyedRefInput {
  *
  * Mirrors PT9's `MarbleForm.UpdateReference` semantics (`Paratext/Marble/MarbleForm.cs:2138-2192`):
  *
- * - `Scope.CurrentVerse` -> tab data reloads on every verse change
+ * - `Scope.CurrentVerse` (and `'current-sense'`, which maps to backend CurrentVerse) -> tab data
+ *   reloads on every verse change
  * - `Scope.CurrentSection` -> tab data reloads when the section boundary moves (modeled here as
  *   keying on verse until backend section-boundary data is available; degrades to today's behavior,
  *   never worse)
- * - `Scope.CurrentChapter` and larger -> tab data does NOT reload on verse changes; only chapter or
+ * - `Scope.CurrentChapter` and broader -> tab data does NOT reload on verse changes; only chapter or
  *   book changes invalidate the cache
  *
  * The key string is opaque; callers should treat it as a single dep value.
@@ -29,14 +30,20 @@ export function computeScopeKeyedRefKey(scope: MarbleScope, ref: ScopeKeyedRefIn
   const base = `${ref.book}|${ref.chapterNum}`;
   switch (scope) {
     case 'current-verse':
+    case 'current-sense':
+      // 'current-sense' is only enabled when a token filter is active and
+      // maps to backend ScopeEnum.CurrentVerse via marbleScopeToBackend; the
+      // C# loader does an exact verse match (ScopeFilterService.cs:179).
+      // Cursor moves change which token rows are returned, so re-key on
+      // verse - same as plain 'current-verse'.
       return `${base}|v${ref.verseNum}`;
     case 'current-section':
       return `${base}|s${ref.verseNum}`;
     case 'current-chapter':
-    case 'current-sense':
     default:
-      // Any future broader scope (e.g. 'current-book', 'whole-bible') falls into the default and
-      // keys at (book, chapter). Cursor moves within the chapter do NOT re-trigger tab loads.
+      // 'current-chapter' (or any future BCV-broader scope) - same
+      // (book, chapter) key. Cursor moves within the chapter do NOT
+      // re-trigger tab loads.
       return base;
   }
 }

@@ -19,14 +19,17 @@ describe('computeScopeKeyedRefKey', () => {
     expect(key).toBe('JHN|1');
   });
 
-  // Note: PT10 MarbleScope union is `current-verse | current-section | current-chapter |
-  // current-sense`. The plan's original test referenced a hypothetical `current-book` literal that
-  // does not exist in the codebase; substituted with `current-sense` (the only other non-verse,
-  // non-section, non-chapter scope) to preserve the test's intent: any scope outside
-  // verse/section keys at chapter level.
-  it('does not include the verse when scope is current-sense', () => {
-    const key = computeScopeKeyedRefKey('current-sense', ref);
-    expect(key).toBe('JHN|1');
+  it('includes the verse when scope is current-sense (maps to backend CurrentVerse)', () => {
+    // 'current-sense' is enabled only when a token filter is active and routes
+    // through marbleScopeToBackend -> ScopeEnum.CurrentVerse on the C# side, so
+    // it must re-key on verse the same way 'current-verse' does. Otherwise the
+    // research tabs would show stale rows scoped to the previous verse.
+    const key = computeScopeKeyedRefKey('current-sense', {
+      book: 'JHN',
+      chapterNum: 1,
+      verseNum: 5,
+    });
+    expect(key).toBe('JHN|1|v5');
   });
 
   it('produces distinct keys when only the chapter changes', () => {
