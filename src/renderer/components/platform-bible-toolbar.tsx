@@ -50,7 +50,9 @@ const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
   themeFamilyId: '',
   type: 'light',
   id: 'light',
-  label: '%unused%',
+  // Reference-equality sentinel only; this label is never displayed (the loading state is detected
+  // before any render uses the label). Reusing an existing key avoids needing a bogus i18n entry.
+  label: '%toolbar_theme_loading%',
   cssVariables: {},
 };
 
@@ -271,7 +273,7 @@ export function PlatformBibleToolbar() {
                   >
                     {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
                     {syncState === 'synced' && (
-                      <CircleCheck className="tw:h-4 tw:w-4 tw:text-success" />
+                      <CircleCheck className="tw:h-4 tw:w-4 tw:text-success-foreground" />
                     )}
                     {
                       {

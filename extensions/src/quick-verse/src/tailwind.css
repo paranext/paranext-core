@@ -1,3 +1,18 @@
+/*
+ * CUSTOM: Theme variable policy.
+ *
+ * Generally do not add new theme variables without UX approval. Prefer using existing theme
+ * variables wherever possible — they already cover the vast majority of UI needs and ensure
+ * consistency across themes. Only introduce a new theme variable when it is highly reusable and
+ * carries significant semantic meaning (e.g. a distinct UI role that cannot be expressed with the
+ * existing tokens). One-off colors, feature-specific shades, or near-duplicates of existing
+ * tokens do not qualify. Extensions have a little more freedom to experiment with new theme
+ * variables than the core platform does, but they should still be added based on these criteria.
+ *
+ * If you do decide to add a new semantic color, you MUST receive direct approval from UX before
+ * merging.
+ */
+
 /* CUSTOM: Added `tw:` prefix */
 @import 'tailwindcss' prefix(tw);
 @import 'tw-animate-css';
@@ -30,8 +45,11 @@
   --color-destructive: var(--destructive);
   /* CUSTOM: destructive-foreground is not in shadcn/ui anymore */
   --color-destructive-foreground: var(--destructive-foreground);
-  /* CUSTOM: success added */
-  --color-success: var(--success);
+  /* CUSTOM: success-foreground added */
+  --color-success-foreground: var(--success-foreground);
+  /* CUSTOM: warning and warning-foreground added from https://ui.shadcn.com/docs/theming#adding-new-tokens */
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -96,8 +114,11 @@
   --destructive: oklch(0.6369 0.2077 25.32);
   /* CUSTOM: destructive-foreground is not in shadcn/ui anymore */
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
-  /* CUSTOM: success added */
-  --success: oklch(62.7% 0.194 149.214); /* green-600 */
+  /* CUSTOM: success-foreground added */
+  --success-foreground: oklch(62.7% 0.194 149.214); /* green-600 */
+  /* CUSTOM: warning and warning-foreground added from https://ui.shadcn.com/docs/theming#adding-new-tokens */
+  --warning: oklch(0.84 0.16 84); /* amber-400 */
+  --warning-foreground: oklch(0.28 0.07 46); /* amber-950 */
   --border: oklch(0.929 0.0127 255.58); /* slate-200 */
   --input: oklch(0.929 0.0127 255.58); /* slate-200 */
   --ring: oklch(0.1371 0.036 258.53); /* slate-950 */
@@ -135,8 +156,11 @@
   --destructive: oklch(0.396 0.1331 25.71);
   /* CUSTOM: destructive-foreground is not in shadcn/ui anymore */
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
-  /* CUSTOM: success added */
-  --success: oklch(79.2% 0.209 151.711); /* green-400 */
+  /* CUSTOM: success-foreground added */
+  --success-foreground: oklch(79.2% 0.209 151.711); /* green-400 */
+  /* CUSTOM: warning and warning-foreground added from https://ui.shadcn.com/docs/theming#adding-new-tokens */
+  --warning: oklch(0.41 0.11 46); /* amber-900 */
+  --warning-foreground: oklch(0.99 0.02 95); /* amber-50 */
   --border: oklch(0.4454 0.0374 257.3); /* slate-600 */
   --input: oklch(0.4454 0.0374 257.3); /* slate-600 */
   --ring: oklch(0.8688 0.0199 252.89); /* slate-300 */
@@ -173,7 +197,10 @@
   --accent-foreground: oklch(0.228 0.013 107.4); /* slate-900 */
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
-  --success: oklch(62.7% 0.194 149.214); /* green-600 */
+  --success-foreground: oklch(62.7% 0.194 149.214); /* green-600 */
+  /* CUSTOM: warning and warning-foreground added from https://ui.shadcn.com/docs/theming#adding-new-tokens */
+  --warning: oklch(0.84 0.16 84); /* amber-400 */
+  --warning-foreground: oklch(0.28 0.07 46); /* amber-950 */
   --border: oklch(0.93 0.007 106.5); /* slate-200 */
   --input: oklch(0.93 0.007 106.5); /* slate-200 */
   --ring: oklch(0.737 0.021 106.9); /* slate-950 */
@@ -210,7 +237,10 @@
   --accent-foreground: oklch(0.988 0.003 106.5); /* slate-50 */
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.9838 0.0036 248.23); /* slate-50 */
-  --success: oklch(79.2% 0.209 151.711); /* green-400 */
+  --success-foreground: oklch(79.2% 0.209 151.711); /* green-400 */
+  /* CUSTOM: warning and warning-foreground added from https://ui.shadcn.com/docs/theming#adding-new-tokens */
+  --warning: oklch(0.41 0.11 46); /* amber-900 */
+  --warning-foreground: oklch(0.99 0.02 95); /* amber-50 */
   --border: oklch(1 0 0 / 10%); /* slate-600 */
   --input: oklch(1 0 0 / 15%); /* slate-600 */
   --ring: oklch(0.58 0.031 107.3); /* slate-300 */
@@ -225,6 +255,7 @@
   --sidebar-primary-foreground: oklch(0.279 0.077 45.635); /* slate-900 */
   --sidebar-accent: oklch(0.286 0.016 107.4); /* slate-800 */
   --sidebar-accent-foreground: oklch(0.988 0.003 106.5); /* slate-400 */
+  --sidebar-border: oklch(1 0 0 / 10%); /* slate-800 */
   --sidebar-ring: oklch(0.58 0.031 107.3); /* slate-300 */
 }
 

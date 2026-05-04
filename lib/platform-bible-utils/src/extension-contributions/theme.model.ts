@@ -107,7 +107,11 @@ export interface ThemeCssVariables {
   /** Text and content color rendered on destructive surfaces. */
   'destructive-foreground'?: string;
   /** Color to emphasize the success of some action */
-  success?: string;
+  'success-foreground'?: string;
+  /** Color representing warning states such as caution, advisories, and non-critical issues. */
+  warning?: string;
+  /** Text and content color rendered on warning surfaces. */
+  'warning-foreground'?: string;
   /** Default border and separator color. Applied to cards, menus, tables, and layout dividers. */
   border?: string;
   /** Border and surface treatment color for form controls such as inputs, text areas, and selects. */
@@ -240,8 +244,17 @@ const themeDefs = {
         description: 'Text and content color rendered on destructive surfaces.',
         type: 'string',
       },
-      success: {
+      'success-foreground': {
         description: 'Color to emphasize the success of some action',
+        type: 'string',
+      },
+      warning: {
+        description:
+          'Color representing warning states such as caution, advisories, and non-critical issues.',
+        type: 'string',
+      },
+      'warning-foreground': {
+        description: 'Text and content color rendered on warning surfaces.',
         type: 'string',
       },
       border: {
