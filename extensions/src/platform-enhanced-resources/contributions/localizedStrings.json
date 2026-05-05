@@ -192,6 +192,9 @@
     "%enhancedResources_dictionary_findText%": {
       "notes": "Context menu item: Find this text (search by surface text)."
     },
+    "%enhancedResources_dictionary_additionalRelevantSenses%": {
+      "notes": "Tooltip on the +N badge in the collapsed dictionary row when a token has multiple relevant senses. {count} is the number of additional relevant senses beyond the first."
+    },
     "%enhancedResources_dictionary_sensesHeader%": {},
     "%enhancedResources_dictionary_hideLessRelevantToggle%": {
       "notes": "Switch label: hide senses flagged as less-relevant in the current verse."
@@ -505,6 +508,7 @@
       "%enhancedResources_dictionary_findSense%": "Find sense",
       "%enhancedResources_dictionary_findLemma%": "Find lemma",
       "%enhancedResources_dictionary_findText%": "Find text",
+      "%enhancedResources_dictionary_additionalRelevantSenses%": "{count} additional relevant senses for this word",
       "%enhancedResources_dictionary_sensesHeader%": "Senses",
       "%enhancedResources_dictionary_hideLessRelevantToggle%": "Hide less-relevant senses",
       "%enhancedResources_dictionary_allOccurrencesLink%": "Occurrences in all books",

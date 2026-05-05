@@ -11,9 +11,6 @@ import {
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import type { DictionarySenseDisplay } from '../shared/dictionary-sense-item.component';
 
-/** Preview length for the first-sense description shown in the collapsed row. */
-const FIRST_SENSE_PREVIEW_CHARS = 80;
-
 /** Object containing all keys used for localization in this component. */
 export const DICTIONARY_DISPLAY_ITEM_STRING_KEYS = Object.freeze([
   '%enhancedResources_dictionary_copySurfaceForm%',
@@ -24,6 +21,7 @@ export const DICTIONARY_DISPLAY_ITEM_STRING_KEYS = Object.freeze([
   '%enhancedResources_dictionary_findLemma%',
   '%enhancedResources_dictionary_findText%',
   '%enhancedResources_dictionary_sourceTextTooltip%',
+  '%enhancedResources_dictionary_additionalRelevantSenses%',
 ] as const);
 
 type DictionaryDisplayItemLocalizedStringKey = (typeof DICTIONARY_DISPLAY_ITEM_STRING_KEYS)[number];
@@ -37,6 +35,11 @@ type DictionaryDisplayItemLocalizedStrings = {
  * first-N-chars preview of the first sense's description. The previously-rendered `glosses`,
  * `partOfSpeech`, `occurrenceCount`, and `translations` columns were dropped - they have no
  * collapsed-row analog in PT9.
+ *
+ * G7 (M5): contextual sense-relevance comes from the C# loader's `relevantSenseIndices` +
+ * `firstRelevantSensePreview` (see DictionaryService.cs ComputeRelevantSenseIndices /
+ * ComputeFirstRelevantSensePreview). The collapsed row renders `firstRelevantSensePreview` verbatim
+ * and shows a `+N` badge mirroring PT9 DictionaryTab.cs:283-284 `relevantString`.
  */
 export type DictionaryDisplayItemData = {
   tokenId: string;
@@ -53,6 +56,19 @@ export type DictionaryDisplayItemData = {
   translit: string;
   /** Detail data (loaded lazily when expanded). */
   senses?: DictionarySenseDisplay[];
+  /**
+   * Indices into the resolved entry's senses that apply to this token at this verse. The first
+   * entry is the sense whose preview text is shown in `firstRelevantSensePreview`; subsequent
+   * indices drive the `+N` badge in the collapsed row. Empty when the token has no lexical-link
+   * sense annotations. [G7 / M5]
+   */
+  relevantSenseIndices: number[];
+  /**
+   * Preview text of the first relevant sense (Definition or fallback localized gloss). Computed
+   * server-side by the C# loader so the collapsed row does not need to wait for the lazy
+   * `readDictionaryEntry` call. [G7 / M5]
+   */
+  firstRelevantSensePreview: string;
   /**
    * Total occurrences in all books for the entire entry. Consumed by `DictionaryEntryDetail` for
    * the entry-level "Occurrences in all books ({x})" link. Optional during loading; production data
@@ -85,22 +101,19 @@ export type DictionaryDisplayItemProps = {
   localizedStringsWithLoadingState?: [DictionaryDisplayItemLocalizedStrings, boolean];
 };
 
-/** Truncate `text` at `maxChars`, appending an ellipsis when truncation occurs. */
-function previewText(text: string | undefined, maxChars: number): string {
-  if (!text) return '';
-  if (text.length <= maxChars) return text;
-  return `${text.slice(0, maxChars).trimEnd()}…`;
-}
-
 /**
  * Pure presentational entry row content used inside `SourceLanguageIndexedList`'s `renderItem`
  * slot. The surrounding `<li>` (selection, focus, keyboard nav) is owned by the list component.
  *
- * [Revised: 2026-04-29 Theme 13c]
+ * [Revised: 2026-04-29 Theme 13c; 2026-05-04 G7/M5]
  *
  * Body layout:
  *
- * <source-language word (clickable)> <first ~80 chars of first sense's definition>
+ * <source-language word (clickable)> <firstRelevantSensePreview> [<+N badge>]
+ *
+ * The badge mirrors PT9 DictionaryTab.cs:283-284 (`<span class='relevantCount'>+N</span>`) and
+ * appears only when there is more than one relevant sense for the current token at the current
+ * verse.
  *
  * FN-020(c): the source-text button intentionally allows the click to bubble to the parent row so
  * the SLI's row-click handler ALSO fires - that's what opens the detail drawer. Sebastian's round-2
@@ -144,9 +157,16 @@ export function DictionaryDisplayItem({
   const sourceTextTooltip = String(
     getLocalizedString('%enhancedResources_dictionary_sourceTextTooltip%'),
   );
+  const additionalRelevantSensesTemplate = String(
+    getLocalizedString('%enhancedResources_dictionary_additionalRelevantSenses%'),
+  );
+  const additionalRelevantSensesTooltip = (count: number) =>
+    additionalRelevantSensesTemplate.replace('{count}', String(count));
 
-  const firstSenseDefinition = item.senses?.[0]?.definition;
-  const preview = previewText(firstSenseDefinition, FIRST_SENSE_PREVIEW_CHARS);
+  // G7: contextual sense preview from the C# loader. The badge shows additional-relevant-sense
+  // count, mirroring PT9 DictionaryTab.cs:283-284 relevantString. PT9: <span class='relevantCount'>+N</span>.
+  const preview = item.firstRelevantSensePreview;
+  const additionalRelevantSenseCount = Math.max(0, item.relevantSenseIndices.length - 1);
 
   return (
     <ContextMenu>
@@ -177,6 +197,14 @@ export function DictionaryDisplayItem({
           {preview && (
             <span className="tw-flex-1 tw-truncate tw-text-sm tw-text-muted-foreground">
               {preview}
+            </span>
+          )}
+          {additionalRelevantSenseCount > 0 && (
+            <span
+              className="tw-inline-flex tw-shrink-0 tw-items-center tw-rounded tw-bg-muted tw-px-1.5 tw-text-xs tw-text-muted-foreground"
+              title={additionalRelevantSensesTooltip(additionalRelevantSenseCount)}
+            >
+              +{additionalRelevantSenseCount}
             </span>
           )}
         </div>

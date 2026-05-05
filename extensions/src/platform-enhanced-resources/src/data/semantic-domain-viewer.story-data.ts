@@ -131,6 +131,8 @@ export const MOCK_DICT_ENTRIES_FILTERED: SemanticDomainFilteredItem[] = [
     entryId: 'λόγος',
     sourceText: 'λόγος',
     translit: 'logos',
+    relevantSenseIndices: [0, 1],
+    firstRelevantSensePreview: 'A spoken or written communication of meaning.',
     senses: [
       {
         id: 'logos-1',
@@ -161,6 +163,8 @@ export const MOCK_DICT_ENTRIES_FILTERED: SemanticDomainFilteredItem[] = [
     entryId: 'ῥῆμα',
     sourceText: 'ῥῆμα',
     translit: 'rhema',
+    relevantSenseIndices: [0],
+    firstRelevantSensePreview: 'A specific spoken word or utterance.',
     senses: [
       {
         id: 'rhema-1',
@@ -182,6 +186,8 @@ export const MOCK_DICT_ENTRIES_FILTERED: SemanticDomainFilteredItem[] = [
     entryId: 'ἀγγελία',
     sourceText: 'ἀγγελία',
     translit: 'aggelia',
+    relevantSenseIndices: [0],
+    firstRelevantSensePreview: 'A message communicated from one party to another.',
     senses: [
       {
         id: 'aggelia-1',

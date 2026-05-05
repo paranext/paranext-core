@@ -53,7 +53,10 @@ export type DictionaryDisplayItemDto = {
   glosses: string[];
   partOfSpeech: string;
   occurrenceCount: number;
-  definition?: string | null;
+  /** Indices into the resolved entry's senses that apply to this token at this verse. */
+  relevantSenseIndices: number[];
+  /** Preview text of the first relevant sense (Definition or fallback localized gloss). */
+  firstRelevantSensePreview: string;
 };
 
 export type DictionaryLoadResultDto = {

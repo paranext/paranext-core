@@ -30,6 +30,8 @@ export const MOCK_DICT_ENTRY_ELOHIM: MockDictionaryEntry = {
   sourceText: 'אֱלֹהִים',
   translit: 'ʾĕlōhîm',
   totalOccurrencesInAllBooks: 2602,
+  relevantSenseIndices: [0, 1],
+  firstRelevantSensePreview: 'The supreme deity of Israel; the one true God.',
   senses: [
     {
       id: 'elohim-1',
@@ -63,6 +65,8 @@ export const MOCK_DICT_ENTRY_BERESHIT: MockDictionaryEntry = {
   sourceText: 'רֵאשִׁית',
   translit: 'rēʾšît',
   totalOccurrencesInAllBooks: 51,
+  relevantSenseIndices: [0],
+  firstRelevantSensePreview: 'The starting point in time; the first instance.',
   senses: [
     {
       id: 'reshit-1',
@@ -100,6 +104,8 @@ export const MOCK_DICT_ENTRY_YASHA: MockDictionaryEntry = {
   sourceText: 'יָשַׁע',
   translit: 'yāšaʿ',
   totalOccurrencesInAllBooks: 205,
+  relevantSenseIndices: [1],
+  firstRelevantSensePreview: 'To deliver from spiritual oppression; to grant salvation.',
   senses: [
     {
       id: 'yasha-1',
@@ -130,6 +136,8 @@ export const MOCK_DICT_ENTRY_LOGOS: MockDictionaryEntry = {
   sourceText: 'λόγος',
   translit: 'logos',
   totalOccurrencesInAllBooks: 330,
+  relevantSenseIndices: [0, 1],
+  firstRelevantSensePreview: 'A spoken or written word; a unit of speech.',
   senses: [
     {
       id: 'logos-1',
@@ -169,6 +177,8 @@ export const MOCK_DICT_ENTRY_AGAPE: MockDictionaryEntry = {
   sourceText: 'ἀγάπη',
   translit: 'agapē',
   totalOccurrencesInAllBooks: 116,
+  relevantSenseIndices: [0],
+  firstRelevantSensePreview: 'Self-giving love, especially divine love.',
   senses: [
     {
       id: 'agape-1',

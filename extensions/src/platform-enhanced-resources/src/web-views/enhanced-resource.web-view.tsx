@@ -1403,6 +1403,11 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
           entryId: it.entryId,
           sourceText: it.sourceText,
           translit: it.translit,
+          // G7 (M5): the C# loader supplies these so the collapsed row can render the
+          // contextual sense preview + relevant-sense badge without waiting for the lazy
+          // readDictionaryEntry detail load.
+          relevantSenseIndices: it.relevantSenseIndices,
+          firstRelevantSensePreview: it.firstRelevantSensePreview,
           totalOccurrencesInAllBooks: it.occurrenceCount,
         }));
         setDictionaryItems(mapped);
