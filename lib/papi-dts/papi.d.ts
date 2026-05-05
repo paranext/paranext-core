@@ -3553,6 +3553,34 @@ declare module 'papi-shared-types' {
    */
   type CommandNames = keyof CommandHandlers;
   /**
+   * Event data types for each network event available on the papi. Each extension can extend this
+   * interface to add events it emits with `papi.network.createNetworkEventEmitter`.
+   *
+   * Note: Event names must consist of two strings separated by at least one period. We recommend
+   * one period and lower camel case in case we expand the api in the future to allow dot notation.
+   *
+   * An extension can extend this interface to add types for the network events it emits by adding
+   * the following to its `.d.ts` file:
+   *
+   * @example
+   *
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export interface NetworkEventHandlers {
+   *     'myExtension.onSomethingChanged': { someData: string };
+   *   }
+   * }
+   * ```
+   */
+  interface NetworkEventHandlers {}
+  /**
+   * Names for each network event available on the papi.
+   *
+   * Automatically includes all extensions' network events that are added to
+   * {@link NetworkEventHandlers}.
+   */
+  type NetworkEventNames = keyof NetworkEventHandlers;
+  /**
    * Types corresponding to each user setting available in Platform.Bible. Keys are setting names,
    * and values are setting data types. Extensions can add more user setting types with
    * corresponding user setting IDs by adding details to their `.d.ts` file.

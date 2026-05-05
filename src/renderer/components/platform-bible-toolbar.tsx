@@ -16,7 +16,7 @@ import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
-import { CircleUserRound, HomeIcon, Moon, Network, Sun } from 'lucide-react';
+import { CircleCheck, CircleUserRound, HomeIcon, Moon, Network, Sun } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
@@ -24,6 +24,7 @@ import {
   cn,
   getToolbarOSReservedSpaceClassName,
   ScrollGroupSelector,
+  Spinner,
   Toolbar,
   Tooltip,
   TooltipContent,
@@ -71,7 +72,9 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_theme_loading%',
   '%toolbar_theme_loading_error%',
   '%toolbar_sync%',
-  '%toolbar_sync_projects%',
+  '%toolbar_sync_open_status%',
+  '%toolbar_sync_status_synced%',
+  '%toolbar_sync_status_syncing%',
 ];
 
 export function PlatformBibleToolbar() {
@@ -153,6 +156,19 @@ export function PlatformBibleToolbar() {
   const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
   );
+
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'synced'>('idle');
+
+  const handleSyncStateChanged = useCallback(
+    ({ isSyncing }: { isSyncing: boolean }) => setSyncState(isSyncing ? 'syncing' : 'synced'),
+    [],
+  );
+
+  const onSyncStateChanged = useMemo(
+    () => getNetworkEvent<{ isSyncing: boolean }>('paratextBibleSendReceive.onSyncStateChanged'),
+    [],
+  );
+  useEvent(onSyncStateChanged, handleSyncStateChanged);
 
   const checkIfSendReceiveAvailable = useCallback(async () => {
     try {
@@ -245,19 +261,29 @@ export function PlatformBibleToolbar() {
                     onClick={() => {
                       // This command comes from an extension and is not typed in CommandHandlers.
                       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                      (sendCommand as any)('paratextBibleSendReceive.syncOpenProjects').catch(
+                      (sendCommand as any)('paratextBibleSendReceive.openSyncStatus').catch(
                         (e: unknown) =>
                           logger.warn(
-                            `Toolbar caught an error while trying to sync open projects: ${getErrorMessage(e)}`,
+                            `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
                           ),
                       );
                     }}
                   >
-                    {localizedStrings['%toolbar_sync%']}
+                    {syncState === 'syncing' && <Spinner className="tw-h-4 tw-w-4" />}
+                    {syncState === 'synced' && (
+                      <CircleCheck className="tw-h-4 tw-w-4 tw-text-success" />
+                    )}
+                    {
+                      {
+                        idle: localizedStrings['%toolbar_sync%'],
+                        syncing: localizedStrings['%toolbar_sync_status_syncing%'],
+                        synced: localizedStrings['%toolbar_sync_status_synced%'],
+                      }[syncState]
+                    }
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="tw-font-light">{localizedStrings['%toolbar_sync_projects%']}</p>
+                  <p className="tw-font-light">{localizedStrings['%toolbar_sync_open_status%']}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

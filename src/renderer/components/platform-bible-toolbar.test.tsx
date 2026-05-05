@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
@@ -17,7 +17,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%toolbar_sync%': 'Sync',
-      '%toolbar_sync_projects%': 'Sync open projects and linked resources',
+      '%toolbar_sync_open_status%': 'Test Sync status',
+      '%toolbar_sync_status_synced%': 'Test Synced',
+      '%toolbar_sync_status_syncing%': 'Test Syncing',
       '%mainMenu_openHome%': 'Home',
       '%mainMenu_openParatextRegistration%': 'Registration',
       '%mainMenu_openInternetSettings%': 'Internet Settings',
@@ -169,14 +171,14 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  it('calls syncOpenProjects command when clicked', async () => {
+  it('calls openSyncStatus command when clicked', async () => {
     mockSendCommand(true);
     render(<PlatformBibleToolbar />);
     const btn = await screen.findByRole('button', { name: 'Sync' });
     fireEvent.click(btn);
     await waitFor(() => {
       expect(vi.mocked(sendCommand)).toHaveBeenLastCalledWith(
-        'paratextBibleSendReceive.syncOpenProjects',
+        'paratextBibleSendReceive.openSyncStatus',
       );
     });
   });
@@ -218,13 +220,89 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  it('logs a warning when syncOpenProjects command fails', async () => {
+  it('shows Syncing label when onSyncStateChanged fires with isSyncing: true', async () => {
+    let capturedSyncStateCallback: ((arg: { isSyncing: boolean }) => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      // getNetworkEvent has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      ((eventName: string) => {
+        if (eventName === 'paratextBibleSendReceive.onSyncStateChanged')
+          return vi.fn((cb: (arg: { isSyncing: boolean }) => void) => {
+            capturedSyncStateCallback = cb;
+            return vi.fn();
+          });
+        return vi.fn(() => vi.fn());
+        // getNetworkEvent has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+
+    mockSendCommand(true);
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    });
+
+    expect(capturedSyncStateCallback).toBeDefined();
+    if (!capturedSyncStateCallback)
+      throw new Error('capturedSyncStateCallback was not set by mock');
+
+    const syncStateCallback = capturedSyncStateCallback;
+    act(() => {
+      syncStateCallback({ isSyncing: true });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Syncing' })).toBeInTheDocument();
+    });
+  });
+
+  it('shows Synced label when onSyncStateChanged fires with isSyncing: false', async () => {
+    let capturedSyncStateCallback: ((arg: { isSyncing: boolean }) => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      // getNetworkEvent has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      ((eventName: string) => {
+        if (eventName === 'paratextBibleSendReceive.onSyncStateChanged')
+          return vi.fn((cb: (arg: { isSyncing: boolean }) => void) => {
+            capturedSyncStateCallback = cb;
+            return vi.fn();
+          });
+        return vi.fn(() => vi.fn());
+        // getNetworkEvent has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+
+    mockSendCommand(true);
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    });
+
+    expect(capturedSyncStateCallback).toBeDefined();
+    if (!capturedSyncStateCallback)
+      throw new Error('capturedSyncStateCallback was not set by mock');
+
+    const syncStateCallback = capturedSyncStateCallback;
+    act(() => {
+      syncStateCallback({ isSyncing: false });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Synced' })).toBeInTheDocument();
+    });
+  });
+
+  it('logs a warning when openSyncStatus command fails', async () => {
     const { logger } = await import('@shared/services/logger.service');
     vi.mocked(sendCommand).mockImplementation(
       // sendCommand has a complex generic signature; cast is required for the mock implementation
       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
       (async (commandName: string) => {
-        if (commandName === 'paratextBibleSendReceive.syncOpenProjects')
+        if (commandName === 'paratextBibleSendReceive.openSyncStatus')
           throw new Error('Sync failed');
         if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
         if (commandName === 'platform.getOSPlatform') return 'win32';
@@ -239,7 +317,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     fireEvent.click(btn);
     await waitFor(() => {
       expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
-        expect.stringContaining('Toolbar caught an error while trying to sync open projects:'),
+        expect.stringContaining('Toolbar caught an error while trying to open sync status:'),
       );
     });
   });
