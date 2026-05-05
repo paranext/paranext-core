@@ -7,9 +7,9 @@ import {
 
 // Mock Electron's protocol.handle so we can exercise the module's registration
 // path without a running Electron session. Vitest hoists vi.mock above imports.
-const { mockProtocolHandle, mockSendCommand, mockLoggerWarn } = vi.hoisted(() => ({
+const { mockProtocolHandle, mockNetworkRequest, mockLoggerWarn } = vi.hoisted(() => ({
   mockProtocolHandle: vi.fn(),
-  mockSendCommand: vi.fn(),
+  mockNetworkRequest: vi.fn(),
   mockLoggerWarn: vi.fn(),
 }));
 
@@ -28,8 +28,8 @@ vi.mock('@shared/services/logger.service', () => ({
   },
 }));
 
-vi.mock('@shared/services/command.service', () => ({
-  sendCommand: mockSendCommand,
+vi.mock('@shared/services/network.service', () => ({
+  request: mockNetworkRequest,
 }));
 
 describe('enhanced-resource-protocol.service / handleEnhancedResourceRequest', () => {

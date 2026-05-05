@@ -13,9 +13,8 @@ import {
   getMimeTypeForImageId,
   parseEnhancedResourceUri,
 } from '@shared/utils/enhanced-resource.utils';
-import * as commandService from '@shared/services/command.service';
+import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
-import { CommandNames } from 'papi-shared-types';
 
 /** Shape returned by the platform.enhancedResources.fetchImageBytes PAPI command. */
 type FetchImageBytesResult = {
@@ -46,23 +45,29 @@ function errorResponse(url: string, httpErrorNumber: number): Response {
 }
 
 /**
- * Default implementation of the fetchImageBytes invoker. Calls the PAPI command registered by the
- * C# `EnhancedResourceFactory`. The string-to-`CommandNames` cast is a temporary bridge: the
- * command's typed name flows into `papi.d.ts` only after `npm run build:types` runs against a built
- * C# side. Once the type is published, swap the cast for the literal command name.
+ * Network-object request type for the C# `EnhancedResourceFactory.fetchImageBytes` method. The
+ * factory registers `fetchImageBytes` on the `platform.enhancedResources` NetworkObject (see
+ * `c-sharp/EnhancedResources/EnhancedResourceFactory.cs:168-173`), so the dispatch prefix is
+ * `object:` (not `command:`). The renderer reaches this method via
+ * `papi.networkObjects.get('platform.enhancedResources').fetchImageBytes(...)`; from the main
+ * process we send the same JSON-RPC method name directly. Format matches
+ * `getNetworkObjectRequestType` in `network-object.service.ts`.
  */
-const defaultFetchImageBytesInvoker: FetchImageBytesInvoker = (input) => {
-  // platform.enhancedResources.fetchImageBytes types aren't yet in papi.d.ts
-  // (Task 12 backend); follow up post-merge to regenerate types and remove the casts.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const commandName = 'platform.enhancedResources.fetchImageBytes' as CommandNames;
-  // Same temporary bridge as the cast above: command name and parameter shape only become typed
-  // once papi.d.ts is regenerated post-merge.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return commandService.sendCommand(commandName, input as never) as Promise<
-    FetchImageBytesResult | undefined
-  >;
-};
+const FETCH_IMAGE_BYTES_REQUEST_TYPE = 'object:platform.enhancedResources.fetchImageBytes' as const;
+
+/**
+ * Default implementation of the fetchImageBytes invoker. Sends a JSON-RPC request to the
+ * `platform.enhancedResources` NetworkObject's `fetchImageBytes` method registered by the C#
+ * `EnhancedResourceFactory`. We use `networkService.request` (the same primitive that the renderer
+ * proxy uses internally) instead of `commandService.sendCommand` because the handler is registered
+ * as a network-object method, not a command - sending with the `command:` prefix produces a "No
+ * handler found" error and the `<img>` tag renders as a broken placeholder.
+ */
+const defaultFetchImageBytesInvoker: FetchImageBytesInvoker = (input) =>
+  networkService.request<[FetchImageBytesInput], FetchImageBytesResult | undefined>(
+    FETCH_IMAGE_BYTES_REQUEST_TYPE,
+    input,
+  );
 
 /** Currently-active invoker; swappable via `setFetchImageBytesInvokerForTest`. */
 let activeFetchImageBytesInvoker: FetchImageBytesInvoker = defaultFetchImageBytesInvoker;
