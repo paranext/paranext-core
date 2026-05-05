@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   Editorial,
   getDefaultViewOptions,
@@ -7,7 +7,7 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import type { ContentJsonPath, Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import {
   Alert,
   AlertDescription,
@@ -80,7 +80,22 @@ const ANNOTATION_TYPE_MARBLE_WORD = 'marble-word';
 const ANNOTATION_TYPE_MARBLE_NOTE = 'marble-note';
 const ANNOTATION_TYPE_FILTER = 'marble-filter';
 const ANNOTATION_TYPE_HIGHLIGHT = 'marble-highlight';
+const ANNOTATION_TYPE_HOVER_MATCH = 'marble-hover-match';
+const ANNOTATION_TYPE_HOVER_DIM = 'marble-hover-dim';
 const RIGHT_MOUSE_BUTTON = 2;
+
+// Local mirror of the backend `buildTooltipData` PAPI command's return shape. The backend
+// command is registered in C# and not yet surfaced in papi-shared-types CommandHandlers,
+// so we type the response locally for now. Keep in sync with MockTooltipData in
+// data/marble-form.story-data.ts and the eventual papi-shared-types entry.
+type TooltipData = {
+  lemma: string;
+  gloss?: string;
+  partOfSpeech?: string;
+  strongNumber?: string;
+  notes: string[];
+  morphology?: string;
+};
 
 /**
  * CSS for marble annotation marks.
@@ -103,11 +118,6 @@ const MARBLE_ANNOTATION_STYLES = `
      color: inherit; text-decoration: inherit. The user opts in via the toolbar's
      "All research terms" mode, hovers, or click-state. We therefore drop the always-on
      dotted-underline that previously made every linked word visually distinct. */
-}
-.editor-typed-mark-external-marble-word:hover {
-  background-color: hsl(var(--accent));
-  text-decoration: underline dotted hsl(var(--primary));
-  text-underline-offset: 2px;
 }
 .editor-typed-mark-external-marble-note {
   cursor: pointer;
@@ -142,6 +152,44 @@ function annotationToRange(annotation: MarbleAnnotation): AnnotationRange {
 
 function annotationTypeFor(kind: MarbleAnnotation['kind']): string {
   return kind === 'word' ? ANNOTATION_TYPE_MARBLE_WORD : ANNOTATION_TYPE_MARBLE_NOTE;
+}
+
+// MarbleAnnotation.metadata.lexicalLinks is a string[] where each entry is shaped
+// `NAMESPACE:LEMMA:ID` (e.g. `SDBH:רֵאשִׁית:001001000`). Extract the lemma (the middle
+// colon-delimited segment) for hover-time lemma matching.
+function lemmaFromLexicalLink(link: string): string | undefined {
+  const parts = link.split(':');
+  if (parts.length < 2) return undefined;
+  const lemma = parts[1];
+  return lemma && lemma.length > 0 ? lemma : undefined;
+}
+
+// Markdown special characters that need escaping when interpolating untrusted text from
+// TooltipData fields (lemma, gloss, partOfSpeech, notes) into the popover markdown body.
+// markdown-to-jsx interprets these by default, so unescaped content can produce surprising
+// formatting when (e.g.) a lemma contains an underscore.
+function escapeMarkdown(text: string): string {
+  return text.replace(/([\\`*_~[\]<>])/g, '\\$1');
+}
+
+function loadingMarkdownFromMetadata(annotation: MarbleAnnotation): string {
+  // Use whatever lemma is already in metadata so the popover never appears empty.
+  const firstLink = annotation.metadata?.lexicalLinks?.[0];
+  const lemma = firstLink ? lemmaFromLexicalLink(firstLink) : undefined;
+  return lemma ? `**${escapeMarkdown(lemma)}**` : '...';
+}
+
+function renderTooltipMarkdown(data: TooltipData): string {
+  const parts: string[] = [];
+  const lemma = escapeMarkdown(data.lemma);
+  const pos = data.partOfSpeech ? ` *${escapeMarkdown(data.partOfSpeech)}*` : '';
+  parts.push(`**${lemma}**${pos}`);
+  if (data.gloss) parts.push(escapeMarkdown(data.gloss));
+  if (data.strongNumber) parts.push(`Strong: ${escapeMarkdown(data.strongNumber)}`);
+  if (data.notes.length > 0) {
+    parts.push(data.notes.map((n) => `- ${escapeMarkdown(n)}`).join('\n'));
+  }
+  return parts.join('\n\n');
 }
 
 // Module-level no-op defaults so omitting the callbacks does not generate a fresh
@@ -193,12 +241,52 @@ export function EnhancedScripturePane({
     handlersRef.current = { onTokenClick, onTokenContextMenu };
   }, [onTokenClick, onTokenContextMenu]);
 
-  // FN-027 / FN-028 (Session 2 follow-up): the editor's annotation API currently exposes only
-  // onClick/onRemove. Per-lemma marble-dictionary tooltips on hover (FN-027 in
-  // ~/scripture-editors) and PT9-style dimming of non-matching lemmas (FN-028 here once
-  // FN-027 lands) are deferred. Until then: hover yields the simple :hover CSS rule
-  // (accent background + dotted underline) defined in MARBLE_ANNOTATION_STYLES; no marble
-  // dictionary data is shown on hover. See working-docs/2026-05-04-pt9-fidelity-session-1-design.md §7.
+  // Hover lifecycle bookkeeping. fetchGenRef is bumped on every mouseenter/mouseleave so
+  // late-arriving showPopover / buildTooltipData promises can detect they are stale and
+  // self-cancel. activePopoverIdRef tracks the currently-rendered popover for dismissal;
+  // active{Match,Dim}SetRef tracks the annotationIds we layered on the editor so they can
+  // be removed on mouseleave or component unmount.
+  const fetchGenRef = useRef(0);
+  // The popover-id ref is initially null because no popover is open. Using `undefined` would be
+  // technically possible but conflates "absent" with "uninitialized" given React's useRef contract;
+  // null is the canonical sentinel.
+  // eslint-disable-next-line no-null/no-null
+  const activePopoverIdRef = useRef<string | null>(null);
+  const activeMatchSetRef = useRef<Set<string>>(new Set());
+  const activeDimSetRef = useRef<Set<string>>(new Set());
+
+  // Build per-lemma annotation index from `lexicalLinks` metadata. Used by hover handlers
+  // to compute matching vs non-matching annotations on each mouseenter without iterating
+  // the full annotation set every time.
+  const lemmaIndex = useMemo(() => {
+    const lemmaToAnnotationIds = new Map<string, Set<string>>();
+    const annotationIdToLemmas = new Map<string, Set<string>>();
+    annotations.forEach((annotation) => {
+      if (annotation.kind !== 'word') return;
+      const lemmas = new Set<string>();
+      (annotation.metadata?.lexicalLinks ?? []).forEach((link) => {
+        const lemma = lemmaFromLexicalLink(link);
+        if (!lemma) return;
+        lemmas.add(lemma);
+        let bucket = lemmaToAnnotationIds.get(lemma);
+        if (!bucket) {
+          bucket = new Set();
+          lemmaToAnnotationIds.set(lemma, bucket);
+        }
+        bucket.add(annotation.annotationId);
+      });
+      if (lemmas.size > 0) {
+        annotationIdToLemmas.set(annotation.annotationId, lemmas);
+      }
+    });
+    return { lemmaToAnnotationIds, annotationIdToLemmas };
+  }, [annotations]);
+
+  // FN-027 / FN-028 / FN-029 wired in Session 2 (2026-05-05). Effect A registers
+  // onMouseEnter / onMouseLeave alongside onClick to drive the marble-dictionary popover
+  // (via papi.overlays) and lemma-match / lemma-dim annotations. CharNode title
+  // suppression is set at the <Editorial> mount via view.showCharMarkerTitles=false.
+  // See working-docs/2026-05-05-pt9-fidelity-session-2-design.md.
 
   // Effect A — base marble-word / marble-note annotations.
   // Chunked apply: 50 annotations per RAF tick so mousedown / setFocus and
@@ -212,6 +300,144 @@ export function EnhancedScripturePane({
     let cancelled = false;
     const CHUNK_SIZE = 50;
 
+    // Async helpers for the hover-popover lifecycle. Kept outside the event-handler so the
+    // sync handler can fire-and-forget them (no `floating-promise` warning) and so each
+    // failure mode is logged with a distinct message.
+    const showLoadingPopover = async (annotation: MarbleAnnotation, rect: DOMRect, gen: number) => {
+      try {
+        const overlayId = await papi.overlays.showPopover(
+          {
+            anchor: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+            side: 'top',
+            content: { type: 'markdown', markdown: loadingMarkdownFromMetadata(annotation) },
+            dismissOnClickOutside: true,
+          },
+          globalThis.webViewId,
+        );
+        if (gen !== fetchGenRef.current) {
+          await papi.overlays.dismissPopover(overlayId).catch(() => {});
+          return;
+        }
+        activePopoverIdRef.current = overlayId;
+      } catch (err) {
+        // Overlay service debounces rapid re-trigger requests with RESOURCE_EXHAUSTED
+        // (50ms leading-edge cooldown). Swallow silently - the user re-hovered before
+        // the cooldown expired.
+        if (
+          !(err && typeof err === 'object' && 'code' in err && err.code === 'RESOURCE_EXHAUSTED')
+        ) {
+          logger.warn(
+            `EnhancedScripturePane: showPopover failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      }
+    };
+
+    const fetchAndUpdatePopover = async (id: string, gen: number) => {
+      let data: TooltipData;
+      try {
+        data = await papi.commands.sendCommand('platform.enhancedResources.buildTooltipData', {
+          tokenId: id,
+        });
+      } catch (err) {
+        logger.warn(
+          `EnhancedScripturePane: buildTooltipData failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        return;
+      }
+      if (gen !== fetchGenRef.current) return;
+      const overlayId = activePopoverIdRef.current;
+      if (!overlayId) return;
+      try {
+        await papi.overlays.updatePopover(overlayId, {
+          type: 'markdown',
+          markdown: renderTooltipMarkdown(data),
+        });
+      } catch (err) {
+        logger.warn(
+          `EnhancedScripturePane: updatePopover failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    };
+
+    // Hover handlers - declared inside the effect so they close over `annotationsById`
+    // and `editor` from this run. The activePopoverIdRef / activeMatchSetRef / activeDimSetRef
+    // bookkeeping is component-lifetime so a delayed mouseleave from a previous render still
+    // dismisses correctly.
+    const handleMarbleMouseEnter = (event: MouseEvent, _type: string, id: string) => {
+      const annotation = annotationsById.get(id);
+      if (!annotation || annotation.kind !== 'word') return;
+
+      const target = event.currentTarget;
+      if (!(target instanceof Element)) return;
+      const rect = target.getBoundingClientRect();
+
+      fetchGenRef.current += 1;
+      const gen = fetchGenRef.current;
+
+      // Fire and forget - the helpers swallow their own errors and log via logger.warn.
+      showLoadingPopover(annotation, rect, gen);
+      fetchAndUpdatePopover(id, gen);
+
+      const lemmas = lemmaIndex.annotationIdToLemmas.get(id);
+      const matchingIds = new Set<string>();
+      if (lemmas) {
+        lemmas.forEach((lemma) => {
+          const ids = lemmaIndex.lemmaToAnnotationIds.get(lemma);
+          if (ids) ids.forEach((matchingId) => matchingIds.add(matchingId));
+        });
+      }
+
+      matchingIds.forEach((matchingId) => {
+        const matching = annotationsById.get(matchingId);
+        if (!matching) return;
+        editor.setAnnotation(
+          annotationToRange(matching),
+          ANNOTATION_TYPE_HOVER_MATCH,
+          `match-${matchingId}`,
+          {},
+        );
+        activeMatchSetRef.current.add(matchingId);
+      });
+      annotations.forEach((wordAnnotation) => {
+        if (wordAnnotation.kind !== 'word') return;
+        if (matchingIds.has(wordAnnotation.annotationId)) return;
+        editor.setAnnotation(
+          annotationToRange(wordAnnotation),
+          ANNOTATION_TYPE_HOVER_DIM,
+          `dim-${wordAnnotation.annotationId}`,
+          {},
+        );
+        activeDimSetRef.current.add(wordAnnotation.annotationId);
+      });
+    };
+
+    const handleMarbleMouseLeave = () => {
+      fetchGenRef.current += 1;
+
+      if (activePopoverIdRef.current) {
+        papi.overlays.dismissPopover(activePopoverIdRef.current).catch(() => {});
+        // Reset to the null sentinel - see activePopoverIdRef declaration for rationale.
+        // eslint-disable-next-line no-null/no-null
+        activePopoverIdRef.current = null;
+      }
+
+      activeMatchSetRef.current.forEach((matchId) => {
+        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_MATCH, `match-${matchId}`);
+      });
+      activeDimSetRef.current.forEach((dimId) => {
+        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_DIM, `dim-${dimId}`);
+      });
+      activeMatchSetRef.current.clear();
+      activeDimSetRef.current.clear();
+    };
+
     const applyChunked = async () => {
       for (let i = 0; i < annotations.length; i += CHUNK_SIZE) {
         if (cancelled) return;
@@ -219,11 +445,8 @@ export function EnhancedScripturePane({
         slice.forEach((annotation) => {
           const range = annotationToRange(annotation);
           const baseType = annotationTypeFor(annotation.kind);
-          editor.setAnnotation(
-            range,
-            baseType,
-            annotation.annotationId,
-            (event, _type, id, textContent) => {
+          editor.setAnnotation(range, baseType, annotation.annotationId, {
+            onClick: (event, _type, id, textContent) => {
               const annotationForId = annotationsById.get(id);
               if (!annotationForId) return;
               const { onTokenClick: latestClick, onTokenContextMenu: latestContextMenu } =
@@ -238,7 +461,9 @@ export function EnhancedScripturePane({
                 latestClick(id, annotationForId, textContent);
               }
             },
-          );
+            onMouseEnter: annotation.kind === 'word' ? handleMarbleMouseEnter : undefined,
+            onMouseLeave: annotation.kind === 'word' ? handleMarbleMouseLeave : undefined,
+          });
         });
         if (i + CHUNK_SIZE < annotations.length) {
           // Yield to the event loop so mousedown / setFocus / paint can run.
@@ -260,13 +485,34 @@ export function EnhancedScripturePane({
       );
     });
 
+    // Capture ref-stored Set instances so the cleanup function uses the same Sets the effect
+    // populated. The ref objects themselves never change identity (useRef), but the lint rule
+    // can't prove that - capturing here also makes intent explicit.
+    const matchSet = activeMatchSetRef.current;
+    const dimSet = activeDimSetRef.current;
+
     return () => {
       cancelled = true;
+      const popoverId = activePopoverIdRef.current;
+      if (popoverId) {
+        papi.overlays.dismissPopover(popoverId).catch(() => {});
+        // Reset to the null sentinel - see activePopoverIdRef declaration for rationale.
+        // eslint-disable-next-line no-null/no-null
+        activePopoverIdRef.current = null;
+      }
+      matchSet.forEach((matchId) => {
+        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_MATCH, `match-${matchId}`);
+      });
+      dimSet.forEach((dimId) => {
+        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_DIM, `dim-${dimId}`);
+      });
+      matchSet.clear();
+      dimSet.clear();
       annotations.forEach((a) => {
         editor.removeAnnotation(annotationTypeFor(a.kind), a.annotationId);
       });
     };
-  }, [usj, annotations]);
+  }, [usj, annotations, lemmaIndex]);
 
   // Effect B — single marble-filter overlay.
   // Re-runs only when the filtered token changes (or when annotations change
@@ -280,6 +526,7 @@ export function EnhancedScripturePane({
       annotationToRange(target),
       ANNOTATION_TYPE_FILTER,
       `filter-${filteredTokenId}`,
+      {},
     );
     return () => {
       editor.removeAnnotation(ANNOTATION_TYPE_FILTER, `filter-${filteredTokenId}`);
@@ -297,6 +544,7 @@ export function EnhancedScripturePane({
         annotationToRange(a),
         ANNOTATION_TYPE_HIGHLIGHT,
         `highlight-${a.annotationId}`,
+        {},
       );
     });
     return () => {
@@ -361,7 +609,7 @@ export function EnhancedScripturePane({
           options={{
             isReadonly: true,
             hasExternalUI: true,
-            view: getDefaultViewOptions(),
+            view: { ...getDefaultViewOptions(), showCharMarkerTitles: false },
           }}
         />
         {filteredTokenId && (

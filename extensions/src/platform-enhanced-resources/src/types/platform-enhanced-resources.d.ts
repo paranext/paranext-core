@@ -46,6 +46,27 @@ declare module 'papi-shared-types' {
      * locally inside the web view (UI-PKG-008).
      */
     'platformEnhancedResources.requestAutoShowGuide': () => Promise<boolean>;
+
+    /**
+     * Builds the marble-dictionary tooltip payload for the given annotation token id. Backed by the
+     * C# EnhancedResourceFactory; emitted on hover by the Enhanced Resource scripture pane.
+     *
+     * @todo Type registration is incomplete. C# `TooltipInput` actually requires `{ tokenId,
+     *   resourceId, glossLanguage, currentReference }`. The consumer currently only passes `{
+     *   tokenId }` because the additional context isn't yet plumbed to the scripture-pane. When
+     *   that wiring lands (separate milestone), update both this registration and the
+     *   `papi.commands.sendCommand` call site in scripture-pane.component.tsx to match the full
+     *   input shape. See c-sharp/EnhancedResources/TooltipData.cs for the full TooltipInput
+     *   record.
+     */
+    'platform.enhancedResources.buildTooltipData': (args: { tokenId: string }) => Promise<{
+      lemma: string;
+      gloss?: string;
+      partOfSpeech?: string;
+      strongNumber?: string;
+      notes: string[];
+      morphology?: string;
+    }>;
   }
 
   export interface SettingTypes {

@@ -2,7 +2,7 @@
 // We pull the click handler out of `setAnnotationSpy.mock.calls[0][3]` (typed `unknown`) and
 // must cast it to a callable signature for the test to invoke it. There is no cleaner alternative.
 /* eslint-disable no-type-assertion/no-type-assertion */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
@@ -17,6 +17,31 @@ import type { MarbleAnnotation } from '../../lib/marble-converter';
 // references are stable - so assertions stay reliable.
 const setAnnotationSpy = vi.fn();
 const removeAnnotationSpy = vi.fn();
+
+// papi.overlays / papi.commands are external boundaries; mock them so unit tests can assert on
+// hover-lifecycle calls without spinning up the real overlay service or PAPI WebSocket.
+const mockShowPopover = vi.fn();
+const mockUpdatePopover = vi.fn();
+const mockDismissPopover = vi.fn();
+const mockSendCommand = vi.fn();
+
+vi.mock('@papi/frontend', () => ({
+  default: {
+    overlays: {
+      showPopover: (...args: unknown[]) => mockShowPopover(...args),
+      updatePopover: (...args: unknown[]) => mockUpdatePopover(...args),
+      dismissPopover: (...args: unknown[]) => mockDismissPopover(...args),
+    },
+    commands: {
+      sendCommand: (...args: unknown[]) => mockSendCommand(...args),
+    },
+  },
+  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
+
+beforeAll(() => {
+  (globalThis as unknown as { webViewId: string }).webViewId = 'test-webview';
+});
 
 // Editorial is heavy and depends on Lexical; mock it so unit tests stay fast and isolated.
 // The mock renders a div the tests can query, and exposes setAnnotation/removeAnnotation spies on a ref.
@@ -54,9 +79,25 @@ const STRINGS_BAG = {
 };
 
 beforeEach(() => {
+  // restoreAllMocks resets vi.spyOn() targets back to originals - must run BEFORE we install
+  // the per-test mock implementations below, otherwise our resolved-value setup gets wiped.
+  vi.restoreAllMocks();
   setAnnotationSpy.mockClear();
   removeAnnotationSpy.mockClear();
-  vi.restoreAllMocks();
+  mockShowPopover.mockReset();
+  mockShowPopover.mockResolvedValue('overlay-1');
+  mockUpdatePopover.mockReset();
+  mockUpdatePopover.mockResolvedValue(undefined);
+  mockDismissPopover.mockReset();
+  mockDismissPopover.mockResolvedValue(undefined);
+  mockSendCommand.mockReset();
+  mockSendCommand.mockResolvedValue({
+    lemma: 'logos',
+    gloss: 'word, message',
+    partOfSpeech: 'noun',
+    strongNumber: 'G3056',
+    notes: [],
+  });
 });
 
 describe('EnhancedScripturePane', () => {
@@ -148,7 +189,7 @@ describe('EnhancedScripturePane', () => {
       expect.objectContaining({ start: { jsonPath: '$.content[0].content[1]' } }),
       'marble-word',
       'wg-001',
-      expect.any(Function),
+      expect.objectContaining({ onClick: expect.any(Function) }),
     );
     // Second call: note annotation
     expect(setAnnotationSpy).toHaveBeenNthCalledWith(
@@ -156,7 +197,7 @@ describe('EnhancedScripturePane', () => {
       expect.objectContaining({ start: { jsonPath: '$.content[0].content[2]' } }),
       'marble-note',
       'note-1',
-      expect.any(Function),
+      expect.objectContaining({ onClick: expect.any(Function) }),
     );
   });
 
@@ -179,13 +220,10 @@ describe('EnhancedScripturePane', () => {
       />,
     );
     // Grab the onClick callback the component registered with the editor.
-    const setAnnotationCall = setAnnotationSpy.mock.calls[0];
-    const clickHandler = setAnnotationCall[3] as (
-      event: { button: number },
-      type: string,
-      id: string,
-      textContent: string,
-    ) => void;
+    const callbacks = setAnnotationSpy.mock.calls[0][3] as {
+      onClick: (event: { button: number }, type: string, id: string, textContent: string) => void;
+    };
+    const clickHandler = callbacks.onClick;
     clickHandler({ button: 0 }, 'marble-word', 'wg-001', 'λόγος');
     expect(onTokenClick).toHaveBeenCalledWith('wg-001', annotation, 'λόγος');
     expect(onTokenContextMenu).not.toHaveBeenCalled();
@@ -209,12 +247,10 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
-    const clickHandler = setAnnotationSpy.mock.calls[0][3] as (
-      event: { button: number },
-      type: string,
-      id: string,
-      textContent: string,
-    ) => void;
+    const callbacks = setAnnotationSpy.mock.calls[0][3] as {
+      onClick: (event: { button: number }, type: string, id: string, textContent: string) => void;
+    };
+    const clickHandler = callbacks.onClick;
     clickHandler({ button: 2 }, 'marble-word', 'wg-001', 'λόγος');
     expect(onTokenContextMenu).toHaveBeenCalledWith('wg-001', annotation, expect.anything());
     expect(onTokenClick).not.toHaveBeenCalled();
@@ -244,6 +280,7 @@ describe('EnhancedScripturePane', () => {
       expect.objectContaining({ start: { jsonPath: '$.content[0].content[1]' } }),
       'marble-filter',
       'filter-wg-001',
+      {},
     );
   });
 
@@ -278,6 +315,7 @@ describe('EnhancedScripturePane', () => {
       expect.objectContaining({ start: { jsonPath: '$.content[0].content[1]' } }),
       'marble-highlight',
       'highlight-wg-001',
+      {},
     );
   });
 
@@ -350,6 +388,7 @@ describe('EnhancedScripturePane', () => {
       expect.anything(),
       'marble-filter',
       'filter-wg-001',
+      {},
     );
     setAnnotationSpy.mockClear();
 
@@ -401,6 +440,7 @@ describe('EnhancedScripturePane', () => {
       expect.anything(),
       'marble-highlight',
       'highlight-wg-001',
+      {},
     );
   });
 
@@ -510,5 +550,183 @@ describe('EnhancedScripturePane', () => {
     expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-word', 'wg-001');
     expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-filter', 'filter-wg-001');
     expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-highlight', 'highlight-wg-001');
+  });
+});
+
+describe('marble hover lifecycle', () => {
+  function getHoverHandlersForCall(callIndex: number) {
+    const callbacks = setAnnotationSpy.mock.calls[callIndex][3] as {
+      onClick?: (...args: unknown[]) => void;
+      onMouseEnter?: (event: MouseEvent, type: string, id: string, textContent: string) => void;
+      onMouseLeave?: (event: MouseEvent, type: string, id: string, textContent: string) => void;
+    };
+    return callbacks;
+  }
+
+  function makeFakeMouseEvent(): MouseEvent {
+    const target = document.createElement('span');
+    target.getBoundingClientRect = () => ({
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 40,
+      top: 20,
+      left: 10,
+      right: 40,
+      bottom: 60,
+      toJSON: () => '',
+    });
+    const event = new MouseEvent('mouseenter');
+    Object.defineProperty(event, 'currentTarget', { value: target });
+    return event;
+  }
+
+  // lexicalLinks shape is `NAMESPACE:LEMMA:ID`; the consumer extracts the middle segment as the
+  // lemma for hover-time matching. Use simple ASCII namespaces / IDs so tests are readable.
+  const wordA: MarbleAnnotation = {
+    usjPath: '$.content[0].content[1]',
+    kind: 'word',
+    annotationId: 'wg-A',
+    metadata: { lexicalLinks: ['SDBH:logos:001'] },
+  };
+  const wordB: MarbleAnnotation = {
+    usjPath: '$.content[0].content[2]',
+    kind: 'word',
+    annotationId: 'wg-B',
+    metadata: { lexicalLinks: ['SDBH:logos:002'] },
+  };
+  const wordC: MarbleAnnotation = {
+    usjPath: '$.content[0].content[3]',
+    kind: 'word',
+    annotationId: 'wg-C',
+    metadata: { lexicalLinks: ['SDBH:theos:003'] },
+  };
+
+  it('mouseenter on a marble-word triggers showPopover with the anchor rect', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[wordA, wordB, wordC]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+    expect(handlers.onMouseEnter).toBeDefined();
+
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+
+    expect(mockShowPopover).toHaveBeenCalledTimes(1);
+    expect(mockShowPopover).toHaveBeenCalledWith(
+      expect.objectContaining({
+        anchor: { x: 10, y: 20, width: 30, height: 40 },
+        side: 'top',
+        content: expect.objectContaining({ type: 'markdown' }),
+      }),
+      'test-webview',
+    );
+  });
+
+  it('updatePopover called with full markdown after buildTooltipData resolves', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[wordA]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+
+    // Two microtask flushes: one for showPopover.then setting activePopoverIdRef,
+    // and one for sendCommand.then -> updatePopover.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockUpdatePopover).toHaveBeenCalledWith(
+      'overlay-1',
+      expect.objectContaining({
+        type: 'markdown',
+        markdown: expect.stringContaining('logos'),
+      }),
+    );
+  });
+
+  it('mouseleave dismisses the popover and clears match/dim annotations', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[wordA, wordB, wordC]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    await Promise.resolve();
+
+    handlers.onMouseLeave!(new MouseEvent('mouseleave'), 'marble-word', 'wg-A', 'logos');
+
+    expect(mockDismissPopover).toHaveBeenCalledWith('overlay-1');
+    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-hover-match', expect.any(String));
+    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-hover-dim', expect.any(String));
+  });
+
+  it('RESOURCE_EXHAUSTED from showPopover is swallowed', async () => {
+    mockShowPopover.mockRejectedValueOnce({ code: 'RESOURCE_EXHAUSTED', message: 'debounced' });
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[wordA]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+
+    expect(() => {
+      handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    }).not.toThrow();
+  });
+
+  it('buildTooltipData rejection leaves loading markdown without crashing', async () => {
+    mockSendCommand.mockRejectedValueOnce(new Error('network'));
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[wordA]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockShowPopover).toHaveBeenCalledTimes(1);
+    expect(mockUpdatePopover).not.toHaveBeenCalled();
+  });
+
+  it('lemma-matching annotations sharing the hovered lemma get marble-hover-match', async () => {
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[wordA, wordB, wordC]}
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    await Promise.resolve();
+    const handlers = getHoverHandlersForCall(0);
+    setAnnotationSpy.mockClear();
+
+    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+
+    const { calls } = setAnnotationSpy.mock;
+    const matchCalls = calls.filter((c) => c[1] === 'marble-hover-match');
+    const dimCalls = calls.filter((c) => c[1] === 'marble-hover-dim');
+    expect(matchCalls.length).toBe(2);
+    expect(dimCalls.length).toBe(1);
   });
 });
