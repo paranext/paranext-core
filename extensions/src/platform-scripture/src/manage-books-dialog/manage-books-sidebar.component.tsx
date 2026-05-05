@@ -13,7 +13,7 @@
  * The disabled sections render as muted, non-clickable rows with a tooltip explaining that the
  * functionality is not yet available in Platform.Bible.
  */
-import { Fragment, useMemo } from 'react';
+import { Fragment } from 'react';
 import {
   BarChart3,
   BookA,
@@ -25,7 +25,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
-  ComboBox,
+  OpenProjectTab,
+  ProjectSelector,
   ProjectSelectorProject,
   Tooltip,
   TooltipContent,
@@ -149,6 +150,12 @@ export type ManageBooksSidebarProps = {
 
   /** Project list, derived from `useProjectsLookup` in the wiring layer. */
   projects: readonly ProjectSelectorProject[];
+  /**
+   * Currently-open project-bound tabs across the app. Passed straight through to the
+   * `<ProjectSelector openTabs={…}>` so the popover's "Open Tabs" grouping section reflects actual
+   * app state. Empty array is fine — the section just won't render.
+   */
+  openTabs?: readonly OpenProjectTab[];
   /** The currently selected project id (controlled). */
   projectId: string;
   /** Called when the user picks a different project in the sidebar. */
@@ -197,26 +204,17 @@ function actionToSectionId(action: ManageBooksAction): ManageBooksSidebarSection
   }
 }
 
-/** Local row shape for the project picker. Extends `ComboBoxLabelOption`. */
-type ProjectComboOption = ProjectSelectorProject & {
-  label: string;
-};
-
 export function ManageBooksSidebar({
   active,
   onSelectAction,
   projects,
+  openTabs,
   projectId,
   onProjectIdChange,
   isSubmitting = false,
   t,
 }: ManageBooksSidebarProps) {
   const activeSectionId = actionToSectionId(active);
-  const comboOptions = useMemo<ProjectComboOption[]>(
-    () => projects.map((p) => ({ ...p, label: p.shortName })),
-    [projects],
-  );
-  const comboValue = comboOptions.find((p) => p.id === projectId);
   return (
     <nav
       aria-label={t('%manageBooks_sidebar_heading%', 'Manage books')}
@@ -231,11 +229,14 @@ export function ManageBooksSidebar({
           {t('%manageBooks_header_projectLabel%', 'Project')}
         </Label>
         <div data-testid="manage-books-sidebar-project-trigger">
-          <ComboBox<ProjectComboOption>
-            options={comboOptions}
-            value={comboValue}
-            onChange={(next) => onProjectIdChange(next.id)}
-            getButtonLabel={(p) => p.shortName}
+          <ProjectSelector
+            mode="project"
+            projects={projects}
+            openTabs={openTabs ?? []}
+            selection={{ projectId }}
+            onChangeSelection={({ projectId: nextId }) => {
+              if (nextId) onProjectIdChange(nextId);
+            }}
             buttonClassName="tw-h-8 tw-w-full tw-font-normal"
             isDisabled={isSubmitting}
             ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
@@ -244,7 +245,7 @@ export function ManageBooksSidebar({
             // are GUIDs and would render as a 32-char hex string in the trigger, which the
             // verifier flagged as unreadable. The localized "Select project" string is the
             // correct momentary fallback; once `projects` resolves and contains `projectId`,
-            // ComboBox renders the matching `shortName` (e.g. "ESVUS16") via getButtonLabel.
+            // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16") in the trigger.
             buttonPlaceholder={t('%manageBooks_sidebar_projectPlaceholder%', 'Select project')}
           />
         </div>

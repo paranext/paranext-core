@@ -16,6 +16,8 @@ import {
   cn,
   Input,
   Label,
+  OpenProjectTab,
+  ProjectSelector,
   ProjectSelectorProject,
   Select,
   SelectContent,
@@ -198,6 +200,14 @@ export type ManageBooksDialogProps = {
    * Defaults to an empty array, which makes the ProjectSelector render an empty popover.
    */
   sidebarProjects?: readonly ProjectSelectorProject[];
+
+  /**
+   * Currently-open project-bound tabs across the app. Forwarded straight through to the sidebar
+   * `<ProjectSelector openTabs={…}>` so the popover's "Open Tabs" grouping section reflects actual
+   * app state. The wiring layer typically supplies this via `useOpenProjectTabs`. Empty array (the
+   * default) is fine — the section just won't render.
+   */
+  openTabs?: readonly OpenProjectTab[];
 };
 
 // --------------------------------------------------------------------------
@@ -323,6 +333,7 @@ export function ManageBooksDialog({
   bookIds,
   localizedStrings = {},
   sidebarProjects = [],
+  openTabs,
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
 
@@ -465,6 +476,15 @@ export function ManageBooksDialog({
   };
   const project = projects.find((p) => p.id === projectId) ?? fallbackProject;
   const otherProjects = projects.filter((p) => p.id !== projectId);
+  // The Copy "From" and Create "Based on" pickers are <ProjectSelector mode="project">, which
+  // takes a `ProjectSelectorProject` shape (`{ id, shortName, fullName }`). Map the dialog's
+  // `ManageBooksDialogProject` (`{ id, shortName, name }`) into that shape — the long display
+  // `name` becomes `fullName`. The target project itself is filtered out (already done in
+  // `otherProjects`).
+  const otherProjectsAsPS = useMemo<ProjectSelectorProject[]>(
+    () => otherProjects.map((p) => ({ id: p.id, shortName: p.shortName, fullName: p.name })),
+    [otherProjects],
+  );
   const copySourceProject = copySourceId ? projects.find((p) => p.id === copySourceId) : undefined;
   const createReferenceProject = createReferenceId
     ? projects.find((p) => p.id === createReferenceId)
@@ -1454,6 +1474,7 @@ export function ManageBooksDialog({
               if (!isSubmitting) setAction(next);
             }}
             projects={sidebarProjects}
+            openTabs={openTabs}
             projectId={projectId}
             onProjectIdChange={onProjectIdChange}
             isSubmitting={isSubmitting}
@@ -1649,34 +1670,33 @@ export function ManageBooksDialog({
                     </Tooltip>
                   )}
                   {createMethod === 'fromTemplate' && (
-                    <Select
-                      value={createReferenceId ?? ''}
-                      onValueChange={(v) => setCreateReferenceId(v || undefined)}
-                      disabled={isSubmitting}
-                    >
-                      <SelectTrigger
-                        id="af-reference"
-                        className={cn(
+                    <div id="af-reference" data-testid="manage-books-create-reference-trigger">
+                      <ProjectSelector
+                        mode="project"
+                        projects={otherProjectsAsPS}
+                        openTabs={openTabs ?? []}
+                        selection={{ projectId: createReferenceId }}
+                        onChangeSelection={({ projectId: nextId }) =>
+                          setCreateReferenceId(nextId || undefined)
+                        }
+                        isDisabled={isSubmitting}
+                        ariaLabel={t(
+                          '%manageBooks_create_referenceProjectPlaceholder%',
+                          'Select reference project',
+                        )}
+                        buttonPlaceholder={t(
+                          '%manageBooks_create_referenceProjectPlaceholder%',
+                          'Select reference project',
+                        )}
+                        // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
+                        // the picker reads as a call-to-action until a reference project is set.
+                        buttonClassName={cn(
                           'tw-h-8 tw-min-w-0 tw-flex-1 tw-basis-48',
                           !createReferenceId &&
-                            'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90 [&>span]:tw-text-primary-foreground [&_svg]:tw-text-primary-foreground',
+                            'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90',
                         )}
-                      >
-                        <SelectValue
-                          placeholder={t(
-                            '%manageBooks_create_referenceProjectPlaceholder%',
-                            'Select reference project',
-                          )}
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {otherProjects.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      />
+                    </div>
                   )}
                 </div>
               )}
@@ -1686,31 +1706,30 @@ export function ManageBooksDialog({
                   <Label htmlFor="af-source" className="tw-text-xs tw-text-muted-foreground">
                     {t('%manageBooks_copy_fromLabel%', 'From')}
                   </Label>
-                  <Select
-                    value={copySourceId ?? ''}
-                    onValueChange={(v) => setCopySourceId(v || undefined)}
-                    disabled={isSubmitting}
-                  >
-                    <SelectTrigger
-                      id="af-source"
-                      className={cn(
+                  <div id="af-source" data-testid="manage-books-copy-source-trigger">
+                    <ProjectSelector
+                      mode="project"
+                      projects={otherProjectsAsPS}
+                      openTabs={openTabs ?? []}
+                      selection={{ projectId: copySourceId }}
+                      onChangeSelection={({ projectId: nextId }) =>
+                        setCopySourceId(nextId || undefined)
+                      }
+                      isDisabled={isSubmitting}
+                      ariaLabel={t('%manageBooks_copy_sourcePlaceholder%', 'Select project')}
+                      buttonPlaceholder={t(
+                        '%manageBooks_copy_sourcePlaceholder%',
+                        'Select project',
+                      )}
+                      // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
+                      // the picker reads as a call-to-action until a source project is set.
+                      buttonClassName={cn(
                         'tw-h-8 tw-w-52',
                         !copySourceId &&
-                          'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90 [&>span]:tw-text-primary-foreground [&_svg]:tw-text-primary-foreground',
+                          'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90',
                       )}
-                    >
-                      <SelectValue
-                        placeholder={t('%manageBooks_copy_sourcePlaceholder%', 'Select project')}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {otherProjects.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    />
+                  </div>
                 </div>
               )}
 

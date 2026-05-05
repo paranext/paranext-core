@@ -22,7 +22,8 @@ import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ProjectSelectorProject } from 'platform-bible-react';
+import type { OpenProjectTab, ProjectSelectorProject } from 'platform-bible-react';
+import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { getErrorMessage } from 'platform-bible-utils';
 import {
   AlertEntry,
@@ -71,6 +72,14 @@ type ImportFileEntry = {
 type ProjectListResult = {
   projects: { projectId: string; name: string; projectType: string; isEditable: boolean }[];
 };
+
+/**
+ * Sidebar's enriched `ProjectSelectorProject` row. `isEditable` is added so the dialog can disable
+ * mutating actions (Create / Copy / Import / Delete) when the active target is read-only — see
+ * `manage-books-dialog.types.ts:ManageBooksDialogProject.isEditable`. The ProjectSelector itself
+ * ignores this extra field.
+ */
+type SidebarProject = ProjectSelectorProject & { isEditable: boolean };
 
 /**
  * Wire-shape of the manage-books NetworkObject as seen by the React layer. The methods listed here
@@ -386,7 +395,12 @@ global.webViewComponent = function ManageBooksWebView({
           } catch {
             // fall through with wire-name as display
           }
-          return { id: p.projectId, shortName: p.name, name: displayName };
+          return {
+            id: p.projectId,
+            shortName: p.name,
+            name: displayName,
+            isEditable: p.isEditable,
+          };
         }),
       );
     } catch (e) {
@@ -420,20 +434,20 @@ global.webViewComponent = function ManageBooksWebView({
   }, [manageBooksApi, projectId]);
 
   // ===== Sidebar projects (via ProjectSelector) ==============================
-  // The rebuilt sidebar uses the cherry-picked `<ProjectSelector>` (commit `555de7cfdd`)
-  // for the project picker. ProjectSelector consumes a richer `ProjectSelectorProject`
-  // shape than `ManageBooksDialogProject`, so we wrap `manageBooksApi.filterProjects` —
-  // the same source the original `loadProjects` callback uses, ensuring the sidebar list
-  // and the dialog's internal project list stay in lockstep (e.g. ESVUS16 / shared
-  // scripture projects show up in both).
-  const [sidebarProjects, setSidebarProjects] = useState<readonly ProjectSelectorProject[]>([]);
+  // Feeds the sidebar's `<ProjectSelector mode="project">`. We extend the base
+  // `ProjectSelectorProject` shape with `isEditable` (sourced from C# `ProjectSummary`) so the
+  // dialog can disable Create / Copy / Import / Delete actions when the active target is
+  // read-only. ProjectSelector ignores unknown fields, so passing the extended array directly is
+  // safe. Source is `manageBooksApi.filterProjects` — the same call `loadProjects` uses, so the
+  // sidebar list and the dialog's internal project list stay in lockstep.
+  const [sidebarProjects, setSidebarProjects] = useState<readonly SidebarProject[]>([]);
   useEffect(() => {
     if (!manageBooksApi) return undefined;
     let cancelled = false;
     (async () => {
       try {
         const result = await manageBooksApi.filterProjects({ purpose: 'AllScripture' });
-        const enriched: ProjectSelectorProject[] = await Promise.all(
+        const enriched: SidebarProject[] = await Promise.all(
           result.projects.map(async (p) => {
             // Mirror loadProjects: try platform.fullName for the human-friendly long name; fall
             // back to the wire short name when unavailable.
@@ -445,7 +459,12 @@ global.webViewComponent = function ManageBooksWebView({
             } catch {
               // best-effort; fall through with wire-name as full name
             }
-            return { id: p.projectId, shortName: p.name, fullName };
+            return {
+              id: p.projectId,
+              shortName: p.name,
+              fullName,
+              isEditable: p.isEditable,
+            };
           }),
         );
         if (!cancelled) setSidebarProjects(enriched);
@@ -457,6 +476,21 @@ global.webViewComponent = function ManageBooksWebView({
       cancelled = true;
     };
   }, [manageBooksApi]);
+
+  // ===== Open project tabs (for ProjectSelector grouping) ====================
+  // The shared `useOpenProjectTabs` hook returns a richer shape (`webViewId`, `webViewType`); map
+  // it down to the lighter `OpenProjectTab` shape `<ProjectSelector>` consumes. The `scrollGroup`
+  // current-reference label is omitted — Manage Books pickers don't surface scroll-group ref
+  // tooltips today.
+  const allOpenProjectTabs = useOpenProjectTabs();
+  const openProjectTabs = useMemo<OpenProjectTab[]>(
+    () =>
+      allOpenProjectTabs.map((tab) => ({
+        projectId: tab.projectId,
+        scrollGroupId: tab.scrollGroupId,
+      })),
+    [allOpenProjectTabs],
+  );
 
   // ===== Mutation result routing → toasts ====================================
   const onMutationResult = useCallback((result: MutationResult) => {
@@ -652,6 +686,7 @@ global.webViewComponent = function ManageBooksWebView({
         isSharedProject={isSharedProject}
         localizedStrings={localizedStrings}
         sidebarProjects={sidebarProjects}
+        openTabs={openProjectTabs}
       />
       <GreekEstherTemplatePicker
         open={pickerOpen}

@@ -54,6 +54,12 @@ export type ManageBooksDialogProject = {
   id: string;
   shortName: string;
   name: string;
+  /**
+   * Whether the user has write access to this project. Sourced from the C# `ProjectSummary`. Used
+   * by the dialog to disable Create / Copy / Import / Delete actions when the target project is
+   * read-only.
+   */
+  isEditable?: boolean;
 };
 
 /**
