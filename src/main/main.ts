@@ -144,6 +144,7 @@ if (!isFirstInstance) {
 // #endregion
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
+const SHUTDOWN_SYNC_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
 /** Height of the custom title bar buttons on Windows */
 const TITLE_BAR_BUTTON_HEIGHT = 47;
@@ -692,6 +693,24 @@ async function main() {
       // Also, in the future, this should allow a "are you sure?" dialog to display.
       e.preventDefault();
       isAppQuitting = true;
+
+      // Cancel any in-progress sync, then run a fresh full sync before shutdown.
+      // All errors are swallowed — extension may not be installed, or sync may fail.
+      // Shutdown must never be permanently blocked.
+      try {
+        await commandService.sendCommand('paratextBibleSendReceive.cancelSync');
+      } catch {
+        /* no sync in progress, or extension unavailable */
+      }
+
+      try {
+        await Promise.race([
+          commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined),
+          wait(SHUTDOWN_SYNC_TIMEOUT_MS),
+        ]);
+      } catch {
+        /* sync failed or extension unavailable — proceed with shutdown */
+      }
 
       await Promise.all([
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT),
