@@ -33,6 +33,7 @@ declare module 'platform-get-resources' {
 
 declare module 'papi-shared-types' {
   import type { IDblResourcesProvider } from 'platform-get-resources';
+  import type { ResultsData } from 'paratext-bible-send-receive';
 
   export interface DataProviders {
     'platformGetResources.dblResourcesProvider': IDblResourcesProvider;
@@ -98,7 +99,7 @@ declare module 'papi-shared-types' {
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)
      */
-    'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<void>;
+    'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<ResultsData>;
 
     /**
      * Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjects` with
