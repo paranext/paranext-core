@@ -144,7 +144,7 @@ if (!isFirstInstance) {
 // #endregion
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
-const SHUTDOWN_SYNC_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+const SHUTDOWN_SYNC_TIME_OUT = 10 * 60 * 1000; // 10 minutes
 
 /** Height of the custom title bar buttons on Windows */
 const TITLE_BAR_BUTTON_HEIGHT = 47;
@@ -703,13 +703,25 @@ async function main() {
         /* no sync in progress, or extension unavailable */
       }
 
+      let syncTimedOut = false;
       try {
         await Promise.race([
           commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined),
-          wait(SHUTDOWN_SYNC_TIMEOUT_MS),
+          wait(SHUTDOWN_SYNC_TIME_OUT).then(() => {
+            syncTimedOut = true;
+            return undefined;
+          }),
         ]);
       } catch {
         /* sync failed or extension unavailable — proceed with shutdown */
+      }
+
+      if (syncTimedOut) {
+        try {
+          await commandService.sendCommand('paratextBibleSendReceive.cancelSync');
+        } catch {
+          /* extension unavailable */
+        }
       }
 
       await Promise.all([
