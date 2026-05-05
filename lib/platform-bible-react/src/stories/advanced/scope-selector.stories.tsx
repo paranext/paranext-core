@@ -371,6 +371,79 @@ export const SelectedBooksScope: Story = {
   },
 };
 
+const gridVariantLocalizedStrings = {
+  ...rangeLocalizedStrings,
+  '%scripture_section_ot_long%': 'Old Testament',
+  '%scripture_section_nt_long%': 'New Testament',
+  '%scripture_section_dc_long%': 'Deuterocanon',
+  '%scripture_section_extra_long%': 'Extra Materials',
+};
+
+export const SelectedBooksScopeGridVariant: Story = {
+  render: () => {
+    const [scope, setScope] = useState<Scope>('selectedBooks');
+    const [selectedBookIds, setSelectedBookIds] = useState<string[]>(['GEN', 'EXO', 'MAT']);
+
+    return (
+      <ScopeSelector
+        bookSelectorVariant="grid"
+        scope={scope}
+        availableBookInfo={mockAvailableBookInfo}
+        selectedBookIds={selectedBookIds}
+        onScopeChange={setScope}
+        onSelectedBookIdsChange={setSelectedBookIds}
+        localizedStrings={gridVariantLocalizedStrings}
+        localizedBookNames={mockLocalizedBookNames}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Selected-books scope rendered with `bookSelectorVariant="grid"`. Books appear as a multi-column grid grouped by canon section (OT / NT / DC / Extra), each group with a tristate select-all checkbox and a collapsible header. No section buttons (OT / NT / …) above the popover. Inspired by the BookGridSelector in the Manage Books dialog design (paranext-core PR #2224).',
+      },
+    },
+  },
+};
+
+export const DropdownVariantWithBookGrid: Story = {
+  render: () => {
+    const [scope, setScope] = useState<Scope>('selectedBooks');
+    const [selectedBookIds, setSelectedBookIds] = useState<string[]>(['MAT', 'MRK']);
+    const [currentScrRef, setCurrentScrRef] = useState<SerializedVerseRef>({
+      book: 'MAT',
+      chapterNum: 5,
+      verseNum: 3,
+    });
+
+    return (
+      <ScopeSelector
+        variant="dropdown"
+        bookSelectorVariant="grid"
+        scope={scope}
+        availableBookInfo={mockAvailableBookInfo}
+        selectedBookIds={selectedBookIds}
+        onScopeChange={setScope}
+        onSelectedBookIdsChange={setSelectedBookIds}
+        localizedStrings={gridVariantLocalizedStrings}
+        localizedBookNames={mockLocalizedBookNames}
+        currentScrRef={currentScrRef}
+        onCurrentScrRefChange={setCurrentScrRef}
+        getEndVerse={sampleGetEndVerse}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Combines the dropdown scope variant with the grid book-selector variant. The "Choose books…" entry opens a dialog containing the grouped grid.',
+      },
+    },
+  },
+};
+
 // Sample localized book names for Spanish
 const spanishBookNames = new Map([
   ['GEN', { localizedId: 'GÉN', localizedName: 'Génesis' }],

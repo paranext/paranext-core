@@ -1,4 +1,5 @@
 import { BookSelector } from '@/components/advanced/scope-selector/book-selector.component';
+import { BookGridSelector } from '@/components/advanced/scope-selector/book-grid-selector.component';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { BookChapterControlLocalizedStrings } from '@/components/advanced/book-chapter-control/book-chapter-control.types';
 import { Button } from '@/components/shadcn-ui/button';
@@ -96,6 +97,17 @@ const localizeString = (
 export type ScopeSelectorVariant = 'radio' | 'dropdown';
 
 /**
+ * Visual variant for the "Choose books" picker rendered when `scope === 'selectedBooks'`.
+ *
+ * - `'classic'` (default) — section buttons (OT / NT / DC / Extra) above a search popover with a
+ *   single-column list of book items, matching the original Scope Selector design.
+ * - `'grid'` — a multi-column grid of clickable book pills with collapsible groups by canon section
+ *   and a tristate select-all checkbox per group. Inspired by the BookGridSelector in the Manage
+ *   Books dialog design (paranext-core PR #2224).
+ */
+export type ScopeBookSelectorVariant = 'classic' | 'grid';
+
+/**
  * Keys that submit the start reference in the range picker in addition to Enter. Space and `-` are
  * the natural separators a user types between a start and end reference, so we treat them as "I'm
  * done with the start, take me to the end" signals.
@@ -149,6 +161,14 @@ interface ScopeSelectorProps {
    * options.
    */
   variant?: ScopeSelectorVariant;
+
+  /**
+   * Controls the look of the "Choose books" picker. `'classic'` (default) renders the original
+   * BookSelector with OT / NT / DC / Extra section buttons above a search popover. `'grid'` renders
+   * a multi-column grid of book pills grouped by canon section, with per-group select-all
+   * checkboxes (no section buttons).
+   */
+  bookSelectorVariant?: ScopeBookSelectorVariant;
 
   /**
    * The start of the verse range. Only used when `scope === 'range'`. Defaults to `defaultScrRef`
@@ -208,6 +228,7 @@ export function ScopeSelector({
   localizedBookNames,
   id,
   variant = 'radio',
+  bookSelectorVariant = 'classic',
   rangeStart,
   rangeEnd,
   onRangeStartChange,
@@ -481,15 +502,24 @@ export function ScopeSelector({
   const selectedBooksScope = displayedScopes.find((option) => option.value === 'selectedBooks');
   const rangeScope = displayedScopes.find((option) => option.value === 'range');
 
-  const bookSelectorBlock = (
-    <BookSelector
-      availableBookInfo={availableBookInfo}
-      selectedBookIds={selectedBookIds}
-      onChangeSelectedBookIds={onSelectedBookIdsChange}
-      localizedStrings={localizedStrings}
-      localizedBookNames={localizedBookNames}
-    />
-  );
+  const bookSelectorBlock =
+    bookSelectorVariant === 'grid' ? (
+      <BookGridSelector
+        availableBookInfo={availableBookInfo}
+        selectedBookIds={selectedBookIds}
+        onChangeSelectedBookIds={onSelectedBookIdsChange}
+        localizedStrings={localizedStrings}
+        localizedBookNames={localizedBookNames}
+      />
+    ) : (
+      <BookSelector
+        availableBookInfo={availableBookInfo}
+        selectedBookIds={selectedBookIds}
+        onChangeSelectedBookIds={onSelectedBookIdsChange}
+        localizedStrings={localizedStrings}
+        localizedBookNames={localizedBookNames}
+      />
+    );
 
   // While one range BCV is showing its picker, fade the other side (label + trigger) to
   // muted-foreground so the active picker visibly owns the user's focus. The fade reverts
