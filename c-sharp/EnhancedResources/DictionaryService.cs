@@ -246,6 +246,13 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
             var lemmaKey = lemma.Normalize(System.Text.NormalizationForm.FormD);
             pkg.EntriesById.TryGetValue(lemmaKey, out var entry);
 
+            var relevantSenseIndices = ComputeRelevantSenseIndices(entry, token.LexicalLinks);
+            var firstRelevantSensePreview = ComputeFirstRelevantSensePreview(
+                entry,
+                relevantSenseIndices,
+                input.GlossLanguage
+            );
+
             items.Add(
                 new DictionaryDisplayItem(
                     TokenId: token.Index.ToString(),
@@ -255,7 +262,9 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
                     Translit: "",
                     Glosses: BuildGlossesForLanguage(entry, input.GlossLanguage),
                     PartOfSpeech: entry?.Morphology ?? "",
-                    OccurrenceCount: 1
+                    OccurrenceCount: 1,
+                    RelevantSenseIndices: relevantSenseIndices,
+                    FirstRelevantSensePreview: firstRelevantSensePreview
                 )
             );
         }
@@ -274,6 +283,66 @@ internal sealed class DictionaryService(DictionaryData data, IMarbleBookTokenPro
         var lemma = parts.Length >= 2 ? parts[1] : "";
         var senseId = parts.Length >= 3 ? parts[2] : "";
         return (lemma, senseId, entry);
+    }
+
+    /// <summary>
+    /// For a token's lexical_links (semicolon-delimited "lemma:senseId:..." entries), find which
+    /// senses in the resolved DictionaryEntryRecord apply at this position. Returns the indices into
+    /// entry.Senses for matching SenseIds (preserving entry-order so callers can stably pick "first").
+    /// PT9 reference: DictionaryTab.cs:485-517 SelectedSense + DictionaryTab.cs:1482 Senses.Add(sense.SenseIndex).
+    /// </summary>
+    private static IList<int> ComputeRelevantSenseIndices(
+        DictionaryEntryRecord? entry,
+        IList<string>? lexicalLinks
+    )
+    {
+        if (entry is null || lexicalLinks is null || lexicalLinks.Count == 0)
+            return Array.Empty<int>();
+
+        // Collect the unique SenseIds claimed by this token's lexical links.
+        var claimedSenseIds = new HashSet<string>();
+        foreach (var link in lexicalLinks)
+        {
+            if (string.IsNullOrEmpty(link))
+                continue;
+            var (_, senseId, _) = ParseLinkEntry(link);
+            if (!string.IsNullOrEmpty(senseId))
+                claimedSenseIds.Add(senseId);
+        }
+        if (claimedSenseIds.Count == 0)
+            return Array.Empty<int>();
+
+        var indices = new List<int>();
+        for (int i = 0; i < entry.Senses.Count; i++)
+        {
+            if (claimedSenseIds.Contains(entry.Senses[i].SenseId))
+                indices.Add(i);
+        }
+        return indices;
+    }
+
+    /// <summary>
+    /// Pick the preview text for the first relevant sense. Mirrors PT9 DictionaryTab.cs:554-555:
+    /// use Definition (DefinitionShort in PT9) when non-empty; otherwise fall back to the first localized gloss.
+    /// Empty string when no preview is available (no relevant senses, no definition, no glosses).
+    /// </summary>
+    private static string ComputeFirstRelevantSensePreview(
+        DictionaryEntryRecord? entry,
+        IList<int> relevantSenseIndices,
+        string glossLanguage
+    )
+    {
+        if (entry is null || relevantSenseIndices.Count == 0)
+            return "";
+        var sense = entry.Senses[relevantSenseIndices[0]];
+        if (!string.IsNullOrEmpty(sense.Definition))
+            return sense.Definition;
+        var firstLocalizedGloss = sense
+            .Glosses.FirstOrDefault(g => g.Language == glossLanguage)
+            ?.Text;
+        if (!string.IsNullOrEmpty(firstLocalizedGloss))
+            return firstLocalizedGloss;
+        return sense.Glosses.FirstOrDefault()?.Text ?? "";
     }
 
     private static IList<string> BuildGlossesForLanguage(

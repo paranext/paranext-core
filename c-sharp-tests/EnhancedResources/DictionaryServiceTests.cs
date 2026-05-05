@@ -768,7 +768,7 @@ internal class DictionaryServiceTests
                 StringComparer.OrdinalIgnoreCase
             )
             {
-                ["SDBH"] = sdbh with { Lexicon = extendedLexicon, },
+                ["SDBH"] = sdbh with { Lexicon = extendedLexicon },
                 ["SDBG"] = baseData.ByDictionary["SDBG"],
                 ["DCLEX"] = baseData.ByDictionary["DCLEX"],
             },
@@ -875,6 +875,118 @@ internal class DictionaryServiceTests
         var result = service.LoadResources(input);
 
         Assert.That(result.Items, Is.Not.Empty);
+    }
+
+    #endregion
+
+    #region BHV-110/Section 4.8: RelevantSenseIndices + FirstRelevantSensePreview
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("BehaviorId", "BHV-110")]
+    [Description(
+        "Token with lexical_links naming two of three senses populates RelevantSenseIndices "
+            + "with their indices and FirstRelevantSensePreview from the first relevant sense's Definition. "
+            + "PT9 ref: DictionaryTab.cs:485-517 SelectedSense, DictionaryTab.cs:554-555 preview."
+    )]
+    public void LoadDictionaryResources_TokenWithMultipleRelevantSenses_PopulatesRelevantSenseIndices()
+    {
+        var data = DictionaryFixtures.BuildDictionaryDataWithSingleEntry(
+            DictionaryFixtures.MultiSenseHebrewEntry()
+        );
+        var service = BuildService(
+            data: data,
+            bookTokens: DictionaryFixtures.BuildBookTokenProviderForMultiSenseHebrewToken(
+                "test-resource"
+            )
+        );
+        var input = new DictionaryLoadInput(
+            CurrentReference: new VerseRef(1, 1, 1),
+            Scope: ScopeEnum.CurrentVerse,
+            Filter: null,
+            ShowTranslations: false,
+            GlossLanguage: "en",
+            ResourceId: "test-resource"
+        );
+
+        var result = service.LoadResources(input);
+
+        var item = result.Items.Single(i => i.Term == "אֱלֹהִים");
+        // Order-strict assertion: PT9 callers depend on entry-order stability for
+        // "first relevant sense" picking, so [2, 0] would be a regression even though
+        // it has the same elements.
+        Assert.That(item.RelevantSenseIndices, Is.EqualTo(new[] { 0, 2 }));
+        Assert.That(item.FirstRelevantSensePreview, Is.EqualTo("The supreme deity."));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("BehaviorId", "BHV-110")]
+    [Description(
+        "Token whose lexical_links carry no SenseId yields an empty RelevantSenseIndices list "
+            + "and an empty FirstRelevantSensePreview. PT9 ref: DictionaryTab.cs:485-517."
+    )]
+    public void LoadDictionaryResources_TokenWithoutLexicalLinks_ReturnsEmptyRelevance()
+    {
+        var data = DictionaryFixtures.BuildDictionaryDataWithSingleEntry(
+            DictionaryFixtures.MultiSenseHebrewEntry()
+        );
+        var service = BuildService(
+            data: data,
+            bookTokens: DictionaryFixtures.BuildBookTokenProviderForUnlinkedToken("test-resource")
+        );
+        var input = new DictionaryLoadInput(
+            CurrentReference: new VerseRef(1, 1, 1),
+            Scope: ScopeEnum.CurrentVerse,
+            Filter: null,
+            ShowTranslations: false,
+            GlossLanguage: "en",
+            ResourceId: "test-resource"
+        );
+
+        var result = service.LoadResources(input);
+
+        var item = result.Items.Single();
+        Assert.That(item.RelevantSenseIndices, Is.Empty);
+        Assert.That(item.FirstRelevantSensePreview, Is.EqualTo(""));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("BehaviorId", "BHV-110")]
+    [Description(
+        "Sense with empty Definition falls back to first localized gloss for "
+            + "FirstRelevantSensePreview. PT9 ref: DictionaryTab.cs:554-555."
+    )]
+    public void LoadDictionaryResources_SenseWithEmptyDefinition_FallsBackToFirstGloss()
+    {
+        var data = DictionaryFixtures.BuildDictionaryDataWithSingleEntry(
+            DictionaryFixtures.DefinitionlessSenseEntry()
+        );
+        var service = BuildService(
+            data: data,
+            bookTokens: DictionaryFixtures.BuildBookTokenProviderForDefinitionlessToken(
+                "test-resource"
+            )
+        );
+        var input = new DictionaryLoadInput(
+            CurrentReference: new VerseRef(1, 1, 1),
+            Scope: ScopeEnum.CurrentVerse,
+            Filter: null,
+            ShowTranslations: false,
+            GlossLanguage: "en",
+            ResourceId: "test-resource"
+        );
+
+        var result = service.LoadResources(input);
+
+        var item = result.Items.Single();
+        Assert.That(item.RelevantSenseIndices.Count, Is.EqualTo(1));
+        Assert.That(item.RelevantSenseIndices[0], Is.EqualTo(0));
+        Assert.That(item.FirstRelevantSensePreview, Is.EqualTo("God-fallback-gloss"));
     }
 
     #endregion

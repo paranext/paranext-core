@@ -10,6 +10,16 @@ namespace Paranext.DataProvider.EnhancedResources;
 /// (PT9 MarbleDataAccess.cs:1444 keys cachedLemmaToEntry on the FormD lemma).
 /// Clients pass it back to readDictionaryEntry to drill into the full entry.
 /// </para>
+/// <para>
+/// RelevantSenseIndices lists the indices into the resolved entry's Senses list
+/// that apply to THIS token at THIS verse (PT9 DictionaryTab.cs:485-517 SelectedSense).
+/// Empty list when no relevance data is available.
+/// </para>
+/// <para>
+/// FirstRelevantSensePreview is the preview text rendered in the collapsed list row
+/// (uses the first relevant sense's Definition; falls back to first gloss per
+/// PT9 DictionaryTab.cs:554-555). Empty string when no preview is available.
+/// </para>
 /// </summary>
 public record DictionaryDisplayItem(
     string TokenId,
@@ -20,7 +30,8 @@ public record DictionaryDisplayItem(
     IList<string> Glosses,
     string PartOfSpeech,
     int OccurrenceCount,
-    string? Definition = null,
+    IList<int> RelevantSenseIndices,
+    string FirstRelevantSensePreview,
     IList<SemanticDomainRef>? SemanticDomains = null,
     IList<RelatedLexemeRef>? RelatedLexemes = null,
     IList<EncyclopediaLinkRef>? EncyclopediaLinks = null,
