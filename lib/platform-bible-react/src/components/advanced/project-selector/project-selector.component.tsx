@@ -276,7 +276,11 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
   const rowNode = (
     <CommandItem
       value={`${row.rowKey} ${row.shortName} ${row.fullName} ${row.language ?? ''} ${row.languageCode ?? ''}`}
-      onSelect={() => onClick(row)}
+      onSelect={() => {
+        if (row.isDisabled) return;
+        onClick(row);
+      }}
+      disabled={row.isDisabled}
       className="tw-flex tw-items-center tw-gap-2 tw-pe-4 tw-@container"
       data-selected={row.isSelected}
     >
@@ -327,6 +331,9 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
           </div>
         )}
         {tooltipBoundBut && <div className="tw-text-sm tw-italic">{tooltipBoundBut}</div>}
+        {row.isDisabled && row.disabledReason && (
+          <div className="tw-text-sm tw-italic tw-text-muted-foreground">{row.disabledReason}</div>
+        )}
       </TooltipContent>
     </Tooltip>
   );

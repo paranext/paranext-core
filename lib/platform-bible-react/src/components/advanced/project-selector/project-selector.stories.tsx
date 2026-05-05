@@ -276,3 +276,37 @@ export const Disabled: Story = {
 };
 
 // #endregion
+
+// #region per-row disabled
+
+export const PerRowDisabled: Story = {
+  render: () => {
+    const projectsWithDisabled: ProjectSelectorProject[] = sampleProjects.map((p) =>
+      p.id === 'esv16uk' || p.id === 'tp1'
+        ? { ...p, isDisabled: true, disabledReason: 'Read-only — cannot copy into this project' }
+        : p,
+    );
+    const [projectId, setProjectId] = useState<string | undefined>(undefined);
+    return (
+      <ProjectSelector
+        mode="project"
+        projects={projectsWithDisabled}
+        openTabs={sampleOpenTabs}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        buttonPlaceholder="Pick a target project"
+        ariaLabel="Project"
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Two projects (`ESV16UK`, `TP1`) are marked disabled with a `disabledReason`. They render muted, are not selectable (Up/Down navigation skips them), and the reason surfaces in the row tooltip. Use this to surface read-only or otherwise-unusable projects without filtering them out of the list.',
+      },
+    },
+  },
+};
+
+// #endregion
