@@ -15,7 +15,13 @@ import {
   type SemanticDomain,
 } from 'platform-bible-react';
 import type { LocalizeKey, LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
-import { formatScrRef, formatScrRefRange, isPlatformError } from 'platform-bible-utils';
+import {
+  formatScrRef,
+  formatScrRefRange,
+  isPlatformError,
+  UsjReaderWriter,
+  USFM_MARKERS_MAP_PARATEXT_3_0,
+} from 'platform-bible-utils';
 import type { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import { convertMarbleChapterXml, type MarbleAnnotation } from '../lib/marble-converter';
 import { computeScopeKeyedRefKey } from '../lib/scope-keyed-ref-key';
@@ -151,12 +157,14 @@ export type EnhancedResourceWebViewProps = {
   usj: Usj | undefined;
   annotations: MarbleAnnotation[];
   filteredTokenId: string | undefined;
+  /** Surface form of the currently filtered token, if any. Drives the filter-banner display. */
+  filteredTokenSurface?: string;
   hebrewDisplayMode?: ScriptDisplayMode;
   greekDisplayMode?: ScriptDisplayMode;
   showFootnotes?: boolean;
   scripturePaneZoom?: number;
   scripturePaneError?: string;
-  onTokenClick?: (tokenId: string, annotation: MarbleAnnotation) => void;
+  onTokenClick?: (tokenId: string, annotation: MarbleAnnotation, textContent: string) => void;
   onTokenContextMenu?: (
     tokenId: string,
     annotation: MarbleAnnotation,
@@ -410,6 +418,7 @@ export function EnhancedResourceWebView({
   usj,
   annotations,
   filteredTokenId,
+  filteredTokenSurface,
   hebrewDisplayMode = 'both',
   greekDisplayMode = 'both',
   showFootnotes = false,
@@ -626,6 +635,7 @@ export function EnhancedResourceWebView({
                   usj={usj}
                   annotations={annotations}
                   filteredTokenId={filteredTokenId}
+                  filteredTokenSurface={filteredTokenSurface}
                   scripturePaneZoom={scripturePaneZoom}
                   errorMessage={scripturePaneError}
                   highlightAllResearchTerms={highlightMode === 'all-research-terms'}
@@ -1180,6 +1190,10 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   const [scripturePaneZoom, setScripturePaneZoom] = useWebViewState<number>('scripturePaneZoom', 1);
   const [filteredTokenId, setFilteredTokenId] = useWebViewState<string | undefined>(
     'filteredTokenId',
+    undefined,
+  );
+  const [filteredTokenSurface, setFilteredTokenSurface] = useWebViewState<string | undefined>(
+    'filteredTokenSurface',
     undefined,
   );
   // Transient selection state for the footnotes pane (G4) - intentionally NOT a memento field;
@@ -2445,11 +2459,37 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
 
   // FN-020: linked-word click → set filter, ensure scope dropdown gains "Current Sense" option,
   // and propagate the filter to whatever research tab is currently active.
+  // G6: note clicks branch to footnote selection (no filter update); word clicks set both
+  // the filter id and the surface form so toolbar/banner display the actual word text
+  // (e.g. "λόγος") rather than the opaque integer marble walking-order id.
   const handleTokenClick = useCallback(
-    (tokenId: string) => {
+    (tokenId: string, annotation: MarbleAnnotation, textContent: string) => {
+      if (annotation.kind === 'note') {
+        // G6: note clicks select the corresponding footnote in the footnotes pane
+        // (FootnoteList drives focus/scroll automatically). Skip the filter update.
+        // findAllNotes() walks the USJ in identical order to the marble-converter's
+        // note annotations, so the position within `kind==='note'` annotations maps
+        // directly to allNotes' index.
+        if (!usj) return;
+        try {
+          const reader = new UsjReaderWriter(usj, { markersMap: USFM_MARKERS_MAP_PARATEXT_3_0 });
+          const allNotes = reader.findAllNotes();
+          const noteIndex = annotations
+            .filter((a) => a.kind === 'note')
+            .findIndex((a) => a.annotationId === annotation.annotationId);
+          if (noteIndex >= 0 && noteIndex < allNotes.length) {
+            setSelectedFootnote(allNotes[noteIndex]);
+          }
+        } catch {
+          // Silently no-op on USJ-read failures; filter+banner state untouched.
+        }
+        return;
+      }
+      // Word click — set both filter id and surface for downstream display.
       setFilteredTokenId(tokenId);
+      setFilteredTokenSurface(textContent);
     },
-    [setFilteredTokenId],
+    [annotations, usj, setFilteredTokenId, setFilteredTokenSurface, setSelectedFootnote],
   );
 
   // FN-020 / BHV-308: context-menu placeholder. The real context-menu wiring
@@ -2475,11 +2515,15 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   // FN-020 (c): clicking a source-language word in DictionaryTab sets the filter to that lemma so
   // the scripture pane (and other research tabs) propagate. We reuse the existing token-click
   // handler — both paths terminate in `setFilteredTokenId`.
+  // G6: clear the cached surface form so searchValue's useMemo falls through to the dictionary
+  // lookup (which yields the matching item's sourceText) rather than retaining a stale value
+  // from a prior scripture-pane click.
   const handleDictionarySourceTextClick = useCallback(
     (tokenId: string) => {
       setFilteredTokenId(tokenId);
+      setFilteredTokenSurface(undefined);
     },
-    [setFilteredTokenId],
+    [setFilteredTokenId, setFilteredTokenSurface],
   );
 
   // FN-020 (c) — encyclopedia variant. Clicking the translit headline in an encyclopedia row
@@ -2488,8 +2532,9 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
   const handleEncyclopediaSourceTextClick = useCallback(
     (tokenId: string) => {
       setFilteredTokenId(tokenId);
+      setFilteredTokenSurface(undefined);
     },
-    [setFilteredTokenId],
+    [setFilteredTokenId, setFilteredTokenSurface],
   );
 
   // FN-020: clear-filter → reset filteredTokenId. Because `hasSenseScope` is derived from
@@ -2499,11 +2544,14 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     (value: string) => {
       if (value === '') {
         setFilteredTokenId(undefined);
+        // G6: clear the cached surface form alongside the id so the toolbar/banner don't
+        // show stale text after a clear.
+        setFilteredTokenSurface(undefined);
         // Keep scope on current-sense impossible once filter is gone.
         if (scope === 'current-sense') setScope('current-verse');
       }
     },
-    [scope, setFilteredTokenId, setScope],
+    [scope, setFilteredTokenId, setFilteredTokenSurface, setScope],
   );
 
   // UI-PKG-008: MarbleGuide ("Getting started in Enhanced Resources") wiring.
@@ -2814,19 +2862,23 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     };
   }, [setShowFootnotes, setScripturePaneZoom]);
 
-  // FN-020(c): the filter input shows the actual word text (sourceText) of the clicked token, not
-  // the opaque numeric token id. We look up the matching item in the lemma-keyed lists (dictionary
-  // and encyclopedia). Media rows are verse-ref-keyed (per the round-2 cutoff strategy), so they
-  // don't contribute to the lookup. Falls back to the bare filteredTokenId if no match is found
-  // yet (the data may still be loading).
+  // FN-020(c) / G6: the filter input shows the actual word text (sourceText) of the clicked
+  // token, not the opaque numeric token id. The scripture-pane click now forwards the surface
+  // form via filteredTokenSurface, which is the most direct source. As a fallback (e.g. when
+  // the filter was set from a dictionary/encyclopedia row instead of a scripture click), we
+  // look up the matching item in the lemma-keyed lists (dictionary and encyclopedia). Media
+  // rows are verse-ref-keyed (per the round-2 cutoff strategy), so they don't contribute to
+  // the lookup. Falls back to the bare filteredTokenId if no match is found yet (the data may
+  // still be loading).
   const searchValue = useMemo(() => {
     if (!filteredTokenId) return '';
+    if (filteredTokenSurface) return filteredTokenSurface;
     const dictMatch = dictionaryItems.find((i) => i.tokenId === filteredTokenId);
     if (dictMatch) return dictMatch.sourceText;
     const encMatch = encyclopediaItems.find((i) => i.tokenId === filteredTokenId);
     if (encMatch) return encMatch.sourceText;
     return filteredTokenId;
-  }, [filteredTokenId, dictionaryItems, encyclopediaItems]);
+  }, [filteredTokenId, filteredTokenSurface, dictionaryItems, encyclopediaItems]);
 
   // ViewMenu state surface (the hamburger menu's checkboxes + radio groups). Persists via
   // useWebViewState so memento fully round-trips (FN-017).
@@ -2860,6 +2912,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       // updates sibling editor / scripture panes.
       onScrRefChange={setScrRef}
       filteredTokenId={filteredTokenId}
+      filteredTokenSurface={filteredTokenSurface}
       hebrewDisplayMode={hebrewDisplayMode}
       greekDisplayMode={greekDisplayMode}
       showFootnotes={showFootnotes}

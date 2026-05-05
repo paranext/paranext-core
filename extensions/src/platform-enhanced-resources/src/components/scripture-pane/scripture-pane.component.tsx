@@ -53,6 +53,8 @@ export type EnhancedScripturePaneProps = {
   annotations: MarbleAnnotation[];
   /** AnnotationId of a single linked word the user has filtered to (highlights only that token). */
   filteredTokenId?: string;
+  /** Surface form of the currently filtered token, if any. Drives the filter-banner display. */
+  filteredTokenSurface?: string;
   /** When true, every word-kind annotation gets a `marble-highlight` overlay (BHV-301). */
   highlightAllResearchTerms?: boolean;
   /** Zoom factor applied to the rendered scripture (1.0 = 100%). */
@@ -63,8 +65,8 @@ export type EnhancedScripturePaneProps = {
   errorMessage?: string;
   /** Scripture reference passed straight through to `<Editorial>` for cursor positioning. */
   scrRef?: SerializedVerseRef;
-  /** Click handler for a marble word/note. */
-  onTokenClick?: (tokenId: string, annotation: MarbleAnnotation) => void;
+  /** Click handler for a marble word/note. textContent is the surface form of the annotated range. */
+  onTokenClick?: (tokenId: string, annotation: MarbleAnnotation, textContent: string) => void;
   /** Right-click handler - wiring layer turns this into the BHV-308 context menu. */
   onTokenContextMenu?: (
     tokenId: string,
@@ -97,12 +99,15 @@ const RIGHT_MOUSE_BUTTON = 2;
 const MARBLE_ANNOTATION_STYLES = `
 .editor-typed-mark-external-marble-word {
   cursor: pointer;
-  text-decoration: underline dotted hsl(var(--primary) / 0.55);
-  text-underline-offset: 2px;
+  /* G5: PT9 (.textlink/.term/.missingterm) renders no visible affordance by default —
+     color: inherit; text-decoration: inherit. The user opts in via the toolbar's
+     "All research terms" mode, hovers, or click-state. We therefore drop the always-on
+     dotted-underline that previously made every linked word visually distinct. */
 }
 .editor-typed-mark-external-marble-word:hover {
   background-color: hsl(var(--accent));
-  text-decoration-color: hsl(var(--primary));
+  text-decoration: underline dotted hsl(var(--primary));
+  text-underline-offset: 2px;
 }
 .editor-typed-mark-external-marble-note {
   cursor: pointer;
@@ -152,6 +157,7 @@ export function EnhancedScripturePane({
   usj,
   annotations,
   filteredTokenId,
+  filteredTokenSurface,
   highlightAllResearchTerms = false,
   scripturePaneZoom = 1,
   isLoading = false,
@@ -206,21 +212,26 @@ export function EnhancedScripturePane({
         slice.forEach((annotation) => {
           const range = annotationToRange(annotation);
           const baseType = annotationTypeFor(annotation.kind);
-          editor.setAnnotation(range, baseType, annotation.annotationId, (event, _type, id) => {
-            const annotationForId = annotationsById.get(id);
-            if (!annotationForId) return;
-            const { onTokenClick: latestClick, onTokenContextMenu: latestContextMenu } =
-              handlersRef.current;
-            if (event.button === RIGHT_MOUSE_BUTTON) {
-              // Editorial gives us a DOM MouseEvent; consumers expect the React
-              // MouseEvent surface (only `.button`, `.preventDefault()`, etc are
-              // read), so a structural cast is correct.
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              latestContextMenu(id, annotationForId, event as unknown as ReactMouseEvent);
-            } else {
-              latestClick(id, annotationForId);
-            }
-          });
+          editor.setAnnotation(
+            range,
+            baseType,
+            annotation.annotationId,
+            (event, _type, id, textContent) => {
+              const annotationForId = annotationsById.get(id);
+              if (!annotationForId) return;
+              const { onTokenClick: latestClick, onTokenContextMenu: latestContextMenu } =
+                handlersRef.current;
+              if (event.button === RIGHT_MOUSE_BUTTON) {
+                // Editorial gives us a DOM MouseEvent; consumers expect the React
+                // MouseEvent surface (only `.button`, `.preventDefault()`, etc are
+                // read), so a structural cast is correct.
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                latestContextMenu(id, annotationForId, event as unknown as ReactMouseEvent);
+              } else {
+                latestClick(id, annotationForId, textContent);
+              }
+            },
+          );
         });
         if (i + CHUNK_SIZE < annotations.length) {
           // Yield to the event loop so mousedown / setFocus / paint can run.
@@ -351,7 +362,7 @@ export function EnhancedScripturePane({
             role="status"
             className="tw-mt-3 tw-rounded tw-bg-accent tw-px-2 tw-py-1 tw-text-xs tw-text-accent-foreground"
           >
-            {`${filterActiveLabel}: ${filteredTokenId}`}
+            {`${filterActiveLabel}: ${filteredTokenSurface ?? filteredTokenId}`}
           </p>
         )}
       </div>

@@ -184,9 +184,10 @@ describe('EnhancedScripturePane', () => {
       event: { button: number },
       type: string,
       id: string,
+      textContent: string,
     ) => void;
-    clickHandler({ button: 0 }, 'marble-word', 'wg-001');
-    expect(onTokenClick).toHaveBeenCalledWith('wg-001', annotation);
+    clickHandler({ button: 0 }, 'marble-word', 'wg-001', 'λόγος');
+    expect(onTokenClick).toHaveBeenCalledWith('wg-001', annotation, 'λόγος');
     expect(onTokenContextMenu).not.toHaveBeenCalled();
   });
 
@@ -212,8 +213,9 @@ describe('EnhancedScripturePane', () => {
       event: { button: number },
       type: string,
       id: string,
+      textContent: string,
     ) => void;
-    clickHandler({ button: 2 }, 'marble-word', 'wg-001');
+    clickHandler({ button: 2 }, 'marble-word', 'wg-001', 'λόγος');
     expect(onTokenContextMenu).toHaveBeenCalledWith('wg-001', annotation, expect.anything());
     expect(onTokenClick).not.toHaveBeenCalled();
   });
@@ -458,6 +460,31 @@ describe('EnhancedScripturePane', () => {
     });
     // Total setAnnotation calls should not have grown past the first chunk.
     expect(setAnnotationSpy).toHaveBeenCalledTimes(50);
+  });
+
+  it('renders surface text in the filter banner when filteredTokenSurface is provided', () => {
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[]}
+        filteredTokenId="453"
+        filteredTokenSurface="λόγος"
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Filter: λόγος');
+  });
+
+  it('falls back to filteredTokenId in the filter banner when surface is not provided', () => {
+    render(
+      <EnhancedScripturePane
+        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        annotations={[]}
+        filteredTokenId="453"
+        localizedStringsWithLoadingState={[STRINGS_BAG, false]}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Filter: 453');
   });
 
   it('removes all applied annotations on unmount', () => {
