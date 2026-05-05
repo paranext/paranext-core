@@ -23,6 +23,7 @@ import {
   ScriptureFinderProjectDataProviderEngineFactory,
 } from './project-data-provider/platform-scripture-finder.pdpef.model';
 import { SCRIPTURE_FINDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-finder-pdpe.model';
+import { resourceReferenceListValidator } from './resource-reference-list.utils';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
@@ -360,6 +361,14 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.invalidPunctuation',
     punctuationValidator,
   );
+  const modelTextsPromise = papi.projectSettings.registerValidator(
+    'platformScripture.modelTexts',
+    resourceReferenceListValidator,
+  );
+  const referencedProjectsAndResourcesPromise = papi.projectSettings.registerValidator(
+    'platformScripture.referencedProjectsAndResources',
+    resourceReferenceListValidator,
+  );
   const openPunctuationInventoryPromise = papi.commands.registerCommand(
     'platformScripture.openPunctuationInventory',
     openPlatformPunctuationInventory,
@@ -467,6 +476,8 @@ export async function activate(context: ExecutionActivationContext) {
     await markersInventoryWebViewProviderPromise,
     await validPunctuationPromise,
     await invalidPunctuationPromise,
+    await modelTextsPromise,
+    await referencedProjectsAndResourcesPromise,
     await openPunctuationInventoryPromise,
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
