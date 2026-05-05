@@ -16,7 +16,7 @@ import {
 import { cn } from '@/utils/shadcn-ui.util';
 import { Canon } from '@sillsdev/scripture';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { getSectionForBook, LanguageStrings, Section } from 'platform-bible-utils';
+import { getSectionForBook, LanguageStrings, LocalizeKey, Section } from 'platform-bible-utils';
 import {
   KeyboardEvent,
   MouseEvent,
@@ -49,10 +49,173 @@ type BookGridSelectorProps = {
    * value contains localized versions of the ID and full book name
    */
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
+  /**
+   * When true, OT and NT books are additionally sub-grouped by traditional biblical book category
+   * (Pentateuch, Historical, Wisdom, Major Prophets, Minor Prophets in OT; Gospels, Acts, Pauline
+   * Epistles, General Epistles, Revelation in NT). Each category gets a smaller sub-header with its
+   * own tristate select-all checkbox. DC and Extra sections are not sub-divided. Defaults to
+   * false.
+   */
+  groupByCategory?: boolean;
 };
 
 /** Sections rendered as groups, in display order. */
 const GROUP_SECTIONS: readonly Section[] = [Section.OT, Section.NT, Section.DC, Section.Extra];
+
+/**
+ * Traditional biblical book categories used as a second grouping layer when
+ * `groupByCategory={true}`. Only OT and NT have category sub-divisions; DC and Extra render flat.
+ */
+enum BookCategory {
+  Pentateuch = 'Pentateuch',
+  Historical = 'Historical',
+  Wisdom = 'Wisdom',
+  MajorProphets = 'MajorProphets',
+  MinorProphets = 'MinorProphets',
+  Gospels = 'Gospels',
+  Acts = 'Acts',
+  PaulineEpistles = 'PaulineEpistles',
+  GeneralEpistles = 'GeneralEpistles',
+  Revelation = 'Revelation',
+}
+
+/** Categories rendered within each section, in display order. Sections missing here are flat. */
+const CATEGORIES_BY_SECTION: Partial<Record<Section, readonly BookCategory[]>> = {
+  [Section.OT]: [
+    BookCategory.Pentateuch,
+    BookCategory.Historical,
+    BookCategory.Wisdom,
+    BookCategory.MajorProphets,
+    BookCategory.MinorProphets,
+  ],
+  [Section.NT]: [
+    BookCategory.Gospels,
+    BookCategory.Acts,
+    BookCategory.PaulineEpistles,
+    BookCategory.GeneralEpistles,
+    BookCategory.Revelation,
+  ],
+};
+
+/**
+ * Book ID → category lookup. Books not present here (DC, Extra, unknown) have no category and
+ * render in their section without a category sub-header.
+ */
+const BOOK_TO_CATEGORY: Readonly<Record<string, BookCategory>> = Object.freeze({
+  GEN: BookCategory.Pentateuch,
+  EXO: BookCategory.Pentateuch,
+  LEV: BookCategory.Pentateuch,
+  NUM: BookCategory.Pentateuch,
+  DEU: BookCategory.Pentateuch,
+  JOS: BookCategory.Historical,
+  JDG: BookCategory.Historical,
+  RUT: BookCategory.Historical,
+  '1SA': BookCategory.Historical,
+  '2SA': BookCategory.Historical,
+  '1KI': BookCategory.Historical,
+  '2KI': BookCategory.Historical,
+  '1CH': BookCategory.Historical,
+  '2CH': BookCategory.Historical,
+  EZR: BookCategory.Historical,
+  NEH: BookCategory.Historical,
+  EST: BookCategory.Historical,
+  JOB: BookCategory.Wisdom,
+  PSA: BookCategory.Wisdom,
+  PRO: BookCategory.Wisdom,
+  ECC: BookCategory.Wisdom,
+  SNG: BookCategory.Wisdom,
+  ISA: BookCategory.MajorProphets,
+  JER: BookCategory.MajorProphets,
+  LAM: BookCategory.MajorProphets,
+  EZK: BookCategory.MajorProphets,
+  DAN: BookCategory.MajorProphets,
+  HOS: BookCategory.MinorProphets,
+  JOL: BookCategory.MinorProphets,
+  AMO: BookCategory.MinorProphets,
+  OBA: BookCategory.MinorProphets,
+  JON: BookCategory.MinorProphets,
+  MIC: BookCategory.MinorProphets,
+  NAM: BookCategory.MinorProphets,
+  HAB: BookCategory.MinorProphets,
+  ZEP: BookCategory.MinorProphets,
+  HAG: BookCategory.MinorProphets,
+  ZEC: BookCategory.MinorProphets,
+  MAL: BookCategory.MinorProphets,
+  MAT: BookCategory.Gospels,
+  MRK: BookCategory.Gospels,
+  LUK: BookCategory.Gospels,
+  JHN: BookCategory.Gospels,
+  ACT: BookCategory.Acts,
+  ROM: BookCategory.PaulineEpistles,
+  '1CO': BookCategory.PaulineEpistles,
+  '2CO': BookCategory.PaulineEpistles,
+  GAL: BookCategory.PaulineEpistles,
+  EPH: BookCategory.PaulineEpistles,
+  PHP: BookCategory.PaulineEpistles,
+  COL: BookCategory.PaulineEpistles,
+  '1TH': BookCategory.PaulineEpistles,
+  '2TH': BookCategory.PaulineEpistles,
+  '1TI': BookCategory.PaulineEpistles,
+  '2TI': BookCategory.PaulineEpistles,
+  TIT: BookCategory.PaulineEpistles,
+  PHM: BookCategory.PaulineEpistles,
+  // Hebrews is grouped with the General Epistles since Pauline authorship is disputed by most
+  // modern scholarship. (Older categorizations sometimes group it with Pauline.)
+  HEB: BookCategory.GeneralEpistles,
+  JAS: BookCategory.GeneralEpistles,
+  '1PE': BookCategory.GeneralEpistles,
+  '2PE': BookCategory.GeneralEpistles,
+  '1JN': BookCategory.GeneralEpistles,
+  '2JN': BookCategory.GeneralEpistles,
+  '3JN': BookCategory.GeneralEpistles,
+  JUD: BookCategory.GeneralEpistles,
+  REV: BookCategory.Revelation,
+});
+
+/** Localized string key per category. Falls back to a sensible English default when unset. */
+const CATEGORY_STRING_KEYS: Readonly<Record<BookCategory, { key: LocalizeKey; fallback: string }>> =
+  Object.freeze({
+    [BookCategory.Pentateuch]: {
+      key: '%scripture_category_pentateuch%',
+      fallback: 'Pentateuch',
+    },
+    [BookCategory.Historical]: {
+      key: '%scripture_category_historical%',
+      fallback: 'Historical Books',
+    },
+    [BookCategory.Wisdom]: {
+      key: '%scripture_category_wisdom%',
+      fallback: 'Wisdom Books',
+    },
+    [BookCategory.MajorProphets]: {
+      key: '%scripture_category_major_prophets%',
+      fallback: 'Major Prophets',
+    },
+    [BookCategory.MinorProphets]: {
+      key: '%scripture_category_minor_prophets%',
+      fallback: 'Minor Prophets',
+    },
+    [BookCategory.Gospels]: {
+      key: '%scripture_category_gospels%',
+      fallback: 'Gospels',
+    },
+    [BookCategory.Acts]: {
+      key: '%scripture_category_acts%',
+      fallback: 'Acts',
+    },
+    [BookCategory.PaulineEpistles]: {
+      key: '%scripture_category_pauline_epistles%',
+      fallback: 'Pauline Epistles',
+    },
+    [BookCategory.GeneralEpistles]: {
+      key: '%scripture_category_general_epistles%',
+      fallback: 'General Epistles',
+    },
+    [BookCategory.Revelation]: {
+      key: '%scripture_category_revelation%',
+      fallback: 'Revelation',
+    },
+  });
 
 /**
  * A book selection component that renders a grid of clickable book pills grouped by canon section
@@ -73,6 +236,7 @@ export function BookGridSelector({
   onChangeSelectedBookIds,
   localizedStrings,
   localizedBookNames,
+  groupByCategory = false,
 }: BookGridSelectorProps) {
   const searchBooksText = localizedStrings['%webView_book_selector_search_books%'];
   const selectAllText = localizedStrings['%webView_book_selector_select_all%'];
@@ -375,6 +539,80 @@ export function BookGridSelector({
     );
   };
 
+  /**
+   * Splits a section's filtered books into render-time sub-groups. When `groupByCategory` is true
+   * and the section has a category list (OT, NT), books are partitioned by category in the
+   * canonical category order; otherwise the section produces a single un-categorized sub-group.
+   * Empty categories are dropped so we don't render headers for nothing.
+   */
+  const getSubgroupsForSection = useCallback(
+    (
+      section: Section,
+      sectionBooks: string[],
+    ): Array<{ category?: BookCategory; books: string[] }> => {
+      const categoryOrder = groupByCategory ? CATEGORIES_BY_SECTION[section] : undefined;
+      if (!categoryOrder) return [{ books: sectionBooks }];
+      const buckets = new Map<BookCategory, string[]>(categoryOrder.map((cat) => [cat, []]));
+      sectionBooks.forEach((bookId) => {
+        const cat = BOOK_TO_CATEGORY[bookId];
+        const bucket = cat ? buckets.get(cat) : undefined;
+        if (bucket) bucket.push(bookId);
+      });
+      return categoryOrder
+        .map((cat) => ({ category: cat, books: buckets.get(cat) ?? [] }))
+        .filter((sub) => sub.books.length > 0);
+    },
+    [groupByCategory],
+  );
+
+  const handleToggleAllInCategory = (booksInCategory: string[]) => {
+    if (booksInCategory.length === 0) return;
+    const allSelected = booksInCategory.every((bookId) => selectedSet.has(bookId));
+    const next = new Set(selectedBookIds);
+    if (allSelected) {
+      booksInCategory.forEach((bookId) => next.delete(bookId));
+    } else {
+      booksInCategory.forEach((bookId) => next.add(bookId));
+    }
+    onChangeSelectedBookIds([...next]);
+  };
+
+  const renderCategoryHeader = (category: BookCategory, booksInCategory: string[]) => {
+    const { key, fallback } = CATEGORY_STRING_KEYS[category];
+    const label = localizedStrings[key] ?? fallback;
+    const selectedCount = booksInCategory.reduce(
+      (acc, bookId) => (selectedSet.has(bookId) ? acc + 1 : acc),
+      0,
+    );
+    const allSelected = booksInCategory.length > 0 && selectedCount === booksInCategory.length;
+    let checkState: boolean | 'indeterminate' = false;
+    if (allSelected) checkState = true;
+    else if (selectedCount > 0) checkState = 'indeterminate';
+
+    return (
+      <div className="tw-mt-1 tw-flex tw-items-center tw-gap-2 tw-ps-2">
+        <span className="tw-flex-1 tw-text-[10px] tw-font-medium tw-uppercase tw-tracking-wide tw-text-muted-foreground/80">
+          {label}
+          <span className="tw-ms-1 tw-font-normal tw-normal-case tw-tracking-normal tw-text-muted-foreground/60">
+            ({booksInCategory.length})
+          </span>
+        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="tw-flex tw-shrink-0 tw-items-center">
+              <Checkbox
+                checked={checkState}
+                onCheckedChange={() => handleToggleAllInCategory(booksInCategory)}
+                aria-label={`${selectAllText} – ${label}`}
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{`${selectAllText} – ${label}`}</TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  };
+
   const renderPill = (bookId: string, flatIndex: number) => {
     const isSelected = selectedSet.has(bookId);
     return (
@@ -453,22 +691,51 @@ export function BookGridSelector({
               const groupBooks = filteredBooksByGroup[section];
               const collapsed = collapsedGroups.has(section);
               const groupStart = groupStarts.get(section) ?? 0;
+              const subgroups = getSubgroupsForSection(section, groupBooks);
+              // Cumulative offset of each sub-group's first pill into the section's flat
+              // book list — used to compute the global flat index for keyboard nav.
+              let subgroupOffset = 0;
               return (
                 <section key={section} className="tw-flex tw-flex-col">
                   {renderGroupHeader(section)}
-                  {!collapsed && (
-                    <ul
-                      ref={groupIdx === 0 ? firstUlRef : undefined}
-                      className={cn(
-                        'tw-mt-0.5 tw-grid tw-auto-rows-min tw-gap-1',
-                        'tw-grid-cols-2 [@media(min-width:560px)]:tw-grid-cols-3 [@media(min-width:720px)]:tw-grid-cols-4',
-                      )}
-                    >
-                      {groupBooks.map((bookId, withinGroup) => (
-                        <li key={bookId}>{renderPill(bookId, groupStart + withinGroup)}</li>
-                      ))}
-                    </ul>
-                  )}
+                  {!collapsed &&
+                    subgroups.map((subgroup, subgroupIdx) => {
+                      const startWithinSection = subgroupOffset;
+                      subgroupOffset += subgroup.books.length;
+                      // Attach `firstUlRef` to the very first rendered ul (first section's
+                      // first sub-group). The measurement assumes a sub-group with at least
+                      // enough books to wrap at the smallest breakpoint (2 cols); both
+                      // entry points satisfy that — Pentateuch (5) for OT, Gospels (4) for
+                      // NT-only filter results.
+                      const isFirstUl = groupIdx === 0 && subgroupIdx === 0;
+                      // Sections without category sub-grouping (DC, Extra, or `groupByCategory=false`)
+                      // produce a single un-categorized sub-group per section, so `__flat-0` is
+                      // unique within the section's list of subgroups. The eslint exception that
+                      // would otherwise fire for using an index here doesn't trigger because the
+                      // index isn't the sole key — it's the fallback for a stable empty-category.
+                      return (
+                        <div key={subgroup.category ?? `__flat-${subgroupIdx}`}>
+                          {subgroup.category &&
+                            renderCategoryHeader(subgroup.category, subgroup.books)}
+                          <ul
+                            ref={isFirstUl ? firstUlRef : undefined}
+                            className={cn(
+                              'tw-mt-0.5 tw-grid tw-auto-rows-min tw-gap-1',
+                              'tw-grid-cols-2 [@media(min-width:560px)]:tw-grid-cols-3 [@media(min-width:720px)]:tw-grid-cols-4',
+                            )}
+                          >
+                            {subgroup.books.map((bookId, withinSubgroup) => (
+                              <li key={bookId}>
+                                {renderPill(
+                                  bookId,
+                                  groupStart + startWithinSection + withinSubgroup,
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })}
                 </section>
               );
             })

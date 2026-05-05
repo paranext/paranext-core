@@ -71,6 +71,16 @@ export const SCOPE_SELECTOR_STRING_KEYS = Object.freeze([
   '%scripture_section_dc_short%',
   '%scripture_section_extra_long%',
   '%scripture_section_extra_short%',
+  '%scripture_category_pentateuch%',
+  '%scripture_category_historical%',
+  '%scripture_category_wisdom%',
+  '%scripture_category_major_prophets%',
+  '%scripture_category_minor_prophets%',
+  '%scripture_category_gospels%',
+  '%scripture_category_acts%',
+  '%scripture_category_pauline_epistles%',
+  '%scripture_category_general_epistles%',
+  '%scripture_category_revelation%',
 ] as const);
 
 /** Type definition for the localized strings used in this component */
@@ -171,6 +181,15 @@ interface ScopeSelectorProps {
   bookSelectorVariant?: ScopeBookSelectorVariant;
 
   /**
+   * When true and `bookSelectorVariant === 'grid'`, OT and NT books in the grid are additionally
+   * sub-grouped by traditional biblical book category (Pentateuch, Historical Books, Wisdom Books,
+   * Major Prophets, Minor Prophets in OT; Gospels, Acts, Pauline Epistles, General Epistles,
+   * Revelation in NT). DC and Extra are not sub-divided. Has no effect when `bookSelectorVariant
+   * === 'classic'`. Defaults to false.
+   */
+  groupBooksByCategory?: boolean;
+
+  /**
    * The start of the verse range. Only used when `scope === 'range'`. Defaults to `defaultScrRef`
    * (GEN 1:1) if neither this nor `currentScrRef` is provided.
    */
@@ -229,6 +248,7 @@ export function ScopeSelector({
   id,
   variant = 'radio',
   bookSelectorVariant = 'classic',
+  groupBooksByCategory = false,
   rangeStart,
   rangeEnd,
   onRangeStartChange,
@@ -510,6 +530,7 @@ export function ScopeSelector({
         onChangeSelectedBookIds={onSelectedBookIdsChange}
         localizedStrings={localizedStrings}
         localizedBookNames={localizedBookNames}
+        groupByCategory={groupBooksByCategory}
       />
     ) : (
       <BookSelector

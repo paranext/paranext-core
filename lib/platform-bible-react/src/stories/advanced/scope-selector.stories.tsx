@@ -407,6 +407,35 @@ export const SelectedBooksScopeGridVariant: Story = {
   },
 };
 
+export const SelectedBooksScopeGridVariantByCategory: Story = {
+  render: () => {
+    const [scope, setScope] = useState<Scope>('selectedBooks');
+    const [selectedBookIds, setSelectedBookIds] = useState<string[]>(['GEN', 'PSA', 'MAT', 'ROM']);
+
+    return (
+      <ScopeSelector
+        bookSelectorVariant="grid"
+        groupBooksByCategory
+        scope={scope}
+        availableBookInfo={mockAvailableBookInfo}
+        selectedBookIds={selectedBookIds}
+        onScopeChange={setScope}
+        onSelectedBookIdsChange={setSelectedBookIds}
+        localizedStrings={gridVariantLocalizedStrings}
+        localizedBookNames={mockLocalizedBookNames}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Selected-books scope rendered with `bookSelectorVariant="grid"` and `groupBooksByCategory`. Within Old and New Testament, books are sub-grouped by traditional biblical category (Pentateuch, Historical Books, Wisdom Books, Major/Minor Prophets, Gospels, Acts, Pauline Epistles, General Epistles, Revelation). Each category has its own tristate select-all checkbox; the section-level collapse still owns the visibility of the whole testament. Deuterocanon and Extra render flat (no sub-categories).',
+      },
+    },
+  },
+};
+
 export const DropdownVariantWithBookGrid: Story = {
   render: () => {
     const [scope, setScope] = useState<Scope>('selectedBooks');
