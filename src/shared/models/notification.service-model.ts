@@ -30,6 +30,14 @@ export interface PlatformNotification {
   clickCommand?: keyof CommandHandlers;
   /** Optional ID of a previous notification to update instead of showing a new notification */
   notificationId?: string | number;
+  /**
+   * Optional duration in milliseconds for how long the notification is displayed. To make the
+   * notification show indefinitely, specify a `duration` of `0` or less.
+   *
+   * When omitted, duration is computed from message length (minimum 10 seconds, maximum 35
+   * seconds).
+   */
+  duration?: number;
 }
 
 /**
@@ -52,6 +60,12 @@ export interface INotificationService {
    * @returns Promise that resolves with the ID of the notification
    */
   send(notification: PlatformNotification): Promise<string | number>;
+  /**
+   * Dismiss a notification by its ID. If the notification is not found, this is a no-op.
+   *
+   * @param notificationId ID of the notification to dismiss, as returned by {@link send}
+   */
+  dismiss(notificationId: string | number): Promise<void>;
 }
 
 export const NotificationServiceNetworkObjectName = 'NotificationService';
