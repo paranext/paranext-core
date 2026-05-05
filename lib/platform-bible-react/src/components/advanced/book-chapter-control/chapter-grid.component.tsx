@@ -1,7 +1,6 @@
-import { CommandGroup, CommandItem } from '@/components/shadcn-ui/command';
-import { cn } from '@/utils/shadcn-ui.util';
 import { ALL_ENGLISH_BOOK_NAMES } from '@/components/shared/book.utils';
 import { fetchEndChapter } from './book-chapter-control.utils';
+import { NumberedItemGrid } from './numbered-item-grid.component';
 
 export interface ChapterGridProps {
   /** The book ID to render chapters for */
@@ -36,45 +35,15 @@ export function ChapterGrid({
   if (!bookId) return undefined;
 
   return (
-    <CommandGroup>
-      <div className={cn('tw-grid tw-grid-cols-6 tw-gap-1', className)}>
-        {Array.from({ length: fetchEndChapter(bookId) }, (_, i) => i + 1).map((chapter) => {
-          const disabled = isChapterDisabled?.(chapter) ?? false;
-          return (
-            <CommandItem
-              key={chapter}
-              value={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ${chapter}`}
-              onSelect={() => {
-                if (disabled) return;
-                onChapterSelect(chapter);
-              }}
-              ref={setChapterRef(chapter)}
-              disabled={disabled}
-              aria-disabled={disabled || undefined}
-              className={cn(
-                // No fixed width (previously `tw-w-8`) so cells fill their grid
-                // column (1fr) and adapt when the popover is narrower than the
-                // default 280px. `tw-min-w-0` lets cells shrink below their
-                // intrinsic content width; `tw-px-0` overrides CommandItem's
-                // default horizontal padding so multi-digit chapter numbers still
-                // fit in tight cells. Keep `tw-h-8` for a consistent row height.
-                'tw-h-8 tw-min-w-0 tw-cursor-pointer tw-justify-center tw-rounded-md tw-px-0 tw-text-center tw-text-sm',
-                {
-                  'tw-bg-primary tw-text-primary-foreground':
-                    bookId === scrRef.book && chapter === scrRef.chapterNum,
-                },
-                {
-                  'tw-bg-muted/50 tw-text-muted-foreground/50':
-                    (isChapterDimmed?.(chapter) ?? false) && !disabled,
-                },
-                disabled && 'tw-cursor-not-allowed tw-opacity-40',
-              )}
-            >
-              {chapter}
-            </CommandItem>
-          );
-        })}
-      </div>
-    </CommandGroup>
+    <NumberedItemGrid
+      count={fetchEndChapter(bookId)}
+      valueBuilder={(chapter) => `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ${chapter}`}
+      onSelect={onChapterSelect}
+      itemRef={setChapterRef}
+      isDisabled={isChapterDisabled}
+      isDimmed={isChapterDimmed}
+      isSelected={(chapter) => bookId === scrRef.book && chapter === scrRef.chapterNum}
+      className={className}
+    />
   );
 }

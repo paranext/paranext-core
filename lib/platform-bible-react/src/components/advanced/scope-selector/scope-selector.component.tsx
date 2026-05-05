@@ -20,7 +20,7 @@ import {
 import { Label } from '@/components/shadcn-ui/label';
 import { PopoverPortalContainerProvider } from '@/components/shadcn-ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
-import { Scope } from '@/components/utils/scripture.util';
+import { Scope, ScopeWithRange } from '@/components/utils/scripture.util';
 import { cn } from '@/utils/shadcn-ui.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Check, ChevronDown } from 'lucide-react';
@@ -105,16 +105,16 @@ const RANGE_START_SUBMIT_KEYS = Object.freeze([' ', '-']);
 /** Props for configuring the ScopeSelector component */
 interface ScopeSelectorProps {
   /** The current scope selection */
-  scope: Scope;
+  scope: ScopeWithRange;
 
   /**
    * Optional array of scopes that should be available in the selector. If not provided, all scopes
-   * will be shown as defined in the Scope type
+   * will be shown as defined in the ScopeWithRange type
    */
-  availableScopes?: Scope[];
+  availableScopes?: ScopeWithRange[];
 
   /** Callback function that is executed when the user changes the scope selection */
-  onScopeChange: (scope: Scope) => void;
+  onScopeChange: (scope: ScopeWithRange) => void;
 
   /**
    * Information about available books, formatted as a 123 character long string as defined in a
@@ -204,9 +204,10 @@ interface ScopeSelectorProps {
 
 /**
  * A component that allows users to select the scope of their search or operation. Available scopes
- * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a BookSelector
- * component is displayed to allow users to choose specific books. When 'range' is chosen, two
- * BookChapterControl pickers are displayed for selecting the start and end verse of the range.
+ * are defined in the ScopeWithRange type. When 'selectedBooks' is chosen as the scope, a
+ * BookSelector component is displayed to allow users to choose specific books. When 'range' is
+ * chosen, two BookChapterControl pickers are displayed for selecting the start and end verse of the
+ * range.
  */
 export function ScopeSelector({
   scope,
@@ -281,7 +282,7 @@ export function ScopeSelector({
   // "Current" so users browsing the menu see the semantics up front; the trigger stays terse
   // so the selected value stays compact ("Verse: GEN 1:1" rather than "Current verse: GEN 1:1").
   const SCOPE_OPTIONS: Array<{
-    value: Scope;
+    value: ScopeWithRange;
     label: string;
     dropdownLabel?: string;
     scrRefSuffix?: string;
@@ -458,7 +459,7 @@ export function ScopeSelector({
   // the current book (if known) so the user has a meaningful starting point. When no current ref
   // is provided we leave it empty.
   const handleScopeChange = useCallback(
-    (newScope: Scope) => {
+    (newScope: ScopeWithRange) => {
       onScopeChange(newScope);
       if (newScope === 'selectedBooks' && selectedBookIds.length === 0 && currentScrRef?.book) {
         onSelectedBookIdsChange([currentScrRef.book]);
@@ -500,12 +501,12 @@ export function ScopeSelector({
   // (the selectedBooks / range pickers always open as dialogs rather than as flyout submenus —
   // the dialog form is consistent regardless of viewport size and gives those more complex
   // pickers their own focus scope).
-  const [dialogSub, setDialogSub] = useState<Scope | undefined>(undefined);
+  const [dialogSub, setDialogSub] = useState<ScopeWithRange | undefined>(undefined);
   // ─── Dialog staging (D1, D2, D3) ──────────────────────────────────────────
   // While a range / selectedBooks dialog is open, edits accumulate into these
   // drafts. They commit (via the prop callbacks) on OK and discard on
   // Cancel/X/Escape. No callback fires while the dialog is open.
-  const [draftScope, setDraftScope] = useState<Scope | undefined>(undefined);
+  const [draftScope, setDraftScope] = useState<ScopeWithRange | undefined>(undefined);
   const [draftRangeStart, setDraftRangeStart] = useState<SerializedVerseRef | undefined>(undefined);
   const [draftRangeEnd, setDraftRangeEnd] = useState<SerializedVerseRef | undefined>(undefined);
   const [draftSelectedBookIds, setDraftSelectedBookIds] = useState<string[]>([]);
@@ -608,7 +609,7 @@ export function ScopeSelector({
   // on the currently selected scope instead of Radix's default first-item.
   const scopeItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const assignScopeItemRef = useCallback(
-    (targetScope: Scope) => (node: HTMLDivElement | null) => {
+    (targetScope: ScopeWithRange) => (node: HTMLDivElement | null) => {
       scopeItemRefs.current[targetScope] = node;
     },
     [],
@@ -683,7 +684,7 @@ export function ScopeSelector({
   // tears down, and when the dialog closes we return focus to the outer trigger (same UX as
   // Radix's default behavior after selecting a simple DropdownMenuItem).
   const openDialogFallback = useCallback(
-    (targetScope: Scope) => {
+    (targetScope: ScopeWithRange) => {
       // D1: seed drafts from current props/state; do NOT commit scope yet.
       // commitDialog (Task SS-T3) fires onScopeChange + range/books callbacks on OK.
       setDraftScope(targetScope);
@@ -738,7 +739,7 @@ export function ScopeSelector({
     outerTriggerRef.current?.focus();
   }, []);
 
-  const renderDialogLauncherCheck = (launcherScope: Scope) =>
+  const renderDialogLauncherCheck = (launcherScope: ScopeWithRange) =>
     scope === launcherScope ? (
       <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
         <Check className="tw-h-4 tw-w-4" />

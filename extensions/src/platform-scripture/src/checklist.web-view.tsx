@@ -9,7 +9,7 @@ import {
   type OpenProjectTab,
   type ProjectPair,
   type ProjectSelectorProject,
-  type Scope,
+  type ScopeWithRange,
   usePromise,
 } from 'platform-bible-react';
 import {
@@ -178,7 +178,7 @@ global.webViewComponent = function ChecklistWebView({
   //   `undefined` = "All Books", matching PT9 memento with empty FirstVerseRef/LastVerseRef).
   // - `rangeStart` / `rangeEnd` back the BCV pickers shown in `range` mode.
   // - `selectedBookIds` is wired to ScopeSelector but inert (its mode is not in availableScopes).
-  const [scope, setScope] = useWebViewState<Scope>('checklistScope', 'chapter');
+  const [scope, setScope] = useWebViewState<ScopeWithRange>('checklistScope', 'chapter');
   const [rangeStart, setRangeStart] = useWebViewState<SerializedVerseRef>(
     'checklistRangeStart',
     defaultScrRef,
@@ -677,7 +677,7 @@ global.webViewComponent = function ChecklistWebView({
   // ─── ScopeSelector handlers (R1: snapshot at click-time) ─────────────────
 
   const handleScopeChange = useCallback(
-    (newScope: Scope) => {
+    (newScope: ScopeWithRange) => {
       // Auto-follow: verseRange is derived via the effect below from {scope, liveScrRef,
       // rangeStart, rangeEnd}. handleScopeChange just commits the new mode.
       setScope(newScope);

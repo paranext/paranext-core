@@ -34,7 +34,7 @@ export const MARKER_SETTINGS_STRING_KEYS = Object.freeze([
   '%markersChecklist_settings_markerFilterHelp%',
   '%markersChecklist_settings_ok%',
   '%markersChecklist_settings_cancel%',
-  '%markersChecklist_settings_validationErrorDescription%',
+  '%markersChecklist_errorInvalidMarkerPair%',
   '%markersChecklist_settings_helpIconAriaLabel%',
 ] as const);
 
@@ -254,7 +254,7 @@ export function MarkerSettingsDialog({
   // generic description if the backend didn't supply one.
   const errorMessage =
     validationResult.errorMessage ??
-    getLocalizedString('%markersChecklist_settings_validationErrorDescription%');
+    getLocalizedString('%markersChecklist_errorInvalidMarkerPair%');
   const helpIconAriaLabel = getLocalizedString('%markersChecklist_settings_helpIconAriaLabel%');
 
   return (

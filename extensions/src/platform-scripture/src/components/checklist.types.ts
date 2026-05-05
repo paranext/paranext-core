@@ -46,6 +46,10 @@ export const CHECKLIST_STRING_KEYS = Object.freeze([
   '%markersChecklist_goto_aria%',
   // Column-header full-name tooltip (PT10 enhancement #3092235610)
   '%markersChecklist_columnHeader_aria%',
+  // Reference column screen-reader label (Ref column header is intentionally unlabeled visually)
+  '%markersChecklist_columnHeader_referenceAria%',
+  // Per-paragraph marker aria-label; `{marker}` is replaced client-side
+  '%markersChecklist_marker_aria%',
 ] as const);
 
 /** Union of the localization keys declared above. */

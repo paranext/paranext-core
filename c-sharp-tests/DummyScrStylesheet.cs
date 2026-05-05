@@ -160,7 +160,7 @@ namespace TestParanextDataProvider
                     Marker = marker,
                     TextProperties = textProps,
                     TextType = textType,
-                    StyleType = styleType
+                    StyleType = styleType,
                 };
             if (!string.IsNullOrEmpty(endMarker))
                 newTag.Endmarker = endMarker;

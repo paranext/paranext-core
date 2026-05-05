@@ -1,5 +1,5 @@
 import type { SerializedVerseRef } from '@sillsdev/scripture';
-import type { Scope } from 'platform-bible-react';
+import type { ScopeWithRange } from 'platform-bible-react';
 import type { ChecklistScriptureRange } from 'platform-scripture';
 
 // 999 is the documented "end of chapter / end of book" sentinel for ScriptureRange (see platform-scripture.d.ts).
@@ -7,7 +7,7 @@ const FALLBACK_END_VERSE = 999;
 const FALLBACK_END_CHAPTER = 999;
 
 export interface ComputeRangeFromScopeArgs {
-  scope: Scope;
+  scope: ScopeWithRange;
   ref: SerializedVerseRef;
   rangeStart: SerializedVerseRef;
   rangeEnd: SerializedVerseRef;
@@ -62,11 +62,11 @@ export function computeRangeFromScope({
     case 'selectedText':
       return undefined;
     default:
-      // Exhaustiveness check: the IIFE's parameter is typed as `never`, so if `Scope` grows in
-      // platform-bible-react and a new value is added, `scope` will no longer narrow to `never`
-      // and TypeScript will flag this call site at compile time, forcing the helper to grow with
-      // the union. `never` is assignable to `undefined`, so the runtime fall-through returns
-      // `undefined` (same as the unhandled-scope branches above).
+      // Exhaustiveness check: the IIFE's parameter is typed as `never`, so if `ScopeWithRange`
+      // grows in platform-bible-react and a new value is added, `scope` will no longer narrow to
+      // `never` and TypeScript will flag this call site at compile time, forcing the helper to
+      // grow with the union. `never` is assignable to `undefined`, so the runtime fall-through
+      // returns `undefined` (same as the unhandled-scope branches above).
       return ((scopeNever: never): undefined => scopeNever)(scope);
   }
 }

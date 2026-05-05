@@ -837,7 +837,9 @@ export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose,
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
-export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks" | "range";
+export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
+/** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
+export type ScopeWithRange = Scope | "range";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
@@ -1503,14 +1505,14 @@ export type ScopeSelectorLocalizedStrings = {
 export type ScopeSelectorVariant = "radio" | "dropdown";
 interface ScopeSelectorProps {
 	/** The current scope selection */
-	scope: Scope;
+	scope: ScopeWithRange;
 	/**
 	 * Optional array of scopes that should be available in the selector. If not provided, all scopes
-	 * will be shown as defined in the Scope type
+	 * will be shown as defined in the ScopeWithRange type
 	 */
-	availableScopes?: Scope[];
+	availableScopes?: ScopeWithRange[];
 	/** Callback function that is executed when the user changes the scope selection */
-	onScopeChange: (scope: Scope) => void;
+	onScopeChange: (scope: ScopeWithRange) => void;
 	/**
 	 * Information about available books, formatted as a 123 character long string as defined in a
 	 * projects BooksPresent setting
@@ -1596,9 +1598,10 @@ interface ScopeSelectorProps {
 }
 /**
  * A component that allows users to select the scope of their search or operation. Available scopes
- * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a BookSelector
- * component is displayed to allow users to choose specific books. When 'range' is chosen, two
- * BookChapterControl pickers are displayed for selecting the start and end verse of the range.
+ * are defined in the ScopeWithRange type. When 'selectedBooks' is chosen as the scope, a
+ * BookSelector component is displayed to allow users to choose specific books. When 'range' is
+ * chosen, two BookChapterControl pickers are displayed for selecting the start and end verse of the
+ * range.
  */
 export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
@@ -3177,6 +3180,11 @@ export declare const Z_INDEX_OVERLAY = 400;
 export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
+/**
+ * Z-index for tooltips — must render above modal dialogs since tooltips can be triggered from
+ * elements inside a modal (e.g. help icons in form fields).
+ */
+export declare const Z_INDEX_TOOLTIP = 550;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

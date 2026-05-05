@@ -89,9 +89,15 @@ function getMarkerIndentStyle(marker: string): CSSProperties {
 type ParagraphRowProps = {
   paragraph: ChecklistParagraph;
   showVerseText: boolean;
+  /**
+   * Localized template for the marker aria-label, with `{marker}` placeholder. The parent resolves
+   * this once via `getLocalizedString('%markersChecklist_marker_aria%')` and passes it down so the
+   * sub-component (defined at module scope) doesn't need access to the localization helper.
+   */
+  markerAriaTemplate: string;
 };
 
-function ParagraphRow({ paragraph, showVerseText }: ParagraphRowProps) {
+function ParagraphRow({ paragraph, showVerseText, markerAriaTemplate }: ParagraphRowProps) {
   return (
     <div
       className="tw-flex tw-flex-row tw-flex-wrap tw-items-baseline tw-gap-1"
@@ -100,7 +106,7 @@ function ParagraphRow({ paragraph, showVerseText }: ParagraphRowProps) {
     >
       <span
         className="tw-font-mono tw-text-xs tw-font-semibold"
-        aria-label={`marker ${paragraph.marker}`}
+        aria-label={markerAriaTemplate.replace('{marker}', paragraph.marker)}
       >
         {`\\${paragraph.marker}`}
       </span>
@@ -180,9 +186,11 @@ type CellContentProps = {
    * the project setting is the single source of truth.
    */
   dir?: 'ltr' | 'rtl' | undefined;
+  /** Localized template for the per-paragraph marker aria-label (with `{marker}` placeholder). */
+  markerAriaTemplate: string;
 };
 
-function CellContent({ cell, showVerseText, dir }: CellContentProps) {
+function CellContent({ cell, showVerseText, dir, markerAriaTemplate }: CellContentProps) {
   if (cell.error) {
     return <span className="tw-italic tw-text-destructive">{cell.error}</span>;
   }
@@ -204,6 +212,7 @@ function CellContent({ cell, showVerseText, dir }: CellContentProps) {
           key={`${cell.reference}-para-${paragraphIndex}-${paragraph.marker}`}
           paragraph={paragraph}
           showVerseText={showVerseText}
+          markerAriaTemplate={markerAriaTemplate}
         />
       ))}
     </div>
@@ -341,7 +350,9 @@ export function ChecklistTool({
           {/* The Ref column header is intentionally unlabeled in the spec — it's axis metadata
               rather than a project column — so we render a visually-hidden label for accessibility.
               BHV-111 requires every row to carry a firstRef, which doubles as the row header.     */}
-          <span className="tw-sr-only">Reference</span>
+          <span className="tw-sr-only">
+            {getLocalizedString('%markersChecklist_columnHeader_referenceAria%')}
+          </span>
         </span>
       ),
       // TanStack Table `cell` render fn — not a React component; see rationale on `header` above.
@@ -413,6 +424,7 @@ export function ChecklistTool({
                   cell={cell}
                   showVerseText={showVerseText}
                   dir={columnDirections[projectId]}
+                  markerAriaTemplate={getLocalizedString('%markersChecklist_marker_aria%')}
                 />
                 {/*
                  * Edit link: per Sebastian PR #2219 #3137862427 ("we are here to design a

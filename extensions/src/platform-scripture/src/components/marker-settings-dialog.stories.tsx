@@ -23,9 +23,9 @@ const englishFallbacks: MarkerSettingsLocalizedStrings = {
   '%markersChecklist_settings_markerFilterLabel%': 'Markers to be displayed (blank for all)',
   '%markersChecklist_settings_markerFilterHelp%':
     'To display only certain markers, enter them without the backslash, separated by a space.\nFor example: To display only markers for poetic lines, enter:\nq q1 q2',
-  '%markersChecklist_settings_ok%': 'OK',
+  '%markersChecklist_settings_ok%': 'Save',
   '%markersChecklist_settings_cancel%': 'Cancel',
-  '%markersChecklist_settings_validationErrorDescription%':
+  '%markersChecklist_errorInvalidMarkerPair%':
     'Equivalent markers need to be entered in the form: p/q',
   '%markersChecklist_settings_helpIconAriaLabel%': 'Help',
 };
@@ -68,9 +68,7 @@ const storybookValidate: MarkerSettingsValidate = (equivalentMarkers) => {
           return { marker1, marker2 };
         })
       : undefined,
-    errorMessage: valid
-      ? undefined
-      : englishFallbacks['%markersChecklist_settings_validationErrorDescription%'],
+    errorMessage: valid ? undefined : englishFallbacks['%markersChecklist_errorInvalidMarkerPair%'],
   };
 };
 

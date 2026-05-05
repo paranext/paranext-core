@@ -269,7 +269,7 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
-export type { Scope } from './components/utils/scripture.util';
+export type { Scope, ScopeWithRange } from './components/utils/scripture.util';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
@@ -290,6 +290,7 @@ export {
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,
+  Z_INDEX_TOOLTIP,
 } from './components/z-index';
 
 // Utils

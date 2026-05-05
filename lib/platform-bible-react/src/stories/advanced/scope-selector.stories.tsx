@@ -4,7 +4,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { defaultScrRef } from 'platform-bible-utils';
 import { ScopeSelector } from '@/components/advanced/scope-selector/scope-selector.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
-import { Scope } from '@/components/utils/scripture.util';
+import { ScopeWithRange } from '@/components/utils/scripture.util';
 
 // Mock book information - represents which books are available (all books available in this case)
 const mockAvailableBookInfo = '1'.repeat(123);
@@ -50,7 +50,7 @@ type Story = StoryObj<typeof ScopeSelector>;
 
 export const BookScope: Story = {
   render: () => {
-    const [scope, setScope] = useState<Scope>('book');
+    const [scope, setScope] = useState<ScopeWithRange>('book');
     const [selectedBookIds, setSelectedBookIds] = useState<string[]>(['GEN', 'MAT']);
 
     return (
@@ -58,7 +58,7 @@ export const BookScope: Story = {
         scope={scope}
         availableBookInfo={mockAvailableBookInfo}
         selectedBookIds={selectedBookIds}
-        onScopeChange={(newScope: Scope) => {
+        onScopeChange={(newScope: ScopeWithRange) => {
           console.log('Scope changed to:', newScope);
           setScope(newScope);
         }}
@@ -93,7 +93,7 @@ export const BookScope: Story = {
 
 export const ChapterScope: Story = {
   render: () => {
-    const [scope, setScope] = useState<Scope>('chapter');
+    const [scope, setScope] = useState<ScopeWithRange>('chapter');
     const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
 
     return (
@@ -101,7 +101,7 @@ export const ChapterScope: Story = {
         scope={scope}
         availableBookInfo={mockAvailableBookInfo}
         selectedBookIds={selectedBookIds}
-        onScopeChange={(newScope: Scope) => {
+        onScopeChange={(newScope: ScopeWithRange) => {
           console.log('Scope changed to:', newScope);
           setScope(newScope);
         }}
@@ -134,7 +134,7 @@ export const ChapterScope: Story = {
 
 export const VerseScope: Story = {
   render: () => {
-    const [scope, setScope] = useState<Scope>('verse');
+    const [scope, setScope] = useState<ScopeWithRange>('verse');
     const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
 
     return (
@@ -142,7 +142,7 @@ export const VerseScope: Story = {
         scope={scope}
         availableBookInfo={mockAvailableBookInfo}
         selectedBookIds={selectedBookIds}
-        onScopeChange={(newScope: Scope) => {
+        onScopeChange={(newScope: ScopeWithRange) => {
           console.log('Scope changed to:', newScope);
           setScope(newScope);
         }}
@@ -212,7 +212,7 @@ function sampleGetEndVerse(bookId: string, chapterNum: number): number {
 
 export const DropdownVariant: Story = {
   render: () => {
-    const [scope, setScope] = useState<Scope>('chapter');
+    const [scope, setScope] = useState<ScopeWithRange>('chapter');
     const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
     const [currentScrRef, setCurrentScrRef] = useState<SerializedVerseRef>({
       book: 'MAT',
@@ -226,7 +226,7 @@ export const DropdownVariant: Story = {
         scope={scope}
         availableBookInfo={mockAvailableBookInfo}
         selectedBookIds={selectedBookIds}
-        onScopeChange={(newScope: Scope) => setScope(newScope)}
+        onScopeChange={(newScope: ScopeWithRange) => setScope(newScope)}
         onSelectedBookIdsChange={(bookIds: string[]) => setSelectedBookIds(bookIds)}
         localizedStrings={rangeLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
@@ -248,7 +248,7 @@ export const DropdownVariant: Story = {
 
 export const RangeScope: Story = {
   render: () => {
-    const [scope, setScope] = useState<Scope>('range');
+    const [scope, setScope] = useState<ScopeWithRange>('range');
     const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
     const [rangeStart, setRangeStart] = useState<SerializedVerseRef>(defaultScrRef);
     const [rangeEnd, setRangeEnd] = useState<SerializedVerseRef>({
@@ -262,7 +262,7 @@ export const RangeScope: Story = {
         scope={scope}
         availableBookInfo={mockAvailableBookInfo}
         selectedBookIds={selectedBookIds}
-        onScopeChange={(newScope: Scope) => setScope(newScope)}
+        onScopeChange={(newScope: ScopeWithRange) => setScope(newScope)}
         onSelectedBookIdsChange={(bookIds: string[]) => setSelectedBookIds(bookIds)}
         localizedStrings={rangeLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
@@ -286,7 +286,7 @@ export const RangeScope: Story = {
 
 export const DropdownVariantWithRange: Story = {
   render: () => {
-    const [scope, setScope] = useState<Scope>('range');
+    const [scope, setScope] = useState<ScopeWithRange>('range');
     const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
     const [rangeStart, setRangeStart] = useState<SerializedVerseRef | undefined>(undefined);
     const [rangeEnd, setRangeEnd] = useState<SerializedVerseRef | undefined>(undefined);
@@ -302,7 +302,7 @@ export const DropdownVariantWithRange: Story = {
         scope={scope}
         availableBookInfo={mockAvailableBookInfo}
         selectedBookIds={selectedBookIds}
-        onScopeChange={(newScope: Scope) => setScope(newScope)}
+        onScopeChange={(newScope: ScopeWithRange) => setScope(newScope)}
         onSelectedBookIdsChange={(bookIds: string[]) => setSelectedBookIds(bookIds)}
         localizedStrings={rangeLocalizedStrings}
         localizedBookNames={mockLocalizedBookNames}
@@ -327,7 +327,7 @@ export const DropdownVariantWithRange: Story = {
 
 export const SelectedBooksScope: Story = {
   render: () => {
-    const [scope, setScope] = useState<Scope>('selectedBooks');
+    const [scope, setScope] = useState<ScopeWithRange>('selectedBooks');
     const [selectedBookIds, setSelectedBookIds] = useState<string[]>(['GEN', 'EXO', 'MAT', 'JHN']);
 
     return (
@@ -335,7 +335,7 @@ export const SelectedBooksScope: Story = {
         scope={scope}
         availableBookInfo={mockAvailableBookInfo}
         selectedBookIds={selectedBookIds}
-        onScopeChange={(newScope: Scope) => {
+        onScopeChange={(newScope: ScopeWithRange) => {
           console.log('Scope changed to:', newScope);
           setScope(newScope);
         }}
@@ -470,7 +470,7 @@ const fullProjectAvailableBookInfo =
 
 export const WithLocalizedSpanishBookNames: Story = {
   render: () => {
-    const [scope, setScope] = useState<Scope>('selectedBooks');
+    const [scope, setScope] = useState<ScopeWithRange>('selectedBooks');
     const [selectedBookIds, setSelectedBookIds] = useState<string[]>([
       'GEN',
       'PSA',
@@ -485,7 +485,7 @@ export const WithLocalizedSpanishBookNames: Story = {
         availableBookInfo={fullProjectAvailableBookInfo}
         availableScopes={['selectedText', 'chapter', 'book', 'selectedBooks']}
         selectedBookIds={selectedBookIds}
-        onScopeChange={(newScope: Scope) => {
+        onScopeChange={(newScope: ScopeWithRange) => {
           console.log('Scope changed to:', newScope);
           setScope(newScope);
         }}
@@ -531,7 +531,7 @@ The localization is provided through the \`localizedBookNames\` prop, which maps
 
 export const WithLocalizedGermanBookNames: Story = {
   render: () => {
-    const [scope, setScope] = useState<Scope>('selectedBooks');
+    const [scope, setScope] = useState<ScopeWithRange>('selectedBooks');
     const [selectedBookIds, setSelectedBookIds] = useState<string[]>([
       'GEN',
       'PSA',
@@ -546,7 +546,7 @@ export const WithLocalizedGermanBookNames: Story = {
         availableBookInfo={fullProjectAvailableBookInfo}
         availableScopes={['selectedText', 'chapter', 'book', 'selectedBooks']}
         selectedBookIds={selectedBookIds}
-        onScopeChange={(newScope: Scope) => {
+        onScopeChange={(newScope: ScopeWithRange) => {
           console.log('Scope changed to:', newScope);
           setScope(newScope);
         }}

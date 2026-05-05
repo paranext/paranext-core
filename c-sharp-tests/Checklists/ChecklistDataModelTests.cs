@@ -546,7 +546,7 @@ internal class ChecklistDataModelTests
     {
         var result = new MarkerSettingsValidationResult(
             Valid: true,
-            ParsedPairs: new List<MarkerPair> { new("p", "q"), new("q1", "q2"), },
+            ParsedPairs: new List<MarkerPair> { new("p", "q"), new("q1", "q2") },
             ErrorMessage: null
         );
 

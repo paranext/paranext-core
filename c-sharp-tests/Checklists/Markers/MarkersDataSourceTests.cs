@@ -734,7 +734,7 @@ internal class MarkersDataSourceTests
     {
         // INV-008 inverse: when rows exist, NO empty-result message is produced.
         // The caller sets ChecklistResult.EmptyResultMessage to null in this case.
-        var rows = new List<ChecklistRow> { RowFromMarkers(new[] { "p" }, new[] { "p" }), };
+        var rows = new List<ChecklistRow> { RowFromMarkers(new[] { "p" }, new[] { "p" }) };
         var emptyFilter = new HashSet<string>();
         var books = new List<string> { "GEN" };
 
