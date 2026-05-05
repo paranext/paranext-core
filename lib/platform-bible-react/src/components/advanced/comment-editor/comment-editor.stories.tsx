@@ -4,9 +4,10 @@ import CommentEditor from './comment-editor.component';
 import { CommentEditorLocalizedStrings } from './comment-editor.types';
 
 const commentEditorLocalizedStrings: CommentEditorLocalizedStrings = {
-  '%commentEditor_placeholder%': 'Type your comment here...',
+  '%acceptButton_tooltip%': 'Save',
+  '%cancelButton_tooltip%': 'Cancel',
   '%commentEditor_saveButton_tooltip%': 'Save comment',
-  '%commentEditor_cancelButton_tooltip%': 'Cancel',
+  '%commentEditor_placeholder%': 'Type your comment here...',
   '%commentEditor_assignTo_label%': 'Assign to',
   '%commentEditor_unassigned%': 'Unassigned',
   '%commentEditor_team%': 'Team',

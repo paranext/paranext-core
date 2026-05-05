@@ -1,3 +1,5 @@
+import { CANCEL_ACCEPT_BUTTONS_STRING_KEYS } from '@/components/basics/cancel-accept-buttons.component';
+
 /**
  * Object containing all keys used for localization in the CommentEditor component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -5,11 +7,11 @@
  */
 export const COMMENT_EDITOR_STRING_KEYS = Object.freeze([
   '%commentEditor_placeholder%',
-  '%commentEditor_saveButton_tooltip%',
-  '%commentEditor_cancelButton_tooltip%',
   '%commentEditor_assignTo_label%',
+  '%commentEditor_saveButton_tooltip%',
   '%commentEditor_unassigned%',
   '%commentEditor_team%',
+  ...CANCEL_ACCEPT_BUTTONS_STRING_KEYS,
 ] as const);
 
 /** Localized strings needed for the comment editor component */

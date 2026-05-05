@@ -1,4 +1,6 @@
 import { Button } from '@/components/shadcn-ui/button';
+import { ButtonGroup } from '@/components/shadcn-ui/button-group';
+import { CancelAcceptButtons } from '@/components/basics/cancel-accept-buttons.component';
 import {
   DeltaOp,
   DeltaOpInsertNoteEmbed,
@@ -11,7 +13,7 @@ import {
   isInsertEmbedOpOfType,
   StateChangeSnapshot,
 } from '@eten-tech-foundation/platform-editor';
-import { Check, Copy, X } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -173,7 +175,9 @@ export default function FootnoteEditor({
   }, []);
 
   const [callerType, setCallerType] = useState<FootnoteCallerType>('generated');
+  const [originalCallerType, setOriginalCallerType] = useState<FootnoteCallerType>('generated');
   const [customCaller, setCustomCaller] = useState<string>('*');
+  const [originalCustomCaller, setOriginalCustomCaller] = useState<string>('*');
 
   const [noteType, setNoteType] = useState<string>('f');
 
@@ -243,8 +247,10 @@ export default function FootnoteEditor({
         parsedCallerType = 'hidden';
       } else if (rawCaller) {
         setCustomCaller(rawCaller);
+        setOriginalCustomCaller(rawCaller);
       }
       setCallerType(parsedCallerType);
+      setOriginalCallerType(parsedCallerType);
       // Assigns note type
       setNoteType(noteOp.insert.note?.style ?? 'f');
       timeout = setTimeout(() => {
@@ -498,6 +504,8 @@ export default function FootnoteEditor({
     };
   }, [showMarkersMenu, showInlineMarkersMenu, defaultMarkerMenuTrigger]);
 
+  const copyButtonTooltip = localizedStrings['%footnoteEditor_copyButton_tooltip%'];
+
   return (
     <>
       <div ref={containerRef} className="footnote-editor tw-grid tw-gap-[12px]">
@@ -517,43 +525,27 @@ export default function FootnoteEditor({
               localizedStrings={localizedStrings}
             />
           </div>
-          <div className="tw-flex tw-w-full tw-justify-end tw-gap-4">
-            <UndoRedoButtons
-              onUndoClick={() => editorRef.current?.undo()}
-              onRedoClick={() => editorRef.current?.redo()}
-              canUndo={!isAtInitialState}
-              canRedo={canRedo}
-              localizedStrings={localizedStrings}
-            />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    onClick={closeAndSave}
-                    className="tw-h-6 tw-w-6"
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <Check />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{localizedStrings['%footnoteEditor_saveButton_tooltip%']}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button onClick={onClose} className="tw-h-6 tw-w-6" size="icon" variant="ghost">
-                    <X />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{localizedStrings['%footnoteEditor_cancelButton_tooltip%']}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+          <div className="tw-flex tw-w-full tw-justify-end">
+            <ButtonGroup>
+              <UndoRedoButtons
+                onUndoClick={() => editorRef.current?.undo()}
+                onRedoClick={() => editorRef.current?.redo()}
+                canUndo={!isAtInitialState}
+                canRedo={canRedo}
+                localizedStrings={localizedStrings}
+              />
+              <CancelAcceptButtons
+                onCancelClick={onClose}
+                onAcceptClick={closeAndSave}
+                canAccept={
+                  !isAtInitialState ||
+                  originalCallerType !== callerType ||
+                  (callerType === 'custom' && customCaller !== originalCustomCaller)
+                }
+                localizedStrings={localizedStrings}
+                acceptLabel={localizedStrings['%footnoteEditor_saveButton_tooltip%']}
+              />
+            </ButtonGroup>
           </div>
         </div>
         <div
@@ -561,7 +553,11 @@ export default function FootnoteEditor({
           className="tw-relative tw-rounded-[6px] tw-border-2 tw-border-ring"
         >
           <div className={classNameForEditor}>
-            <EditorKeyboardShortcuts editorRef={editorRef}>
+            <EditorKeyboardShortcuts
+              editorRef={editorRef}
+              canUndo={!isAtInitialState}
+              canRedo={canRedo}
+            >
               <Editorial
                 options={options}
                 onStateChange={handleStateChange}
@@ -578,6 +574,7 @@ export default function FootnoteEditor({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    aria-label={copyButtonTooltip}
                     onClick={handleCopy}
                     className="tw-h-6 tw-w-6"
                     variant="ghost"
@@ -587,7 +584,7 @@ export default function FootnoteEditor({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{localizedStrings['%footnoteEditor_copyButton_tooltip%']}</p>
+                  <p>{copyButtonTooltip}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
