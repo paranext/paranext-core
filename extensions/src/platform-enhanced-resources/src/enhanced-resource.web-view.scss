@@ -1,0 +1,21 @@
+// USFM-node stylesheet bundle for the Enhanced Resources web view (gap G3).
+// Mirrors extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.scss's
+// pattern; see _usj-nodes.scss / _editor.scss / _editor-overrides.scss header comments for
+// the duplication TODO.
+
+@use './usj-nodes';
+@use './editor';
+@use './editor-overrides';
+
+body {
+  // Remove margins added by the electron browser user-agent style sheet.
+  margin: 0;
+}
+
+// Reset mark styles to unstyled. The editor uses <mark> elements for annotations
+// (marble-word, marble-note, marble-filter, marble-highlight); the visual treatment for
+// those classes is handled inline in scripture-pane.component.tsx via useStylesheet.
+mark {
+  background-color: initial;
+  color: inherit;
+}

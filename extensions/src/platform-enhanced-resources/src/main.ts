@@ -8,6 +8,7 @@ import {
 import type { EnhancedResourceWebViewOptions } from 'platform-enhanced-resources';
 import enhancedResourceWebViewReact from './web-views/enhanced-resource.web-view?inline';
 import tailwindCssStyles from './tailwind.css?inline';
+import enhancedResourceWebViewStyles from './enhanced-resource.web-view.scss?inline';
 
 const ENHANCED_RESOURCE_WEB_VIEW_TYPE = 'platformEnhancedResources.enhancedResource';
 
@@ -47,7 +48,7 @@ const enhancedResourceWebViewProvider: IWebViewProvider = {
       ...savedWebView,
       title: '%platformEnhancedResources_title_enhancedResource%',
       content: enhancedResourceWebViewReact,
-      styles: tailwindCssStyles,
+      styles: `${tailwindCssStyles}\n${enhancedResourceWebViewStyles}`,
       shouldShowToolbar: true,
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
       state: {
