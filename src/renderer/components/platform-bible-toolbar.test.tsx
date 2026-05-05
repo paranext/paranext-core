@@ -17,9 +17,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%toolbar_sync%': 'Sync',
-      '%toolbar_sync_open_status%': 'Open sync status',
-      '%toolbar_sync_status_synced%': 'Synced',
-      '%toolbar_sync_status_syncing%': 'Syncing',
+      '%toolbar_sync_open_status%': 'Test Sync status',
+      '%toolbar_sync_status_synced%': 'Test Synced',
+      '%toolbar_sync_status_syncing%': 'Test Syncing',
       '%mainMenu_openHome%': 'Home',
       '%mainMenu_openParatextRegistration%': 'Registration',
       '%mainMenu_openInternetSettings%': 'Internet Settings',
@@ -254,7 +254,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Syncing' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Test Syncing' })).toBeInTheDocument();
     });
   });
 
@@ -292,7 +292,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Synced' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Test Synced' })).toBeInTheDocument();
     });
   });
 
