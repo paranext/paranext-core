@@ -193,6 +193,13 @@ export function EnhancedScripturePane({
     handlersRef.current = { onTokenClick, onTokenContextMenu };
   }, [onTokenClick, onTokenContextMenu]);
 
+  // FN-027 / FN-028 (Session 2 follow-up): the editor's annotation API currently exposes only
+  // onClick/onRemove. Per-lemma marble-dictionary tooltips on hover (FN-027 in
+  // ~/scripture-editors) and PT9-style dimming of non-matching lemmas (FN-028 here once
+  // FN-027 lands) are deferred. Until then: hover yields the simple :hover CSS rule
+  // (accent background + dotted underline) defined in MARBLE_ANNOTATION_STYLES; no marble
+  // dictionary data is shown on hover. See working-docs/2026-05-04-pt9-fidelity-session-1-design.md §7.
+
   // Effect A — base marble-word / marble-note annotations.
   // Chunked apply: 50 annotations per RAF tick so mousedown / setFocus and
   // other UI events can be serviced between batches. The cancellation flag

@@ -252,6 +252,13 @@ const WG_LINK_ATTRS: readonly string[] = [
   'textual_links',
 ];
 
+// FN-029 (Session 2 follow-up): `<wg>` is intentionally retained as a `char` MarkerObject
+// with marker="wg" because the annotation infrastructure anchors ranges to markers via
+// closingMarkerOffset (scripture-pane.component.tsx:annotationToRange). Dropping the marker
+// would break range computation. The unwanted side-effect — every <wg> renders with
+// title="wg" in the browser via CharNode.createDOM():207 — is tracked as FN-029 and
+// addressed editor-side in Session 2 by making the title attribute suppressible via a new
+// ViewOptions.showCharMarkerTitles option. See working-docs/2026-05-04-pt9-fidelity-session-1-design.md §7.
 function emitWg(el: XElement, path: string, annotations: MarbleAnnotation[]): MarbleMarker {
   // Marble <wg> is an inline tagged word; emit as a `char` MarkerObject with
   // `marker="wg"`. The editor recognizes "wg" via its USFM char marker list
