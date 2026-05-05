@@ -379,26 +379,34 @@ global.webViewComponent = function ManageBooksWebView({
       const result = await manageBooksApi.filterProjects({ purpose: 'AllScripture' });
       return Promise.all(
         result.projects.map(async (p) => {
-          // The C# `ProjectSummary.Name` is `ScrText.Name` — the project's
-          // short name (e.g. "ESVUS16", "MP1", 3-8 chars in practice). That's
-          // exactly what the dialog wants for `shortName`. For the longer
-          // display `name` we ask the project data provider's `platform.name`
-          // setting (typically the user-friendly name); when that's
-          // unavailable we fall back to the short name.
+          // The C# `ProjectSummary.Name` is `ScrText.Name` — the project's short name (e.g.
+          // "ESVUS16", "MP1", 3-8 chars in practice). For display we fetch two pdp settings:
+          //   `platform.name`     → user-friendly display label (used by footer summaries)
+          //   `platform.fullName` → long human-readable name shown as the secondary label in the
+          //                         <ProjectSelector> popover rows (e.g. "English Standard
+          //                         Version 2016"). Both fall back to the wire short name.
           let displayName = p.name;
+          let fullName: string | undefined;
           try {
             const pdp = await papi.projectDataProviders.get('platform.base', p.projectId);
-            // platform.name is typed as `string | undefined` at runtime
-            // (the setting may not be set on every project); coerce conservatively.
-            const nameSetting = await pdp.getSetting('platform.name');
+            const [nameSetting, fullNameSetting] = await Promise.all([
+              pdp.getSetting('platform.name'),
+              pdp.getSetting('platform.fullName'),
+            ]);
+            // pdp.getSetting can return undefined (or null at runtime) when the setting is not
+            // configured on the project; fall back to the wire short name.
             displayName = typeof nameSetting === 'string' ? nameSetting : p.name;
+            if (typeof fullNameSetting === 'string' && fullNameSetting.length > 0) {
+              fullName = fullNameSetting;
+            }
           } catch {
-            // fall through with wire-name as display
+            // best-effort; fall through with wire-name as both display + fullName
           }
           return {
             id: p.projectId,
             shortName: p.name,
             name: displayName,
+            fullName: fullName ?? p.name,
             isEditable: p.isEditable,
           };
         }),

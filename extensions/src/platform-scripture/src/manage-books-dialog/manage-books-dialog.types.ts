@@ -53,7 +53,17 @@ export type ManageBooksComparisonState =
 export type ManageBooksDialogProject = {
   id: string;
   shortName: string;
+  /**
+   * Display name. Equal to `shortName` when no longer/friendlier name is available. Used by footer
+   * summaries and other places that want a shorter label.
+   */
   name: string;
+  /**
+   * Long human-readable name (typically the project's `platform.fullName` setting), e.g. "English
+   * Standard Version 2016". Falls back to `shortName` when no fullName is configured. Used as the
+   * secondary label in the `<ProjectSelector>` dialog pickers (Copy "From", Create "Based on").
+   */
+  fullName?: string;
   /**
    * Whether the user has write access to this project. Sourced from the C# `ProjectSummary`. Used
    * by the dialog to disable Create / Copy / Import / Delete actions when the target project is

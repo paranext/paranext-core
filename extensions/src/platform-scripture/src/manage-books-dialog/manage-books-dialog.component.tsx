@@ -478,11 +478,16 @@ export function ManageBooksDialog({
   const otherProjects = projects.filter((p) => p.id !== projectId);
   // The Copy "From" and Create "Based on" pickers are <ProjectSelector mode="project">, which
   // takes a `ProjectSelectorProject` shape (`{ id, shortName, fullName }`). Map the dialog's
-  // `ManageBooksDialogProject` (`{ id, shortName, name }`) into that shape — the long display
-  // `name` becomes `fullName`. The target project itself is filtered out (already done in
-  // `otherProjects`).
+  // `ManageBooksDialogProject` to that shape — `p.fullName` (sourced from `platform.fullName`
+  // upstream) becomes the secondary label, falling back to `shortName` when no fullName is
+  // configured. The target project itself is filtered out (already done in `otherProjects`).
   const otherProjectsAsPS = useMemo<ProjectSelectorProject[]>(
-    () => otherProjects.map((p) => ({ id: p.id, shortName: p.shortName, fullName: p.name })),
+    () =>
+      otherProjects.map((p) => ({
+        id: p.id,
+        shortName: p.shortName,
+        fullName: p.fullName ?? p.shortName,
+      })),
     [otherProjects],
   );
   const copySourceProject = copySourceId ? projects.find((p) => p.id === copySourceId) : undefined;
