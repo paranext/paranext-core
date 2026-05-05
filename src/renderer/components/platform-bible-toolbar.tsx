@@ -33,7 +33,6 @@ import {
   useEvent,
   usePromise,
 } from 'platform-bible-react';
-import type { NetworkEventHandlers } from 'papi-shared-types';
 import {
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
@@ -166,10 +165,7 @@ export function PlatformBibleToolbar() {
   );
 
   const onSyncStateChanged = useMemo(
-    () =>
-      getNetworkEvent<NetworkEventHandlers['paratextBibleSendReceive.onSyncStateChanged']>(
-        'paratextBibleSendReceive.onSyncStateChanged',
-      ),
+    () => getNetworkEvent<{ isSyncing: boolean }>('paratextBibleSendReceive.onSyncStateChanged'),
     [],
   );
   useEvent(onSyncStateChanged, handleSyncStateChanged);
@@ -263,10 +259,13 @@ export function PlatformBibleToolbar() {
                     aria-hidden={isSendReceiveAvailable === undefined || undefined}
                     tabIndex={isSendReceiveAvailable === undefined ? -1 : undefined}
                     onClick={() => {
-                      sendCommand('paratextBibleSendReceive.openSyncStatus').catch((e: unknown) =>
-                        logger.warn(
-                          `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
-                        ),
+                      // This command comes from an extension and is not typed in CommandHandlers.
+                      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                      (sendCommand as any)('paratextBibleSendReceive.openSyncStatus').catch(
+                        (e: unknown) =>
+                          logger.warn(
+                            `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
+                          ),
                       );
                     }}
                   >

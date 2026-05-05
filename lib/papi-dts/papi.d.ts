@@ -3543,8 +3543,6 @@ declare module 'papi-shared-types' {
     'platform.closeOpenUsersnapForm': () => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
-    /** Opens the Sync Status floating window. Returns the web view id, or undefined on failure. */
-    'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
   }
   /**
    * Names for each command available on the papi.
@@ -3574,12 +3572,7 @@ declare module 'papi-shared-types' {
    * }
    * ```
    */
-  interface NetworkEventHandlers {
-    /** Fired by paratextBibleSendReceive whenever a sync starts or ends. */
-    'paratextBibleSendReceive.onSyncStateChanged': {
-      isSyncing: boolean;
-    };
-  }
+  interface NetworkEventHandlers {}
   /**
    * Names for each network event available on the papi.
    *

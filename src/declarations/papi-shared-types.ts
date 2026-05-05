@@ -112,11 +112,6 @@ declare module 'papi-shared-types' {
     // `extension-host.ts`
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
-
-    // These commands are provided by the paratextBibleSendReceive extension. They are declared here
-    // so core renderer code (e.g. toolbar) can call them with type safety.
-    /** Opens the Sync Status floating window. Returns the web view id, or undefined on failure. */
-    'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
   }
 
   /**
@@ -148,10 +143,7 @@ declare module 'papi-shared-types' {
    * }
    * ```
    */
-  export interface NetworkEventHandlers {
-    /** Fired by paratextBibleSendReceive whenever a sync starts or ends. */
-    'paratextBibleSendReceive.onSyncStateChanged': { isSyncing: boolean };
-  }
+  export interface NetworkEventHandlers {}
 
   /**
    * Names for each network event available on the papi.
