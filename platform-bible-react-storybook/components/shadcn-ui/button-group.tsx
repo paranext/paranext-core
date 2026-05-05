@@ -5,6 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Separator } from '@/components/shadcn-ui/separator';
 
+/** CVA variants for ButtonGroup — controls horizontal vs. vertical orientation styling. */
 const buttonGroupVariants = cva(
   'tw-flex tw-w-fit tw-items-stretch has-[>[data-slot=button-group]]:tw-gap-2 [&>*]:focus-visible:tw-relative [&>*]:focus-visible:tw-z-10 has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:tw-rounded-r-md [&>[data-slot=select-trigger]:not([class*=w-])]:tw-w-fit [&>input]:tw-flex-1',
   {
@@ -22,6 +23,11 @@ const buttonGroupVariants = cva(
   },
 );
 
+/**
+ * Groups a set of buttons (or other form controls) with shared borders and rounded corners, making
+ * them appear as a single cohesive unit. Use `orientation` to switch between horizontal (default)
+ * and vertical layouts.
+ */
 function ButtonGroup({
   className,
   orientation,
@@ -38,6 +44,10 @@ function ButtonGroup({
   );
 }
 
+/**
+ * Renders a non-interactive text label (or arbitrary content via `asChild`) inside a `ButtonGroup`,
+ * styled to match the height and border of adjacent buttons.
+ */
 function ButtonGroupText({
   className,
   asChild = false,
@@ -58,6 +68,10 @@ function ButtonGroupText({
   );
 }
 
+/**
+ * A thin visual divider between items inside a `ButtonGroup`. Defaults to vertical orientation and
+ * stretches to fill the group's cross-axis height automatically.
+ */
 function ButtonGroupSeparator({
   className,
   orientation = 'vertical',
