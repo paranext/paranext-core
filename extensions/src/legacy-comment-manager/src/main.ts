@@ -152,14 +152,25 @@ async function openCommentList(
   if (existingWebViewId) {
     logger.debug(`Found existing comment list for project ${projectId}: ${existingWebViewId}`);
 
-    // Bring the existing web view to the front
-    await papi.webViews.openWebView(
+    // Bring the existing web view to the front. Pass createNewIfNotFound: false so we can detect
+    // when the webview is no longer in the dock layout (returns undefined in that case).
+    const foundWebViewId = await papi.webViews.openWebView(
       commentListWebViewType,
       { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
       { existingId: existingWebViewId, bringToFront: true, createNewIfNotFound: false },
     );
 
-    commentListWebViewId = existingWebViewId;
+    if (foundWebViewId) {
+      commentListWebViewId = existingWebViewId;
+    } else {
+      // The previously cached webview is no longer in the dock layout (e.g., the layout was
+      // reset). Clear the cache so the code below creates a fresh webview.
+      logger.warn(
+        `Comment list webview ${existingWebViewId} not found in layout for project ${projectId}; ` +
+          `clearing cache and creating a new one`,
+      );
+      activeCommentListsByProject.delete(projectId);
+    }
   }
 
   if (!commentListWebViewId) {

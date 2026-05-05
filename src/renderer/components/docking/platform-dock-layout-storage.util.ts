@@ -558,6 +558,30 @@ export function getTabInfoByDirectionFromTab(
 
 // #region webview storage
 /**
+ * Gets the WebView definition from a tab, asserting its type
+ *
+ * @param tabInfo The tab info to get the WebView definition from
+ * @param methodName Name of the method that is calling this - prints in thrown exceptions
+ * @returns The WebView definition from the tab
+ * @throws If the tab is not a WebView tab
+ */
+function getWebViewDefinitionFromTab(
+  tabInfo: RCDockTabInfo,
+  methodName: string,
+): WebViewDefinition {
+  if (tabInfo.tabType !== TAB_TYPE_WEBVIEW)
+    throw new Error(
+      `platform-dock-layout.component ${methodName} error: target tab with id '${
+        tabInfo.id
+      }' is not a WebView tab`,
+    );
+
+  // Type assert the webview data in the web view tab
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return tabInfo.data as WebViewDefinition;
+}
+
+/**
  * Gets the web view definition (data on the TabInfo) for the web view with the specified id
  *
  * @param webViewId The id of the WebView whose web view definition to get
@@ -583,18 +607,35 @@ function getWebViewTabInfoById(
   // If we didn't find the webview, return nothing
   if (!targetTabInfo) return [undefined, undefined];
 
-  if (targetTabInfo.tabType !== TAB_TYPE_WEBVIEW)
-    throw new Error(
-      `platform-dock-layout.component ${methodName} error: target tab with id '${
-        targetTabInfo.id
-      }' is not a WebView tab`,
-    );
-
-  // Type assert the webview data in the web view tab
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const targetTabWebViewData = targetTabInfo.data as WebViewDefinition;
+  const targetTabWebViewData = getWebViewDefinitionFromTab(targetTabInfo, methodName);
 
   return [targetTabInfo, targetTabWebViewData];
+}
+
+/**
+ * Gets all WebView definitions for all currently open web view tabs in the dock layout
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @returns Array of WebView definitions for all open web view tabs
+ */
+export function getAllWebViewDefinitions(dockLayout: DockLayout): WebViewDefinition[] {
+  const webViewDefinitions: WebViewDefinition[] = [];
+
+  // Always return false from the callback so rc-dock visits every tab instead of stopping at the
+  // first match. Filter.AnyTab traverses both docked and floated panels.
+  dockLayout.find((item) => {
+    // Still have to check isTab because of a bug https://github.com/ticlo/rc-dock/pull/253
+    if (!isTab(item)) return false;
+    // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const tabInfo = item as RCDockTabInfo;
+    if (tabInfo.tabType !== TAB_TYPE_WEBVIEW) return false;
+    webViewDefinitions.push(getWebViewDefinitionFromTab(tabInfo, 'getAllWebViewDefinitions'));
+    return false;
+  }, Filter.AnyTab);
+
+  return webViewDefinitions;
 }
 
 /**

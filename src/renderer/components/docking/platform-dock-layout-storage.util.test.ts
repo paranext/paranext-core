@@ -7,7 +7,13 @@ import {
   SavedTabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
-import { addTabToDock, addWebViewToDock, loadTab } from './platform-dock-layout-storage.util';
+import { WebViewDefinition } from '@shared/models/web-view.model';
+import {
+  addTabToDock,
+  addWebViewToDock,
+  getAllWebViewDefinitions,
+  loadTab,
+} from './platform-dock-layout-storage.util';
 
 vi.mock('../../../shared/services/logger.service');
 vi.mock('@renderer/services/theme.service-host', () => ({
@@ -40,6 +46,66 @@ describe('Dock Layout Component', () => {
       ).toThrow();
     });
     // TODO: verify it adds an error tab if no/bad tab type provided
+  });
+
+  describe('getAllWebViewDefinitions()', () => {
+    let localMockDockLayout: DockLayout;
+
+    beforeEach(() => {
+      localMockDockLayout = mock(DockLayout);
+    });
+
+    it('returns empty array when no tabs have WebView data', () => {
+      when(localMockDockLayout.find(anything(), anything())).thenCall(
+        (callback: (item: unknown) => boolean) => {
+          callback({ id: 'panel1', title: 'Panel 1', tabType: 'settings' }); // non-WebView tab
+          callback({
+            id: 'settings',
+            title: 'Settings',
+            tabType: 'settings',
+            data: { settingsType: 'general' },
+          }); // non-WebView tab
+          return undefined;
+        },
+      );
+      expect(getAllWebViewDefinitions(instance(localMockDockLayout))).toEqual([]);
+    });
+
+    it('returns only WebView definitions, filtering out non-WebView tabs', () => {
+      // Intentionally minimal object — only webViewType is checked by the filter
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const webViewDef = { id: 'wv1', webViewType: 'TestWebView' } as unknown as WebViewDefinition;
+      when(localMockDockLayout.find(anything(), anything())).thenCall(
+        (callback: (item: unknown) => boolean) => {
+          callback({
+            id: 'settings',
+            title: 'Settings',
+            tabType: 'settings',
+            data: { settingsType: 'general' },
+          });
+          callback({ id: 'wv1', title: 'WebView 1', tabType: 'webView', data: webViewDef });
+          return undefined;
+        },
+      );
+      expect(getAllWebViewDefinitions(instance(localMockDockLayout))).toEqual([webViewDef]);
+    });
+
+    it('returns definitions for all WebView tabs including floated ones', () => {
+      // Intentionally constructing partial test fixtures that only include fields relevant to this test.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const docked = { id: 'docked', webViewType: 'Type1' } as unknown as WebViewDefinition;
+      // Intentionally constructing partial test fixture that only includes fields relevant to this test.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const floated = { id: 'floated', webViewType: 'Type2' } as unknown as WebViewDefinition;
+      when(localMockDockLayout.find(anything(), anything())).thenCall(
+        (callback: (item: unknown) => boolean) => {
+          callback({ id: 'docked', title: 'Docked', tabType: 'webView', data: docked });
+          callback({ id: 'floated', title: 'Floated', tabType: 'webView', data: floated });
+          return undefined;
+        },
+      );
+      expect(getAllWebViewDefinitions(instance(localMockDockLayout))).toEqual([docked, floated]);
+    });
   });
 
   describe('addWebViewToDock()', () => {

@@ -12,6 +12,14 @@ public class PlatformCommentThreadWrapper
     private readonly CommentThread _thread;
     private List<Comment>? _additionalComments;
 
+    /// <summary>
+    /// Maps comment IDs of merged comments to their original <see cref="CommentThread"/> so that
+    /// <see cref="IsCommentRead"/> evaluates read status against the correct object. Without this,
+    /// <see cref="ThreadStatus.IsCommentRead"/> would be called with the primary thread's object
+    /// for comments that originated from a duplicate thread, potentially returning incorrect results.
+    /// </summary>
+    private Dictionary<string, CommentThread>? _mergedCommentSourceThreads;
+
     public PlatformCommentThreadWrapper(CommentThread thread)
     {
         _thread = thread;
@@ -39,7 +47,14 @@ public class PlatformCommentThreadWrapper
 
     public bool IsRead => ThreadStatus.IsThreadRead(_thread);
 
-    internal bool IsCommentRead(Comment comment) => ThreadStatus.IsCommentRead(_thread, comment);
+    internal bool IsCommentRead(Comment comment)
+    {
+        // Use the comment's original source thread so that read status is evaluated in the
+        // correct context. Merged comments came from a different CommentThread object; using the
+        // primary thread's _thread for them would produce incorrect results.
+        var sourceThread = _mergedCommentSourceThreads?.GetValueOrDefault(comment.Id) ?? _thread;
+        return ThreadStatus.IsCommentRead(sourceThread, comment);
+    }
 
     /// <summary>
     /// Gets the underlying CommentThread object.
@@ -70,6 +85,12 @@ public class PlatformCommentThreadWrapper
             {
                 _additionalComments ??= new List<Comment>();
                 _additionalComments.Add(comment);
+                // Track the source thread for each merged comment so IsCommentRead can use the
+                // correct CommentThread object when evaluating read status.
+                _mergedCommentSourceThreads ??= new Dictionary<string, CommentThread>();
+                _mergedCommentSourceThreads[comment.Id] =
+                    other._mergedCommentSourceThreads?.GetValueOrDefault(comment.Id)
+                    ?? other._thread;
             }
         }
     }

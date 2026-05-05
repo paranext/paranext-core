@@ -91,6 +91,20 @@
         "isHidden": true,
         "default": "\\s+",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.modelTexts": {
+        "label": "%project_settings_platformScripture_modelTexts_label%",
+        "description": "%project_settings_platformScripture_modelTexts_description%",
+        "default": { "dataVersion": "1.0.0", "items": [] },
+        "isHidden": true,
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.referencedProjectsAndResources": {
+        "label": "%project_settings_platformScripture_referencedProjectsAndResources_label%",
+        "description": "%project_settings_platformScripture_referencedProjectsAndResources_description%",
+        "default": { "dataVersion": "1.0.0", "items": [] },
+        "isHidden": true,
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }
   }

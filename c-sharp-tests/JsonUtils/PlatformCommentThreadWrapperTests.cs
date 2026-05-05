@@ -164,7 +164,7 @@ internal class PlatformCommentThreadWrapperTests : PapiTestBase
     }
 
     [Test]
-    public void DeduplicateCommentThreads_AllDeletedComments_DropsThread()
+    public void DeduplicateCommentThreads_AllDeletedComments_PassesThroughThread()
     {
         // Arrange - Create a thread, then delete all its comments
         Comment comment = CommentTestHelper.CreateBasicComment();
@@ -186,8 +186,10 @@ internal class PlatformCommentThreadWrapperTests : PapiTestBase
             new List<PlatformCommentThreadWrapper> { wrapper }
         );
 
-        // Assert - Thread with all deleted comments should be dropped
-        Assert.That(result, Is.Empty);
+        // Assert - DeduplicateCommentThreads passes the thread through unchanged;
+        // filtering all-deleted threads is the caller's responsibility.
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].HasNonDeletedComments, Is.False);
     }
 
     [Test]
@@ -220,6 +222,30 @@ internal class PlatformCommentThreadWrapperTests : PapiTestBase
 
         // Assert - Thread should be kept because it has at least one non-deleted comment
         Assert.That(result, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void DeduplicateCommentThreads_SameIdDifferentWrappers_MergesComments()
+    {
+        // Arrange - Create two different threads and wrap them, then give them the same key
+        // to simulate what happens when FindThreads returns duplicates.
+        // We can't create true ID duplicates through ParatextData, so we test the merge
+        // logic via wrapper merge + dedup method combination.
+        var wrapper1 = CreateThread("merge-test-1", "Comment from thread 1");
+        var wrapper2 = CreateThread("merge-test-2", "Comment from thread 2");
+
+        // Manually merge to simulate what dedup does
+        int wrapper1OriginalCount = wrapper1.AllComments.Count();
+        int wrapper2CommentCount = wrapper2.AllComments.Count();
+
+        wrapper1.MergeCommentsFrom(wrapper2);
+
+        // Assert - Merged wrapper should contain comments from both
+        Assert.That(
+            wrapper1.AllComments.Count(),
+            Is.EqualTo(wrapper1OriginalCount + wrapper2CommentCount)
+        );
+        Assert.That(wrapper1.HasNonDeletedComments, Is.True);
     }
 
     #endregion

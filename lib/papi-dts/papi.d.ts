@@ -2938,6 +2938,12 @@ declare module 'shared/models/docking-framework.model' {
      */
     floatTabById: (tabId: string) => void;
     /**
+     * Gets all WebView definitions for all currently open web view tabs
+     *
+     * @returns Array of WebView definitions for all open web view tabs
+     */
+    getAllWebViewDefinitions: () => WebViewDefinition[];
+    /**
      * Gets the WebView definition for the web view with the specified ID
      *
      * @param webViewId The ID of the WebView whose web view definition to get
@@ -3128,6 +3134,16 @@ declare module 'shared/services/web-view.service-model' {
      *   found
      */
     getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
+    /**
+     * Gets the saved properties on all currently open WebView definitions
+     *
+     * Note: this only returns a representation of the current WebView definitions, not the actual web
+     * view definitions themselves. Changing properties on the returned definitions does not affect
+     * the actual WebView definitions.
+     *
+     * @returns Promise that resolves to an array of saved properties for all open WebView definitions
+     */
+    getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
     /**
      * Get an existing web view controller for an open web view.
      *

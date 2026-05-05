@@ -27,6 +27,7 @@ import {
   addTabToDock,
   addWebViewToDock,
   floatTabById,
+  getAllWebViewDefinitions,
   getTabInfoByElement,
   getTabInfoById,
   getWebViewDefinition,
@@ -78,6 +79,7 @@ export function PlatformDockLayout() {
         return !!tabToRemove;
       },
       floatTabById: (tabId: string) => floatTabById(tabId, dockLayoutRef.current),
+      getAllWebViewDefinitions: () => getAllWebViewDefinitions(dockLayoutRef.current),
       getWebViewDefinition: (webViewId: string) =>
         getWebViewDefinition(webViewId, dockLayoutRef.current),
       updateTabPartial: (

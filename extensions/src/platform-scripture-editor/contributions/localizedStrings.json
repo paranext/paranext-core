@@ -52,6 +52,8 @@
       "%platformScriptureEditor_markersView_readonly_message_format%": "The markers view for {projectName} is read-only.",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "Don't show again today",
       "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Change Footnote Pane Location",
+      "%versionHistoryCommit_beforeInsertCrossReference%": "Before inserting cross reference",
+      "%versionHistoryCommit_beforeInsertFootnote%": "Before inserting footnote",
       "%webView_footnoteList_header%": "Footnotes",
       "%webView_platformScriptureEditor_backgroundColor%": "Background Color",
       "%webView_platformScriptureEditor_charactersInventory%": "Inventory: Characters...",

@@ -251,11 +251,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             .Select(t => new PlatformCommentThreadWrapper(t))
             .ToList();
 
-        // Deduplicate threads with the same ID: combine unique comments, use the thread
-        // with the latest ModifiedDate as the metadata base, and drop all-deleted threads.
+        // Deduplicate threads with the same ID: combine unique comments and use the thread
+        // with the latest ModifiedDate as the metadata base.
         // Done after wrapping to avoid mutating ParatextData's internal CommentThread objects.
         if (selector.DeduplicateThreads)
             results = DeduplicateCommentThreads(results);
+
+        // Always drop threads where all comments are deleted, even when deduplication is off.
+        // External API consumers should not receive all-deleted threads regardless of DeduplicateThreads.
+        results = results.Where(t => t.HasNonDeletedComments).ToList();
 
         return results;
     }
@@ -875,7 +879,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <summary>
     /// Merges threads with duplicate IDs: combines unique comments and uses the thread with the
     /// latest <see cref="PlatformCommentThreadWrapper.ModifiedDate"/> as the metadata base.
-    /// Drops threads where all comments are deleted.
     /// Works on wrappers to avoid mutating ParatextData's internal CommentThread objects.
     /// </summary>
     internal static List<PlatformCommentThreadWrapper> DeduplicateCommentThreads(
@@ -906,8 +909,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             }
         }
 
-        // Drop threads where all comments are deleted
-        return threadMap.Values.Where(t => t.HasNonDeletedComments).ToList();
+        return threadMap.Values.ToList();
     }
 
     private static IEnumerable<CommentThread> FilterByDate(
@@ -1088,6 +1090,42 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
 
         if (
+            paratextSettingName == ProjectSettingsNames.PT_MODEL_TEXTS
+            || paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
+        )
+        {
+            if (
+                scrText.Settings.ParametersDictionary.TryGetValue(
+                    paratextSettingName,
+                    out string? storedValue
+                ) && !string.IsNullOrEmpty(storedValue)
+            )
+            {
+                int spaceIndex = storedValue.IndexOf(' ');
+                if (spaceIndex < 0)
+                    throw new InvalidDataException(
+                        $"Setting '{paratextSettingName}' is missing the version prefix."
+                    );
+
+                string versionStr = storedValue[..spaceIndex];
+                string jsonBody = storedValue[(spaceIndex + 1)..];
+
+                if (!System.Version.TryParse(versionStr, out var parsedVersion))
+                    throw new InvalidDataException(
+                        $"Setting '{paratextSettingName}' has an invalid version format: '{versionStr}'"
+                    );
+                if (parsedVersion.Major != ResourceReferenceList.CurrentMajorVersion)
+                    throw new InvalidDataException(
+                        $"Setting '{paratextSettingName}' has incompatible major version "
+                            + $"{parsedVersion.Major}; expected {ResourceReferenceList.CurrentMajorVersion}"
+                    );
+
+                return jsonBody.DeserializeFromJson<ResourceReferenceList>();
+            }
+            return new ResourceReferenceList();
+        }
+
+        if (
             scrText.Settings.ParametersDictionary.TryGetValue(
                 paratextSettingName,
                 out string? settingValue
@@ -1206,7 +1244,34 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 {
                     try
                     {
-                        if (ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName))
+                        if (
+                            paratextSettingName == ProjectSettingsNames.PT_MODEL_TEXTS
+                            || paratextSettingName
+                                == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
+                        )
+                        {
+                            // Validator code should have ensured that value is not null and
+                            // deserializes cleanly; these checks guard against unexpected states.
+                            if (value is null)
+                                throw new InvalidDataException(
+                                    $"Value for {settingName} must not be null after validation"
+                                );
+                            var serialized =
+                                value.ToString()
+                                ?? throw new InvalidDataException(
+                                    $"Value for {settingName} could not be converted to a string"
+                                );
+                            var list =
+                                serialized.DeserializeFromJson<ResourceReferenceList>()
+                                ?? throw new InvalidDataException(
+                                    $"Value for {settingName} could not be deserialized as a ResourceReferenceList"
+                                );
+                            value =
+                                $"{ResourceReferenceList.CurrentFormatVersion} {list.SerializeToJson()}";
+                        }
+                        else if (
+                            ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName)
+                        )
                         {
                             var stringValue = value?.ToString() ?? "";
                             value = stringValue.ToUpperInvariant() switch

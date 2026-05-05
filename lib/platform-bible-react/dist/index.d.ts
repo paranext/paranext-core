@@ -225,13 +225,18 @@ export interface CommentEditorProps {
 	onClose: () => void;
 	/** Localized strings to be passed to the comment editor component */
 	localizedStrings: CommentEditorLocalizedStrings;
+	/**
+	 * The user to pre-select in the "Assign to" dropdown when the editor opens. Used to persist the
+	 * last chosen assignee across consecutive comment creations within a session.
+	 */
+	initialAssignedUser?: string;
 }
 /**
  * Component to create a new project comment from within the scripture editor
  *
  * @param CommentEditorProps - The properties for the comment editor component
  */
-export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrings, }: CommentEditorProps): import("react/jsx-runtime").JSX.Element;
+export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrings, initialAssignedUser, }: CommentEditorProps): import("react/jsx-runtime").JSX.Element;
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
 	/** The ID of the thread to add the comment to */
@@ -2177,13 +2182,27 @@ export declare const DialogDescription: React$1.ForwardRefExoticComponent<Omit<D
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/separator}
  */
 export declare const Separator: React$1.ForwardRefExoticComponent<Omit<SeparatorPrimitive.SeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** CVA variants for ButtonGroup — controls horizontal vs. vertical orientation styling. */
 export declare const buttonGroupVariants: (props?: ({
 	orientation?: "horizontal" | "vertical" | null | undefined;
 } & ClassProp) | undefined) => string;
+/**
+ * Groups a set of buttons (or other form controls) with shared borders and rounded corners, making
+ * them appear as a single cohesive unit. Use `orientation` to switch between horizontal (default)
+ * and vertical layouts.
+ */
 export declare function ButtonGroup({ className, orientation, ...props }: React$1.ComponentProps<"div"> & VariantProps<typeof buttonGroupVariants>): import("react/jsx-runtime").JSX.Element;
+/**
+ * Renders a non-interactive text label (or arbitrary content via `asChild`) inside a `ButtonGroup`,
+ * styled to match the height and border of adjacent buttons.
+ */
 export declare function ButtonGroupText({ className, asChild, ...props }: React$1.ComponentProps<"div"> & {
 	asChild?: boolean;
 }): import("react/jsx-runtime").JSX.Element;
+/**
+ * A thin visual divider between items inside a `ButtonGroup`. Defaults to vertical orientation and
+ * stretches to fill the group's cross-axis height automatically.
+ */
 export declare function ButtonGroupSeparator({ className, orientation, ...props }: React$1.ComponentProps<typeof Separator>): import("react/jsx-runtime").JSX.Element;
 /**
  * A drawer component for React. These components are built on Vaul and styled with Shadcn UI. See

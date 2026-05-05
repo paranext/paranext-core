@@ -119,6 +119,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
     .map((item) => item[1].description)
     .filter((item) => !!item),
   '%paragraphMenu_misc_markerDescription%',
+  '%versionHistoryCommit_beforeInsertFootnote%',
+  '%versionHistoryCommit_beforeInsertCrossReference%',
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_error_permissions_format%',
@@ -232,6 +234,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // These control the placement of the comment editor popover by setting the location of the anchor
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
+  /** Remembers the last assignee chosen so the next new comment pre-selects the same user */
+  const [lastAssignedUser, setLastAssignedUser] = useState<string | undefined>();
   const [commentPopoverAnchorX, setCommentPopoverAnchorX] = useState<number>();
   const [commentPopoverAnchorY, setCommentPopoverAnchorY] = useState<number>();
   const [commentPopoverAnchorHeight, setCommentPopoverAnchorHeight] = useState<number>();
@@ -680,10 +684,57 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'insertFootnoteAtSelection': {
+          // Commits a snapshot of the project to the version history
+          if (projectId)
+            try {
+              await papi.commands.sendCommand(
+                'paratextBibleSendReceive.commitChanges',
+                projectId,
+                localizedStrings['%versionHistoryCommit_beforeInsertFootnote%'],
+                true,
+              );
+            } catch (err: unknown) {
+              const errMessage = getErrorMessage(err);
+              // Requires the `commitChanges` command handler to throw
+              // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+              // successfully handle if this command is not implemented in the application version
+              if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+                logger.info(errMessage);
+              } else {
+                logger.warn(
+                  `Error committing changes to version history before inserting footnote: ${getErrorMessage(err)}`,
+                );
+              }
+            }
+
           editorRef.current?.insertMarker('f');
           break;
         }
         case 'insertCrossReferenceAtSelection': {
+          // Commits a snapshot of the project to the version history
+
+          if (projectId)
+            try {
+              await papi.commands.sendCommand(
+                'paratextBibleSendReceive.commitChanges',
+                projectId,
+                localizedStrings['%versionHistoryCommit_beforeInsertCrossReference%'],
+                true,
+              );
+            } catch (err: unknown) {
+              const errMessage = getErrorMessage(err);
+              // Requires the `commitChanges` command handler to throw
+              // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+              // successfully handle if this command is not implemented in the application version
+              if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+                logger.info(errMessage);
+              } else {
+                logger.warn(
+                  `Error committing changes to version history before inserting cross-reference: ${getErrorMessage(err)}`,
+                );
+              }
+            }
+
           editorRef.current?.insertMarker('x');
           break;
         }
@@ -868,6 +919,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setFootnotesPaneVisible,
     setViewType,
     viewOptions.markerMode,
+    localizedStrings,
+    projectId,
   ]);
 
   const inlineMarkerMenuItems = useMemo(
@@ -1109,7 +1162,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       currentlyWritingUsjToPdp.current = true;
       usjSentToPdp.current = newUsj;
       try {
-        if (!(await saveUsjToPdpRawStableRef.current(newUsj)) && currentlyWritingUsjToPdp.current) {
+        const saveResult = await saveUsjToPdpRawStableRef.current(newUsj);
+
+        // Prompts the PDP to commit changes to the version history once a day if the save was successfully
+        if (saveResult && projectId) {
+          try {
+            await papi.commands.sendCommand('paratextBibleSendReceive.commitDaily', projectId);
+          } catch (err: unknown) {
+            const errMessage = getErrorMessage(err);
+            // Requires the `commitChanges` command handler to throw
+            // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+            // successfully handle if this command is not implemented in the application version
+            if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+              logger.info(errMessage);
+            } else {
+              logger.warn(
+                `Error committing version history after saving USJ to PDP: ${getErrorMessage(err)}`,
+              );
+            }
+          }
+        } else if (!saveResult && currentlyWritingUsjToPdp.current) {
           currentlyWritingUsjToPdp.current = false;
 
           // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
@@ -1151,7 +1223,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [usjFromPdp, projectName, localizedStrings]);
+  }, [usjFromPdp, projectName, localizedStrings, projectId]);
 
   /**
    * Close the footnote editor, optionally deleting the note from the main editor first. Pass
@@ -1417,6 +1489,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
 
         pendingCommentAnnotationRange.current = undefined;
+        if (assignedUser !== undefined) setLastAssignedUser(assignedUser);
         setShowCommentEditor(false);
       } catch (error) {
         logger.error(`Error creating comment: ${getErrorMessage(error)}`);
@@ -1769,6 +1842,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onSave={onCommentEditorSave}
             onClose={onCommentEditorCancel}
             localizedStrings={localizedStrings}
+            initialAssignedUser={lastAssignedUser}
           />
         </PopoverContent>
       </Popover>
