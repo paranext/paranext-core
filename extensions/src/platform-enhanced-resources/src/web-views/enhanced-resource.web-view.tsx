@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
-import type { WebViewProps } from '@papi/core';
+import type { UseWebViewStateHook, WebViewProps } from '@papi/core';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import {
   ResizableHandle,
@@ -16,7 +16,7 @@ import {
 } from 'platform-bible-react';
 import type { LocalizeKey, LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
 import { formatScrRef, formatScrRefRange, isPlatformError } from 'platform-bible-utils';
-import type { Usj } from '@eten-tech-foundation/scripture-utilities';
+import type { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
 import { convertMarbleChapterXml, type MarbleAnnotation } from '../lib/marble-converter';
 import { computeScopeKeyedRefKey } from '../lib/scope-keyed-ref-key';
 import {
@@ -34,6 +34,7 @@ import {
   EnhancedScripturePane,
   ENHANCED_SCRIPTURE_PANE_STRING_KEYS,
 } from '../components/scripture-pane/scripture-pane.component';
+import { EnhancedResourceFootnotesPane } from '../components/footnotes-pane/footnotes-pane.component';
 import {
   EnhancedResourceTabBar,
   EnhancedResourceTopToolbar,
@@ -120,6 +121,16 @@ export const ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS = Object.freeze([
   '%enhancedResources_shell_emptyDescription%',
 ] as const);
 
+/**
+ * No-op stand-in for `useWebViewState` used when the shell is rendered outside the PAPI runtime
+ * (Storybook). The third element of the real hook's tuple is the resetter; the bottom-pane
+ * footnotes layout reads only the first two, so the stub matches that shape with an inert setter.
+ */
+const NOOP_USE_WEB_VIEW_STATE: UseWebViewStateHook = <T,>(
+  _key: string,
+  defaultValue: T,
+): [T, (v: T) => void, () => void] => [defaultValue, () => {}, () => {}];
+
 type EnhancedResourceWebViewLocalizedStringKey =
   (typeof ENHANCED_RESOURCE_WEB_VIEW_STRING_KEYS)[number];
 
@@ -151,6 +162,15 @@ export type EnhancedResourceWebViewProps = {
     annotation: MarbleAnnotation,
     event: ReactMouseEvent,
   ) => void;
+  /**
+   * WebView state hook used by EnhancedResourceFootnotesPane to persist its size between sessions.
+   * Required at runtime - stories pass a no-op stub since they re-mount on every render anyway.
+   */
+  useWebViewState?: UseWebViewStateHook;
+  /** Externally-controlled selected footnote (for the bottom-pane FootnoteList focus). */
+  selectedFootnote?: MarkerObject;
+  /** Fired when a row in the footnotes pane FootnoteList is clicked / focused. */
+  onFootnoteSelected?: (footnote: MarkerObject, index: number) => void;
 
   // Toolbar
   activeTab: ResearchTab;
@@ -397,6 +417,9 @@ export function EnhancedResourceWebView({
   scripturePaneError,
   onTokenClick = () => {},
   onTokenContextMenu = () => {},
+  useWebViewState: useWebViewStateProp,
+  selectedFootnote,
+  onFootnoteSelected = () => {},
 
   activeTab,
   onTabChange,
@@ -592,19 +615,26 @@ export function EnhancedResourceWebView({
               minSize={20}
               className="tw-flex tw-flex-col"
             >
-              <EnhancedScripturePane
+              <EnhancedResourceFootnotesPane
                 usj={usj}
-                annotations={annotations}
-                filteredTokenId={filteredTokenId}
-                showFootnotes={showFootnotes}
-                scripturePaneZoom={scripturePaneZoom}
-                errorMessage={scripturePaneError}
-                highlightAllResearchTerms={highlightMode === 'all-research-terms'}
-                scrRef={scrRef}
-                onTokenClick={onTokenClick}
-                onTokenContextMenu={onTokenContextMenu}
-                localizedStringsWithLoadingState={childStrings}
-              />
+                isVisible={showFootnotes}
+                useWebViewState={useWebViewStateProp ?? NOOP_USE_WEB_VIEW_STATE}
+                selectedFootnote={selectedFootnote}
+                onFootnoteSelected={onFootnoteSelected}
+              >
+                <EnhancedScripturePane
+                  usj={usj}
+                  annotations={annotations}
+                  filteredTokenId={filteredTokenId}
+                  scripturePaneZoom={scripturePaneZoom}
+                  errorMessage={scripturePaneError}
+                  highlightAllResearchTerms={highlightMode === 'all-research-terms'}
+                  scrRef={scrRef}
+                  onTokenClick={onTokenClick}
+                  onTokenContextMenu={onTokenContextMenu}
+                  localizedStringsWithLoadingState={childStrings}
+                />
+              </EnhancedResourceFootnotesPane>
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel
@@ -1152,6 +1182,9 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     'filteredTokenId',
     undefined,
   );
+  // Transient selection state for the footnotes pane (G4) - intentionally NOT a memento field;
+  // selecting a footnote is navigation, not configuration that should round-trip across reopens.
+  const [selectedFootnote, setSelectedFootnote] = useState<MarkerObject | undefined>(undefined);
 
   // resourceId is provider-supplied via savedWebView.state - no `useWebViewState` because it's
   // populated at provider time and shouldn't be changed from inside the web view.
@@ -2432,6 +2465,13 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     // Intentionally empty until BHV-308 lands the context menu.
   }, []);
 
+  // G4 (footnotes pane): clicking a row in the bottom-pane FootnoteList sets the externally-
+  // controlled selection so the list re-focuses on it. Task 12 will use the index for the
+  // scripture-pane-to-footnote scroll-into-view link.
+  const handleFootnoteListSelection = useCallback((footnote: MarkerObject) => {
+    setSelectedFootnote(footnote);
+  }, []);
+
   // FN-020 (c): clicking a source-language word in DictionaryTab sets the filter to that lemma so
   // the scripture pane (and other research tabs) propagate. We reuse the existing token-click
   // handler — both paths terminate in `setFilteredTokenId`.
@@ -2827,6 +2867,9 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
       scripturePaneError={scripturePaneError}
       onTokenClick={handleTokenClick}
       onTokenContextMenu={handleTokenContextMenu}
+      useWebViewState={useWebViewState}
+      selectedFootnote={selectedFootnote}
+      onFootnoteSelected={handleFootnoteListSelection}
       activeTab={activeTab}
       onTabChange={setActiveTab}
       scope={scope}

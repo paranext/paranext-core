@@ -39,7 +39,6 @@ export const ENHANCED_SCRIPTURE_PANE_STRING_KEYS = Object.freeze([
   '%enhancedResources_scripturePane_emptyDescription%',
   '%enhancedResources_scripturePane_errorTitle%',
   '%enhancedResources_scripturePane_filterActive%',
-  '%enhancedResources_scripturePane_footnotesHeader%',
 ] as const);
 
 type ScripturePaneLocalizedStringKey = (typeof ENHANCED_SCRIPTURE_PANE_STRING_KEYS)[number];
@@ -56,8 +55,6 @@ export type EnhancedScripturePaneProps = {
   filteredTokenId?: string;
   /** When true, every word-kind annotation gets a `marble-highlight` overlay (BHV-301). */
   highlightAllResearchTerms?: boolean;
-  /** Reserved: when true, the footnote pane is shown below the scripture pane (BHV-302). */
-  showFootnotes?: boolean;
   /** Zoom factor applied to the rendered scripture (1.0 = 100%). */
   scripturePaneZoom?: number;
   /** Loading state - shows a Skeleton placeholder. */
@@ -156,7 +153,6 @@ export function EnhancedScripturePane({
   annotations,
   filteredTokenId,
   highlightAllResearchTerms = false,
-  showFootnotes = false,
   scripturePaneZoom = 1,
   isLoading = false,
   errorMessage,
@@ -180,7 +176,6 @@ export function EnhancedScripturePane({
   const emptyDescription = getLocalizedString('%enhancedResources_scripturePane_emptyDescription%');
   const errorTitle = getLocalizedString('%enhancedResources_scripturePane_errorTitle%');
   const filterActiveLabel = getLocalizedString('%enhancedResources_scripturePane_filterActive%');
-  const footnotesHeader = getLocalizedString('%enhancedResources_scripturePane_footnotesHeader%');
 
   // Hold the latest token-click + context-menu callbacks in a ref so the
   // annotation effect's onClick closure can read them WITHOUT putting them in
@@ -359,13 +354,6 @@ export function EnhancedScripturePane({
             {`${filterActiveLabel}: ${filteredTokenId}`}
           </p>
         )}
-      </div>
-      <div
-        data-testid="er-footnotes-pane"
-        hidden={!showFootnotes}
-        className="tw-border-t tw-bg-muted/40 tw-px-4 tw-py-2 tw-text-xs"
-      >
-        <h4 className="tw-mb-1 tw-text-sm tw-font-semibold">{footnotesHeader}</h4>
       </div>
     </div>
   );

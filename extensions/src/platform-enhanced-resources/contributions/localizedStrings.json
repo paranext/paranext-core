@@ -57,9 +57,6 @@
     "%enhancedResources_scripturePane_editorPlaceholder%": {
       "notes": "Placeholder text rendered in place of the real scripture editor during the design phase."
     },
-    "%enhancedResources_scripturePane_footnotesHeader%": {
-      "notes": "Header above the footnote list in the scripture pane."
-    },
     "%enhancedResources_ribbon_missingBook_title%": {},
     "%enhancedResources_ribbon_missingBook_description%": {
       "notes": "{resourceName} is replaced with the resource short name."
@@ -435,7 +432,6 @@
       "%enhancedResources_scripturePane_errorTitle%": "Scripture pane error",
       "%enhancedResources_scripturePane_filterActive%": "Filter active",
       "%enhancedResources_scripturePane_editorPlaceholder%": "Scripture editor placeholder. The integrated read-only editor will replace this area in a later iteration.",
-      "%enhancedResources_scripturePane_footnotesHeader%": "Footnotes",
       "%enhancedResources_ribbon_missingBook_title%": "Book not available",
       "%enhancedResources_ribbon_missingBook_description%": "Book does not exist in {resourceName}.",
       "%enhancedResources_ribbon_reviewStatus_title%": "Pre-release version",

@@ -51,7 +51,6 @@ const STRINGS_BAG = {
   '%enhancedResources_scripturePane_emptyDescription%': 'Open a resource',
   '%enhancedResources_scripturePane_errorTitle%': 'Something went wrong',
   '%enhancedResources_scripturePane_filterActive%': 'Filter',
-  '%enhancedResources_scripturePane_footnotesHeader%': 'Footnotes',
 };
 
 beforeEach(() => {
