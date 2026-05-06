@@ -4771,7 +4771,7 @@ declare module 'shared/models/project-lookup.service-model' {
   /**
    * Transform a network object id for a pdp factory into its well-known pdp factory id
    *
-   * @param pdpFactoryNetworkObjectName Id for then network object for this pdp factory
+   * @param pdpFactoryNetworkObjectName Id for the network object for this pdp factory
    * @returns Id extensions use to identify this pdp factory
    */
   export function getPDPFactoryIdFromNetworkObjectName(pdpFactoryNetworkObjectName: string): string;
@@ -4868,17 +4868,20 @@ declare module 'shared/models/project-lookup.service-model' {
       projectsMetadata: ProjectMetadata[],
       options: ProjectMetadataFilterOptions,
     ): ProjectMetadata[];
-    /** Combines two project metadata filters, removing duplicate items */
+    /**
+     * Combines two project metadata filters, removing duplicate items
+     *
+     * Note: uses additive (OR) semantics for include lists — if one filter specifies an include list
+     * and the other does not, the merged filter keeps the include list (not "include all"). If you
+     * need "include all" to win, ensure both sides are undefined.
+     */
     mergeMetadataFilters(
       metadataFilter1: ProjectMetadataFilterOptions | undefined,
       metadataFilter2: ProjectMetadataFilterOptions | undefined,
     ): ProjectMetadataFilterOptions;
     /**
-     * Get the PDP Factory info whose `projectInterface`s are most minimally matching to the provided
-     * `projectInterface`
-     *
-     * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s
-     * to avoid unnecessary redirects through layered PDPs
+     * Get the best (most specific) PDP Factory match for the provided `projectInterface` to avoid
+     * unnecessary PDP layering
      *
      * @param projectMetadata Metadata for project for which to get minimally matching PDPF
      * @param projectInterface Which `projectInterface` to minimally match for
@@ -4938,11 +4941,8 @@ declare module 'shared/models/project-lookup.service-model' {
     excludeProjectInterfaces: (RegExp | RegExp[])[],
   ): boolean;
   /**
-   * Compare function (for array sorting and such) that compares two PDPF Metadata infos by most
-   * minimal match to the `projectInterface` in question.
-   *
-   * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s to
-   * avoid unnecessary redirects through layered PDPs
+   * Compare function (for array sorting and such) that compares two PDPF Metadata infos by best (most
+   * specific) match to the `projectInterface` in question to avoid unnecessary PDP layering
    *
    * @param pdpFMetadataInfoA First ProjectDataProviderFactoryMetadataInfo to compare
    * @param pdpFMetadataInfoB Second ProjectDataProviderFactoryMetadataInfo to compare

@@ -1,3 +1,4 @@
+using Paranext.DataProvider;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 using SIL.TestUtilities;
@@ -10,6 +11,7 @@ namespace TestParanextDataProvider.Projects
         private TemporaryFolder _folder;
 
         public TestLocalParatextProjectsInTempDir()
+            : base(new AppInfo("test-app", "0.0.0", "test-app"))
         {
             _folder = new TemporaryFolder(TestContext.CurrentContext.Test.ID);
         }

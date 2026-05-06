@@ -58,7 +58,7 @@ public static class Program
             );
             ParatextInfo.ParatextVersion = appVersion;
 
-            var paratextProjects = new LocalParatextProjects();
+            var paratextProjects = new LocalParatextProjects(appInfo);
 
             // Adapted from Paratext's `Program.StaticInitialization`
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
