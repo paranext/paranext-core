@@ -4,6 +4,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Filter,
   FolderOpen,
   Info,
   Loader2,
@@ -14,6 +15,12 @@ import {
   Button,
   Checkbox,
   cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
   Label,
   OpenProjectTab,
   ProjectSelector,
@@ -26,12 +33,11 @@ import {
   SelectValue,
   Sonner,
   sonner,
-  ToggleGroup,
-  ToggleGroupItem,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  Z_INDEX_OVERLAY,
 } from 'platform-bible-react';
 import { ManageBooksSidebar } from './manage-books-sidebar.component';
 import {
@@ -290,17 +296,84 @@ const isCreateMethod = (v: string): v is ManageBooksCreateMethod =>
   v === 'empty' || v === 'chapterVerse' || v === 'fromTemplate';
 
 type ViewPresenceFilter = 'all' | 'new' | 'existing';
-type CopyStateFilter = 'all' | 'new' | 'newer' | 'older' | 'same' | 'undetermined';
 
-const isPresenceFilter = (v: string): v is ViewPresenceFilter =>
-  v === 'all' || v === 'new' || v === 'existing';
-const isCopyStateFilter = (v: string): v is CopyStateFilter =>
-  v === 'all' ||
-  v === 'new' ||
-  v === 'newer' ||
-  v === 'older' ||
-  v === 'same' ||
-  v === 'undetermined';
+// Sebastian review item 8 (2026-05-06): the Copy-mode comparison-state filter (New/Newer/Older/
+// Same/Undetermined) was removed entirely — the New/Newer/Older/Same options didn't actually
+// filter anything (the chip selection was decorative without a backing state-set), and the
+// All/Undetermined options were equivalent. Per Sebastian's verdict the simplest fix is to drop
+// the affordance until comparison-state filtering is genuinely needed; the per-book status
+// labels and badges already give users the same information at a glance.
+
+/**
+ * Presence-filter dropdown shared by View and Import modes. Replaces the chip rows that used to sit
+ * in the filter bar (per Sebastian review item 8, 2026-05-06): the trigger is a Filter-icon Button
+ * that opens a `<DropdownMenuRadioGroup>` of the three presence states (All / New / Existing). The
+ * trigger picks up an accent background when a non-`all` filter is active so the affordance still
+ * reads as "filter applied" without a chip row.
+ *
+ * E2E tests use `data-testid` on each radio item — preserve the existing tokens
+ * (`presence-filter-{all|new|existing}` and `import-presence-filter-{…}`) so the tests just need to
+ * open the trigger first and then click the same item.
+ */
+type PresenceFilterMenuProps = {
+  testIdPrefix: 'presence-filter' | 'import-presence-filter';
+  value: ViewPresenceFilter;
+  onValueChange: (next: ViewPresenceFilter) => void;
+  ariaLabel: string;
+  menuLabel: string;
+  presenceFilterLabel: (s: ViewPresenceFilter) => string;
+};
+function PresenceFilterMenu({
+  testIdPrefix,
+  value,
+  onValueChange,
+  ariaLabel,
+  menuLabel,
+  presenceFilterLabel,
+}: PresenceFilterMenuProps) {
+  const isFilterActive = value !== 'all';
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            'tw-ml-auto tw-h-8 tw-w-8 tw-shrink-0 tw-p-0',
+            isFilterActive &&
+              'tw-bg-accent tw-text-accent-foreground hover:tw-bg-accent/80 data-[state=open]:tw-bg-accent',
+          )}
+          aria-label={ariaLabel}
+          aria-pressed={isFilterActive}
+          title={ariaLabel}
+          data-testid={`${testIdPrefix}-trigger`}
+          data-active={isFilterActive ? 'true' : 'false'}
+        >
+          <Filter className="tw-h-4 tw-w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="tw-w-44" style={{ zIndex: Z_INDEX_OVERLAY }}>
+        <DropdownMenuLabel>{menuLabel}</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={(v) => {
+            if (v === 'all' || v === 'new' || v === 'existing') onValueChange(v);
+          }}
+        >
+          {(['all', 'new', 'existing'] as const).map((s) => (
+            // Default `onSelect` behavior closes the dropdown after a radio pick — that's what
+            // we want here (single-select). PS's `FilterMenu` uses `event.preventDefault()`
+            // because its checkboxes allow multi-toggle without re-opening; that doesn't apply
+            // to a radio group.
+            <DropdownMenuRadioItem key={s} value={s} data-testid={`${testIdPrefix}-${s}`}>
+              {presenceFilterLabel(s)}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 type ProjectBookState = {
   present: Set<string>;
@@ -429,9 +502,6 @@ export function ManageBooksDialog({
   const [overlapError, setOverlapError] = useState<
     { book: string; existingFile: string; newFile: string } | undefined
   >(undefined);
-  const [copyStateFilter, setCopyStateFilter] = useState<
-    'all' | 'new' | 'newer' | 'older' | 'same' | 'undetermined'
-  >('all');
   const [importPresenceFilter, setImportPresenceFilter] = useState<'all' | 'new' | 'existing'>(
     'all',
   );
@@ -566,7 +636,6 @@ export function ManageBooksDialog({
   // (2026-05-06) the gridGroupBy preference is intentionally NOT reset — the
   // user's grouping choice persists across workflow switches.
   useEffect(() => {
-    setCopyStateFilter('all');
     setImportPresenceFilter('all');
     setViewPresenceFilter('all');
   }, [action]);
@@ -809,33 +878,6 @@ export function ManageBooksDialog({
   const filterTerm = filter.trim().toLowerCase();
 
   const actionFilteredBooks = useMemo<string[]>(() => {
-    if (action === 'copy' && copySource && copyStateFilter !== 'all') {
-      return universe.filter((b) => {
-        const destHas = current.present.has(b);
-        const state = computeCompareState(
-          copySource.dates[b],
-          destHas ? current.dates[b] : undefined,
-        );
-        // Map ComparisonState (camelCase from data-contracts.md) to the chip token
-        // used by the filter UI. Keep this switch in sync with the chips rendered
-        // around line 1752 (`copyStateFilter` ToggleGroup values: all/new/newer/
-        // older/same/undetermined).
-        switch (copyStateFilter) {
-          case 'new':
-            return state === 'destDoesNotExist';
-          case 'newer':
-            return state === 'sourceIsNewer';
-          case 'older':
-            return state === 'sourceIsOlder';
-          case 'same':
-            return state === 'filesAreSame';
-          case 'undetermined':
-            return state === 'undetermined';
-          default:
-            return true;
-        }
-      });
-    }
     if (action === 'import' && importPresenceFilter !== 'all') {
       return universe.filter((b) =>
         importPresenceFilter === 'new' ? !current.present.has(b) : current.present.has(b),
@@ -847,15 +889,7 @@ export function ManageBooksDialog({
       );
     }
     return universe;
-  }, [
-    action,
-    universe,
-    copyStateFilter,
-    copySource,
-    current,
-    importPresenceFilter,
-    viewPresenceFilter,
-  ]);
+  }, [action, universe, current, importPresenceFilter, viewPresenceFilter]);
 
   const textFilteredBooks = filterTerm
     ? actionFilteredBooks.filter(
@@ -1195,24 +1229,20 @@ export function ManageBooksDialog({
     ? fmtTemplate(subtitleTemplate, totalPresent, projectDisplayName, versificationName)
     : fmtTemplate(subtitleTemplate, totalPresent, projectDisplayName);
 
-  const filterChipLabel = (s: string): string => {
+  // Per Sebastian review item 8 (2026-05-06): only the All/New/Existing presence-filter labels
+  // are used now that the Copy comparison-state filter has been removed. The remaining
+  // newer/older/same/undetermined chip-label localized strings are still consumed by the per-row
+  // status section headers in the BookGrid (see `gridItems` above) — leave them in
+  // localizedStrings.json untouched.
+  const presenceFilterLabel = (s: 'all' | 'new' | 'existing'): string => {
     switch (s) {
       case 'all':
         return t('%manageBooks_filter_state_all%', 'All');
       case 'new':
         return t('%manageBooks_filter_state_new%', 'New');
       case 'existing':
-        return t('%manageBooks_filter_state_existing%', 'Existing');
-      case 'newer':
-        return t('%manageBooks_filter_state_newer%', 'Newer');
-      case 'older':
-        return t('%manageBooks_filter_state_older%', 'Older');
-      case 'same':
-        return t('%manageBooks_filter_state_same%', 'Same');
-      case 'undetermined':
-        return t('%manageBooks_filter_state_undetermined%', 'Undetermined');
       default:
-        return s;
+        return t('%manageBooks_filter_state_existing%', 'Existing');
     }
   };
 
@@ -1251,7 +1281,6 @@ export function ManageBooksDialog({
   })();
   const clearActiveFilters = () => {
     setFilter('');
-    setCopyStateFilter('all');
     setImportPresenceFilter('all');
     setViewPresenceFilter('all');
   };
@@ -1985,71 +2014,34 @@ export function ManageBooksDialog({
                       universe.length,
                     )}
               </span>
+              {/* Sebastian review item 8 (2026-05-06): the View / Import presence-filter chip
+                  rows were replaced with a single Filter-icon button that opens a popover
+                  containing the radio choices. Mirrors the pattern in
+                  `lib/platform-bible-react/src/components/advanced/project-selector/
+                  project-selector.component.tsx` (`FilterMenu`). The trigger picks up an
+                  accent background when a filter is active so the affordance still reads as
+                  "filter applied" without dragging the user's eye to a chip row. The Copy-
+                  mode comparison-state filter (New/Newer/Older/Same/Undetermined) was
+                  removed entirely — see comment block on `ViewPresenceFilter` declaration. */}
               {action === 'view' && (
-                <ToggleGroup
-                  type="single"
+                <PresenceFilterMenu
+                  testIdPrefix="presence-filter"
                   value={viewPresenceFilter}
-                  onValueChange={(v) => {
-                    if (v && isPresenceFilter(v)) setViewPresenceFilter(v);
-                  }}
-                  className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
-                  data-testid="presence-filter"
-                >
-                  {(['all', 'new', 'existing'] as const).map((s) => (
-                    <ToggleGroupItem
-                      key={s}
-                      value={s}
-                      data-testid={`presence-filter-${s}`}
-                      className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
-                    >
-                      {filterChipLabel(s)}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              )}
-              {action === 'copy' && copySourceId && (
-                <ToggleGroup
-                  type="single"
-                  value={copyStateFilter}
-                  onValueChange={(v) => {
-                    if (v && isCopyStateFilter(v)) setCopyStateFilter(v);
-                  }}
-                  className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
-                  data-testid="copy-state-filter"
-                >
-                  {(['all', 'new', 'newer', 'older', 'same', 'undetermined'] as const).map((s) => (
-                    <ToggleGroupItem
-                      key={s}
-                      value={s}
-                      data-testid={`copy-state-filter-${s}`}
-                      className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
-                    >
-                      {filterChipLabel(s)}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
+                  onValueChange={setViewPresenceFilter}
+                  ariaLabel={t('%manageBooks_filter_buttonAriaLabel%', 'Filter')}
+                  menuLabel={t('%manageBooks_filter_menuLabel%', 'Show')}
+                  presenceFilterLabel={presenceFilterLabel}
+                />
               )}
               {action === 'import' && (
-                <ToggleGroup
-                  type="single"
+                <PresenceFilterMenu
+                  testIdPrefix="import-presence-filter"
                   value={importPresenceFilter}
-                  onValueChange={(v) => {
-                    if (v && isPresenceFilter(v)) setImportPresenceFilter(v);
-                  }}
-                  className="tw-ml-auto tw-shrink-0 tw-rounded-lg tw-bg-muted tw-p-1"
-                  data-testid="import-presence-filter"
-                >
-                  {(['all', 'new', 'existing'] as const).map((s) => (
-                    <ToggleGroupItem
-                      key={s}
-                      value={s}
-                      data-testid={`import-presence-filter-${s}`}
-                      className="tw-h-6 tw-px-2 tw-text-xs tw-capitalize data-[state=on]:!tw-bg-background data-[state=on]:tw-shadow-sm"
-                    >
-                      {filterChipLabel(s)}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
+                  onValueChange={setImportPresenceFilter}
+                  ariaLabel={t('%manageBooks_filter_buttonAriaLabel%', 'Filter')}
+                  menuLabel={t('%manageBooks_filter_menuLabel%', 'Show')}
+                  presenceFilterLabel={presenceFilterLabel}
+                />
               )}
               <BookGridGroupByToggle
                 value={gridGroupBy}

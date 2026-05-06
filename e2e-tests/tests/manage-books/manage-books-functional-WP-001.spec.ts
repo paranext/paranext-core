@@ -211,11 +211,15 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     });
     const frame = mainPage.frameLocator(`iframe[title*="Manage Books" i]`);
 
-    // The "present" filter chip narrows the universe to books currently in the project. The
-    // wiring layer subscribes to `useProjectSetting('platformScripture.booksPresent')` so a
-    // real value comes through here; we assert at least one present book is rendered.
-    const presentChip = frame.locator('[data-testid="presence-filter-existing"]');
-    await presentChip.click();
+    // The "Existing" presence filter narrows the universe to books currently in the project.
+    // The wiring layer subscribes to `useProjectSetting('platformScripture.booksPresent')` so a
+    // real value comes through here; we assert at least one present book is rendered. Per
+    // Sebastian review item 8 (2026-05-06) the chip row was replaced with a Filter-icon trigger
+    // that opens a DropdownMenuRadioGroup — we open the trigger first, then click the radio item.
+    const filterTrigger = frame.locator('[data-testid="presence-filter-trigger"]');
+    await filterTrigger.click();
+    const presentItem = frame.locator('[data-testid="presence-filter-existing"]');
+    await presentItem.click();
 
     const presentBooks = frame.locator('ul[role="listbox"] li[data-book]');
     await expect(presentBooks.first()).toBeVisible({ timeout: 10_000 });
@@ -568,9 +572,13 @@ test.describe('Manage Books Functional Tests (WP-001 — Unified Dialog Wiring)'
     await expect(firstSourceOption).toBeVisible({ timeout: 10_000 });
     await firstSourceOption.click();
 
-    // Now the grid populates with comparison badges. State filter chips become available.
-    const stateFilters = frame.locator('[data-testid^="copy-state-filter-"]');
-    await expect(stateFilters.first()).toBeVisible({ timeout: 10_000 });
+    // Now the grid populates with comparison badges. Per Sebastian review item 8 (2026-05-06)
+    // the Copy-mode comparison-state filter (New/Newer/Older/Same/Undetermined) was removed
+    // entirely — the previous `[data-testid^="copy-state-filter-"]` chips no longer exist. We
+    // instead assert that book rows appear in the listbox, which is the actual signal that the
+    // comparison grid populated against the picked source project.
+    const copyBookRows = frame.locator('ul[role="listbox"] li[data-book]');
+    await expect(copyBookRows.first()).toBeVisible({ timeout: 10_000 });
 
     // EVD-032: comparison grid populated.
     await mainPage.screenshot({

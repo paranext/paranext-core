@@ -220,6 +220,11 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_filter_state_older%',
   '%manageBooks_filter_state_same%',
   '%manageBooks_filter_state_undetermined%',
+  // Sebastian review item 8 (2026-05-06): the View / Import presence-filter chip rows were
+  // replaced with a single Filter-icon button that opens a DropdownMenu of radio items. These
+  // two strings localize the trigger's aria-label/title and the menu's section header.
+  '%manageBooks_filter_buttonAriaLabel%',
+  '%manageBooks_filter_menuLabel%',
   // Selection / book grid
   '%manageBooks_selection_selectAll%',
   '%manageBooks_selection_xSelected%',
