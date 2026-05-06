@@ -358,7 +358,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
         align="center"
         sideOffset={8}
         collisionPadding={16}
-        className="tw-max-w-xs"
+        className="tw-max-w-xs tw-text-center"
         style={{ zIndex: Z_INDEX_OVERLAY }}
       >
         <div className="tw-font-semibold">{row.fullName}</div>
