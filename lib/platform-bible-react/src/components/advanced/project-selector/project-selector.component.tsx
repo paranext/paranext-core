@@ -661,7 +661,63 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       <ChevronDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
     );
 
-  const hasMultiSelection = props.mode === 'project-multi' && props.selection.pairs.length > 0;
+  // Trigger tooltip — surfaces the full project name (which is otherwise truncated to shortName in
+  // the trigger button) plus language when available. For multi-select, lists every selected
+  // project. When nothing is selected, the tooltip echoes the ariaLabel / buttonPlaceholder so the
+  // hover hint still tells the user what the picker is for. Suppressed when the popover is open
+  // (would obscure the popover content).
+  const triggerTooltipContent = useMemo<ReactNode | undefined>(() => {
+    const fallback = props.ariaLabel ?? props.buttonPlaceholder;
+    const renderProject = (p: ProjectSelectorProject, suffix?: string): string => {
+      const langSuffix =
+        p.language && p.languageCode
+          ? ` · ${p.language} (${p.languageCode})`
+          : p.language
+            ? ` · ${p.language}`
+            : p.languageCode
+              ? ` · ${p.languageCode}`
+              : '';
+      return `${p.fullName}${suffix ?? ''}${langSuffix}`;
+    };
+    switch (props.mode) {
+      case 'project': {
+        const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        return selected ? renderProject(selected) : fallback;
+      }
+      case 'projectScrollGroup': {
+        const selected = props.projects.find((p) => p.id === props.selection.projectId);
+        if (!selected) return fallback;
+        const group = props.selection.scrollGroupId;
+        return group !== undefined
+          ? renderProject(selected, ` · ${scrollGroupLetter(group)}`)
+          : renderProject(selected);
+      }
+      case 'project-multi': {
+        const { pairs } = props.selection;
+        if (pairs.length === 0) return fallback;
+        const lines: string[] = [];
+        pairs.forEach((pair) => {
+          const project = props.projects.find((p) => p.id === pair.projectId);
+          if (!project) return;
+          const groupSuffix =
+            pair.scrollGroupId !== undefined
+              ? ` (${scrollGroupLetter(pair.scrollGroupId)})`
+              : undefined;
+          lines.push(renderProject(project, groupSuffix));
+        });
+        if (lines.length === 0) return fallback;
+        return (
+          <ul className="tw-m-0 tw-list-none tw-p-0">
+            {lines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        );
+      }
+      default:
+        return fallback;
+    }
+  }, [props]);
 
   const openButtonHandler =
     props.mode === 'projectScrollGroup' ||
@@ -670,30 +726,50 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       : undefined;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant={props.buttonVariant ?? 'outline'}
-          role="combobox"
-          aria-expanded={open}
-          aria-label={props.ariaLabel}
-          disabled={props.isDisabled ?? false}
-          title={hasMultiSelection ? triggerContent.title : undefined}
-          className={cn(
-            'tw-flex tw-w-[180px] tw-items-center tw-justify-between tw-overflow-hidden',
-            props.buttonClassName,
-          )}
+    <TooltipProvider delayDuration={400}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <Tooltip
+          // Force closed while the popover is open so the tooltip doesn't compete with the
+          // popover content. When the popover is closed, leave `open` undefined so Radix's
+          // built-in hover/focus tracking takes over.
+          {...(open ? { open: false } : {})}
         >
-          <span className="tw-flex tw-min-w-0 tw-flex-1 tw-items-baseline tw-gap-2 tw-overflow-hidden tw-whitespace-nowrap tw-text-start">
-            {typeof triggerContent.node === 'string' ? (
-              <span className="tw-min-w-0 tw-truncate">{triggerContent.node}</span>
-            ) : (
-              triggerContent.node
-            )}
-          </span>
-          {triggerIcon}
-        </Button>
-      </PopoverTrigger>
+          <PopoverTrigger asChild>
+            <TooltipTrigger asChild>
+              <Button
+                variant={props.buttonVariant ?? 'outline'}
+                role="combobox"
+                aria-expanded={open}
+                aria-label={props.ariaLabel}
+                disabled={props.isDisabled ?? false}
+                className={cn(
+                  'tw-flex tw-w-[180px] tw-items-center tw-justify-between tw-overflow-hidden',
+                  props.buttonClassName,
+                )}
+              >
+                <span className="tw-flex tw-min-w-0 tw-flex-1 tw-items-baseline tw-gap-2 tw-overflow-hidden tw-whitespace-nowrap tw-text-start">
+                  {typeof triggerContent.node === 'string' ? (
+                    <span className="tw-min-w-0 tw-truncate">{triggerContent.node}</span>
+                  ) : (
+                    triggerContent.node
+                  )}
+                </span>
+                {triggerIcon}
+              </Button>
+            </TooltipTrigger>
+          </PopoverTrigger>
+          {triggerTooltipContent !== undefined && triggerTooltipContent !== '' && (
+            <TooltipContent
+              side="bottom"
+              align="start"
+              sideOffset={6}
+              collisionPadding={16}
+              className="tw-max-w-sm"
+            >
+              {triggerTooltipContent}
+            </TooltipContent>
+          )}
+        </Tooltip>
       <PopoverContent
         align={props.alignDropDown ?? 'start'}
         collisionPadding={16}
@@ -756,8 +832,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
             </CommandList>
           </Command>
         </TooltipProvider>
-      </PopoverContent>
-    </Popover>
+        </PopoverContent>
+      </Popover>
+    </TooltipProvider>
   );
 }
 
