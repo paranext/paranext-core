@@ -274,6 +274,7 @@
       "%manageBooks_import_conflictBody2%": "Choose how to proceed with the import.",
       "%manageBooks_import_conflictCancel%": "Cancel",
       "%manageBooks_import_conflictTitle%": "Books already exist",
+      "%manageBooks_import_emptyState_addFiles%": "Add files to begin importing.",
       "%manageBooks_import_filesMatched_one%": "1 file matched",
       "%manageBooks_import_filesMatched_other%": "{0} files matched",
       "%manageBooks_import_nonExistingChapters%": "Import non-existing chapters",

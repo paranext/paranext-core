@@ -257,6 +257,10 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_import_overlapTitle%',
   '%manageBooks_import_overlapBody%',
   '%manageBooks_import_overlapDismiss%',
+  // Sebastian review item 22 (2026-05-06): Import grid renders an empty body until the user
+  // attaches files; this is the empty-state message that replaces the previous "all books in
+  // canon" universe.
+  '%manageBooks_import_emptyState_addFiles%',
   // Delete confirm
   '%manageBooks_delete_confirmTitle%',
   '%manageBooks_delete_confirmBodyPartial%',

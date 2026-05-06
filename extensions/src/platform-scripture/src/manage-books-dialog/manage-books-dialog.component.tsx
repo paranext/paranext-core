@@ -617,11 +617,18 @@ export function ManageBooksDialog({
       case 'copy':
         return copySource ? allBooks.filter((b) => copySource.present.has(b)) : [];
       case 'import':
-        return allBooks;
+        // Sebastian review item 22 (2026-05-06): Import mode starts empty and only shows books
+        // the user has actually attached files for. As `runImport` removes successfully-imported
+        // entries from `importFiles`, the grid shrinks too — books vanish on success without
+        // needing any extra clean-up. Sort by canonical book number so multi-file picks render
+        // in the same order as the OT/NT/DC sections.
+        return Object.keys(importFiles).sort(
+          (a, b) => Canon.bookIdToNumber(a) - Canon.bookIdToNumber(b),
+        );
       default:
         return [];
     }
-  }, [action, allBooks, current, copySource]);
+  }, [action, allBooks, current, copySource, importFiles]);
 
   // Per Sebastian review item 27 (2026-05-06): when the user picks a different
   // reference project (or clears it / changes createMethod), prune any books from
@@ -1167,13 +1174,22 @@ export function ManageBooksDialog({
   };
 
   const isFilterEmptyState =
-    visibleBooks.length === 0 && universe.length > 0 && !(action === 'copy' && !copySourceId);
+    visibleBooks.length === 0 &&
+    universe.length > 0 &&
+    !(action === 'copy' && !copySourceId) &&
+    action !== 'import';
   const emptyStateMessage = (() => {
     if (action === 'copy' && !copySourceId)
       return t(
         '%manageBooks_copy_emptyState_chooseSource%',
         'Choose a source project to see books available to copy.',
       );
+    // Sebastian review item 22 (2026-05-06): Import mode renders an empty grid until the user
+    // attaches files. The "Add files…" / "Choose files…" affordance lives in the per-action
+    // header just above; this empty-state message gives the otherwise-blank grid area a hint.
+    if (action === 'import' && universe.length === 0) {
+      return t('%manageBooks_import_emptyState_addFiles%', 'Add files to begin importing.');
+    }
     if (universe.length === 0) {
       if (action === 'create')
         return t(
