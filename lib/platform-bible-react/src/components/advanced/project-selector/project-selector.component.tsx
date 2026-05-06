@@ -6,7 +6,9 @@
 import {
   Fragment,
   ReactNode,
+  useCallback,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type MouseEvent,
@@ -242,7 +244,32 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
   // hover ourselves bypasses that auto-detection entirely.
   const [isHovered, setIsHovered] = useState(false);
 
+  // Ref to the truncating label span so we can measure scrollWidth vs clientWidth on hover
+  // and decide whether the tooltip should show. We only want a tooltip on rows where the
+  // visible text is actually clipped — or on rows that have extra info to surface beyond
+  // what's visible in the row itself.
+  const labelRef = useRef<HTMLSpanElement>(null);
+
   const tooltipHasLanguage = Boolean(row.language || row.languageCode);
+
+  // Tooltip lines that convey information NOT visible in the row text. These rows should
+  // always show a tooltip on hover, regardless of whether the visible text is truncated.
+  const hasExtraTooltipContent =
+    tooltipHasLanguage ||
+    Boolean(row.scrollGroupScrRefLabel) ||
+    row.isBoundButClosed ||
+    (row.isDisabled && Boolean(row.disabledReason));
+
+  const handlePointerEnter = useCallback(() => {
+    if (hasExtraTooltipContent) {
+      setIsHovered(true);
+      return;
+    }
+    // Otherwise only open the tooltip if the visible row text is actually truncated.
+    const el = labelRef.current;
+    if (!el) return;
+    if (el.scrollWidth > el.clientWidth) setIsHovered(true);
+  }, [hasExtraTooltipContent]);
 
   const leftCheck = (
     <Check className={cn('tw-h-4 tw-w-4', row.isSelected ? 'tw-opacity-100' : 'tw-opacity-0')} />
@@ -298,7 +325,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
         onClick(row);
       }}
       disabled={row.isDisabled}
-      onPointerEnter={() => setIsHovered(true)}
+      onPointerEnter={handlePointerEnter}
       onPointerLeave={() => setIsHovered(false)}
       className="tw-flex tw-items-center tw-gap-2 tw-pe-4"
       data-selected={row.isSelected}
@@ -308,7 +335,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
       </span>
       {/* shortName • fullName as a single truncating line. The whole line truncates with ellipsis
           when it overflows; the tooltip surfaces the fullName for clipped rows. */}
-      <span className="tw-min-w-0 tw-flex-1 tw-truncate tw-text-start">
+      <span ref={labelRef} className="tw-min-w-0 tw-flex-1 tw-truncate tw-text-start">
         <span>{row.shortName}</span>
         <span className="tw-text-muted-foreground"> • {row.fullName}</span>
       </span>
@@ -714,7 +741,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         align={props.alignDropDown ?? 'start'}
         collisionPadding={16}
         className={cn(
-          'tw-w-[500px] tw-max-w-[calc(100vw-2rem)] tw-p-0',
+          'tw-w-80 tw-max-w-[calc(100vw-2rem)] tw-p-0',
           props.popoverContentClassName,
         )}
         style={props.popoverContentStyle}
