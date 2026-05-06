@@ -60,6 +60,7 @@ import { CreatePreflightPrompt } from './create-preflight-prompt.component';
 import { UsxConfirmPrompt } from './usx-confirm-prompt.component';
 import { OverlapErrorPrompt } from './overlap-error-prompt.component';
 import { ImportConflictPrompt } from './import-conflict-prompt.component';
+import { CopyConflictPrompt } from './copy-conflict-prompt.component';
 
 // Re-export the public types for backwards compatibility with the original cherry-pick.
 export type {
@@ -395,6 +396,16 @@ export function ManageBooksDialog({
     | {
         books: string[];
         existing: string[];
+      }
+    | undefined
+  >(undefined);
+  // Copy overwrite-confirm — Sebastian #16. Without this, Copy with mixed existence silently
+  // overwrites the books that already exist in the destination project.
+  const [copyConfirm, setCopyConfirm] = useState<
+    | {
+        books: string[];
+        existing: string[];
+        sourceId: string;
       }
     | undefined
   >(undefined);
@@ -1072,9 +1083,19 @@ export function ManageBooksDialog({
         // A2: open delete-confirm prompt.
         setDeleteConfirm({ books: selectedArr });
         break;
-      case 'copy':
-        if (copySourceId) runCopy(selectedArr, copySourceId).catch(() => undefined);
+      case 'copy': {
+        if (!copySourceId) break;
+        // Sebastian #16: gate Copy with an overwrite-confirm prompt when the selection contains
+        // books that already exist in the destination project. Mixed-existence selections used to
+        // silently overwrite — now the user has to confirm.
+        const existing = selectedArr.filter((b) => current.present.has(b));
+        if (existing.length > 0) {
+          setCopyConfirm({ books: selectedArr, existing, sourceId: copySourceId });
+          break;
+        }
+        runCopy(selectedArr, copySourceId).catch(() => undefined);
         break;
+      }
       case 'import': {
         const existing = selectedArr.filter((b) => current.present.has(b));
         if (existing.length > 0) {
@@ -2198,6 +2219,16 @@ export function ManageBooksDialog({
         onChoose={(strategy, books) => {
           runImport(books, strategy).catch(() => undefined);
           setImportConflict(undefined);
+        }}
+      />
+      <CopyConflictPrompt
+        conflict={copyConfirm}
+        projectName={project.name}
+        t={t}
+        onCancel={() => setCopyConfirm(undefined)}
+        onConfirm={(books) => {
+          if (copyConfirm) runCopy(books, copyConfirm.sourceId).catch(() => undefined);
+          setCopyConfirm(undefined);
         }}
       />
       <Sonner position="top-center" />

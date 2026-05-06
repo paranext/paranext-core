@@ -172,6 +172,11 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_copy_sourcePlaceholder%',
   '%manageBooks_copy_emptyState_chooseSource%',
   '%manageBooks_copy_emptyState_noBooks%',
+  // Copy overwrite confirm
+  '%manageBooks_copy_confirmTitle%',
+  '%manageBooks_copy_confirmBody%',
+  '%manageBooks_copy_confirmReplace%',
+  '%manageBooks_copy_confirmCancel%',
   // Per-action empty states
   '%manageBooks_create_emptyState_allPresent%',
   '%manageBooks_delete_emptyState_noBooks%',
