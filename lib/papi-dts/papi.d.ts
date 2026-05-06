@@ -1328,6 +1328,7 @@ declare module 'shared/models/rpc.interface' {
     request: (
       requestType: SerializedRequestType,
       requestParams: RequestParams,
+      skipRetry?: boolean,
     ) => Promise<JSONRPCResponse>;
     /**
      * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
@@ -1467,6 +1468,7 @@ declare module 'client/services/rpc-client' {
     request(
       requestType: SerializedRequestType,
       requestParams: RequestParams,
+      _skipRetry?: boolean,
     ): Promise<JSONRPCResponse>;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     registerMethod(
@@ -1522,6 +1524,7 @@ declare module 'main/services/rpc-server' {
     request(
       requestType: SerializedRequestType,
       requestParams: RequestParams,
+      skipRetry?: boolean,
     ): Promise<JSONRPCResponse>;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean;
@@ -1576,6 +1579,7 @@ declare module 'main/services/rpc-websocket-listener' {
     request(
       requestType: SerializedRequestType,
       requestParams: RequestParams,
+      skipRetry?: boolean,
     ): Promise<JSONRPCResponse>;
     registerMethod(
       methodName: string,
@@ -1630,6 +1634,19 @@ declare module 'shared/services/network.service' {
    * @returns Promise that resolves with the response message
    */
   export const request: <TParam extends Array<unknown>, TReturn>(
+    requestType: SerializedRequestType,
+    ...args: TParam
+  ) => Promise<TReturn>;
+  /**
+   * Send a request on the network without retrying if the handler is not yet registered. Use for
+   * requests where immediate failure is preferable to waiting, such as commands sent during app
+   * shutdown.
+   *
+   * @param requestType The type of request
+   * @param args Arguments to send in the request (put in request.contents)
+   * @returns Promise that resolves with the response message
+   */
+  export const requestNoRetry: <TParam extends Array<unknown>, TReturn>(
     requestType: SerializedRequestType,
     ...args: TParam
   ) => Promise<TReturn>;
@@ -4160,6 +4177,14 @@ declare module 'shared/services/command.service' {
   ) => Promise<UnsubscriberAsync>;
   /** Send a command to the backend. */
   export const sendCommand: <CommandName extends CommandNames>(
+    commandName: CommandName,
+    ...args: Parameters<CommandHandlers[CommandName]>
+  ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
+  /**
+   * Send a command to the backend without retrying if the handler is not registered. Use during app
+   * shutdown where immediate failure is preferable to a retry delay.
+   */
+  export const sendCommandNoRetry: <CommandName extends CommandNames>(
     commandName: CommandName,
     ...args: Parameters<CommandHandlers[CommandName]>
   ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
