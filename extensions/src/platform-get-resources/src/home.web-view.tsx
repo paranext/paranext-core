@@ -101,6 +101,14 @@ globalThis.webViewComponent = function HomeWebView() {
 
   const [isSendReceiveInProgress, setIsSendReceiveInProgress] = useState<boolean>(false);
   const [activeSendReceiveProjects, setActiveSendReceiveProjects] = useState<string[]>([]);
+  const [syncRefreshKey, setSyncRefreshKey] = useState<number>(0);
+
+  useEvent(
+    papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncStateChanged'),
+    useCallback(({ isSyncing }: { isSyncing: boolean }) => {
+      if (!isSyncing) setSyncRefreshKey((k) => k + 1);
+    }, []),
+  );
 
   const sendReceiveProject = async (projectId: string) => {
     if (!isSendReceiveAvailable) return;
@@ -189,7 +197,12 @@ globalThis.webViewComponent = function HomeWebView() {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
     };
-  }, [isSendReceiveAvailable, isSendReceiveInProgress, sharedProjectErrorNotificationId]);
+  }, [
+    isSendReceiveAvailable,
+    isSendReceiveInProgress,
+    sharedProjectErrorNotificationId,
+    syncRefreshKey,
+  ]);
 
   const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
   const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
@@ -245,7 +258,7 @@ globalThis.webViewComponent = function HomeWebView() {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
     };
-  }, [isSendReceiveInProgress, excludePdpFactoryIds, resourcesList]);
+  }, [isSendReceiveInProgress, excludePdpFactoryIds, resourcesList, syncRefreshKey]);
 
   const [interfaceLanguages] = useSetting('platform.interfaceLanguage', defaultInterfaceLanguages);
 
