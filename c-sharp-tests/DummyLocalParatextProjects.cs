@@ -9,7 +9,7 @@ namespace TestParanextDataProvider
     internal class DummyLocalParatextProjects : LocalParatextProjects
     {
         public DummyLocalParatextProjects()
-            : base(new AppInfo("platform-bible", "0.0.0", "platform-bible")) { }
+            : base(new AppInfo("test-app", "0.0.0", "test-app")) { }
 
         public void FakeAddProject(ProjectDetails details, ScrText? scrText = null)
         {

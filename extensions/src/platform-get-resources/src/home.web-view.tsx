@@ -101,12 +101,12 @@ globalThis.webViewComponent = function HomeWebView() {
 
   const [isSendReceiveInProgress, setIsSendReceiveInProgress] = useState<boolean>(false);
   const [activeSendReceiveProjects, setActiveSendReceiveProjects] = useState<string[]>([]);
-  const [syncRefreshKey, setSyncRefreshKey] = useState<number>(0);
+  const [syncsCompletedCount, setSyncsCompletedCount] = useState<number>(0);
 
   useEvent(
     papi.network.getNetworkEvent('paratextBibleSendReceive.onSyncStateChanged'),
     useCallback(({ isSyncing }: { isSyncing: boolean }) => {
-      if (!isSyncing) setSyncRefreshKey((k) => k + 1);
+      if (!isSyncing) setSyncsCompletedCount((k) => k + 1);
     }, []),
   );
 
@@ -201,7 +201,7 @@ globalThis.webViewComponent = function HomeWebView() {
     isSendReceiveAvailable,
     isSendReceiveInProgress,
     sharedProjectErrorNotificationId,
-    syncRefreshKey,
+    syncsCompletedCount, // triggers a re-fetch each time a sync completes
   ]);
 
   const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
@@ -258,7 +258,12 @@ globalThis.webViewComponent = function HomeWebView() {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
     };
-  }, [isSendReceiveInProgress, excludePdpFactoryIds, resourcesList, syncRefreshKey]);
+  }, [
+    isSendReceiveInProgress,
+    excludePdpFactoryIds,
+    resourcesList,
+    syncsCompletedCount, // triggers a re-fetch each time a sync completes
+  ]);
 
   const [interfaceLanguages] = useSetting('platform.interfaceLanguage', defaultInterfaceLanguages);
 
