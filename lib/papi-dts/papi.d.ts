@@ -4771,7 +4771,7 @@ declare module 'shared/models/project-lookup.service-model' {
   /**
    * Transform a network object id for a pdp factory into its well-known pdp factory id
    *
-   * @param pdpFactoryNetworkObjectName Id for then network object for this pdp factory
+   * @param pdpFactoryNetworkObjectName Id for the network object for this pdp factory
    * @returns Id extensions use to identify this pdp factory
    */
   export function getPDPFactoryIdFromNetworkObjectName(pdpFactoryNetworkObjectName: string): string;
@@ -4868,7 +4868,13 @@ declare module 'shared/models/project-lookup.service-model' {
       projectsMetadata: ProjectMetadata[],
       options: ProjectMetadataFilterOptions,
     ): ProjectMetadata[];
-    /** Combines two project metadata filters, removing duplicate items */
+    /**
+     * Combines two project metadata filters, removing duplicate items
+     *
+     * Note: uses additive (OR) semantics for include lists — if one filter specifies an include list
+     * and the other does not, the merged filter keeps the include list (not "include all"). If you
+     * need "include all" to win, ensure both sides are undefined.
+     */
     mergeMetadataFilters(
       metadataFilter1: ProjectMetadataFilterOptions | undefined,
       metadataFilter2: ProjectMetadataFilterOptions | undefined,
