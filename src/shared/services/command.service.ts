@@ -56,6 +56,10 @@ export const sendCommand = async <CommandName extends CommandNames>(
 /**
  * Send a command to the backend without retrying if the handler is not registered. Use during app
  * shutdown where immediate failure is preferable to a retry delay.
+ *
+ * @param commandName Command name to send
+ * @param args Arguments to pass to the command handler
+ * @returns Promise that resolves with the command's return value
  */
 export const sendCommandNoRetry = async <CommandName extends CommandNames>(
   commandName: CommandName,

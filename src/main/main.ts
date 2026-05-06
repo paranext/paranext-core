@@ -536,6 +536,7 @@ async function main() {
       }
 
       try {
+        // waitForDuration resolves (doesn't throw) on timeout — errors only come from syncProjects
         await waitForDuration(
           () =>
             commandService.sendCommandNoRetry('paratextBibleSendReceive.syncProjects', undefined),
