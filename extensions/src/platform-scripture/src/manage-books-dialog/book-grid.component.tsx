@@ -112,13 +112,19 @@ const BOOK_PILL_BASE_CLASS =
  * use the accent tone at rest and shift to primary on hover; absent books get a dashed primary
  * outline plus muted text and the same primary hover treatment. Per Sebastian item 24
  * (2026-05-06).
+ *
+ * NOTE on `hover:tw-bg-primary/90` vs `hover:tw-bg-primary`: the slashless `hover:tw-bg-primary`
+ * does not get JIT-compiled in this build pipeline (only the slash variants `/10`, `/70`, `/80`,
+ * `/90` are emitted). Using `/90` keeps a near-solid primary on hover while ensuring the rule
+ * actually exists in the stylesheet — without it the hover background falls back to the at-rest
+ * accent color and the white `text-primary-foreground` becomes unreadable on the light background.
  */
 const bookPillClasses = (present: boolean): string =>
   cn(
     BOOK_PILL_BASE_CLASS,
-    'tw-transition-colors hover:tw-bg-primary hover:tw-text-primary-foreground',
+    'tw-transition-colors hover:tw-bg-primary/90 hover:tw-text-primary-foreground',
     present
-      ? 'tw-border-primary/40 tw-bg-accent tw-text-accent-foreground'
+      ? 'tw-border-primary/40 tw-bg-accent'
       : 'tw-border-dashed tw-border-primary/40 tw-text-muted-foreground',
   );
 
