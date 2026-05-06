@@ -54,6 +54,7 @@ import { serializeRequestType, SerializedRequestType } from '@shared/utils/util'
 import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
 import {
+  AsyncVariable,
   getErrorMessage,
   isPlatformError,
   serialize,
@@ -537,18 +538,20 @@ async function main() {
         /* no sync in progress, or extension unavailable */
       }
 
-      try {
-        // waitForDuration always resolves — syncProjects errors are suppressed by Promise.any; catch is a safety net
-        await waitForDuration(
-          () =>
-            networkService.requestNoRetry(
-              serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.syncProjects'),
-              undefined,
-            ),
-          SHUTDOWN_SYNC_TIME_OUT,
+      const syncComplete = new AsyncVariable<void>('shutdown sync', SHUTDOWN_SYNC_TIME_OUT);
+      networkService
+        .requestNoRetry(
+          serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.syncProjects'),
+          undefined,
+        )
+        .then(() => syncComplete.resolveToValue(undefined))
+        .catch(
+          () => syncComplete.resolveToValue(undefined), // sync failed — settle anyway
         );
+      try {
+        await syncComplete.promise;
       } catch {
-        /* sync failed or extension unavailable — proceed with shutdown */
+        /* timed out */
       }
 
       logger.info('Sync on shutdown complete');
