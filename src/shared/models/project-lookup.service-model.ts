@@ -49,7 +49,7 @@ export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string) {
 /**
  * Transform a network object id for a pdp factory into its well-known pdp factory id
  *
- * @param pdpFactoryNetworkObjectName Id for then network object for this pdp factory
+ * @param pdpFactoryNetworkObjectName Id for the network object for this pdp factory
  * @returns Id extensions use to identify this pdp factory
  */
 export function getPDPFactoryIdFromNetworkObjectName(pdpFactoryNetworkObjectName: string) {
@@ -156,7 +156,13 @@ export type ProjectLookupServiceType = {
     projectsMetadata: ProjectMetadata[],
     options: ProjectMetadataFilterOptions,
   ): ProjectMetadata[];
-  /** Combines two project metadata filters, removing duplicate items */
+  /**
+   * Combines two project metadata filters, removing duplicate items
+   *
+   * Note: uses additive (OR) semantics for include lists — if one filter specifies an include list
+   * and the other does not, the merged filter keeps the include list (not "include all"). If you
+   * need "include all" to win, ensure both sides are undefined.
+   */
   mergeMetadataFilters(
     metadataFilter1: ProjectMetadataFilterOptions | undefined,
     metadataFilter2: ProjectMetadataFilterOptions | undefined,
@@ -209,7 +215,9 @@ export const projectLookupServiceBase: ProjectLookupServiceType = {
           timeoutInMS,
         );
       } catch (e) {
-        throw new Error(`getMetadataForProject wait for PDPF ${pdpFactoryId} threw! ${e}`);
+        throw new Error(
+          `getMetadataForProject wait for PDPF ${pdpFactoryId} threw! ${getErrorMessage(e)}`,
+        );
       }
     } else if (projectInterface) {
       try {
@@ -232,7 +240,7 @@ export const projectLookupServiceBase: ProjectLookupServiceType = {
           timeoutInMS,
         );
       } catch (e) {
-        throw new Error(`getMetadataForProject wait for any PDPF threw! ${e}`);
+        throw new Error(`getMetadataForProject wait for any PDPF threw! ${getErrorMessage(e)}`);
       }
     }
 
@@ -240,9 +248,6 @@ export const projectLookupServiceBase: ProjectLookupServiceType = {
       transformGetMetadataForProjectParametersToFilter(projectId, projectInterface, pdpFactoryId),
     );
 
-    // Get the most minimal match to the projectInterface in question. Hopefully this will give us the
-    // PDP that most closely matches the projectInterfaces to avoid unnecessary redirects through
-    // layered PDPs
     if (metadata && metadata.length > 0) return metadata[0];
     throw new Error(
       `No project found with ID ${projectId}${projectInterface ? ` and project interface ${projectInterface}` : ''}${pdpFactoryId ? ` from ${pdpFactoryId}` : ''}`,
@@ -253,8 +258,6 @@ export const projectLookupServiceBase: ProjectLookupServiceType = {
     projectsMetadata: ProjectMetadata[],
     options: ProjectMetadataFilterOptions,
   ): ProjectMetadata[] {
-    if (!options) return [...projectsMetadata];
-
     if (
       !options.excludeProjectIds &&
       !options.includeProjectIds &&
@@ -753,9 +756,8 @@ function compareProjectDataProviderFactoryMetadataInfoMinimalMatch(
   const lengthA = pdpFMetadataInfoA.projectInterfaces.length;
   const lengthB = pdpFMetadataInfoB.projectInterfaces.length;
 
-  // If one only has the original interface or is smaller than the other, it should be first
-  if (lengthA === 1 || lengthA < lengthB) return -1;
-  if (lengthB === 1 || lengthB < lengthA) return 1;
+  if (lengthA < lengthB) return -1;
+  if (lengthB < lengthA) return 1;
   // Otherwise they are pretty much the same as far as we can tell
   return 0;
 }
