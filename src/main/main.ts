@@ -524,6 +524,8 @@ async function main() {
       // Prevents the main window from initially closing
       event.preventDefault();
 
+      logger.info('Syncing projects on shutdown...');
+
       // Cancel any in-progress sync, then run a fresh full sync before shutdown.
       // All errors are swallowed — extension may not be installed, or sync may fail.
       // Shutdown must never be permanently blocked.
@@ -541,6 +543,8 @@ async function main() {
       } catch {
         /* sync failed or extension unavailable — proceed with shutdown */
       }
+
+      logger.info('Sync on shutdown complete');
 
       // Destroys the main window allowing the rest of the close sequence to continue. This is the
       // equivalent of doing `mainWindow.close()` just without triggering the `close` event.
