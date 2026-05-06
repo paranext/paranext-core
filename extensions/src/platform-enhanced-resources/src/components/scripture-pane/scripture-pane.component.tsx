@@ -316,8 +316,8 @@ export function EnhancedScripturePane({
   // Hover lifecycle bookkeeping. fetchGenRef is bumped on every mouseenter/mouseleave so
   // late-arriving showPopover / buildTooltipData promises can detect they are stale and
   // self-cancel. activePopoverIdRef tracks the currently-rendered popover for dismissal;
-  // active{Match,Dim}SetRef tracks the annotationIds we layered on the editor so they can
-  // be removed on mouseleave or component unmount.
+  // activeMatchSetRef tracks the annotationIds whose marks we tagged with the hover-match
+  // class so they can be cleared on mouseleave or component unmount.
   const fetchGenRef = useRef(0);
   // The popover-id ref is initially null because no popover is open. Using `undefined` would be
   // technically possible but conflates "absent" with "uninitialized" given React's useRef contract;
@@ -325,7 +325,6 @@ export function EnhancedScripturePane({
   // eslint-disable-next-line no-null/no-null
   const activePopoverIdRef = useRef<string | null>(null);
   const activeMatchSetRef = useRef<Set<string>>(new Set());
-  const activeDimSetRef = useRef<Set<string>>(new Set());
 
   // Build per-lemma annotation index from `lexicalLinks` metadata. Used by hover handlers
   // to compute matching vs non-matching annotations on each mouseenter without iterating
@@ -444,8 +443,8 @@ export function EnhancedScripturePane({
     };
 
     // Hover handlers - declared inside the effect so they close over `annotationsById`
-    // and `editor` from this run. The activePopoverIdRef / activeMatchSetRef / activeDimSetRef
-    // bookkeeping is component-lifetime so a delayed mouseleave from a previous render still
+    // and `editor` from this run. The activePopoverIdRef / activeMatchSetRef bookkeeping
+    // is component-lifetime so a delayed mouseleave from a previous render still
     // dismisses correctly.
     const handleMarbleMouseEnter = (event: MouseEvent, _type: string, id: string) => {
       const annotation = annotationsById.get(id);
@@ -471,13 +470,15 @@ export function EnhancedScripturePane({
         });
       }
 
-      // CSS-based dim/match (replaces editor-based approach for perf - see _marble-overrides.scss).
-      // Toggle the body-level hover-active class once, then add the match class to each mark element
-      // whose annotationId is in the matching set. Editor-side annotation marks already carry the
-      // `annotationId-{id}` class added by TypedMarkNode.createDOM. Marks without the match class
-      // get dimmed via descendant selector specificity.
-      // `target.ownerDocument` gives us the iframe's document; `document` alone would target the
-      // main renderer frame.
+      // CSS-based lemma-match highlight (replaces editor-based approach for perf - see
+      // _marble-overrides.scss). Toggle the body-level hover-active class once, then add the
+      // match class to each mark element whose annotationId shares a lemma with the hovered
+      // token. Editor-side annotation marks already carry the `annotationId-{id}` class added
+      // by TypedMarkNode.createDOM. Per PT9 fidelity, non-matching words receive NO visual
+      // change - dimming them would create a false equivalence between "shares lemma" and
+      // "has no link at all."
+      // `target.ownerDocument` gives us the iframe's document; `document` alone would target
+      // the main renderer frame.
       const { ownerDocument } = target;
       ownerDocument.body.classList.add('er-marble-hover-active');
       matchingIds.forEach((matchingId) => {
@@ -515,7 +516,6 @@ export function EnhancedScripturePane({
         });
       });
       activeMatchSetRef.current.clear();
-      activeDimSetRef.current.clear();
     };
 
     const applyChunked = async () => {
@@ -571,11 +571,10 @@ export function EnhancedScripturePane({
       );
     });
 
-    // Capture ref-stored Set instances so the cleanup function uses the same Sets the effect
-    // populated. The ref objects themselves never change identity (useRef), but the lint rule
-    // can't prove that - capturing here also makes intent explicit.
+    // Capture the ref-stored Set instance so the cleanup function uses the same Set the effect
+    // populated. The ref object itself never changes identity (useRef), but the lint rule can't
+    // prove that - capturing here also makes intent explicit.
     const matchSet = activeMatchSetRef.current;
-    const dimSet = activeDimSetRef.current;
 
     return () => {
       cancelled = true;
@@ -586,8 +585,9 @@ export function EnhancedScripturePane({
         // eslint-disable-next-line no-null/no-null
         activePopoverIdRef.current = null;
       }
-      // CSS-based dim/match cleanup - removeAnnotation calls for hover types are no-ops
-      // now since we never added them as editor annotations (see _marble-overrides.scss).
+      // CSS-based hover-match cleanup - clear the body-level hover class and the per-mark
+      // match class. No removeAnnotation calls for hover types because we never added them as
+      // editor annotations (see _marble-overrides.scss).
       const cleanupDocument = globalThis.document;
       cleanupDocument.body.classList.remove('er-marble-hover-active');
       matchSet.forEach((matchId) => {
@@ -597,7 +597,6 @@ export function EnhancedScripturePane({
         });
       });
       matchSet.clear();
-      dimSet.clear();
       wordAnnotations.forEach((a) => {
         editor.removeAnnotation(annotationTypeFor(a.kind), a.annotationId);
       });
