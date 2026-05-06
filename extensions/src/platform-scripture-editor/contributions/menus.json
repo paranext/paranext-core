@@ -119,6 +119,13 @@
             "command": "platformScripture.openPunctuationInventory"
           },
           {
+            "label": "%markersChecklist_menu_openTool%",
+            "localizeNotes": "Scripture editor top menu > Tools > Markers Checklist... (opens the markers checklist for the editor's active project)",
+            "group": "platformScriptureEditor.inventory",
+            "order": 5,
+            "command": "platformScripture.openMarkersChecklist"
+          },
+          {
             "label": "%webView_platformScriptureEditor_openChecks%",
             "group": "platformScriptureEditor.checks",
             "order": 3,

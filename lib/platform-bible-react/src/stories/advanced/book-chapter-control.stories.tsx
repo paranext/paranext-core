@@ -12,7 +12,27 @@ type BookChapterControlWrapperProps = {
   handleSubmit: (scrRef: SerializedVerseRef) => void;
   className?: string;
   getActiveBookIds?: () => string[];
+  getEndVerse?: (bookId: string, chapterNum: number) => number;
 };
+
+/**
+ * Sample verse-count table for stories. Real consumers will typically derive this from a
+ * versification service. This is just enough data to demonstrate verse selection.
+ */
+const SAMPLE_VERSE_COUNTS: Record<string, Record<number, number>> = {
+  GEN: { 1: 31, 2: 25, 3: 24 },
+  PSA: { 23: 6, 117: 2, 119: 176, 135: 21 },
+  MAT: { 1: 25, 5: 48, 15: 39 },
+  JHN: { 3: 36 },
+  ROM: { 8: 39, 12: 21 },
+  '1CO': { 13: 13 },
+  REV: { 22: 21 },
+  OBA: { 1: 21 },
+};
+
+function sampleGetEndVerse(bookId: string, chapterNum: number): number {
+  return SAMPLE_VERSE_COUNTS[bookId]?.[chapterNum] ?? 30;
+}
 
 // Wrapper component to handle state
 function BookChapterControlWrapper({
@@ -986,6 +1006,158 @@ function BookChapterControlWithRecentSearches({
     </ThemeProvider>
   );
 }
+
+export const WithDisabledReferences: Story = {
+  args: {
+    scrRef: {
+      book: 'REV',
+      chapterNum: 22,
+      verseNum: 21,
+    },
+    getEndVerse: sampleGetEndVerse,
+    disableReferencesUpTo: {
+      book: 'MAT',
+      chapterNum: 5,
+      verseNum: 10,
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Disabled References** - When \`disableReferencesUpTo\` is provided, any reference that comes
+strictly before the given one is shown as disabled: books before MAT, chapters before MAT 5,
+and verses before MAT 5:10. Useful for range pickers where the "end" selector should not allow
+picking a reference before the "start".
+        `,
+      },
+    },
+  },
+};
+
+export const WithVerseSelection: Story = {
+  args: {
+    scrRef: {
+      book: 'JHN',
+      chapterNum: 3,
+      verseNum: 16,
+    },
+    getEndVerse: sampleGetEndVerse,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Verse Selection** - When the \`getEndVerse\` prop is provided, the control enables verse
+selection. After clicking a chapter in the chapter grid, the control transitions to a verse
+selection sub-screen instead of submitting immediately. Additionally, typing a reference with a
+chapter-verse separator (e.g. "John 3:" or "John 3:16") shows a verse grid below the top match.
+        `,
+      },
+    },
+  },
+};
+
+export const VerseSelectionByTyping: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    getEndVerse: sampleGetEndVerse,
+  },
+  play: async ({ canvas, userEvent, step, args }) => {
+    await step('Open control and type reference with colon', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+
+      const dropdownContent = getDropdown();
+      const searchInput = within(dropdownContent).getByRole(INPUT_ROLE);
+      await userEvent.type(searchInput, 'John 3:');
+    });
+
+    await step('Click verse 16 from the verse grid', async () => {
+      const dropdownContent = getDropdown();
+      const verse16 = await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, {
+        name: '16',
+      });
+      await userEvent.click(verse16);
+    });
+
+    await step('Verify submission with selected verse', async () => {
+      await expect(args.handleSubmit).toHaveBeenCalledWith({
+        book: 'JHN',
+        chapterNum: 3,
+        verseNum: 16,
+      });
+      await expectPopoverToBeClosed();
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Typing a reference with the chapter-verse separator present (e.g. "John 3:") shows the verse grid so the user can pick a verse.',
+      },
+    },
+  },
+};
+
+export const VerseSelectionFromChapterGrid: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    getEndVerse: sampleGetEndVerse,
+  },
+  play: async ({ canvas, userEvent, step, args }) => {
+    await step('Open control and click Matthew', async () => {
+      const trigger = canvas.getByRole(TRIGGER_ROLE);
+      await userEvent.click(trigger);
+      await expectPopoverToBeOpenAndVisible();
+
+      const dropdownContent = getDropdown();
+      const matthewItem = within(dropdownContent).getByText('Matthew');
+      await userEvent.click(matthewItem);
+    });
+
+    await step('Click chapter 5 from chapter grid', async () => {
+      const dropdownContent = getDropdown();
+      const chapter5 = await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, {
+        name: '5',
+      });
+      await userEvent.click(chapter5);
+    });
+
+    await step('Verify verse grid appears (did not submit yet)', async () => {
+      await expect(args.handleSubmit).not.toHaveBeenCalled();
+      const dropdownContent = getDropdown();
+      const verse3 = await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, {
+        name: '3',
+      });
+      await expect(verse3).toBeInTheDocument();
+    });
+
+    await step('Click verse 3 to submit', async () => {
+      const dropdownContent = getDropdown();
+      const verse3 = within(dropdownContent).getByRole(CHAPTER_BUTTON_ROLE, { name: '3' });
+      await userEvent.click(verse3);
+    });
+
+    await step('Verify submission', async () => {
+      await expect(args.handleSubmit).toHaveBeenCalledWith({
+        book: 'MAT',
+        chapterNum: 5,
+        verseNum: 3,
+      });
+      await expectPopoverToBeClosed();
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'After selecting a chapter from the chapter grid, the control shows a verse grid instead of submitting immediately. The user then picks the verse to finalize the reference.',
+      },
+    },
+  },
+};
 
 export const WithRecentSearches: Story = {
   args: {

@@ -9,11 +9,12 @@ import {
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
-  ComboBox,
-  ComboBoxGroup,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
+  OpenProjectTab,
   Progress,
+  ProjectSelector,
+  ProjectSelectorProject,
   Select,
   SelectContent,
   SelectItem,
@@ -23,6 +24,7 @@ import {
   useEvent,
   usePromise,
 } from 'platform-bible-react';
+import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   deepEqual,
   formatReplacementString,
@@ -52,6 +54,7 @@ import {
 } from './checks-side-panel.utils';
 import { CHECK_RESULTS_INVALIDATED_EVENT } from './checks/check.model';
 import { CheckCard, CheckStates } from './checks/checks-side-panel/check-card.component';
+import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -82,7 +85,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   useWebViewScrollGroupScrRef,
   useWebViewState,
 }: WebViewProps) {
-  const [scrRef, setScrRef, ,] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
   const [selectedCheckId, setSelectedCheckId] = useState<string>('');
   const [selectedCheckTypeIds, setSelectedCheckTypeIds] = useWebViewState<string[]>(
     'selectedCheckTypes',
@@ -136,6 +139,15 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const editorWebViewController = useWebViewController(
     'platformScriptureEditor.react',
     editorWebViewId,
+  );
+
+  // Track all project-bound tabs via the shared hook. `openTabsRich` retains webViewId +
+  // webViewType for tab-dedup logic in `handleSelectProject` (Task 14). `openTabs` is the
+  // lighter shape that ProjectSelector's `openTabs` prop expects.
+  const openTabsRich = useOpenProjectTabs();
+  const openTabs = useMemo<OpenProjectTab[]>(
+    () => openTabsRich.map((t) => ({ projectId: t.projectId, scrollGroupId: t.scrollGroupId })),
+    [openTabsRich],
   );
 
   const invalidateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -658,10 +670,48 @@ global.webViewComponent = function ChecksSidePanelWebView({
   );
 
   const handleSelectProject = useCallback(
-    (newProjectId: string) => {
-      updateWebViewDefinition({ projectId: newProjectId });
+    (newSelection: { projectId: string; scrollGroupId: ScrollGroupId }) => {
+      // Q5 — Theme 5 #8: focus existing editor tab if present instead of opening duplicate.
+      const existingEditorTab = openTabsRich.find(
+        (t) =>
+          t.projectId === newSelection.projectId &&
+          t.webViewType === 'platformScriptureEditor.react',
+      );
+      if (existingEditorTab) {
+        papi.window
+          .setFocus({ focusType: 'webView', id: existingEditorTab.webViewId })
+          .catch((err: unknown) =>
+            logger.debug(`checks-side-panel: setFocus failed: ${getErrorMessage(err)}`),
+          );
+        // Adopt the existing tab's scroll group rather than the user-clicked one to keep
+        // bindings consistent.
+        updateWebViewDefinition({ projectId: newSelection.projectId });
+        setScrollGroupId(existingEditorTab.scrollGroupId);
+        return;
+      }
+      updateWebViewDefinition({ projectId: newSelection.projectId });
+      setScrollGroupId(newSelection.scrollGroupId);
     },
-    [updateWebViewDefinition],
+    [openTabsRich, updateWebViewDefinition, setScrollGroupId],
+  );
+
+  const handleOpenProjectInGroup = useCallback(
+    async (projectIdToOpen: string, scrollGroupIdToOpen: ScrollGroupId) => {
+      try {
+        await papi.webViews.openWebView(
+          'platformScriptureEditor.react',
+          undefined,
+          // The editor's webview provider attaches `scrollGroupScrRef` when constructing its
+          // definition. We pass it via options for the provider to honor; if the provider ignores
+          // it, the editor still opens and the user can re-bind the scroll group from the tab.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          { projectId: projectIdToOpen, scrollGroupScrRef: scrollGroupIdToOpen } as never,
+        );
+      } catch (error) {
+        logger.debug(`Failed to open scripture editor tab: ${getErrorMessage(error)}`);
+      }
+    },
+    [],
   );
 
   const handleSelectScope = useCallback(
@@ -677,41 +727,18 @@ global.webViewComponent = function ChecksSidePanelWebView({
     setSelectedCheckTypeIds(updatedCheckIds);
   };
 
-  type ProjectEntry = {
-    id: string;
-    fullName: string;
-    shortName: string;
-    label: string;
-    secondaryLabel?: string;
-  };
-
-  const projectOptionsGrouped = useMemo<ComboBoxGroup<ProjectEntry>[]>(() => {
-    const allProjects = Object.entries(projectIdsAndNames)
-      .sort(([, a], [, b]) =>
-        a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
-      )
-      .map(([id, project]) => ({
-        id,
-        fullName: project.fullName,
-        shortName: project.shortName,
-        label: project.shortName,
-        secondaryLabel: project.fullName,
-      }));
-    return [
-      {
-        groupHeading:
-          localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
-        options: allProjects,
-      },
-    ];
-  }, [projectIdsAndNames, localizedStrings]);
-
-  const selectedProjectOption = useMemo(
+  const sortedProjects = useMemo<ProjectSelectorProject[]>(
     () =>
-      projectOptionsGrouped
-        .flatMap((group) => group.options)
-        .find((option) => option.id === projectId),
-    [projectOptionsGrouped, projectId],
+      Object.entries(projectIdsAndNames)
+        .sort(([, a], [, b]) =>
+          a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }),
+        )
+        .map(([id, project]) => ({
+          id,
+          shortName: project.shortName,
+          fullName: project.fullName,
+        })),
+    [projectIdsAndNames],
   );
 
   const getScopeLabel = useCallback(
@@ -770,11 +797,16 @@ global.webViewComponent = function ChecksSidePanelWebView({
       {/* Check configuration */}
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
         {/* Project Filter */}
-        <ComboBox<ProjectEntry>
-          options={projectOptionsGrouped}
-          value={selectedProjectOption}
-          onChange={(newProject) => handleSelectProject(newProject.id)}
-          getButtonLabel={(project) => project.shortName}
+        <ProjectSelector
+          mode="projectScrollGroup"
+          projects={sortedProjects}
+          openTabs={openTabs}
+          selection={{
+            projectId,
+            scrollGroupId: typeof scrollGroupId === 'number' ? scrollGroupId : undefined,
+          }}
+          onChangeSelection={handleSelectProject}
+          onOpenProjectInGroup={handleOpenProjectInGroup}
           buttonPlaceholder={
             localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
           }
@@ -784,10 +816,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
           ariaLabel={
             localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
           }
-          buttonVariant="outline"
           buttonClassName="tw-flex-1 tw-min-w-32 tw-font-normal"
-          popoverContentClassName="tw-w-[300px]"
-          alignDropDown="start"
         />
 
         {/* Scope Filter */}

@@ -104,6 +104,26 @@ export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
+export {
+  default as ProjectSelector,
+  scrollGroupLetter,
+  type ProjectSelectorProps,
+  type ProjectSelectorLocalizedStrings,
+  type ProjectSelectorMode,
+  type ProjectSelectorProject,
+  type OpenProjectTab,
+  type ProjectPair,
+  type ProjectSelection,
+  type ProjectMultiSelection,
+  type ProjectScrollGroupSelection,
+  type ProjectRow,
+} from './components/advanced/project-selector/project-selector.component';
+export {
+  computeRows,
+  partitionAndSort,
+  type RowSection,
+  type ComputeRowsArgs,
+} from './components/advanced/project-selector/project-selector.rows';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
   default as SettingsSidebar,
@@ -123,7 +143,10 @@ export type {
 } from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 export { default as ScopeSelector } from './components/advanced/scope-selector/scope-selector.component';
 export { SCOPE_SELECTOR_STRING_KEYS } from './components/advanced/scope-selector/scope-selector.component';
-export type { ScopeSelectorLocalizedStrings } from './components/advanced/scope-selector/scope-selector.component';
+export type {
+  ScopeSelectorLocalizedStrings,
+  ScopeSelectorVariant,
+} from './components/advanced/scope-selector/scope-selector.component';
 export {
   default as ScrollGroupSelector,
   type ScrollGroupSelectorProps,
@@ -162,6 +185,10 @@ export type {
 } from './components/basics/combo-box.component';
 export { EditorKeyboardShortcuts } from './components/basics/editor-keyboard-shortcuts.component';
 export { ErrorDump } from './components/basics/error-dump.component';
+export {
+  default as LinkedScrRefButton,
+  type LinkedScrRefButtonProps,
+} from './components/basics/linked-scr-ref-button.component';
 export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
 export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
 export { default as UndoRedoButtons } from './components/basics/undo-redo-buttons.component';
@@ -242,7 +269,7 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
-export type { Scope } from './components/utils/scripture.util';
+export type { Scope, ScopeWithRange } from './components/utils/scripture.util';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
@@ -263,6 +290,7 @@ export {
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,
+  Z_INDEX_TOOLTIP,
 } from './components/z-index';
 
 // Utils

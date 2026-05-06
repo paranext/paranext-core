@@ -32,6 +32,7 @@ import {
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
   ScopeSelector,
+  ScopeWithRange,
   Skeleton,
   Sonner,
   sonner,
@@ -1445,7 +1446,13 @@ global.webViewComponent = function FindWebView({
               <ScopeSelector
                 scope={scope}
                 availableScopes={['chapter', 'book', 'selectedBooks']}
-                onScopeChange={setScope}
+                // ScopeSelector's onScopeChange takes the wider ScopeWithRange. Find never enables
+                // `'range'` (not in availableScopes), so the narrowing wrapper just guards that
+                // contract before forwarding to the narrow `setScope` setter.
+                onScopeChange={(newScope: ScopeWithRange) => {
+                  if (newScope === 'range') return;
+                  setScope(newScope);
+                }}
                 availableBookInfo={booksPresent}
                 selectedBookIds={selectedBookIds}
                 onSelectedBookIdsChange={setSelectedBookIds}
