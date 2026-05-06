@@ -104,7 +104,7 @@ describe('useOpenProjectTabs', () => {
     expect(result.current).toEqual([]);
   });
 
-  it('skips webView with non-numeric scrollGroupScrRef', () => {
+  it('skips webView with non-numeric, non-undefined scrollGroupScrRef', () => {
     const { result } = renderHook(() => useOpenProjectTabs());
     const handler = mockOnDidOpenWebView.mock.calls[0][0];
     act(() =>
@@ -113,6 +113,58 @@ describe('useOpenProjectTabs', () => {
       }),
     );
     expect(result.current).toEqual([]);
+    act(() =>
+      handler({
+        webView: { id: 'wv-2', projectId: 'p-2', scrollGroupScrRef: null },
+      }),
+    );
+    expect(result.current).toEqual([]);
+  });
+
+  it('treats undefined scrollGroupScrRef as scroll group 0 (default)', () => {
+    const { result } = renderHook(() => useOpenProjectTabs());
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-1',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'p-1',
+          // scrollGroupScrRef intentionally omitted — fresh editors don't seed it
+        },
+      }),
+    );
+    expect(result.current).toEqual([
+      {
+        webViewId: 'wv-1',
+        projectId: 'p-1',
+        scrollGroupId: 0,
+        webViewType: 'platformScriptureEditor.react',
+      },
+    ]);
+  });
+
+  it('lowercases projectId so WebView (uppercase) matches PDP (lowercase)', () => {
+    const { result } = renderHook(() => useOpenProjectTabs());
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-1',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'AbCdEf',
+          scrollGroupScrRef: 0,
+        },
+      }),
+    );
+    expect(result.current).toEqual([
+      {
+        webViewId: 'wv-1',
+        projectId: 'abcdef',
+        scrollGroupId: 0,
+        webViewType: 'platformScriptureEditor.react',
+      },
+    ]);
   });
 
   it('removes tab on close event', () => {

@@ -19,12 +19,24 @@ interface WebViewEventLike {
 }
 
 /**
- * Subscribe to webView open/update/close events and yield project-bound tabs (entries with both a
- * `projectId` and a numeric `scrollGroupScrRef`). Optional `filter` narrows by webViewType — useful
- * for "editor tabs only" queries.
+ * Subscribe to webView open/update/close events and yield project-bound tabs (entries with a
+ * `projectId`). Optional `filter` narrows by webViewType — useful for "editor tabs only" queries.
  *
  * Replaces the inline subscription pattern duplicated in `checks-side-panel.web-view.tsx` and
  * `checklist.web-view.tsx`.
+ *
+ * Notes on normalization (handle pre-existing PAPI quirks so consumers see consistent data):
+ *
+ * - **Default scroll group**: tabs without an explicit `scrollGroupScrRef` are treated as scroll
+ *   group `0` (the default group). `platform-scripture-editor` keeps the editor's scroll group in
+ *   local React state and only writes it back to the WebView definition on a user change, so
+ *   freshly-opened editors return no `scrollGroupScrRef` field. Treating "missing" as group 0
+ *   matches what the editor itself shows. Non-numeric, non-undefined values (string, null) are
+ *   still rejected defensively.
+ * - **Lowercase projectId**: WebView definitions store `projectId` in upper-case while
+ *   PDP/Manage-Books APIs return lower-case. The hook lowercases on the way out so consumer-side
+ *   string comparisons (e.g. `collectOpenTabsByProject`) succeed regardless of which side wrote the
+ *   casing.
  */
 export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWebView[] {
   const [tabsMap, setTabsMap] = useState<Map<string, OpenProjectTabWithWebView>>(() => new Map());
@@ -34,13 +46,20 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
     const upsert = (webView: WebViewEventLike) => {
       const { id, projectId, scrollGroupScrRef, webViewType } = webView;
       const passesFilter = !filter || (webViewType !== undefined && filter({ webViewType }));
+      // See JSDoc above: undefined → default group 0; numeric → as-is; anything else → reject.
+      let scrollGroup: ScrollGroupId | undefined;
+      if (scrollGroupScrRef === undefined) {
+        scrollGroup = 0 as ScrollGroupId;
+      } else if (typeof scrollGroupScrRef === 'number') {
+        scrollGroup = scrollGroupScrRef as ScrollGroupId;
+      }
       const passes =
         typeof projectId === 'string' &&
         projectId.length > 0 &&
-        typeof scrollGroupScrRef === 'number' &&
+        scrollGroup !== undefined &&
         passesFilter;
       setTabsMap((prev) => {
-        if (!passes) {
+        if (!passes || scrollGroup === undefined || typeof projectId !== 'string') {
           if (!prev.has(id)) return prev;
           const next = new Map(prev);
           next.delete(id);
@@ -48,8 +67,10 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
         }
         const tab: OpenProjectTabWithWebView = {
           webViewId: id,
-          projectId,
-          scrollGroupId: scrollGroupScrRef,
+          // Normalize to lowercase so consumer-side comparisons against PDP/manage-books
+          // projectIds (which are lowercase) succeed regardless of WebView casing.
+          projectId: projectId.toLowerCase(),
+          scrollGroupId: scrollGroup,
           webViewType: webViewType ?? '',
         };
         const next = new Map(prev);
