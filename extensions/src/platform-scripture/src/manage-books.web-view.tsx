@@ -23,8 +23,8 @@ import { WebViewProps } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { OpenProjectTab, ProjectSelectorProject } from 'platform-bible-react';
+import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
-import { getErrorMessage } from 'platform-bible-utils';
 import {
   AlertEntry,
   EstherTemplate,
@@ -223,20 +223,81 @@ global.webViewComponent = function ManageBooksWebView({
     () => persistedProjectId || initialProjectId || '',
   );
 
+  // Pull all the localization strings the dialog + picker need in one batch. Including the
+  // picker keys here ensures the inline-rendered picker reads from the same string map and
+  // localization fetches happen as a single round-trip.
+  // (Hoisted above the project-change effect so the effect can read the localized title
+  // template when computing the new tab title.)
+  const stringKeys = useMemo(
+    () => [...MANAGE_BOOKS_DIALOG_STRING_KEYS, ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS],
+    [],
+  );
+  const [localizedStrings] = useLocalizedStrings(stringKeys);
+
   // Sync local → persisted whenever projectId changes.
   // Theme C wiring: if the dialog opened with no project context (main-menu
   // invocation), seed the projectId from the first available scripture project
   // once the manage-books NetworkObject resolves. The setter is a no-op when
   // projectId is already set so this only fires for the cold-open case.
+  //
+  // Per Sebastian review item 25 (2026-05-06): also recompute the dock-tab title
+  // from the new project's `platform.name` setting and pass it to
+  // `updateWebViewDefinition` so the tab label tracks project switches in real
+  // time. Mirrors `manage-books.web-view-provider.ts` getWebView's title shape:
+  //   `${titleTemplate}` when no project, otherwise
+  //   `${titleTemplate} — {projectName}` (formatted via formatReplacementString).
+  // Keeping these two title-construction sites in sync is intentional — the
+  // initial title (provider) and update title (here) MUST match so the user
+  // does not see the title shape change between cold-open and project switch.
+  // Persist projectId to the web view's saved state on change. Kept as its own
+  // effect so the title-update effect below can be triggered by `projectId`-only
+  // and not get cancelled when `setPersistedProjectId` triggers a re-render.
   useEffect(() => {
     if (projectId && projectId !== persistedProjectId) {
       setPersistedProjectId(projectId);
-      // Also update the dock-tab title to reflect the new project — keeps
-      // the platform tab label aligned with the in-dialog header. The PAPI
-      // helper is synchronous (returns boolean: did the update apply); a
-      // false return is non-fatal so we just log it.
+    }
+  }, [projectId, persistedProjectId, setPersistedProjectId]);
+
+  // Update the dock-tab title (and projectId) on project change. Per Sebastian
+  // review item 25 (2026-05-06), the tab label must track the active project
+  // in real time. Mirrors `manage-books.web-view-provider.ts:getWebView` so the
+  // initial title (cold open) and update title (project switch) both produce
+  // `${titleTemplate}` (no project) or `${titleTemplate} — {projectName}`.
+  //
+  // `lastAppliedProjectIdRef` dedupes when this effect re-runs for non-projectId
+  // dep changes (e.g. `localizedStrings` arriving from the localization service).
+  // It must be a ref (not state) so the dedupe survives React's render → cleanup →
+  // re-run cycle without cancelling the in-flight async PDP fetch.
+  const lastAppliedProjectIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!projectId) return undefined;
+    if (lastAppliedProjectIdRef.current === projectId) return undefined;
+    lastAppliedProjectIdRef.current = projectId;
+
+    let cancelled = false;
+    (async () => {
+      // Resolve the projectName (display name) the same way the provider does:
+      // `platform.name` setting, falling back to projectId when unavailable.
+      let projectName: string | undefined;
       try {
-        const ok = updateWebViewDefinition({ projectId });
+        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+        const nameSetting = await pdp.getSetting('platform.name');
+        projectName = typeof nameSetting === 'string' ? nameSetting : projectId;
+      } catch {
+        projectName = projectId;
+      }
+      if (cancelled) return;
+
+      // Compose the title using the localized template; if the localized string
+      // hasn't loaded yet (string-fetch race), fall back to the English default
+      // so the title still updates.
+      const titleTemplate = localizedStrings['%manageBooks_dialog_title%'] ?? 'Manage books';
+      const title = projectName
+        ? formatReplacementString(`${titleTemplate} — {projectName}`, { projectName })
+        : titleTemplate;
+
+      try {
+        const ok = updateWebViewDefinition({ projectId, title });
         if (!ok) {
           logger.debug(
             `manage-books: updateWebViewDefinition returned false (likely racing the saved-definition lifecycle)`,
@@ -247,17 +308,12 @@ global.webViewComponent = function ManageBooksWebView({
           `manage-books: updateWebViewDefinition threw: ${e instanceof Error ? e.message : String(e)}`,
         );
       }
-    }
-  }, [projectId, persistedProjectId, setPersistedProjectId, updateWebViewDefinition]);
+    })();
 
-  // Pull all the localization strings the dialog + picker need in one batch. Including the
-  // picker keys here ensures the inline-rendered picker reads from the same string map and
-  // localization fetches happen as a single round-trip.
-  const stringKeys = useMemo(
-    () => [...MANAGE_BOOKS_DIALOG_STRING_KEYS, ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS],
-    [],
-  );
-  const [localizedStrings] = useLocalizedStrings(stringKeys);
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, updateWebViewDefinition, localizedStrings]);
 
   // Build a typed subset for the picker by copying the picker's keys out of the shared map.
   // This avoids a `as`-assertion (banned by no-type-assertion lint rule) at the wire boundary.
