@@ -325,10 +325,10 @@ function compareRows(a: ProjectRow, b: ProjectRow): number {
  * project rows land in "Other projects".
  *
  * Special case: when grouping is on but the "Open tabs" section would be empty (no project in the
- * list is currently open in any scroll group), we fall back to a flat list. A lone "Other
- * projects" heading without a partner section reads as a bug — the user wonders what they're
- * "other" to. This commonly happens when the consumer hasn't (or can't) seed `openTabs` with
- * already-open tabs at mount time.
+ * list is currently open in any scroll group), we fall back to a flat list. A lone "Other projects"
+ * heading without a partner section reads as a bug — the user wonders what they're "other" to. This
+ * commonly happens when the consumer hasn't (or can't) seed `openTabs` with already-open tabs at
+ * mount time.
  */
 export function partitionAndSort(
   rows: readonly ProjectRow[],

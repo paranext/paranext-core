@@ -504,6 +504,17 @@ export type ProjectSelectorProject = {
 	fullName: string;
 	language?: string;
 	languageCode?: string;
+	/**
+	 * When `true`, the row for this project is rendered muted, is not selectable, and the
+	 * `disabledReason` (if provided) is surfaced in the row tooltip. Use when a project is present in
+	 * the list but cannot be picked in the current context (e.g. a read-only target, a reference
+	 * project that lacks the required data type). Already-selected pairs that become disabled remain
+	 * visible — the selector renders them as disabled-and-selected so the user can see the prior
+	 * selection but can't toggle it again.
+	 */
+	isDisabled?: boolean;
+	/** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
+	disabledReason?: string;
 };
 /** A project that is currently open in a specific scroll group. */
 export type OpenProjectTab = {
@@ -577,6 +588,13 @@ export type ProjectRow = {
 	 * reopens the tab via `onOpenProjectInGroup`.
 	 */
 	isBoundButClosed: boolean;
+	/**
+	 * Mirrors {@link ProjectSelectorProject.isDisabled}. When true, the row renders muted and is not
+	 * selectable. Disabled-and-selected rows are allowed (still visible, surface prior selection).
+	 */
+	isDisabled: boolean;
+	/** Mirrors {@link ProjectSelectorProject.disabledReason}. Surfaced in the row tooltip. */
+	disabledReason?: string;
 };
 export type ComputeRowsArgs = {
 	mode: "project";
@@ -613,6 +631,12 @@ export type RowSection = {
  * "Open tabs" rows are: open-group rows (project-multi / projectScrollGroup modes) and
  * `project`-mode rows whose project is open somewhere. Bound-but-closed synthetic rows and not-open
  * project rows land in "Other projects".
+ *
+ * Special case: when grouping is on but the "Open tabs" section would be empty (no project in the
+ * list is currently open in any scroll group), we fall back to a flat list. A lone "Other projects"
+ * heading without a partner section reads as a bug — the user wonders what they're "other" to. This
+ * commonly happens when the consumer hasn't (or can't) seed `openTabs` with already-open tabs at
+ * mount time.
  */
 export declare function partitionAndSort(rows: readonly ProjectRow[], groupByOpenTabs: boolean): RowSection[];
 export type ProjectSelectorLocalizedStrings = {
