@@ -108,15 +108,17 @@ const BOOK_PILL_BASE_CLASS =
   'tw-flex tw-w-full tw-items-center tw-gap-2 tw-rounded tw-border tw-px-2 tw-py-1 tw-text-start';
 
 /**
- * Compose the pill's color/border classes for a given `present` flag. Present books get the primary
- * tint; absent books get a dashed primary outline plus muted text.
+ * Compose the pill's color/border classes for a given `present` flag. In-project (`present`) books
+ * use the accent tone at rest and shift to primary on hover; absent books get a dashed primary
+ * outline plus muted text and the same primary hover treatment. Per Sebastian item 24
+ * (2026-05-06).
  */
 const bookPillClasses = (present: boolean): string =>
   cn(
     BOOK_PILL_BASE_CLASS,
-    'tw-transition-colors hover:tw-bg-accent hover:tw-text-accent-foreground',
+    'tw-transition-colors hover:tw-bg-primary hover:tw-text-primary-foreground',
     present
-      ? 'tw-border-primary/40 tw-bg-primary/5'
+      ? 'tw-border-primary/40 tw-bg-accent tw-text-accent-foreground'
       : 'tw-border-dashed tw-border-primary/40 tw-text-muted-foreground',
   );
 
@@ -717,7 +719,7 @@ export function BookGridSelector({
         className={cn(
           bookPillClasses(item.present),
           'tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-1',
-          isSelected && 'tw-text-primary',
+          isSelected && 'tw-text-accent-foreground',
           item.disabled && 'tw-cursor-not-allowed tw-opacity-50',
         )}
       >
@@ -832,7 +834,7 @@ export function BookGridSelector({
                   'tw-grid tw-auto-rows-min tw-gap-1 tw-text-sm',
                   group.label && 'tw-mt-0.5',
                   hoveredGroupLabel === group.label &&
-                    '[&_>li>button]:!tw-bg-accent [&_>li>button]:!tw-text-accent-foreground [&_>li>div]:!tw-bg-accent [&_>li>div]:!tw-text-accent-foreground',
+                    '[&_>li>button]:!tw-bg-primary [&_>li>button]:!tw-text-primary-foreground [&_>li>div]:!tw-bg-primary [&_>li>div]:!tw-text-primary-foreground',
                 )}
               >
                 {group.items.map((item, i) => {
