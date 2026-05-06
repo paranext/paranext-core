@@ -163,6 +163,10 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_create_method_referenceText%',
   '%manageBooks_create_referenceProjectPlaceholder%',
   '%manageBooks_create_basedOnInfo%',
+  // Sebastian review item 27 (2026-05-06): in Create > Based on, books that do
+  // not exist in the reference project are disabled in the grid with this
+  // tooltip ("Not in {0}", where {0} is the reference project's shortName).
+  '%manageBooks_create_book_notInReference%',
   // Copy mode
   '%manageBooks_copy_fromLabel%',
   '%manageBooks_copy_sourcePlaceholder%',

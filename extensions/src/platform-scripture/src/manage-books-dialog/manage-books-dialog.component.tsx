@@ -601,6 +601,34 @@ export function ManageBooksDialog({
     }
   }, [action, allBooks, current, copySource]);
 
+  // Per Sebastian review item 27 (2026-05-06): when the user picks a different
+  // reference project (or clears it / changes createMethod), prune any books from
+  // the current Create selection that are NOT in the new reference project's book
+  // set. Without this, switching reference projects could leave a stale selection
+  // that the grid renders as disabled while the footer still counts them as
+  // selected — the user would see a phantom selection count and the apply button
+  // would submit books the orchestrator can't template.
+  useEffect(() => {
+    if (action !== 'create') return;
+    if (createMethod !== 'fromTemplate') return;
+    if (!createReferenceBookState) return;
+    setSelectionsByAction((prev) => {
+      const currentSelection = prev.create;
+      if (!currentSelection || currentSelection.size === 0) return prev;
+      const filtered = new Set<string>();
+      let changed = false;
+      currentSelection.forEach((b) => {
+        if (createReferenceBookState.present.has(b)) {
+          filtered.add(b);
+        } else {
+          changed = true;
+        }
+      });
+      if (!changed) return prev;
+      return { ...prev, create: filtered };
+    });
+  }, [action, createMethod, createReferenceBookState]);
+
   // A7: seed copy selection with default-eligible books when source picked.
   useEffect(() => {
     if (action !== 'copy') return;
@@ -1236,6 +1264,28 @@ export function ManageBooksDialog({
         primaryDate = destDate;
       }
 
+      // Per Sebastian review item 27 (2026-05-06): in Create > Based on,
+      // books not present in the reference project are not selectable —
+      // there is no template content to base the new book on. Disable the
+      // pill at the grid level (defense in depth alongside the existing
+      // EXT-102 / TS-054 missing-model pre-flight prompt the dialog falls
+      // back to if the reference book set hadn't yet loaded).
+      let disabled: boolean | undefined;
+      let disabledReason: string | undefined;
+      if (
+        action === 'create' &&
+        createMethod === 'fromTemplate' &&
+        createReferenceBookState &&
+        createReferenceProject &&
+        !createReferenceBookState.present.has(book)
+      ) {
+        disabled = true;
+        disabledReason = fmtTemplate(
+          t('%manageBooks_create_book_notInReference%', 'Not in {0}'),
+          createReferenceProject.shortName,
+        );
+      }
+
       return {
         book,
         present,
@@ -1243,9 +1293,21 @@ export function ManageBooksDialog({
         statusLabel,
         primaryDate,
         secondaryDate,
+        disabled,
+        disabledReason,
       };
     });
-  }, [action, visibleBooks, current, copySource, importFiles, t]);
+  }, [
+    action,
+    visibleBooks,
+    current,
+    copySource,
+    importFiles,
+    createMethod,
+    createReferenceBookState,
+    createReferenceProject,
+    t,
+  ]);
 
   // Per-pill aria label, mirroring what the previous inline `<li>` provided.
   // Workflows where the row isn't toggleable still get the english book name

@@ -167,6 +167,7 @@
       "%manageBooks_copy_fromLabel%": "From",
       "%manageBooks_copy_sourcePlaceholder%": "Select project",
       "%manageBooks_create_basedOnInfo%": "Prefill with the same markers as a selected project",
+      "%manageBooks_create_book_notInReference%": "Not in {0}",
       "%manageBooks_create_emptyState_allPresent%": "This project already contains every canonical book.",
       "%manageBooks_create_method_chapterVerse%": "Create with all chapter and verse numbers",
       "%manageBooks_create_method_chapterVerse_disabledTooltip%": "Disabled because the selection contains only non-canonical books.",
