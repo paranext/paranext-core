@@ -384,10 +384,11 @@ export function ManageBooksDialog({
   const [selectionsByAction, setSelectionsByAction] = useState<Record<string, Set<string>>>({});
   const [filter, setFilter] = useState('');
   const [copySourceId, setCopySourceId] = useState<string | undefined>(undefined);
-  // Default Create method is Empty (matches PT9 `CreateBooksForm.Designer.cs` `rbnEmpty.Checked = true`).
-  // Empty allows the Create apply button to enable immediately once a book is selected; the user can
-  // change to ChapterAndVerse or FromTemplate for richer templates.
-  const [createMethod, setCreateMethod] = useState<ManageBooksCreateMethod>('empty');
+  // Default Create method is "Create based on" (FromTemplate). Per Sebastian item 11 (2026-05-06)
+  // the prompt copy now reads "Create based on" rather than "Based on", and the most useful default
+  // for users is to start by picking a reference project; they can switch to Empty or
+  // ChapterAndVerse if they prefer.
+  const [createMethod, setCreateMethod] = useState<ManageBooksCreateMethod>('fromTemplate');
   const [createReferenceId, setCreateReferenceId] = useState<string | undefined>(undefined);
   const [importFiles, setImportFiles] = useState<Record<string, ManageBooksImportFile>>({});
   const [importConflict, setImportConflict] = useState<
@@ -1353,42 +1354,34 @@ export function ManageBooksDialog({
     if (action === 'view')
       return fmtTemplate(t('%manageBooks_footer_summary_view%', 'Viewing {0}'), project.shortName);
     if (action === 'create') {
-      let methodLabel = t('%manageBooks_create_method_referenceText%', 'Based on');
-      if (createMethod === 'empty') {
-        methodLabel = t('%manageBooks_create_method_empty%', 'Empty book');
-      } else if (createMethod === 'chapterVerse') {
-        methodLabel = t(
-          '%manageBooks_create_method_chapterVerse%',
-          'With all chapter and verse numbers',
+      if (createMethod === 'empty')
+        return t('%manageBooks_footer_summary_create_empty%', 'Create from scratch');
+      if (createMethod === 'chapterVerse')
+        return t(
+          '%manageBooks_footer_summary_create_chapterVerse%',
+          'Create with chapter and verse numbers',
         );
-      }
-      return fmtTemplate(
-        t('%manageBooks_footer_summary_create%', 'Create in {0} — {1}'),
-        project.shortName,
-        methodLabel,
-      );
+      // fromTemplate
+      if (createReferenceProject)
+        return fmtTemplate(
+          t('%manageBooks_footer_summary_create_fromTemplate_with%', 'Create based on {0}'),
+          createReferenceProject.shortName,
+        );
+      return t('%manageBooks_footer_summary_create_fromTemplate_without%', 'Create based on…');
     }
-    if (action === 'delete')
-      return fmtTemplate(
-        t('%manageBooks_footer_summary_delete%', 'Delete from {0}'),
-        project.shortName,
-      );
+    if (action === 'delete') return t('%manageBooks_footer_summary_delete%', 'Delete books');
     if (action === 'copy') {
       if (copySourceProject)
         return fmtTemplate(
-          t('%manageBooks_footer_summary_copy_with%', 'Copy from {0} into {1}'),
+          t('%manageBooks_footer_summary_copy_with%', 'Copy from {0}'),
           copySourceProject.shortName,
-          project.shortName,
         );
-      return fmtTemplate(
-        t('%manageBooks_footer_summary_copy_without%', 'Copy into {0}'),
-        project.shortName,
-      );
+      return t('%manageBooks_footer_summary_copy_without%', 'Copy from…');
     }
     if (action === 'import')
       return fmtTemplate(
-        t('%manageBooks_footer_summary_import%', 'Import into {0}'),
-        project.shortName,
+        t('%manageBooks_footer_summary_import%', 'Import {0} file(s)'),
+        Object.keys(importFiles).length,
       );
     return '';
   })();
@@ -1644,7 +1637,7 @@ export function ManageBooksDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="empty">
-                        {t('%manageBooks_create_method_empty%', 'Empty book')}
+                        {t('%manageBooks_create_method_empty%', 'Create empty book')}
                       </SelectItem>
                       <SelectItem
                         value="chapterVerse"
@@ -1653,11 +1646,11 @@ export function ManageBooksDialog({
                       >
                         {t(
                           '%manageBooks_create_method_chapterVerse%',
-                          'With all chapter and verse numbers',
+                          'Create with all chapter and verse numbers',
                         )}
                       </SelectItem>
                       <SelectItem value="fromTemplate">
-                        {t('%manageBooks_create_method_referenceText%', 'Based on')}
+                        {t('%manageBooks_create_method_referenceText%', 'Create based on')}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -2016,17 +2009,56 @@ export function ManageBooksDialog({
                         {applyButtonLabel}
                       </Button>
                     );
-                    if (!disabledTooltip) return actionButton;
+                    // Tooltip body: when disabled use disabledTooltip; when enabled, only Create
+                    // and Copy have defined enabled-state tooltips per Sebastian item 20
+                    // (2026-05-06). Delete and Import fall through with no enabled tooltip and
+                    // render the bare button.
+                    let tooltipBody: string | undefined;
+                    if (disabled) {
+                      tooltipBody = disabledTooltip;
+                    } else if (action === 'create') {
+                      if (createMethod === 'empty') {
+                        tooltipBody = t(
+                          '%manageBooks_footer_enabledTooltip_create_empty%',
+                          'Create empty',
+                        );
+                      } else if (createMethod === 'chapterVerse') {
+                        tooltipBody = t(
+                          '%manageBooks_footer_enabledTooltip_create_chapterVerse%',
+                          'Create with all chapters and verses',
+                        );
+                      } else {
+                        // fromTemplate — prefer the picked reference project's short name; fall
+                        // back to a single ellipsis (U+2026) when no project is picked yet (the
+                        // disabled-state tooltip has already kicked in by then, but defend
+                        // against the case anyway).
+                        tooltipBody = fmtTemplate(
+                          t(
+                            '%manageBooks_footer_enabledTooltip_create_fromTemplate%',
+                            'Create based on {0}',
+                          ),
+                          createReferenceProject?.shortName ?? '…',
+                        );
+                      }
+                    } else if (action === 'copy') {
+                      tooltipBody = fmtTemplate(
+                        t('%manageBooks_footer_enabledTooltip_copy%', 'Copy from {0}'),
+                        copySourceProject?.shortName ?? '…',
+                      );
+                    }
+                    if (!tooltipBody) return actionButton;
                     return (
                       <>
-                        <span id={applyDisabledHintId} className="tw-sr-only">
-                          {disabledTooltip}
-                        </span>
+                        {disabled && (
+                          <span id={applyDisabledHintId} className="tw-sr-only">
+                            {tooltipBody}
+                          </span>
+                        )}
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span>{actionButton}</span>
                           </TooltipTrigger>
-                          <TooltipContent>{disabledTooltip}</TooltipContent>
+                          <TooltipContent>{tooltipBody}</TooltipContent>
                         </Tooltip>
                       </>
                     );

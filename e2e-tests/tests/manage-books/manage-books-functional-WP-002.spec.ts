@@ -635,8 +635,11 @@ test.describe('Manage Books — Greek Esther Template Picker (WP-002)', () => {
     await frame.locator('[data-testid="manage-books-sidebar-section-create"]').click();
     await frame.locator('ul[role="listbox"] li[data-book="ESG"]').click();
 
-    // Empty-book method (the default) — picker MUST NOT open. The default createMethod is
-    // 'empty' so we don't need to open the method dropdown; just click apply.
+    // Switch the method dropdown to Empty. The default createMethod was changed to
+    // 'fromTemplate' per Sebastian item 11 (2026-05-06), so this test must explicitly
+    // pick 'empty' before applying. The picker MUST NOT open for the empty-book path.
+    await frame.locator('#af-method').click();
+    await frame.getByRole('option', { name: /Create empty book|Empty book/i }).click();
     await frame.getByRole('button', { name: /Create .* in /i }).click();
 
     // Picker dialog must NOT be present.
