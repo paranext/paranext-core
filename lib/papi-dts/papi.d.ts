@@ -4181,18 +4181,6 @@ declare module 'shared/services/command.service' {
     ...args: Parameters<CommandHandlers[CommandName]>
   ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
   /**
-   * Send a command to the backend without retrying if the handler is not registered. Use during app
-   * shutdown where immediate failure is preferable to a retry delay.
-   *
-   * @param commandName Command name to send
-   * @param args Arguments to pass to the command handler
-   * @returns Promise that resolves with the command's return value
-   */
-  export const sendCommandNoRetry: <CommandName extends CommandNames>(
-    commandName: CommandName,
-    ...args: Parameters<CommandHandlers[CommandName]>
-  ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
-  /**
    * Creates a function that is a command function with a baked commandName. This is also nice because
    * you get TypeScript type support using this function.
    *

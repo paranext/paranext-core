@@ -40,7 +40,7 @@ import {
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
 } from '@shared/data/platform.data';
-import { GET_METHODS } from '@shared/data/rpc.model';
+import { CATEGORY_COMMAND, GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
@@ -50,7 +50,7 @@ import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
-import { SerializedRequestType } from '@shared/utils/util';
+import { serializeRequestType, SerializedRequestType } from '@shared/utils/util';
 import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
 import {
@@ -530,16 +530,21 @@ async function main() {
       // All errors are swallowed — extension may not be installed, or sync may fail.
       // Shutdown must never be permanently blocked.
       try {
-        await commandService.sendCommandNoRetry('paratextBibleSendReceive.cancelSync');
+        await networkService.requestNoRetry(
+          serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync'),
+        );
       } catch {
         /* no sync in progress, or extension unavailable */
       }
 
       try {
-        // waitForDuration resolves (doesn't throw) on timeout — errors only come from syncProjects
+        // waitForDuration always resolves — syncProjects errors are suppressed by Promise.any; catch is a safety net
         await waitForDuration(
           () =>
-            commandService.sendCommandNoRetry('paratextBibleSendReceive.syncProjects', undefined),
+            networkService.requestNoRetry(
+              serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.syncProjects'),
+              undefined,
+            ),
           SHUTDOWN_SYNC_TIME_OUT,
         );
       } catch {
