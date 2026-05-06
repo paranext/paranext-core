@@ -4,7 +4,14 @@
  * can import without dragging in React or PAPI.
  */
 
-import type { ManageBooksComparisonState } from './manage-books-dialog.types';
+import { ScrVersType } from '@sillsdev/scripture';
+import type {
+  ManageBooksComparisonState,
+  ManageBooksDialogLocalizedStrings,
+} from './manage-books-dialog.types';
+
+/** All localized string keys consumed by the dialog. */
+type DialogLocalizationKey = keyof ManageBooksDialogLocalizedStrings;
 
 /**
  * Format a localized template string by substituting positional `{0}`, `{1}`, … placeholders with
@@ -49,4 +56,63 @@ export const computeCompareState = (
   if (Number.isNaN(sourceMs) || Number.isNaN(destMs)) return 'undetermined';
   if (sourceMs === destMs) return 'filesAreSame';
   return sourceMs > destMs ? 'sourceIsNewer' : 'sourceIsOlder';
+};
+
+/**
+ * Map a versification value (numeric `ScrVersType` enum or its stringified form, as returned by
+ * `pdp.getSetting('platformScripture.versification')`) to the localization key for its display
+ * name. Per Vladimir review item 21 (2026-05-06), the dialog's header subtitle previously rendered
+ * the raw numeric enum (e.g. "4"), which is meaningless to users. The header now resolves the value
+ * through this helper and the surrounding template appends "Versification" so e.g.
+ * `ScrVersType.English` reads as "English Versification".
+ *
+ * Keep the switch arms aligned with `@sillsdev/scripture`'s `ScrVersType` enum order (Unknown=0,
+ * Original=1, Septuagint=2, Vulgate=3, English=4, RussianProtestant=5, RussianOrthodox=6).
+ */
+export const versificationLabelKey = (value: number | string): DialogLocalizationKey => {
+  const num = typeof value === 'string' ? Number(value) : value;
+  switch (num) {
+    case ScrVersType.Original:
+      return '%manageBooks_versification_original%';
+    case ScrVersType.Septuagint:
+      return '%manageBooks_versification_septuagint%';
+    case ScrVersType.Vulgate:
+      return '%manageBooks_versification_vulgate%';
+    case ScrVersType.English:
+      return '%manageBooks_versification_english%';
+    case ScrVersType.RussianProtestant:
+      return '%manageBooks_versification_russianProtestant%';
+    case ScrVersType.RussianOrthodox:
+      return '%manageBooks_versification_russianOrthodox%';
+    case ScrVersType.Unknown:
+    default:
+      return '%manageBooks_versification_unknown%';
+  }
+};
+
+/**
+ * English-fallback display name for a versification value. Mirrors `versificationLabelKey` and is
+ * supplied as the second argument to `t()` so the subtitle still reads sensibly when the matching
+ * localized string is absent (for unrecognised numeric inputs the dialog falls back to "Unknown",
+ * matching the `%manageBooks_versification_unknown%` localized copy).
+ */
+export const versificationFallbackName = (value: number | string): string => {
+  const num = typeof value === 'string' ? Number(value) : value;
+  switch (num) {
+    case ScrVersType.Original:
+      return 'Original';
+    case ScrVersType.Septuagint:
+      return 'Septuagint';
+    case ScrVersType.Vulgate:
+      return 'Vulgate';
+    case ScrVersType.English:
+      return 'English';
+    case ScrVersType.RussianProtestant:
+      return 'Russian Protestant';
+    case ScrVersType.RussianOrthodox:
+      return 'Russian Orthodox';
+    case ScrVersType.Unknown:
+    default:
+      return 'Unknown';
+  }
 };

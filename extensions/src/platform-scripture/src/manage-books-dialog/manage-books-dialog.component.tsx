@@ -55,7 +55,12 @@ import {
   ManageBooksImportStrategy,
   MutationResult,
 } from './manage-books-dialog.types';
-import { computeCompareState, fmtTemplate } from './manage-books-dialog.utils';
+import {
+  computeCompareState,
+  fmtTemplate,
+  versificationFallbackName,
+  versificationLabelKey,
+} from './manage-books-dialog.utils';
 import { DeleteConfirmPrompt } from './delete-confirm-prompt.component';
 import { CreatePreflightPrompt } from './create-preflight-prompt.component';
 import { UsxConfirmPrompt } from './usx-confirm-prompt.component';
@@ -1133,24 +1138,30 @@ export function ManageBooksDialog({
     }
   };
 
-  // Subtitle reports counts over the canonical-only subset (matching PT9 "X of 88 canonical books"
-  // copy). The wider `allBooks` universe includes XXA/FRT/etc. as creatable options but those are
-  // not "canonical books" by definition.
-  const canonicalBooks = useMemo(() => allBooks.filter((b) => isCanonicalId(b)), [allBooks]);
-  const totalPresent = canonicalBooks.filter((b) => current.present.has(b)).length;
+  // Vladimir review item 21 (2026-05-06): the subtitle was rewritten from
+  // "{count} of {88} canonical books in {short} ({vrs})" to "{count} books in {full} ⋅ {vrs name}
+  // Versification". The new copy reports the absolute number of books currently in the project
+  // (not capped to canonical) so users with deuterocanonical or extra books see them counted.
+  const totalPresent = current.present.size;
 
+  // Vladimir review item 21 (2026-05-06): the subtitle now reads
+  // "{count} books in {full project name} ⋅ {versification name} Versification". The
+  // versification name is resolved from the numeric `ScrVersType` enum (which `loadVersification`
+  // returns as a string) via `versificationLabelKey` + `t()`. The trailing literal " Versification"
+  // is part of the template, not the localized name (the names are bare — "English", "Vulgate",
+  // …). Falls back to the no-versification template when the versification setting is absent.
+  // Project label prefers `fullName` (the project's `platform.fullName` setting) and falls back to
+  // `shortName` so the subtitle reads naturally for both fully-configured and bare-bones projects.
+  const projectDisplayName = project.fullName ?? project.shortName;
   const subtitleTemplate = versification
-    ? t('%manageBooks_header_subtitle%', '{0} of {1} canonical books in {2} ({3})')
-    : t('%manageBooks_header_subtitleNoVersification%', '{0} of {1} canonical books in {2}');
+    ? t('%manageBooks_header_subtitle%', '{0} books in {1} ⋅ {2} Versification')
+    : t('%manageBooks_header_subtitleNoVersification%', '{0} books in {1}');
+  const versificationName = versification
+    ? t(versificationLabelKey(versification), versificationFallbackName(versification))
+    : '';
   const headerSubtitle = versification
-    ? fmtTemplate(
-        subtitleTemplate,
-        totalPresent,
-        canonicalBooks.length,
-        project.shortName,
-        versification,
-      )
-    : fmtTemplate(subtitleTemplate, totalPresent, canonicalBooks.length, project.shortName);
+    ? fmtTemplate(subtitleTemplate, totalPresent, projectDisplayName, versificationName)
+    : fmtTemplate(subtitleTemplate, totalPresent, projectDisplayName);
 
   const filterChipLabel = (s: string): string => {
     switch (s) {

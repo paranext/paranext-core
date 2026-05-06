@@ -165,6 +165,17 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_header_projectLabel%',
   '%manageBooks_header_subtitle%',
   '%manageBooks_header_subtitleNoVersification%',
+  // Vladimir review item 21 (2026-05-06): the header subtitle's `{2}` placeholder used to
+  // resolve to the raw numeric `ScrVersType` enum value (e.g. "4"). It now resolves to one of
+  // these localized names via `versificationLabelKey()`; the surrounding template appends
+  // "Versification" so the final reads e.g. "{0} books in {1} ⋅ English Versification".
+  '%manageBooks_versification_original%',
+  '%manageBooks_versification_septuagint%',
+  '%manageBooks_versification_vulgate%',
+  '%manageBooks_versification_english%',
+  '%manageBooks_versification_russianProtestant%',
+  '%manageBooks_versification_russianOrthodox%',
+  '%manageBooks_versification_unknown%',
   // View-mode cross-launch buttons
   '%manageBooks_view_openScrRefSettings%',
   '%manageBooks_view_openProjectCanons%',
