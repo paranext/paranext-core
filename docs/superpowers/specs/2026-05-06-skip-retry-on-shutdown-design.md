@@ -19,7 +19,7 @@ This does not add a "check if commands are registered" API. The existing `try/ca
 
 ### Approach
 
-Thread a `skipRetry` flag from `commandService.sendCommandNoRetry` down to `requestWithRetry`. When `skipRetry` is `true`, `requestWithRetry` caps `MAX_REQUEST_ATTEMPTS` at 1, returning the `MethodNotFound` error immediately on the first failed attempt. All existing callers use the default (`skipRetry = false`) and are unaffected.
+Thread a `skipRetry` flag from `commandService.sendCommandNoRetry` down to the RPC handler implementations. When `skipRetry` is `true`, each handler calls the request callback directly once instead of passing it to `requestWithRetry`. `requestWithRetry` is not modified. All existing callers use the default (`skipRetry = false`) and are unaffected.
 
 ### Call Chain
 
@@ -28,26 +28,13 @@ main.ts (close handler)
   └─ commandService.sendCommandNoRetry        [command.service.ts — new export]
        └─ networkService.requestNoRetry       [network.service.ts — new export]
             └─ jsonRpc.request(..., skipRetry=true)
-                 ├─ RpcWebSocketListener.request  [thread skipRetry through]
-                 ├─ RpcServer.request             [thread skipRetry through]
-                 └─ RpcClient.request             [thread skipRetry through]
-                      └─ requestWithRetry(..., skipRetry=true)  [max 1 attempt]
+                 ├─ RpcWebSocketListener.request  → calls requestCallback() directly (no retry)
+                 ├─ RpcServer.request             → calls requestCallback() directly (no retry)
+                 └─ RpcClient.request             → calls requestCallback() directly (no retry)
+                      (requestWithRetry is NOT modified)
 ```
 
 ### File-by-File Changes
-
-**`src/shared/data/rpc.model.ts`**
-
-Add `skipRetry = false` as the last parameter to `requestWithRetry`. When `true`, the loop runs for at most 1 attempt:
-
-```typescript
-export async function requestWithRetry(
-  requestCallback: () => Promise<JSONRPCResponse>,
-  name: string,
-  requestType: string,
-  skipRetry = false,
-): Promise<JSONRPCResponse>;
-```
 
 **`src/shared/models/rpc.interface.ts`**
 
@@ -62,7 +49,14 @@ request: (requestType: SerializedRequestType, requestParams: RequestParams, skip
 **`src/main/services/rpc-server.ts`**
 **`src/client/services/rpc-client.ts`**
 
-Each: add `skipRetry = false` parameter to `request`, pass it through to `requestWithRetry`. One-line change per file.
+Each: add `skipRetry = false` parameter to `request`. When `skipRetry` is `true`, call the request callback directly; otherwise pass it to `requestWithRetry` as before:
+
+```typescript
+const doRequest = async () => {
+  /* existing callback logic, unchanged */
+};
+return skipRetry ? doRequest() : requestWithRetry(doRequest, '<handler-name>', requestType);
+```
 
 **`src/shared/services/network.service.ts`**
 
@@ -107,7 +101,7 @@ In the `close` event handler, replace `sendCommand` with `sendCommandNoRetry` fo
 ### Error Handling
 
 - `skipRetry = false` is the default — zero impact on existing callers.
-- `requestWithRetry` still runs the callback once when `skipRetry` is `true`. Non-`MethodNotFound` errors already short-circuit the loop, so those paths are unchanged.
+- `requestWithRetry` is completely unchanged. The no-retry path calls the callback directly, bypassing the loop entirely.
 - With `sendCommandNoRetry`, a dead extension host causes the `syncProjects` call to throw immediately. The `catch` in the close handler swallows it and `mainWindow.destroy()` is called without delay. This is the correct behavior.
 - The `waitForDuration` 10-minute timeout now reflects actual sync time rather than retry time.
 
