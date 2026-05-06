@@ -25,6 +25,36 @@ function PopoverTrigger({ ...props }: React.ComponentProps<typeof PopoverPrimiti
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
 }
 
+/* #region CUSTOM PopoverPortalContainerContext + Provider — let descendant PopoverContent portal into a custom container instead of document.body */
+// Context to override where `PopoverContent` portals to. By default Radix portals
+// popovers to `document.body`, which is fine for top-level UI but breaks Radix Dialog's
+// focus trap when a popover opens from inside a modal dialog — the portal'd content is
+// outside the dialog's DOM subtree, so the trap yanks focus back out of the popover.
+// Providing a container inside the dialog here lets the popover render as a DOM descendant
+// of the dialog content and be accepted by the focus scope.
+// eslint-disable-next-line no-null/no-null
+const PopoverPortalContainerContext = React.createContext<HTMLElement | null>(null);
+
+/**
+ * Override the container that descendant `PopoverContent` components portal to. Render this inside
+ * a modal Radix `DialogContent` (with its element as `container`) so that nested popovers remain
+ * within the dialog's focus scope and keep working normally.
+ */
+function PopoverPortalContainerProvider({
+  container,
+  children,
+}: {
+  container: HTMLElement | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <PopoverPortalContainerContext.Provider value={container}>
+      {children}
+    </PopoverPortalContainerContext.Provider>
+  );
+}
+/* #endregion CUSTOM */
+
 /** @inheritdoc Popover */
 function PopoverContent({
   className,
@@ -36,8 +66,12 @@ function PopoverContent({
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   // CUSTOM: Read document direction to support RTL layouts
   const dir: Direction = readDirection();
+  // CUSTOM: Read portal container override (see PopoverPortalContainerContext above) so nested popovers stay inside modal dialogs.
+  const portalContainer = React.useContext(PopoverPortalContainerContext);
   return (
-    <PopoverPrimitive.Portal>
+    // CUSTOM: When a PopoverPortalContainerProvider is in scope, portal into its container
+    // instead of the default document.body so nested popovers stay inside modal dialogs.
+    <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}
@@ -104,6 +138,8 @@ export {
   PopoverContent,
   PopoverDescription,
   PopoverHeader,
+  // CUSTOM: export `PopoverPortalContainerProvider` alongside the standard shadcn exports
+  PopoverPortalContainerProvider,
   PopoverTitle,
   PopoverTrigger,
 };

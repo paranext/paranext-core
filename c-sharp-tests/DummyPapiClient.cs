@@ -58,6 +58,16 @@ namespace TestParanextDataProvider
             return Task.FromResult<T?>(default);
         }
 
+        /// <summary>
+        /// Test-only accessor that reports whether a handler is registered in
+        /// <c>_localMethods</c> for the given wire name. Exposes the protected
+        /// dictionary directly so tests can verify registration without the
+        /// fragile "probe by invocation" pattern (which conflates "handler
+        /// present" with "handler threw on bad args").
+        /// </summary>
+        public bool IsHandlerRegistered(string requestType) =>
+            _localMethods.ContainsKey(requestType);
+
         #endregion
     }
 }

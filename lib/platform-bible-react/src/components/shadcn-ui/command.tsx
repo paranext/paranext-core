@@ -86,10 +86,35 @@ function CommandDialog({
 /** @inheritdoc Command */
 function CommandInput({
   className,
+  // CUSTOM: destructure `onKeyDown` from props so we can compose with our space-to-click handler below
+  onKeyDown,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   // CUSTOM: Added readDirection for RTL support — sets dir on the wrapper so icon placement is mirrored
   const dir: Direction = readDirection();
+  /* #region CUSTOM Intercept Space-on-empty-input to click highlighted cmdk item (Enter-style UX) */
+  // When the filter is empty, a leading space is almost never what the user wants — they're
+  // looking at a highlighted item and expect Space to pick it (the Enter UX). Intercept Space
+  // in that state, find cmdk's current `data-selected` item, and click it. cmdk auto-highlights
+  // the first non-disabled item so the target always exists when the list is non-empty.
+  const handleKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      onKeyDown?.(event);
+      if (event.defaultPrevented) return;
+      if (event.key !== ' ') return;
+      if (event.currentTarget.value !== '') return;
+      const commandRoot = event.currentTarget.closest('[cmdk-root]');
+      const highlighted = commandRoot?.querySelector<HTMLElement>(
+        '[cmdk-item][data-selected="true"]:not([data-disabled="true"])',
+      );
+      if (!highlighted) return;
+      event.preventDefault();
+      event.stopPropagation();
+      highlighted.click();
+    },
+    [onKeyDown],
+  );
+  /* #endregion CUSTOM */
   return (
     // CUSTOM: Added dir prop for RTL support
     <div data-slot="command-input-wrapper" className="tw:p-1 tw:pb-0" dir={dir}>
@@ -100,6 +125,8 @@ function CommandInput({
             'tw:w-full tw:text-sm tw:outline-hidden tw:disabled:cursor-not-allowed tw:disabled:opacity-50',
             className,
           )}
+          // CUSTOM: space-to-click handler (composes with caller-supplied onKeyDown)
+          onKeyDown={handleKeyDown}
           {...props}
         />
         <InputGroupAddon>

@@ -25,6 +25,7 @@ import {
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
   ScopeSelector,
+  ScopeWithRange,
   Skeleton,
   Sonner,
   ToggleGroup,
@@ -607,7 +608,14 @@ export function Find({
               <ScopeSelector
                 scope={scope}
                 availableScopes={['chapter', 'book', 'selectedBooks']}
-                onScopeChange={setScope}
+                // ScopeSelector's onScopeChange takes the wider ScopeWithRange (the
+                // markers-checklist work added a 'range' scope). Find never enables
+                // 'range' (not in availableScopes), so this narrowing wrapper just
+                // guards that contract before forwarding to the narrow setScope.
+                onScopeChange={(newScope: ScopeWithRange) => {
+                  if (newScope === 'range') return;
+                  setScope(newScope);
+                }}
                 availableBookInfo={booksPresent}
                 selectedBookIds={selectedBookIds}
                 onSelectedBookIdsChange={onSelectedBookIdsChange}

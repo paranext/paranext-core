@@ -190,7 +190,10 @@ export function SelectBooksPicker({
           <ChevronsUpDown className="tw:ml-2 tw:h-4 tw:w-4 tw:shrink-0 tw:opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="tw:w-full tw:p-0" align="start">
+      {/* Fixed 500px width (clamped to the viewport) so the book grid lays out
+          consistently instead of tracking the trigger width — carried over from
+          the pre-refactor BookSelector (markers-checklist work). */}
+      <PopoverContent className="tw:w-[500px] tw:max-w-[calc(100vw-2rem)] tw:p-0" align="start">
         <Command
           shouldFilter={false}
           onKeyDown={(e) => {

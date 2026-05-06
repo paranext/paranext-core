@@ -6,6 +6,12 @@ import {
   ChecksSidePanelWebViewProvider,
   checksSidePanelWebViewType,
 } from './checks-side-panel.web-view-provider';
+import {
+  ChecklistWebViewOptions,
+  ChecklistWebViewProvider,
+  markersChecklistWebViewType,
+} from './checklist.web-view-provider';
+import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import {
   checkAggregatorService,
@@ -157,6 +163,49 @@ async function openChecksSidePanel(
   return sidePanelWebViewId;
 }
 
+async function openMarkersChecklist(webViewId: string | undefined): Promise<string | undefined> {
+  let projectId: string | undefined;
+
+  if (webViewId) {
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+    projectId = webViewDefinition?.projectId;
+  }
+
+  const options: ChecklistWebViewOptions = { projectId };
+  return papi.webViews.openWebView(
+    markersChecklistWebViewType,
+    { type: 'float', floatSize: { width: 1000, height: 700 } },
+    options,
+  );
+}
+
+/**
+ * Network event emitter used by the tab-menu `Settings…` command to ask any mounted Markers
+ * Checklist web view to open its Marker Settings dialog (UI-PKG-003 wiring). The web view
+ * subscribes to this event via `papi.network.getNetworkEvent(CHECKLIST_OPEN_SETTINGS_EVENT)` and
+ * flips its local `isSettingsOpen` state to `true` when it fires. See
+ * `extensions/src/platform-scripture/src/checklist.model.ts` for the event contract.
+ *
+ * We keep this as a module-level lazy-initialized variable (rather than an eager top-level
+ * constant) so the emitter registers during `activate` and is disposed deterministically via
+ * `context.registrations`. The fallback `?? undefined` guard in the handler below makes the command
+ * still succeed (no-op) if the emitter hasn't been initialized yet (e.g. in tests that stub out
+ * activation).
+ */
+let openSettingsEventEmitter:
+  | ReturnType<typeof papi.network.createNetworkEventEmitter<undefined>>
+  | undefined;
+
+async function openMarkersChecklistSettings(): Promise<void> {
+  if (!openSettingsEventEmitter) {
+    logger.warn(
+      'platformScripture.openMarkersChecklistSettings invoked before the event emitter was initialized — ignoring.',
+    );
+    return;
+  }
+  openSettingsEventEmitter.emit(undefined);
+}
+
 async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
   let projectId: FindWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
@@ -213,6 +262,14 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('platformScripture is activating!');
 
+  // Register the Markers Checklist "open settings" network event emitter BEFORE the backing
+  // command handler is exposed. The web-view subscribes to this event (via `useEvent`) and flips
+  // its local `isSettingsOpen` state when it fires. The emitter is disposed through
+  // `context.registrations` below so re-activation gets a fresh channel.
+  openSettingsEventEmitter = papi.network.createNetworkEventEmitter<undefined>(
+    CHECKLIST_OPEN_SETTINGS_EVENT,
+  );
+
   const scriptureExtenderPdpefPromise =
     papi.projectDataProviders.registerProjectDataProviderEngineFactory(
       SCRIPTURE_EXTENDER_PDPF_ID,
@@ -245,6 +302,7 @@ export async function activate(context: ExecutionActivationContext) {
   );
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
   const findWebViewProvider = new FindWebViewProvider();
+  const markersChecklistWebViewProvider = new ChecklistWebViewProvider();
 
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
@@ -408,6 +466,48 @@ export async function activate(context: ExecutionActivationContext) {
     checksSidePanelWebViewProvider,
   );
 
+  const openMarkersChecklistPromise = papi.commands.registerCommand(
+    'platformScripture.openMarkersChecklist',
+    openMarkersChecklist,
+    {
+      method: {
+        summary: 'Open the Markers Checklist tool',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that the checklist is for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened markers checklist web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const openMarkersChecklistSettingsPromise = papi.commands.registerCommand(
+    'platformScripture.openMarkersChecklistSettings',
+    openMarkersChecklistSettings,
+    {
+      method: {
+        summary: 'Open the Marker Settings dialog for the Markers Checklist',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'Void',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+  const markersChecklistWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    markersChecklistWebViewType,
+    markersChecklistWebViewProvider,
+  );
+
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
       summary: 'Open the find UI',
@@ -509,6 +609,10 @@ export async function activate(context: ExecutionActivationContext) {
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
     await showChecksSidePanelWebViewProviderPromise,
+    await openMarkersChecklistPromise,
+    await openMarkersChecklistSettingsPromise,
+    await markersChecklistWebViewProviderPromise,
+    openSettingsEventEmitter,
     await openFindPromise,
     await openFindWebViewProviderPromise,
     await invalidateResultsPromise,

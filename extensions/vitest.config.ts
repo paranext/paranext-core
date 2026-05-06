@@ -15,6 +15,8 @@ const config = defineConfig({
       '@papi/backend': path.resolve(__dirname, '__test-mocks__/@papi/backend.ts'),
       // Mock @papi/frontend/react for tests
       '@papi/frontend/react': path.resolve(__dirname, '__test-mocks__/@papi/frontend-react.ts'),
+      // Mock @papi/frontend for tests
+      '@papi/frontend': path.resolve(__dirname, '__test-mocks__/@papi/frontend.ts'),
     },
   },
 });
