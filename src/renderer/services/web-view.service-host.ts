@@ -929,6 +929,14 @@ async function getOpenWebViewDefinition(
   return savedWebViewDefinition;
 }
 
+/** See {@link WebViewServiceType.getAllOpenWebViewDefinitions} */
+async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]> {
+  const dockLayout = await getDockLayout();
+  return dockLayout
+    .getAllWebViewDefinitions()
+    .map((webViewDefinition) => convertWebViewDefinitionToSaved(webViewDefinition));
+}
+
 /**
  * Gets the saved properties on the WebView definition with the specified ID
  *
@@ -1777,6 +1785,7 @@ const papiWebViewService: WebViewServiceType = {
   reloadWebView,
   getSavedWebViewDefinition: getOpenWebViewDefinition,
   getOpenWebViewDefinition,
+  getAllOpenWebViewDefinitions,
   getWebViewController,
 };
 

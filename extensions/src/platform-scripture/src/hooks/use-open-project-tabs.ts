@@ -30,6 +30,7 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
   const [tabsMap, setTabsMap] = useState<Map<string, OpenProjectTabWithWebView>>(() => new Map());
 
   useEffect(() => {
+    let cancelled = false;
     const upsert = (webView: WebViewEventLike) => {
       const { id, projectId, scrollGroupScrRef, webViewType } = webView;
       const passesFilter = !filter || (webViewType !== undefined && filter({ webViewType }));
@@ -56,6 +57,18 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
         return next;
       });
     };
+    // Seed initial state from currently-open WebViews. PAPI events don't replay for already-open
+    // tabs, so without this the hook would be empty on mount when consumers mount after tabs are
+    // already open. The map dedupes by id, so any race with the first live event is harmless.
+    papi.webViews
+      .getAllOpenWebViewDefinitions()
+      .then((webViews) => {
+        if (!cancelled) webViews.forEach((wv) => upsert(wv));
+        return undefined;
+      })
+      .catch(() => {
+        // Non-fatal — live events will still populate state going forward.
+      });
     const unsubOpen = papi.webViews.onDidOpenWebView(({ webView }) => upsert(webView));
     const unsubUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => upsert(webView));
     const unsubClose = papi.webViews.onDidCloseWebView(({ webView }) => {
@@ -67,6 +80,7 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
       });
     });
     return () => {
+      cancelled = true;
       unsubOpen();
       unsubUpdate();
       unsubClose();
