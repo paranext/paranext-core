@@ -47,6 +47,12 @@ import {
 const NETWORK_OBJECT_ID = 'platformScripture.manageBooks';
 const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
 
+// Only Scripture Editor tabs should mark a project as "open" in the ProjectSelector.
+// Other project-bound tabs (Manage Books itself, Checks side panel, etc.) carry a `projectId`
+// but are not the "is the project open" signal users expect. Mirrors the canonical webViewType
+// from `platform-scripture-editor.utils.ts` (SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react').
+const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>(['platformScriptureEditor.react']);
+
 /**
  * Wire-shape of a single import file as the C# orchestrator expects to receive it. Mirrors
  * `ImportFileEntry.cs` in c-sharp/ManageBooks/ and the canonical `ImportFileEntry` definition in
@@ -490,7 +496,13 @@ global.webViewComponent = function ManageBooksWebView({
   // it down to the lighter `OpenProjectTab` shape `<ProjectSelector>` consumes. The `scrollGroup`
   // current-reference label is omitted — Manage Books pickers don't surface scroll-group ref
   // tooltips today.
-  const allOpenProjectTabs = useOpenProjectTabs();
+  // Filter to Scripture Editor tabs only — without this, every project-bound tab (Manage Books
+  // itself, Checks side panel, etc.) would falsely mark a project as "open".
+  const editorWebViewFilter = useCallback(
+    (webView: { webViewType: string }) => SCRIPTURE_EDITOR_WEB_VIEW_TYPES.has(webView.webViewType),
+    [],
+  );
+  const allOpenProjectTabs = useOpenProjectTabs(editorWebViewFilter);
   const openProjectTabs = useMemo<OpenProjectTab[]>(
     () =>
       allOpenProjectTabs.map((tab) => ({

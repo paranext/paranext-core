@@ -181,6 +181,42 @@ describe('useOpenProjectTabs', () => {
     expect(result.current).toEqual([]);
   });
 
+  it('filter excludes manage-books and side-panel tabs from a mixed initial seed', async () => {
+    // Reproduces the manage-books bug: without the filter, every project-bound tab
+    // (Manage Books itself, Checks side panel, scripture editors) would land in the list.
+    // With a Scripture-Editor-only filter, only the editor entries should remain.
+    mockGetAllOpenWebViewDefinitions.mockResolvedValueOnce([
+      {
+        id: 'wv-mb',
+        webViewType: 'platformScripture.manageBooks',
+        projectId: 'p-mb-target',
+        scrollGroupScrRef: 0,
+      },
+      {
+        id: 'wv-checks',
+        webViewType: 'someChecks.sidePanel',
+        projectId: 'p-checks-target',
+        scrollGroupScrRef: 0,
+      },
+      {
+        id: 'wv-editor',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'p-editor',
+        scrollGroupScrRef: 0,
+      },
+    ]);
+    const { result } = renderHook(() =>
+      useOpenProjectTabs((wv) => wv.webViewType === 'platformScriptureEditor.react'),
+    );
+    await waitFor(() => expect(result.current).toHaveLength(1));
+    expect(result.current[0]).toEqual({
+      webViewId: 'wv-editor',
+      projectId: 'p-editor',
+      scrollGroupId: 0,
+      webViewType: 'platformScriptureEditor.react',
+    });
+  });
+
   it('filter excludes non-matching webViewType', () => {
     const { result } = renderHook(() =>
       useOpenProjectTabs((wv) => wv.webViewType === 'platformScriptureEditor.react'),
