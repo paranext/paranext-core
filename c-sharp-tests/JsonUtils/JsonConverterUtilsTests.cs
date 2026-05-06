@@ -170,7 +170,7 @@ public class JsonConverterUtilsTests
         // effectively the same "type" for the purpose of equality comparisons.
 
         // Arrange
-        Enum<NoteType>[] noteTypes = [NoteType.Unspecified, NoteType.Normal, NoteType.Conflict,];
+        Enum<NoteType>[] noteTypes = [NoteType.Unspecified, NoteType.Normal, NoteType.Conflict];
 
         foreach (Enum<NoteType> original in noteTypes)
         {
