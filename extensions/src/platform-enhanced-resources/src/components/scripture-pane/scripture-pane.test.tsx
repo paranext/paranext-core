@@ -6,9 +6,11 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   EnhancedScripturePane,
   ENHANCED_SCRIPTURE_PANE_STRING_KEYS,
+  annotationToRange,
 } from './scripture-pane.component';
 import type { MarbleAnnotation } from '../../lib/marble-converter';
 
@@ -77,6 +79,25 @@ const STRINGS_BAG = {
   '%enhancedResources_scripturePane_errorTitle%': 'Something went wrong',
   '%enhancedResources_scripturePane_filterActive%': 'Filter',
 };
+
+/**
+ * Build a minimal USJ fixture whose first paragraph has `count` text children. Annotation paths
+ * shaped `$.content[0].content[N]` resolve to string leaves, so `annotationToRange` returns a valid
+ * non-collapsed range for each.
+ */
+function makeTestUsj(count: number): Usj {
+  return {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      {
+        type: 'para',
+        marker: 'p',
+        content: Array.from({ length: count }, (_, i) => `word-${i}`),
+      },
+    ],
+  } as unknown as Usj;
+}
 
 beforeEach(() => {
   // restoreAllMocks resets vi.spyOn() targets back to originals - must run BEFORE we install
@@ -176,27 +197,23 @@ describe('EnhancedScripturePane', () => {
     ];
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(3)}
         annotations={annotations}
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
-    // setAnnotation should be called once per annotation
-    expect(setAnnotationSpy).toHaveBeenCalledTimes(2);
-    // First call: word annotation
+    // setAnnotation should be called only for word annotations; notes are skipped because in
+    // readonly mode the editor renders note callers as ImmutableNoteCallerNode whose content
+    // children don't exist in the Lexical tree, causing path resolution to silently fail.
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+    // Only call: word annotation
     expect(setAnnotationSpy).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ start: { jsonPath: '$.content[0].content[1]' } }),
+      expect.objectContaining({
+        start: expect.objectContaining({ jsonPath: '$.content[0].content[1]' }),
+      }),
       'marble-word',
       'wg-001',
-      expect.objectContaining({ onClick: expect.any(Function) }),
-    );
-    // Second call: note annotation
-    expect(setAnnotationSpy).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ start: { jsonPath: '$.content[0].content[2]' } }),
-      'marble-note',
-      'note-1',
       expect.objectContaining({ onClick: expect.any(Function) }),
     );
   });
@@ -212,7 +229,7 @@ describe('EnhancedScripturePane', () => {
     };
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(2)}
         annotations={[annotation]}
         onTokenClick={onTokenClick}
         onTokenContextMenu={onTokenContextMenu}
@@ -240,7 +257,7 @@ describe('EnhancedScripturePane', () => {
     };
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(2)}
         annotations={[annotation]}
         onTokenClick={onTokenClick}
         onTokenContextMenu={onTokenContextMenu}
@@ -256,7 +273,9 @@ describe('EnhancedScripturePane', () => {
     expect(onTokenClick).not.toHaveBeenCalled();
   });
 
-  it('applies a marble-filter annotation when filteredTokenId matches a known annotation', () => {
+  it('applies er-marble-filter CSS class when filteredTokenId matches a known annotation', () => {
+    // Effect B now uses DOM class manipulation instead of editor.setAnnotation for the filter
+    // overlay. The annotationId-{id} class on the mark element is the selector target.
     const annotations: MarbleAnnotation[] = [
       {
         usjPath: '$.content[0].content[1]',
@@ -265,26 +284,40 @@ describe('EnhancedScripturePane', () => {
         metadata: {},
       },
     ];
+
+    // Simulate a mark element with the annotationId class that Effect A would produce in
+    // the real editor. jsdom doesn't run the actual editor, so we create it manually.
+    const markEl = document.createElement('mark');
+    markEl.className = 'editor-typed-mark-external-marble-word annotationId-wg-001';
+    document.body.appendChild(markEl);
+
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(2)}
         annotations={annotations}
         filteredTokenId="wg-001"
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
-    // Two calls expected: one for the base annotation, one for the filter overlay.
-    expect(setAnnotationSpy).toHaveBeenCalledTimes(2);
-    expect(setAnnotationSpy).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ start: { jsonPath: '$.content[0].content[1]' } }),
+
+    // Only one setAnnotation call: the base marble-word annotation.
+    // No second setAnnotation call for the filter overlay (was the old approach).
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+    expect(setAnnotationSpy).not.toHaveBeenCalledWith(
+      expect.anything(),
       'marble-filter',
-      'filter-wg-001',
-      {},
+      expect.any(String),
+      expect.anything(),
     );
+    // The er-marble-filter CSS class should be on the mark element.
+    expect(markEl.classList).toContain('er-marble-filter');
+
+    document.body.removeChild(markEl);
   });
 
-  it('applies marble-highlight annotations to every word annotation when highlightAllResearchTerms is true', () => {
+  it('adds er-highlight-all-research-terms body class when highlightAllResearchTerms is true', () => {
+    // Effect C now uses a single body-level CSS class instead of per-annotation editor.setAnnotation.
+    // The class drives highlight paint via _marble-overrides.scss specificity.
     const annotations: MarbleAnnotation[] = [
       {
         usjPath: '$.content[0].content[1]',
@@ -301,22 +334,23 @@ describe('EnhancedScripturePane', () => {
     ];
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(3)}
         annotations={annotations}
         highlightAllResearchTerms
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
-    // Two base annotations + one highlight overlay (only for the word kind).
-    expect(setAnnotationSpy).toHaveBeenCalledTimes(3);
-    // The third call should be the highlight overlay for the word annotation.
-    expect(setAnnotationSpy).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({ start: { jsonPath: '$.content[0].content[1]' } }),
+    // Only one setAnnotation call: base marble-word annotation.
+    // No setAnnotation calls for marble-highlight (was the old approach).
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
+    expect(setAnnotationSpy).not.toHaveBeenCalledWith(
+      expect.anything(),
       'marble-highlight',
-      'highlight-wg-001',
-      {},
+      expect.any(String),
+      expect.anything(),
     );
+    // Body class should be set.
+    expect(document.body.classList).toContain('er-highlight-all-research-terms');
   });
 
   it('does not re-run the annotation effect when re-rendered with the same props (no fake-dep churn)', () => {
@@ -326,7 +360,7 @@ describe('EnhancedScripturePane', () => {
       annotationId: 'wg-001',
       metadata: {},
     };
-    const usj = { type: 'USJ' as const, version: '3.1' as const, content: [] };
+    const usj = makeTestUsj(2);
     // Hold every prop reference stable across renders so the only thing that *could* change
     // is the unstable inline `() => {}` defaults the component itself fabricates.
     const annotationsArr = [annotation];
@@ -364,7 +398,13 @@ describe('EnhancedScripturePane', () => {
     };
     const annotationsArr = [annotation];
     const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
-    const usj = { type: 'USJ' as const, version: '3.1' as const, content: [] };
+    const usj = makeTestUsj(2);
+
+    // Create a mark element with the annotationId class that the editor would add in production.
+    const markEl = document.createElement('mark');
+    markEl.className = 'editor-typed-mark-external-marble-word annotationId-wg-001';
+    document.body.appendChild(markEl);
+
     const { rerender } = render(
       <EnhancedScripturePane
         usj={usj}
@@ -383,13 +423,10 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
-    expect(setAnnotationSpy).toHaveBeenCalledWith(
-      expect.anything(),
-      'marble-filter',
-      'filter-wg-001',
-      {},
-    );
+    // No setAnnotation for filter (Effect B now uses DOM class).
+    expect(setAnnotationSpy).not.toHaveBeenCalled();
+    // The mark element should have received er-marble-filter.
+    expect(markEl.classList).toContain('er-marble-filter');
     setAnnotationSpy.mockClear();
 
     rerender(
@@ -399,8 +436,13 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
+    // No setAnnotation and no removeAnnotation for marble-filter type (DOM cleanup only).
     expect(setAnnotationSpy).not.toHaveBeenCalled();
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-filter', 'filter-wg-001');
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-filter', expect.any(String));
+    // The CSS class should be removed after Effect B cleanup.
+    expect(markEl.classList).not.toContain('er-marble-filter');
+
+    document.body.removeChild(markEl);
   });
 
   it('toggling highlightAllResearchTerms does not re-set base annotations or filter overlay', () => {
@@ -412,7 +454,7 @@ describe('EnhancedScripturePane', () => {
     };
     const annotationsArr = [annotation];
     const localized: [Record<string, string>, boolean] = [STRINGS_BAG, false];
-    const usj = { type: 'USJ' as const, version: '3.1' as const, content: [] };
+    const usj = makeTestUsj(2);
     const { rerender } = render(
       <EnhancedScripturePane
         usj={usj}
@@ -421,8 +463,8 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    // First render: 1 base + 1 filter = 2 calls.
-    expect(setAnnotationSpy).toHaveBeenCalledTimes(2);
+    // First render: 1 base annotation only (filter and highlight are CSS-based now).
+    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
     setAnnotationSpy.mockClear();
     removeAnnotationSpy.mockClear();
 
@@ -435,13 +477,15 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={localized}
       />,
     );
-    expect(setAnnotationSpy).toHaveBeenCalledTimes(1);
-    expect(setAnnotationSpy).toHaveBeenCalledWith(
+    // Toggling highlight adds the body class — no setAnnotation calls for marble-highlight.
+    expect(setAnnotationSpy).not.toHaveBeenCalled();
+    expect(setAnnotationSpy).not.toHaveBeenCalledWith(
       expect.anything(),
       'marble-highlight',
-      'highlight-wg-001',
-      {},
+      expect.any(String),
+      expect.anything(),
     );
+    expect(document.body.classList).toContain('er-highlight-all-research-terms');
   });
 
   it('chunks setAnnotation calls across animation frames so the JS thread can service other work', async () => {
@@ -456,7 +500,7 @@ describe('EnhancedScripturePane', () => {
     const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame');
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(120)}
         annotations={annotations}
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
@@ -482,7 +526,7 @@ describe('EnhancedScripturePane', () => {
     });
     const { unmount } = render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(200)}
         annotations={annotations}
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
@@ -528,9 +572,14 @@ describe('EnhancedScripturePane', () => {
   });
 
   it('removes all applied annotations on unmount', () => {
+    // Create a mark element so Effect B can apply and then clean up er-marble-filter.
+    const markEl = document.createElement('mark');
+    markEl.className = 'editor-typed-mark-external-marble-word annotationId-wg-001';
+    document.body.appendChild(markEl);
+
     const { unmount } = render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(2)}
         annotations={[
           {
             usjPath: '$.content[0].content[1]',
@@ -544,12 +593,23 @@ describe('EnhancedScripturePane', () => {
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
     );
+    // Verify CSS state before unmount.
+    expect(markEl.classList).toContain('er-marble-filter');
+    expect(document.body.classList).toContain('er-highlight-all-research-terms');
+
     removeAnnotationSpy.mockClear(); // Ignore any pre-unmount removals
     unmount();
-    // Cleanup should remove the base word annotation, the filter overlay, and the highlight overlay.
+
+    // Effect A cleanup: base word annotation removed via editor.removeAnnotation.
     expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-word', 'wg-001');
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-filter', 'filter-wg-001');
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-highlight', 'highlight-wg-001');
+    // Effects B and C are CSS-based: no removeAnnotation calls for filter/highlight types.
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-filter', expect.any(String));
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-highlight', expect.any(String));
+    // CSS classes cleaned up by their respective effect cleanup functions.
+    expect(markEl.classList).not.toContain('er-marble-filter');
+    expect(document.body.classList).not.toContain('er-highlight-all-research-terms');
+
+    document.body.removeChild(markEl);
   });
 });
 
@@ -605,7 +665,7 @@ describe('marble hover lifecycle', () => {
   it('mouseenter on a marble-word triggers showPopover with the anchor rect', async () => {
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(4)}
         annotations={[wordA, wordB, wordC]}
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
@@ -630,7 +690,7 @@ describe('marble hover lifecycle', () => {
   it('updatePopover called with full markdown after buildTooltipData resolves', async () => {
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(4)}
         annotations={[wordA]}
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
@@ -653,10 +713,10 @@ describe('marble hover lifecycle', () => {
     );
   });
 
-  it('mouseleave dismisses the popover and clears match/dim annotations', async () => {
+  it('mouseleave dismisses the popover and clears the CSS hover state', async () => {
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(4)}
         annotations={[wordA, wordB, wordC]}
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
@@ -669,15 +729,18 @@ describe('marble hover lifecycle', () => {
     handlers.onMouseLeave!(new MouseEvent('mouseleave'), 'marble-word', 'wg-A', 'logos');
 
     expect(mockDismissPopover).toHaveBeenCalledWith('overlay-1');
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-hover-match', expect.any(String));
-    expect(removeAnnotationSpy).toHaveBeenCalledWith('marble-hover-dim', expect.any(String));
+    // Dim/match state is now CSS-based (er-marble-hover-active body class + er-marble-hover-match
+    // per-mark class) instead of editor-based annotations, so removeAnnotation is NOT called for
+    // hover types. The editor removeAnnotation is only called on base annotation cleanup.
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-hover-match', expect.any(String));
+    expect(removeAnnotationSpy).not.toHaveBeenCalledWith('marble-hover-dim', expect.any(String));
   });
 
   it('RESOURCE_EXHAUSTED from showPopover is swallowed', async () => {
     mockShowPopover.mockRejectedValueOnce({ code: 'RESOURCE_EXHAUSTED', message: 'debounced' });
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(4)}
         annotations={[wordA]}
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
@@ -694,7 +757,7 @@ describe('marble hover lifecycle', () => {
     mockSendCommand.mockRejectedValueOnce(new Error('network'));
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(4)}
         annotations={[wordA]}
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
@@ -709,10 +772,10 @@ describe('marble hover lifecycle', () => {
     expect(mockUpdatePopover).not.toHaveBeenCalled();
   });
 
-  it('lemma-matching annotations sharing the hovered lemma get marble-hover-match', async () => {
+  it('lemma-matching annotations sharing the hovered lemma apply CSS hover state', async () => {
     render(
       <EnhancedScripturePane
-        usj={{ type: 'USJ', version: '3.1', content: [] }}
+        usj={makeTestUsj(4)}
         annotations={[wordA, wordB, wordC]}
         localizedStringsWithLoadingState={[STRINGS_BAG, false]}
       />,
@@ -721,12 +784,140 @@ describe('marble hover lifecycle', () => {
     const handlers = getHoverHandlersForCall(0);
     setAnnotationSpy.mockClear();
 
-    handlers.onMouseEnter!(makeFakeMouseEvent(), 'marble-word', 'wg-A', 'logos');
+    const fakeEvent = makeFakeMouseEvent();
+    handlers.onMouseEnter!(fakeEvent, 'marble-word', 'wg-A', 'logos');
 
+    // Hover state is now CSS-based: no setAnnotation calls for hover types.
+    // wordA and wordB share 'logos' lemma; wordC has 'theos' (non-matching).
+    // The implementation adds 'er-marble-hover-active' to the body and 'er-marble-hover-match'
+    // to matching mark elements via DOM queries. setAnnotation is NOT called for hover types.
     const { calls } = setAnnotationSpy.mock;
     const matchCalls = calls.filter((c) => c[1] === 'marble-hover-match');
     const dimCalls = calls.filter((c) => c[1] === 'marble-hover-dim');
-    expect(matchCalls.length).toBe(2);
-    expect(dimCalls.length).toBe(1);
+    expect(matchCalls.length).toBe(0);
+    expect(dimCalls.length).toBe(0);
+    // Body-level hover class should be set (jsdom environment supports classList).
+    expect(fakeEvent.currentTarget).toBeInstanceOf(Element);
+    expect((fakeEvent.currentTarget as Element).ownerDocument.body.classList).toContain(
+      'er-marble-hover-active',
+    );
+  });
+});
+
+describe('annotationToRange (USJ walker)', () => {
+  it('returns explicit text-end range for a marker whose content is a plain string', () => {
+    const usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'char',
+          marker: 'wg',
+          content: ['beginning'],
+        },
+      ],
+    } as unknown as Usj;
+    const annotation = {
+      annotationId: 'a1',
+      kind: 'word',
+      usjPath: '$.content[0]',
+    } as unknown as MarbleAnnotation;
+    const range = annotationToRange(annotation, usj);
+    expect(range).toEqual({
+      start: { jsonPath: '$.content[0]', offset: 0 },
+      end: { jsonPath: '$.content[0].content[0]', offset: 'beginning'.length },
+    });
+  });
+
+  it('descends into the last child for a marker with nested content', () => {
+    const usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'char',
+          marker: 'wg',
+          content: [{ type: 'char', marker: 'add', content: ['extra'] }, 'tail'],
+        },
+      ],
+    } as unknown as Usj;
+    const annotation = {
+      annotationId: 'a2',
+      kind: 'word',
+      usjPath: '$.content[0]',
+    } as unknown as MarbleAnnotation;
+    const range = annotationToRange(annotation, usj);
+    expect(range).toEqual({
+      start: { jsonPath: '$.content[0]', offset: 0 },
+      end: { jsonPath: '$.content[0].content[1]', offset: 'tail'.length },
+    });
+  });
+
+  it('returns undefined when the marker content is empty', () => {
+    const usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'char',
+          marker: 'wg',
+          content: [],
+        },
+      ],
+    } as unknown as Usj;
+    const annotation = {
+      annotationId: 'a3',
+      kind: 'word',
+      usjPath: '$.content[0]',
+    } as unknown as MarbleAnnotation;
+    const range = annotationToRange(annotation, usj);
+    expect(range).toBeUndefined();
+  });
+
+  it('returns undefined when the usjPath does not resolve to a node', () => {
+    const usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'char', marker: 'wg', content: ['x'] }],
+    } as unknown as Usj;
+    const annotation = {
+      annotationId: 'a4',
+      kind: 'word',
+      usjPath: '$.content[99]',
+    } as unknown as MarbleAnnotation;
+    const range = annotationToRange(annotation, usj);
+    expect(range).toBeUndefined();
+  });
+
+  it('descends recursively through nested element-only chains to find the text', () => {
+    // Edge case: the marker contains only a nested element which itself contains a string.
+    // The walker should descend into the last element child until it finds a string leaf.
+    const usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'char',
+          marker: 'wg',
+          content: [
+            {
+              type: 'char',
+              marker: 'add',
+              content: ['inner'],
+            },
+          ],
+        },
+      ],
+    } as unknown as Usj;
+    const annotation = {
+      annotationId: 'a5',
+      kind: 'word',
+      usjPath: '$.content[0]',
+    } as unknown as MarbleAnnotation;
+    const range = annotationToRange(annotation, usj);
+    expect(range).toEqual({
+      start: { jsonPath: '$.content[0]', offset: 0 },
+      end: { jsonPath: '$.content[0].content[0].content[0]', offset: 'inner'.length },
+    });
   });
 });

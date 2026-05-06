@@ -78,10 +78,6 @@ export type EnhancedScripturePaneProps = {
 
 const ANNOTATION_TYPE_MARBLE_WORD = 'marble-word';
 const ANNOTATION_TYPE_MARBLE_NOTE = 'marble-note';
-const ANNOTATION_TYPE_FILTER = 'marble-filter';
-const ANNOTATION_TYPE_HIGHLIGHT = 'marble-highlight';
-const ANNOTATION_TYPE_HOVER_MATCH = 'marble-hover-match';
-const ANNOTATION_TYPE_HOVER_DIM = 'marble-hover-dim';
 const RIGHT_MOUSE_BUTTON = 2;
 
 // Local mirror of the backend `buildTooltipData` PAPI command's return shape. The backend
@@ -106,47 +102,111 @@ type TooltipData = {
  *
  * - Marble-word: linked research term (BHV-301/302). Click to filter the dictionary / open tooltip.
  * - Marble-note: linked study/cross-ref note. Renders as a footnote-style affordance.
- * - Marble-filter: the single token the user has filtered to (BHV-307).
- * - Marble-highlight: applied to every word annotation when "Highlight all research terms" is on.
- *
- * Filter trumps highlight trumps base style; CSS rule order + `:is()` specificity handles that.
+ * - Highlight and filter states are applied via CSS class manipulation (not setAnnotation). Effect B
+ *   uses `.er-marble-filter` on the mark element; Effect C uses the body-level
+ *   `er-highlight-all-research-terms` class. The `marble-highlight` and `marble-filter` annotation
+ *   types are no longer registered via setAnnotation.
  */
 const MARBLE_ANNOTATION_STYLES = `
 .editor-typed-mark-external-marble-word {
   cursor: pointer;
-  /* G5: PT9 (.textlink/.term/.missingterm) renders no visible affordance by default —
-     color: inherit; text-decoration: inherit. The user opts in via the toolbar's
-     "All research terms" mode, hovers, or click-state. We therefore drop the always-on
-     dotted-underline that previously made every linked word visually distinct. */
+  /* Override <mark> user-agent default (background: yellow, color: black) so marble-words
+     have no visual treatment by default. Per G5 PT9 fidelity: visible affordance is opt-in
+     via the "Highlight all research terms" toggle, hovers, or filter state. */
+  background-color: transparent;
+  color: inherit;
 }
 .editor-typed-mark-external-marble-note {
   cursor: pointer;
+  background-color: transparent;
+  /* Marble-note keeps the primary color (footnote-style affordance) - it intentionally
+     stands out, unlike marble-word. */
   color: hsl(var(--primary));
-}
-.editor-typed-mark-external-marble-highlight {
-  background-color: hsl(210 100% 90%);
-  border-radius: 2px;
-}
-.editor-typed-mark-external-marble-filter {
-  background-color: hsl(45 100% 75%);
-  border-radius: 2px;
 }
 `;
 
+/**
+ * Walk into the USJ marker at `usjPath` and return the path of its deepest last-text descendant
+ * plus that text's length. Used to build a non-collapsed `AnnotationRange` whose `end` points at an
+ * actual TextNode in Lexical, bypassing the editor resolver's stricter Marker / ClosingMarker
+ * branches that silently reject our previous range shape (see
+ * working-docs/2026-05-06-er-hover-regression-design.md §4 Path B2).
+ *
+ * Returns undefined when the marker has no textual content (annotation is skipped).
+ */
+function findLastTextEnd(
+  usj: Usj,
+  usjPath: string,
+): { jsonPath: ContentJsonPath; offset: number } | undefined {
+  // Resolve the marker object at usjPath. The marble-converter emits paths shaped like
+  // `$.content[N].content[M]...` - walk dot/bracket segments.
+  const segments = usjPath
+    .replace(/^\$\.?/, '')
+    .split(/\.|\[|\]/)
+    .filter(Boolean);
+  // The USJ tree is a recursive `unknown` shape; tracking it through a fully-typed walker
+  // would be more code than the value justifies. Localize the unsafety here.
+  // USJ is a recursive unknown tree; a fully-typed walker would add more complexity than value
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let node: any = usj;
+  // Prefer reduce over for...of to satisfy no-restricted-syntax. Using a sentinel to short-circuit.
+  // `acc[key] ?? notFound` already converts null/undefined properties to the sentinel, so the
+  // only guard needed inside the callback is `=== notFound` (no null literal required).
+  const notFound = Symbol('notFound');
+  const resolved = segments.reduce(
+    // Same any rationale as above: USJ tree is recursive unknown, localized to this helper
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (acc: any, seg: string) => {
+      if (acc === notFound) return notFound;
+      const key = /^\d+$/.test(seg) ? Number(seg) : seg;
+      return acc[key] ?? notFound;
+    },
+    node,
+  );
+  if (resolved === notFound) return undefined;
+  node = resolved;
+
+  // Recursively descend into the last `content` child until we find a string.
+  let currentPath = usjPath;
+  // Same any rationale as above: USJ tree is recursive unknown, localized to this helper
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let current: any = node;
+  while (current && typeof current === 'object' && Array.isArray(current.content)) {
+    const lastIndex = current.content.length - 1;
+    if (lastIndex < 0) return undefined;
+    currentPath = `${currentPath}.content[${lastIndex}]`;
+    current = current.content[lastIndex];
+  }
+  if (typeof current !== 'string' || current.length === 0) return undefined;
+  // ContentJsonPath is a literal-template type; runtime construction matches the pattern but
+  // TypeScript can't prove it.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { jsonPath: currentPath as ContentJsonPath, offset: current.length };
+}
+
 // The marble-converter emits paths shaped like `$.content[N]...` which match ContentJsonPath at
 // runtime; the type narrows from `string` here. The annotation's `usjPath` points at the wg / note
-// MarkerObject; we span its full text by pairing a marker-location start (resolves to the first
-// text child at offset 0) with a closing-marker-location end (resolves to the last text child at
-// its full length). A collapsed marker-location range produces a zero-length selection, which
-// Editorial silently drops without rendering a `<mark>` - so the range MUST be non-collapsed.
-function annotationToRange(annotation: MarbleAnnotation): AnnotationRange {
+// MarkerObject. We produce a non-collapsed range using UsjTextContentLocation for both anchors:
+// start at the marker itself (offset 0, routes through the resolver's isUsjTextContentLocation
+// branch) and end at the deepest last-text-child (offset = text length). This bypasses the
+// stricter Marker / ClosingMarker resolver branches that silently rejected our previous range shape.
+export function annotationToRange(
+  annotation: MarbleAnnotation,
+  usj: Usj,
+): AnnotationRange | undefined {
+  // Start anchor: the marker itself with offset 0. The resolver lands on the wg/note ElementNode
+  // and produces an element point at child index 0 - i.e. the very beginning of the marker's
+  // textual content.
   // ContentJsonPath is a literal-template type; the marble-converter produces matching strings
-  // at runtime but TypeScript can't prove it from `string`, so an assertion is the cleanest fix.
+  // at runtime but TypeScript can't prove it from `string`.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const jsonPath = annotation.usjPath as ContentJsonPath;
+  const startPath = annotation.usjPath as ContentJsonPath;
+  // End anchor: the deepest last-text-child of the marker, with offset = its text length.
+  const end = findLastTextEnd(usj, annotation.usjPath);
+  if (!end) return undefined;
   return {
-    start: { jsonPath },
-    end: { jsonPath, closingMarkerOffset: 0 },
+    start: { jsonPath: startPath, offset: 0 },
+    end,
   };
 }
 
@@ -191,6 +251,18 @@ function renderTooltipMarkdown(data: TooltipData): string {
   }
   return parts.join('\n\n');
 }
+
+// Module-level Editorial options. CRITICAL: this object MUST be a stable reference. When the
+// `options` prop changes identity, Editorial reconciles its Lexical theme/config which destroys
+// every external typed mark (including all the marble-word marks we register via
+// `editor.setAnnotation`). Inlining the object literal in JSX caused marks to silently disappear
+// on every parent re-render (e.g. when the MarbleGuide modal opens/closes). See
+// working-docs/2026-05-06-er-hover-regression-design.md.
+const EDITORIAL_OPTIONS = {
+  isReadonly: true,
+  hasExternalUI: true,
+  view: { ...getDefaultViewOptions(), showCharMarkerTitles: false },
+} as const;
 
 // Module-level no-op defaults so omitting the callbacks does not generate a fresh
 // function identity on every render (which would falsely invalidate the annotation
@@ -297,6 +369,11 @@ export function EnhancedScripturePane({
     if (!editor || !usj) return undefined;
 
     const annotationsById = new Map(annotations.map((a) => [a.annotationId, a]));
+    // Notes are excluded from setAnnotation: in readonly mode the editor renders note callers as
+    // ImmutableNoteCallerNode (DecoratorNode) whose content children don't exist in the Lexical tree,
+    // so any USJ path into note content silently fails to resolve. Notes remain clickable via the
+    // editor's caller node rendering; we just don't add a mark overlay for them.
+    const wordAnnotations = annotations.filter((a) => a.kind === 'word');
     let cancelled = false;
     const CHUNK_SIZE = 50;
 
@@ -394,31 +471,27 @@ export function EnhancedScripturePane({
         });
       }
 
+      // CSS-based dim/match (replaces editor-based approach for perf - see _marble-overrides.scss).
+      // Toggle the body-level hover-active class once, then add the match class to each mark element
+      // whose annotationId is in the matching set. Editor-side annotation marks already carry the
+      // `annotationId-{id}` class added by TypedMarkNode.createDOM. Marks without the match class
+      // get dimmed via descendant selector specificity.
+      // `target.ownerDocument` gives us the iframe's document; `document` alone would target the
+      // main renderer frame.
+      const { ownerDocument } = target;
+      ownerDocument.body.classList.add('er-marble-hover-active');
       matchingIds.forEach((matchingId) => {
-        const matching = annotationsById.get(matchingId);
-        if (!matching) return;
-        editor.setAnnotation(
-          annotationToRange(matching),
-          ANNOTATION_TYPE_HOVER_MATCH,
-          `match-${matchingId}`,
-          {},
+        const markElements = ownerDocument.querySelectorAll(
+          `[class~="annotationId-${matchingId}"]`,
         );
+        markElements.forEach((markElement) => {
+          markElement.classList.add('er-marble-hover-match');
+        });
         activeMatchSetRef.current.add(matchingId);
-      });
-      annotations.forEach((wordAnnotation) => {
-        if (wordAnnotation.kind !== 'word') return;
-        if (matchingIds.has(wordAnnotation.annotationId)) return;
-        editor.setAnnotation(
-          annotationToRange(wordAnnotation),
-          ANNOTATION_TYPE_HOVER_DIM,
-          `dim-${wordAnnotation.annotationId}`,
-          {},
-        );
-        activeDimSetRef.current.add(wordAnnotation.annotationId);
       });
     };
 
-    const handleMarbleMouseLeave = () => {
+    const handleMarbleMouseLeave = (event: MouseEvent) => {
       fetchGenRef.current += 1;
 
       if (activePopoverIdRef.current) {
@@ -428,22 +501,35 @@ export function EnhancedScripturePane({
         activePopoverIdRef.current = null;
       }
 
+      // Mirror handleMarbleMouseEnter: scope DOM queries to the EXACT iframe document of the
+      // element being left. `globalThis.document` should resolve to the same document, but using
+      // the event target's ownerDocument is more robust (and necessary if the leave handler ever
+      // fires from a different context).
+      const target = event.currentTarget;
+      const leaveDocument = target instanceof Element ? target.ownerDocument : globalThis.document;
+      leaveDocument.body.classList.remove('er-marble-hover-active');
       activeMatchSetRef.current.forEach((matchId) => {
-        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_MATCH, `match-${matchId}`);
-      });
-      activeDimSetRef.current.forEach((dimId) => {
-        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_DIM, `dim-${dimId}`);
+        const markElements = leaveDocument.querySelectorAll(`[class~="annotationId-${matchId}"]`);
+        markElements.forEach((markElement) => {
+          markElement.classList.remove('er-marble-hover-match');
+        });
       });
       activeMatchSetRef.current.clear();
       activeDimSetRef.current.clear();
     };
 
     const applyChunked = async () => {
-      for (let i = 0; i < annotations.length; i += CHUNK_SIZE) {
+      for (let i = 0; i < wordAnnotations.length; i += CHUNK_SIZE) {
         if (cancelled) return;
-        const slice = annotations.slice(i, i + CHUNK_SIZE);
+        const slice = wordAnnotations.slice(i, i + CHUNK_SIZE);
         slice.forEach((annotation) => {
-          const range = annotationToRange(annotation);
+          const range = annotationToRange(annotation, usj);
+          if (!range) {
+            logger.info(
+              `EnhancedScripturePane: skipping annotation with no textual content: id=${annotation.annotationId} usjPath=${annotation.usjPath}`,
+            );
+            return;
+          }
           const baseType = annotationTypeFor(annotation.kind);
           editor.setAnnotation(range, baseType, annotation.annotationId, {
             onClick: (event, _type, id, textContent) => {
@@ -461,11 +547,11 @@ export function EnhancedScripturePane({
                 latestClick(id, annotationForId, textContent);
               }
             },
-            onMouseEnter: annotation.kind === 'word' ? handleMarbleMouseEnter : undefined,
-            onMouseLeave: annotation.kind === 'word' ? handleMarbleMouseLeave : undefined,
+            onMouseEnter: handleMarbleMouseEnter,
+            onMouseLeave: handleMarbleMouseLeave,
           });
         });
-        if (i + CHUNK_SIZE < annotations.length) {
+        if (i + CHUNK_SIZE < wordAnnotations.length) {
           // Yield to the event loop so mousedown / setFocus / paint can run.
           // eslint-disable-next-line no-await-in-loop
           await new Promise<void>((resolve) => {
@@ -500,59 +586,60 @@ export function EnhancedScripturePane({
         // eslint-disable-next-line no-null/no-null
         activePopoverIdRef.current = null;
       }
+      // CSS-based dim/match cleanup - removeAnnotation calls for hover types are no-ops
+      // now since we never added them as editor annotations (see _marble-overrides.scss).
+      const cleanupDocument = globalThis.document;
+      cleanupDocument.body.classList.remove('er-marble-hover-active');
       matchSet.forEach((matchId) => {
-        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_MATCH, `match-${matchId}`);
-      });
-      dimSet.forEach((dimId) => {
-        editor.removeAnnotation(ANNOTATION_TYPE_HOVER_DIM, `dim-${dimId}`);
+        const markElements = cleanupDocument.querySelectorAll(`[class~="annotationId-${matchId}"]`);
+        markElements.forEach((markElement) => {
+          markElement.classList.remove('er-marble-hover-match');
+        });
       });
       matchSet.clear();
       dimSet.clear();
-      annotations.forEach((a) => {
+      wordAnnotations.forEach((a) => {
         editor.removeAnnotation(annotationTypeFor(a.kind), a.annotationId);
       });
     };
   }, [usj, annotations, lemmaIndex]);
 
-  // Effect B — single marble-filter overlay.
-  // Re-runs only when the filtered token changes (or when annotations change
-  // and the filter target may have appeared / disappeared).
+  // Effect B — single marble-filter overlay via DOM class on the existing marble-word mark.
+  // Same rationale as Effect C: a secondary editor.setAnnotation on already-marked text fails
+  // in 0.8.15. Use the annotationId class the editor adds to each mark to find and class it.
+  // `globalThis.document` resolves to the iframe's document from inside the webview context.
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !usj || !filteredTokenId) return undefined;
     const target = annotations.find((a) => a.annotationId === filteredTokenId);
-    if (!target) return undefined;
-    editor.setAnnotation(
-      annotationToRange(target),
-      ANNOTATION_TYPE_FILTER,
-      `filter-${filteredTokenId}`,
-      {},
+    if (!target || target.kind !== 'word') return undefined;
+    const markElements = globalThis.document.querySelectorAll(
+      `[class~="annotationId-${filteredTokenId}"]`,
     );
+    markElements.forEach((markElement: Element) => {
+      markElement.classList.add('er-marble-filter');
+    });
     return () => {
-      editor.removeAnnotation(ANNOTATION_TYPE_FILTER, `filter-${filteredTokenId}`);
+      markElements.forEach((markElement: Element) => {
+        markElement.classList.remove('er-marble-filter');
+      });
     };
   }, [usj, annotations, filteredTokenId]);
 
-  // Effect C — marble-highlight overlays for every word annotation.
-  // Re-runs only when the highlight toggle or annotation set changes.
+  // Effect C — "highlight all research terms" via a single body class.
+  // Replaces a per-annotation editor.setAnnotation approach (~380 reconcile cycles + every
+  // secondary setAnnotation on already-marked text fails in editor 0.8.15 with "Failed to find
+  // start or end node"). The marble-word marks already exist in DOM with annotationId classes;
+  // we just toggle a body-level class and let CSS specificity paint the highlight.
+  // `globalThis.document` resolves to the iframe's document from inside the webview context.
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !usj || !highlightAllResearchTerms) return undefined;
-    const wordAnnotations = annotations.filter((a) => a.kind === 'word');
-    wordAnnotations.forEach((a) => {
-      editor.setAnnotation(
-        annotationToRange(a),
-        ANNOTATION_TYPE_HIGHLIGHT,
-        `highlight-${a.annotationId}`,
-        {},
-      );
-    });
+    globalThis.document.body.classList.add('er-highlight-all-research-terms');
     return () => {
-      wordAnnotations.forEach((a) => {
-        editor.removeAnnotation(ANNOTATION_TYPE_HIGHLIGHT, `highlight-${a.annotationId}`);
-      });
+      globalThis.document.body.classList.remove('er-highlight-all-research-terms');
     };
-  }, [usj, annotations, highlightAllResearchTerms]);
+  }, [usj, highlightAllResearchTerms]);
 
   if (errorMessage) {
     return (
@@ -606,11 +693,8 @@ export function EnhancedScripturePane({
           ref={editorRef}
           defaultUsj={usj}
           scrRef={scrRef}
-          options={{
-            isReadonly: true,
-            hasExternalUI: true,
-            view: { ...getDefaultViewOptions(), showCharMarkerTitles: false },
-          }}
+          logger={logger}
+          options={EDITORIAL_OPTIONS}
         />
         {filteredTokenId && (
           <p

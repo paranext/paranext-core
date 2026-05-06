@@ -3,16 +3,35 @@
 // Contains marble-annotation hover-state classes that the editor itself does not need
 // (only ER renders <wg> annotations and applies the lemma-match/dim hover state).
 
-// Lemma-match annotation: applied via setAnnotation(type='marble-hover-match') to every
-// annotation whose lemma matches the hovered word. Subtle emphasis - tinted background
-// plus dotted underline so matching words stand out without screaming.
-.editor-typed-mark-external-marble-hover-match {
-  background-color: hsl(var(--accent));
-  text-decoration: underline dotted hsl(var(--primary));
+// PT9-fidelity hover state (replaces the per-mark editor.setAnnotation approach which was
+// catastrophically slow at ~4s/hover for ~380 word annotations - each setAnnotation triggers
+// a separate Lexical reconcile cycle). When a marble word is hovered, the host extension
+// applies `er-marble-hover-active` on the editor's iframe body + `er-marble-hover-match` on
+// each mark whose annotationId is in the lemma-match set. Marks without the match class get
+// dimmed via descendant selector specificity.
+// "Highlight all research terms" toolbar toggle - applies the light-blue background to
+// every marble-word mark via a body-level class (replaces per-annotation editor.setAnnotation).
+.er-highlight-all-research-terms .editor-typed-mark-external-marble-word {
+  background-color: hsl(210 100% 90%);
+  border-radius: 2px;
 }
 
-// Lemma-dim annotation: applied via setAnnotation(type='marble-hover-dim') to every word
-// annotation whose lemma does NOT match the hovered word. Muted via reduced opacity.
-.editor-typed-mark-external-marble-hover-dim {
+// Per-mark filter class - applied via DOM manipulation to the marble-word mark whose
+// annotationId matches the active filter token.
+.editor-typed-mark-external-marble-word.er-marble-filter {
+  background-color: hsl(45 100% 75%);
+  border-radius: 2px;
+}
+
+// Hover dim/match state. Rules are ordered AFTER highlight/filter so hover-match specificity
+// takes precedence when both are active (a hovered match in highlight-all mode shows match
+// emphasis; a hovered non-match still gets dimmed even when highlighted).
+.er-marble-hover-active .editor-typed-mark-external-marble-word {
   opacity: 0.4;
+}
+
+.er-marble-hover-active .editor-typed-mark-external-marble-word.er-marble-hover-match {
+  opacity: 1;
+  background-color: hsl(var(--accent));
+  text-decoration: underline dotted hsl(var(--primary));
 }
