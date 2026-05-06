@@ -1336,6 +1336,7 @@ declare module 'shared/models/rpc.interface' {
      *
      * @param eventType Unique network event type for coordinating between processes
      * @param event Event data to emit on the network
+     * @param skipRetry Whether to skip the retry process that will retry up to 10 times
      */
     emitEventOnNetwork: EventHandler;
   }
