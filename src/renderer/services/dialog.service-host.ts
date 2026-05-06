@@ -16,6 +16,7 @@ import {
   DialogData,
 } from '@shared/models/dialog-options.model';
 import { registerCommand } from '@shared/services/command.service';
+import { CommandNames } from 'papi-shared-types';
 import { CATEGORY_DIALOG } from '@shared/services/dialog.service-model';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -476,7 +477,11 @@ export async function startDialogService(): Promise<void> {
       },
     ),
   );
-  unsubPromises.push(registerCommand('platform.about', showAboutDialog));
+  // Register under window-scoped name so multiple windows can coexist. The main process
+  // command routing proxy handles forwarding the generic name to the focused window.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const scopedAboutCommand = `platform.about-${globalThis.windowId}` as CommandNames;
+  unsubPromises.push(registerCommand(scopedAboutCommand, showAboutDialog));
 
   // Wait to successfully register all requests
   const unsubscribeRequests = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));

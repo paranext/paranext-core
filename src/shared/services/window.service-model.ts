@@ -67,24 +67,24 @@ declare module 'papi-shared-types' {
 /**
  * JSDOC SOURCE windowService
  *
- * Service that allows to interact with the main application window
+ * Service that allows to interact with the current application window
  */
 export type IWindowService = {
   /**
    * JSDOC SOURCE getFocus
    *
-   * Get information about the current subject of focus in the main app window
+   * Get information about the current subject of focus in the current window
    *
    * @param selector `undefined`. Does not have to be provided
-   * @returns Information about the main app window's current subject of focus
+   * @returns Information about the current window's current subject of focus
    */
   getFocus(selector: undefined): Promise<FocusSubject>;
   /** JSDOC DESTINATION getFocus */
   getFocus(): Promise<FocusSubject>;
   /**
-   * Sets the subject of focus in the main app window.
+   * Sets the subject of focus in the current window.
    *
-   * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+   * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
    *   the window to update the current focus based on what is actually focused in the window (only
    *   necessary when an action happens that changes the focus but the window service does not
    *   detect already). In most cases, you will not need to set `'detect'` manually.
@@ -95,10 +95,10 @@ export type IWindowService = {
     focusSubject: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
   /**
-   * Sets the subject of focus in the main app window.
+   * Sets the subject of focus in the current window.
    *
    * @param selector `undefined`. Does not have to be provided
-   * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+   * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
    *   the window to update the current focus based on what is actually focused in the window (only
    *   necessary when an action happens that changes the focus but the window service does not
    *   detect already). In most cases, you will not need to set `'detect'` manually.
@@ -114,7 +114,7 @@ export type IWindowService = {
     focusSubject: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
   /**
-   * Subscribe to run a callback function when the main app window's subject of focus is changed
+   * Subscribe to run a callback function when the current window's subject of focus is changed
    *
    * @param selector `undefined`. Does not have to be provided
    * @param callback Function to run with the updated localized menuContent for this selector. If
