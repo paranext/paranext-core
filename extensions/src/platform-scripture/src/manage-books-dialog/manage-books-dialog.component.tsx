@@ -14,11 +14,11 @@ import {
   Button,
   Checkbox,
   cn,
-  Input,
   Label,
   OpenProjectTab,
   ProjectSelector,
   ProjectSelectorProject,
+  SearchBar,
   Select,
   SelectContent,
   SelectItem,
@@ -1833,13 +1833,12 @@ export function ManageBooksDialog({
                   </TooltipContent>
                 </Tooltip>
               )}
-              <Input
+              <SearchBar
                 value={filter}
-                onChange={(e) => setFilter(e.target.value)}
+                onSearch={setFilter}
                 placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
                 className="tw-h-8 tw-min-w-0 tw-max-w-xs tw-flex-1 tw-basis-24"
-                aria-label={t('%manageBooks_filter_books%', 'Filter books')}
-                disabled={isSubmitting}
+                isDisabled={isSubmitting}
               />
               <span
                 className={cn(
