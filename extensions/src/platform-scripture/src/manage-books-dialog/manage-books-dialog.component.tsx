@@ -408,9 +408,10 @@ export function ManageBooksDialog({
     'all',
   );
   const [viewPresenceFilter, setViewPresenceFilter] = useState<'all' | 'new' | 'existing'>('all');
-  // BookGridSelector grouping state. Defaults to canon grouping in View mode (so
-  // the user reads "OT / NT / DC" at a glance) and to status grouping in
-  // Create/Copy/Import (so the comparison badges drive the section ordering).
+  // BookGridSelector grouping state. Initial mount defaults to canon grouping
+  // (the dialog opens in View mode where "OT / NT / DC" reads naturally). Per
+  // Sebastian item 10 (2026-05-06) the user's choice is preserved across
+  // workflow switches so changing modes doesn't undo their grouping preference.
   const [gridGroupBy, setGridGroupBy] = useState<BookGridGroupBy>('canon');
   // Using null for React ref compatibility
   // eslint-disable-next-line no-null/no-null
@@ -535,15 +536,13 @@ export function ManageBooksDialog({
     });
   }, [copySourceId]);
 
-  // Reset per-action filters when the action changes.
+  // Reset per-action filters when the action changes. Per Sebastian item 10
+  // (2026-05-06) the gridGroupBy preference is intentionally NOT reset — the
+  // user's grouping choice persists across workflow switches.
   useEffect(() => {
     setCopyStateFilter('all');
     setImportPresenceFilter('all');
     setViewPresenceFilter('all');
-    // Default View grouping to canon (OT/NT/DC reads naturally as a "what's in
-    // this project" overview). Mutation modes default to status grouping so
-    // comparison badges (Newer/Older/New/Same) drive the section order.
-    setGridGroupBy(action === 'view' ? 'canon' : 'status');
   }, [action]);
 
   // Clear the reference project when the creation method is no longer referenceText.
