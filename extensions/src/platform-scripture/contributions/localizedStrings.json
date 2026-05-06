@@ -152,6 +152,7 @@
       "%manageBooks_sidebar_import_subtitle%": "Import from files",
       "%manageBooks_sidebar_delete_label%": "Delete books",
       "%manageBooks_sidebar_delete_subtitle%": "Remove books",
+      "%manageBooks_sidebar_readOnlyTooltip%": "{0} is read-only — switch to a writable project to add, copy, import, or delete books.",
       "%manageBooks_progressTracking_label%": "Progress tracking",
       "%manageBooks_progressTracking_subtitle%": "Start, stop, and review tracking",
       "%manageBooks_progressTracking_notYetAvailable%": "Progress tracking is not yet available — coming soon.",

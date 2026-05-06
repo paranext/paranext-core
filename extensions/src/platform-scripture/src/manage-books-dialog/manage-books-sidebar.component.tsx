@@ -164,6 +164,20 @@ export type ManageBooksSidebarProps = {
   /** Disable all rows + ProjectSelector while a mutation is in flight. */
   isSubmitting?: boolean;
 
+  /**
+   * Whether the active project is editable. When `false`, the four mutation sections (Create / Copy
+   * / Import / Delete) are disabled and surface a "{shortName} is read-only" tooltip. `undefined`
+   * (the default) leaves the sections enabled — used during initial load before the editability
+   * flag has resolved. Sourced from the C# `ProjectSummary.IsEditable`.
+   */
+  isTargetEditable?: boolean;
+  /**
+   * Short name of the active project. Surfaced inside the read-only tooltip body so the user knows
+   * which project they'd need to pick a different one to act on. Falls back to "this project" when
+   * not provided.
+   */
+  targetShortName?: string;
+
   /** Localized strings (forwarded from the orchestrator). */
   t: (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) => string;
 };
@@ -204,6 +218,14 @@ function actionToSectionId(action: ManageBooksAction): ManageBooksSidebarSection
   }
 }
 
+/** Sections that mutate the active project — disabled when the target is read-only. */
+const MUTATING_SECTION_IDS: ReadonlySet<ManageBooksSidebarSectionId> = new Set([
+  'create',
+  'copy',
+  'import',
+  'delete',
+]);
+
 export function ManageBooksSidebar({
   active,
   onSelectAction,
@@ -212,9 +234,20 @@ export function ManageBooksSidebar({
   projectId,
   onProjectIdChange,
   isSubmitting = false,
+  isTargetEditable,
+  targetShortName,
   t,
 }: ManageBooksSidebarProps) {
   const activeSectionId = actionToSectionId(active);
+  // Read-only target → block mutating actions. `undefined` means "still loading", so we leave
+  // sections enabled until the flag resolves to avoid a flicker of disabled state on first render.
+  const isTargetReadOnly = isTargetEditable === false;
+  const readOnlyTooltip = isTargetReadOnly
+    ? t(
+        '%manageBooks_sidebar_readOnlyTooltip%',
+        '{0} is read-only — switch to a writable project to add, copy, import, or delete books.',
+      ).replace('{0}', targetShortName ?? 'This project')
+    : undefined;
   return (
     <nav
       aria-label={t('%manageBooks_sidebar_heading%', 'Manage books')}
@@ -250,10 +283,16 @@ export function ManageBooksSidebar({
           />
         </div>
       </div>
-      {SECTIONS.map(({ id, groupStart, disabled, Icon }, index) => {
+      {SECTIONS.map(({ id, groupStart, disabled: defDisabled, Icon }, index) => {
+        // A section is disabled at runtime if either:
+        //   (a) it's hard-coded as "future" in the SECTIONS map (the 3 reference rows), or
+        //   (b) it mutates the active project but the active project is read-only.
+        const isReadOnlyDisabled = isTargetReadOnly && MUTATING_SECTION_IDS.has(id);
+        const disabled = defDisabled === true || isReadOnlyDisabled;
         const isActive = !disabled && id === activeSectionId;
         const showSeparator = !!groupStart && index > 0;
         const labels = getSectionLabels(id, t);
+        const tooltip = labels.tooltip ?? (isReadOnlyDisabled ? readOnlyTooltip : undefined);
 
         let groupHeading: string | undefined;
         if (groupStart === 'manage') {
@@ -275,6 +314,7 @@ export function ManageBooksSidebar({
             disabled={disabled || isSubmitting}
             data-testid={`manage-books-sidebar-section-${id}`}
             data-active={isActive ? 'true' : undefined}
+            data-read-only-disabled={isReadOnlyDisabled ? 'true' : undefined}
             className={cn(
               'tw-flex tw-items-start tw-gap-3 tw-rounded-md tw-px-3 tw-py-2 tw-text-start tw-text-sm tw-transition-colors',
               !disabled && 'hover:tw-bg-accent hover:tw-text-accent-foreground',
@@ -302,13 +342,13 @@ export function ManageBooksSidebar({
                 {groupHeading}
               </div>
             )}
-            {disabled && labels.tooltip ? (
+            {disabled && tooltip ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   {/* Wrapper span so the tooltip works on a disabled button */}
                   <span>{buttonElement}</span>
                 </TooltipTrigger>
-                <TooltipContent side="right">{labels.tooltip}</TooltipContent>
+                <TooltipContent side="right">{tooltip}</TooltipContent>
               </Tooltip>
             ) : (
               buttonElement

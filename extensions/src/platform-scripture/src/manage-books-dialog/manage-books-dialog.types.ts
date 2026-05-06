@@ -298,6 +298,10 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_sidebar_import_subtitle%',
   '%manageBooks_sidebar_delete_label%',
   '%manageBooks_sidebar_delete_subtitle%',
+  // Read-only target — Create / Copy / Import / Delete are disabled when the active project is
+  // not editable (Sebastian item 18). The localized string is the tooltip body. `{0}` is the
+  // project's short name.
+  '%manageBooks_sidebar_readOnlyTooltip%',
   // Disabled future sections (DEF-UI-011/012/013)
   '%manageBooks_progressTracking_label%',
   '%manageBooks_progressTracking_subtitle%',

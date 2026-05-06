@@ -557,6 +557,16 @@ export function ManageBooksDialog({
     if (createReferenceId === projectId) setCreateReferenceId(undefined);
   }, [copySourceId, createReferenceId, projectId]);
 
+  // Read-only target → bounce mutating actions back to "view". The sidebar already disables the
+  // four mutating sections, but if the user is mid-flow (e.g. on Create) and switches to a
+  // read-only project, we redirect them to "view" so the body doesn't sit in a state the user
+  // can no longer apply.
+  useEffect(() => {
+    if (project.isEditable === false && action !== 'view') {
+      setAction('view');
+    }
+  }, [project.isEditable, action]);
+
   // GAP-002 (P3U.1 ui-spec-validator): when the user picks a "Based on" reference project in
   // Create mode, eagerly load that project's book set so EXT-102's missing-model pre-flight
   // prompt can compare the user's selection against a real book inventory. Without this, the
@@ -1483,6 +1493,8 @@ export function ManageBooksDialog({
             projectId={projectId}
             onProjectIdChange={onProjectIdChange}
             isSubmitting={isSubmitting}
+            isTargetEditable={project.isEditable}
+            targetShortName={project.shortName}
             t={t}
           />
           <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col">
