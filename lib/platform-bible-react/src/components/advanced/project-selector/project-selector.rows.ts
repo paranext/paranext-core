@@ -323,6 +323,12 @@ function compareRows(a: ProjectRow, b: ProjectRow): number {
  * "Open tabs" rows are: open-group rows (project-multi / projectScrollGroup modes) and
  * `project`-mode rows whose project is open somewhere. Bound-but-closed synthetic rows and not-open
  * project rows land in "Other projects".
+ *
+ * Special case: when grouping is on but the "Open tabs" section would be empty (no project in the
+ * list is currently open in any scroll group), we fall back to a flat list. A lone "Other
+ * projects" heading without a partner section reads as a bug — the user wonders what they're
+ * "other" to. This commonly happens when the consumer hasn't (or can't) seed `openTabs` with
+ * already-open tabs at mount time.
  */
 export function partitionAndSort(
   rows: readonly ProjectRow[],
@@ -333,8 +339,12 @@ export function partitionAndSort(
   }
   const open = rows.filter(belongsToOpenTabsSection).sort(compareRows);
   const other = rows.filter((r) => !belongsToOpenTabsSection(r)).sort(compareRows);
-  const sections: RowSection[] = [];
-  if (open.length > 0) sections.push({ kind: 'openTabs', rows: open });
+  if (open.length === 0) {
+    // Grouping is on but no rows belong to "Open tabs" — render flat to avoid the misleading
+    // standalone "Other projects" header.
+    return [{ kind: 'flat', rows: other }];
+  }
+  const sections: RowSection[] = [{ kind: 'openTabs', rows: open }];
   if (other.length > 0) sections.push({ kind: 'other', rows: other });
   return sections;
 }

@@ -442,3 +442,41 @@ describe('computeRows — isDisabled / disabledReason flow-through', () => {
     expect(rows[0].isDisabled).toBe(false);
   });
 });
+
+describe('partitionAndSort — flat fallback when no Open Tabs section', () => {
+  it('returns a single flat section (no headings) when grouping is on but no rows belong to Open Tabs', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    const sections = partitionAndSort(rows, true);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].kind).toBe('flat');
+    expect(sections[0].rows).toHaveLength(projects.length);
+  });
+
+  it('still emits both Open Tabs + Other Projects sections when at least one tab is open', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs: [{ projectId: 'a', scrollGroupId: A }],
+      selection: { projectId: undefined },
+    });
+    const sections = partitionAndSort(rows, true);
+    expect(sections.map((s) => s.kind)).toEqual(['openTabs', 'other']);
+  });
+
+  it('falls back to flat in project-multi mode when no projects are open', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects,
+      openTabs: [],
+      selection: { pairs: [] },
+    });
+    const sections = partitionAndSort(rows, true);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].kind).toBe('flat');
+  });
+});
