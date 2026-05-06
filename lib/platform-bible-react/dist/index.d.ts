@@ -652,9 +652,13 @@ export type ProjectSelectorLocalizedStrings = {
 	filterGroupByOpenTabs?: string;
 	/** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
 	filterShowSelectedOnly?: string;
-	/** Section heading for the Open tabs section. Defaults to `"Open tabs"`. */
+	/**
+	 * Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`.
+	 */
 	openTabsSectionHeading?: string;
-	/** Section heading for the Other projects section. Defaults to `"Other projects"`. */
+	/**
+	 * Section heading for the Other projects section. Defaults to `"Your projects & resources"`.
+	 */
 	otherProjectsSectionHeading?: string;
 	/**
 	 * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
