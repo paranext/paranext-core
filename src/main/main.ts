@@ -60,7 +60,6 @@ import {
   serialize,
   UnsubscriberAsyncList,
   wait,
-  waitForDuration,
 } from 'platform-bible-utils';
 import { windowService } from '@shared/services/window.service';
 import { themeService } from '@shared/services/theme.service';
