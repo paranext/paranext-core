@@ -355,7 +355,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
       <TooltipTrigger asChild>{rowNode}</TooltipTrigger>
       <TooltipContent
         side="top"
-        align="start"
+        align="center"
         sideOffset={8}
         collisionPadding={16}
         className="tw-max-w-xs"
