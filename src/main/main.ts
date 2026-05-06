@@ -530,14 +530,15 @@ async function main() {
       // All errors are swallowed — extension may not be installed, or sync may fail.
       // Shutdown must never be permanently blocked.
       try {
-        await commandService.sendCommand('paratextBibleSendReceive.cancelSync');
+        await commandService.sendCommandNoRetry('paratextBibleSendReceive.cancelSync');
       } catch {
         /* no sync in progress, or extension unavailable */
       }
 
       try {
         await waitForDuration(
-          () => commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined),
+          () =>
+            commandService.sendCommandNoRetry('paratextBibleSendReceive.syncProjects', undefined),
           SHUTDOWN_SYNC_TIME_OUT,
         );
       } catch {

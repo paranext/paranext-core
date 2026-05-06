@@ -52,6 +52,7 @@ export interface IRpcHandler {
   request: (
     requestType: SerializedRequestType,
     requestParams: RequestParams,
+    skipRetry?: boolean,
   ) => Promise<JSONRPCResponse>;
   /**
    * Sends an event to other processes. Does NOT run the local event subscriptions as they should be

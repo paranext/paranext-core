@@ -128,6 +128,10 @@ export class RpcClient implements IRpcMethodRegistrar {
   async request(
     requestType: SerializedRequestType,
     requestParams: RequestParams,
+    // RpcClient does not use requestWithRetry so skipRetry has no effect; parameter exists to
+    // satisfy the IRpcHandler interface
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _skipRetry = false,
   ): Promise<JSONRPCResponse> {
     const newRequest = createRequest(requestType, requestParams, this.createNextRequestId());
     // Need to use null since it's part of the API

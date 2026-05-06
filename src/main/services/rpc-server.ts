@@ -101,38 +101,36 @@ export class RpcServer implements IRpcHandler {
   async request(
     requestType: SerializedRequestType,
     requestParams: RequestParams,
+    skipRetry = false,
   ): Promise<JSONRPCResponse> {
-    return requestWithRetry(
-      async () => {
-        const requestId = this.createNextRequestId();
-        const requestToSend = createRequest(requestType, requestParams, requestId);
-        // Need to use null since it's part of the API
-        // eslint-disable-next-line no-null/no-null
-        let response: JSONRPCResponse | null = null;
-        const isLocal = this.jsonRpcServer.hasMethod(requestType);
-        if (isLocal) response = await this.jsonRpcServer.receive(requestToSend);
-        else {
-          const methodDetails = this.rpcMethodDetailsByMethodName.get(requestType);
-          if (!methodDetails)
-            return createErrorResponse(
-              `'${requestType}' not found`,
-              JSONRPCErrorCode.MethodNotFound,
-              requestId,
-            );
-          const { handler } = methodDetails;
-          if (handler === this) response = await this.jsonRpcClient.requestAdvanced(requestToSend);
-          else return handler.request(requestType, requestParams);
-        }
-        if (response) return response;
-        return createErrorResponse(
-          `No response from ${isLocal ? 'local' : 'remote'} RPC server`,
-          JSONRPCErrorCode.InternalError,
-          requestId,
-        );
-      },
-      this.name,
-      requestType,
-    );
+    const doRequest = async () => {
+      const requestId = this.createNextRequestId();
+      const requestToSend = createRequest(requestType, requestParams, requestId);
+      // Need to use null since it's part of the API
+      // eslint-disable-next-line no-null/no-null
+      let response: JSONRPCResponse | null = null;
+      const isLocal = this.jsonRpcServer.hasMethod(requestType);
+      if (isLocal) response = await this.jsonRpcServer.receive(requestToSend);
+      else {
+        const methodDetails = this.rpcMethodDetailsByMethodName.get(requestType);
+        if (!methodDetails)
+          return createErrorResponse(
+            `'${requestType}' not found`,
+            JSONRPCErrorCode.MethodNotFound,
+            requestId,
+          );
+        const { handler } = methodDetails;
+        if (handler === this) response = await this.jsonRpcClient.requestAdvanced(requestToSend);
+        else return handler.request(requestType, requestParams, skipRetry);
+      }
+      if (response) return response;
+      return createErrorResponse(
+        `No response from ${isLocal ? 'local' : 'remote'} RPC server`,
+        JSONRPCErrorCode.InternalError,
+        requestId,
+      );
+    };
+    return skipRetry ? doRequest() : requestWithRetry(doRequest, this.name, requestType);
   }
 
   // Outgoing event from this server to the client it is connected to
