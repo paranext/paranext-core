@@ -18,11 +18,12 @@
 }
 
 // Hover-match state. Per PT9 fidelity, hovering a marble word does NOT dim non-matching
-// words - only the words that share the hovered token's lemma are highlighted. Words with no
-// link stay visually neutral (avoiding the false-equivalence where unlinked words could look
-// like they match the hovered word). The `er-marble-hover-active` body class still serves as
-// the gate so the rule only applies during a hover.
+// words - only the words that share the hovered token's lemma are highlighted, in the same
+// light-blue as the "Highlight all research terms" toggle. Words with no link stay visually
+// neutral (avoiding the false-equivalence where unlinked words could look like they match
+// the hovered word). The `er-marble-hover-active` body class gates the rule so it only
+// applies during a hover.
 .er-marble-hover-active .editor-typed-mark-external-marble-word.er-marble-hover-match {
-  background-color: hsl(var(--accent));
-  text-decoration: underline dotted hsl(var(--primary));
+  background-color: hsl(210 100% 90%);
+  border-radius: 2px;
 }
