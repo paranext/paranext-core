@@ -59,6 +59,7 @@ import {
   serialize,
   UnsubscriberAsyncList,
   wait,
+  waitForDuration,
 } from 'platform-bible-utils';
 import { windowService } from '@shared/services/window.service';
 import { themeService } from '@shared/services/theme.service';
@@ -519,6 +520,33 @@ async function main() {
       })();
     }
 
+    mainWindow.on('close', async (event) => {
+      // Prevents the main window from initially closing
+      event.preventDefault();
+
+      // Cancel any in-progress sync, then run a fresh full sync before shutdown.
+      // All errors are swallowed — extension may not be installed, or sync may fail.
+      // Shutdown must never be permanently blocked.
+      try {
+        await commandService.sendCommand('paratextBibleSendReceive.cancelSync');
+      } catch {
+        /* no sync in progress, or extension unavailable */
+      }
+
+      try {
+        await waitForDuration(
+          () => commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined),
+          SHUTDOWN_SYNC_TIME_OUT,
+        );
+      } catch {
+        /* sync failed or extension unavailable — proceed with shutdown */
+      }
+
+      // Destroys the main window allowing the rest of the close sequence to continue. This is the
+      // equivalent of doing `mainWindow.close()` just without triggering the `close` event.
+      mainWindow?.destroy();
+    });
+
     mainWindow.on('closed', async () => {
       mainWindow = undefined;
       try {
@@ -693,36 +721,6 @@ async function main() {
       // Also, in the future, this should allow a "are you sure?" dialog to display.
       e.preventDefault();
       isAppQuitting = true;
-
-      // Cancel any in-progress sync, then run a fresh full sync before shutdown.
-      // All errors are swallowed — extension may not be installed, or sync may fail.
-      // Shutdown must never be permanently blocked.
-      try {
-        await commandService.sendCommand('paratextBibleSendReceive.cancelSync');
-      } catch {
-        /* no sync in progress, or extension unavailable */
-      }
-
-      let syncTimedOut = false;
-      try {
-        await Promise.race([
-          commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined),
-          wait(SHUTDOWN_SYNC_TIME_OUT).then(() => {
-            syncTimedOut = true;
-            return undefined;
-          }),
-        ]);
-      } catch {
-        /* sync failed or extension unavailable — proceed with shutdown */
-      }
-
-      if (syncTimedOut) {
-        try {
-          await commandService.sendCommand('paratextBibleSendReceive.cancelSync');
-        } catch {
-          /* extension unavailable */
-        }
-      }
 
       await Promise.all([
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT),
