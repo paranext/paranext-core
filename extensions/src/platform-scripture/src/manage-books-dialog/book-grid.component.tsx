@@ -661,7 +661,9 @@ export function BookGridSelector({
       return (
         <Tooltip>
           <TooltipTrigger asChild>{plain}</TooltipTrigger>
-          <TooltipContent side="left">{tooltipContent}</TooltipContent>
+          <TooltipContent side="bottom" align="end">
+            {tooltipContent}
+          </TooltipContent>
         </Tooltip>
       );
     }
@@ -725,7 +727,9 @@ export function BookGridSelector({
     return (
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent side="left">{tooltipContent}</TooltipContent>
+        <TooltipContent side="bottom" align="end">
+          {tooltipContent}
+        </TooltipContent>
       </Tooltip>
     );
   };
