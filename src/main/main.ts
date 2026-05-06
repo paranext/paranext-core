@@ -520,44 +520,49 @@ async function main() {
       })();
     }
 
+    let isWindowClosing = false;
     mainWindow.on('close', async (event) => {
-      // Prevents the main window from initially closing
-      event.preventDefault();
+      // Prevents a "double close" when the user tries to press the close window button a second
+      // time
+      if (!isWindowClosing) {
+        // Prevents the main window from initially closing
+        event.preventDefault();
+        isWindowClosing = true;
 
-      logger.info('Syncing projects on shutdown...');
+        logger.info('Syncing projects on shutdown...');
 
-      // Cancel any in-progress sync, then run a fresh full sync before shutdown.
-      // All errors are swallowed — extension may not be installed, or sync may fail.
-      // Shutdown must never be permanently blocked.
-      try {
-        await networkService.requestNoRetry(
-          serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync'),
-        );
-      } catch {
-        /* no sync in progress, or extension unavailable */
+        // Cancel any in-progress sync, then run a fresh full sync before shutdown.
+        // All errors are swallowed — extension may not be installed, or sync may fail.
+        // Shutdown must never be permanently blocked.
+        try {
+          await networkService.requestNoRetry(
+            serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync'),
+          );
+        } catch {
+          /* no sync in progress, or extension unavailable */
+        }
+
+        const syncComplete = new AsyncVariable<void>('shutdown sync', SHUTDOWN_SYNC_TIME_OUT);
+        networkService
+          .requestNoRetry(
+            serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.syncProjects'),
+            undefined,
+          )
+          .then(() => syncComplete.resolveToValue(undefined))
+          .catch(
+            () => syncComplete.resolveToValue(undefined), // sync failed — settle anyway
+          );
+        try {
+          await syncComplete.promise;
+          logger.info('Sync on shutdown complete');
+        } catch {
+          /* timed out */
+        }
+
+        // Destroys the main window allowing the rest of the close sequence to continue. This is the
+        // equivalent of doing `mainWindow.close()` just without triggering the `close` event.
+        mainWindow?.destroy();
       }
-
-      const syncComplete = new AsyncVariable<void>('shutdown sync', SHUTDOWN_SYNC_TIME_OUT);
-      networkService
-        .requestNoRetry(
-          serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.syncProjects'),
-          undefined,
-        )
-        .then(() => syncComplete.resolveToValue(undefined))
-        .catch(
-          () => syncComplete.resolveToValue(undefined), // sync failed — settle anyway
-        );
-      try {
-        await syncComplete.promise;
-      } catch {
-        /* timed out */
-      }
-
-      logger.info('Sync on shutdown complete');
-
-      // Destroys the main window allowing the rest of the close sequence to continue. This is the
-      // equivalent of doing `mainWindow.close()` just without triggering the `close` event.
-      mainWindow?.destroy();
     });
 
     mainWindow.on('closed', async () => {
