@@ -1,10 +1,11 @@
 import {
   Button,
-  ComboBox,
-  ComboBoxGroup,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
+  OpenProjectTab,
   Progress,
+  ProjectSelector,
+  ProjectSelectorProject,
   Select,
   SelectContent,
   SelectItem,
@@ -12,7 +13,7 @@ import {
   SelectValue,
   Spinner,
 } from 'platform-bible-react';
-import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
+import { formatReplacementString, LanguageStrings, type ScrollGroupId } from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -70,8 +71,24 @@ export type ChecksSidePanelProps = {
    * result type when no check id is present.
    */
   getLocalizedCheckDescription: (checkId: string) => string;
-  /** Called when the user selects a different project. Navigates the panel to that project. */
-  onSelectProject: (projectId: string) => void;
+  /**
+   * Currently-open project-bound tabs, surfaced in the project picker's "Open Tabs" grouping.
+   * Empty array is fine — the section just won't render.
+   */
+  openTabs: OpenProjectTab[];
+  /** The scroll group this panel is bound to, if any. Drives the picker's group chips. */
+  scrollGroupId: ScrollGroupId | undefined;
+  /**
+   * Called when the user picks a (project, scroll group) pair. Navigates the panel to that
+   * project and rebinds the scroll group (markers-checklist Task 14 behavior — the container
+   * may instead focus an existing editor tab and adopt its group).
+   */
+  onChangeSelection: (selection: { projectId: string; scrollGroupId: ScrollGroupId }) => void;
+  /**
+   * Called when the user clicks "Open" on a bound-but-closed picker row; the container opens a
+   * scripture editor for that project in the given scroll group.
+   */
+  onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
   /** Called when the user selects a different scope. */
   onSelectScope: (scope: CheckScopes) => void;
   /** Called when the user changes which check types are selected. */
@@ -89,15 +106,6 @@ export type ChecksSidePanelProps = {
   onNavigateToResult: (resultId: string) => void;
   /** Called when the user cancels the in-progress check job. */
   onCancelOperation: () => void;
-};
-
-/** A project entry shaped for the project ComboBox. */
-type ProjectEntry = {
-  id: string;
-  fullName: string;
-  shortName: string;
-  label: string;
-  secondaryLabel?: string;
 };
 
 /**
@@ -120,7 +128,10 @@ export function ChecksSidePanel({
   hasActiveJob,
   isResultLoadingCancelled,
   getLocalizedCheckDescription,
-  onSelectProject,
+  openTabs,
+  scrollGroupId,
+  onChangeSelection,
+  onOpenProjectInGroup,
   onSelectScope,
   onSelectCheckTypes,
   onAllowCheck,
@@ -157,31 +168,16 @@ export function ChecksSidePanel({
     [onSelectScope],
   );
 
-  const projectOptionsGrouped = useMemo<ComboBoxGroup<ProjectEntry>[]>(() => {
-    const allProjects = [...projects]
-      .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
-      .map((project) => ({
-        id: project.id,
-        fullName: project.fullName,
-        shortName: project.shortName,
-        label: project.shortName,
-        secondaryLabel: project.fullName,
-      }));
-    return [
-      {
-        groupHeading:
-          localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%'],
-        options: allProjects,
-      },
-    ];
-  }, [projects, localizedStrings]);
-
-  const selectedProjectOption = useMemo(
+  const sortedProjects = useMemo<ProjectSelectorProject[]>(
     () =>
-      projectOptionsGrouped
-        .flatMap((group) => group.options)
-        .find((option) => option.id === selectedProjectId),
-    [projectOptionsGrouped, selectedProjectId],
+      [...projects]
+        .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
+        .map((project) => ({
+          id: project.id,
+          shortName: project.shortName,
+          fullName: project.fullName,
+        })),
+    [projects],
   );
 
   const getScopeLabel = useCallback(
@@ -232,11 +228,13 @@ export function ChecksSidePanel({
       {/* Check configuration */}
       <div className="tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:w-full">
         {/* Project Filter */}
-        <ComboBox<ProjectEntry>
-          options={projectOptionsGrouped}
-          value={selectedProjectOption}
-          onChange={(newProject) => onSelectProject(newProject.id)}
-          getButtonLabel={(project) => project.shortName}
+        <ProjectSelector
+          mode="projectScrollGroup"
+          projects={sortedProjects}
+          openTabs={openTabs}
+          selection={{ projectId: selectedProjectId, scrollGroupId }}
+          onChangeSelection={onChangeSelection}
+          onOpenProjectInGroup={onOpenProjectInGroup}
           buttonPlaceholder={
             localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
           }
@@ -248,7 +246,6 @@ export function ChecksSidePanel({
           }
           buttonVariant="outline"
           buttonClassName="tw:flex-1 tw:min-w-32 tw:font-normal"
-          popoverContentClassName="tw:w-[300px]"
           alignDropDown="start"
         />
 
