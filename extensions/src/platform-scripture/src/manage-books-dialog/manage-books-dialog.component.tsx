@@ -992,7 +992,39 @@ export function ManageBooksDialog({
     setIsSubmitting(true);
     const minDisplay = minDelay(MIN_SUBMITTING_VISIBLE_MS);
     try {
-      const raw = await Promise.resolve(onDeleteBooks({ projectId, books }));
+      // Sebastian review item 26 (2026-05-06, FE half): re-fetch the project's current book set
+      // before issuing the delete. If another tab/process has deleted some of the user's selected
+      // books since the dialog last loaded, those books are now absent from the destination — the
+      // C# `DeleteBooksOrchestrator` would either no-op or surface a confusing error per book. We
+      // intersect the user's selection with the freshly-loaded inventory and continue with only
+      // the still-present subset; the dropped books are reported back to the user via a toast so
+      // they understand why the count shrank. The backend's AlertCapture wrap (BE half of #26)
+      // remains a separate PR.
+      const fresh = await Promise.resolve(loadBooks(projectId));
+      setBooksByProjectId((prev) => ({ ...prev, [projectId]: fresh }));
+      const freshPresent = new Set(fresh.map((b) => b.id));
+      const stillPresent = books.filter((b) => freshPresent.has(b));
+      const alreadyGone = books.filter((b) => !freshPresent.has(b));
+      if (alreadyGone.length > 0) {
+        sonner.warning(
+          fmtTemplate(
+            t(
+              '%manageBooks_delete_alreadyDeletedWarning%',
+              '{0} of the selected books have already been deleted in another window. Skipping them.',
+            ),
+            alreadyGone.length,
+          ),
+          { description: alreadyGone.join(', '), duration: 6000, closeButton: true },
+        );
+      }
+      if (stillPresent.length === 0) {
+        // Everything the user selected has already been deleted elsewhere — nothing left for
+        // `onDeleteBooks` to do. Drop the selection (so the empty grid is reflected in the footer)
+        // and bail before the orchestrator call.
+        setSelected(new Set());
+        return;
+      }
+      const raw = await Promise.resolve(onDeleteBooks({ projectId, books: stillPresent }));
       if (raw) emitResult(raw);
       setSelected(new Set());
       await refreshBooks(projectId);

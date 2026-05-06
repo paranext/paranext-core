@@ -279,6 +279,11 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_delete_confirmBodyShared%',
   '%manageBooks_delete_confirmCancel%',
   '%manageBooks_delete_confirmAccept%',
+  // Sebastian review item 26 (2026-05-06, FE half): runDelete refreshes the destination book set
+  // before issuing the delete; if the user's selection contains books that have already been
+  // removed in another tab/window, this localized warning surfaces the skipped count via a
+  // sonner toast.
+  '%manageBooks_delete_alreadyDeletedWarning%',
   // Create prompts (versification / missing model books)
   '%manageBooks_create_versificationMismatchTitle%',
   '%manageBooks_create_versificationMismatchBody%',

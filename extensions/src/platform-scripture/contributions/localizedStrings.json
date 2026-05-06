@@ -191,6 +191,7 @@
       "%manageBooks_create_referenceProjectPlaceholder%": "Select reference project",
       "%manageBooks_create_versificationMismatchBody%": "{0} uses {1} versification but the model project {2} uses {3}. Continue?",
       "%manageBooks_create_versificationMismatchTitle%": "Versification mismatch",
+      "%manageBooks_delete_alreadyDeletedWarning%": "{0} of the selected books have already been deleted in another window. Skipping them.",
       "%manageBooks_delete_confirmAccept%": "Delete",
       "%manageBooks_delete_confirmBodyAll%": "All books will be deleted from {0}. The project itself will not be deleted. This cannot be undone.",
       "%manageBooks_delete_confirmBodyPartial%": "{0} book(s) will be deleted from {1}. This cannot be undone.",
