@@ -3,7 +3,16 @@
 // on the mode-discriminated adjacent fields, so we keep `props.X` access throughout to preserve
 // narrowing inside `if (props.mode === '...')` blocks.
 /* eslint-disable react/destructuring-assignment */
-import { Fragment, ReactNode, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
+import {
+  Fragment,
+  ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from 'react';
 import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Filter } from 'lucide-react';
 import type { ScrollGroupId } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui.util';
@@ -433,6 +442,38 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const [query, setQuery] = useState('');
   const [groupByOpenTabs, setGroupByOpenTabs] = useState(props.defaultGroupByOpenTabs ?? true);
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+  // Suppress the trigger tooltip briefly after the popover closes. Radix Tooltip opens on FOCUS
+  // (not just hover), and Radix Popover restores focus to its trigger on close — without this, the
+  // tooltip flashes open immediately after a row is selected. We use a fixed timer rather than a
+  // pointerleave-only trigger because after a row click the pointer never enters the trigger
+  // (it was over the popover content), so pointerleave does not fire reliably. The timer is long
+  // enough to swallow the focus-restore event but short enough that an intentional re-hover
+  // shortly after still works.
+  const [suppressTriggerTooltip, setSuppressTriggerTooltip] = useState(false);
+  const suppressTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const clearSuppressTimer = () => {
+    if (suppressTimerRef.current !== undefined) {
+      clearTimeout(suppressTimerRef.current);
+      suppressTimerRef.current = undefined;
+    }
+  };
+  useEffect(() => {
+    // Clear pending timer on unmount.
+    return clearSuppressTimer;
+  }, []);
+
+  // Close the popover and start the trigger-tooltip suppression window. Used both by direct
+  // row-click handlers (which call setOpen(false) imperatively) and by the popover's onOpenChange
+  // when it closes via outside-click / Escape.
+  const closePopoverAndSuppressTooltip = () => {
+    setOpen(false);
+    clearSuppressTimer();
+    setSuppressTriggerTooltip(true);
+    suppressTimerRef.current = setTimeout(() => {
+      setSuppressTriggerTooltip(false);
+      suppressTimerRef.current = undefined;
+    }, 700);
+  };
 
   const strings = resolveStrings(props.localizedStrings);
 
@@ -521,7 +562,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     switch (props.mode) {
       case 'project': {
         props.onChangeSelection({ projectId: row.projectId });
-        setOpen(false);
+        closePopoverAndSuppressTooltip();
         return;
       }
       case 'project-multi': {
@@ -541,7 +582,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         if (row.isBoundButClosed && row.scrollGroupId !== undefined) {
           // Reopen the tab in the bound group; selection doesn't change.
           props.onOpenProjectInGroup(row.projectId, row.scrollGroupId);
-          setOpen(false);
+          closePopoverAndSuppressTooltip();
           return;
         }
         if (row.scrollGroupId !== undefined) {
@@ -549,7 +590,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
             projectId: row.projectId,
             scrollGroupId: row.scrollGroupId,
           });
-          setOpen(false);
+          closePopoverAndSuppressTooltip();
           return;
         }
         // Not-open-project row: inherit the current selection's scroll group so the newly
@@ -558,7 +599,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         const targetGroup: ScrollGroupId = props.selection.scrollGroupId ?? 0;
         props.onChangeSelection({ projectId: row.projectId, scrollGroupId: targetGroup });
         props.onOpenProjectInGroup(row.projectId, targetGroup);
-        setOpen(false);
+        closePopoverAndSuppressTooltip();
       }
       // no default
     }
@@ -727,12 +768,29 @@ export function ProjectSelector(props: ProjectSelectorProps) {
 
   return (
     <TooltipProvider delayDuration={400}>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          // When the popover closes (e.g. user clicked outside / pressed Escape), Radix Popover
+          // restores focus to the trigger. Radix Tooltip opens on focus, so it would flash open
+          // immediately. closePopoverAndSuppressTooltip suppresses the tooltip for 700ms — enough
+          // to swallow the focus-restore but short enough that a deliberate re-hover shortly
+          // after still works. (Row-click handlers also use this helper directly, since they
+          // bypass onOpenChange by calling setOpen imperatively.)
+          if (!next) {
+            closePopoverAndSuppressTooltip();
+          } else {
+            setOpen(true);
+            clearSuppressTimer();
+            setSuppressTriggerTooltip(false);
+          }
+        }}
+      >
         <Tooltip
-          // Force closed while the popover is open so the tooltip doesn't compete with the
-          // popover content. When the popover is closed, leave `open` undefined so Radix's
-          // built-in hover/focus tracking takes over.
-          {...(open ? { open: false } : {})}
+          // Force closed while the popover is open OR while the post-close suppression window is
+          // active. Otherwise leave `open` undefined so Radix's built-in hover/focus tracking
+          // takes over.
+          {...(open || suppressTriggerTooltip ? { open: false } : {})}
         >
           <PopoverTrigger asChild>
             <TooltipTrigger asChild>
@@ -742,6 +800,17 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                 aria-expanded={open}
                 aria-label={props.ariaLabel}
                 disabled={props.isDisabled ?? false}
+                onPointerLeave={() => {
+                  // Mouse left the trigger → release the post-close tooltip suppression early.
+                  // The next legitimate hover (re-entry) will open the tooltip normally. Note:
+                  // after a row click this often doesn't fire (pointer was over the popover, not
+                  // the trigger), so the timer in closePopoverAndSuppressTooltip is the primary
+                  // release mechanism.
+                  if (suppressTriggerTooltip) {
+                    clearSuppressTimer();
+                    setSuppressTriggerTooltip(false);
+                  }
+                }}
                 className={cn(
                   'tw-flex tw-w-[180px] tw-items-center tw-justify-between tw-overflow-hidden',
                   props.buttonClassName,
@@ -770,68 +839,68 @@ export function ProjectSelector(props: ProjectSelectorProps) {
             </TooltipContent>
           )}
         </Tooltip>
-      <PopoverContent
-        align={props.alignDropDown ?? 'start'}
-        collisionPadding={16}
-        className={cn(
-          'tw-w-[500px] tw-max-w-[calc(100vw-2rem)] tw-p-0',
-          props.popoverContentClassName,
-        )}
-        style={props.popoverContentStyle}
-      >
-        <TooltipProvider delayDuration={200}>
-          <Command shouldFilter={false}>
-            <div className="tw-flex tw-items-center tw-border-b tw-pe-2">
-              <div className="tw-flex-1">
-                <CommandInput
-                  value={query}
-                  onValueChange={setQuery}
-                  placeholder={strings.searchPlaceholder}
-                  className="tw-border-0"
+        <PopoverContent
+          align={props.alignDropDown ?? 'start'}
+          collisionPadding={16}
+          className={cn(
+            'tw-w-[500px] tw-max-w-[calc(100vw-2rem)] tw-p-0',
+            props.popoverContentClassName,
+          )}
+          style={props.popoverContentStyle}
+        >
+          <TooltipProvider delayDuration={200}>
+            <Command shouldFilter={false}>
+              <div className="tw-flex tw-items-center tw-border-b tw-pe-2">
+                <div className="tw-flex-1">
+                  <CommandInput
+                    value={query}
+                    onValueChange={setQuery}
+                    placeholder={strings.searchPlaceholder}
+                    className="tw-border-0"
+                  />
+                </div>
+                <FilterMenu
+                  groupByOpenTabs={groupByOpenTabs}
+                  onChangeGroupByOpenTabs={setGroupByOpenTabs}
+                  showSelectedOnly={props.mode === 'project-multi' ? showSelectedOnly : undefined}
+                  onChangeShowSelectedOnly={
+                    props.mode === 'project-multi' ? setShowSelectedOnly : undefined
+                  }
+                  strings={strings}
                 />
               </div>
-              <FilterMenu
-                groupByOpenTabs={groupByOpenTabs}
-                onChangeGroupByOpenTabs={setGroupByOpenTabs}
-                showSelectedOnly={props.mode === 'project-multi' ? showSelectedOnly : undefined}
-                onChangeShowSelectedOnly={
-                  props.mode === 'project-multi' ? setShowSelectedOnly : undefined
-                }
-                strings={strings}
-              />
-            </div>
-            {props.mode === 'project-multi' && (
-              <div className="tw-flex tw-justify-between tw-border-b tw-py-2 tw-pe-4 tw-ps-2">
-                <Button variant="ghost" size="sm" onClick={handleSelectAll}>
-                  {`${strings.selectAll} (${allPairs.length.toString()})`}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleClearAll}>
-                  {`${strings.clearAll} (${props.selection.pairs.length.toString()})`}
-                </Button>
-              </div>
-            )}
-            <CommandList>
-              <CommandEmpty>{props.commandEmptyMessage ?? 'No projects found'}</CommandEmpty>
-              {sections.map((section, index) => (
-                <Fragment key={section.kind}>
-                  <CommandGroup heading={sectionHeading(section, strings)}>
-                    {section.rows.map((row) => (
-                      <ProjectRowView
-                        key={row.rowKey}
-                        row={row}
-                        mode={props.mode}
-                        strings={strings}
-                        onClick={handleRowClick}
-                        onOpen={openButtonHandler}
-                      />
-                    ))}
-                  </CommandGroup>
-                  {index < sections.length - 1 && <CommandSeparator />}
-                </Fragment>
-              ))}
-            </CommandList>
-          </Command>
-        </TooltipProvider>
+              {props.mode === 'project-multi' && (
+                <div className="tw-flex tw-justify-between tw-border-b tw-py-2 tw-pe-4 tw-ps-2">
+                  <Button variant="ghost" size="sm" onClick={handleSelectAll}>
+                    {`${strings.selectAll} (${allPairs.length.toString()})`}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleClearAll}>
+                    {`${strings.clearAll} (${props.selection.pairs.length.toString()})`}
+                  </Button>
+                </div>
+              )}
+              <CommandList>
+                <CommandEmpty>{props.commandEmptyMessage ?? 'No projects found'}</CommandEmpty>
+                {sections.map((section, index) => (
+                  <Fragment key={section.kind}>
+                    <CommandGroup heading={sectionHeading(section, strings)}>
+                      {section.rows.map((row) => (
+                        <ProjectRowView
+                          key={row.rowKey}
+                          row={row}
+                          mode={props.mode}
+                          strings={strings}
+                          onClick={handleRowClick}
+                          onOpen={openButtonHandler}
+                        />
+                      ))}
+                    </CommandGroup>
+                    {index < sections.length - 1 && <CommandSeparator />}
+                  </Fragment>
+                ))}
+              </CommandList>
+            </Command>
+          </TooltipProvider>
         </PopoverContent>
       </Popover>
     </TooltipProvider>
