@@ -441,8 +441,6 @@ export function ManageBooksDialog({
     },
     [onMutationResult],
   );
-  // A8: track auto-browse to fire only once per Import-mode entry
-  const importAutoBrowseFired = useRef(false);
   // -- Load source-project books on demand when Copy picks a source --------
   useEffect(() => {
     if (!open) return;
@@ -724,7 +722,7 @@ export function ManageBooksDialog({
   const handleImportFilesPicked = (picked: FileList | null) => {
     if (!picked || picked.length === 0) return;
     // Fire-and-forget: ingestImportFiles's async work is internally tracked via setImportFiles;
-    // callers don't need to await here (the auto-browse path uses triggerFileBrowser, which does).
+    // callers don't need to await here.
     ingestImportFiles(Array.from(picked)).catch(() => undefined);
   };
 
@@ -740,29 +738,11 @@ export function ManageBooksDialog({
     return { pickedAny: true };
   }, [ingestImportFiles, onPickImportFiles]);
 
-  // A8: auto-browse on Import mode entry.
-  useEffect(() => {
-    if (!open) {
-      importAutoBrowseFired.current = false;
-      return;
-    }
-    if (action !== 'import') {
-      importAutoBrowseFired.current = false;
-      return;
-    }
-    if (importAutoBrowseFired.current) return;
-    if (Object.keys(importFiles).length > 0) return;
-    importAutoBrowseFired.current = true;
-    triggerFileBrowser()
-      .then(({ pickedAny }) => {
-        if (!pickedAny && Object.keys(importFiles).length === 0) {
-          // A8: silently revert to View when the user cancels the auto-picker.
-          setAction('view');
-        }
-        return undefined;
-      })
-      .catch(() => undefined);
-  }, [open, action, importFiles, triggerFileBrowser]);
+  // Per Sebastian review item 23 (2026-05-06): auto-browse on Import-mode entry was reversed.
+  // The file picker now opens only when the user explicitly clicks the "Choose files…" /
+  // "Add files…" button (rendered around line 1759-1768). Decision A8's "auto-browse on entry"
+  // behavior is superseded — the prior `useEffect` that called `triggerFileBrowser()` and the
+  // `importAutoBrowseFired` ref have both been removed.
 
   const filterTerm = filter.trim().toLowerCase();
 

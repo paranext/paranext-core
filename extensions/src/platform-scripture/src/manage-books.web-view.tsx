@@ -622,14 +622,11 @@ global.webViewComponent = function ManageBooksWebView({
   // disappears.
 
   // ===== File picker stub (DEF-UI-009 / FN-010 spike) ========================
-  // No platform multi-file picker exists in PT10. We deliberately do NOT
-  // pass an `onPickImportFiles` prop to the dialog: providing one triggers
-  // the component's A8 auto-cancel-to-View-mode flow on `undefined` returns,
-  // which would correctly fire when the user *dismisses* a real picker but
-  // would incorrectly fire on every Import-mode entry while the picker is
-  // unimplemented. With the prop omitted, the component falls back to its
-  // native `<input type="file" multiple>` ref-click — Import mode stays
-  // sticky and the user can browse via the visible "Choose files…" button.
+  // No platform multi-file picker exists in PT10. The component falls back to
+  // a native `<input type="file" multiple>` ref-click triggered by the visible
+  // "Choose files…" / "Add files…" buttons. Per Sebastian review item 23
+  // (2026-05-06), Import mode no longer auto-opens the picker on entry —
+  // the user clicks the button explicitly.
   //
   // Tracked as DEF-UI-009 / FN-010 in deferred-functionality.md. When the
   // future `papi.dialogs.selectFiles({ multi, filters })` PAPI ships, wire
