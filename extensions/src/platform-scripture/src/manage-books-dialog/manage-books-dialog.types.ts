@@ -26,6 +26,19 @@ export type ManageBooksCreateMethod = 'empty' | 'chapterVerse' | 'fromTemplate';
 export type ManageBooksImportStrategy = 'replaceEntireBooks' | 'nonExistingChapters';
 
 /**
+ * Strategy for resolving conflicts when copying into a project that already has the book.
+ *
+ * Mirrors {@link ManageBooksImportStrategy}. Vladimir review item 16 asked Copy to surface the same
+ * three-way confirmation Import does (Cancel / Replace entire books / Copy non-existing chapters).
+ * The frontend distinguishes the two paths so the wiring layer can pass the chosen strategy to the
+ * backend once the C# side accepts it. Today the `copyBooks` PAPI method has no strategy parameter
+ * (CopyBooksOrchestrator unconditionally writes the full book), so both choices currently route
+ * through the same `copyBooks` call and the backend behaves as `replaceEntireBooks` regardless —
+ * matching the same gap Sebastian flagged for Import (#15). See TODO in the web-view adapter.
+ */
+export type ManageBooksCopyStrategy = 'replaceEntireBooks' | 'nonExistingChapters';
+
+/**
  * Comparison state between a candidate book in a source/import file and the destination project.
  * Renamed on 2026-05-01 per FN-008 #1 to match `data-contracts.md` Section 3.7's canonical names
  * (the C# `ComparisonState` enum):
@@ -177,6 +190,8 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   '%manageBooks_copy_confirmBody%',
   '%manageBooks_copy_confirmReplace%',
   '%manageBooks_copy_confirmCancel%',
+  // Vladimir review #16: Copy gets the same 3-way conflict prompt as Import.
+  '%manageBooks_copy_confirmNonExistingChapters%',
   // Per-action empty states
   '%manageBooks_create_emptyState_allPresent%',
   '%manageBooks_delete_emptyState_noBooks%',

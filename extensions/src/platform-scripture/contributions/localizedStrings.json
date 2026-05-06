@@ -164,6 +164,7 @@
       "%manageBooks_introductions_notYetAvailable%": "Introductions are not yet available — coming soon.",
       "%manageBooks_copy_confirmBody%": "{0} of the books you are copying already exist in {1}.",
       "%manageBooks_copy_confirmCancel%": "Cancel",
+      "%manageBooks_copy_confirmNonExistingChapters%": "Copy non-existing chapters",
       "%manageBooks_copy_confirmReplace%": "Replace entire books",
       "%manageBooks_copy_confirmTitle%": "Books already exist",
       "%manageBooks_copy_emptyState_chooseSource%": "Choose a source project to see books available to copy.",

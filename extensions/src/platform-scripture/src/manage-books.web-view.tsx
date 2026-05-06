@@ -28,6 +28,7 @@ import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import {
   AlertEntry,
   EstherTemplate,
+  ManageBooksCopyStrategy,
   ManageBooksCreateMethod,
   ManageBooksDialog,
   ManageBooksDialogBookInfo,
@@ -622,8 +623,21 @@ global.webViewComponent = function ManageBooksWebView({
       destProjectId: string;
       sourceProjectId: string;
       books: string[];
+      strategy?: ManageBooksCopyStrategy;
     }): Promise<MutationResult | undefined> => {
       if (!manageBooksApi) return undefined;
+      // TODO (Vladimir #16 follow-up / parallel to Sebastian #15): the C#
+      // `copyBooks` PAPI method has no strategy parameter — `CopyBooksOrchestrator.CopyBooks`
+      // unconditionally writes the whole book via `PutText(bookNum, 0, false, ...)`.
+      // The dialog now lets the user pick `replaceEntireBooks` vs
+      // `nonExistingChapters`, and we forward `args.strategy` here for parity
+      // with `onImportBooks`, but until the backend honors a strategy flag both
+      // choices currently behave as `replaceEntireBooks`. Mirrors Sebastian's
+      // note about Import's `replaceEntireBook` flag being a no-op today.
+      // When the backend lands a real merge path, add `replaceEntireBook:
+      // args.strategy !== 'nonExistingChapters'` to the payload below and
+      // update `CopyBooksRequest` / `CopyBooksOrchestrator.CopyBooks`
+      // accordingly.
       return manageBooksApi.copyBooks({
         fromProjectId: args.sourceProjectId,
         toProjectId: args.destProjectId,

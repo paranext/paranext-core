@@ -6,14 +6,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from 'platform-bible-react';
-import type { ManageBooksDialogLocalizedStrings } from './manage-books-dialog.types';
+import type {
+  ManageBooksCopyStrategy,
+  ManageBooksDialogLocalizedStrings,
+} from './manage-books-dialog.types';
 import { fmtTemplate } from './manage-books-dialog.utils';
 
 /**
  * Copy overwrite-confirm prompt — surfaced when one or more picked books already exist in the
- * destination project on a Copy. Mirrors the import-conflict prompt structure but only offers two
- * choices: Cancel (ghost) or Replace entire books (destructive). Closing the dialog cancels the
- * copy entirely. Sebastian #16 — without this prompt, Copy silently overwrites existing books.
+ * destination project on a Copy. Mirrors the import-conflict prompt structure: Cancel (ghost),
+ * Replace entire books (destructive), Copy non-existing chapters (outline). Closing the dialog
+ * cancels the copy entirely.
+ *
+ * History: Sebastian #16 introduced this prompt with a two-button shape (Cancel / Replace).
+ * Vladimir #16 (follow-up) asked for the same three-way prompt that Import shows so the user can
+ * also pick the "merge non-existing chapters" path. The third button is wired through the new
+ * `ManageBooksCopyStrategy` union; see `manage-books-dialog.types.ts` for the wire note about the
+ * backend currently honoring only the full-book replace path.
  */
 export type CopyConflictPromptProps = {
   /** Pending conflict (the books being copied and which already exist in the destination). */
@@ -24,8 +33,8 @@ export type CopyConflictPromptProps = {
   t: (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) => string;
   /** Called when the user dismisses the dialog (cancels the copy). */
   onCancel: () => void;
-  /** Called with the books to copy when the user confirms the overwrite. */
-  onConfirm: (books: string[]) => void;
+  /** Called with the chosen strategy and the books to copy when the user picks an option. */
+  onChoose: (strategy: ManageBooksCopyStrategy, books: string[]) => void;
 };
 
 export function CopyConflictPrompt({
@@ -33,7 +42,7 @@ export function CopyConflictPrompt({
   projectName,
   t,
   onCancel,
-  onConfirm,
+  onChoose,
 }: CopyConflictPromptProps) {
   return (
     <Dialog
@@ -68,10 +77,19 @@ export function CopyConflictPrompt({
               variant="destructive"
               onClick={() => {
                 if (!conflict) return;
-                onConfirm(conflict.books);
+                onChoose('replaceEntireBooks', conflict.books);
               }}
             >
               {t('%manageBooks_copy_confirmReplace%', 'Replace entire books')}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!conflict) return;
+                onChoose('nonExistingChapters', conflict.books);
+              }}
+            >
+              {t('%manageBooks_copy_confirmNonExistingChapters%', 'Copy non-existing chapters')}
             </Button>
           </div>
         </div>

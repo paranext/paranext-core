@@ -46,6 +46,7 @@ import {
   EstherTemplate,
   ManageBooksAction,
   ManageBooksComparisonState,
+  ManageBooksCopyStrategy,
   ManageBooksCreateMethod,
   ManageBooksDialogBookInfo,
   ManageBooksDialogLocalizedStrings,
@@ -68,6 +69,7 @@ export type {
   EstherTemplate,
   ManageBooksAction,
   ManageBooksComparisonState,
+  ManageBooksCopyStrategy,
   ManageBooksCreateMethod,
   ManageBooksDialogBookInfo,
   ManageBooksDialogLocalizedStrings,
@@ -140,11 +142,20 @@ export type ManageBooksDialogProps = {
     strategy: ManageBooksImportStrategy;
   }) => Promise<MutationResult | undefined> | MutationResult | undefined | void;
 
-  /** Commit a Copy-books operation. */
+  /**
+   * Commit a Copy-books operation.
+   *
+   * `strategy` mirrors the Import flow's `replaceEntireBooks` / `nonExistingChapters` choice (see
+   * Vladimir review #16 — Copy now surfaces the same three-button conflict prompt as Import).
+   * `strategy` is `undefined` when no conflict prompt was shown (the picked books did not exist in
+   * the destination, so the question never came up). Wiring layers should treat `undefined` as
+   * "destination had nothing in the way — write through".
+   */
   onCopyBooks: (args: {
     destProjectId: string;
     sourceProjectId: string;
     books: string[];
+    strategy?: ManageBooksCopyStrategy;
   }) => Promise<MutationResult | undefined> | MutationResult | undefined | void;
 
   /** Commit a Delete-books operation. */
@@ -981,13 +992,18 @@ export function ManageBooksDialog({
     }
   };
 
-  const runCopy = async (books: string[], sourceId: string) => {
+  const runCopy = async (books: string[], sourceId: string, strategy?: ManageBooksCopyStrategy) => {
     if (books.length === 0) return;
     setIsSubmitting(true);
     const minDisplay = minDelay(MIN_SUBMITTING_VISIBLE_MS);
     try {
       const raw = await Promise.resolve(
-        onCopyBooks({ destProjectId: projectId, sourceProjectId: sourceId, books }),
+        onCopyBooks({
+          destProjectId: projectId,
+          sourceProjectId: sourceId,
+          books,
+          strategy,
+        }),
       );
       if (raw) emitResult(raw);
       setSelected(new Set());
@@ -2226,8 +2242,8 @@ export function ManageBooksDialog({
         projectName={project.name}
         t={t}
         onCancel={() => setCopyConfirm(undefined)}
-        onConfirm={(books) => {
-          if (copyConfirm) runCopy(books, copyConfirm.sourceId).catch(() => undefined);
+        onChoose={(strategy, books) => {
+          if (copyConfirm) runCopy(books, copyConfirm.sourceId, strategy).catch(() => undefined);
           setCopyConfirm(undefined);
         }}
       />
