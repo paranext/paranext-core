@@ -69,7 +69,7 @@ export function ImportConflictPrompt({
               {t('%manageBooks_import_conflictCancel%', 'Cancel')}
             </Button>
             <Button
-              variant="outline"
+              variant="destructive"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('replaceEntireBooks', conflict.books);
@@ -78,6 +78,7 @@ export function ImportConflictPrompt({
               {t('%manageBooks_import_replaceEntireBooks%', 'Replace entire books')}
             </Button>
             <Button
+              variant="outline"
               onClick={() => {
                 if (!conflict) return;
                 onChoose('nonExistingChapters', conflict.books);
