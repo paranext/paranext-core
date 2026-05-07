@@ -48,6 +48,14 @@ const PopoverPortalContainerContext = React.createContext<HTMLElement | null>(nu
  * Single descendant scope: a `PopoverPortalContainerProvider` only affects `PopoverContent` mounts
  * rendered as React children. It does not retroactively re-portal already-mounted popovers, and it
  * does not affect popovers in sibling subtrees.
+ *
+ * Initial-mount behavior: pass `null` for `container` (the initial value of a `useState<HTMLElement
+ *
+ * | null>(null)` paired with a ref callback on the ancestor) to keep Radix's default
+ *
+ * `document.body` behavior until the ancestor mounts. Once the element exists, future popover opens
+ * portal into it. The triggering ancestor (the trap owner) must wrap, not be wrapped by, this
+ * provider.
  * @example
  *
  * ```tsx
@@ -80,13 +88,6 @@ const PopoverPortalContainerContext = React.createContext<HTMLElement | null>(nu
  *   </DropdownMenuContent>
  * </DropdownMenu>
  * ```
- *
- * @param container - The element to portal descendant popovers into. Pass `null` (the initial value
- *   of a `useState<HTMLElement | null>(null)` paired with a ref callback on the ancestor) to keep
- *   Radix's default `document.body` behavior until the ancestor mounts. Once the element exists,
- *   future popover opens portal into it.
- * @param children - Tree containing the popover trigger(s) you want re-targeted. The triggering
- *   ancestor (the trap owner) must wrap, not be wrapped by, this provider.
  */
 function PopoverPortalContainerProvider({
   container,
