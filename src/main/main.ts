@@ -144,8 +144,8 @@ if (!isFirstInstance) {
 
 // #endregion
 
-const PROCESS_CLOSE_TIME_OUT = 2000;
-const SHUTDOWN_SYNC_TIME_OUT = 10 * 60 * 1000; // 10 minutes
+const PROCESS_CLOSE_TIME_OUT_MS = 2000;
+const SHUTDOWN_SYNC_TIME_OUT_MS = 10 * 60 * 1000; // 10 minutes
 
 /** Height of the custom title bar buttons on Windows */
 const TITLE_BAR_BUTTON_HEIGHT = 47;
@@ -220,7 +220,7 @@ async function main() {
   // Some extensions inside the extension host rely on the renderer to accept 'getWebView' commands.
   // The renderer relies on the extension host, so something has to break the dependency loop.
   // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
-  await extensionHostService.start(PROCESS_CLOSE_TIME_OUT);
+  await extensionHostService.start(PROCESS_CLOSE_TIME_OUT_MS);
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
@@ -520,49 +520,60 @@ async function main() {
       })();
     }
 
+    // The reason this code is here and not in the `app.on('will-quit')` code is that the
+    // `will-quit` event only gets triggered after all windows have been closed (including this
+    // one). According to the documentation the event sequence goes
+    // app:`before-quit` -> window:`close` -> app:`will-quit` -> app:`quit`
+    // Also, the reason why this is in the window:`close` event and not in app:`before-quit` is that
+    // when you click on the close button for the main window, it immediately fires the `close`
+    // event, superseding the app:`before-quit` event and this process needs to be able to hang
+    // the window until the sync completes.
     let isWindowClosing = false;
     mainWindow.on('close', async (event) => {
       // Prevents a "double close" when the user tries to press the close window button a second
       // time
-      if (!isWindowClosing) {
-        // Prevents the main window from initially closing
-        event.preventDefault();
-        isWindowClosing = true;
+      if (isWindowClosing) return;
 
-        logger.info('Syncing projects on shutdown...');
+      // Prevents the main window from initially closing
+      event.preventDefault();
+      isWindowClosing = true;
 
-        // Cancel any in-progress sync, then run a fresh full sync before shutdown.
-        // All errors are swallowed — extension may not be installed, or sync may fail.
-        // Shutdown must never be permanently blocked.
+      logger.info('Syncing projects on shutdown...');
+
+      // Cancel any in-progress sync, then run a fresh full sync before shutdown.
+      // All errors are swallowed — extension may not be installed, or sync may fail.
+      // Shutdown must never be permanently blocked.
+      try {
+        await networkService.requestNoRetry(
+          serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync'),
+        );
+      } catch {
+        /* no sync in progress, or extension unavailable */
+      }
+
+      const syncComplete = new AsyncVariable<void>('shutdown sync', SHUTDOWN_SYNC_TIME_OUT_MS);
+      (async () => {
         try {
           await networkService.requestNoRetry(
-            serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync'),
-          );
-        } catch {
-          /* no sync in progress, or extension unavailable */
-        }
-
-        const syncComplete = new AsyncVariable<void>('shutdown sync', SHUTDOWN_SYNC_TIME_OUT);
-        networkService
-          .requestNoRetry(
             serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.syncProjects'),
             undefined,
-          )
-          .then(() => syncComplete.resolveToValue(undefined))
-          .catch(
-            () => syncComplete.resolveToValue(undefined), // sync failed — settle anyway
           );
-        try {
-          await syncComplete.promise;
-          logger.info('Sync on shutdown complete');
+          syncComplete.resolveToValue(undefined);
         } catch {
-          /* timed out */
+          // sync failed — settle anyway
+          syncComplete.resolveToValue(undefined);
         }
-
-        // Destroys the main window allowing the rest of the close sequence to continue. This is the
-        // equivalent of doing `mainWindow.close()` just without triggering the `close` event.
-        mainWindow?.destroy();
+      })();
+      try {
+        await syncComplete.promise;
+        logger.info('Sync on shutdown complete');
+      } catch {
+        /* timed out */
       }
+
+      // Destroys the main window allowing the rest of the close sequence to continue. This is the
+      // equivalent of doing `mainWindow.close()` just without triggering the `close` event.
+      mainWindow?.destroy();
     });
 
     mainWindow.on('closed', async () => {
@@ -741,8 +752,8 @@ async function main() {
       isAppQuitting = true;
 
       await Promise.all([
-        dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT),
-        extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT),
+        dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
+        extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
       ]);
       await networkService.shutdown();
 
@@ -1116,7 +1127,7 @@ async function main() {
 
 async function restartExtensionHost() {
   logger.info('Restarting extension host');
-  await extensionHostService.restart(PROCESS_CLOSE_TIME_OUT);
+  await extensionHostService.restart(PROCESS_CLOSE_TIME_OUT_MS);
 }
 
 (async () => {

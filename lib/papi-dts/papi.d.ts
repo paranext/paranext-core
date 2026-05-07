@@ -1469,7 +1469,6 @@ declare module 'client/services/rpc-client' {
     request(
       requestType: SerializedRequestType,
       requestParams: RequestParams,
-      _skipRetry?: boolean,
     ): Promise<JSONRPCResponse>;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     registerMethod(
