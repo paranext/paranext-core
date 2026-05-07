@@ -8,7 +8,31 @@ Delivery order: T1 lands first and unblocks parallel work. T2 is independent and
 
 ---
 
+## Must-Have Requirements
+
+The following requirements are drawn from the PRD. Each ticket below references which items it addresses.
+
+1. Workspace displays as a 3-column layout below the main title bar/toolbar.
+2. Column 1: A panel exists for the model text.
+3. Column 2: A panel exists for the project/editor.
+4. Column 3: A panel exists for resources and tools, with two tabs — "Bible texts" and "Commentaries".
+5. All content scrolls in sync with the BCV control in the main app toolbar.
+6. BCV controls are absent from all panels/columns; only the main app toolbar has one.
+7. Column 1 zero state: Donna sees a prompt to select a model text; Saroj can also do so if Donna hasn't. On sync, Donna's selection overrides Saroj's.
+8. Column 1 selection UI: preferentially shows resources already associated with the project; projects require an extra deliberate step to reveal; user only sees projects they are a named member of.
+9. Column 3 Bible texts zero state: Donna sees a prompt to select preferred Bible texts; Saroj can do the same if Donna hasn't. On sync, Donna's selections add to (not replace) Saroj's.
+10. Column 3 Bible texts daily use: selector UI to choose which downloaded text to display; "Download resources" action available.
+11. Downloadable Bible texts from DBL are filtered by the user's DBL licensing permissions.
+12. Column 3 Commentaries zero state: same as Bible texts zero state; Donna's selections add to (not replace) Saroj's on sync.
+13. Column 3 Commentaries daily use: selector UI to choose which downloaded commentary to display; "Download commentaries" action available.
+14. Only specific commentaries available for download: UBS Handbook and SIL TNN/TND in English.
+15. Removing resources: both Donna and Saroj can remove items they added; Saroj cannot remove items Donna added (UI disabled with explanation).
+
+---
+
 ## T1 — Configure `platform-dock-layout` with 3-column 10Simple layout
+
+**Addresses requirements:** 1, 2, 3, 4
 
 ### Description
 
@@ -29,6 +53,8 @@ Read the `platform.interfaceMode` setting (already exists, defaults to `'simple'
 
 ## T2 — Remove BCV controls from the scripture editor toolbar
 
+**Addresses requirements:** 5, 6
+
 ### Description
 
 The scripture editor currently has its own BCV (Book-Chapter-Verse) navigation control in its panel toolbar. In 10Simple, BCV navigation lives exclusively in the main app toolbar. The per-panel BCV control in the scripture editor should be removed to avoid duplication and confusion.
@@ -46,6 +72,8 @@ Locate the BCV control rendered inside the scripture editor's panel toolbar and 
 ---
 
 ## T3 — Add `addedByRole` and `addedByUser` metadata to `ResourceReferenceList`
+
+**Addresses requirements:** 7, 9, 12, 15 (prerequisite data structure for all role-based UI behavior)
 
 ### Description
 
@@ -76,6 +104,8 @@ Update `ResourceReferenceList.items` from `ResourceReference[]` to `AnnotatedRes
 
 ## T4 — Model text panel (Column 1)
 
+**Addresses requirements:** 2, 5, 7, 8
+
 ### Description
 
 Column 1 displays a model text (reference translation) in read-only mode, synchronized to the main app toolbar BCV. The panel reads the `platformScripture.modelTexts` project setting to know which text(s) to offer. Both admin and regular users can write to this setting; on sync, admin entries take precedence over user entries. The user sees only entries they added or that an admin added — not entries from other users.
@@ -103,6 +133,8 @@ When a user makes a selection, write the entry to `modelTexts` with `addedByRole
 ---
 
 ## T5 — Bible texts tab (Column 3)
+
+**Addresses requirements:** 4, 5, 9, 10, 11, 15
 
 ### Description
 
@@ -132,6 +164,8 @@ Add a "Bible texts" tab to the Column 3 panel using the existing docking tab sys
 
 ## T6 — Commentaries tab (Column 3)
 
+**Addresses requirements:** 4, 5, 12, 13, 14, 15
+
 ### Description
 
 The second tab in Column 3 ("Commentaries") lets Saroj read a commentary alongside his project. It follows the same structure as the Bible texts tab but is filtered to commentary resources. Only specific commentaries are available for download: UBS Handbook and SIL TNN/TND in English. The "Download commentaries" action opens `platform-get-resources` filtered directly to the commentaries resource type.
@@ -153,6 +187,8 @@ Add a "Commentaries" tab to the Column 3 panel alongside the Bible texts tab. Th
 ---
 
 ## T7 — Add commentaries resource type to `platform-get-resources`
+
+**Addresses requirements:** 10, 11, 13, 14
 
 ### Description
 
@@ -178,6 +214,8 @@ The download flow itself reuses existing infrastructure — no new download mech
 ---
 
 ## T8 (Nice-to-have) — Prevent columns from being moved or closed
+
+**Addresses requirements:** none (nice-to-have only)
 
 ### Description
 
