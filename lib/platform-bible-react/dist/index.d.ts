@@ -672,8 +672,6 @@ export type ProjectSelectorLocalizedStrings = {
 	/** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
 	clearAll?: string;
 };
-/** Map 0→A, 1→B, … 25→Z. */
-export declare function scrollGroupLetter(id: ScrollGroupId): string;
 type CommonProps = {
 	projects: readonly ProjectSelectorProject[];
 	openTabs: readonly OpenProjectTab[];

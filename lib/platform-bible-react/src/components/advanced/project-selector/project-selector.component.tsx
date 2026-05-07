@@ -14,7 +14,11 @@ import {
   type MouseEvent,
 } from 'react';
 import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Filter } from 'lucide-react';
-import type { ScrollGroupId } from 'platform-bible-utils';
+import {
+  DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
+  getLocalizeKeyForScrollGroupId,
+  type ScrollGroupId,
+} from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Z_INDEX_OVERLAY } from '@/components/z-index';
 import { Badge } from '@/components/shadcn-ui/badge';
@@ -129,10 +133,12 @@ function resolveStrings(
 
 // #region Scroll group labels
 
-/** Map 0→A, 1→B, … 25→Z. */
-export function scrollGroupLetter(id: ScrollGroupId): string {
-  if (id >= 0 && id <= 25) return String.fromCharCode('A'.charCodeAt(0) + id);
-  return String(id);
+/**
+ * Map a scroll group id to its display letter (`0`→`A`, …, `25`→`Z`) using the canonical default
+ * localized strings from `platform-bible-utils`. Falls back to the numeric id when no entry exists.
+ */
+function scrollGroupLetterFromMap(id: ScrollGroupId): string {
+  return DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS[getLocalizeKeyForScrollGroupId(id)] ?? String(id);
 }
 
 // #endregion
@@ -210,7 +216,7 @@ type ScrollGroupChipProps = {
 };
 
 function ScrollGroupChip({ scrollGroupId, isBoundButClosed }: ScrollGroupChipProps) {
-  const letter = scrollGroupLetter(scrollGroupId);
+  const letter = scrollGroupLetterFromMap(scrollGroupId);
   if (isBoundButClosed) {
     return (
       <Badge
@@ -283,7 +289,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
         <span className="tw-ms-auto tw-flex tw-shrink-0 tw-gap-1">
           {row.openGroups.map((g) => (
             <Badge key={g} variant="secondary">
-              {scrollGroupLetter(g)}
+              {scrollGroupLetterFromMap(g)}
             </Badge>
           ))}
         </span>
@@ -343,7 +349,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
     </CommandItem>
   );
 
-  const letter = row.scrollGroupId !== undefined ? scrollGroupLetter(row.scrollGroupId) : undefined;
+  const letter = row.scrollGroupId !== undefined ? scrollGroupLetterFromMap(row.scrollGroupId) : undefined;
 
   const tooltipBoundBut =
     row.isBoundButClosed && letter
@@ -664,7 +670,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
           .map(({ project, scrollGroupId }) =>
             scrollGroupId === undefined
               ? project.shortName
-              : `${project.shortName} (${scrollGroupLetter(scrollGroupId)})`,
+              : `${project.shortName} (${scrollGroupLetterFromMap(scrollGroupId)})`,
           )
           .join(', ');
         // One pair selected → drop the count; the name already conveys the cardinality.
@@ -692,7 +698,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         if (group === undefined) {
           return { node: selected.shortName, title: selected.shortName };
         }
-        const text = `${selected.shortName} · ${scrollGroupLetter(group)}`;
+        const text = `${selected.shortName} · ${scrollGroupLetterFromMap(group)}`;
         return { node: text, title: text };
       }
       default:

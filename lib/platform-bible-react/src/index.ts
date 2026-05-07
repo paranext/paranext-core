@@ -43,7 +43,6 @@ export type {
 // The unified Paratext-specific dialog is no longer part of the platform-bible-react surface.
 export {
   default as ProjectSelector,
-  scrollGroupLetter,
   type ProjectSelectorProps,
   type ProjectSelectorLocalizedStrings,
   type ProjectSelectorMode,
