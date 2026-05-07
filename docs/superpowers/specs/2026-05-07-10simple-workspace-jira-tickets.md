@@ -26,7 +26,10 @@ The following requirements are drawn from the PRD. Each ticket below references 
 12. Column 3 Commentaries zero state: same as Bible texts zero state; Donna's selections add to (not replace) Saroj's on sync.
 13. Column 3 Commentaries daily use: selector UI to choose which downloaded commentary to display; "Download commentaries" action available.
 14. Only specific commentaries available for download: UBS Handbook and SIL TNN/TND in English.
-15. Removing resources: both Donna and Saroj can remove items they added; Saroj cannot remove items Donna added (UI disabled with explanation).
+
+**Nice-to-have (moved from must-haves):**
+
+- Removing resources: both Donna and Saroj can remove items they added; Saroj cannot remove items Donna added (UI disabled with explanation).
 
 ---
 
@@ -86,7 +89,6 @@ Locate the BCV control rendered inside the scripture editor's panel toolbar and 
 - #7: Column 1 zero state — admin/user can both select; admin overrides on sync
 - #9: Column 3 Bible texts zero state — admin adds to user entries on sync
 - #12: Column 3 Commentaries zero state — admin adds to user entries on sync
-- #15: Resource removal — Saroj cannot remove items Donna added
 
 ### Description
 
@@ -159,7 +161,6 @@ When a user makes a selection, write the entry to `modelTexts` with `addedByRole
 - #9: Column 3 Bible texts zero state — admin adds to user entries on sync
 - #10: Column 3 Bible texts daily use — selector UI and "Download resources" action
 - #11: Downloadable Bible texts filtered by DBL licensing permissions
-- #15: Resource removal — Saroj cannot remove items Donna added
 
 ### Description
 
@@ -196,7 +197,6 @@ Add a "Bible texts" tab to the Column 3 panel using the existing docking tab sys
 - #12: Column 3 Commentaries zero state — admin adds to user entries on sync
 - #13: Column 3 Commentaries daily use — selector UI and "Download commentaries" action
 - #14: Only UBS Handbook and SIL TNN/TND available for download
-- #15: Resource removal — Saroj cannot remove items Donna added
 
 ### Description
 
