@@ -2,7 +2,15 @@
   "mainMenu": {
     "columns": {},
     "groups": {},
-    "items": []
+    "items": [
+      {
+        "label": "%manageBooks_openMenuItem%",
+        "localizeNotes": "Application main menu > Project > Manage books…",
+        "group": "platform.projectResources",
+        "order": 100,
+        "command": "platformScripture.openManageBooks"
+      }
+    ]
   },
   "webViewMenus": {
     "platformScripture.configureChecks": {
@@ -66,6 +74,7 @@
         "groups": {},
         "items": []
       }
-    }
+    },
+    "platformScripture.manageBooks": {}
   }
 }

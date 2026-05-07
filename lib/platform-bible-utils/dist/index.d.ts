@@ -1572,6 +1572,15 @@ export declare function compareScrRefs(scrRef1: SerializedVerseRef, scrRef2: Ser
 /** Get the localized string key for a given scroll group Id (or no scroll group if `undefined`) */
 export declare function getLocalizeKeyForScrollGroupId(scrollGroupId: ScrollGroupId | undefined | "undefined"): LocalizeKey;
 /**
+ * Default English localizations for scroll group ids: `'Ø'` for `undefined` and `'A'`–`'Z'` for ids
+ * 0–25. Keyed by {@link getLocalizeKeyForScrollGroupId}. Used as the fallback map for
+ * scroll-group-aware UI (selectors, badges, chips) before user-supplied localized strings load and
+ * as a stable lookup table for code that only needs the letter representation.
+ */
+export declare const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS: {
+	[x: string]: string;
+};
+/**
  * Gets a list of localized string keys for provided scroll group Ids. Uses
  * {@link getLocalizeKeyForScrollGroupId} internally
  *

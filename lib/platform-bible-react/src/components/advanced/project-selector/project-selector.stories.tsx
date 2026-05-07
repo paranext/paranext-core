@@ -7,8 +7,8 @@ import { useState } from 'react';
 import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   ProjectSelector,
-  type OpenProjectTab,
-  type ProjectPair,
+  type ProjectSelectorOpenTab,
+  type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
@@ -65,7 +65,7 @@ const sampleProjects: ProjectSelectorProject[] = [
   },
 ];
 
-const sampleOpenTabs: OpenProjectTab[] = [
+const sampleOpenTabs: ProjectSelectorOpenTab[] = [
   {
     projectId: 'esvus16',
     scrollGroupId: 0 as ScrollGroupId,
@@ -140,7 +140,7 @@ export const SingleProject: Story = {
 
 export const MultiProject: Story = {
   render: () => {
-    const [pairs, setPairs] = useState<ProjectPair[]>([
+    const [pairs, setPairs] = useState<ProjectSelectorProjectPair[]>([
       { projectId: 'esvus16', scrollGroupId: 0 as ScrollGroupId },
       { projectId: 'esv16uk' },
     ]);
@@ -184,7 +184,7 @@ export const ScrollGroupBinding: Story = {
       projectId?: string;
       scrollGroupId?: ScrollGroupId;
     }>({ projectId: 'esvus16', scrollGroupId: 1 as ScrollGroupId });
-    const [openTabs, setOpenTabs] = useState<OpenProjectTab[]>(sampleOpenTabs);
+    const [openTabs, setOpenTabs] = useState<ProjectSelectorOpenTab[]>(sampleOpenTabs);
 
     return (
       <div className="tw-flex tw-flex-col tw-gap-2">
@@ -273,6 +273,40 @@ export const Disabled: Story = {
       isDisabled
     />
   ),
+};
+
+// #endregion
+
+// #region per-row disabled
+
+export const PerRowDisabled: Story = {
+  render: () => {
+    const projectsWithDisabled: ProjectSelectorProject[] = sampleProjects.map((p) =>
+      p.id === 'esv16uk' || p.id === 'tp1'
+        ? { ...p, isDisabled: true, disabledReason: 'Read-only — cannot copy into this project' }
+        : p,
+    );
+    const [projectId, setProjectId] = useState<string | undefined>(undefined);
+    return (
+      <ProjectSelector
+        mode="project"
+        projects={projectsWithDisabled}
+        openTabs={sampleOpenTabs}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        buttonPlaceholder="Pick a target project"
+        ariaLabel="Project"
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Two projects (`ESV16UK`, `TP1`) are marked disabled with a `disabledReason`. They render muted, are not selectable (Up/Down navigation skips them), and the reason surfaces in the row tooltip. Use this to surface read-only or otherwise-unusable projects without filtering them out of the list.',
+      },
+    },
+  },
 };
 
 // #endregion

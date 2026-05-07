@@ -2,9 +2,9 @@ import {
   Button,
   MultiSelectComboBox,
   MultiSelectComboBoxEntry,
-  OpenProjectTab,
   Progress,
   ProjectSelector,
+  ProjectSelectorOpenTab,
   ProjectSelectorProject,
   Select,
   SelectContent,
@@ -13,7 +13,7 @@ import {
   SelectValue,
   Spinner,
 } from 'platform-bible-react';
-import { formatReplacementString, LanguageStrings, type ScrollGroupId } from 'platform-bible-utils';
+import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import { CheckJobStatusReport, CheckRunResult } from 'platform-scripture';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -72,23 +72,12 @@ export type ChecksSidePanelProps = {
    */
   getLocalizedCheckDescription: (checkId: string) => string;
   /**
-   * Currently-open project-bound tabs, surfaced in the project picker's "Open Tabs" grouping.
+   * Currently-open scripture editor tabs, surfaced in the project picker's "Open Tabs" grouping.
    * Empty array is fine — the section just won't render.
    */
-  openTabs: OpenProjectTab[];
-  /** The scroll group this panel is bound to, if any. Drives the picker's group chips. */
-  scrollGroupId: ScrollGroupId | undefined;
-  /**
-   * Called when the user picks a (project, scroll group) pair. Navigates the panel to that
-   * project and rebinds the scroll group (markers-checklist Task 14 behavior — the container
-   * may instead focus an existing editor tab and adopt its group).
-   */
-  onChangeSelection: (selection: { projectId: string; scrollGroupId: ScrollGroupId }) => void;
-  /**
-   * Called when the user clicks "Open" on a bound-but-closed picker row; the container opens a
-   * scripture editor for that project in the given scroll group.
-   */
-  onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
+  openTabs: ProjectSelectorOpenTab[];
+  /** Called when the user picks a different project to run checks against. */
+  onSelectProject: (projectId: string) => void;
   /** Called when the user selects a different scope. */
   onSelectScope: (scope: CheckScopes) => void;
   /** Called when the user changes which check types are selected. */
@@ -129,9 +118,7 @@ export function ChecksSidePanel({
   isResultLoadingCancelled,
   getLocalizedCheckDescription,
   openTabs,
-  scrollGroupId,
-  onChangeSelection,
-  onOpenProjectInGroup,
+  onSelectProject,
   onSelectScope,
   onSelectCheckTypes,
   onAllowCheck,
@@ -224,30 +211,34 @@ export function ChecksSidePanel({
   }
 
   return (
-    <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:max-h-screen tw:gap-6 tw:p-4 tw:min-w-[10rem]">
+    <div className="pr-twp tw:container tw:mx-auto tw:flex tw:flex-col tw:max-h-screen tw:gap-6 tw:p-4 tw:min-w-[10rem]">
       {/* Check configuration */}
       <div className="tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:w-full">
         {/* Project Filter */}
-        <ProjectSelector
-          mode="projectScrollGroup"
-          projects={sortedProjects}
-          openTabs={openTabs}
-          selection={{ projectId: selectedProjectId, scrollGroupId }}
-          onChangeSelection={onChangeSelection}
-          onOpenProjectInGroup={onOpenProjectInGroup}
-          buttonPlaceholder={
-            localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
-          }
-          commandEmptyMessage={
-            localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
-          }
-          ariaLabel={
-            localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
-          }
-          buttonVariant="outline"
-          buttonClassName="tw:flex-1 tw:min-w-32 tw:font-normal"
-          alignDropDown="start"
-        />
+        <div data-testid="checks-side-panel-project-trigger" className="tw:flex-1 tw:min-w-32">
+          <ProjectSelector
+            mode="project"
+            projects={sortedProjects}
+            openTabs={openTabs}
+            selection={{ projectId: selectedProjectId ?? '' }}
+            onChangeSelection={({ projectId: nextId }) => {
+              if (nextId) onSelectProject(nextId);
+            }}
+            buttonPlaceholder={
+              localizedStrings['%webView_checksSidePanel_projectFilter_noProjectSelected%']
+            }
+            commandEmptyMessage={
+              localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
+            }
+            ariaLabel={
+              localizedStrings['%webView_checksSidePanel_projectFilter_projectsAndResources%']
+            }
+            buttonVariant="outline"
+            buttonClassName="tw:w-full tw:font-normal"
+            popoverContentClassName="tw:w-[300px]"
+            alignDropDown="start"
+          />
+        </div>
 
         {/* Scope Filter */}
         <Select value={scope} onValueChange={handleSelectScope}>

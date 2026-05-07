@@ -7,8 +7,7 @@ import {
   useWebViewController,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { OpenProjectTab, useEvent, usePromise } from 'platform-bible-react';
-import type { ScrollGroupId } from 'platform-bible-utils';
+import { ProjectSelectorOpenTab, useEvent, usePromise } from 'platform-bible-react';
 import {
   deepEqual,
   getChaptersForBook,
@@ -33,6 +32,7 @@ import {
   ChecksSidePanelProject,
   CHECKS_SIDE_PANEL_STRING_KEYS,
 } from './checks/checks-side-panel/checks-side-panel.component';
+import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 
 /**
  * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
@@ -44,7 +44,14 @@ async function getProjectNames(projectId: string): Promise<ProjectOption> {
   const projectFullName = await pdp.getSetting('platform.fullName');
   return { shortName: projectShortName, fullName: projectFullName };
 }
-import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+
+/**
+ * Web-view types that should count as "open" project tabs for the picker's "Open Tabs" grouping.
+ * Mirrors `manage-books.web-view.tsx`: only the scripture editor binds a project to a scroll group
+ * in a user-meaningful way. Without this filter, every project-bound web view (including the checks
+ * side panel itself) would falsely mark a project as open.
+ */
+const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>(['platformScriptureEditor.react']);
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -75,7 +82,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   useWebViewScrollGroupScrRef,
   useWebViewState,
 }: WebViewProps) {
-  const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRef, ,] = useWebViewScrollGroupScrRef();
   const [selectedCheckTypeIds, setSelectedCheckTypeIds] = useWebViewState<string[]>(
     'selectedCheckTypes',
     [],
@@ -129,15 +136,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const editorWebViewController = useWebViewController(
     'platformScriptureEditor.react',
     editorWebViewId,
-  );
-
-  // Track all project-bound tabs via the shared hook. `openTabsRich` retains webViewId +
-  // webViewType for tab-dedup logic in `handleSelectProject` (Task 14). `openTabs` is the
-  // lighter shape that ProjectSelector's `openTabs` prop expects.
-  const openTabsRich = useOpenProjectTabs();
-  const openTabs = useMemo<OpenProjectTab[]>(
-    () => openTabsRich.map((t) => ({ projectId: t.projectId, scrollGroupId: t.scrollGroupId })),
-    [openTabsRich],
   );
 
   const invalidateTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -652,48 +650,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
   );
 
   const handleSelectProject = useCallback(
-    (newSelection: { projectId: string; scrollGroupId: ScrollGroupId }) => {
-      // Q5 — Theme 5 #8: focus existing editor tab if present instead of opening duplicate.
-      const existingEditorTab = openTabsRich.find(
-        (t) =>
-          t.projectId === newSelection.projectId &&
-          t.webViewType === 'platformScriptureEditor.react',
-      );
-      if (existingEditorTab) {
-        papi.window
-          .setFocus({ focusType: 'webView', id: existingEditorTab.webViewId })
-          .catch((err: unknown) =>
-            logger.debug(`checks-side-panel: setFocus failed: ${getErrorMessage(err)}`),
-          );
-        // Adopt the existing tab's scroll group rather than the user-clicked one to keep
-        // bindings consistent.
-        updateWebViewDefinition({ projectId: newSelection.projectId });
-        setScrollGroupId(existingEditorTab.scrollGroupId);
-        return;
-      }
-      updateWebViewDefinition({ projectId: newSelection.projectId });
-      setScrollGroupId(newSelection.scrollGroupId);
+    (newProjectId: string) => {
+      updateWebViewDefinition({ projectId: newProjectId });
     },
-    [openTabsRich, updateWebViewDefinition, setScrollGroupId],
-  );
-
-  const handleOpenProjectInGroup = useCallback(
-    async (projectIdToOpen: string, scrollGroupIdToOpen: ScrollGroupId) => {
-      try {
-        await papi.webViews.openWebView(
-          'platformScriptureEditor.react',
-          undefined,
-          // The editor's webview provider attaches `scrollGroupScrRef` when constructing its
-          // definition. We pass it via options for the provider to honor; if the provider ignores
-          // it, the editor still opens and the user can re-bind the scroll group from the tab.
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          { projectId: projectIdToOpen, scrollGroupScrRef: scrollGroupIdToOpen } as never,
-        );
-      } catch (error) {
-        logger.debug(`Failed to open scripture editor tab: ${getErrorMessage(error)}`);
-      }
-    },
-    [],
+    [updateWebViewDefinition],
   );
 
   const handleSelectScope = useCallback(
@@ -708,6 +668,23 @@ global.webViewComponent = function ChecksSidePanelWebView({
       setSelectedCheckTypeIds(updatedCheckIds);
     },
     [setSelectedCheckTypeIds],
+  );
+
+  // Filter to scripture editor tabs only — without this filter, every project-bound web view
+  // (e.g. the checks side panel itself) would falsely mark a project as "open" in the popover's
+  // "Open Tabs" grouping.
+  const editorWebViewFilter = useCallback(
+    (webView: { webViewType: string }) => SCRIPTURE_EDITOR_WEB_VIEW_TYPES.has(webView.webViewType),
+    [],
+  );
+  const allOpenProjectTabs = useOpenProjectTabs(editorWebViewFilter);
+  const projectSelectorOpenTabs = useMemo<ProjectSelectorOpenTab[]>(
+    () =>
+      allOpenProjectTabs.map((tab) => ({
+        projectId: tab.projectId,
+        scrollGroupId: tab.scrollGroupId,
+      })),
+    [allOpenProjectTabs],
   );
 
   const handleCancelOperation = useCallback(async () => {
@@ -750,10 +727,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
       hasActiveJob={activeJobStatusReport !== defaultJobStatusReport}
       isResultLoadingCancelled={isResultLoadingCancelled}
       getLocalizedCheckDescription={getLocalizedCheckDescription}
-      openTabs={openTabs}
-      scrollGroupId={typeof scrollGroupId === 'number' ? scrollGroupId : undefined}
-      onChangeSelection={handleSelectProject}
-      onOpenProjectInGroup={handleOpenProjectInGroup}
+      openTabs={projectSelectorOpenTabs}
+      onSelectProject={handleSelectProject}
       onSelectScope={handleSelectScope}
       onSelectCheckTypes={handleSelectCheckType}
       onAllowCheck={handleAllowCheck}

@@ -12,10 +12,21 @@ export type ProjectSelectorProject = {
   fullName: string;
   language?: string;
   languageCode?: string;
+  /**
+   * When `true`, the row for this project is rendered muted, is not selectable, and the
+   * `disabledReason` (if provided) is surfaced in the row tooltip. Use when a project is present in
+   * the list but cannot be picked in the current context (e.g. a read-only target, a reference
+   * project that lacks the required data type). Already-selected pairs that become disabled remain
+   * visible — the selector renders them as disabled-and-selected so the user can see the prior
+   * selection but can't toggle it again.
+   */
+  isDisabled?: boolean;
+  /** Human-readable explanation surfaced in the row tooltip when `isDisabled` is true. */
+  disabledReason?: string;
 };
 
 /** A project that is currently open in a specific scroll group. */
-export type OpenProjectTab = {
+export type ProjectSelectorOpenTab = {
   projectId: string;
   scrollGroupId: ScrollGroupId;
   /**
@@ -30,7 +41,7 @@ export type OpenProjectTab = {
  * A `(projectId, scrollGroupId)` pair. `scrollGroupId` is undefined when the pair refers to a
  * project that is not currently open in any scroll group.
  */
-export type ProjectPair = {
+export type ProjectSelectorProjectPair = {
   projectId: string;
   scrollGroupId?: ScrollGroupId;
 };
@@ -43,7 +54,7 @@ export type ProjectSelection = { projectId?: string };
  * same project open in two scroll groups is two distinct pairs. `scrollGroupId` is undefined when a
  * project that is not currently open anywhere is selected.
  */
-export type ProjectMultiSelection = { pairs: readonly ProjectPair[] };
+export type ProjectMultiSelection = { pairs: readonly ProjectSelectorProjectPair[] };
 
 /** Selection shape for `projectScrollGroup` mode. */
 export type ProjectScrollGroupSelection = {
@@ -67,7 +78,7 @@ export type ProjectRow = {
   scrollGroupId?: ScrollGroupId;
   /**
    * Current scripture reference for the row's scroll group (for the tooltip). Populated only when
-   * the caller provided one via `OpenProjectTab.scrollGroupScrRefLabel`.
+   * the caller provided one via `ProjectSelectorOpenTab.scrollGroupScrRefLabel`.
    */
   scrollGroupScrRefLabel?: string;
   /**
@@ -87,25 +98,32 @@ export type ProjectRow = {
    * reopens the tab via `onOpenProjectInGroup`.
    */
   isBoundButClosed: boolean;
+  /**
+   * Mirrors {@link ProjectSelectorProject.isDisabled}. When true, the row renders muted and is not
+   * selectable. Disabled-and-selected rows are allowed (still visible, surface prior selection).
+   */
+  isDisabled: boolean;
+  /** Mirrors {@link ProjectSelectorProject.disabledReason}. Surfaced in the row tooltip. */
+  disabledReason?: string;
 };
 
 export type ComputeRowsArgs =
   | {
       mode: 'project';
       projects: readonly ProjectSelectorProject[];
-      openTabs: readonly OpenProjectTab[];
+      openTabs: readonly ProjectSelectorOpenTab[];
       selection: ProjectSelection;
     }
   | {
       mode: 'project-multi';
       projects: readonly ProjectSelectorProject[];
-      openTabs: readonly OpenProjectTab[];
+      openTabs: readonly ProjectSelectorOpenTab[];
       selection: ProjectMultiSelection;
     }
   | {
       mode: 'projectScrollGroup';
       projects: readonly ProjectSelectorProject[];
-      openTabs: readonly OpenProjectTab[];
+      openTabs: readonly ProjectSelectorOpenTab[];
       selection: ProjectScrollGroupSelection;
     };
 
@@ -118,7 +136,9 @@ type TabInfo = {
   scrollGroupScrRefLabel?: string;
 };
 
-function collectOpenTabsByProject(openTabs: readonly OpenProjectTab[]): Map<string, TabInfo[]> {
+function collectOpenTabsByProject(
+  openTabs: readonly ProjectSelectorOpenTab[],
+): Map<string, TabInfo[]> {
   const map = new Map<string, TabInfo[]>();
   openTabs.forEach((tab) => {
     const existing = map.get(tab.projectId);
@@ -137,7 +157,7 @@ function collectOpenTabsByProject(openTabs: readonly OpenProjectTab[]): Map<stri
 }
 
 function pairIsSelected(
-  pairs: readonly ProjectPair[],
+  pairs: readonly ProjectSelectorProjectPair[],
   projectId: string,
   scrollGroupId: ScrollGroupId | undefined,
 ): boolean {
@@ -173,13 +193,15 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         isSelected: selectedId === project.id,
         isMuted: tabs.length === 0,
         isBoundButClosed: false,
+        isDisabled: project.isDisabled === true,
+        disabledReason: project.disabledReason,
       };
     });
   }
 
   // project-multi and projectScrollGroup share the row structure (per-pair rows plus per-project
   // rows for not-open projects). They differ only in how selection is keyed.
-  let selectedPairs: readonly ProjectPair[] = [];
+  let selectedPairs: readonly ProjectSelectorProjectPair[] = [];
   if (args.mode === 'project-multi') {
     selectedPairs = args.selection.pairs;
   } else if (args.selection.projectId !== undefined) {
@@ -209,6 +231,8 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         isSelected: pairIsSelected(selectedPairs, project.id, undefined),
         isMuted: true,
         isBoundButClosed: false,
+        isDisabled: project.isDisabled === true,
+        disabledReason: project.disabledReason,
       });
       return;
     }
@@ -226,6 +250,8 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
         isSelected: pairIsSelected(selectedPairs, project.id, tab.scrollGroupId),
         isMuted: false,
         isBoundButClosed: false,
+        isDisabled: project.isDisabled === true,
+        disabledReason: project.disabledReason,
       });
     });
   });
@@ -255,6 +281,8 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
       isSelected: true,
       isMuted: false,
       isBoundButClosed: true,
+      isDisabled: project.isDisabled === true,
+      disabledReason: project.disabledReason,
     });
   });
 
@@ -297,6 +325,12 @@ function compareRows(a: ProjectRow, b: ProjectRow): number {
  * "Open tabs" rows are: open-group rows (project-multi / projectScrollGroup modes) and
  * `project`-mode rows whose project is open somewhere. Bound-but-closed synthetic rows and not-open
  * project rows land in "Other projects".
+ *
+ * Special case: when grouping is on but the "Open tabs" section would be empty (no project in the
+ * list is currently open in any scroll group), we fall back to a flat list. A lone "Other projects"
+ * heading without a partner section reads as a bug — the user wonders what they're "other" to. This
+ * commonly happens when the consumer hasn't (or can't) seed `openTabs` with already-open tabs at
+ * mount time.
  */
 export function partitionAndSort(
   rows: readonly ProjectRow[],
@@ -307,8 +341,12 @@ export function partitionAndSort(
   }
   const open = rows.filter(belongsToOpenTabsSection).sort(compareRows);
   const other = rows.filter((r) => !belongsToOpenTabsSection(r)).sort(compareRows);
-  const sections: RowSection[] = [];
-  if (open.length > 0) sections.push({ kind: 'openTabs', rows: open });
+  if (open.length === 0) {
+    // Grouping is on but no rows belong to "Open tabs" — render flat to avoid the misleading
+    // standalone "Other projects" header.
+    return [{ kind: 'flat', rows: other }];
+  }
+  const sections: RowSection[] = [{ kind: 'openTabs', rows: open }];
   if (other.length > 0) sections.push({ kind: 'other', rows: other });
   return sections;
 }

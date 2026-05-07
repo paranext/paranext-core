@@ -39,6 +39,14 @@ export type {
   SortDirection,
   TableContents,
 } from './components/advanced/data-table/data-table.component';
+// ManageBooksDialog moved to extensions/src/platform-scripture/src/manage-books-dialog/ (FN-009).
+// The unified Paratext-specific dialog is no longer part of the platform-bible-react surface.
+export {
+  default as ProjectSelector,
+  type ProjectSelectorProject,
+  type ProjectSelectorOpenTab,
+  type ProjectSelectorProjectPair,
+} from './components/advanced/project-selector/project-selector.component';
 export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
 export {
   ErrorPopover,
@@ -104,26 +112,6 @@ export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
-export {
-  default as ProjectSelector,
-  scrollGroupLetter,
-  type ProjectSelectorProps,
-  type ProjectSelectorLocalizedStrings,
-  type ProjectSelectorMode,
-  type ProjectSelectorProject,
-  type OpenProjectTab,
-  type ProjectPair,
-  type ProjectSelection,
-  type ProjectMultiSelection,
-  type ProjectScrollGroupSelection,
-  type ProjectRow,
-} from './components/advanced/project-selector/project-selector.component';
-export {
-  computeRows,
-  partitionAndSort,
-  type RowSection,
-  type ComputeRowsArgs,
-} from './components/advanced/project-selector/project-selector.rows';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
   default as ResourcePickerDialog,

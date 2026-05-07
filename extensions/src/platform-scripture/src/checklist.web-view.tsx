@@ -6,8 +6,8 @@ import {
   ProjectSelector,
   ScopeSelector,
   SCOPE_SELECTOR_STRING_KEYS,
-  type OpenProjectTab,
-  type ProjectPair,
+  type ProjectSelectorOpenTab,
+  type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
   type ScopeWithRange,
   usePromise,
@@ -572,7 +572,7 @@ global.webViewComponent = function ChecklistWebView({
   //
   // Fetch all scripture projects on mount; filter the primary out (no self-comparison); track open
   // tabs for the "Open tabs" section in the popover. On selection change, map the returned
-  // `ProjectPair[]` back to our `ChecklistComparativeTextRef[]` persistence shape.
+  // `ProjectSelectorProjectPair[]` back to our `ChecklistComparativeTextRef[]` persistence shape.
 
   const [allProjects] = usePromise(
     useCallback(async () => {
@@ -621,10 +621,10 @@ global.webViewComponent = function ChecklistWebView({
 
   // Comparative-texts ProjectSelector tracks ALL project-bound tabs (no webViewType filter).
   // The shared `useOpenProjectTabs` hook (introduced for goto-focus tracking) returns a richer
-  // shape with webViewId + webViewType; map back to the lighter OpenProjectTab shape that
+  // shape with webViewId + webViewType; map back to the lighter ProjectSelectorOpenTab shape that
   // ProjectSelector's `openTabs` prop expects.
   const allOpenProjectTabs = useOpenProjectTabs();
-  const comparativeOpenTabs = useMemo<OpenProjectTab[]>(
+  const comparativeOpenTabs = useMemo<ProjectSelectorOpenTab[]>(
     () =>
       allOpenProjectTabs.map((t) => ({ projectId: t.projectId, scrollGroupId: t.scrollGroupId })),
     [allOpenProjectTabs],
@@ -647,7 +647,7 @@ global.webViewComponent = function ChecklistWebView({
   );
 
   const handleComparativeTextsChange = useCallback(
-    (selection: { pairs: ProjectPair[] }) => {
+    (selection: { pairs: ProjectSelectorProjectPair[] }) => {
       const projectIdToName = new Map(allProjects.map((p) => [p.id, p.shortName]));
       const nextRefs: ChecklistComparativeTextRef[] = selection.pairs.map((pair) => ({
         id: pair.projectId,
