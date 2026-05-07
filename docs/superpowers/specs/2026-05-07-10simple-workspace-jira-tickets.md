@@ -14,7 +14,7 @@ Delivery order: T1 lands first and unblocks parallel work. T2 is independent and
 
 The entire Platform.Bible app should default to a fixed 3-column layout when `platform.interfaceMode` is `'simple'`. The three columns are: model text (start), scripture editor (middle), resources & tools (end). No new layout component should be created — this is achieved by configuring the existing `platform-dock-layout` with the right default layout state.
 
-### Implementation idea
+### Implementation Ideas
 
 Read the `platform.interfaceMode` setting (already exists, defaults to `'simple'`) in the layout initialization path. When the value is `'simple'`, load a hardcoded 3-column dock layout configuration rather than whatever was last saved. The three panels (model text, editor, resources) should be registered contributions that the layout can reference by ID. The existing flexible layout behavior is preserved and will be used when `interfaceMode` is `'power'` in a future iteration.
 
@@ -33,7 +33,7 @@ Read the `platform.interfaceMode` setting (already exists, defaults to `'simple'
 
 The scripture editor currently has its own BCV (Book-Chapter-Verse) navigation control in its panel toolbar. In 10Simple, BCV navigation lives exclusively in the main app toolbar. The per-panel BCV control in the scripture editor should be removed to avoid duplication and confusion.
 
-### Implementation idea
+### Implementation Ideas
 
 Locate the BCV control rendered inside the scripture editor's panel toolbar and remove it. This should be a small, targeted change with no effect on the main app toolbar BCV or the underlying BCV sync behavior (which already works correctly across all panels).
 
@@ -51,7 +51,7 @@ Locate the BCV control rendered inside the scripture editor's panel toolbar and 
 
 The `ResourceReferenceList` type (used by both `platformScripture.modelTexts` and `platformScripture.referencedProjectsAndResources` project settings) needs two new metadata fields on each entry: `addedByRole` to distinguish admin vs. user additions, and `addedByUser` to record the ID of who added the entry. This metadata is required by the Column 1 and Column 3 UIs to filter visible entries and lock admin-added items from being removed by regular users.
 
-### Implementation idea
+### Implementation Ideas
 
 In `platform-scripture.d.ts`, introduce a new `AnnotatedResourceReference` intersection type:
 
@@ -80,7 +80,7 @@ Update `ResourceReferenceList.items` from `ResourceReference[]` to `AnnotatedRes
 
 Column 1 displays a model text (reference translation) in read-only mode, synchronized to the main app toolbar BCV. The panel reads the `platformScripture.modelTexts` project setting to know which text(s) to offer. Both admin and regular users can write to this setting; on sync, admin entries take precedence over user entries. The user sees only entries they added or that an admin added — not entries from other users.
 
-### Implementation idea
+### Implementation Ideas
 
 Reuse the existing scripture editor/reader component in read-only mode inside the Column 1 panel. Add a selector UI above (or integrated into) the panel that:
 
@@ -108,7 +108,7 @@ When a user makes a selection, write the entry to `modelTexts` with `addedByRole
 
 The first tab in Column 3 ("Bible texts") lets Saroj select and read a downloaded Bible text resource alongside his project. The tab reads `platformScripture.referencedProjectsAndResources` filtered to Bible text resources. Admin and user can both add entries; admin entries add to (not replace) user entries on sync. Users can only remove their own entries — admin-added entries show a disabled remove button with an explanation.
 
-### Implementation idea
+### Implementation Ideas
 
 Add a "Bible texts" tab to the Column 3 panel using the existing docking tab system. Inside the tab:
 
@@ -136,7 +136,7 @@ Add a "Bible texts" tab to the Column 3 panel using the existing docking tab sys
 
 The second tab in Column 3 ("Commentaries") lets Saroj read a commentary alongside his project. It follows the same structure as the Bible texts tab but is filtered to commentary resources. Only specific commentaries are available for download: UBS Handbook and SIL TNN/TND in English. The "Download commentaries" action opens `platform-get-resources` filtered directly to the commentaries resource type.
 
-### Implementation idea
+### Implementation Ideas
 
 Add a "Commentaries" tab to the Column 3 panel alongside the Bible texts tab. The implementation mirrors T5 exactly, with two differences:
 
@@ -158,7 +158,7 @@ Add a "Commentaries" tab to the Column 3 panel alongside the Bible texts tab. Th
 
 The `platform-get-resources` extension needs a new commentaries resource type so users can browse and download commentaries from within Platform.Bible. The available list is curated and limited: UBS Handbook and SIL TNN/TND in English. The extension also needs to support an optional resource-type filter parameter so it can be opened directly on the commentaries view when launched from Column 3.
 
-### Implementation idea
+### Implementation Ideas
 
 In the `platform-get-resources` extension:
 
@@ -183,7 +183,7 @@ The download flow itself reuses existing infrastructure — no new download mech
 
 In the 10Simple layout, columns should not be movable or closable by the user. This ticket implements the UI constraints that enforce the fixed 3-column arrangement. Cut this ticket first if time is tight.
 
-### Implementation idea
+### Implementation Ideas
 
 When `platform.interfaceMode` is `'simple'`, disable the drag handles and close buttons on the three 10Simple columns within `platform-dock-layout`. This may involve conditionally hiding or disabling the relevant controls based on the interface mode setting.
 
