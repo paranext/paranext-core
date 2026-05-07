@@ -3,9 +3,22 @@
 // on the mode-discriminated adjacent fields, so we keep `props.X` access throughout to preserve
 // narrowing inside `if (props.mode === '...')` blocks.
 /* eslint-disable react/destructuring-assignment */
-import { Fragment, ReactNode, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
+import {
+  Fragment,
+  ReactNode,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from 'react';
 import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Filter } from 'lucide-react';
-import type { ScrollGroupId } from 'platform-bible-utils';
+import {
+  DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
+  getLocalizeKeyForScrollGroupId,
+  type ScrollGroupId,
+} from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_OVERLAY } from '@/components/z-index';
 import { Badge } from '@/components/shadcn-ui/badge';
@@ -37,9 +50,9 @@ import {
 import {
   computeRows,
   partitionAndSort,
-  type OpenProjectTab,
+  type ProjectSelectorOpenTab,
   type ProjectMultiSelection,
-  type ProjectPair,
+  type ProjectSelectorProjectPair,
   type ProjectRow,
   type ProjectScrollGroupSelection,
   type ProjectSelection,
@@ -49,9 +62,9 @@ import {
 } from './project-selector.rows';
 
 export type {
-  OpenProjectTab,
+  ProjectSelectorOpenTab,
   ProjectMultiSelection,
-  ProjectPair,
+  ProjectSelectorProjectPair,
   ProjectRow,
   ProjectScrollGroupSelection,
   ProjectSelection,
@@ -74,9 +87,9 @@ export type ProjectSelectorLocalizedStrings = {
   filterGroupByOpenTabs?: string;
   /** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
   filterShowSelectedOnly?: string;
-  /** Section heading for the Open tabs section. Defaults to `"Open tabs"`. */
+  /** Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`. */
   openTabsSectionHeading?: string;
-  /** Section heading for the Other projects section. Defaults to `"Other projects"`. */
+  /** Section heading for the Other projects section. Defaults to `"Your projects & resources"`. */
   otherProjectsSectionHeading?: string;
   /**
    * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
@@ -98,8 +111,8 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   filterSectionLabel: 'Filter',
   filterGroupByOpenTabs: 'By open tabs',
   filterShowSelectedOnly: 'Show selected only',
-  openTabsSectionHeading: 'Open tabs',
-  otherProjectsSectionHeading: 'Other projects',
+  openTabsSectionHeading: 'Opened project & resource tabs',
+  otherProjectsSectionHeading: 'Your projects & resources',
   boundButClosedTooltip: 'Bound to {group} · not currently open',
   openButtonLabel: 'Open',
   selectAll: 'Select all',
@@ -116,10 +129,13 @@ function resolveStrings(
 
 // #region Scroll group labels
 
-/** Map 0→A, 1→B, … 25→Z. */
-export function scrollGroupLetter(id: ScrollGroupId): string {
-  if (id >= 0 && id <= 25) return String.fromCharCode('A'.charCodeAt(0) + id);
-  return String(id);
+/**
+ * Map a scroll group id to its display letter (`0`→`A`, …, `25`→`Z`) using the canonical default
+ * localized strings from `platform-bible-utils`. Falls back to the numeric id when no entry
+ * exists.
+ */
+function scrollGroupLetterFromMap(id: ScrollGroupId): string {
+  return DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS[getLocalizeKeyForScrollGroupId(id)] ?? String(id);
 }
 
 // #endregion
@@ -128,7 +144,7 @@ export function scrollGroupLetter(id: ScrollGroupId): string {
 
 type CommonProps = {
   projects: readonly ProjectSelectorProject[];
-  openTabs: readonly OpenProjectTab[];
+  openTabs: readonly ProjectSelectorOpenTab[];
   buttonPlaceholder?: string;
   commandEmptyMessage?: string;
   ariaLabel?: string;
@@ -152,7 +168,7 @@ export type ProjectSelectorProps =
   | (CommonProps & {
       mode: 'project-multi';
       selection: ProjectMultiSelection;
-      onChangeSelection: (selection: { pairs: ProjectPair[] }) => void;
+      onChangeSelection: (selection: { pairs: ProjectSelectorProjectPair[] }) => void;
       /**
        * Called when the user clicks the "Open" button on a bound-but-closed row (or the row
        * itself). The caller is expected to open a tab via `papi.webViews.openWebView(...)`.
@@ -197,7 +213,7 @@ type ScrollGroupChipProps = {
 };
 
 function ScrollGroupChip({ scrollGroupId, isBoundButClosed }: ScrollGroupChipProps) {
-  const letter = scrollGroupLetter(scrollGroupId);
+  const letter = scrollGroupLetterFromMap(scrollGroupId);
   if (isBoundButClosed) {
     return (
       <Badge
@@ -225,7 +241,40 @@ type RowRenderProps = {
 };
 
 function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps) {
+  // Per-row hover state. We control Radix Tooltip's `open` prop manually because Radix's
+  // built-in pointer/focus auto-detection does not fire on cmdk's `<CommandItem>` trigger
+  // (data-state stays "closed" even after pointerenter / pointermove / focus). Tracking
+  // hover ourselves bypasses that auto-detection entirely.
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Ref to the truncating label span so we can measure scrollWidth vs clientWidth on hover
+  // and decide whether the tooltip should show. We only want a tooltip on rows where the
+  // visible text is actually clipped — or on rows that have extra info to surface beyond
+  // what's visible in the row itself.
+  // React's ref API requires `null` as the initial value for DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const labelRef = useRef<HTMLSpanElement>(null);
+
   const tooltipHasLanguage = Boolean(row.language || row.languageCode);
+
+  // Tooltip lines that convey information NOT visible in the row text. These rows should
+  // always show a tooltip on hover, regardless of whether the visible text is truncated.
+  const hasExtraTooltipContent =
+    tooltipHasLanguage ||
+    Boolean(row.scrollGroupScrRefLabel) ||
+    row.isBoundButClosed ||
+    (row.isDisabled && Boolean(row.disabledReason));
+
+  const handlePointerEnter = useCallback(() => {
+    if (hasExtraTooltipContent) {
+      setIsHovered(true);
+      return;
+    }
+    // Otherwise only open the tooltip if the visible row text is actually truncated.
+    const el = labelRef.current;
+    if (!el) return;
+    if (el.scrollWidth > el.clientWidth) setIsHovered(true);
+  }, [hasExtraTooltipContent]);
 
   const leftCheck = (
     <Check className={cn('tw-h-4 tw-w-4', row.isSelected ? 'tw-opacity-100' : 'tw-opacity-0')} />
@@ -239,7 +288,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
         <span className="tw-ms-auto tw-flex tw-shrink-0 tw-gap-1">
           {row.openGroups.map((g) => (
             <Badge key={g} variant="secondary">
-              {scrollGroupLetter(g)}
+              {scrollGroupLetterFromMap(g)}
             </Badge>
           ))}
         </span>
@@ -276,24 +325,31 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
   const rowNode = (
     <CommandItem
       value={`${row.rowKey} ${row.shortName} ${row.fullName} ${row.language ?? ''} ${row.languageCode ?? ''}`}
-      onSelect={() => onClick(row)}
-      className="tw-flex tw-items-center tw-gap-2 tw-pe-4 tw-@container"
+      onSelect={() => {
+        if (row.isDisabled) return;
+        onClick(row);
+      }}
+      disabled={row.isDisabled}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={() => setIsHovered(false)}
+      className="tw-flex tw-items-center tw-gap-2 tw-pe-4"
       data-selected={row.isSelected}
     >
       <span className="tw-flex tw-h-4 tw-w-4 tw-shrink-0 tw-items-center tw-justify-center">
         {leftCheck}
       </span>
-      <span className="tw-w-16 tw-shrink-0 tw-truncate">{row.shortName}</span>
-      {/* Short name + check + chip + padding consume ~150px, so this threshold gives the full
-          name column ~100px before it collapses. */}
-      <span className="tw-hidden tw-min-w-0 tw-flex-1 tw-truncate tw-text-start tw-text-muted-foreground @[250px]:tw-block">
-        {row.fullName}
+      {/* shortName • fullName as a single truncating line. The whole line truncates with ellipsis
+          when it overflows; the tooltip surfaces the fullName for clipped rows. */}
+      <span ref={labelRef} className="tw-min-w-0 tw-flex-1 tw-truncate tw-text-start">
+        <span>{row.shortName}</span>
+        <span className="tw-text-muted-foreground"> • {row.fullName}</span>
       </span>
       {rightContent}
     </CommandItem>
   );
 
-  const letter = row.scrollGroupId !== undefined ? scrollGroupLetter(row.scrollGroupId) : undefined;
+  const letter =
+    row.scrollGroupId !== undefined ? scrollGroupLetterFromMap(row.scrollGroupId) : undefined;
 
   const tooltipBoundBut =
     row.isBoundButClosed && letter
@@ -301,14 +357,14 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
       : undefined;
 
   return (
-    <Tooltip delayDuration={200}>
+    <Tooltip open={isHovered} delayDuration={400}>
       <TooltipTrigger asChild>{rowNode}</TooltipTrigger>
       <TooltipContent
-        side="right"
-        align="start"
+        side="top"
+        align="center"
         sideOffset={8}
         collisionPadding={16}
-        className="tw-max-w-xs"
+        className="tw-max-w-xs tw-text-center"
         style={{ zIndex: Z_INDEX_OVERLAY }}
       >
         <div className="tw-font-semibold">{row.fullName}</div>
@@ -327,6 +383,9 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
           </div>
         )}
         {tooltipBoundBut && <div className="tw-text-sm tw-italic">{tooltipBoundBut}</div>}
+        {row.isDisabled && row.disabledReason && (
+          <div className="tw-text-sm tw-italic tw-text-muted-foreground">{row.disabledReason}</div>
+        )}
       </TooltipContent>
     </Tooltip>
   );
@@ -480,9 +539,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // Every (project, scrollGroupId) pair available for selection — independent of the current
   // search query or "Show selected only" filter. Used by "Select all" in multi mode so the user
   // can select the full catalog without first clearing the search box.
-  const allPairs = useMemo<ProjectPair[]>(() => {
+  const allPairs = useMemo<ProjectSelectorProjectPair[]>(() => {
     if (props.mode !== 'project-multi') return [];
-    const result: ProjectPair[] = [];
+    const result: ProjectSelectorProjectPair[] = [];
     props.projects.forEach((project) => {
       const tabs = props.openTabs.filter((t) => t.projectId === project.id);
       if (tabs.length === 0) {
@@ -519,7 +578,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       }
       case 'project-multi': {
         const current = props.selection.pairs;
-        const match = (p: ProjectPair) =>
+        const match = (p: ProjectSelectorProjectPair) =>
           p.projectId === row.projectId && p.scrollGroupId === row.scrollGroupId;
         const next = current.some(match)
           ? current.filter((p) => !match(p))
@@ -611,7 +670,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
           .map(({ project, scrollGroupId }) =>
             scrollGroupId === undefined
               ? project.shortName
-              : `${project.shortName} (${scrollGroupLetter(scrollGroupId)})`,
+              : `${project.shortName} (${scrollGroupLetterFromMap(scrollGroupId)})`,
           )
           .join(', ');
         // One pair selected → drop the count; the name already conveys the cardinality.
@@ -639,7 +698,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         if (group === undefined) {
           return { node: selected.shortName, title: selected.shortName };
         }
-        const text = `${selected.shortName} · ${scrollGroupLetter(group)}`;
+        const text = `${selected.shortName} · ${scrollGroupLetterFromMap(group)}`;
         return { node: text, title: text };
       }
       default:
@@ -653,8 +712,6 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     ) : (
       <ChevronDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
     );
-
-  const hasMultiSelection = props.mode === 'project-multi' && props.selection.pairs.length > 0;
 
   const openButtonHandler =
     props.mode === 'projectScrollGroup' ||
@@ -671,7 +728,6 @@ export function ProjectSelector(props: ProjectSelectorProps) {
           aria-expanded={open}
           aria-label={props.ariaLabel}
           disabled={props.isDisabled ?? false}
-          title={hasMultiSelection ? triggerContent.title : undefined}
           className={cn(
             'tw-flex tw-w-[180px] tw-items-center tw-justify-between tw-overflow-hidden',
             props.buttonClassName,
@@ -690,13 +746,10 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       <PopoverContent
         align={props.alignDropDown ?? 'start'}
         collisionPadding={16}
-        className={cn(
-          'tw-w-[500px] tw-max-w-[calc(100vw-2rem)] tw-p-0',
-          props.popoverContentClassName,
-        )}
+        className={cn('tw-w-80 tw-max-w-[calc(100vw-2rem)] tw-p-0', props.popoverContentClassName)}
         style={props.popoverContentStyle}
       >
-        <TooltipProvider delayDuration={200}>
+        <TooltipProvider delayDuration={400}>
           <Command shouldFilter={false}>
             <div className="tw-flex tw-items-center tw-border-b tw-pe-2">
               <div className="tw-flex-1">

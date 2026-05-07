@@ -1083,7 +1083,7 @@ declare module 'platform-scripture' {
      *
      * @example Not a known name "{name}"
      *
-     * @example %tab_title_unknown% (illustrative — any `LocalizeKey` is valid here)
+     * @example %manageBooks_param_bookNotInProject%
      */
     messageFormatString: LocalizeKey | string;
     /**
@@ -2072,7 +2072,14 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
-    'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+    /**
+     * Open the Find / Replace UI for a project. The single optional argument is the calling
+     * editor's `webViewId` (when invoked from an editor's menu, so the Find UI can inherit the
+     * editor's project + scroll group). Pass `undefined` to open without an editor context.
+     */
+    'platformScripture.openFind': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<string | undefined>;
 
     /**
      * Open the Markers Checklist web view. Resolves the target project from the supplied
@@ -2087,6 +2094,23 @@ declare module 'papi-shared-types' {
      * replaced with the real dialog launcher in UI-PKG-003.
      */
     'platformScripture.openMarkersChecklistSettings': () => Promise<void>;
+
+    /**
+     * Open the unified Manage Books dialog (FN-008, 2026-05-01) for the active scripture project.
+     * Opens the dialog as a tab web view; the dialog itself supports View / Create / Delete / Copy
+     * / Import action modes and an inline book-chooser grid.
+     *
+     * The single optional argument is either an editor's `webViewId` (when invoked from a
+     * scripture-editor menu) or a literal project id (when invoked from the main menu or from
+     * another extension). The handler probes the value with
+     * `papi.webViews.getOpenWebViewDefinition` — if it resolves, the dialog opens pre-targeted at
+     * that web view's project; otherwise the value is treated as a project id and the dialog opens
+     * for that project directly. Pass `undefined` to open the dialog with the project picker
+     * visible.
+     */
+    'platformScripture.openManageBooks': (
+      webViewIdOrProjectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {

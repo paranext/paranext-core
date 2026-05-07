@@ -86,3 +86,9 @@ secrets/
 *.p12
 credentials.json
 service-account.json
+
+# Brainstorming session artifacts (visual companion)
+.superpowers/
+
+# Phase 3 UI evidence proofs (canonical location is ai-prompts/.context/features/{feature}/proofs/)
+/proofs/

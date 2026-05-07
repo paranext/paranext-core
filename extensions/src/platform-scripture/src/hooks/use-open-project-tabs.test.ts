@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useOpenProjectTabs } from './use-open-project-tabs';
 
 interface WebViewLike {
@@ -14,6 +14,7 @@ type WebViewEventHandler = (event: { webView: WebViewLike }) => void;
 const mockOnDidOpenWebView = vi.fn<(handler: WebViewEventHandler) => () => void>();
 const mockOnDidUpdateWebView = vi.fn<(handler: WebViewEventHandler) => () => void>();
 const mockOnDidCloseWebView = vi.fn<(handler: WebViewEventHandler) => () => void>();
+const mockGetAllOpenWebViewDefinitions = vi.fn<() => Promise<WebViewLike[]>>();
 const mockUnsubOpen = vi.fn();
 const mockUnsubUpdate = vi.fn();
 const mockUnsubClose = vi.fn();
@@ -33,6 +34,7 @@ vi.mock('@papi/frontend', () => ({
         mockOnDidCloseWebView(h);
         return mockUnsubClose;
       },
+      getAllOpenWebViewDefinitions: () => mockGetAllOpenWebViewDefinitions(),
     },
   },
 }));
@@ -41,6 +43,8 @@ beforeEach(() => {
   mockOnDidOpenWebView.mockClear();
   mockOnDidUpdateWebView.mockClear();
   mockOnDidCloseWebView.mockClear();
+  mockGetAllOpenWebViewDefinitions.mockReset();
+  mockGetAllOpenWebViewDefinitions.mockResolvedValue([]);
   mockUnsubOpen.mockClear();
   mockUnsubUpdate.mockClear();
   mockUnsubClose.mockClear();
@@ -100,7 +104,7 @@ describe('useOpenProjectTabs', () => {
     expect(result.current).toEqual([]);
   });
 
-  it('skips webView with non-numeric scrollGroupScrRef', () => {
+  it('skips webView with non-numeric, non-undefined scrollGroupScrRef', () => {
     const { result } = renderHook(() => useOpenProjectTabs());
     const handler = mockOnDidOpenWebView.mock.calls[0][0];
     act(() =>
@@ -109,6 +113,60 @@ describe('useOpenProjectTabs', () => {
       }),
     );
     expect(result.current).toEqual([]);
+    act(() =>
+      handler({
+        // Test asserts that the hook rejects null defensively (PAPI quirk: legacy WebViews can carry null scrollGroupScrRef).
+        // eslint-disable-next-line no-null/no-null
+        webView: { id: 'wv-2', projectId: 'p-2', scrollGroupScrRef: null },
+      }),
+    );
+    expect(result.current).toEqual([]);
+  });
+
+  it('treats undefined scrollGroupScrRef as scroll group 0 (default)', () => {
+    const { result } = renderHook(() => useOpenProjectTabs());
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-1',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'p-1',
+          // scrollGroupScrRef intentionally omitted — fresh editors don't seed it
+        },
+      }),
+    );
+    expect(result.current).toEqual([
+      {
+        webViewId: 'wv-1',
+        projectId: 'p-1',
+        scrollGroupId: 0,
+        webViewType: 'platformScriptureEditor.react',
+      },
+    ]);
+  });
+
+  it('lowercases projectId so WebView (uppercase) matches PDP (lowercase)', () => {
+    const { result } = renderHook(() => useOpenProjectTabs());
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-1',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'AbCdEf',
+          scrollGroupScrRef: 0,
+        },
+      }),
+    );
+    expect(result.current).toEqual([
+      {
+        webViewId: 'wv-1',
+        projectId: 'abcdef',
+        scrollGroupId: 0,
+        webViewType: 'platformScriptureEditor.react',
+      },
+    ]);
   });
 
   it('removes tab on close event', () => {
@@ -123,6 +181,42 @@ describe('useOpenProjectTabs', () => {
     expect(result.current).toHaveLength(1);
     act(() => closeH({ webView: { id: 'wv-1' } }));
     expect(result.current).toEqual([]);
+  });
+
+  it('filter excludes manage-books and side-panel tabs from a mixed initial seed', async () => {
+    // Reproduces the manage-books bug: without the filter, every project-bound tab
+    // (Manage Books itself, Checks side panel, scripture editors) would land in the list.
+    // With a Scripture-Editor-only filter, only the editor entries should remain.
+    mockGetAllOpenWebViewDefinitions.mockResolvedValueOnce([
+      {
+        id: 'wv-mb',
+        webViewType: 'platformScripture.manageBooks',
+        projectId: 'p-mb-target',
+        scrollGroupScrRef: 0,
+      },
+      {
+        id: 'wv-checks',
+        webViewType: 'someChecks.sidePanel',
+        projectId: 'p-checks-target',
+        scrollGroupScrRef: 0,
+      },
+      {
+        id: 'wv-editor',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'p-editor',
+        scrollGroupScrRef: 0,
+      },
+    ]);
+    const { result } = renderHook(() =>
+      useOpenProjectTabs((wv) => wv.webViewType === 'platformScriptureEditor.react'),
+    );
+    await waitFor(() => expect(result.current).toHaveLength(1));
+    expect(result.current[0]).toEqual({
+      webViewId: 'wv-editor',
+      projectId: 'p-editor',
+      scrollGroupId: 0,
+      webViewType: 'platformScriptureEditor.react',
+    });
   });
 
   it('filter excludes non-matching webViewType', () => {
@@ -153,5 +247,79 @@ describe('useOpenProjectTabs', () => {
     );
     expect(result.current).toHaveLength(1);
     expect(result.current[0].webViewId).toBe('wv-2');
+  });
+
+  it('seeds initial state from getAllOpenWebViewDefinitions on mount', async () => {
+    mockGetAllOpenWebViewDefinitions.mockResolvedValueOnce([
+      {
+        id: 'wv-seed-1',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'p-1',
+        scrollGroupScrRef: 0,
+      },
+      {
+        id: 'wv-seed-2',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'p-2',
+        scrollGroupScrRef: 1,
+      },
+    ]);
+    const { result } = renderHook(() => useOpenProjectTabs());
+    await waitFor(() => expect(result.current).toHaveLength(2));
+    expect(result.current.map((t) => t.webViewId).sort()).toEqual(['wv-seed-1', 'wv-seed-2']);
+  });
+
+  it('does not duplicate when an open event arrives for an already-seeded id', async () => {
+    mockGetAllOpenWebViewDefinitions.mockResolvedValueOnce([
+      {
+        id: 'wv-1',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'p-1',
+        scrollGroupScrRef: 0,
+      },
+      {
+        id: 'wv-2',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'p-2',
+        scrollGroupScrRef: 1,
+      },
+    ]);
+    const { result } = renderHook(() => useOpenProjectTabs());
+    await waitFor(() => expect(result.current).toHaveLength(2));
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-1',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'p-1',
+          scrollGroupScrRef: 0,
+        },
+      }),
+    );
+    expect(result.current).toHaveLength(2);
+  });
+
+  it('falls back to live events when getAllOpenWebViewDefinitions rejects', async () => {
+    mockGetAllOpenWebViewDefinitions.mockRejectedValueOnce(new Error('papi unavailable'));
+    const { result } = renderHook(() => useOpenProjectTabs());
+    // Wait one microtask flush so the rejection settles before we drive a live event.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current).toEqual([]);
+    const handler = mockOnDidOpenWebView.mock.calls[0][0];
+    act(() =>
+      handler({
+        webView: {
+          id: 'wv-live',
+          webViewType: 'platformScriptureEditor.react',
+          projectId: 'p-1',
+          scrollGroupScrRef: 0,
+        },
+      }),
+    );
+    expect(result.current).toHaveLength(1);
+    expect(result.current[0].webViewId).toBe('wv-live');
   });
 });

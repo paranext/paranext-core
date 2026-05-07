@@ -19,6 +19,7 @@ import {
   Mutex,
   newPlatformError,
   PlatformError,
+  PlatformErrorCode,
   PlatformEvent,
   PlatformEventEmitter,
   stringLength,
@@ -205,8 +206,28 @@ async function doRequest<TParam extends Array<unknown>, TReturn>(
     response = getErrorMessage(e);
   }
 
+  // When the backend service throws `PlatformErrorCodes.WithCode(code, message)`
+  // (see c-sharp/PlatformErrorCodes.cs), the code is serialized into
+  // `error.data.data.platformErrorCode`. Extract it here so it survives the
+  // rethrow as a PlatformError with a machine-readable `code` property.
+  // FN-002, Theme 7 — manage-books feature.
+  //
+  // The double `.data?.data?` indirection mirrors StreamJsonRpc's wire shape
+  // (Theme 12, 2026-04-30):
+  //   - The OUTER `error.data` is the standard JSON-RPC 2.0 error envelope's
+  //     `data` field (where StreamJsonRpc places its serialized error payload
+  //     for thrown C# exceptions).
+  //   - The INNER `.data` is StreamJsonRpc's serialized representation of
+  //     the C# `Exception.Data` IDictionary, where
+  //     `PlatformErrorCodes.WithCode` writes
+  //     `ex.Data["platformErrorCode"] = code` (decision-registry.json
+  //     `patterns.errorHandling.platformErrorCodes`).
+  // Do NOT flatten this access unless StreamJsonRpc's serialization changes —
+  // both levels are intentional.
+  let platformErrorCode: PlatformErrorCode | undefined;
   if (isJsonRpcResponse(response)) {
     if (!response.error) return response.result;
+    platformErrorCode = response.error.data?.data?.platformErrorCode;
     response = `JSON-RPC Request error (${response.error.code}): ${response.error.message}`;
   } else if (isPlatformError(response)) {
     logger.debug(response.message);
@@ -217,7 +238,7 @@ async function doRequest<TParam extends Array<unknown>, TReturn>(
       : `Invalid JSON-RPC Response: ${response}`;
   }
   logger.debug(response);
-  throw newPlatformError(response);
+  throw newPlatformError(response, platformErrorCode);
 }
 
 /**

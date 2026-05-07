@@ -111,13 +111,19 @@ export interface WebViewServiceType {
   getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
 
   /**
-   * Gets the saved properties on all currently open WebView definitions
+   * Get the saved properties on every currently-open WebView definition. Returns the same
+   * representation `getOpenWebViewDefinition` does, just for every open WebView in one call.
+   *
+   * Use this at mount time to seed initial state for subscribers of `onDidOpenWebView` /
+   * `onDidUpdateWebView` / `onDidCloseWebView` — those events do not replay for tabs already open
+   * at subscription time. Combined with the live event stream, this gives a complete picture of the
+   * WebView landscape from any point in the app's lifetime.
    *
    * Note: this only returns a representation of the current WebView definitions, not the actual web
-   * view definitions themselves. Changing properties on the returned definitions does not affect
-   * the actual WebView definitions.
+   * view definitions themselves. Changing properties on returned definitions does not affect the
+   * actual WebView definitions.
    *
-   * @returns Promise that resolves to an array of saved properties for all open WebView definitions
+   * @returns Saved properties of every open WebView. Empty array if no WebViews are open.
    */
   getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
 

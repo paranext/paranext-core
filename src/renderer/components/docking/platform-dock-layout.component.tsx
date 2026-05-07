@@ -89,6 +89,7 @@ export function PlatformDockLayout() {
       getAllWebViewDefinitions: () => getAllWebViewDefinitions(dockLayoutRef.current),
       getWebViewDefinition: (webViewId: string) =>
         getWebViewDefinition(webViewId, dockLayoutRef.current),
+      getAllWebViewDefinitions: () => getAllWebViewDefinitions(dockLayoutRef.current),
       updateTabPartial: (
         tabId: string,
         partialTabInfo: Partial<TabInfo>,

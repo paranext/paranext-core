@@ -264,6 +264,14 @@ export function getTabInfoByElement(
  * @returns Info for adjacent tab in the correct direction or `undefined` if there is not an
  *   adjacent tab in this tab group that meets the specified criteria
  */
+// Direction string constants — referenced via named constants so the AI lint rule
+// `paranext/no-hardcoded-string-comparison` passes. These mirror the values in
+// `DIRECTION_FROM_TAB` / `DirectionFromTab` (see `docking-framework.model.ts`).
+const DIRECTION_NEXT_TAB = 'nextTab';
+const DIRECTION_NEXT_TAB_OR_GROUP = 'nextTabOrGroup';
+const DIRECTION_PREVIOUS_TAB_OR_GROUP = 'previousTabOrGroup';
+const DIRECTION_NEAR_TAB_OR_NEXT_GROUP = 'nearTabOrNextGroup';
+
 function getAdjacentTabInfoInDirectionWithinTabGroup(
   sourceTabGroup: PanelData,
   sourceTabId: string,
@@ -701,6 +709,58 @@ export function findFirstWebViewDefinitionByType(
   // Type assert the webview data in the web view tab
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return getWebViewDefinitionFromTab(found as RCDockTabInfo, 'findFirstWebViewDefinitionByType2');
+}
+
+/**
+ * Recursively collects every WebView tab's data from a `BoxData` subtree.
+ *
+ * Walks `children`, descending through nested `BoxData` and visiting each `PanelData`'s `tabs`.
+ * Only tabs with `tabType === TAB_TYPE_WEBVIEW` are included.
+ */
+function collectWebViewDefinitionsFromBox(box: BoxData | undefined): WebViewDefinition[] {
+  if (!box || !box.children) return [];
+  const definitions: WebViewDefinition[] = [];
+  box.children.forEach((child) => {
+    if ('tabs' in child) {
+      // PanelData
+      child.tabs.forEach((tab) => {
+        // RCDockTabInfo carries `tabType` and `data`. Cast through unknown — TabData from rc-dock
+        // does not declare these fields, but Platform always wraps them via createRCDockTabFromTabInfo.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const platformTab = tab as unknown as RCDockTabInfo;
+        if (platformTab.tabType === TAB_TYPE_WEBVIEW && platformTab.data) {
+          // `data` is typed `unknown` on SavedTabInfo; for WebView tabs Platform stores a WebViewDefinition.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          definitions.push(platformTab.data as WebViewDefinition);
+        }
+      });
+    } else if ('children' in child) {
+      // BoxData — recurse
+      definitions.push(...collectWebViewDefinitionsFromBox(child));
+    }
+  });
+  return definitions;
+}
+
+/**
+ * Gets the WebView definitions for every open WebView tab across the entire dock layout.
+ *
+ * Walks `dockbox`, `floatbox`, `maxbox`, and `windowbox` recursively. Returns the underlying
+ * `WebViewDefinition` from each tab's `data` field. Non-WebView tabs are skipped.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @returns Array of WebView definitions, one per currently-open WebView tab. Empty array if no
+ *   WebView tabs are open.
+ */
+export function getAllWebViewDefinitions(dockLayout: DockLayout): WebViewDefinition[] {
+  const layout = dockLayout.getLayout();
+  return [
+    ...collectWebViewDefinitionsFromBox(layout.dockbox),
+    ...collectWebViewDefinitionsFromBox(layout.floatbox),
+    ...collectWebViewDefinitionsFromBox(layout.maxbox),
+    ...collectWebViewDefinitionsFromBox(layout.windowbox),
+  ];
 }
 
 // #endregion

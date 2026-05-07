@@ -1,0 +1,786 @@
+/**
+ * === NEW IN PT10 === FN-008 (2026-05-01): Wiring layer for the unified Manage Books dialog. The
+ * presentational component lives in platform-bible-react; this thin web view subscribes to PAPI
+ * data, calls the platformScripture.manageBooks NetworkObject methods, and routes AlertEntry
+ * results to the platform notification service per Theme C1.
+ *
+ * Adapter responsibilities (FN-008 #1):
+ *
+ * - LoadBooks(projectId) ← useProjectSetting('platformScripture.booksPresent')
+ * - LoadProjects() ← manageBooks.filterProjects(...)
+ * - LoadVersification(projectId) ← useProjectSetting('platformScripture.versification')
+ * - OnCreateBooks/onDeleteBooks/onCopyBooks/onImportBooks ← manageBooks.{method}(...)
+ * - OnMutationResult(result) ← iterates AlertEntry[] → notificationService.send
+ * - IsProjectShared ← manageBooks.isProjectShared(projectId)
+ * - ImportFile { file, date } ↔ ImportFileEntry { projectId, fileName, ... }
+ *
+ * Cross-launch callbacks land as info-toast stubs (DEF-UI-006/007/008) until the corresponding
+ * platform commands ship.
+ */
+import papi, { logger } from '@papi/frontend';
+import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
+import { WebViewProps } from '@papi/core';
+import { Canon } from '@sillsdev/scripture';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ProjectSelectorOpenTab, ProjectSelectorProject } from 'platform-bible-react';
+import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
+import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import {
+  AlertEntry,
+  EstherTemplate,
+  ManageBooksCopyStrategy,
+  ManageBooksCreateMethod,
+  ManageBooksDialog,
+  ManageBooksDialogBookInfo,
+  ManageBooksDialogProject,
+  ManageBooksImportFile,
+  ManageBooksImportStrategy,
+  MutationResult,
+  MANAGE_BOOKS_DIALOG_STRING_KEYS,
+} from './manage-books-dialog/manage-books-dialog.component';
+import {
+  GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS,
+  GreekEstherTemplate,
+  GreekEstherTemplatePicker,
+  GreekEstherTemplatePickerLocalizedStrings,
+} from './greek-esther-template-picker.component';
+
+const NETWORK_OBJECT_ID = 'platformScripture.manageBooks';
+const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
+
+// Only Scripture Editor tabs should mark a project as "open" in the ProjectSelector.
+// Other project-bound tabs (Manage Books itself, Checks side panel, etc.) carry a `projectId`
+// but are not the "is the project open" signal users expect. Mirrors the canonical webViewType
+// from `platform-scripture-editor.utils.ts` (SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react').
+const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>(['platformScriptureEditor.react']);
+
+/**
+ * Wire-shape of a single import file as the C# orchestrator expects to receive it. Mirrors
+ * `ImportFileEntry.cs` in c-sharp/ManageBooks/ and the canonical `ImportFileEntry` definition in
+ * `.context/features/manage-books/data-contracts.md` Section 2.5.
+ *
+ * Bug fix (2026-05-03): the prior shape `{projectId, fileName, bookNumber, replaceEntireBook}` did
+ * not match the data-contracts wire shape — `Content` was missing entirely, leading to a
+ * `NullReferenceException` inside `ImportBooksOrchestrator.IsUsxContent` (`content.TrimStart()` on
+ * `null`), and `Included` was also absent (causing every file to be silently treated as
+ * `Included=false` and skipped). The corrected shape matches both the C# `ImportFileEntry` record
+ * and the e2e `manage-books-commands.spec.ts` "M-011 importBooks" payload exactly.
+ */
+type ImportFileEntry = {
+  fileName: string;
+  content: string;
+  included: boolean;
+};
+
+/**
+ * Wire-shape returned by `manageBooks.filterProjects` / `manageBooks.getToProjectFilter`. Mirrors
+ * C# `ProjectListResult`.
+ */
+type ProjectListResult = {
+  projects: { projectId: string; name: string; projectType: string; isEditable: boolean }[];
+};
+
+/**
+ * Sidebar's enriched `ProjectSelectorProject` row. `isEditable` is added so the dialog can disable
+ * mutating actions (Create / Copy / Import / Delete) when the active target is read-only — see
+ * `manage-books-dialog.types.ts:ManageBooksDialogProject.isEditable`. The ProjectSelector itself
+ * ignores this extra field.
+ */
+type SidebarProject = ProjectSelectorProject & { isEditable: boolean };
+
+/**
+ * Wire-shape of the manage-books NetworkObject as seen by the React layer. The methods listed here
+ * are the ones we actually call in this wiring pass — not all 13 backend methods need a TS
+ * signature for the dialog to function.
+ */
+interface ManageBooksNetworkObject {
+  filterProjects: (input: {
+    purpose: string;
+    sourceProjectType?: string;
+  }) => Promise<ProjectListResult>;
+  isProjectShared: (projectId: string) => Promise<boolean>;
+  createBooks: (request: {
+    projectId: string;
+    bookNumbers: number[];
+    creationMethod: string;
+    modelProjectId?: string;
+    estherTemplate?: string;
+  }) => Promise<MutationResult>;
+  deleteBooks: (request: { projectId: string; bookNumbers: number[] }) => Promise<MutationResult>;
+  copyBooks: (request: {
+    fromProjectId: string;
+    toProjectId: string;
+    bookNumbers: number[];
+  }) => Promise<MutationResult>;
+  importBooks: (input: {
+    projectId: string;
+    files: ImportFileEntry[];
+    replaceEntireBook: boolean;
+  }) => Promise<MutationResult>;
+}
+
+// ===== Adapter helpers =====================================================
+
+/**
+ * Decode the 123-char `platformScripture.booksPresent` setting into the shape the dialog consumes
+ * (`ManageBooksDialogBookInfo[]`). Each '1' bit at index N means book number N+1 is present.
+ */
+function decodeBooksPresent(booksPresent: string): ManageBooksDialogBookInfo[] {
+  const out: ManageBooksDialogBookInfo[] = [];
+  for (let i = 0; i < booksPresent.length; i += 1) {
+    if (booksPresent[i] === '1') {
+      const bookNumber = i + 1;
+      const bookId = Canon.bookNumberToId(bookNumber);
+      if (bookId) out.push({ id: bookId });
+    }
+  }
+  return out;
+}
+
+/**
+ * Convert the dialog's `Record<bookId, ManageBooksImportFile>` shape into the wire-shape
+ * `ImportFileEntry[]` the C# `ImportBooksOrchestrator` expects (data-contracts §2.5).
+ *
+ * `entry.content` is populated by the dialog's file picker (it reads `File.text()` at pick time).
+ * If a story / decorator omits content, we forward an empty string — the orchestrator's parse
+ * pipeline surfaces missing-content as a per-file MISSING_ID_LINE error rather than crashing, which
+ * is the documented contract.
+ */
+function componentToImportFileEntries(
+  files: Record<string, ManageBooksImportFile>,
+): ImportFileEntry[] {
+  return Object.entries(files).map(([, entry]) => ({
+    fileName: entry.file,
+    content: entry.content ?? '',
+    included: true,
+  }));
+}
+
+/**
+ * Map the unified dialog's createMethod TS union into the wire-shape token the C# `CreationMethod`
+ * enum accepts. The C# JSON deserializer is configured with `JsonStringEnumConverter` +
+ * `JsonNamingPolicy.CamelCase` (see `c-sharp/JsonUtils/SerializationOptions.cs`), so the wire
+ * tokens are the camelCase forms `'empty' | 'chapterVerse' | 'fromTemplate'` — matching the
+ * canonical shape in `.context/features/manage-books/data-contracts.md` Section 2.2 and the e2e
+ * `manage-books-commands.spec.ts` "M-004 createBooks" payload.
+ *
+ * Bug fix (2026-05-03): the prior mapping returned `'Empty' | 'ChapterAndVerseNumbers' |
+ * 'FromTemplate'`, which the C# converter rejected and silently fell back to `Empty` (enum 0). That
+ * produced an empty book regardless of the user's "Based on" / "With all chapter and verse numbers"
+ * selection.
+ */
+function createMethodToWire(method: ManageBooksCreateMethod): string {
+  switch (method) {
+    case 'empty':
+      return 'empty';
+    case 'chapterVerse':
+      return 'chapterVerse';
+    case 'fromTemplate':
+      return 'fromTemplate';
+    default:
+      // Exhaustiveness check; if a new method lands the type system will flag.
+      return 'empty';
+  }
+}
+
+/** Convert AlertEntry.level → platform notification severity. */
+function alertLevelToSeverity(level: AlertEntry['level']): 'info' | 'warning' | 'error' {
+  switch (level) {
+    case 'error':
+      return 'error';
+    case 'warning':
+      return 'warning';
+    case 'info':
+    default:
+      return 'info';
+  }
+}
+
+/** Convert book-id strings to wire bookNumbers (drops invalid ids). */
+function booksToNumbers(bookIds: string[]): number[] {
+  const nums: number[] = [];
+  bookIds.forEach((id) => {
+    const n = Canon.bookIdToNumber(id);
+    if (n) nums.push(n);
+  });
+  return nums;
+}
+
+// ===== Web view component ==================================================
+
+global.webViewComponent = function ManageBooksWebView({
+  projectId: initialProjectId,
+  useWebViewState,
+  updateWebViewDefinition,
+}: WebViewProps) {
+  // Persist projectId in the saved web view state so the dock-tab restores
+  // the user's last choice across sessions.
+  const [persistedProjectId, setPersistedProjectId] = useWebViewState<string>(
+    'projectId',
+    initialProjectId ?? '',
+  );
+
+  const [projectId, setProjectIdLocal] = useState<string>(
+    () => persistedProjectId || initialProjectId || '',
+  );
+
+  // Pull all the localization strings the dialog + picker need in one batch. Including the
+  // picker keys here ensures the inline-rendered picker reads from the same string map and
+  // localization fetches happen as a single round-trip.
+  // (Hoisted above the project-change effect so the effect can read the localized title
+  // template when computing the new tab title.)
+  const stringKeys = useMemo(
+    () => [...MANAGE_BOOKS_DIALOG_STRING_KEYS, ...GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS],
+    [],
+  );
+  const [localizedStrings] = useLocalizedStrings(stringKeys);
+
+  // Sync local → persisted whenever projectId changes.
+  // Theme C wiring: if the dialog opened with no project context (main-menu
+  // invocation), seed the projectId from the first available scripture project
+  // once the manage-books NetworkObject resolves. The setter is a no-op when
+  // projectId is already set so this only fires for the cold-open case.
+  //
+  // Per Sebastian review item 25 (2026-05-06): also recompute the dock-tab title
+  // from the new project's `platform.name` setting and pass it to
+  // `updateWebViewDefinition` so the tab label tracks project switches in real
+  // time. Mirrors `manage-books.web-view-provider.ts` getWebView's title shape:
+  //   `${titleTemplate}` when no project, otherwise
+  //   `${titleTemplate} — {projectName}` (formatted via formatReplacementString).
+  // Keeping these two title-construction sites in sync is intentional — the
+  // initial title (provider) and update title (here) MUST match so the user
+  // does not see the title shape change between cold-open and project switch.
+  // Persist projectId to the web view's saved state on change. Kept as its own
+  // effect so the title-update effect below can be triggered by `projectId`-only
+  // and not get cancelled when `setPersistedProjectId` triggers a re-render.
+  useEffect(() => {
+    if (projectId && projectId !== persistedProjectId) {
+      setPersistedProjectId(projectId);
+    }
+  }, [projectId, persistedProjectId, setPersistedProjectId]);
+
+  // Update the dock-tab title (and projectId) on project change. Per Sebastian
+  // review item 25 (2026-05-06), the tab label must track the active project
+  // in real time. Mirrors `manage-books.web-view-provider.ts:getWebView` so the
+  // initial title (cold open) and update title (project switch) both produce
+  // `${titleTemplate}` (no project) or `${titleTemplate} — {projectName}`.
+  //
+  // `lastAppliedProjectIdRef` dedupes when this effect re-runs for non-projectId
+  // dep changes (e.g. `localizedStrings` arriving from the localization service).
+  // It must be a ref (not state) so the dedupe survives React's render → cleanup →
+  // re-run cycle without cancelling the in-flight async PDP fetch.
+  const lastAppliedProjectIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!projectId) return undefined;
+    if (lastAppliedProjectIdRef.current === projectId) return undefined;
+    lastAppliedProjectIdRef.current = projectId;
+
+    let cancelled = false;
+    (async () => {
+      // Resolve the projectName (display name) the same way the provider does:
+      // `platform.name` setting, falling back to projectId when unavailable.
+      let projectName: string | undefined;
+      try {
+        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+        const nameSetting = await pdp.getSetting('platform.name');
+        projectName = typeof nameSetting === 'string' ? nameSetting : projectId;
+      } catch {
+        projectName = projectId;
+      }
+      if (cancelled) return;
+
+      // Compose the title using the localized template; if the localized string
+      // hasn't loaded yet (string-fetch race), fall back to the English default
+      // so the title still updates.
+      const titleTemplate = localizedStrings['%manageBooks_dialog_title%'] ?? 'Manage books';
+      const title = projectName
+        ? formatReplacementString(`${titleTemplate} — {projectName}`, { projectName })
+        : titleTemplate;
+
+      try {
+        const ok = updateWebViewDefinition({ projectId, title });
+        if (!ok) {
+          logger.debug(
+            `manage-books: updateWebViewDefinition returned false (likely racing the saved-definition lifecycle)`,
+          );
+        }
+      } catch (e) {
+        logger.warn(
+          `manage-books: updateWebViewDefinition threw: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, updateWebViewDefinition, localizedStrings]);
+
+  // Build a typed subset for the picker by copying the picker's keys out of the shared map.
+  // This avoids a `as`-assertion (banned by no-type-assertion lint rule) at the wire boundary.
+  const pickerLocalizedStrings = useMemo<GreekEstherTemplatePickerLocalizedStrings>(() => {
+    const out: GreekEstherTemplatePickerLocalizedStrings = {};
+    GREEK_ESTHER_TEMPLATE_PICKER_STRING_KEYS.forEach((key) => {
+      const value = localizedStrings[key];
+      if (typeof value === 'string') out[key] = value;
+    });
+    return out;
+  }, [localizedStrings]);
+
+  // ===== PAPI: project list =================================================
+  // Resolve the manage-books NetworkObject lazily on first render.
+  const [manageBooksApi, setManageBooksApi] = useState<ManageBooksNetworkObject | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    let mounted = true;
+    papi.networkObjects
+      .get<ManageBooksNetworkObject>(NETWORK_OBJECT_ID)
+      .then((obj) => {
+        if (mounted) setManageBooksApi(obj);
+        return undefined;
+      })
+      .catch((e) => {
+        logger.error(
+          `manage-books: failed to resolve NetworkObject ${NETWORK_OBJECT_ID}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Seed default projectId on cold-open (main-menu invocation with no
+  // active-editor context). Picks the first AllScripture project the wire
+  // returns; if there are none we leave projectId empty and the dialog's
+  // project Select shows the placeholder.
+  useEffect(() => {
+    if (projectId || !manageBooksApi) return;
+    let cancelled = false;
+    manageBooksApi
+      .filterProjects({ purpose: 'AllScripture' })
+      .then((result) => {
+        if (cancelled || projectId) return undefined;
+        const first = result.projects[0];
+        if (first) setProjectIdLocal(first.projectId);
+        return undefined;
+      })
+      .catch(() => {
+        // best-effort
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, manageBooksApi]);
+
+  // ===== PAPI: booksPresent subscription =====================================
+  const [booksPresentRaw] = useProjectSetting(
+    projectId || undefined,
+    'platformScripture.booksPresent',
+    BOOKS_PRESENT_DEFAULT,
+  );
+  const [versificationRaw] = useProjectSetting(
+    projectId || undefined,
+    'platformScripture.versification',
+    0,
+  );
+
+  // booksPresent decoded for the active project — the dialog calls
+  // loadBooks(projectId) so we cache and serve from this map.
+  const activeBooks = useMemo(() => {
+    if (typeof booksPresentRaw === 'string') return decodeBooksPresent(booksPresentRaw);
+    return [];
+  }, [booksPresentRaw]);
+
+  // Cache books for OTHER projects the dialog asks about (e.g. Copy source,
+  // Create model). The dialog's loadBooks is called eagerly on project
+  // change; we delegate to a per-project getProjectSetting fetch.
+  const [bookCache, setBookCache] = useState<Record<string, ManageBooksDialogBookInfo[]>>({});
+  const loadBooks = useCallback(
+    async (pid: string): Promise<ManageBooksDialogBookInfo[]> => {
+      if (pid === projectId) return activeBooks;
+      if (bookCache[pid]) return bookCache[pid];
+      try {
+        const pdp = await papi.projectDataProviders.get('platform.base', pid);
+        const bp = await pdp.getSetting('platformScripture.booksPresent');
+        const decoded = decodeBooksPresent(typeof bp === 'string' ? bp : BOOKS_PRESENT_DEFAULT);
+        setBookCache((prev) => ({ ...prev, [pid]: decoded }));
+        return decoded;
+      } catch (e) {
+        logger.warn(
+          `manage-books: loadBooks(${pid}) failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        return [];
+      }
+    },
+    [projectId, activeBooks, bookCache],
+  );
+
+  // ===== Versification (per-project) =========================================
+  const loadVersification = useCallback(
+    async (pid: string): Promise<string> => {
+      if (pid === projectId) {
+        return typeof versificationRaw === 'number' || typeof versificationRaw === 'string'
+          ? String(versificationRaw)
+          : '0';
+      }
+      try {
+        const pdp = await papi.projectDataProviders.get('platform.base', pid);
+        const v = await pdp.getSetting('platformScripture.versification');
+        return v !== undefined ? String(v) : '0';
+      } catch {
+        return '0';
+      }
+    },
+    [projectId, versificationRaw],
+  );
+
+  // ===== loadProjects via filterProjects =====================================
+  const loadProjects = useCallback(async (): Promise<ManageBooksDialogProject[]> => {
+    if (!manageBooksApi) return [];
+    try {
+      const result = await manageBooksApi.filterProjects({ purpose: 'AllScripture' });
+      return Promise.all(
+        result.projects.map(async (p) => {
+          // The C# `ProjectSummary.Name` is `ScrText.Name` — the project's short name (e.g.
+          // "ESVUS16", "MP1", 3-8 chars in practice). For display we fetch two pdp settings:
+          //   `platform.name`     → user-friendly display label (used by footer summaries)
+          //   `platform.fullName` → long human-readable name shown as the secondary label in the
+          //                         <ProjectSelector> popover rows (e.g. "English Standard
+          //                         Version 2016"). Both fall back to the wire short name.
+          let displayName = p.name;
+          let fullName: string | undefined;
+          try {
+            const pdp = await papi.projectDataProviders.get('platform.base', p.projectId);
+            const [nameSetting, fullNameSetting] = await Promise.all([
+              pdp.getSetting('platform.name'),
+              pdp.getSetting('platform.fullName'),
+            ]);
+            // pdp.getSetting can return undefined (or null at runtime) when the setting is not
+            // configured on the project; fall back to the wire short name.
+            displayName = typeof nameSetting === 'string' ? nameSetting : p.name;
+            if (typeof fullNameSetting === 'string' && fullNameSetting.length > 0) {
+              fullName = fullNameSetting;
+            }
+          } catch {
+            // best-effort; fall through with wire-name as both display + fullName
+          }
+          return {
+            id: p.projectId,
+            shortName: p.name,
+            name: displayName,
+            fullName: fullName ?? p.name,
+            isEditable: p.isEditable,
+          };
+        }),
+      );
+    } catch (e) {
+      logger.warn(
+        `manage-books: filterProjects failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return [];
+    }
+  }, [manageBooksApi]);
+
+  // ===== isProjectShared =====================================================
+  const [isSharedProject, setIsSharedProject] = useState(false);
+  useEffect(() => {
+    if (!manageBooksApi || !projectId) {
+      setIsSharedProject(false);
+      return;
+    }
+    let cancelled = false;
+    manageBooksApi
+      .isProjectShared(projectId)
+      .then((shared) => {
+        if (!cancelled) setIsSharedProject(shared);
+        return undefined;
+      })
+      .catch(() => {
+        if (!cancelled) setIsSharedProject(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [manageBooksApi, projectId]);
+
+  // ===== Sidebar projects (via ProjectSelector) ==============================
+  // Feeds the sidebar's `<ProjectSelector mode="project">`. We extend the base
+  // `ProjectSelectorProject` shape with `isEditable` (sourced from C# `ProjectSummary`) so the
+  // dialog can disable Create / Copy / Import / Delete actions when the active target is
+  // read-only. ProjectSelector ignores unknown fields, so passing the extended array directly is
+  // safe. Source is `manageBooksApi.filterProjects` — the same call `loadProjects` uses, so the
+  // sidebar list and the dialog's internal project list stay in lockstep.
+  const [sidebarProjects, setSidebarProjects] = useState<readonly SidebarProject[]>([]);
+  useEffect(() => {
+    if (!manageBooksApi) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await manageBooksApi.filterProjects({ purpose: 'AllScripture' });
+        const enriched: SidebarProject[] = await Promise.all(
+          result.projects.map(async (p) => {
+            // Mirror loadProjects: try platform.fullName for the human-friendly long name; fall
+            // back to the wire short name when unavailable.
+            let fullName = p.name;
+            try {
+              const pdp = await papi.projectDataProviders.get('platform.base', p.projectId);
+              const fnSetting = await pdp.getSetting('platform.fullName');
+              if (typeof fnSetting === 'string' && fnSetting.length > 0) fullName = fnSetting;
+            } catch {
+              // best-effort; fall through with wire-name as full name
+            }
+            return {
+              id: p.projectId,
+              shortName: p.name,
+              fullName,
+              isEditable: p.isEditable,
+            };
+          }),
+        );
+        if (!cancelled) setSidebarProjects(enriched);
+      } catch (err) {
+        logger.warn(`manage-books: sidebarProjects fetch failed: ${getErrorMessage(err)}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [manageBooksApi]);
+
+  // ===== Open project tabs (for ProjectSelector grouping) ====================
+  // The shared `useOpenProjectTabs` hook returns a richer shape (`webViewId`, `webViewType`); map
+  // it down to the lighter `ProjectSelectorOpenTab` shape `<ProjectSelector>` consumes. The `scrollGroup`
+  // current-reference label is omitted — Manage Books pickers don't surface scroll-group ref
+  // tooltips today.
+  // Filter to Scripture Editor tabs only — without this, every project-bound tab (Manage Books
+  // itself, Checks side panel, etc.) would falsely mark a project as "open".
+  const editorWebViewFilter = useCallback(
+    (webView: { webViewType: string }) => SCRIPTURE_EDITOR_WEB_VIEW_TYPES.has(webView.webViewType),
+    [],
+  );
+  const allOpenProjectTabs = useOpenProjectTabs(editorWebViewFilter);
+  const projectSelectorOpenTabs = useMemo<ProjectSelectorOpenTab[]>(
+    () =>
+      allOpenProjectTabs.map((tab) => ({
+        projectId: tab.projectId,
+        scrollGroupId: tab.scrollGroupId,
+      })),
+    [allOpenProjectTabs],
+  );
+
+  // ===== Mutation result routing → toasts ====================================
+  const onMutationResult = useCallback((result: MutationResult) => {
+    const entries: AlertEntry[] = [...result.errors, ...result.warnings];
+    entries.forEach((entry) => {
+      const message = entry.caption ? `${entry.caption}: ${entry.text}` : entry.text;
+      try {
+        // notificationService is exposed on @papi/frontend; per
+        // ui-spec-manage-books.md:118 toasts are the canonical surface.
+        papi.notifications.send({ message, severity: alertLevelToSeverity(entry.level) });
+      } catch (e) {
+        logger.warn(
+          `manage-books: notifications.send failed for AlertEntry: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    });
+  }, []);
+
+  // ===== Mutation handlers ===================================================
+  const onCreateBooks = useCallback(
+    async (args: {
+      projectId: string;
+      books: string[];
+      method: ManageBooksCreateMethod;
+      referenceProjectId?: string;
+      estherTemplate?: EstherTemplate;
+    }): Promise<MutationResult | undefined> => {
+      if (!manageBooksApi) return undefined;
+      return manageBooksApi.createBooks({
+        projectId: args.projectId,
+        bookNumbers: booksToNumbers(args.books),
+        creationMethod: createMethodToWire(args.method),
+        modelProjectId: args.referenceProjectId,
+        estherTemplate: args.estherTemplate,
+      });
+    },
+    [manageBooksApi],
+  );
+
+  const onDeleteBooks = useCallback(
+    async (args: { projectId: string; books: string[] }): Promise<MutationResult | undefined> => {
+      if (!manageBooksApi) return undefined;
+      return manageBooksApi.deleteBooks({
+        projectId: args.projectId,
+        bookNumbers: booksToNumbers(args.books),
+      });
+    },
+    [manageBooksApi],
+  );
+
+  const onCopyBooks = useCallback(
+    async (args: {
+      destProjectId: string;
+      sourceProjectId: string;
+      books: string[];
+      strategy?: ManageBooksCopyStrategy;
+    }): Promise<MutationResult | undefined> => {
+      if (!manageBooksApi) return undefined;
+      // TODO (Vladimir #16 follow-up / parallel to Sebastian #15): the C#
+      // `copyBooks` PAPI method has no strategy parameter — `CopyBooksOrchestrator.CopyBooks`
+      // unconditionally writes the whole book via `PutText(bookNum, 0, false, ...)`.
+      // The dialog now lets the user pick `replaceEntireBooks` vs
+      // `nonExistingChapters`, and we forward `args.strategy` here for parity
+      // with `onImportBooks`, but until the backend honors a strategy flag both
+      // choices currently behave as `replaceEntireBooks`. Mirrors Sebastian's
+      // note about Import's `replaceEntireBook` flag being a no-op today.
+      // When the backend lands a real merge path, add `replaceEntireBook:
+      // args.strategy !== 'nonExistingChapters'` to the payload below and
+      // update `CopyBooksRequest` / `CopyBooksOrchestrator.CopyBooks`
+      // accordingly.
+      return manageBooksApi.copyBooks({
+        fromProjectId: args.sourceProjectId,
+        toProjectId: args.destProjectId,
+        bookNumbers: booksToNumbers(args.books),
+      });
+    },
+    [manageBooksApi],
+  );
+
+  const onImportBooks = useCallback(
+    async (args: {
+      projectId: string;
+      files: Record<string, ManageBooksImportFile>;
+      strategy: ManageBooksImportStrategy;
+    }): Promise<MutationResult | undefined> => {
+      if (!manageBooksApi) return undefined;
+      const fileEntries = componentToImportFileEntries(args.files);
+      return manageBooksApi.importBooks({
+        projectId: args.projectId,
+        files: fileEntries,
+        replaceEntireBook: args.strategy === 'replaceEntireBooks',
+      });
+    },
+    [manageBooksApi],
+  );
+
+  // ===== Cross-launch: Scripture Reference Settings (DEF-UI-006 — ADDRESSED 2026-05-03)
+  // The `platform.openSettings` command opens the platform settings tab and reads the
+  // calling web-view's `projectId` via `getOpenWebViewDefinition(webViewId)` — see
+  // `src/renderer/services/web-view.service-host.ts:openSettingsTab`. Passing
+  // `globalThis.webViewId` therefore scopes the resulting settings tab to the
+  // currently-selected manage-books project (we keep the saved-definition's projectId
+  // in sync via `updateWebViewDefinition` above).
+  const onOpenScriptureReferenceSettings = useCallback(() => {
+    papi.commands
+      .sendCommand('platform.openSettings', globalThis.webViewId)
+      .catch((e) =>
+        logger.warn(
+          `manage-books: platform.openSettings failed: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
+  }, []);
+
+  // ===== Cross-launch stubs (DEF-UI-007/008) =================================
+  // Project canons and Registry have no PT10 cross-launch target yet. Per Phase 3 UI
+  // Decision 13 (2026-05-04), the wiring layer simply omits the `onOpenProjectCanons` /
+  // `onOpenRegistry` props from <ManageBooksDialog>. The dialog renders each button as
+  // disabled with a "Not yet available — coming soon" tooltip on hover (the convention
+  // used elsewhere in the dialog for not-yet-implemented affordances). When real
+  // platform commands ship, replace the omission with `useCallback` handlers that route
+  // to those commands — the buttons will auto-enable and the disabled+tooltip stub
+  // disappears.
+
+  // ===== File picker stub (DEF-UI-009 / FN-010 spike) ========================
+  // No platform multi-file picker exists in PT10. The component falls back to
+  // a native `<input type="file" multiple>` ref-click triggered by the visible
+  // "Choose files…" / "Add files…" buttons. Per Sebastian review item 23
+  // (2026-05-06), Import mode no longer auto-opens the picker on entry —
+  // the user clicks the button explicitly.
+  //
+  // Tracked as DEF-UI-009 / FN-010 in deferred-functionality.md. When the
+  // future `papi.dialogs.selectFiles({ multi, filters })` PAPI ships, wire
+  // it in here as `const onPickImportFiles = async () => papi.dialogs.selectFiles(...)`.
+
+  // ===== Greek Esther picker (WP-002) — modal-on-modal in-process render =====
+  // The picker is a Radix `<Dialog>` rendered as a peer of the parent ManageBooksDialog inside
+  // this same web view. Modal-on-modal stacking, focus trap, and Escape key are Radix Dialog
+  // defaults. Promise resolution happens locally: when `onOpenEstherPicker` is invoked we open
+  // the picker and stash the awaiting Promise's `resolve` in a ref; the picker's onSelect or
+  // onCancel calls that resolver and clears the ref.
+  //
+  // WP-002 architectural decision: in-process render rather than `papi.webViews.openWebView`.
+  // Rationale: the parent dialog awaits a `Promise<EstherTemplate | undefined>` returned from
+  // this callback. In-process resolution is one ref + one useState; the cross-iframe alternative
+  // would need a PAPI command + correlation ID + state subscription. Functional tests
+  // (manage-books-functional-WP-002.spec.ts) also assert the picker renders inside the
+  // manage-books iframe via `frame.getByRole('dialog', ...)`, which requires same-iframe render.
+  // The standalone `greek-esther-template-picker.web-view-provider.ts` exists for future callers
+  // that want a free-floating dialog but is not on the WP-002 hot path.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerResolverRef = useRef<((value: GreekEstherTemplate | undefined) => void) | undefined>(
+    undefined,
+  );
+
+  const onOpenEstherPicker = useCallback(async (): Promise<EstherTemplate | undefined> => {
+    return new Promise<GreekEstherTemplate | undefined>((resolve) => {
+      // If a previous picker invocation is somehow still pending (defensive — shouldn't happen
+      // because the parent dialog awaits the promise sequentially), resolve it as cancelled
+      // before starting a new one so we never leak an unresolved promise.
+      if (pickerResolverRef.current) pickerResolverRef.current(undefined);
+      pickerResolverRef.current = resolve;
+      setPickerOpen(true);
+    });
+  }, []);
+
+  const handlePickerSelect = useCallback((template: GreekEstherTemplate) => {
+    setPickerOpen(false);
+    const resolver = pickerResolverRef.current;
+    pickerResolverRef.current = undefined;
+    resolver?.(template);
+  }, []);
+
+  const handlePickerCancel = useCallback(() => {
+    setPickerOpen(false);
+    const resolver = pickerResolverRef.current;
+    pickerResolverRef.current = undefined;
+    resolver?.(undefined);
+  }, []);
+
+  // ===== Open/close ==========================================================
+  // The web-view's only close affordance is the dock-tab X in the platform-
+  // managed tab header. The in-component Cancel/Close buttons that previously
+  // routed through `onOpenChange(false)` were removed (UI polish 2026-05-03)
+  // because they duplicated the dock-tab X. ManageBooksDialog no longer accepts
+  // an `onOpenChange` prop — sub-modals use local state setters internally.
+
+  return (
+    <>
+      <ManageBooksDialog
+        open
+        projectId={projectId}
+        onProjectIdChange={setProjectIdLocal}
+        loadProjects={loadProjects}
+        loadBooks={loadBooks}
+        loadVersification={loadVersification}
+        onOpenScriptureReferenceSettings={onOpenScriptureReferenceSettings}
+        onCreateBooks={onCreateBooks}
+        onDeleteBooks={onDeleteBooks}
+        onCopyBooks={onCopyBooks}
+        onImportBooks={onImportBooks}
+        onMutationResult={onMutationResult}
+        onOpenEstherPicker={onOpenEstherPicker}
+        isSharedProject={isSharedProject}
+        localizedStrings={localizedStrings}
+        sidebarProjects={sidebarProjects}
+        openTabs={projectSelectorOpenTabs}
+      />
+      <GreekEstherTemplatePicker
+        open={pickerOpen}
+        onSelect={handlePickerSelect}
+        onCancel={handlePickerCancel}
+        localizedStrings={pickerLocalizedStrings}
+      />
+    </>
+  );
+};
