@@ -115,6 +115,8 @@ describe('useOpenProjectTabs', () => {
     expect(result.current).toEqual([]);
     act(() =>
       handler({
+        // Test asserts that the hook rejects null defensively (PAPI quirk: legacy WebViews can carry null scrollGroupScrRef).
+        // eslint-disable-next-line no-null/no-null
         webView: { id: 'wv-2', projectId: 'p-2', scrollGroupScrRef: null },
       }),
     );

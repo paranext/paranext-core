@@ -49,9 +49,9 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
       // See JSDoc above: undefined → default group 0; numeric → as-is; anything else → reject.
       let scrollGroup: ScrollGroupId | undefined;
       if (scrollGroupScrRef === undefined) {
-        scrollGroup = 0 as ScrollGroupId;
+        scrollGroup = 0;
       } else if (typeof scrollGroupScrRef === 'number') {
-        scrollGroup = scrollGroupScrRef as ScrollGroupId;
+        scrollGroup = scrollGroupScrRef;
       }
       const passes =
         typeof projectId === 'string' &&

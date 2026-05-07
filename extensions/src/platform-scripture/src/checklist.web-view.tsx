@@ -6,7 +6,7 @@ import {
   ProjectSelector,
   ScopeSelector,
   SCOPE_SELECTOR_STRING_KEYS,
-  type OpenProjectTab,
+  type ProjectSelectorOpenTab,
   type ProjectPair,
   type ProjectSelectorProject,
   type ScopeWithRange,
@@ -621,10 +621,10 @@ global.webViewComponent = function ChecklistWebView({
 
   // Comparative-texts ProjectSelector tracks ALL project-bound tabs (no webViewType filter).
   // The shared `useOpenProjectTabs` hook (introduced for goto-focus tracking) returns a richer
-  // shape with webViewId + webViewType; map back to the lighter OpenProjectTab shape that
+  // shape with webViewId + webViewType; map back to the lighter ProjectSelectorOpenTab shape that
   // ProjectSelector's `openTabs` prop expects.
   const allOpenProjectTabs = useOpenProjectTabs();
-  const comparativeOpenTabs = useMemo<OpenProjectTab[]>(
+  const comparativeOpenTabs = useMemo<ProjectSelectorOpenTab[]>(
     () =>
       allOpenProjectTabs.map((t) => ({ projectId: t.projectId, scrollGroupId: t.scrollGroupId })),
     [allOpenProjectTabs],
