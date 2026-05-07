@@ -1,4 +1,6 @@
-import { ComboBox } from '@/components/basics/combo-box.component';
+import ProjectSelector, {
+  type ProjectSelectorProject,
+} from '@/components/advanced/project-selector/project-selector.component';
 import { Z_INDEX_OVERLAY } from '@/components/z-index';
 import {
   Sidebar,
@@ -12,7 +14,7 @@ import {
 } from '@/components/shadcn-ui/sidebar';
 import { cn } from '@/utils/shadcn-ui.util';
 import { ScrollText } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 
 export type SelectedSettingsSidebarItem = {
   label: string;
@@ -83,6 +85,20 @@ export function SettingsSidebar({
     [projectInfo],
   );
 
+  // Adapt the public `ProjectInfo[]` shape to `ProjectSelectorProject[]` for the canonical
+  // <ProjectSelector> trigger. We only have a single name string in the public API, so reuse it
+  // as both `shortName` (the trigger label) and `fullName` (the popover row's secondary line).
+  // The public prop shape is intentionally preserved so downstream consumers don't need to change.
+  const projectSelectorProjects = useMemo<ProjectSelectorProject[]>(
+    () =>
+      projectInfo.map((info) => ({
+        id: info.projectId,
+        shortName: info.projectName,
+        fullName: info.projectName,
+      })),
+    [projectInfo],
+  );
+
   const getIsActive: (label: string) => boolean = useCallback(
     (label: string) => !selectedSidebarItem.projectId && label === selectedSidebarItem.label,
     [selectedSidebarItem],
@@ -118,25 +134,48 @@ export function SettingsSidebar({
         <SidebarGroup>
           <SidebarGroupLabel className="tw-text-sm">{projectsSidebarGroupLabel}</SidebarGroupLabel>
           <SidebarGroupContent className="tw-pl-3">
-            <ComboBox
-              buttonVariant="ghost"
-              buttonClassName={cn('tw-w-full', {
-                'tw-bg-sidebar-accent tw-text-sidebar-accent-foreground':
-                  selectedSidebarItem?.projectId,
-              })}
-              // TODO: Check if this z-index override is necessary — the PopoverContent default
-              // (Z_INDEX_ABOVE_DOCK = 250) may be sufficient since this dropdown portals to body
-              popoverContentStyle={{ zIndex: Z_INDEX_OVERLAY }}
-              options={projectInfo.flatMap((info) => info.projectId)}
-              getOptionLabel={getProjectNameFromProjectId}
-              buttonPlaceholder={buttonPlaceholderText}
-              onChange={(projectId: string) => {
-                const selectedProjectName = getProjectNameFromProjectId(projectId);
-                handleSelectItem(selectedProjectName, projectId);
-              }}
-              value={selectedSidebarItem?.projectId ?? undefined}
-              icon={<ScrollText />}
-            />
+            {/*
+              Flex wrapper hosts the leading <ScrollText /> icon outside the ProjectSelector's
+              trigger button. ProjectSelector has no built-in icon slot, and adding one solely for
+              this consumer would expand its API. The icon was decorative on the prior ComboBox
+              (no click handler), so keeping it adjacent to — rather than inside — the trigger
+              preserves the visual affordance without bloating the canonical component.
+
+              Open Tabs grouping isn't wired here because the platform-bible-react library is
+              intentionally PAPI-free (see CLAUDE.md "Symlinked Directories" / lib boundaries).
+              `useOpenProjectTabs` lives in the extension layer; passing `openTabs={[]}` makes the
+              ProjectSelector fall back to a flat (non-grouped) list. If a future consumer needs
+              the grouping, they can pass `openTabs` in via a new prop on this component.
+            */}
+            <div
+              className={cn(
+                'tw-flex tw-w-full tw-items-center tw-gap-2 tw-rounded-md tw-px-2 tw-py-1',
+                {
+                  'tw-bg-sidebar-accent tw-text-sidebar-accent-foreground':
+                    selectedSidebarItem?.projectId,
+                },
+              )}
+            >
+              <ScrollText className="tw-h-4 tw-w-4 tw-shrink-0" />
+              <ProjectSelector
+                mode="project"
+                projects={projectSelectorProjects}
+                openTabs={[]}
+                selection={{ projectId: selectedSidebarItem?.projectId ?? '' }}
+                onChangeSelection={({ projectId: nextId }) => {
+                  if (!nextId) return;
+                  const selectedProjectName = getProjectNameFromProjectId(nextId);
+                  handleSelectItem(selectedProjectName, nextId);
+                }}
+                buttonVariant="ghost"
+                buttonClassName="tw-h-8 tw-w-full tw-flex-1 tw-justify-start tw-font-normal"
+                buttonPlaceholder={buttonPlaceholderText}
+                ariaLabel={projectsSidebarGroupLabel}
+                // TODO: Check if this z-index override is necessary — the PopoverContent default
+                // (Z_INDEX_ABOVE_DOCK = 250) may be sufficient since this dropdown portals to body
+                popoverContentStyle={{ zIndex: Z_INDEX_OVERLAY }}
+              />
+            </div>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

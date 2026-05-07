@@ -19,6 +19,15 @@ import {
 } from './checks/check-aggregator.service';
 import { checkHostingService } from './checks/extension-host-check-runner.service';
 import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
+import {
+  MANAGE_BOOKS_WEB_VIEW_TYPE,
+  ManageBooksWebViewOptions,
+  ManageBooksWebViewProvider,
+} from './manage-books.web-view-provider';
+import {
+  GREEK_ESTHER_TEMPLATE_PICKER_WEB_VIEW_TYPE,
+  GreekEstherTemplatePickerWebViewProvider,
+} from './greek-esther-template-picker.web-view-provider';
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
 import {
   SCRIPTURE_EXTENDER_PDPF_ID,
@@ -201,6 +210,48 @@ async function openMarkersChecklistSettings(): Promise<void> {
   openSettingsEventEmitter.emit(undefined);
 }
 
+/**
+ * FN-008 (2026-05-01): Open the unified Manage Books dialog as a tab web view. The optional
+ * argument is either an editor's `webViewId` (from a scripture-editor menu) or a literal project id
+ * — we probe with `papi.webViews.getOpenWebViewDefinition` and fall back to treating the value as a
+ * project id when the probe returns `undefined`. When the caller provides no id (e.g. main-menu
+ * invocation) the dialog opens with the project picker visible.
+ */
+async function openManageBooks(
+  webViewIdOrProjectId: string | undefined,
+): Promise<string | undefined> {
+  let projectId: string | undefined;
+
+  if (webViewIdOrProjectId) {
+    // Try to resolve as a web view id first; if that fails treat the value
+    // as a literal project id. The .d.ts parameter name is
+    // `webViewIdOrProjectId?: string` to reflect both forms.
+    try {
+      const def = await papi.webViews.getOpenWebViewDefinition(webViewIdOrProjectId);
+      projectId = def?.projectId ?? webViewIdOrProjectId;
+    } catch {
+      projectId = webViewIdOrProjectId;
+    }
+  }
+
+  const options: ManageBooksWebViewOptions = { projectId };
+
+  // Reuse the existing Manage Books tab if one is already open (per FN-003 — only one
+  // Manage Books dialog at a time). `existingId: '?'` matches any open instance of this
+  // web-view-type; if none is found we fall through and create a new one.
+  const existingId = await papi.webViews.openWebView(
+    MANAGE_BOOKS_WEB_VIEW_TYPE,
+    { type: 'tab' },
+    { ...options, existingId: '?', createNewIfNotFound: false },
+  );
+  if (existingId) {
+    // Bring the existing tab to the front and update it with the new project context.
+    await papi.webViews.reloadWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, existingId, options);
+    return existingId;
+  }
+  return papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, { type: 'tab' }, options);
+}
+
 async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
   let projectId: FindWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
@@ -298,6 +349,8 @@ export async function activate(context: ExecutionActivationContext) {
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
   const findWebViewProvider = new FindWebViewProvider();
   const markersChecklistWebViewProvider = new ChecklistWebViewProvider();
+  const manageBooksWebViewProvider = new ManageBooksWebViewProvider();
+  const greekEstherTemplatePickerWebViewProvider = new GreekEstherTemplatePickerWebViewProvider();
 
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
@@ -494,6 +547,38 @@ export async function activate(context: ExecutionActivationContext) {
     markersChecklistWebViewType,
     markersChecklistWebViewProvider,
   );
+  const openManageBooksPromise = papi.commands.registerCommand(
+    'platformScripture.openManageBooks',
+    openManageBooks,
+    {
+      method: {
+        summary: 'Open the unified Manage Books dialog (FN-008)',
+        params: [
+          {
+            name: 'projectIdOrWebViewId',
+            required: false,
+            summary:
+              'Either the active editor web view id (resolves its project) or a literal project id; omit to open with the project picker visible.',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The id of the opened Manage Books web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const manageBooksWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    MANAGE_BOOKS_WEB_VIEW_TYPE,
+    manageBooksWebViewProvider,
+  );
+  const greekEstherTemplatePickerWebViewProviderPromise =
+    papi.webViewProviders.registerWebViewProvider(
+      GREEK_ESTHER_TEMPLATE_PICKER_WEB_VIEW_TYPE,
+      greekEstherTemplatePickerWebViewProvider,
+    );
 
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
@@ -577,6 +662,9 @@ export async function activate(context: ExecutionActivationContext) {
     openSettingsEventEmitter,
     await openFindPromise,
     await openFindWebViewProviderPromise,
+    await openManageBooksPromise,
+    await manageBooksWebViewProviderPromise,
+    await greekEstherTemplatePickerWebViewProviderPromise,
     await invalidateResultsPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,

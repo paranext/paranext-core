@@ -8,7 +8,7 @@ import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   computeRows,
   partitionAndSort,
-  type OpenProjectTab,
+  type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
 } from './project-selector.rows';
 
@@ -22,7 +22,7 @@ const projects: ProjectSelectorProject[] = [
   { id: 'c', shortName: 'C', fullName: 'Project C' },
 ];
 
-const openTabs: OpenProjectTab[] = [
+const openTabs: ProjectSelectorOpenTab[] = [
   { projectId: 'a', scrollGroupId: A },
   { projectId: 'a', scrollGroupId: B },
   { projectId: 'b', scrollGroupId: A },
@@ -349,7 +349,7 @@ describe('partitionAndSort', () => {
       { id: 'p', shortName: 'P', fullName: 'P' },
       { id: 'q', shortName: 'Q', fullName: 'Q' },
     ];
-    const tabs: OpenProjectTab[] = [
+    const tabs: ProjectSelectorOpenTab[] = [
       { projectId: 'p', scrollGroupId: B },
       { projectId: 'p', scrollGroupId: A },
       { projectId: 'q', scrollGroupId: A },
@@ -367,5 +367,116 @@ describe('partitionAndSort', () => {
       'p:1',
       'q:0',
     ]);
+  });
+});
+
+describe('computeRows — isDisabled / disabledReason flow-through', () => {
+  it('project mode propagates isDisabled and disabledReason from project to row', () => {
+    const disabledProjects: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'A' },
+      {
+        id: 'b',
+        shortName: 'B',
+        fullName: 'B',
+        isDisabled: true,
+        disabledReason: 'Read-only target',
+      },
+    ];
+    const rows = computeRows({
+      mode: 'project',
+      projects: disabledProjects,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    const rowA = rows.find((r) => r.projectId === 'a');
+    const rowB = rows.find((r) => r.projectId === 'b');
+    expect(rowA?.isDisabled).toBe(false);
+    expect(rowA?.disabledReason).toBeUndefined();
+    expect(rowB?.isDisabled).toBe(true);
+    expect(rowB?.disabledReason).toBe('Read-only target');
+  });
+
+  it('project-multi mode propagates isDisabled to per-tab rows of a disabled project', () => {
+    const disabledProjects: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'A' },
+      { id: 'b', shortName: 'B', fullName: 'B', isDisabled: true, disabledReason: 'Locked' },
+    ];
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: disabledProjects,
+      openTabs: [
+        { projectId: 'a', scrollGroupId: A },
+        { projectId: 'b', scrollGroupId: A },
+        { projectId: 'b', scrollGroupId: B },
+      ],
+      selection: { pairs: [] },
+    });
+    const bRows = rows.filter((r) => r.projectId === 'b');
+    expect(bRows).toHaveLength(2);
+    expect(bRows.every((r) => r.isDisabled)).toBe(true);
+    expect(bRows.every((r) => r.disabledReason === 'Locked')).toBe(true);
+  });
+
+  it('synthetic bound-but-closed rows inherit isDisabled from the source project', () => {
+    const disabledProjects: ProjectSelectorProject[] = [
+      { id: 'a', shortName: 'A', fullName: 'A', isDisabled: true, disabledReason: 'Archived' },
+    ];
+    const rows = computeRows({
+      mode: 'projectScrollGroup',
+      projects: disabledProjects,
+      openTabs: [],
+      selection: { projectId: 'a', scrollGroupId: A },
+    });
+    const closed = rows.find((r) => r.isBoundButClosed);
+    expect(closed?.isDisabled).toBe(true);
+    expect(closed?.disabledReason).toBe('Archived');
+  });
+
+  it('rows for projects without isDisabled report isDisabled=false (boolean, not undefined)', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects: [{ id: 'a', shortName: 'A', fullName: 'A' }],
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    expect(rows[0].isDisabled).toBe(false);
+  });
+});
+
+describe('partitionAndSort — flat fallback when no Open Tabs section', () => {
+  it('returns a single flat section (no headings) when grouping is on but no rows belong to Open Tabs', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs: [],
+      selection: { projectId: undefined },
+    });
+    const sections = partitionAndSort(rows, true);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].kind).toBe('flat');
+    expect(sections[0].rows).toHaveLength(projects.length);
+  });
+
+  it('still emits both Open Tabs + Other Projects sections when at least one tab is open', () => {
+    const rows = computeRows({
+      mode: 'project',
+      projects,
+      openTabs: [{ projectId: 'a', scrollGroupId: A }],
+      selection: { projectId: undefined },
+    });
+    const sections = partitionAndSort(rows, true);
+    expect(sections.map((s) => s.kind)).toEqual(['openTabs', 'other']);
+  });
+
+  it('falls back to flat in project-multi mode when no projects are open', () => {
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects,
+      openTabs: [],
+      selection: { pairs: [] },
+    });
+    const sections = partitionAndSort(rows, true);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].kind).toBe('flat');
   });
 });

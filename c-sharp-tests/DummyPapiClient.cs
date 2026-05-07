@@ -47,6 +47,16 @@ namespace TestParanextDataProvider
             get { return _sentEvents.Dequeue(); }
         }
 
+        /// <summary>
+        /// Test-only read-only view of the request-type keys currently registered
+        /// on this client. Used by CAP-012 <c>ManageBooksServiceRegistrationTests</c>
+        /// to assert the Theme-1 single-NetworkObject registration constraint:
+        /// every manage-books wire method dispatches via
+        /// <c>object:platformScripture.manageBooks.{method}</c> and no individual
+        /// <c>command:</c> handlers are registered for manage-books.
+        /// </summary>
+        public IReadOnlyCollection<string> RegisteredRequestTypes => _localMethods.Keys.ToArray();
+
         public override Task<T?> SendRequestAsync<T>(
             string requestType,
             IReadOnlyList<object?>? requestContents

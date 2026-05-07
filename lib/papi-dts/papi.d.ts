@@ -2945,6 +2945,17 @@ declare module 'shared/models/docking-framework.model' {
      */
     getWebViewDefinition: (webViewId: string) => WebViewDefinition | undefined;
     /**
+     * Get the WebView definitions for every open WebView tab across the dock layout.
+     *
+     * Used by consumers (e.g. ProjectSelector) that need to seed initial state at mount time.
+     * `papi.webViews.onDidOpenWebView` does not replay for tabs already open at subscription time, so
+     * subscribers that mount after some tabs are already open need this enumeration to bootstrap.
+     *
+     * @returns Array of WebView definitions, one per currently-open WebView tab. Empty array when the
+     *   dock layout has no WebView tabs.
+     */
+    getAllWebViewDefinitions: () => WebViewDefinition[];
+    /**
      * Updates the tab with the specified id with the specified properties. No need to have all the
      * tab info; just specify the properties you want to update.
      *
@@ -3128,6 +3139,22 @@ declare module 'shared/services/web-view.service-model' {
      *   found
      */
     getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
+    /**
+     * Get the saved properties on every currently-open WebView definition. Returns the same
+     * representation `getOpenWebViewDefinition` does, just for every open WebView in one call.
+     *
+     * Use this at mount time to seed initial state for subscribers of `onDidOpenWebView` /
+     * `onDidUpdateWebView` / `onDidCloseWebView` — those events do not replay for tabs already open
+     * at subscription time. Combined with the live event stream, this gives a complete picture of the
+     * WebView landscape from any point in the app's lifetime.
+     *
+     * Note: this only returns a representation of the current WebView definitions, not the actual web
+     * view definitions themselves. Changing properties on returned definitions does not affect the
+     * actual WebView definitions.
+     *
+     * @returns Saved properties of every open WebView. Empty array if no WebViews are open.
+     */
+    getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
     /**
      * Get an existing web view controller for an open web view.
      *

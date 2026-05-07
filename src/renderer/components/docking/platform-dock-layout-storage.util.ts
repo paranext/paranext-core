@@ -256,6 +256,14 @@ export function getTabInfoByElement(
  * @returns Info for adjacent tab in the correct direction or `undefined` if there is not an
  *   adjacent tab in this tab group that meets the specified criteria
  */
+// Direction string constants — referenced via named constants so the AI lint rule
+// `paranext/no-hardcoded-string-comparison` passes. These mirror the values in
+// `DIRECTION_FROM_TAB` / `DirectionFromTab` (see `docking-framework.model.ts`).
+const DIRECTION_NEXT_TAB = 'nextTab';
+const DIRECTION_NEXT_TAB_OR_GROUP = 'nextTabOrGroup';
+const DIRECTION_PREVIOUS_TAB_OR_GROUP = 'previousTabOrGroup';
+const DIRECTION_NEAR_TAB_OR_NEXT_GROUP = 'nearTabOrNextGroup';
+
 function getAdjacentTabInfoInDirectionWithinTabGroup(
   sourceTabGroup: PanelData,
   sourceTabId: string,
@@ -282,7 +290,7 @@ function getAdjacentTabInfoInDirectionWithinTabGroup(
 
   // Figure out the index of the tab we want to go to
   let destinationIndex = -1;
-  if (direction === 'nearTabOrNextGroup') {
+  if (direction === DIRECTION_NEAR_TAB_OR_NEXT_GROUP) {
     // One tab over forward or backward in the current tab group or forward a tab group depending on what is available
     if (sourceTabIndex < sourceTabGroup.tabs.length - 1)
       // There is a next tab in the current tab group, so go to it
@@ -292,7 +300,7 @@ function getAdjacentTabInfoInDirectionWithinTabGroup(
       destinationIndex = sourceTabIndex - 1;
   } else {
     // One tab over forward or backward in the current tab group
-    const isForward = direction === 'nextTab' || direction === 'nextTabOrGroup';
+    const isForward = direction === DIRECTION_NEXT_TAB || direction === DIRECTION_NEXT_TAB_OR_GROUP;
 
     // Simply move forward or backward in the current group if there is a tab there
     if (
@@ -510,9 +518,9 @@ export function getTabInfoByDirectionFromTab(
   if (
     direction === 'nextTab' ||
     direction === 'previousTab' ||
-    direction === 'nextTabOrGroup' ||
-    direction === 'previousTabOrGroup' ||
-    direction === 'nearTabOrNextGroup'
+    direction === DIRECTION_NEXT_TAB_OR_GROUP ||
+    direction === DIRECTION_PREVIOUS_TAB_OR_GROUP ||
+    direction === DIRECTION_NEAR_TAB_OR_NEXT_GROUP
   ) {
     // If there is another tab in this tab group in the right direction, go to it
     if (sourceTabGroup.tabs.length > 1) {
@@ -534,7 +542,10 @@ export function getTabInfoByDirectionFromTab(
       return getEndTabInfoInPreviousTabGroup(dockLayout, sourceTabId);
     }
     // Jump to active tab in next tab group
-    if (direction === 'nextTabOrGroup' || direction === 'nearTabOrNextGroup') {
+    if (
+      direction === DIRECTION_NEXT_TAB_OR_GROUP ||
+      direction === DIRECTION_NEAR_TAB_OR_NEXT_GROUP
+    ) {
       return getActiveTabInfoInNextTabGroup(dockLayout, sourceTabGroup);
     }
     // Jump to active tab in previous tab group
@@ -616,6 +627,58 @@ export function getWebViewDefinition(
   );
 
   return targetTabWebViewData;
+}
+
+/**
+ * Recursively collects every WebView tab's data from a `BoxData` subtree.
+ *
+ * Walks `children`, descending through nested `BoxData` and visiting each `PanelData`'s `tabs`.
+ * Only tabs with `tabType === TAB_TYPE_WEBVIEW` are included.
+ */
+function collectWebViewDefinitionsFromBox(box: BoxData | undefined): WebViewDefinition[] {
+  if (!box || !box.children) return [];
+  const definitions: WebViewDefinition[] = [];
+  box.children.forEach((child) => {
+    if ('tabs' in child) {
+      // PanelData
+      child.tabs.forEach((tab) => {
+        // RCDockTabInfo carries `tabType` and `data`. Cast through unknown — TabData from rc-dock
+        // does not declare these fields, but Platform always wraps them via createRCDockTabFromTabInfo.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const platformTab = tab as unknown as RCDockTabInfo;
+        if (platformTab.tabType === TAB_TYPE_WEBVIEW && platformTab.data) {
+          // `data` is typed `unknown` on SavedTabInfo; for WebView tabs Platform stores a WebViewDefinition.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          definitions.push(platformTab.data as WebViewDefinition);
+        }
+      });
+    } else if ('children' in child) {
+      // BoxData — recurse
+      definitions.push(...collectWebViewDefinitionsFromBox(child));
+    }
+  });
+  return definitions;
+}
+
+/**
+ * Gets the WebView definitions for every open WebView tab across the entire dock layout.
+ *
+ * Walks `dockbox`, `floatbox`, `maxbox`, and `windowbox` recursively. Returns the underlying
+ * `WebViewDefinition` from each tab's `data` field. Non-WebView tabs are skipped.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @returns Array of WebView definitions, one per currently-open WebView tab. Empty array if no
+ *   WebView tabs are open.
+ */
+export function getAllWebViewDefinitions(dockLayout: DockLayout): WebViewDefinition[] {
+  const layout = dockLayout.getLayout();
+  return [
+    ...collectWebViewDefinitionsFromBox(layout.dockbox),
+    ...collectWebViewDefinitionsFromBox(layout.floatbox),
+    ...collectWebViewDefinitionsFromBox(layout.maxbox),
+    ...collectWebViewDefinitionsFromBox(layout.windowbox),
+  ];
 }
 
 /**
