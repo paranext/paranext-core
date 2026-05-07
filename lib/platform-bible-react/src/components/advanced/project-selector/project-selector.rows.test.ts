@@ -8,7 +8,7 @@ import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   computeRows,
   partitionAndSort,
-  type OpenProjectTab,
+  type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
 } from './project-selector.rows';
 
@@ -22,7 +22,7 @@ const projects: ProjectSelectorProject[] = [
   { id: 'c', shortName: 'C', fullName: 'Project C' },
 ];
 
-const openTabs: OpenProjectTab[] = [
+const openTabs: ProjectSelectorOpenTab[] = [
   { projectId: 'a', scrollGroupId: A },
   { projectId: 'a', scrollGroupId: B },
   { projectId: 'b', scrollGroupId: A },
@@ -349,7 +349,7 @@ describe('partitionAndSort', () => {
       { id: 'p', shortName: 'P', fullName: 'P' },
       { id: 'q', shortName: 'Q', fullName: 'Q' },
     ];
-    const tabs: OpenProjectTab[] = [
+    const tabs: ProjectSelectorOpenTab[] = [
       { projectId: 'p', scrollGroupId: B },
       { projectId: 'p', scrollGroupId: A },
       { projectId: 'q', scrollGroupId: A },

@@ -22,7 +22,7 @@ import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { OpenProjectTab, ProjectSelectorProject } from 'platform-bible-react';
+import type { ProjectSelectorOpenTab, ProjectSelectorProject } from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import {
@@ -550,7 +550,7 @@ global.webViewComponent = function ManageBooksWebView({
 
   // ===== Open project tabs (for ProjectSelector grouping) ====================
   // The shared `useOpenProjectTabs` hook returns a richer shape (`webViewId`, `webViewType`); map
-  // it down to the lighter `OpenProjectTab` shape `<ProjectSelector>` consumes. The `scrollGroup`
+  // it down to the lighter `ProjectSelectorOpenTab` shape `<ProjectSelector>` consumes. The `scrollGroup`
   // current-reference label is omitted — Manage Books pickers don't surface scroll-group ref
   // tooltips today.
   // Filter to Scripture Editor tabs only — without this, every project-bound tab (Manage Books
@@ -560,7 +560,7 @@ global.webViewComponent = function ManageBooksWebView({
     [],
   );
   const allOpenProjectTabs = useOpenProjectTabs(editorWebViewFilter);
-  const openProjectTabs = useMemo<OpenProjectTab[]>(
+  const projectSelectorOpenTabs = useMemo<ProjectSelectorOpenTab[]>(
     () =>
       allOpenProjectTabs.map((tab) => ({
         projectId: tab.projectId,
@@ -773,7 +773,7 @@ global.webViewComponent = function ManageBooksWebView({
         isSharedProject={isSharedProject}
         localizedStrings={localizedStrings}
         sidebarProjects={sidebarProjects}
-        openTabs={openProjectTabs}
+        openTabs={projectSelectorOpenTabs}
       />
       <GreekEstherTemplatePicker
         open={pickerOpen}

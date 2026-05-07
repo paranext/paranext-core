@@ -50,7 +50,7 @@ import {
 import {
   computeRows,
   partitionAndSort,
-  type OpenProjectTab,
+  type ProjectSelectorOpenTab,
   type ProjectMultiSelection,
   type ProjectPair,
   type ProjectRow,
@@ -62,7 +62,7 @@ import {
 } from './project-selector.rows';
 
 export type {
-  OpenProjectTab,
+  ProjectSelectorOpenTab,
   ProjectMultiSelection,
   ProjectPair,
   ProjectRow,
@@ -147,7 +147,7 @@ function scrollGroupLetterFromMap(id: ScrollGroupId): string {
 
 type CommonProps = {
   projects: readonly ProjectSelectorProject[];
-  openTabs: readonly OpenProjectTab[];
+  openTabs: readonly ProjectSelectorOpenTab[];
   buttonPlaceholder?: string;
   commandEmptyMessage?: string;
   ariaLabel?: string;

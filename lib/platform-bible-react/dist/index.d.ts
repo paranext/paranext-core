@@ -495,8 +495,6 @@ export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElem
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
-/** The three modes of the project selector. */
-export type ProjectSelectorMode = "project" | "project-multi" | "projectScrollGroup";
 /** Minimal project metadata fed to the selector. */
 export type ProjectSelectorProject = {
 	id: string;
@@ -517,7 +515,7 @@ export type ProjectSelectorProject = {
 	disabledReason?: string;
 };
 /** A project that is currently open in a specific scroll group. */
-export type OpenProjectTab = {
+export type ProjectSelectorOpenTab = {
 	projectId: string;
 	scrollGroupId: ScrollGroupId;
 	/**
@@ -527,119 +525,21 @@ export type OpenProjectTab = {
 	 */
 	scrollGroupScrRefLabel?: string;
 };
-/**
- * A `(projectId, scrollGroupId)` pair. `scrollGroupId` is undefined when the pair refers to a
- * project that is not currently open in any scroll group.
- */
-export type ProjectPair = {
+type ProjectPair = {
 	projectId: string;
 	scrollGroupId?: ScrollGroupId;
 };
-/** Selection shape for single `project` mode. */
-export type ProjectSelection = {
+type ProjectSelection = {
 	projectId?: string;
 };
-/**
- * Selection shape for `project-multi` mode. Each entry is a `(projectId, scrollGroupId)` pair; the
- * same project open in two scroll groups is two distinct pairs. `scrollGroupId` is undefined when a
- * project that is not currently open anywhere is selected.
- */
-export type ProjectMultiSelection = {
+type ProjectMultiSelection = {
 	pairs: readonly ProjectPair[];
 };
-/** Selection shape for `projectScrollGroup` mode. */
-export type ProjectScrollGroupSelection = {
+type ProjectScrollGroupSelection = {
 	projectId?: string;
 	scrollGroupId?: ScrollGroupId;
 };
-/** One row in the project selector list. */
-export type ProjectRow = {
-	/** Stable unique key for React / cmdk. */
-	rowKey: string;
-	projectId: string;
-	shortName: string;
-	fullName: string;
-	language?: string;
-	languageCode?: string;
-	/**
-	 * The scroll group this row represents. `undefined` means the row is a project-level row (no
-	 * chip, or `project` mode chips aggregated in `openGroups`).
-	 */
-	scrollGroupId?: ScrollGroupId;
-	/**
-	 * Current scripture reference for the row's scroll group (for the tooltip). Populated only when
-	 * the caller provided one via `OpenProjectTab.scrollGroupScrRefLabel`.
-	 */
-	scrollGroupScrRefLabel?: string;
-	/**
-	 * `project` mode: scroll groups the project is open in (one chip each). Always empty in the other
-	 * modes.
-	 */
-	openGroups: readonly ScrollGroupId[];
-	isSelected: boolean;
-	/**
-	 * `project` mode: true when the project isn't open in any scroll group. `project-multi` /
-	 * `projectScrollGroup`: true for the not-open-project row (no chip). Drives muted row styling.
-	 */
-	isMuted: boolean;
-	/**
-	 * True for a synthetic row representing a currently-selected (projectId, scrollGroupId) pair
-	 * whose tab is not currently open. Rendered with a struck-through chip and an "Open" button that
-	 * reopens the tab via `onOpenProjectInGroup`.
-	 */
-	isBoundButClosed: boolean;
-	/**
-	 * Mirrors {@link ProjectSelectorProject.isDisabled}. When true, the row renders muted and is not
-	 * selectable. Disabled-and-selected rows are allowed (still visible, surface prior selection).
-	 */
-	isDisabled: boolean;
-	/** Mirrors {@link ProjectSelectorProject.disabledReason}. Surfaced in the row tooltip. */
-	disabledReason?: string;
-};
-export type ComputeRowsArgs = {
-	mode: "project";
-	projects: readonly ProjectSelectorProject[];
-	openTabs: readonly OpenProjectTab[];
-	selection: ProjectSelection;
-} | {
-	mode: "project-multi";
-	projects: readonly ProjectSelectorProject[];
-	openTabs: readonly OpenProjectTab[];
-	selection: ProjectMultiSelection;
-} | {
-	mode: "projectScrollGroup";
-	projects: readonly ProjectSelectorProject[];
-	openTabs: readonly OpenProjectTab[];
-	selection: ProjectScrollGroupSelection;
-};
-/**
- * Build the selector's row list from the current inputs. Pure: same inputs produce the same output
- * in the same order. Consumers render these rows in the order returned unless they sort further
- * (see {@link partitionAndSort}).
- */
-export declare function computeRows(args: ComputeRowsArgs): ProjectRow[];
-export type RowSection = {
-	/** 'flat' means no section header (grouping toggle off). */
-	kind: "openTabs" | "other" | "flat";
-	rows: ProjectRow[];
-};
-/**
- * Split rows into the Open tabs / Other projects sections (when `groupByOpenTabs`) or a single flat
- * section (otherwise). Within each section, selected rows float to the top, then alphabetical by
- * `shortName`, tie-broken by `scrollGroupId`.
- *
- * "Open tabs" rows are: open-group rows (project-multi / projectScrollGroup modes) and
- * `project`-mode rows whose project is open somewhere. Bound-but-closed synthetic rows and not-open
- * project rows land in "Other projects".
- *
- * Special case: when grouping is on but the "Open tabs" section would be empty (no project in the
- * list is currently open in any scroll group), we fall back to a flat list. A lone "Other projects"
- * heading without a partner section reads as a bug — the user wonders what they're "other" to. This
- * commonly happens when the consumer hasn't (or can't) seed `openTabs` with already-open tabs at
- * mount time.
- */
-export declare function partitionAndSort(rows: readonly ProjectRow[], groupByOpenTabs: boolean): RowSection[];
-export type ProjectSelectorLocalizedStrings = {
+type ProjectSelectorLocalizedStrings = {
 	/** Placeholder for the popover's search input. Defaults to `"Search projects & resources"`. */
 	searchPlaceholder?: string;
 	/** Accessible label for the filter menu icon button. Defaults to `"Filter"`. */
@@ -674,7 +574,7 @@ export type ProjectSelectorLocalizedStrings = {
 };
 type CommonProps = {
 	projects: readonly ProjectSelectorProject[];
-	openTabs: readonly OpenProjectTab[];
+	openTabs: readonly ProjectSelectorOpenTab[];
 	buttonPlaceholder?: string;
 	commandEmptyMessage?: string;
 	ariaLabel?: string;
@@ -688,7 +588,7 @@ type CommonProps = {
 	/** Initial state of the "Group by open tabs" toggle. Defaults to `true`. */
 	defaultGroupByOpenTabs?: boolean;
 };
-export type ProjectSelectorProps = (CommonProps & {
+type ProjectSelectorProps = (CommonProps & {
 	mode: "project";
 	selection: ProjectSelection;
 	onChangeSelection: (selection: {

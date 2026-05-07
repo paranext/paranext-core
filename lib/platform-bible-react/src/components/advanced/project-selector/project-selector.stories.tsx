@@ -7,7 +7,7 @@ import { useState } from 'react';
 import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   ProjectSelector,
-  type OpenProjectTab,
+  type ProjectSelectorOpenTab,
   type ProjectPair,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
@@ -65,7 +65,7 @@ const sampleProjects: ProjectSelectorProject[] = [
   },
 ];
 
-const sampleOpenTabs: OpenProjectTab[] = [
+const sampleOpenTabs: ProjectSelectorOpenTab[] = [
   {
     projectId: 'esvus16',
     scrollGroupId: 0 as ScrollGroupId,
@@ -184,7 +184,7 @@ export const ScrollGroupBinding: Story = {
       projectId?: string;
       scrollGroupId?: ScrollGroupId;
     }>({ projectId: 'esvus16', scrollGroupId: 1 as ScrollGroupId });
-    const [openTabs, setOpenTabs] = useState<OpenProjectTab[]>(sampleOpenTabs);
+    const [openTabs, setOpenTabs] = useState<ProjectSelectorOpenTab[]>(sampleOpenTabs);
 
     return (
       <div className="tw-flex tw-flex-col tw-gap-2">

@@ -26,7 +26,7 @@ export type ProjectSelectorProject = {
 };
 
 /** A project that is currently open in a specific scroll group. */
-export type OpenProjectTab = {
+export type ProjectSelectorOpenTab = {
   projectId: string;
   scrollGroupId: ScrollGroupId;
   /**
@@ -78,7 +78,7 @@ export type ProjectRow = {
   scrollGroupId?: ScrollGroupId;
   /**
    * Current scripture reference for the row's scroll group (for the tooltip). Populated only when
-   * the caller provided one via `OpenProjectTab.scrollGroupScrRefLabel`.
+   * the caller provided one via `ProjectSelectorOpenTab.scrollGroupScrRefLabel`.
    */
   scrollGroupScrRefLabel?: string;
   /**
@@ -111,19 +111,19 @@ export type ComputeRowsArgs =
   | {
       mode: 'project';
       projects: readonly ProjectSelectorProject[];
-      openTabs: readonly OpenProjectTab[];
+      openTabs: readonly ProjectSelectorOpenTab[];
       selection: ProjectSelection;
     }
   | {
       mode: 'project-multi';
       projects: readonly ProjectSelectorProject[];
-      openTabs: readonly OpenProjectTab[];
+      openTabs: readonly ProjectSelectorOpenTab[];
       selection: ProjectMultiSelection;
     }
   | {
       mode: 'projectScrollGroup';
       projects: readonly ProjectSelectorProject[];
-      openTabs: readonly OpenProjectTab[];
+      openTabs: readonly ProjectSelectorOpenTab[];
       selection: ProjectScrollGroupSelection;
     };
 
@@ -136,7 +136,7 @@ type TabInfo = {
   scrollGroupScrRefLabel?: string;
 };
 
-function collectOpenTabsByProject(openTabs: readonly OpenProjectTab[]): Map<string, TabInfo[]> {
+function collectOpenTabsByProject(openTabs: readonly ProjectSelectorOpenTab[]): Map<string, TabInfo[]> {
   const map = new Map<string, TabInfo[]>();
   openTabs.forEach((tab) => {
     const existing = map.get(tab.projectId);

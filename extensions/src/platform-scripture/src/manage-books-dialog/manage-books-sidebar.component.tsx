@@ -25,7 +25,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
-  OpenProjectTab,
+  ProjectSelectorOpenTab,
   ProjectSelector,
   ProjectSelectorProject,
   Tooltip,
@@ -155,7 +155,7 @@ export type ManageBooksSidebarProps = {
    * `<ProjectSelector openTabs={…}>` so the popover's "Open Tabs" grouping section reflects actual
    * app state. Empty array is fine — the section just won't render.
    */
-  openTabs?: readonly OpenProjectTab[];
+  openTabs?: readonly ProjectSelectorOpenTab[];
   /** The currently selected project id (controlled). */
   projectId: string;
   /** Called when the user picks a different project in the sidebar. */

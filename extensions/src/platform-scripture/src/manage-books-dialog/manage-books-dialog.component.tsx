@@ -22,7 +22,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
   Label,
-  OpenProjectTab,
+  ProjectSelectorOpenTab,
   ProjectSelector,
   ProjectSelectorProject,
   SearchBar,
@@ -230,7 +230,7 @@ export type ManageBooksDialogProps = {
    * app state. The wiring layer typically supplies this via `useOpenProjectTabs`. Empty array (the
    * default) is fine — the section just won't render.
    */
-  openTabs?: readonly OpenProjectTab[];
+  openTabs?: readonly ProjectSelectorOpenTab[];
 };
 
 // --------------------------------------------------------------------------

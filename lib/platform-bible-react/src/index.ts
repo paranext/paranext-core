@@ -43,23 +43,9 @@ export type {
 // The unified Paratext-specific dialog is no longer part of the platform-bible-react surface.
 export {
   default as ProjectSelector,
-  type ProjectSelectorProps,
-  type ProjectSelectorLocalizedStrings,
-  type ProjectSelectorMode,
   type ProjectSelectorProject,
-  type OpenProjectTab,
-  type ProjectPair,
-  type ProjectSelection,
-  type ProjectMultiSelection,
-  type ProjectScrollGroupSelection,
-  type ProjectRow,
+  type ProjectSelectorOpenTab,
 } from './components/advanced/project-selector/project-selector.component';
-export {
-  computeRows,
-  partitionAndSort,
-  type RowSection,
-  type ComputeRowsArgs,
-} from './components/advanced/project-selector/project-selector.rows';
 export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
 export {
   ErrorPopover,
