@@ -3929,12 +3929,6 @@ export declare function formatRelativeDate(date: Date, todayString: string, yest
  * https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values#modifier_keys
  */
 export declare const MODIFIER_KEYS: Set<string>;
-/** Canonical Old Testament book ids (1–39). */
-export declare const OT_BOOK_IDS: string[];
-/** Canonical New Testament book ids (40–66). */
-export declare const NT_BOOK_IDS: string[];
-/** Deuterocanonical book ids (67+). */
-export declare const DC_BOOK_IDS: string[];
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**

@@ -9,8 +9,8 @@
  *
  * Adaptations from the storybook source:
  *
- * - Replaced inline mock book constants with the canonical `OT_BOOK_IDS` / `NT_BOOK_IDS` /
- *   `DC_BOOK_IDS` from `platform-bible-utils`.
+ * - Replaced inline mock book constants with the canonical `getSectionForBook` from
+ *   `platform-bible-utils`, switching on the resulting `Section` enum.
  * - All user-facing text is sourced from a `localizedStrings` map (no hard- coded English) so the
  *   component participates in PT10 localization.
  * - The pill `<li>` carries the canonical `data-book` / `aria-checked` / `role="option"` attributes
@@ -45,7 +45,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { OT_BOOK_IDS, NT_BOOK_IDS, DC_BOOK_IDS } from 'platform-bible-utils';
+import { getSectionForBook, Section } from 'platform-bible-utils';
 
 /* ------------------------------------------------------------------ */
 /* Public types                                                       */
@@ -366,18 +366,26 @@ export function BookGridSelector({
       return items.length === 0 ? [] : [{ items }];
     }
     if (groupBy === 'canon') {
-      const otSet = new Set(OT_BOOK_IDS);
-      const ntSet = new Set(NT_BOOK_IDS);
-      const dcSet = new Set(DC_BOOK_IDS);
       const ot: BookGridItem[] = [];
       const nt: BookGridItem[] = [];
       const dc: BookGridItem[] = [];
       const extra: BookGridItem[] = [];
       items.forEach((it) => {
-        if (otSet.has(it.book)) ot.push(it);
-        else if (ntSet.has(it.book)) nt.push(it);
-        else if (dcSet.has(it.book)) dc.push(it);
-        else extra.push(it);
+        switch (getSectionForBook(it.book)) {
+          case Section.OT:
+            ot.push(it);
+            break;
+          case Section.NT:
+            nt.push(it);
+            break;
+          case Section.DC:
+            dc.push(it);
+            break;
+          case Section.Extra:
+          default:
+            extra.push(it);
+            break;
+        }
       });
       return [
         { label: localizedStrings?.canonGroupOT ?? 'Old Testament', items: ot },

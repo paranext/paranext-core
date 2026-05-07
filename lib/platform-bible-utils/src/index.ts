@@ -153,7 +153,6 @@ export type {
   ScriptureSelection,
   ScriptureTextAnchor,
 } from './scripture/scripture.model';
-export { DC_BOOK_IDS, NT_BOOK_IDS, OT_BOOK_IDS } from './scripture/project-scopes';
 export type { Unsubscriber, UnsubscriberAsync } from './lifetime-management/unsubscriber';
 export type { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 export type {
