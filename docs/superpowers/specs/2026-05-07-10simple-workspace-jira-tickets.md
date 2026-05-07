@@ -32,7 +32,12 @@ The following requirements are drawn from the PRD. Each ticket below references 
 
 ## T1 — Configure `platform-dock-layout` with 3-column 10Simple layout
 
-**Addresses requirements:** 1, 2, 3, 4
+**Addresses requirements:**
+
+- #1: 3-column workspace layout below the main title bar/toolbar
+- #2: Column 1 model text panel
+- #3: Column 2 project/editor panel
+- #4: Column 3 resources & tools panel with Bible texts and Commentaries tabs
 
 ### Description
 
@@ -53,7 +58,10 @@ Read the `platform.interfaceMode` setting (already exists, defaults to `'simple'
 
 ## T2 — Remove BCV controls from the scripture editor toolbar
 
-**Addresses requirements:** 5, 6
+**Addresses requirements:**
+
+- #5: All content syncs to main toolbar BCV
+- #6: No BCV controls in panels — only the main app toolbar
 
 ### Description
 
@@ -73,7 +81,12 @@ Locate the BCV control rendered inside the scripture editor's panel toolbar and 
 
 ## T3 — Add `addedByRole` and `addedByUser` metadata to `ResourceReferenceList`
 
-**Addresses requirements:** 7, 9, 12, 15 (prerequisite data structure for all role-based UI behavior)
+**Addresses requirements:** (prerequisite data structure for all role-based UI behavior)
+
+- #7: Column 1 zero state — admin/user can both select; admin overrides on sync
+- #9: Column 3 Bible texts zero state — admin adds to user entries on sync
+- #12: Column 3 Commentaries zero state — admin adds to user entries on sync
+- #15: Resource removal — Saroj cannot remove items Donna added
 
 ### Description
 
@@ -104,7 +117,12 @@ Update `ResourceReferenceList.items` from `ResourceReference[]` to `AnnotatedRes
 
 ## T4 — Model text panel (Column 1)
 
-**Addresses requirements:** 2, 5, 7, 8
+**Addresses requirements:**
+
+- #2: Column 1 model text panel
+- #5: All content syncs to main toolbar BCV
+- #7: Column 1 zero state — admin/user can both select; admin overrides on sync
+- #8: Column 1 resource picker — shows associated resources first; projects hidden by default
 
 ### Description
 
@@ -134,7 +152,14 @@ When a user makes a selection, write the entry to `modelTexts` with `addedByRole
 
 ## T5 — Bible texts tab (Column 3)
 
-**Addresses requirements:** 4, 5, 9, 10, 11, 15
+**Addresses requirements:**
+
+- #4: Column 3 resources & tools panel with Bible texts tab
+- #5: All content syncs to main toolbar BCV
+- #9: Column 3 Bible texts zero state — admin adds to user entries on sync
+- #10: Column 3 Bible texts daily use — selector UI and "Download resources" action
+- #11: Downloadable Bible texts filtered by DBL licensing permissions
+- #15: Resource removal — Saroj cannot remove items Donna added
 
 ### Description
 
@@ -164,7 +189,14 @@ Add a "Bible texts" tab to the Column 3 panel using the existing docking tab sys
 
 ## T6 — Commentaries tab (Column 3)
 
-**Addresses requirements:** 4, 5, 12, 13, 14, 15
+**Addresses requirements:**
+
+- #4: Column 3 resources & tools panel with Commentaries tab
+- #5: All content syncs to main toolbar BCV
+- #12: Column 3 Commentaries zero state — admin adds to user entries on sync
+- #13: Column 3 Commentaries daily use — selector UI and "Download commentaries" action
+- #14: Only UBS Handbook and SIL TNN/TND available for download
+- #15: Resource removal — Saroj cannot remove items Donna added
 
 ### Description
 
@@ -188,7 +220,12 @@ Add a "Commentaries" tab to the Column 3 panel alongside the Bible texts tab. Th
 
 ## T7 — Add commentaries resource type to `platform-get-resources`
 
-**Addresses requirements:** 10, 11, 13, 14
+**Addresses requirements:**
+
+- #10: Column 3 Bible texts daily use — "Download resources" action
+- #11: Downloadable Bible texts filtered by DBL licensing permissions
+- #13: Column 3 Commentaries daily use — "Download commentaries" action
+- #14: Only UBS Handbook and SIL TNN/TND available for download
 
 ### Description
 
@@ -215,7 +252,7 @@ The download flow itself reuses existing infrastructure — no new download mech
 
 ## T8 (Nice-to-have) — Prevent columns from being moved or closed
 
-**Addresses requirements:** none (nice-to-have only)
+**Addresses requirements:** none — this is a nice-to-have, cut first if time is tight
 
 ### Description
 
