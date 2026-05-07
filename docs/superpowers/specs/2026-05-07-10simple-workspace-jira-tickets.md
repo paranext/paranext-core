@@ -267,3 +267,30 @@ When `platform.interfaceMode` is `'simple'`, disable the drag handles and close 
 - In 10Simple mode, columns cannot be dragged to a new position.
 - In 10Simple mode, columns cannot be closed.
 - These constraints do not apply when `interfaceMode` is `'power'`.
+
+---
+
+## T9 (Nice-to-have) — Resource removal with admin-lock enforcement
+
+**Addresses requirements:** nice-to-have — resource removal UI for Bible texts and Commentaries tabs
+
+### Description
+
+Both Donna and Saroj should be able to remove resources they have added from the Bible texts and Commentaries tabs in Column 3. However, Saroj cannot remove resources that Donna (the project admin) added — the remove button for those entries is disabled and displays an explanation tooltip. This ticket depends on T3 (`addedByRole`/`addedByUser` metadata) being complete.
+
+### Implementation Ideas
+
+In the Bible texts and Commentaries tab UIs (T5 and T6), add a remove button alongside each resource entry. Use the `addedByRole` and `addedByUser` metadata from `ReferencedProjectsAndResources` to determine behavior per entry:
+
+- `addedByRole === 'user'` and `addedByUser === currentUserId`: remove button is enabled; clicking removes the entry from the setting.
+- `addedByRole === 'admin'`: remove button is disabled with a tooltip such as "This resource was added by your project admin and cannot be removed."
+
+Removing an entry writes the updated `ReferencedProjectsAndResources` list back to the project setting.
+
+### Definition of Done
+
+- Each resource entry in the Bible texts and Commentaries tabs has a remove button.
+- Users can remove entries they added themselves.
+- Entries added by an admin show a disabled remove button with an explanatory tooltip.
+- Removing an entry updates the `ReferencedProjectsAndResources` project setting correctly.
+- Depends on T3 (metadata), T5 (Bible texts tab), and T6 (Commentaries tab).
