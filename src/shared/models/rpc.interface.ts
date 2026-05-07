@@ -47,6 +47,7 @@ export interface IRpcHandler {
    *
    * @param requestType Type of request (or "method" in JSONRPC jargon) to call
    * @param requestParams Parameters associated with this request
+   * @param skipRetry Whether to skip the retry process that will retry up to 10 times
    * @returns Promise that resolves to a JSONRPCSuccessResponse or JSONRPCErrorResponse message
    */
   request: (
@@ -60,7 +61,6 @@ export interface IRpcHandler {
    *
    * @param eventType Unique network event type for coordinating between processes
    * @param event Event data to emit on the network
-   * @param skipRetry Whether to skip the retry process that will retry up to 10 times
    */
   emitEventOnNetwork: EventHandler;
 }

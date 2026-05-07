@@ -556,12 +556,12 @@ async function main() {
         try {
           await networkService.requestNoRetry(
             serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.syncProjects'),
-            undefined,
+            undefined, // `undefined` means sync all projects
           );
-          syncComplete.resolveToValue(undefined);
+          if (!syncComplete.hasTimedOut) syncComplete.resolveToValue(undefined);
         } catch {
           // sync failed — settle anyway
-          syncComplete.resolveToValue(undefined);
+          if (!syncComplete.hasTimedOut) syncComplete.resolveToValue(undefined);
         }
       })();
       try {
