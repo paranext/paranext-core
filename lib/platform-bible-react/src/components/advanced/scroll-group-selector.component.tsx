@@ -1,4 +1,5 @@
 import {
+  DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
   getLocalizeKeyForScrollGroupId,
   LanguageStrings,
   ScrollGroupId,
@@ -13,36 +14,6 @@ import {
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
-
-const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS = {
-  [getLocalizeKeyForScrollGroupId('undefined')]: 'Ø',
-  [getLocalizeKeyForScrollGroupId(0)]: 'A',
-  [getLocalizeKeyForScrollGroupId(1)]: 'B',
-  [getLocalizeKeyForScrollGroupId(2)]: 'C',
-  [getLocalizeKeyForScrollGroupId(3)]: 'D',
-  [getLocalizeKeyForScrollGroupId(4)]: 'E',
-  [getLocalizeKeyForScrollGroupId(5)]: 'F',
-  [getLocalizeKeyForScrollGroupId(6)]: 'G',
-  [getLocalizeKeyForScrollGroupId(7)]: 'H',
-  [getLocalizeKeyForScrollGroupId(8)]: 'I',
-  [getLocalizeKeyForScrollGroupId(9)]: 'J',
-  [getLocalizeKeyForScrollGroupId(10)]: 'K',
-  [getLocalizeKeyForScrollGroupId(11)]: 'L',
-  [getLocalizeKeyForScrollGroupId(12)]: 'M',
-  [getLocalizeKeyForScrollGroupId(13)]: 'N',
-  [getLocalizeKeyForScrollGroupId(14)]: 'O',
-  [getLocalizeKeyForScrollGroupId(15)]: 'P',
-  [getLocalizeKeyForScrollGroupId(16)]: 'Q',
-  [getLocalizeKeyForScrollGroupId(17)]: 'R',
-  [getLocalizeKeyForScrollGroupId(18)]: 'S',
-  [getLocalizeKeyForScrollGroupId(19)]: 'T',
-  [getLocalizeKeyForScrollGroupId(20)]: 'U',
-  [getLocalizeKeyForScrollGroupId(21)]: 'V',
-  [getLocalizeKeyForScrollGroupId(22)]: 'W',
-  [getLocalizeKeyForScrollGroupId(23)]: 'X',
-  [getLocalizeKeyForScrollGroupId(24)]: 'Y',
-  [getLocalizeKeyForScrollGroupId(25)]: 'Z',
-};
 
 export type ScrollGroupSelectorProps = {
   /**

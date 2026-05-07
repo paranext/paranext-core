@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Paranext.DataProvider.Checklists;
 using Paranext.DataProvider.Checks;
+using Paranext.DataProvider.ManageBooks;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
@@ -90,6 +91,11 @@ public static class Program
             var paratextRegistrationService = new ParatextRegistrationService(papi);
             var checklistNetworkObject = new ChecklistNetworkObject(papi);
             var versificationService = new VersificationService(papi);
+            var manageBooksService = new ManageBooksService(
+                papi,
+                paratextProjects,
+                paratextFactory
+            );
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 inventoryDataProvider.RegisterDataProviderAsync(),
@@ -98,7 +104,8 @@ public static class Program
                 paratextRegistrationService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
                 checklistNetworkObject.InitializeAsync(),
-                versificationService.InitializeAsync()
+                versificationService.InitializeAsync(),
+                manageBooksService.RegisterNetworkObjectAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here
