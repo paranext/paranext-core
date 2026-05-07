@@ -20,20 +20,72 @@ const PopoverTrigger = PopoverPrimitive.Trigger;
 /** @inheritdoc Popover */
 const PopoverAnchor = PopoverPrimitive.Anchor;
 
+// CUSTOM: expand JSDoc — explain focus-trap rationale and add usage examples
 /* #region CUSTOM PopoverPortalContainerContext + Provider — let descendant PopoverContent portal into a custom container instead of document.body */
-// Context to override where `PopoverContent` portals to. By default Radix portals
-// popovers to `document.body`, which is fine for top-level UI but breaks Radix Dialog's
-// focus trap when a popover opens from inside a modal dialog — the portal'd content is
-// outside the dialog's DOM subtree, so the trap yanks focus back out of the popover.
-// Providing a container inside the dialog here lets the popover render as a DOM descendant
-// of the dialog content and be accepted by the focus scope.
+// Backing context for `PopoverPortalContainerProvider`. See the provider's JSDoc for rationale.
 // eslint-disable-next-line no-null/no-null
 const PopoverPortalContainerContext = React.createContext<HTMLElement | null>(null);
 
 /**
- * Override the container that descendant `PopoverContent` components portal to. Render this inside
- * a modal Radix `DialogContent` (with its element as `container`) so that nested popovers remain
- * within the dialog's focus scope and keep working normally.
+ * Overrides the container that descendant {@link PopoverContent} components portal into. Use it
+ * to keep popovers inside a Radix `DialogContent`, `DropdownMenuContent`, or any other ancestor
+ * that owns a focus trap or dismiss-on-outside-click layer.
+ *
+ * @remarks
+ * Radix `Popover` portals its content to `document.body` by default, which works fine for
+ * top-level UI. The default breaks down whenever a popover trigger lives inside an ancestor that:
+ *
+ * - Runs a focus trap (`Dialog`, `AlertDialog`, modal `DropdownMenu`) — the trap yanks focus back
+ *   out of the popover the instant it opens because the portal'd content is outside the trap's
+ *   DOM subtree.
+ * - Listens for outside-clicks (Radix `DismissableLayer`, used by every `*Menu`/`Dialog`) — a
+ *   click inside the popover reads as "outside the menu" and dismisses the parent immediately.
+ *
+ * Wrapping the children of the trapping ancestor in this provider, with that ancestor's element
+ * as `container`, makes nested `PopoverContent` portal as a DOM descendant of the trap so both
+ * focus and dismiss-layer logic accept it.
+ *
+ * Single descendant scope: a `PopoverPortalContainerProvider` only affects `PopoverContent`
+ * mounts rendered as React children. It does not retroactively re-portal already-mounted
+ * popovers, and it does not affect popovers in sibling subtrees.
+ *
+ * @param container - The element to portal descendant popovers into. Pass `null` (the initial
+ *   value of a `useState<HTMLElement | null>(null)` paired with a ref callback on the ancestor)
+ *   to keep Radix's default `document.body` behavior until the ancestor mounts. Once the element
+ *   exists, future popover opens portal into it.
+ * @param children - Tree containing the popover trigger(s) you want re-targeted. The triggering
+ *   ancestor (the trap owner) must wrap, not be wrapped by, this provider.
+ *
+ * @example
+ * ```tsx
+ * function ScopeMenu() {
+ *   const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+ *
+ *   return (
+ *     <Dialog open={isOpen} onOpenChange={setIsOpen}>
+ *       <DialogContent ref={setDialogEl}>
+ *         <PopoverPortalContainerProvider container={dialogEl}>
+ *           <BookChapterControl ... />
+ *         </PopoverPortalContainerProvider>
+ *       </DialogContent>
+ *     </Dialog>
+ *   );
+ * }
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Dropdown variant: same pattern, container is the DropdownMenuContent.
+ * const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
+ * <DropdownMenu>
+ *   <DropdownMenuTrigger>...</DropdownMenuTrigger>
+ *   <DropdownMenuContent ref={setContentEl}>
+ *     <PopoverPortalContainerProvider container={contentEl}>
+ *       <BookChapterControl ... />
+ *     </PopoverPortalContainerProvider>
+ *   </DropdownMenuContent>
+ * </DropdownMenu>
+ * ```
  */
 function PopoverPortalContainerProvider({
   container,
