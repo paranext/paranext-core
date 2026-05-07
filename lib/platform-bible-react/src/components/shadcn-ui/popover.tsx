@@ -27,36 +27,29 @@ const PopoverAnchor = PopoverPrimitive.Anchor;
 const PopoverPortalContainerContext = React.createContext<HTMLElement | null>(null);
 
 /**
- * Overrides the container that descendant {@link PopoverContent} components portal into. Use it
- * to keep popovers inside a Radix `DialogContent`, `DropdownMenuContent`, or any other ancestor
- * that owns a focus trap or dismiss-on-outside-click layer.
+ * Overrides the container that descendant {@link PopoverContent} components portal into. Use it to
+ * keep popovers inside a Radix `DialogContent`, `DropdownMenuContent`, or any other ancestor that
+ * owns a focus trap or dismiss-on-outside-click layer.
  *
  * @remarks
- * Radix `Popover` portals its content to `document.body` by default, which works fine for
- * top-level UI. The default breaks down whenever a popover trigger lives inside an ancestor that:
+ * Radix `Popover` portals its content to `document.body` by default, which works fine for top-level
+ * UI. The default breaks down whenever a popover trigger lives inside an ancestor that:
  *
- * - Runs a focus trap (`Dialog`, `AlertDialog`, modal `DropdownMenu`) — the trap yanks focus back
- *   out of the popover the instant it opens because the portal'd content is outside the trap's
- *   DOM subtree.
- * - Listens for outside-clicks (Radix `DismissableLayer`, used by every `*Menu`/`Dialog`) — a
- *   click inside the popover reads as "outside the menu" and dismisses the parent immediately.
+ * - Runs a focus trap (`Dialog`, `AlertDialog`, modal `DropdownMenu`) — the trap yanks focus back out
+ *   of the popover the instant it opens because the portal'd content is outside the trap's DOM
+ *   subtree.
+ * - Listens for outside-clicks (Radix `DismissableLayer`, used by every `*Menu`/`Dialog`) — a click
+ *   inside the popover reads as "outside the menu" and dismisses the parent immediately.
  *
- * Wrapping the children of the trapping ancestor in this provider, with that ancestor's element
- * as `container`, makes nested `PopoverContent` portal as a DOM descendant of the trap so both
- * focus and dismiss-layer logic accept it.
+ * Wrapping the children of the trapping ancestor in this provider, with that ancestor's element as
+ * `container`, makes nested `PopoverContent` portal as a DOM descendant of the trap so both focus
+ * and dismiss-layer logic accept it.
  *
- * Single descendant scope: a `PopoverPortalContainerProvider` only affects `PopoverContent`
- * mounts rendered as React children. It does not retroactively re-portal already-mounted
- * popovers, and it does not affect popovers in sibling subtrees.
- *
- * @param container - The element to portal descendant popovers into. Pass `null` (the initial
- *   value of a `useState<HTMLElement | null>(null)` paired with a ref callback on the ancestor)
- *   to keep Radix's default `document.body` behavior until the ancestor mounts. Once the element
- *   exists, future popover opens portal into it.
- * @param children - Tree containing the popover trigger(s) you want re-targeted. The triggering
- *   ancestor (the trap owner) must wrap, not be wrapped by, this provider.
- *
+ * Single descendant scope: a `PopoverPortalContainerProvider` only affects `PopoverContent` mounts
+ * rendered as React children. It does not retroactively re-portal already-mounted popovers, and it
+ * does not affect popovers in sibling subtrees.
  * @example
+ *
  * ```tsx
  * function ScopeMenu() {
  *   const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
@@ -74,6 +67,7 @@ const PopoverPortalContainerContext = React.createContext<HTMLElement | null>(nu
  * ```
  *
  * @example
+ *
  * ```tsx
  * // Dropdown variant: same pattern, container is the DropdownMenuContent.
  * const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
@@ -86,6 +80,13 @@ const PopoverPortalContainerContext = React.createContext<HTMLElement | null>(nu
  *   </DropdownMenuContent>
  * </DropdownMenu>
  * ```
+ *
+ * @param container - The element to portal descendant popovers into. Pass `null` (the initial value
+ *   of a `useState<HTMLElement | null>(null)` paired with a ref callback on the ancestor) to keep
+ *   Radix's default `document.body` behavior until the ancestor mounts. Once the element exists,
+ *   future popover opens portal into it.
+ * @param children - Tree containing the popover trigger(s) you want re-targeted. The triggering
+ *   ancestor (the trap owner) must wrap, not be wrapped by, this provider.
  */
 function PopoverPortalContainerProvider({
   container,

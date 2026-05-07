@@ -87,13 +87,9 @@ export type ProjectSelectorLocalizedStrings = {
   filterGroupByOpenTabs?: string;
   /** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
   filterShowSelectedOnly?: string;
-  /**
-   * Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`.
-   */
+  /** Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`. */
   openTabsSectionHeading?: string;
-  /**
-   * Section heading for the Other projects section. Defaults to `"Your projects & resources"`.
-   */
+  /** Section heading for the Other projects section. Defaults to `"Your projects & resources"`. */
   otherProjectsSectionHeading?: string;
   /**
    * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
@@ -135,7 +131,8 @@ function resolveStrings(
 
 /**
  * Map a scroll group id to its display letter (`0`→`A`, …, `25`→`Z`) using the canonical default
- * localized strings from `platform-bible-utils`. Falls back to the numeric id when no entry exists.
+ * localized strings from `platform-bible-utils`. Falls back to the numeric id when no entry
+ * exists.
  */
 function scrollGroupLetterFromMap(id: ScrollGroupId): string {
   return DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS[getLocalizeKeyForScrollGroupId(id)] ?? String(id);
@@ -349,7 +346,8 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
     </CommandItem>
   );
 
-  const letter = row.scrollGroupId !== undefined ? scrollGroupLetterFromMap(row.scrollGroupId) : undefined;
+  const letter =
+    row.scrollGroupId !== undefined ? scrollGroupLetterFromMap(row.scrollGroupId) : undefined;
 
   const tooltipBoundBut =
     row.isBoundButClosed && letter
@@ -746,10 +744,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       <PopoverContent
         align={props.alignDropDown ?? 'start'}
         collisionPadding={16}
-        className={cn(
-          'tw-w-80 tw-max-w-[calc(100vw-2rem)] tw-p-0',
-          props.popoverContentClassName,
-        )}
+        className={cn('tw-w-80 tw-max-w-[calc(100vw-2rem)] tw-p-0', props.popoverContentClassName)}
         style={props.popoverContentStyle}
       >
         <TooltipProvider delayDuration={400}>

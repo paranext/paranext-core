@@ -136,7 +136,9 @@ type TabInfo = {
   scrollGroupScrRefLabel?: string;
 };
 
-function collectOpenTabsByProject(openTabs: readonly ProjectSelectorOpenTab[]): Map<string, TabInfo[]> {
+function collectOpenTabsByProject(
+  openTabs: readonly ProjectSelectorOpenTab[],
+): Map<string, TabInfo[]> {
   const map = new Map<string, TabInfo[]>();
   openTabs.forEach((tab) => {
     const existing = map.get(tab.projectId);
