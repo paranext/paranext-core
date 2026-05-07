@@ -251,6 +251,8 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
   // and decide whether the tooltip should show. We only want a tooltip on rows where the
   // visible text is actually clipped — or on rows that have extra info to surface beyond
   // what's visible in the row itself.
+  // React's ref API requires `null` as the initial value for DOM refs.
+  // eslint-disable-next-line no-null/no-null
   const labelRef = useRef<HTMLSpanElement>(null);
 
   const tooltipHasLanguage = Boolean(row.language || row.languageCode);
