@@ -52,7 +52,7 @@ import {
   partitionAndSort,
   type ProjectSelectorOpenTab,
   type ProjectMultiSelection,
-  type ProjectPair,
+  type ProjectSelectorProjectPair,
   type ProjectRow,
   type ProjectScrollGroupSelection,
   type ProjectSelection,
@@ -64,7 +64,7 @@ import {
 export type {
   ProjectSelectorOpenTab,
   ProjectMultiSelection,
-  ProjectPair,
+  ProjectSelectorProjectPair,
   ProjectRow,
   ProjectScrollGroupSelection,
   ProjectSelection,
@@ -171,7 +171,7 @@ export type ProjectSelectorProps =
   | (CommonProps & {
       mode: 'project-multi';
       selection: ProjectMultiSelection;
-      onChangeSelection: (selection: { pairs: ProjectPair[] }) => void;
+      onChangeSelection: (selection: { pairs: ProjectSelectorProjectPair[] }) => void;
       /**
        * Called when the user clicks the "Open" button on a bound-but-closed row (or the row
        * itself). The caller is expected to open a tab via `papi.webViews.openWebView(...)`.
@@ -539,9 +539,9 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   // Every (project, scrollGroupId) pair available for selection — independent of the current
   // search query or "Show selected only" filter. Used by "Select all" in multi mode so the user
   // can select the full catalog without first clearing the search box.
-  const allPairs = useMemo<ProjectPair[]>(() => {
+  const allPairs = useMemo<ProjectSelectorProjectPair[]>(() => {
     if (props.mode !== 'project-multi') return [];
-    const result: ProjectPair[] = [];
+    const result: ProjectSelectorProjectPair[] = [];
     props.projects.forEach((project) => {
       const tabs = props.openTabs.filter((t) => t.projectId === project.id);
       if (tabs.length === 0) {
@@ -578,7 +578,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       }
       case 'project-multi': {
         const current = props.selection.pairs;
-        const match = (p: ProjectPair) =>
+        const match = (p: ProjectSelectorProjectPair) =>
           p.projectId === row.projectId && p.scrollGroupId === row.scrollGroupId;
         const next = current.some(match)
           ? current.filter((p) => !match(p))

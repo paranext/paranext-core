@@ -491,7 +491,7 @@ export type ProjectSelectorOpenTab = {
  * A `(projectId, scrollGroupId)` pair. `scrollGroupId` is undefined when the pair refers to a
  * project that is not currently open in any scroll group.
  */
-export type ProjectPair = {
+export type ProjectSelectorProjectPair = {
 	projectId: string;
 	scrollGroupId?: ScrollGroupId;
 };
@@ -499,7 +499,7 @@ type ProjectSelection = {
 	projectId?: string;
 };
 type ProjectMultiSelection = {
-	pairs: readonly ProjectPair[];
+	pairs: readonly ProjectSelectorProjectPair[];
 };
 type ProjectScrollGroupSelection = {
 	projectId?: string;
@@ -564,7 +564,7 @@ type ProjectSelectorProps = (CommonProps & {
 	mode: "project-multi";
 	selection: ProjectMultiSelection;
 	onChangeSelection: (selection: {
-		pairs: ProjectPair[];
+		pairs: ProjectSelectorProjectPair[];
 	}) => void;
 	/**
 	 * Called when the user clicks the "Open" button on a bound-but-closed row (or the row

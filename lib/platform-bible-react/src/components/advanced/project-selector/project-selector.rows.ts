@@ -41,7 +41,7 @@ export type ProjectSelectorOpenTab = {
  * A `(projectId, scrollGroupId)` pair. `scrollGroupId` is undefined when the pair refers to a
  * project that is not currently open in any scroll group.
  */
-export type ProjectPair = {
+export type ProjectSelectorProjectPair = {
   projectId: string;
   scrollGroupId?: ScrollGroupId;
 };
@@ -54,7 +54,7 @@ export type ProjectSelection = { projectId?: string };
  * same project open in two scroll groups is two distinct pairs. `scrollGroupId` is undefined when a
  * project that is not currently open anywhere is selected.
  */
-export type ProjectMultiSelection = { pairs: readonly ProjectPair[] };
+export type ProjectMultiSelection = { pairs: readonly ProjectSelectorProjectPair[] };
 
 /** Selection shape for `projectScrollGroup` mode. */
 export type ProjectScrollGroupSelection = {
@@ -155,7 +155,7 @@ function collectOpenTabsByProject(openTabs: readonly ProjectSelectorOpenTab[]): 
 }
 
 function pairIsSelected(
-  pairs: readonly ProjectPair[],
+  pairs: readonly ProjectSelectorProjectPair[],
   projectId: string,
   scrollGroupId: ScrollGroupId | undefined,
 ): boolean {
@@ -199,7 +199,7 @@ export function computeRows(args: ComputeRowsArgs): ProjectRow[] {
 
   // project-multi and projectScrollGroup share the row structure (per-pair rows plus per-project
   // rows for not-open projects). They differ only in how selection is keyed.
-  let selectedPairs: readonly ProjectPair[] = [];
+  let selectedPairs: readonly ProjectSelectorProjectPair[] = [];
   if (args.mode === 'project-multi') {
     selectedPairs = args.selection.pairs;
   } else if (args.selection.projectId !== undefined) {

@@ -8,7 +8,7 @@ import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   ProjectSelector,
   type ProjectSelectorOpenTab,
-  type ProjectPair,
+  type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
 } from '@/components/advanced/project-selector/project-selector.component';
 import { ThemeProvider } from '@/storybook/theme-provider.component';
@@ -140,7 +140,7 @@ export const SingleProject: Story = {
 
 export const MultiProject: Story = {
   render: () => {
-    const [pairs, setPairs] = useState<ProjectPair[]>([
+    const [pairs, setPairs] = useState<ProjectSelectorProjectPair[]>([
       { projectId: 'esvus16', scrollGroupId: 0 as ScrollGroupId },
       { projectId: 'esv16uk' },
     ]);
