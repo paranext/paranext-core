@@ -38,10 +38,10 @@ BCV sync across all panels already works via the main app toolbar — no new wor
 
 Reuses the existing scripture editor/reader component in read-only mode.
 
-**Data:** Reads the `ModelTexts` project setting. Both admin and regular users can write to this setting. Precedence at sync time: the admin's value overrides whatever the user has set. Each entry in `ModelTexts` must include two metadata fields:
+**Data:** The panel merges entries from two sources:
 
-- `addedByRole: "admin" | "user"` — identifies whether an admin or regular user made the selection
-- `addedByUser: string` — the ID of the user who made the selection
+- **Admin entries:** read from the project's main `ModelTexts` project setting. Only admins (Donna) write to this setting.
+- **User entries:** read from `ParatextStudio/UserSettings-{userId}.xml` in the project folder. Regular users (Saroj) write their selections here instead of the main setting. This file is local-only for now; future work will S/R it to the registry so selections follow the user across machines.
 
 **Zero state:**
 
@@ -49,10 +49,11 @@ Reuses the existing scripture editor/reader component in read-only mode.
 - Selection UI follows the same pattern as the project-open picker: search, recently opened items, full list.
 - Resources already associated with the project are shown first.
 - Projects are hidden by default; an extra deliberate step reveals them (only projects where the user is a named team member are shown).
+- When an admin selects, the entry is written to the main `ModelTexts` setting. When a regular user selects, the entry is written to their personal `UserSettings-{userId}.xml`.
 
-**Display filtering:** When rendering the model text selector, the panel shows only entries where `addedByRole === "admin"` or `addedByUser === currentUserId`. Entries added by other regular users are not shown.
+**Display:** The data provider returns a merged list where each entry has a `source: 'admin' | 'user'` tag. The panel shows all entries (`source === 'admin'` entries come from Donna's selection; `source === 'user'` entries come from the current user's personal file). Entries from other users' personal files are never included in the merged list.
 
-**Multiple entries:** `ModelTexts` supports multiple entries. The selector UI allows the user to choose which of the available model texts to display in Column 1 at any given time.
+**Multiple entries:** Both sources support multiple entries. The selector UI allows the user to choose which of the available model texts to display in Column 1 at any given time.
 
 **Daily use:** The panel displays the currently selected model text, scrolling in sync with the main toolbar BCV. A selector allows switching between available model texts.
 
@@ -68,35 +69,27 @@ The existing scripture editor is used as-is. The only change is removing the per
 
 Two tabs using the existing docking tab system: **Bible texts** and **Commentaries**.
 
-### Data structure change (prerequisite)
+### Data routing prerequisite (T3)
 
-Both `platformScripture.modelTexts` and `platformScripture.referencedProjectsAndResources` use the `ResourceReferenceList` type defined in `platform-scripture.d.ts`. Its `items` array currently holds `ResourceReference` entries (a discriminated union of `DblResourceReference`, `EnhancedResourceReference`, etc.).
+The project settings data provider must be updated before either tab's UI is built. The new behavior:
 
-Two metadata fields must be added to each item by intersecting a new `AnnotatedResourceReference` wrapper type:
+- **Writes:** when a non-admin user writes to `ModelTexts` or `ReferencedProjectsAndResources`, the data provider routes the write to `ParatextStudio/UserSettings-{userId}.xml` in the project folder. Admin writes continue to go to the main project settings file.
+- **Reads:** the data provider merges entries from both sources and returns a single list. Each entry in the merged list carries a runtime `source: 'admin' | 'user'` tag computed from which file the entry came from. This tag is not stored on disk — it is derived at read time from file provenance.
 
-```typescript
-export type AnnotatedResourceReference = ResourceReference & {
-  addedByRole: 'admin' | 'user';
-  addedByUser: string;
-};
-```
-
-`ResourceReferenceList.items` becomes `AnnotatedResourceReference[]`. This is a backward-compatible additive change — bump `dataVersion` minor digit (e.g. `1.0.0` → `1.1.0`).
-
-These fields must be added before either tab's UI is built.
+No changes to the `ResourceReferenceList` or `ResourceReference` types are required. The UI uses the `source` tag for display filtering and remove-button behavior (T9).
 
 ### Bible texts tab
 
-- Reads `ReferencedProjectsAndResources` (filtered to Bible text resources).
-- Both admin and user can write entries. On sync, admin entries **add to** user entries (do not replace). `addedByRole` metadata drives the remove-lock behavior.
-- **Display filtering:** only entries where `addedByRole === "admin"` or `addedByUser === currentUserId` are shown. Entries added by other regular users are not visible.
+- Reads `ReferencedProjectsAndResources` filtered to Bible text resources, merging entries from the main project setting (admin) and the current user's personal `UserSettings-{userId}.xml`.
+- Admin writes go to the main project setting; regular user writes go to their personal file. The display shows all admin entries plus the current user's own entries — no entries from other users are shown.
 - **Zero state:** prompt to select preferred Bible texts, opens the same resource picker pattern.
 - **Daily use:** selector UI to choose which downloaded text to display; "Download resources" action opens `platform-get-resources`.
-- **Remove behavior:** entries with `addedByRole: "admin"` show a disabled remove button with a tooltip explaining the item was selected by the project admin.
+- **DBL licensing:** downloadable Bible texts from DBL are filtered by the user's DBL licensing permissions.
+- **Remove behavior (nice-to-have, see T9):** entries with `source === 'admin'` show a disabled remove button with a tooltip; entries with `source === 'user'` can be removed by the user.
 
 ### Commentaries tab
 
-- Same structure as Bible texts tab, filtered to commentaries. Display filtering applies identically: only entries where `addedByRole === "admin"` or `addedByUser === currentUserId` are shown.
+- Same structure as Bible texts tab, filtered to commentaries. The data provider returns the same merged list with `source` tags; entries from other users are never included. Remove behavior is a nice-to-have (see T9).
 - Only specific titles are downloadable: UBS Handbook and SIL TNN/TND in English.
 - "Download commentaries" opens `platform-get-resources` with a commentaries-type filter so it lands directly on that resource type.
 - Language variants of UBS Handbook and SIL TNN/TND are a **nice-to-have**.
@@ -107,15 +100,21 @@ These fields must be added before either tab's UI is built.
 
 **New commentaries resource type:** A curated commentaries type is added to the `platform-get-resources` UI. The available list is limited: UBS Handbook and SIL TNN/TND in English initially. The download flow reuses existing infrastructure; only the resource type definition and its filtered list view are new.
 
+**DBL licensing:** Bible texts from DBL displayed in `platform-get-resources` are filtered by the user's DBL licensing permissions.
+
 **Filter parameter:** `platform-get-resources` gains support for an optional resource-type filter parameter so it can be opened directly on the commentaries view from Column 3.
 
 ---
 
 ## Open Questions
 
-| #   | Question                                                                                                                                              | Impact                 |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| 1   | How does the sync override work for `ModelTexts`? Is this handled automatically by the S/R merge strategy, or does the app need explicit merge logic? | Column 1 sync behavior |
+**1. Read API shape — Resolved** _(impacts T3, T4, T5, T6)_
+
+~~What is the exact read API shape?~~ The data provider returns a single merged list. Each entry carries a runtime `source: 'admin' | 'user'` tag computed from which file it came from — not stored on disk. The UI uses this tag for display filtering and remove-button behavior.
+
+**2. S/R for personal settings file** _(impacts future cross-machine sync)_
+
+When will `ParatextStudio/UserSettings-{userId}.xml` be added to S/R? Needs a follow-on ticket outside this appetite.
 
 ---
 
@@ -129,7 +128,7 @@ Work is organized as a **foundation-first, then parallel** delivery:
          │
     ┌────┴─────────────────────────────────┐
     ▼                                      ▼
-[T3: Add addedByRole/addedByUser metadata]   [T4: Model text panel]
+[T3: Route non-admin writes to ParatextStudio/UserSettings-{userId}.xml]   [T4: Model text panel]
          │
     ┌────┴───────────────────────┐
     ▼                            ▼
@@ -137,13 +136,15 @@ Work is organized as a **foundation-first, then parallel** delivery:
                           [T7: Commentaries type in platform-get-resources]
 
 [T8: Nice-to-have — prevent column move/close]
+[T9: Nice-to-have — resource removal with admin-lock enforcement (depends on T3, T5, T6)]
 ```
 
 ---
 
 ## Nice-to-haves (cut list, in priority order)
 
-1. Prevent columns from being moved or closed
-2. Language variants of UBS Handbook and SIL TNN/TND in Commentaries
-3. Tab headers use icons instead of text in Column 3
-4. Tab headers styled so they don't look like draggable 10Power tabs
+1. Prevent columns from being moved or closed (T8)
+2. Resource removal with admin-lock enforcement — Bible texts and Commentaries tabs (T9)
+3. Language variants of UBS Handbook and SIL TNN/TND in Commentaries
+4. Tab headers use icons instead of text in Column 3
+5. Tab headers styled so they don't look like draggable 10Power tabs

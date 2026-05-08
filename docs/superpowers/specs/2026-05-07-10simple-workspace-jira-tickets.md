@@ -18,12 +18,12 @@ The following requirements are drawn from the PRD. Each ticket below references 
 4. Column 3: A panel exists for resources and tools, with two tabs — "Bible texts" and "Commentaries".
 5. All content scrolls in sync with the BCV control in the main app toolbar.
 6. BCV controls are absent from all panels/columns; only the main app toolbar has one.
-7. Column 1 zero state: Donna sees a prompt to select a model text; Saroj can also do so if Donna hasn't. On sync, Donna's selection overrides Saroj's.
+7. Column 1 zero state: Donna sees a prompt to select a model text; Saroj can also do so. Donna's selection is written to the main project setting; Saroj's is written to `ParatextStudio/UserSettings-{userId}.xml`. Both are shown in Column 1.
 8. Column 1 selection UI: preferentially shows resources already associated with the project; projects require an extra deliberate step to reveal; user only sees projects they are a named member of.
-9. Column 3 Bible texts zero state: Donna sees a prompt to select preferred Bible texts; Saroj can do the same if Donna hasn't. On sync, Donna's selections add to (not replace) Saroj's.
+9. Column 3 Bible texts zero state: Donna sees a prompt to select preferred Bible texts; Saroj can do the same. Donna's selections go to the main project setting; Saroj's go to her personal file. Both sets are shown in the tab.
 10. Column 3 Bible texts daily use: selector UI to choose which downloaded text to display; "Download resources" action available.
 11. Downloadable Bible texts from DBL are filtered by the user's DBL licensing permissions.
-12. Column 3 Commentaries zero state: same as Bible texts zero state; Donna's selections add to (not replace) Saroj's on sync.
+12. Column 3 Commentaries zero state: same as Bible texts zero state; Donna's selections go to the main project setting and Saroj's go to her personal file. Both sets are shown in the tab.
 13. Column 3 Commentaries daily use: selector UI to choose which downloaded commentary to display; "Download commentaries" action available.
 14. Only specific commentaries available for download: UBS Handbook and SIL TNN/TND in English.
 
@@ -82,37 +82,34 @@ Locate the BCV control rendered inside the scripture editor's panel toolbar and 
 
 ---
 
-## T3 — Add `addedByRole` and `addedByUser` metadata to `ResourceReferenceList`
+## T3 — Route non-admin writes to `ParatextStudio/UserSettings-{userId}.xml`
 
-**Addresses requirements:** (prerequisite data structure for all role-based UI behavior)
+**Addresses requirements:** (prerequisite data routing for all role-based UI behavior)
 
-- #7: Column 1 zero state — admin/user can both select; admin overrides on sync
-- #9: Column 3 Bible texts zero state — admin adds to user entries on sync
-- #12: Column 3 Commentaries zero state — admin adds to user entries on sync
+- #7: Column 1 zero state — admin writes to main setting; user writes to personal file
+- #9: Column 3 Bible texts zero state — same routing behavior
+- #12: Column 3 Commentaries zero state — same routing behavior
 
 ### Description
 
-The `ResourceReferenceList` type (used by both `platformScripture.modelTexts` and `platformScripture.referencedProjectsAndResources` project settings) needs two new metadata fields on each entry: `addedByRole` to distinguish admin vs. user additions, and `addedByUser` to record the ID of who added the entry. This metadata is required by the Column 1 and Column 3 UIs to filter visible entries and lock admin-added items from being removed by regular users.
+The project settings data provider must be updated to route writes and reads for `platformScripture.modelTexts` and `platformScripture.referencedProjectsAndResources` based on user role:
+
+- **Writes:** admin users write to the main project settings file as before. Non-admin users write to `ParatextStudio/UserSettings-{userId}.xml` in the project folder (created on first write if it doesn't exist).
+- **Reads:** the data provider merges entries from both sources and returns a single list. Each entry in the merged list carries a runtime `source: 'admin' | 'user'` tag derived from which file it came from. This tag is not stored on disk — it is computed at read time.
+
+No changes to the `ResourceReferenceList` or `ResourceReference` types are required. The `ParatextStudio/UserSettings-{userId}.xml` file is local-only for now; S/R support will be a follow-on ticket.
 
 ### Implementation Ideas
 
-In `platform-scripture.d.ts`, introduce a new `AnnotatedResourceReference` intersection type:
-
-```typescript
-export type AnnotatedResourceReference = ResourceReference & {
-  addedByRole: 'admin' | 'user';
-  addedByUser: string;
-};
-```
-
-Update `ResourceReferenceList.items` from `ResourceReference[]` to `AnnotatedResourceReference[]`. Bump `dataVersion` minor digit (e.g. `1.0.0` → `1.1.0`) since this is an additive, backward-compatible change. Update any existing code that writes to these settings to populate the two new fields.
+In the project settings data provider, intercept write calls for `modelTexts` and `referencedProjectsAndResources`. Check whether the current user is a project admin. If not, redirect the write to `ParatextStudio/UserSettings-{userId}.xml`. For reads, load both files, tag each entry with `source: 'admin'` or `source: 'user'` based on origin, and return the merged list to callers.
 
 ### Definition of Done
 
-- `AnnotatedResourceReference` type exists in `platform-scripture.d.ts`.
-- `ResourceReferenceList.items` is typed as `AnnotatedResourceReference[]`.
-- `dataVersion` minor digit is bumped.
-- All existing write paths for `modelTexts` and `referencedProjectsAndResources` populate `addedByRole` and `addedByUser`.
+- Non-admin writes to `modelTexts` and `referencedProjectsAndResources` go to `ParatextStudio/UserSettings-{userId}.xml`.
+- Admin writes continue to go to the main project settings file.
+- Reads return a merged list where each entry has a `source: 'admin' | 'user'` tag.
+- `ParatextStudio/UserSettings-{userId}.xml` is created automatically on first non-admin write.
+- No changes to `ResourceReferenceList` or `ResourceReference` types.
 - TypeScript compilation passes with no errors.
 
 ---
@@ -128,26 +125,24 @@ Update `ResourceReferenceList.items` from `ResourceReference[]` to `AnnotatedRes
 
 ### Description
 
-Column 1 displays a model text (reference translation) in read-only mode, synchronized to the main app toolbar BCV. The panel reads the `platformScripture.modelTexts` project setting to know which text(s) to offer. Both admin and regular users can write to this setting; on sync, admin entries take precedence over user entries. The user sees only entries they added or that an admin added — not entries from other users.
+Column 1 displays a model text (reference translation) in read-only mode, synchronized to the main app toolbar BCV. The panel reads `platformScripture.modelTexts` via the data provider, which returns a merged list of entries from the main project setting (admin) and the current user's personal `ParatextStudio/UserSettings-{userId}.xml`. Each entry carries a `source: 'admin' | 'user'` tag. The panel displays all entries in this merged list; entries from other users are never included.
 
 ### Implementation Ideas
 
 Reuse the existing scripture editor/reader component in read-only mode inside the Column 1 panel. Add a selector UI above (or integrated into) the panel that:
 
-- Filters `modelTexts` entries to those where `addedByRole === 'admin'` or `addedByUser === currentUserId`.
+- Displays all entries returned by the data provider's merged read (both `source === 'admin'` and `source === 'user'` entries).
 - Allows the user to switch between multiple available model texts.
-- Shows a zero-state prompt ("Select a model text") when no matching entries exist, which opens a resource picker following the project-open picker pattern (search, recently opened, full list; projects hidden behind an extra step).
+- Shows a zero-state prompt ("Select a model text") when the merged list is empty, which opens a resource picker following the project-open picker pattern (search, recently opened, full list; projects hidden behind an extra step).
 
-When a user makes a selection, write the entry to `modelTexts` with `addedByRole: 'user'` and `addedByUser: currentUserId`. When an admin's entry arrives via sync and overrides the user's selection, the panel updates to display the admin's choice.
+When a user makes a selection, write the entry to `modelTexts` — the data provider handles routing it to the correct file based on the user's role.
 
 ### Definition of Done
 
 - Column 1 displays the selected model text in read-only mode, scrolling in sync with the main app toolbar BCV.
-- A selector allows switching between available model texts.
+- A selector shows all entries from the merged list (admin + current user).
 - Zero state shows a prompt that opens the resource picker.
-- Only admin-added entries and the current user's own entries are shown in the selector.
-- Writing a selection correctly populates `addedByRole` and `addedByUser`.
-- Admin entries arriving via sync override the user's local selection.
+- Writing a selection routes correctly: admin writes go to the main setting, non-admin writes go to the personal file (verified via T3).
 - Projects are hidden in the picker by default and require an extra step to reveal.
 
 ---
@@ -164,27 +159,27 @@ When a user makes a selection, write the entry to `modelTexts` with `addedByRole
 
 ### Description
 
-The first tab in Column 3 ("Bible texts") lets Saroj select and read a downloaded Bible text resource alongside his project. The tab reads `platformScripture.referencedProjectsAndResources` filtered to Bible text resources. Admin and user can both add entries; admin entries add to (not replace) user entries on sync. Users can only remove their own entries — admin-added entries show a disabled remove button with an explanation.
+The first tab in Column 3 ("Bible texts") lets Saroj select and read a downloaded Bible text resource alongside his project. The tab reads `platformScripture.referencedProjectsAndResources` via the data provider, which returns a merged list filtered to Bible text resources. Each entry has a `source: 'admin' | 'user'` tag. The tab displays all entries in the merged list; entries from other users are never included. Remove behavior is a nice-to-have handled in T9.
 
 ### Implementation Ideas
 
 Add a "Bible texts" tab to the Column 3 panel using the existing docking tab system. Inside the tab:
 
-- Filter `referencedProjectsAndResources` entries to Bible text types, then further filter to entries where `addedByRole === 'admin'` or `addedByUser === currentUserId`.
+- Display all entries from the data provider's merged read filtered to Bible text types (both `source === 'admin'` and `source === 'user'` entries).
 - Show the selected resource text content synchronized to the main app toolbar BCV, reusing the existing scripture reader.
 - Provide a selector to switch between available Bible texts.
 - Zero state: prompt to select a preferred Bible text, opening the same resource picker pattern as Column 1.
 - "Download resources" button opens `platform-get-resources`.
-- Remove button: enabled for `addedByRole === 'user'` entries, disabled with a tooltip ("Added by [addedByUser]") for `addedByRole === 'admin'` entries.
+
+When a user adds a Bible text, write the entry to `referencedProjectsAndResources` — the data provider routes it to the correct file based on the user's role.
 
 ### Definition of Done
 
 - "Bible texts" tab exists in Column 3 and displays the selected resource synchronized to the BCV.
-- Selector allows switching between available Bible texts (filtered to admin + current user entries only).
+- Selector shows all entries from the merged list (admin + current user).
 - Zero state shows a prompt that opens the resource picker.
 - "Download resources" opens `platform-get-resources`.
-- Remove button is disabled with a tooltip for admin-added entries; functional for user-added entries.
-- Writing a new selection correctly populates `addedByRole` and `addedByUser`.
+- Writing a new selection routes correctly via the data provider (verified via T3).
 
 ---
 
@@ -200,7 +195,7 @@ Add a "Bible texts" tab to the Column 3 panel using the existing docking tab sys
 
 ### Description
 
-The second tab in Column 3 ("Commentaries") lets Saroj read a commentary alongside his project. It follows the same structure as the Bible texts tab but is filtered to commentary resources. Only specific commentaries are available for download: UBS Handbook and SIL TNN/TND in English. The "Download commentaries" action opens `platform-get-resources` filtered directly to the commentaries resource type.
+The second tab in Column 3 ("Commentaries") lets Saroj read a commentary alongside his project. It follows the same structure as the Bible texts tab but is filtered to commentary resources — the data provider returns the same merged list with `source` tags, just filtered to commentary types. Only specific commentaries are available for download: UBS Handbook and SIL TNN/TND in English. The "Download commentaries" action opens `platform-get-resources` filtered directly to the commentaries resource type. Remove behavior is a nice-to-have handled in T9.
 
 ### Implementation Ideas
 
@@ -280,17 +275,17 @@ Both Donna and Saroj should be able to remove resources they have added from the
 
 ### Implementation Ideas
 
-In the Bible texts and Commentaries tab UIs (T5 and T6), add a remove button alongside each resource entry. Use the `addedByRole` and `addedByUser` metadata from `ReferencedProjectsAndResources` to determine behavior per entry:
+In the Bible texts and Commentaries tab UIs (T5 and T6), add a remove button alongside each resource entry. Use the `source` tag on each entry (provided by the data provider's merged read) to determine behavior:
 
-- `addedByRole === 'user'` and `addedByUser === currentUserId`: remove button is enabled; clicking removes the entry from the setting.
-- `addedByRole === 'admin'`: remove button is disabled with a tooltip such as "This resource was added by your project admin and cannot be removed."
+- `source === 'user'`: remove button is enabled; clicking removes the entry from the user's personal `ParatextStudio/UserSettings-{userId}.xml`.
+- `source === 'admin'`: remove button is disabled with a tooltip such as "This resource was added by your project admin and cannot be removed."
 
-Removing an entry writes the updated `ReferencedProjectsAndResources` list back to the project setting.
+Removing an entry writes the updated list back via the data provider, which routes the write to the appropriate file.
 
 ### Definition of Done
 
 - Each resource entry in the Bible texts and Commentaries tabs has a remove button.
-- Users can remove entries they added themselves.
-- Entries added by an admin show a disabled remove button with an explanatory tooltip.
-- Removing an entry updates the `ReferencedProjectsAndResources` project setting correctly.
-- Depends on T3 (metadata), T5 (Bible texts tab), and T6 (Commentaries tab).
+- Entries with `source === 'user'` have an enabled remove button; clicking removes the entry from the user's personal file.
+- Entries with `source === 'admin'` have a disabled remove button with an explanatory tooltip.
+- Removing an entry correctly updates the personal settings file via the data provider.
+- Depends on T3 (data routing), T5 (Bible texts tab), and T6 (Commentaries tab).
