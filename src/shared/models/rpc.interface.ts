@@ -47,11 +47,13 @@ export interface IRpcHandler {
    *
    * @param requestType Type of request (or "method" in JSONRPC jargon) to call
    * @param requestParams Parameters associated with this request
+   * @param skipRetry Whether to skip the retry process that will retry up to 10 times
    * @returns Promise that resolves to a JSONRPCSuccessResponse or JSONRPCErrorResponse message
    */
   request: (
     requestType: SerializedRequestType,
     requestParams: RequestParams,
+    skipRetry?: boolean,
   ) => Promise<JSONRPCResponse>;
   /**
    * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
