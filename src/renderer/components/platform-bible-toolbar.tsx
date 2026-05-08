@@ -41,7 +41,7 @@ import {
   ScrollGroupId,
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
@@ -170,6 +170,8 @@ export function PlatformBibleToolbar() {
   );
   useEvent(onSyncStateChanged, handleSyncStateChanged);
 
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   const checkIfSendReceiveAvailable = useCallback(async () => {
     try {
       // This command comes from an extension and is not typed in CommandHandlers.
@@ -180,12 +182,13 @@ export function PlatformBibleToolbar() {
       // Don't set false — a throw means the extension host wasn't ready yet (startup race), not
       // that the extension is absent. Schedule a retry so the button isn't permanently hidden.
       logger.warn(`Toolbar could not determine send/receive availability: ${getErrorMessage(e)}`);
-      setTimeout(checkIfSendReceiveAvailable, 2000);
+      retryTimeoutRef.current = setTimeout(checkIfSendReceiveAvailable, 2000);
     }
   }, []);
 
   useEffect(() => {
     checkIfSendReceiveAvailable();
+    return () => clearTimeout(retryTimeoutRef.current);
   }, [checkIfSendReceiveAvailable]);
 
   const onDidReloadExtensions = useMemo(
@@ -272,9 +275,7 @@ export function PlatformBibleToolbar() {
                     }}
                   >
                     {syncState === 'syncing' && <Spinner className="tw-h-4 tw-w-4" />}
-                    {syncState === 'synced' && (
-                      <CircleCheck className="tw-h-4 tw-w-4 tw-text-success" />
-                    )}
+                    {syncState === 'synced' && <CircleCheck className="tw-h-4 tw-w-4" />}
                     {
                       {
                         idle: localizedStrings['%toolbar_sync%'],
