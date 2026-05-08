@@ -29,15 +29,9 @@
     ".": {
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
-    },
-    "./localizedStrings.json": "./src/localizedStrings.json"
-  },
-  "typesVersions": {
-    "*": {
-      "localizedStrings.json": ["./src/localizedStrings.json.d.ts"]
     }
   },
-  "files": ["dist", "src/localizedStrings.json", "src/localizedStrings.json.d.ts"],
+  "files": ["dist"],
   "scripts": {
     "start": "npm run storybook",
     "build:basic": "tsc && cross-env NODE_ENV=production vite build && dts-bundle-generator --config ./dts-bundle-generator.config.cts",
