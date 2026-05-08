@@ -126,6 +126,10 @@ describe('PlatformBibleToolbar — Sync button', () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('is not rendered when isSendReceiveAvailable returns false', async () => {
     mockSendCommand(false);
     render(<PlatformBibleToolbar />);
@@ -294,6 +298,51 @@ describe('PlatformBibleToolbar — Sync button', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Test Synced' })).toBeInTheDocument();
     });
+  });
+
+  it('keeps button invisible instead of removing it when command throws, and shows button when retry succeeds', async () => {
+    vi.useFakeTimers();
+
+    let callCount = 0;
+    vi.mocked(sendCommand).mockImplementation(
+      // sendCommand has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      (async (commandName: string) => {
+        if (commandName === 'platformGetResources.isSendReceiveAvailable') {
+          callCount += 1;
+          if (callCount === 1) throw new Error('Extension host not ready');
+          return true;
+        }
+        if (commandName === 'platform.getOSPlatform') return 'win32';
+        if (commandName === 'platform.isFullScreen') return false;
+        return undefined;
+        // sendCommand has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+
+    render(<PlatformBibleToolbar />);
+
+    // Flush microtasks so the async sendCommand throw and catch block have run
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Button should stay in DOM as invisible (state remains undefined, not false)
+    expect(document.querySelector('button[data-testid="toolbar-sync-button"]')).toBeInTheDocument();
+
+    // Advance past the retry delay and flush the resulting async operations
+    act(() => {
+      vi.advanceTimersByTime(2001);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // After retry returns true, button becomes visible
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
   });
 
   it('logs a warning when openSyncStatus command fails', async () => {
