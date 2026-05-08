@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using Paranext.DataProvider;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 
@@ -9,7 +8,7 @@ namespace TestParanextDataProvider
     internal class DummyLocalParatextProjects : LocalParatextProjects
     {
         public DummyLocalParatextProjects()
-            : base(new AppInfo("test-app", "0.0.0", "test-app")) { }
+            : base() { }
 
         public void FakeAddProject(ProjectDetails details, ScrText? scrText = null)
         {
