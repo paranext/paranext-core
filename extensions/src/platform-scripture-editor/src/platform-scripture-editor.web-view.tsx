@@ -24,7 +24,6 @@ import {
   useProjectData,
   useProjectDataProvider,
   useProjectSetting,
-  useRecentScriptureRefs,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { CommandHandlers, CommandNames } from 'papi-shared-types';
@@ -32,7 +31,6 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
-  BookChapterControl,
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
@@ -46,7 +44,6 @@ import {
   PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
-  ScrollGroupSelector,
   SelectMenuItemHandler,
   Spinner,
   TabToolbar,
@@ -59,7 +56,6 @@ import {
   compareScrRefs,
   formatReplacementString,
   getErrorMessage,
-  getLocalizeKeysForScrollGroupIds,
   isPlatformError,
   isString,
   isWhiteSpace,
@@ -90,7 +86,6 @@ import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
-  availableScrollGroupIds,
   blockMarkerToBlockNames,
   deepEqualAcrossIframes,
   formatEditorTitle,
@@ -138,15 +133,11 @@ const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
 
-const BOOKS_PRESENT_DEFAULT = '';
-
 const DEFAULT_WEBVIEW_MENU = {
   topMenu: undefined,
   includeDefaults: true,
   contextMenu: undefined,
 };
-
-const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
 /**
  * Extracts scripture text snippets from a selection range.
@@ -219,7 +210,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   updateWebViewDefinition,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => EDITOR_LOCALIZED_STRINGS, []));
-  const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   // These control the placement of the footnote editor popover by setting the location of the anchor
   const [showFootnoteEditor, setShowFootnoteEditor] = useState<boolean>(false);
@@ -304,8 +294,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     NO_UPDATE_TITLE,
   );
 
-  const [scrRef, setScrRefWithScroll, scrollGroupId, setScrollGroupId] =
-    useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
 
   const [projectNamePossiblyError] = useProjectSetting(
     projectId,
@@ -1543,32 +1532,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return webViewMenuPossiblyError;
   }, [webViewMenuPossiblyError]);
 
-  const [booksPresentPossiblyError] = useProjectSetting(
-    projectId,
-    'platformScripture.booksPresent',
-    BOOKS_PRESENT_DEFAULT,
-  );
-
-  const booksPresent = useMemo(() => {
-    if (isPlatformError(booksPresentPossiblyError)) {
-      logger.warn(`Error getting books present: ${getErrorMessage(booksPresentPossiblyError)}`);
-      return BOOKS_PRESENT_DEFAULT;
-    }
-    return booksPresentPossiblyError;
-  }, [booksPresentPossiblyError]);
-
-  const fetchActiveBooks = useCallback(() => {
-    return Array.from(booksPresent).reduce((ids: string[], char, index) => {
-      if (char === '1') {
-        ids.push(Canon.bookNumberToId(index + 1));
-      }
-
-      return ids;
-    }, []);
-  }, [booksPresent]);
-
-  const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
-
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
       // Assuming that the project menu command is one of the registered command handlers in papi
@@ -1635,63 +1598,46 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         projectMenuData={webViewMenu.topMenu}
         className="scripture-editor-tab-nav tw-block tw-z-10"
         startAreaChildren={
-          <>
-            <BookChapterControl
-              scrRef={scrRef}
-              handleSubmit={setScrRefWithScroll}
-              getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
-              recentSearches={recentScriptureRefs}
-              onAddRecentSearch={addRecentScriptureRef}
-            />
-            {!isReadOnlyEffective && (
-              <>
-                <UndoRedoButtons
-                  className="tw-h-8"
-                  onUndoClick={() => editorRef.current?.undo()}
-                  onRedoClick={() => editorRef.current?.redo()}
-                  canUndo={canUndo}
-                  canRedo={canRedo}
-                  localizedStrings={localizedStrings}
-                />
+          !isReadOnlyEffective && (
+            <>
+              <UndoRedoButtons
+                className="tw-h-8"
+                onUndoClick={() => editorRef.current?.undo()}
+                onRedoClick={() => editorRef.current?.redo()}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                localizedStrings={localizedStrings}
+              />
 
-                {blockMarker !== undefined && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        className="tw-h-8"
-                        aria-label="Paragraph Selection"
-                        title="Paragraph Selection"
-                        variant="outline"
-                      >
-                        {blockMarker ? `${blockMarker} - ` : ''}
-                        {blockMarker &&
-                        Object.entries(blockMarkerToBlockNames).some(
-                          ([marker]) => marker === blockMarker,
-                        )
-                          ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
-                          : localizedStrings['%paragraphMenu_misc_markerDescription%']}
-                        <ChevronDown />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="tw-p-0 tw-w-96">
-                      <MarkerMenu
-                        localizedStrings={localizedStrings}
-                        markerMenuItems={paragraphSwitcherMenuItems}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                )}
-              </>
-            )}
-          </>
-        }
-        endAreaChildren={
-          <ScrollGroupSelector
-            availableScrollGroupIds={availableScrollGroupIds}
-            scrollGroupId={scrollGroupId}
-            onChangeScrollGroupId={setScrollGroupId}
-            localizedStrings={scrollGroupLocalizedStrings}
-          />
+              {blockMarker !== undefined && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      className="tw-h-8"
+                      aria-label="Paragraph Selection"
+                      title="Paragraph Selection"
+                      variant="outline"
+                    >
+                      {blockMarker ? `${blockMarker} - ` : ''}
+                      {blockMarker &&
+                      Object.entries(blockMarkerToBlockNames).some(
+                        ([marker]) => marker === blockMarker,
+                      )
+                        ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
+                        : localizedStrings['%paragraphMenu_misc_markerDescription%']}
+                      <ChevronDown />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="tw-p-0 tw-w-96">
+                    <MarkerMenu
+                      localizedStrings={localizedStrings}
+                      markerMenuItems={paragraphSwitcherMenuItems}
+                    />
+                  </PopoverContent>
+                </Popover>
+              )}
+            </>
+          )
         }
       />
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
