@@ -54,8 +54,6 @@ internal class LocalParatextProjects
             "projects",
             "Paratext 9 Projects"
         );
-
-        Paratext9ProjectsFolder = ComputeParatext9ProjectsFolder();
     }
 
     #endregion
@@ -120,16 +118,11 @@ internal class LocalParatextProjects
     {
         return [.. s_paratextProjectInterfaces];
     }
-
-    public static string ComputeParatext9ProjectsFolder() =>
-        Path.Join(Path.GetPathRoot(Environment.CurrentDirectory), "My Paratext 9 Projects");
-
     #endregion
 
     #region Protected properties and methods
 
     protected virtual string ProjectRootFolder { get; }
-    protected virtual string Paratext9ProjectsFolder { get; }
 
     protected static void CreateDirectory(string dir)
     {

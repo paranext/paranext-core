@@ -177,8 +177,10 @@ export function PlatformBibleToolbar() {
       const isAvailable = await (sendCommand as any)('platformGetResources.isSendReceiveAvailable');
       setIsSendReceiveAvailable(isAvailable);
     } catch (e) {
+      // Don't set false — a throw means the extension host wasn't ready yet (startup race), not
+      // that the extension is absent. Schedule a retry so the button isn't permanently hidden.
       logger.warn(`Toolbar could not determine send/receive availability: ${getErrorMessage(e)}`);
-      setIsSendReceiveAvailable(false);
+      setTimeout(checkIfSendReceiveAvailable, 2000);
     }
   }, []);
 
