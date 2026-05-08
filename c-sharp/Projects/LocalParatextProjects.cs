@@ -46,11 +46,11 @@ internal class LocalParatextProjects
         ProjectInterfaces.MARKER_NAMES,
     ];
 
-    public LocalParatextProjects(AppInfo appInfo)
+    public LocalParatextProjects()
     {
         ProjectRootFolder = Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            $".{appInfo.Name}",
+            ".platform.bible",
             "projects",
             "Paratext 9 Projects"
         );
