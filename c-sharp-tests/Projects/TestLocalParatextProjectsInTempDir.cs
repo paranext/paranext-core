@@ -11,7 +11,7 @@ namespace TestParanextDataProvider.Projects
         private TemporaryFolder _folder;
 
         public TestLocalParatextProjectsInTempDir()
-            : base(new AppInfo("test-app", "0.0.0", "test-app"))
+            : base()
         {
             _folder = new TemporaryFolder(TestContext.CurrentContext.Test.ID);
         }
