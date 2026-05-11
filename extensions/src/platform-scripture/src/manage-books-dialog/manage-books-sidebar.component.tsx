@@ -306,6 +306,12 @@ export function ManageBooksSidebar({
           const fullName = activeProject?.fullName;
           const shortName = activeProject?.shortName;
           const showTooltip = !!fullName && fullName !== shortName;
+          // In narrow mode the sidebar is a ~56px rail. The default
+          // `tw-w-full` trigger clips the shortName to a glyph or two — confusing. Render
+          // the trigger as an icon-only button (just chevron) instead; the hover tooltip
+          // surfaces the full project name (or shortName fallback). Always show the
+          // tooltip in narrow mode so the user has SOME way to identify the active project
+          // without opening the popover.
           const selectorElement = (
             <div data-testid="manage-books-sidebar-project-trigger">
               <ProjectSelector
@@ -316,7 +322,10 @@ export function ManageBooksSidebar({
                 onChangeSelection={({ projectId: nextId }) => {
                   if (nextId) onProjectIdChange(nextId);
                 }}
-                buttonClassName="tw-h-8 tw-w-full tw-font-normal"
+                buttonClassName={cn(
+                  'tw-h-8 tw-font-normal',
+                  isNarrow ? 'tw-w-10 tw-justify-center tw-px-2' : 'tw-w-full',
+                )}
                 isDisabled={isSubmitting}
                 ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
                 // Fallback when the project list is still loading or the active projectId hasn't
@@ -330,11 +339,18 @@ export function ManageBooksSidebar({
               />
             </div>
           );
-          if (!showTooltip) return selectorElement;
+          // In narrow mode always show the tooltip (shortName or fullName) since the
+          // visible trigger is icon-only. In wide mode, only show when fullName adds info.
+          const narrowTooltipText = fullName || shortName || '';
+          if (!isNarrow && !showTooltip) return selectorElement;
+          // Tooltips render to the right of the rail in narrow mode (no other room),
+          // above the trigger in wide mode.
           return (
             <Tooltip>
               <TooltipTrigger asChild>{selectorElement}</TooltipTrigger>
-              <TooltipContent side="top">{fullName}</TooltipContent>
+              <TooltipContent side={isNarrow ? 'right' : 'top'}>
+                {isNarrow ? narrowTooltipText : fullName}
+              </TooltipContent>
             </Tooltip>
           );
         })()}
@@ -416,10 +432,14 @@ export function ManageBooksSidebar({
                 {/* Wrapper span so the tooltip works on a disabled button too */}
                 <span>{buttonElement}</span>
               </TooltipTrigger>
-              {/* Sebastian review item 41 (2026-05-11): show sidebar tooltips above
-                  (or below on collision) rather than to the right, which collides with
-                  the dialog body content. */}
-              <TooltipContent side="top">{tooltipText}</TooltipContent>
+              {/* Sebastian review item 41 (2026-05-11): in wide mode the sidebar is the
+                  full rail and tooltips render above the row (`side="top"`) so they don't
+                  collide with the dialog body. In narrow (icon-only) mode the sidebar is a
+                  left rail and tooltips need to render to its right — `side="top"` would
+                  collide with the dialog header for the topmost row, and there's no label
+                  to read otherwise. Radix's collision detection flips automatically if
+                  there's no room. */}
+              <TooltipContent side={isNarrow ? 'right' : 'top'}>{tooltipText}</TooltipContent>
             </Tooltip>
           </Fragment>
         );
