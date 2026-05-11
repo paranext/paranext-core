@@ -174,17 +174,11 @@ function validateRequestTypeFormatting(requestType: SerializedRequestType) {
   }
 }
 
-/**
- * Send a request on the network and resolve the response contents.
- *
- * @param requestType The type of request
- * @param args Arguments to send in the request (put in request.contents)
- * @returns Promise that resolves with the response message
- */
-export const request = async <TParam extends Array<unknown>, TReturn>(
+async function doRequest<TParam extends Array<unknown>, TReturn>(
   requestType: SerializedRequestType,
-  ...args: TParam
-): Promise<TReturn> => {
+  args: TParam,
+  skipRetry: boolean,
+): Promise<TReturn> {
   validateRequestTypeFormatting(requestType);
   await initialize();
   if (!jsonRpc) throw new Error('RPC handler not set');
@@ -195,7 +189,9 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
   // Resolve the async variable to the JSONRPC response in an IIFE
   (async () => {
     try {
-      responseAsyncVariable.resolveToValue(fixupResponse(await jsonRpc.request(requestType, args)));
+      responseAsyncVariable.resolveToValue(
+        fixupResponse(await jsonRpc.request(requestType, args, skipRetry)),
+      );
     } catch (e) {
       responseAsyncVariable.resolveToValue(newPlatformError(e));
     }
@@ -222,7 +218,33 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
   }
   logger.debug(response);
   throw newPlatformError(response);
-};
+}
+
+/**
+ * Send a request on the network and resolve the response contents.
+ *
+ * @param requestType The type of request
+ * @param args Arguments to send in the request (put in request.contents)
+ * @returns Promise that resolves with the response message
+ */
+export const request = async <TParam extends Array<unknown>, TReturn>(
+  requestType: SerializedRequestType,
+  ...args: TParam
+): Promise<TReturn> => doRequest(requestType, args, false);
+
+/**
+ * Send a request on the network without retrying if the handler is not yet registered. Use for
+ * requests where immediate failure is preferable to waiting, such as commands sent during app
+ * shutdown.
+ *
+ * @param requestType The type of request
+ * @param args Arguments to send in the request (put in request.contents)
+ * @returns Promise that resolves with the response message
+ */
+export const requestNoRetry = async <TParam extends Array<unknown>, TReturn>(
+  requestType: SerializedRequestType,
+  ...args: TParam
+): Promise<TReturn> => doRequest(requestType, args, true);
 
 /**
  * Register a local request handler to run on requests.

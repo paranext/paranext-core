@@ -1323,11 +1323,13 @@ declare module 'shared/models/rpc.interface' {
      *
      * @param requestType Type of request (or "method" in JSONRPC jargon) to call
      * @param requestParams Parameters associated with this request
+     * @param skipRetry Whether to skip the retry process that will retry up to 10 times
      * @returns Promise that resolves to a JSONRPCSuccessResponse or JSONRPCErrorResponse message
      */
     request: (
       requestType: SerializedRequestType,
       requestParams: RequestParams,
+      skipRetry?: boolean,
     ) => Promise<JSONRPCResponse>;
     /**
      * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
@@ -1522,6 +1524,7 @@ declare module 'main/services/rpc-server' {
     request(
       requestType: SerializedRequestType,
       requestParams: RequestParams,
+      skipRetry?: boolean,
     ): Promise<JSONRPCResponse>;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean;
@@ -1576,6 +1579,7 @@ declare module 'main/services/rpc-websocket-listener' {
     request(
       requestType: SerializedRequestType,
       requestParams: RequestParams,
+      skipRetry?: boolean,
     ): Promise<JSONRPCResponse>;
     registerMethod(
       methodName: string,
@@ -1630,6 +1634,19 @@ declare module 'shared/services/network.service' {
    * @returns Promise that resolves with the response message
    */
   export const request: <TParam extends Array<unknown>, TReturn>(
+    requestType: SerializedRequestType,
+    ...args: TParam
+  ) => Promise<TReturn>;
+  /**
+   * Send a request on the network without retrying if the handler is not yet registered. Use for
+   * requests where immediate failure is preferable to waiting, such as commands sent during app
+   * shutdown.
+   *
+   * @param requestType The type of request
+   * @param args Arguments to send in the request (put in request.contents)
+   * @returns Promise that resolves with the response message
+   */
+  export const requestNoRetry: <TParam extends Array<unknown>, TReturn>(
     requestType: SerializedRequestType,
     ...args: TParam
   ) => Promise<TReturn>;
