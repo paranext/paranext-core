@@ -84,7 +84,12 @@ export function ImportConflictPrompt({
                 onChoose('nonExistingChapters', conflict.books);
               }}
             >
-              {t('%manageBooks_import_nonExistingChapters%', 'Import non-existing chapters')}
+              {/* Sebastian review item #15 (2026-05-11): renamed from "Import non-existing
+                  chapters" — that label was a PT10-only invention that promised a behavior
+                  PT9 never had. The actual semantic is PT9's WriteChaptersToBook: source
+                  chapters overwrite their dest counterparts; dest chapters not in source
+                  survive. "Merge book(s)" describes the behavior honestly. */}
+              {t('%manageBooks_import_nonExistingChapters%', 'Merge book(s)')}
             </Button>
           </div>
         </div>

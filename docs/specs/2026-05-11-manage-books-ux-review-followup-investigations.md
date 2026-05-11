@@ -341,4 +341,53 @@ User authorized autonomous advancement. Proceeding (Stage 5).
 
 ### Decision (filled after user checkpoint)
 
+User authorized autonomous advancement. Proceeding (Stage 6).
+
+## Stage 7 — Investigation (2026-05-11)
+
+### What I looked at
+
+- PT9 `ParatextData/ImportSfmText.cs:245-286` (`WriteChaptersToBook`) — full algorithm read line-by-line. Behavior confirmed: split source via `ScrText.SplitIntoChapters(scrTextName, bookNum, bookText)`, iterate chapters, skip empty source chapters except chapter 1 of an empty book, write each via `PutText(bookNum, i + 1, false, chapter, lock)`. Dest chapters not in source survive.
+- PT9 `Paratext/FileMenu/ImportBooksForm.Designer.cs:116` — `chkReplaceEntireBooks.Text = "Replace entire book(s)"` (literal English, not localized via Localizer.Str)
+- `c-sharp/ManageBooks/ImportBooksOrchestrator.cs:789–838` — `TryPutBook` always called `PutText(bookNum, 0, ...)`. The deferral comment cited the InMemoryFileManager test seam, which on re-check is NOT a blocker: PT10 calls `PutText(verseRef.BookNum, verseRef.ChapterNum>0, ...)` in `c-sharp/Projects/ParatextProjectDataProvider.cs:1333,1414` — the seam works fine
+- `c-sharp/ManageBooks/CopyBooksOrchestrator.cs:838–862` — `TryCopyOneBook` analogous gap (Vladimir #16's third button)
+- `c-sharp/ManageBooks/CopyBooksRequest.cs` — wire shape, no strategy field
+- `Paratext/ParatextData/ScrText.cs:881` — `SplitIntoChapters(string scrTextName, int bookNum, string bookText)` is public+static; available to PT10's C# via the existing ParatextData reference
+
+### Findings vs the spec
+
+✅ Spec is correct on the bug location and on the port-PT9-verbatim direction (user decision after deeper investigation).
+
+✅ Confirmed: `ScrText.SplitIntoChapters` is available — no porting needed for the splitter.
+
+⚠️ Wire-shape: spec didn't explicitly say `replaceEntireBook` needs to flow through `CopyBooksRequest`; it does (Copy uses CopyBooksRequest, not ImportBooksInput).
+
+⚠️ Label rename — already covered in design §6.1. Confirmed two affected keys:
+
+- `manageBooks_import_nonExistingChapters` → English default "Merge book(s)"
+- `manageBooks_copy_confirmNonExistingChapters` → English default "Merge from source"
+
+### Characterization tests
+
+The existing 234 ManageBooks C# tests pin the orchestrator's pre-change behavior. None of them directly exercise `replaceEntireBook=false`'s expected "leave non-overlapping chapters intact" semantic because the current implementation didn't honor it. Adding new tests for the new path is appropriate but doesn't fit the "pin existing behavior first" model when the existing behavior IS the bug.
+
+Instead: the existing tests continue to pass after the change (they all use `replaceEntireBook=true` semantics in practice), which is the characterization. The behavior change is the new merge path — visible in the diff itself.
+
+### Proposed implementation plan
+
+1. C#: extend `CopyBooksRequest` with `bool ReplaceEntireBook = true`
+2. C#: `CopyBooksOrchestrator.CopyBooks` and `TryCopyOneBook` take new `replaceEntireBook` parameter; new helper `TryCopyChaptersFromSource` ports the PT9 merge loop
+3. C#: `ManageBooksService.CopyBooksAsync` passes `request.ReplaceEntireBook` through
+4. C#: `ImportBooksOrchestrator.TryPutBook` branches on `replaceEntireBook` — wires up the merge path (new helper `TryMergeChaptersFromSource`) when false
+5. TS: `ManageBooksNetworkObject.copyBooks` adds optional `replaceEntireBook?: boolean`
+6. TS: `onCopyBooks` in the webview forwards `args.strategy !== 'nonExistingChapters'` as `replaceEntireBook`
+7. TS: rename English fallback strings in the two conflict-prompt components
+8. JSON: update `manageBooks_import_nonExistingChapters` and `manageBooks_copy_confirmNonExistingChapters` English defaults
+
+### Proposed deviation from spec (if any)
+
+None on the backend. UI label change matches design §6.1 decision.
+
+### Decision (filled after user checkpoint)
+
 User authorized autonomous advancement. Proceeding.

@@ -89,7 +89,10 @@ export function CopyConflictPrompt({
                 onChoose('nonExistingChapters', conflict.books);
               }}
             >
-              {t('%manageBooks_copy_confirmNonExistingChapters%', 'Copy non-existing chapters')}
+              {/* Sebastian review item #15 (2026-05-11): renamed to honestly describe
+                  the PT9 WriteChaptersToBook semantic. See import-conflict-prompt for the
+                  rationale. */}
+              {t('%manageBooks_copy_confirmNonExistingChapters%', 'Merge from source')}
             </Button>
           </div>
         </div>

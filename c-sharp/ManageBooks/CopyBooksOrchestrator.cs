@@ -728,7 +728,8 @@ public static class CopyBooksOrchestrator
     public static CopyBooksResult CopyBooks(
         ScrText fromScrText,
         ScrText toScrText,
-        BookSet selectedBooks
+        BookSet selectedBooks,
+        bool replaceEntireBook = true
     )
     {
         // LockNotObtained seam: the wire-layer UNAVAILABLE mapping is exercised
@@ -773,7 +774,15 @@ public static class CopyBooksOrchestrator
                 continue;
             }
 
-            if (TryCopyOneBook(fromScrText, toScrText, bookNum, domainErrorStrings))
+            if (
+                TryCopyOneBook(
+                    fromScrText,
+                    toScrText,
+                    bookNum,
+                    replaceEntireBook,
+                    domainErrorStrings
+                )
+            )
             {
                 copiedCount++;
                 lastCopiedBookNum = bookNum;
@@ -839,6 +848,7 @@ public static class CopyBooksOrchestrator
         ScrText fromScrText,
         ScrText toScrText,
         int bookNum,
+        bool replaceEntireBook,
         List<string> errors
     )
     {
@@ -846,8 +856,18 @@ public static class CopyBooksOrchestrator
         try
         {
             string sourceUsfm = fromScrText.GetText(bookNum);
-            toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
-            return true;
+            if (replaceEntireBook)
+            {
+                toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
+                return true;
+            }
+            // Sebastian review item #15 (2026-05-11): merge path — port of PT9
+            // ImportSfmText.WriteChaptersToBook (ParatextData/ImportSfmText.cs:245-286).
+            // Source chapters overwrite their dest counterparts; dest chapters absent
+            // from source survive. Empty source chapters are skipped except when the
+            // dest book is also empty (allows the "first copy populates an empty book"
+            // path to work). Uses the same Regex compiled in ImportBooksOrchestrator.
+            return TryCopyChaptersFromSource(fromScrText, toScrText, bookNum, sourceUsfm, errors);
         }
         catch (Exception ex)
         {
@@ -859,6 +879,78 @@ public static class CopyBooksOrchestrator
             errors.Add($"Failed to copy book {bookId}");
             return false;
         }
+    }
+
+    // Sebastian review item #15 (2026-05-11): see TryCopyOneBook above. Per-chapter
+    // merge path. Local copy of the empty-chapter regex (intentionally duplicated
+    // across CAP-007 and CAP-010; consolidating would cross capability boundaries —
+    // mirrors the SafeGetBookText/SafeGetBookModified duplication-rationale).
+    private static readonly System.Text.RegularExpressions.Regex MergeEmptyChapterPattern =
+        new(@"^(\\id [^\r\n]*)?\s*$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static bool TryCopyChaptersFromSource(
+        ScrText fromScrText,
+        ScrText toScrText,
+        int bookNum,
+        string sourceUsfm,
+        List<string> errors
+    )
+    {
+        string bookId = Canon.BookNumberToId(bookNum);
+        List<string> chapters;
+        try
+        {
+            chapters = ScrText.SplitIntoChapters(toScrText.Name, bookNum, sourceUsfm);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"[CopyBooks.TryCopyChaptersFromSource] split failed for book {bookId}: {ex}"
+            );
+            errors.Add($"Failed to split book {bookId} into chapters");
+            return false;
+        }
+
+        bool destBookExists = toScrText.Settings.BooksPresentSet.IsSelected(bookNum);
+        if (!destBookExists)
+        {
+            toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
+            return true;
+        }
+
+        string destChapter1Text = string.Empty;
+        try
+        {
+            var vref = new VerseRef(bookNum, 1, 0, toScrText.Settings.Versification);
+            destChapter1Text = toScrText.GetText(vref, true, false) ?? string.Empty;
+        }
+        catch (Exception)
+        {
+            destChapter1Text = string.Empty;
+        }
+
+        for (int i = 0; i < chapters.Count; i += 1)
+        {
+            string chapterText = chapters[i];
+            if (MergeEmptyChapterPattern.IsMatch(chapterText))
+            {
+                if (i != 0 || destChapter1Text.Trim().Length != 0)
+                    continue;
+            }
+            try
+            {
+                toScrText.PutText(bookNum, i + 1, false, chapterText, null);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(
+                    $"[CopyBooks.TryCopyChaptersFromSource] PutText failed for {bookId} ch {i + 1}: {ex}"
+                );
+                errors.Add($"Failed to copy book {bookId} (chapter {i + 1})");
+                return false;
+            }
+        }
+        return true;
     }
 
     // === PORTED FROM PT9 ===
