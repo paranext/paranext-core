@@ -47,6 +47,7 @@ import {
   parseMarkerSettings,
   INVALID_MARKER_PAIR_ERROR_KEY,
 } from './checklists/parse-marker-settings';
+import { useChecklistDefaults } from './hooks/use-checklist-defaults';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
 import {
@@ -136,6 +137,16 @@ function cellToText(cell: ChecklistCell): string {
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
+// Mirrors the user-defaults shape returned by `useChecklistDefaults`. Per Decision A1 (rebase
+// onto PR #2276), `equivalentMarkers` and `markerFilter` are excluded — they live in project
+// settings (`platformScripture.checklistEquivalentMarkers` /
+// `platformScripture.checklistMarkerFilter`), not in this user-defaults snapshot.
+type ChecklistDefaults = {
+  comparativeTextIds: string[];
+  hideMatches: boolean;
+  showVerseText: boolean;
+};
+
 /**
  * Fully-wired Markers Checklist web view (UI-PKG-002 + UI-PKG-003 + UI-PKG-004).
  *
@@ -153,13 +164,59 @@ function cellToText(cell: ChecklistCell): string {
  *   (see `marker-settings-dialog.component.tsx`) before being written back to the parent state.
  * - **UI-PKG-004** — six adjacent `useWebViewState<T>(key, default)` slots declared at the top of the
  *   component, backing per-web-view persistence for the checklist settings.
+ *
+ * UX-2 follow-up finding #22 (WP7): the persisted-slot defaults are now seeded from a per-user
+ * setting (`platformScripture.markersChecklistDefaults`) instead of static literals. The outer
+ * `ChecklistWebView` reads the setting via `useChecklistDefaults` and gates rendering on the read
+ * settling — without this gate, `useWebViewState` would lock in the static defaults at first mount
+ * (`useState(() => ...)` lazy init consults the default exactly once) and silently ignore the
+ * persisted value. The inner `ChecklistContent` component receives the resolved defaults + the
+ * `writeChecklistDefaults` mirror-back callback as props.
  */
-global.webViewComponent = function ChecklistWebView({
+global.webViewComponent = function ChecklistWebView(props: WebViewProps) {
+  // Phase 1: read the per-user defaults setting BEFORE mounting the body. We gate on
+  // `isLoading === false` because `useWebViewState`'s lazy-init `useState(() => ...)` consults
+  // its default only on first render — handing it `persistedDefaults?.field ?? fallback` while
+  // the read is still in flight would seed every slot with the fallback for the lifetime of the
+  // tab, defeating persistence on first launch.
+  const [persistedDefaults, isLoadingDefaults, writeChecklistDefaults] = useChecklistDefaults();
+
+  if (isLoadingDefaults || !persistedDefaults) {
+    // Brief flash (~one async tick) while papi.settings.get resolves. Returning `undefined`
+    // tells React to render nothing for this mount — matches the codebase's existing convention
+    // for "no UI to draw yet" (the `useMemo` paths at lines 537/548/550 do the same) and avoids
+    // the `react/jsx-no-useless-fragment` flag for `<></>`. The outer tab chrome already shows
+    // its title bar during the brief loading window.
+    return undefined;
+  }
+
+  return (
+    <ChecklistContent
+      {...props}
+      persistedDefaults={persistedDefaults}
+      writeChecklistDefaults={writeChecklistDefaults}
+    />
+  );
+};
+
+type ChecklistContentProps = WebViewProps & {
+  persistedDefaults: ChecklistDefaults;
+  writeChecklistDefaults: (next: Partial<ChecklistDefaults>) => Promise<void>;
+};
+
+/**
+ * Inner component that runs every hook in the checklist web view. Split out from `ChecklistWebView`
+ * so the persisted-defaults read (WP7) can gate this component's mount — once it mounts,
+ * `useWebViewState`'s lazy init sees the resolved defaults on the very first render.
+ */
+function ChecklistContent({
   projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
   updateWebViewDefinition,
-}: WebViewProps) {
+  persistedDefaults,
+  writeChecklistDefaults,
+}: ChecklistContentProps) {
   // ─── UI-PKG-004: persisted state slots ────────────────────────────────────
 
   // ─── Scroll group binding (drives currentScrRef + goto setter) ────────
@@ -167,10 +224,13 @@ global.webViewComponent = function ChecklistWebView({
   // (parity with checks-side-panel Tasks 13/14); omitted here until that UI is wired.
   const [liveScrRef, setLiveScrRef, scrollGroupId] = useWebViewScrollGroupScrRef();
 
-  // Marker settings now persist as PROJECT settings (cross-web-view persistence on the same
-  // project — TJ C3a). Both keys default to '' to match the previous `useWebViewState` semantics.
-  // `useProjectSetting` may surface a `PlatformError` when the PDP isn't ready yet (e.g. during
-  // initial mount); we narrow to the empty default in that case.
+  // Marker settings persist as PROJECT settings (cross-web-view persistence on the same project —
+  // TJ C3a / PR #2276 Phase 6). Decision A1 (rebase against PR #2276): `equivalentMarkers` and
+  // `markerFilter` are excluded from the WP7 user-defaults setting; they live ONLY in the
+  // project settings (`platformScripture.checklistEquivalentMarkers` /
+  // `platformScripture.checklistMarkerFilter`). `useProjectSetting` may surface a `PlatformError`
+  // when the PDP isn't ready yet (e.g. during initial mount); we narrow to the empty default in
+  // that case.
   const [equivalentMarkersPossiblyError, setEquivalentMarkers] = useProjectSetting(
     projectId,
     'platformScripture.checklistEquivalentMarkers',
@@ -200,16 +260,25 @@ global.webViewComponent = function ChecklistWebView({
     }
     return markerFilterPossiblyError;
   }, [markerFilterPossiblyError]);
-  const [hideMatches, setHideMatches] = useWebViewState<boolean>('checklistHideMatches', false);
+  // View preferences (UX-2 #22, WP7) — seeded from the user-level defaults setting on first mount,
+  // then persisted per-web-view via `useWebViewState`. Per Decision A1, ONLY these three view
+  // preferences participate in the user-defaults setting; the marker-config strings (above) live
+  // exclusively in project settings.
+  const [hideMatches, setHideMatches] = useWebViewState<boolean>(
+    'checklistHideMatches',
+    persistedDefaults.hideMatches,
+  );
   const [showVerseText, setShowVerseText] = useWebViewState<boolean>(
     'checklistShowVerseText',
-    false,
+    persistedDefaults.showVerseText,
   );
   // Comparative-texts selection is driven by the real `ProjectSelector` (`mode: 'project-multi'`,
-  // vendored from draft PR #2223).
+  // vendored from draft PR #2223). UX-2 #22 (WP7): the default is materialised from the user
+  // setting's `comparativeTextIds` (string[]) by lifting each id into the local
+  // `ComparativeTextRef` shape the web view uses internally.
   const [comparativeTexts, setComparativeTexts] = useWebViewState<ComparativeTextRef[]>(
     'checklistComparativeTexts',
-    [],
+    persistedDefaults.comparativeTextIds.map((id) => ({ id })),
   );
   // R1 — mode-aware snapshot persistence (matches PT9's frozen-range model).
   // - `scope` drives the ScopeSelector display label; `verseRange` auto-follows `liveScrRef`
@@ -241,6 +310,27 @@ global.webViewComponent = function ChecklistWebView({
   // ScopeSelector wiring (Task 8). `setLiveScrRef` and `scrollGroupId` are consumed by the
   // goto handler (Task 9). `setScrollGroupId` stays `void`-suppressed until a scroll-group
   // picker is wired (parity with checks-side-panel Tasks 13/14).
+
+  // UX-2 follow-up finding #22 (WP7): mirror the persisted slots to the user setting so a new
+  // checklist tab — or a fresh app session — inherits the latest committed view-toggle defaults.
+  // Scope and verse range are intentionally NOT mirrored: PT9 reset both per-open
+  // (FirstVerseRef / LastVerseRef were rewritten from the live scroll-group ref on each open) and
+  // the reviewer agreed PT10 should match. Per Decision A1 (rebase onto PR #2276),
+  // `equivalentMarkers` / `markerFilter` are NOT mirrored either — those are project-scoped and
+  // already persist via `useProjectSetting` against
+  // `platformScripture.checklistEquivalentMarkers` / `platformScripture.checklistMarkerFilter`.
+  // The mirror also fires on the very first render to (idempotently) re-write the same value
+  // back — harmless, and means a user who never changes the toggles still gets a persisted
+  // record once they touch any view preference.
+  useEffect(() => {
+    writeChecklistDefaults({
+      comparativeTextIds: comparativeTexts.map((ref) => ref.id),
+      hideMatches,
+      showVerseText,
+    }).catch(() => {
+      // Already logged inside the hook; swallow here to keep the effect total.
+    });
+  }, [comparativeTexts, hideMatches, showVerseText, writeChecklistDefaults]);
 
   // ─── Localization ─────────────────────────────────────────────────────────
 
@@ -994,4 +1084,4 @@ global.webViewComponent = function ChecklistWebView({
       />
     </>
   );
-};
+}

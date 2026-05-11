@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "label": "%settings_markersChecklist_group_label%",
+    "description": "%settings_markersChecklist_group_description%",
+    "properties": {
+      "platformScripture.markersChecklistDefaults": {
+        "label": "%settings_markersChecklist_userDefaults_label%",
+        "description": "%settings_markersChecklist_userDefaults_description%",
+        "default": {
+          "comparativeTextIds": [],
+          "hideMatches": false,
+          "showVerseText": false
+        }
+      }
+    }
+  }
+]

@@ -2229,4 +2229,27 @@ declare module 'papi-shared-types' {
      */
     'platformScripture.allowInvisibleCharacters': boolean;
   }
+
+  export interface SettingTypes {
+    /**
+     * Per-user defaults for the Markers Checklist tool (UX-2 follow-up finding #22). The Markers
+     * Checklist web view reads this on mount to seed its per-tab `useWebViewState` slots so a new
+     * checklist tab inherits the user's last-committed view-toggle choices, and writes back
+     * whenever any persisted field changes. Scope and verse range are intentionally NOT persisted
+     * (matches PT9 memento behaviour: scope/verse range reset per open). Cross-tab races are
+     * last-write-wins.
+     *
+     * Decision A1 (rebase onto PR #2276): `equivalentMarkers` and `markerFilter` are excluded
+     * from this user-defaults setting. Those marker-config fields live exclusively in PROJECT
+     * settings (`platformScripture.checklistEquivalentMarkers` /
+     * `platformScripture.checklistMarkerFilter`) so each project owns its values and the
+     * settings travel with the project. Only view preferences (visibility toggles + the
+     * comparative-projects list) participate in the user defaults.
+     */
+    'platformScripture.markersChecklistDefaults': {
+      comparativeTextIds: string[];
+      hideMatches: boolean;
+      showVerseText: boolean;
+    };
+  }
 }
