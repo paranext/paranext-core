@@ -1463,15 +1463,17 @@ interface ScopeSelectorProps {
 	 */
 	variant?: ScopeSelectorVariant;
 	/**
-	 * The start of the verse range. Only used when `scope === 'range'`. Defaults to `defaultScrRef`
-	 * (GEN 1:1) if neither this nor `currentScrRef` is provided.
+	 * Explicit start of the verse range — only meaningful when `scope === 'range'`. When omitted,
+	 * the range UI seeds its start from `currentScrRef` (if provided) or falls back to GEN 1:1.
+	 * Provide this when the consumer is tracking range state independently of "the user's current
+	 * scripture reference" — e.g. the markers-checklist's persisted range bounds.
 	 */
 	rangeStart?: SerializedVerseRef;
 	/**
-	 * The end of the verse range. Only used when `scope === 'range'`. Every time the user submits a
-	 * new `rangeStart`, `onRangeEndChange` is also fired with that same reference so the end mirrors
-	 * the start; the user is free to narrow the end afterward. Defaults to `defaultScrRef` (GEN 1:1)
-	 * if neither this nor `currentScrRef` is provided.
+	 * Explicit end of the verse range — only meaningful when `scope === 'range'`. Fallback chain
+	 * matches `rangeStart` (then `currentScrRef`, then GEN 1:1). Every time the user submits a new
+	 * `rangeStart`, `onRangeEndChange` is also fired with that same reference so the end mirrors
+	 * the start; the user is free to narrow the end afterward.
 	 */
 	rangeEnd?: SerializedVerseRef;
 	/** Callback when the range start reference changes. Required to make the range UI functional. */
@@ -1479,8 +1481,16 @@ interface ScopeSelectorProps {
 	/** Callback when the range end reference changes. Required to make the range UI functional. */
 	onRangeEndChange?: (scrRef: SerializedVerseRef) => void;
 	/**
-	 * Optional current scripture reference. When provided and no explicit `rangeStart` or `rangeEnd`
-	 * is supplied, it is used as the initial value for the range controls.
+	 * The user's current scripture reference (typically the active editor's BCV). Serves two roles:
+	 *
+	 * - **Display**: shown as the muted secondary text on `'verse'` / `'chapter'` / `'book'` scope
+	 *   triggers in the dropdown variant (e.g. "Current verse — GEN 1:1").
+	 * - **Range-mode fallback**: seeds `rangeStart` and `rangeEnd` when those are not explicitly
+	 *   supplied. `rangeStart` / `rangeEnd` always win when present — `currentScrRef` is *not* a
+	 *   duplicate, it is the next-step fallback before the GEN 1:1 default.
+	 *
+	 * Also drives the "Navigate" footer in the dropdown variant when paired with
+	 * `onCurrentScrRefChange`.
 	 */
 	currentScrRef?: SerializedVerseRef;
 	/**
@@ -2105,11 +2115,13 @@ export declare function EditorKeyboardShortcuts({ children, editorRef, canUndo, 
  * `link`, wrapped in a tooltip. Used when a scripture reference should double as a navigation
  * affordance — clicking the reference text takes the user to that location in scripture.
  *
- * NOTE: This is a small, intentionally narrow primitive. PR #1949 introduces a richer
- * `LinkedScrRefDisplay` component built around `SerializedVerseRef` and the formatted-range
- * utilities in `platform-bible-utils`. When that PR merges, consumers that already have structured
- * `SerializedVerseRef` data should prefer `LinkedScrRefDisplay`. This button is for cases where the
- * reference is already rendered as a string and only the link affordance is needed.
+ * @experimental This component is expected to be removed once
+ *   [`LinkedScrRefDisplay`](https://github.com/paranext/paranext-core/pull/1949) lands. That
+ *   richer component is built around `SerializedVerseRef` and the formatted-range utilities in
+ *   `platform-bible-utils` and supersedes this button for consumers that have structured
+ *   `SerializedVerseRef` data. Until PR #1949 merges, this button covers the
+ *   "string-already-formatted" case (e.g. the markers-checklist Reference column). **Do not depend
+ *   on this component long-term — migrate to `LinkedScrRefDisplay` as soon as it is available.**
  */
 export type LinkedScrRefButtonProps = {
 	/**
@@ -2502,8 +2514,85 @@ export declare function DialogHeader({ className, ...props }: React$1.ComponentP
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dialog}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dialog}
  */
-export declare function DialogFooter({ className, showCloseButton, children, ...props }: React$1.ComponentProps<"div"> & {
-	showCloseButton?: boolean;
+export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
+/**
+ * The Popover component displays rich content in a portal, triggered by a button. This popover is
+ * built on Radix UI's Popover component and styled by Shadcn UI.
+ *
+ * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/popover See Radix UI
+ * Documentation https://www.radix-ui.com/docs/primitives/components/popover
+ */
+export declare const Popover: React$1.FC<PopoverPrimitive.PopoverProps>;
+/** @inheritdoc Popover */
+export declare const PopoverTrigger: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+/** @inheritdoc Popover */
+export declare const PopoverAnchor: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverAnchorProps & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Overrides the container that descendant {@link PopoverContent} components portal into. Use it to
+ * keep popovers inside a Radix `DialogContent`, `DropdownMenuContent`, or any other ancestor that
+ * owns a focus trap or dismiss-on-outside-click layer.
+ *
+ * @remarks
+ * Radix `Popover` portals its content to `document.body` by default, which works fine for top-level
+ * UI. The default breaks down whenever a popover trigger lives inside an ancestor that:
+ *
+ * - Runs a focus trap (`Dialog`, `AlertDialog`, modal `DropdownMenu`) — the trap yanks focus back out
+ *   of the popover the instant it opens because the portal'd content is outside the trap's DOM
+ *   subtree.
+ * - Listens for outside-clicks (Radix `DismissableLayer`, used by every `*Menu`/`Dialog`) — a click
+ *   inside the popover reads as "outside the menu" and dismisses the parent immediately.
+ *
+ * Wrapping the children of the trapping ancestor in this provider, with that ancestor's element as
+ * `container`, makes nested `PopoverContent` portal as a DOM descendant of the trap so both focus
+ * and dismiss-layer logic accept it.
+ *
+ * Single descendant scope: a `PopoverPortalContainerProvider` only affects `PopoverContent` mounts
+ * rendered as React children. It does not retroactively re-portal already-mounted popovers, and it
+ * does not affect popovers in sibling subtrees.
+ *
+ * Initial-mount behavior: pass `null` for `container` (the initial value of a `useState<HTMLElement
+ *
+ * | null>(null)` paired with a ref callback on the ancestor) to keep Radix's default
+ *
+ * `document.body` behavior until the ancestor mounts. Once the element exists, future popover opens
+ * portal into it. The triggering ancestor (the trap owner) must wrap, not be wrapped by, this
+ * provider.
+ * @example
+ *
+ * ```tsx
+ * function ScopeMenu() {
+ *   const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+ *
+ *   return (
+ *     <Dialog open={isOpen} onOpenChange={setIsOpen}>
+ *       <DialogContent ref={setDialogEl}>
+ *         <PopoverPortalContainerProvider container={dialogEl}>
+ *           <BookChapterControl ... />
+ *         </PopoverPortalContainerProvider>
+ *       </DialogContent>
+ *     </Dialog>
+ *   );
+ * }
+ * ```
+ *
+ * @example
+ *
+ * ```tsx
+ * // Dropdown variant: same pattern, container is the DropdownMenuContent.
+ * const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
+ * <DropdownMenu>
+ *   <DropdownMenuTrigger>...</DropdownMenuTrigger>
+ *   <DropdownMenuContent ref={setContentEl}>
+ *     <PopoverPortalContainerProvider container={contentEl}>
+ *       <BookChapterControl ... />
+ *     </PopoverPortalContainerProvider>
+ *   </DropdownMenuContent>
+ * </DropdownMenu>
+ * ```
+ */
+export declare function PopoverPortalContainerProvider({ container, children, }: {
+	container: HTMLElement | null;
+	children: React$1.ReactNode;
 }): import("react/jsx-runtime").JSX.Element;
 /**
  * Renders the dialog's title as a styled heading. Used inside DialogHeader.
