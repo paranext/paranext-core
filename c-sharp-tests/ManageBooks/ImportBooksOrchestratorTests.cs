@@ -679,6 +679,72 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         // =====================================================================
+        // Sebastian/Vladimir review items #14 + #44 (2026-05-11) — Import
+        // wire-shape for SourceLastModified / DestLastModified.
+        //
+        // Import's BuildComparisonEntry passes preflightSourceTimestamp =
+        // DateTime.UtcNow as the source modification time. Together with a
+        // non-empty source text, that means SourceLastModified must be a
+        // valid recent ISO-8601 string for every extracted book. The Copy
+        // side already pins the precise ToIsoOrNull contract via its
+        // SetDefaultEligibility tests; the assertion here is the Import
+        // entry-point integration: a parse of any non-empty source produces
+        // a non-null, ISO-shaped SourceLastModified on the wire.
+        // =====================================================================
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-009")]
+        [Property("BehaviorId", "BHV-109")]
+        [Description(
+            "Sebastian/Vladimir #14 + #44: ParseImportFiles surfaces a non-null, "
+                + "ISO-8601-shaped SourceLastModified for every extracted book — the "
+                + "value originates from preflightSourceTimestamp = DateTime.UtcNow."
+        )]
+        public void ParseImportFiles_SourceLastModified_IsRecentIsoString()
+        {
+            var files = new[]
+            {
+                new ImportFileEntry(
+                    FileName: "gen.sfm",
+                    Content: "\\id GEN - Test\n\\c 1\n\\v 1 In the beginning...",
+                    Included: true
+                ),
+            };
+
+            DateTime before = DateTime.UtcNow.AddSeconds(-1);
+            BookComparisonResult result = ImportBooksOrchestrator.ParseImportFiles(_scrText, files);
+            DateTime after = DateTime.UtcNow.AddSeconds(1);
+
+            Assert.That(result.Entries, Has.Count.EqualTo(1));
+            BookComparisonEntry entry = result.Entries[0];
+
+            Assert.That(entry.SourceLastModified, Is.Not.Null);
+            Assert.That(
+                System.Text.RegularExpressions.Regex.IsMatch(
+                    entry.SourceLastModified!,
+                    @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+                ),
+                Is.True,
+                $"SourceLastModified must be ISO-8601 shaped (got '{entry.SourceLastModified}')"
+            );
+
+            // Parse back and assert it falls inside the bracket we captured around
+            // ParseImportFiles — this pins the contract that the timestamp is
+            // generated at-parse-time (UtcNow), not derived from any pre-canned
+            // value in the ImportFileEntry.
+            var parsed = DateTime
+                .Parse(
+                    entry.SourceLastModified!,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.RoundtripKind
+                )
+                .ToUniversalTime();
+            Assert.That(parsed, Is.GreaterThanOrEqualTo(before));
+            Assert.That(parsed, Is.LessThanOrEqualTo(after));
+        }
+
+        // =====================================================================
         // CheckOverlappingFiles — TS-085 / BHV-318 / VAL-012 / gm-012
         // =====================================================================
 
