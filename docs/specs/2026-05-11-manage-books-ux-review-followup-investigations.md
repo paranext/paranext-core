@@ -157,3 +157,43 @@ User has authorized autonomous advancement; proceeding with the implementations 
 ### Decision (filled after user checkpoint)
 
 User authorized autonomous advancement. Proceeding with implementations including the four scope refinements above.
+
+## Stage 3 — Investigation (2026-05-11)
+
+### What I looked at
+
+- `lib/platform-bible-react/tailwind.config.ts:8,141` — `@tailwindcss/container-queries` plugin IS present in platform-bible-react's config
+- `lib/platform-bible-react/package.json:99` — `"@tailwindcss/container-queries": "^0.1.1"` declared
+- `extensions/src/platform-scripture/tailwind.config.ts:116–123` — plugins list: `typography()`, `tailwindCssAnimate` only. **Plugin NOT present in the extension's Tailwind config.**
+- `extensions/src/platform-scripture/package.json` deps — `@tailwindcss/container-queries` NOT declared (though it is installed at the repo root via npm workspaces)
+- `extensions/src/platform-scripture/dist/src/main.js` compiled output: emitted CSS contains only generic `@container (min-width: 24rem)` rules (from `@sm:`) — NO named container rules like `@container/actions`, `@container/filterbar`. Confirmed via Python regex extraction.
+- `manage-books-dialog.component.tsx:1718` — `tw-@container/actions` (added round 1)
+- `manage-books-dialog.component.tsx:1924` — `tw-@container/filterbar` (added round 1)
+- `manage-books-dialog.component.tsx:1971` — `@md/filterbar:tw-inline` (only existing query in our code)
+- PR #2224's `manage-books-dialog.component.tsx:842–1118` — equivalent classes work in PR #2224 because that PR is in `lib/platform-bible-react/` (which has the plugin)
+
+### Findings vs the spec
+
+⚠️ **Plugin was never enabled in the extension's Tailwind config.** Round 1 added `tw-@container/actions` and `@md/filterbar:tw-inline` classes in JSX, but those classes were silently producing no CSS in the extension build. The one existing `@md/filterbar:tw-inline` (Copy-mode count hidden at narrow widths) has been non-functional since PR #2220.
+
+✅ Spec is correct on the patterns to copy from PR #2224.
+
+⚠️ Spec said "verify Tailwind container-query plugin is enabled". Verified — it ISN'T. Stage 3.1 needs to add the plugin as step 0 before any new container-query classes will work, AND this retroactively activates the existing round-1 rule.
+
+### Proposed implementation plan
+
+1. Add `@tailwindcss/container-queries` to `extensions/src/platform-scripture/package.json` devDependencies (resolves to existing workspace-root install)
+2. Import the plugin in `extensions/src/platform-scripture/tailwind.config.ts` and add it to the plugins list
+3. Add `tw-@container/sidebar` to the sidebar's `<nav>` and design icon-only collapse for narrow widths
+4. Add `tw-@container/dialog` to the dialog's outer flex container so cross-cutting responsive rules (header subtitle hide, etc.) can be added
+5. Hide the header subtitle at narrow `@dialog` widths
+6. Add tooltips to ALL sidebar items (not just disabled ones) since icon-only mode hides labels — make the tooltip render label + subtitle (when present)
+
+### Proposed deviation from spec (if any)
+
+- **Sidebar pattern is fresh design** — PR #2224 is dialog-shaped with no sidebar, so no pattern to mirror. Icon-only rail with full tooltips is the standard approach.
+- The Tailwind plugin enablement is a small dep change but technically a behavior-affecting modification. Calling it out explicitly so reviewers know the existing classes start working.
+
+### Decision (filled after user checkpoint)
+
+User authorized autonomous advancement. Proceeding with plugin enablement + sidebar icon-only collapse + dialog-level container query for header subtitle hiding.

@@ -256,13 +256,19 @@ export function ManageBooksSidebar({
   return (
     <nav
       aria-label={t('%manageBooks_sidebar_heading%', 'Manage books')}
-      className="tw:flex tw:w-64 tw:shrink-0 tw:flex-col tw:gap-1 tw:overflow-y-auto tw:border-r tw:bg-muted/40 tw:p-3"
+      // Sebastian review items 6 + 42 (2026-05-11): when the dialog container is narrow
+      // (below `md` per the `@container/dialog` set up by the dialog wrapper), collapse
+      // the sidebar to an icon-only rail. Width drops from w-64 to w-14, gap tightens,
+      // and the project label + section labels hide via `@max-md/dialog:tw-hidden`
+      // selectors on those individual elements below. Tooltips on every section
+      // surface the labels on hover.
+      className="tw-flex tw-w-64 tw-shrink-0 tw-flex-col tw-gap-1 tw-overflow-y-auto tw-border-r tw-bg-muted/40 tw-p-3 @max-md/dialog:tw-w-14 @max-md/dialog:tw-p-1"
       data-testid="manage-books-sidebar"
     >
-      <div className="tw:flex tw:flex-col tw:gap-1 tw:px-2 tw:pt-2 tw:pb-3">
+      <div className="tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-pt-2 tw-pb-3 @max-md/dialog:tw-px-0">
         <Label
           htmlFor="manage-books-sidebar-project"
-          className="tw:text-xs tw:text-muted-foreground"
+          className="tw-text-xs tw-text-muted-foreground @max-md/dialog:tw-hidden"
         >
           {t('%manageBooks_header_projectLabel%', 'Project')}
         </Label>
@@ -340,17 +346,21 @@ export function ManageBooksSidebar({
             data-testid={`manage-books-sidebar-section-${id}`}
             data-active={isActive ? 'true' : undefined}
             data-read-only-disabled={isReadOnlyDisabled ? 'true' : undefined}
+            // At narrow widths (icon-only mode), drop gap + horizontal padding and center
+            // the icon. The label `<span>` below also hides via `@max-md/dialog:tw-hidden`.
             className={cn(
-              'tw:flex tw:items-start tw:gap-3 tw:rounded-md tw:px-3 tw:py-2 tw:text-start tw:text-sm tw:transition-colors',
-              !disabled && 'tw:hover:bg-accent tw:hover:text-accent-foreground',
+              'tw-flex tw-items-start tw-gap-3 tw-rounded-md tw-px-3 tw-py-2 tw-text-start tw-text-sm tw-transition-colors',
+              '@max-md/dialog:tw-gap-0 @max-md/dialog:tw-justify-center @max-md/dialog:tw-px-2',
+              !disabled && 'hover:tw-bg-accent hover:tw-text-accent-foreground',
               !disabled &&
                 'tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring',
               isActive && 'tw:bg-accent tw:font-medium tw:text-accent-foreground',
               disabled && 'tw:cursor-not-allowed tw:opacity-50',
             )}
+            aria-label={labels.label}
           >
-            <Icon className="tw:mt-0.5 tw:h-4 tw:w-4 tw:shrink-0" aria-hidden />
-            <span className="tw:flex tw:flex-col">
+            <Icon className="tw-mt-0.5 tw-h-4 tw-w-4 tw-shrink-0" aria-hidden />
+            <span className="tw-flex tw-flex-col @max-md/dialog:tw-hidden">
               <span>{labels.label}</span>
               {labels.subtitle && (
                 <span className="tw-text-xs tw-font-normal tw-text-muted-foreground">
@@ -361,28 +371,30 @@ export function ManageBooksSidebar({
           </button>
         );
 
+        // Sebastian review items 6 + 42 (2026-05-11): in icon-only mode the section
+        // labels are hidden, so every section needs a tooltip surfacing its label.
+        // Disabled sections show the read-only message (#41 / #18). Active and enabled
+        // sections show their label; the tooltip is harmless at wide widths too — it
+        // simply repeats text already visible inline.
+        const tooltipText = tooltip ?? labels.label;
         return (
           <Fragment key={id}>
             {showSeparator && <Separator className="tw:my-1" />}
             {groupHeading && (
-              <div className="tw:mt-1 tw:px-3 tw:text-[11px] tw:font-semibold tw:uppercase tw:tracking-wider tw:text-muted-foreground">
+              <div className="tw-mt-1 tw-px-3 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground @max-md/dialog:tw-hidden">
                 {groupHeading}
               </div>
             )}
-            {disabled && tooltip ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  {/* Wrapper span so the tooltip works on a disabled button */}
-                  <span>{buttonElement}</span>
-                </TooltipTrigger>
-                {/* Sebastian review item 41 (2026-05-11): show sidebar tooltips above
-                    (or below on collision) rather than to the right, which collides with
-                    the dialog body content. */}
-                <TooltipContent side="top">{tooltip}</TooltipContent>
-              </Tooltip>
-            ) : (
-              buttonElement
-            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* Wrapper span so the tooltip works on a disabled button too */}
+                <span>{buttonElement}</span>
+              </TooltipTrigger>
+              {/* Sebastian review item 41 (2026-05-11): show sidebar tooltips above
+                  (or below on collision) rather than to the right, which collides with
+                  the dialog body content. */}
+              <TooltipContent side="top">{tooltipText}</TooltipContent>
+            </Tooltip>
           </Fragment>
         );
       })}
