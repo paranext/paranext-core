@@ -306,9 +306,11 @@ function belongsToOpenTabsSection(row: ProjectRow): boolean {
 }
 
 function compareRows(a: ProjectRow, b: ProjectRow): number {
-  // Selected rows float to the top of their section.
-  if (a.isSelected !== b.isSelected) return a.isSelected ? -1 : 1;
-  // Then alphabetical by shortName.
+  // Sebastian review item #5 (2026-05-11): selected rows used to float to the top of
+  // their section, which was disorienting — users couldn't predict where their project
+  // would land after selecting it. Stable canonical order now: alphabetical by
+  // shortName, tie-broken by scrollGroupId. The component scrolls the selected row
+  // into view on open, replacing the float-to-top affordance.
   const nameCmp = a.shortName.localeCompare(b.shortName, undefined, { sensitivity: 'base' });
   if (nameCmp !== 0) return nameCmp;
   // Tie-break: scrollGroupId asc so the same project lists A before B before C.

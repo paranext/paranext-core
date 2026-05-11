@@ -7,11 +7,13 @@ import {
   Fragment,
   ReactNode,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type MouseEvent,
+  type RefObject,
 } from 'react';
 import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Filter } from 'lucide-react';
 import {
@@ -238,9 +240,14 @@ type RowRenderProps = {
   strings: Required<ProjectSelectorLocalizedStrings>;
   onClick: (row: ProjectRow) => void;
   onOpen: ((row: ProjectRow) => void) | undefined;
+  /**
+   * Sebastian #5 (2026-05-11): forwarded by the parent so it can scroll the selected row into view
+   * when the popover opens (replacing the prior float-to-top behavior).
+   */
+  selectedRowRef?: RefObject<HTMLDivElement>;
 };
 
-function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps) {
+function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }: RowRenderProps) {
   // Per-row hover state. We control Radix Tooltip's `open` prop manually because Radix's
   // built-in pointer/focus auto-detection does not fire on cmdk's `<CommandItem>` trigger
   // (data-state stays "closed" even after pointerenter / pointermove / focus). Tracking
@@ -324,6 +331,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
 
   const rowNode = (
     <CommandItem
+      ref={row.isSelected ? selectedRowRef : undefined}
       value={`${row.rowKey} ${row.shortName} ${row.fullName} ${row.language ?? ''} ${row.languageCode ?? ''}`}
       onSelect={() => {
         if (row.isDisabled) return;
@@ -338,11 +346,19 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen }: RowRenderProps)
       <span className="tw:flex tw:h-4 tw:w-4 tw:shrink-0 tw:items-center tw:justify-center">
         {leftCheck}
       </span>
-      {/* shortName • fullName as a single truncating line. The whole line truncates with ellipsis
-          when it overflows; the tooltip surfaces the fullName for clipped rows. */}
-      <span ref={labelRef} className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-start">
-        <span>{row.shortName}</span>
-        <span className="tw:text-muted-foreground"> • {row.fullName}</span>
+      {/* Sebastian #35 (2026-05-11): row label uses a 2-line layout — shortName on top,
+          fullName muted below. Each line truncates independently. Tooltip-on-clip still
+          works because the wrapping span is what scrollWidth/clientWidth is measured on
+          (truncation in EITHER child contributes to overflow). Reviewer confirmation
+          requested before this lands wide. */}
+      <span
+        ref={labelRef}
+        className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-items-start tw-overflow-hidden tw-text-start"
+      >
+        <span className="tw-w-full tw-truncate tw-font-medium">{row.shortName}</span>
+        <span className="tw-w-full tw-truncate tw-text-xs tw-text-muted-foreground">
+          {row.fullName}
+        </span>
       </span>
       {rightContent}
     </CommandItem>
@@ -485,6 +501,33 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const [query, setQuery] = useState('');
   const [groupByOpenTabs, setGroupByOpenTabs] = useState(props.defaultGroupByOpenTabs ?? true);
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+
+  // Sebastian #5 (2026-05-11): clear the search filter when the popover closes so the
+  // next open starts fresh. Previously the query persisted across open/close, which
+  // confused users who'd typed a filter and expected the list to reset.
+  //
+  // Scroll-to-selected: when the popover opens, scroll the selected row into view
+  // (replaces the float-to-top behavior removed in rows.ts). The ref is wired through
+  // ProjectRowView; in multi-select the last selected row in the alphabetical order
+  // wins (good-enough for the typical project-mode case where there's only one).
+  // null is the canonical initial value for React DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const selectedRowRef = useRef<HTMLDivElement>(null);
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) setQuery('');
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    // Defer to the next microtask so the popover content has rendered and the row
+    // refs are attached. requestAnimationFrame works the same; microtask is enough.
+    const id = window.requestAnimationFrame(() => {
+      const el = selectedRowRef.current;
+      if (!el) return;
+      el.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [open]);
 
   const strings = resolveStrings(props.localizedStrings);
 
@@ -720,7 +763,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
       : undefined;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant={props.buttonVariant ?? 'outline'}
@@ -793,6 +836,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                         strings={strings}
                         onClick={handleRowClick}
                         onOpen={openButtonHandler}
+                        selectedRowRef={selectedRowRef}
                       />
                     ))}
                   </CommandGroup>
