@@ -4,7 +4,7 @@
 **Appetite:** 6 dev-weeks | **Demo deadline:** June 19, 2026
 **Design spec:** [2026-05-07-10simple-workspace-design.md](./2026-05-07-10simple-workspace-design.md)
 
-Delivery order: T1 lands first and unblocks parallel work. T2 is independent and can be done any time. T3 must land before T5 and T6. T4 is independent of T3, T5, T6. T7 is independent of everything else.
+Delivery order: T1 lands first and unblocks parallel work. T2, T3, and T4 are parallel-safe. T3 must land before T6 and T7. T4 must land before T5, T6, and T7. T8 is independent of everything else.
 
 ---
 
@@ -18,7 +18,7 @@ The following requirements are drawn from the PRD. Each ticket below references 
 4. Column 3: A panel exists for resources and tools, with two tabs — "Bible texts" and "Commentaries".
 5. All content scrolls in sync with the BCV control in the main app toolbar.
 6. BCV controls are absent from all panels/columns; only the main app toolbar has one.
-7. Column 1 zero state: Donna sees a prompt to select a model text; Saroj can also do so. Donna's selection is written to the main project setting; Saroj's is written to `ParatextStudio/UserSettings-{userId}.xml`. Both are shown in Column 1.
+7. Column 1 zero state: Donna sees a prompt to select a model text; Saroj can also do so. Donna's selection is written to the main project setting; Saroj's is written to `Studio/UserSettings-{userId}.xml`. Both are shown in Column 1.
 8. Column 1 selection UI: preferentially shows resources already associated with the project; projects require an extra deliberate step to reveal; user only sees projects they are a named member of.
 9. Column 3 Bible texts zero state: Donna sees a prompt to select preferred Bible texts; Saroj can do the same. Donna's selections go to the main project setting; Saroj's go to her personal file. Both sets are shown in the tab.
 10. Column 3 Bible texts daily use: selector UI to choose which downloaded text to display; "Download resources" action available.
@@ -29,8 +29,8 @@ The following requirements are drawn from the PRD. Each ticket below references 
 
 **Nice-to-haves:**
 
-- Removing resources: both Donna and Saroj can remove items they added; Saroj cannot remove items Donna added (UI disabled with explanation). (T9)
-- Prevent columns from being moved or closed in the 10Simple layout. (T8)
+- Removing resources: both Donna and Saroj can remove items they added; Saroj cannot remove items Donna added (UI disabled with explanation). (T10)
+- Prevent columns from being moved or closed in the 10Simple layout. (T9)
 
 ---
 
@@ -83,7 +83,7 @@ Locate the BCV control rendered inside the scripture editor's panel toolbar and 
 
 ---
 
-## T3 — Route non-admin writes to `ParatextStudio/UserSettings-{userId}.xml`
+## T3 — Route non-admin writes to `Studio/UserSettings-{userId}.xml`
 
 **Addresses requirements:** (prerequisite data routing for all role-based UI behavior)
 
@@ -95,27 +95,66 @@ Locate the BCV control rendered inside the scripture editor's panel toolbar and 
 
 The project settings data provider must be updated to route writes and reads for `platformScripture.modelTexts` and `platformScripture.referencedProjectsAndResources` based on user role:
 
-- **Writes:** admin users write to the main project settings file as before. Non-admin users write to `ParatextStudio/UserSettings-{userId}.xml` in the project folder (created on first write if it doesn't exist).
+- **Writes:** admin users write to the main project settings file as before. Non-admin users write to `Studio/UserSettings-{userId}.xml` in the project folder (created on first write if it doesn't exist).
 - **Reads:** the data provider merges entries from both sources and returns a single list. Each entry in the merged list carries a runtime `source: 'admin' | 'user'` tag derived from which file it came from. This tag is not stored on disk — it is computed at read time.
 
-No changes to the `ResourceReferenceList` or `ResourceReference` types are required. The `ParatextStudio/UserSettings-{userId}.xml` file is local-only for now; S/R support will be a follow-on ticket.
+No changes to the `ResourceReferenceList` or `ResourceReference` types are required. The `Studio/UserSettings-{userId}.xml` file is local-only for now; S/R support will be a follow-on ticket.
 
 ### Implementation Ideas
 
-In the project settings data provider, intercept write calls for `modelTexts` and `referencedProjectsAndResources`. Check whether the current user is a project admin. If not, redirect the write to `ParatextStudio/UserSettings-{userId}.xml`. For reads, load both files, tag each entry with `source: 'admin'` or `source: 'user'` based on origin, and return the merged list to callers.
+In the project settings data provider, intercept write calls for `modelTexts` and `referencedProjectsAndResources`. Check whether the current user is a project admin. If not, redirect the write to `Studio/UserSettings-{userId}.xml`. For reads, load both files, tag each entry with `source: 'admin'` or `source: 'user'` based on origin, and return the merged list to callers.
 
 ### Definition of Done
 
-- Non-admin writes to `modelTexts` and `referencedProjectsAndResources` go to `ParatextStudio/UserSettings-{userId}.xml`.
+- Non-admin writes to `modelTexts` and `referencedProjectsAndResources` go to `Studio/UserSettings-{userId}.xml`.
 - Admin writes continue to go to the main project settings file.
 - Reads return a merged list where each entry has a `source: 'admin' | 'user'` tag.
-- `ParatextStudio/UserSettings-{userId}.xml` is created automatically on first non-admin write.
+- `Studio/UserSettings-{userId}.xml` is created automatically on first non-admin write.
 - No changes to `ResourceReferenceList` or `ResourceReference` types.
 - TypeScript compilation passes with no errors.
 
 ---
 
-## T4 — Model text panel (Column 1)
+## T4 — Shared `ResourcePickerDialog` component
+
+**Addresses requirements:**
+
+- #7: Column 1 zero state — resource selection UI (shared component)
+- #9: Column 3 Bible texts zero state — resource selection UI (shared component)
+- #12: Column 3 Commentaries zero state — resource selection UI (shared component)
+
+### Description
+
+A shared `ResourcePickerDialog` React component used by the Model Text Panel (T5), the Bible texts tab (T6), and the Commentaries tab (T7). It provides a consistent resource-selection UI across all three panels, modeled on the `platform-get-resources` visual design.
+
+The dialog shows only already-downloaded resources. It accepts a `resourceType` prop to pre-select and lock the type filter, and an `excludedResources` prop to hide resources already selected in the calling panel. When the user clicks "Use", the `onSelect` callback fires and the caller writes the selection via the data provider.
+
+### Implementation Ideas
+
+Build a modal dialog component with search, type filter (locked to the caller-provided `resourceType`), language filter, and a resource list. Base the visual design on `platform-get-resources`. Replace the Install/Installed button with a "Use" button. Filter out entries in `excludedResources` before rendering the list.
+
+```ts
+interface ResourcePickerDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  resourceType?: 'modelText' | 'bibleText' | 'commentary';
+  excludedResources?: ResourceReference[];
+  onSelect: (resource: ResourceReference) => void;
+}
+```
+
+### Definition of Done
+
+- `ResourcePickerDialog` renders a modal with search, type filter (locked to `resourceType` prop), language filter, and resource list.
+- Only already-downloaded resources are shown.
+- Resources in `excludedResources` are not shown in the list.
+- Each resource entry has a "Use" button; clicking it calls `onSelect` and closes the dialog.
+- The component is consumed by T5 (Model Text Panel), T6 (Bible texts tab), and T7 (Commentaries tab).
+- TypeScript compilation passes with no errors.
+
+---
+
+## T5 — Model text panel (Column 1)
 
 **Addresses requirements:**
 
@@ -126,7 +165,7 @@ In the project settings data provider, intercept write calls for `modelTexts` an
 
 ### Description
 
-Column 1 displays a model text (reference translation) in read-only mode, synchronized to the main app toolbar BCV. The panel reads `platformScripture.modelTexts` via the data provider, which returns a merged list of entries from the main project setting (admin) and the current user's personal `ParatextStudio/UserSettings-{userId}.xml`. Each entry carries a `source: 'admin' | 'user'` tag. The panel displays all entries in this merged list; entries from other users are never included.
+Column 1 displays a model text (reference translation) in read-only mode, synchronized to the main app toolbar BCV. The panel reads `platformScripture.modelTexts` via the data provider, which returns a merged list of entries from the main project setting (admin) and the current user's personal `Studio/UserSettings-{userId}.xml`. Each entry carries a `source: 'admin' | 'user'` tag. The panel displays all entries in this merged list; entries from other users are never included.
 
 ### Implementation Ideas
 
@@ -134,7 +173,7 @@ Reuse the existing scripture editor/reader component in read-only mode inside th
 
 - Displays all entries returned by the data provider's merged read (both `source === 'admin'` and `source === 'user'` entries).
 - Allows the user to switch between multiple available model texts.
-- Shows a zero-state prompt ("Select a model text") when the merged list is empty, which opens a resource picker following the project-open picker pattern (search, recently opened, full list; projects hidden behind an extra step).
+- Shows a zero-state prompt ("Select a model text") when the merged list is empty, which opens the shared `ResourcePickerDialog` (T4) with `resourceType='modelText'` and current selections as `excludedResources`.
 
 When a user makes a selection, write the entry to `modelTexts` — the data provider handles routing it to the correct file based on the user's role.
 
@@ -142,13 +181,13 @@ When a user makes a selection, write the entry to `modelTexts` — the data prov
 
 - Column 1 displays the selected model text in read-only mode, scrolling in sync with the main app toolbar BCV.
 - A selector shows all entries from the merged list (admin + current user).
-- Zero state shows a prompt that opens the resource picker.
+- Zero state shows a prompt that opens the `ResourcePickerDialog` (T4) with `resourceType='modelText'`.
 - Writing a selection routes correctly: admin writes go to the main setting, non-admin writes go to the personal file (verified via T3).
-- Projects are hidden in the picker by default and require an extra step to reveal.
+- Depends on T4 (ResourcePickerDialog).
 
 ---
 
-## T5 — Bible texts tab (Column 3)
+## T6 — Bible texts tab (Column 3)
 
 **Addresses requirements:**
 
@@ -160,7 +199,7 @@ When a user makes a selection, write the entry to `modelTexts` — the data prov
 
 ### Description
 
-The first tab in Column 3 ("Bible texts") lets Saroj select and read a downloaded Bible text resource alongside his project. The tab reads `platformScripture.referencedProjectsAndResources` via the data provider, which returns a merged list filtered to Bible text resources. Each entry has a `source: 'admin' | 'user'` tag. The tab displays all entries in the merged list; entries from other users are never included. Remove behavior is a nice-to-have handled in T9.
+The first tab in Column 3 ("Bible texts") lets Saroj select and read a downloaded Bible text resource alongside his project. The tab reads `platformScripture.referencedProjectsAndResources` via the data provider, which returns a merged list filtered to Bible text resources. Each entry has a `source: 'admin' | 'user'` tag. The tab displays all entries in the merged list; entries from other users are never included. Remove behavior is a nice-to-have handled in T10.
 
 ### Implementation Ideas
 
@@ -169,7 +208,7 @@ Add a "Bible texts" tab to the Column 3 panel using the existing docking tab sys
 - Display all entries from the data provider's merged read filtered to Bible text types (both `source === 'admin'` and `source === 'user'` entries).
 - Show the selected resource text content synchronized to the main app toolbar BCV, reusing the existing scripture reader.
 - Provide a selector to switch between available Bible texts.
-- Zero state: prompt to select a preferred Bible text, opening the same resource picker pattern as Column 1.
+- Zero state: prompt to select a preferred Bible text, opening the shared `ResourcePickerDialog` (T4) with `resourceType='bibleText'` and current selections as `excludedResources`.
 - "Download resources" button opens `platform-get-resources`.
 
 When a user adds a Bible text, write the entry to `referencedProjectsAndResources` — the data provider routes it to the correct file based on the user's role.
@@ -178,13 +217,14 @@ When a user adds a Bible text, write the entry to `referencedProjectsAndResource
 
 - "Bible texts" tab exists in Column 3 and displays the selected resource synchronized to the BCV.
 - Selector shows all entries from the merged list (admin + current user).
-- Zero state shows a prompt that opens the resource picker.
+- Zero state shows a prompt that opens the `ResourcePickerDialog` (T4) with `resourceType='bibleText'`.
 - "Download resources" opens `platform-get-resources`.
 - Writing a new selection routes correctly via the data provider (verified via T3).
+- Depends on T3 (data routing) and T4 (ResourcePickerDialog).
 
 ---
 
-## T6 — Commentaries tab (Column 3)
+## T7 — Commentaries tab (Column 3)
 
 **Addresses requirements:**
 
@@ -196,25 +236,26 @@ When a user adds a Bible text, write the entry to `referencedProjectsAndResource
 
 ### Description
 
-The second tab in Column 3 ("Commentaries") lets Saroj read a commentary alongside his project. It follows the same structure as the Bible texts tab but is filtered to commentary resources — the data provider returns the same merged list with `source` tags, just filtered to commentary types. Only specific commentaries are available for download: UBS Handbook and SIL TNN/TND in English. The "Download commentaries" action opens `platform-get-resources` filtered directly to the commentaries resource type. Remove behavior is a nice-to-have handled in T9.
+The second tab in Column 3 ("Commentaries") lets Saroj read a commentary alongside his project. It follows the same structure as the Bible texts tab but is filtered to commentary resources — the data provider returns the same merged list with `source` tags, just filtered to commentary types. Only specific commentaries are available for download: UBS Handbook and SIL TNN/TND in English. The "Download commentaries" action opens `platform-get-resources` filtered directly to the commentaries resource type. Remove behavior is a nice-to-have handled in T10.
 
 ### Implementation Ideas
 
-Add a "Commentaries" tab to the Column 3 panel alongside the Bible texts tab. The implementation mirrors T5 exactly, with two differences:
+Add a "Commentaries" tab to the Column 3 panel alongside the Bible texts tab. The implementation mirrors T6 exactly, with two differences:
 
 - Filter `referencedProjectsAndResources` to commentary resource types instead of Bible text types.
-- The "Download commentaries" button opens `platform-get-resources` passing a `resourceType=commentaries` filter parameter (implemented in T7) so the view opens directly on the commentaries list.
+- The "Download commentaries" button opens `platform-get-resources` passing a `resourceType=commentaries` filter parameter (implemented in T8) so the view opens directly on the commentaries list.
 
 ### Definition of Done
 
 - "Commentaries" tab exists in Column 3 and displays the selected commentary synchronized to the BCV.
-- Selector, zero state, remove button, and filtering behavior all match T5 (with commentary-type filtering).
+- Selector, zero state, and filtering behavior all match T6 (with commentary-type filtering); zero state opens the `ResourcePickerDialog` (T4) with `resourceType='commentary'`.
 - "Download commentaries" opens `platform-get-resources` landing directly on the commentaries view.
-- Admin-added entries are locked from removal with a tooltip.
+- Admin-added entries are locked from removal with a tooltip (nice-to-have, T10).
+- Depends on T3 (data routing) and T4 (ResourcePickerDialog).
 
 ---
 
-## T7 — Add commentaries resource type to `platform-get-resources`
+## T8 — Add commentaries resource type to `platform-get-resources`
 
 **Addresses requirements:**
 
@@ -242,11 +283,11 @@ The download flow itself reuses existing infrastructure — no new download mech
 - `platform-get-resources` shows a commentaries section listing UBS Handbook and SIL TNN/TND in English.
 - Commentaries can be downloaded through the existing download flow.
 - The extension accepts a `resourceType` filter parameter and opens directly on the specified type when provided.
-- Opening from the Commentaries tab in Column 3 (T6) lands directly on the commentaries view.
+- Opening from the Commentaries tab in Column 3 (T7) lands directly on the commentaries view.
 
 ---
 
-## T8 (Nice-to-have) — Prevent columns from being moved or closed
+## T9 (Nice-to-have) — Prevent columns from being moved or closed
 
 **Addresses requirements:** none — this is a nice-to-have, cut first if time is tight
 
@@ -266,19 +307,19 @@ When `platform.interfaceMode` is `'simple'`, disable the drag handles and close 
 
 ---
 
-## T9 (Nice-to-have) — Resource removal with admin-lock enforcement
+## T10 (Nice-to-have) — Resource removal with admin-lock enforcement
 
 **Addresses requirements:** nice-to-have — resource removal UI for Bible texts and Commentaries tabs
 
 ### Description
 
-Both Donna and Saroj should be able to remove resources they have added from the Bible texts and Commentaries tabs in Column 3. However, Saroj cannot remove resources that Donna (the project admin) added — the remove button for those entries is disabled and displays an explanation tooltip. This ticket depends on T3 (data provider routing and `source` tag) being complete.
+Both Donna and Saroj should be able to remove resources they have added from the Bible texts and Commentaries tabs in Column 3. However, Saroj cannot remove resources that Donna (the project admin) added — the remove button for those entries is disabled and displays an explanation tooltip. This ticket depends on T3 (data provider routing and `source` tag), T6 (Bible texts tab), and T7 (Commentaries tab) being complete.
 
 ### Implementation Ideas
 
-In the Bible texts and Commentaries tab UIs (T5 and T6), add a remove button alongside each resource entry. Use the `source` tag on each entry (provided by the data provider's merged read) to determine behavior:
+In the Bible texts and Commentaries tab UIs (T6 and T7), add a remove button alongside each resource entry. Use the `source` tag on each entry (provided by the data provider's merged read) to determine behavior:
 
-- `source === 'user'`: remove button is enabled; clicking removes the entry from the user's personal `ParatextStudio/UserSettings-{userId}.xml`.
+- `source === 'user'`: remove button is enabled; clicking removes the entry from the user's personal `Studio/UserSettings-{userId}.xml`.
 - `source === 'admin'`: remove button is disabled with a tooltip such as "This resource was added by your project admin and cannot be removed."
 
 Removing an entry writes the updated list back via the data provider, which routes the write to the appropriate file.
@@ -289,4 +330,4 @@ Removing an entry writes the updated list back via the data provider, which rout
 - Entries with `source === 'user'` have an enabled remove button; clicking removes the entry from the user's personal file.
 - Entries with `source === 'admin'` have a disabled remove button with an explanatory tooltip.
 - Removing an entry correctly updates the personal settings file via the data provider.
-- Depends on T3 (data routing), T5 (Bible texts tab), and T6 (Commentaries tab).
+- Depends on T3 (data routing), T6 (Bible texts tab), and T7 (Commentaries tab).

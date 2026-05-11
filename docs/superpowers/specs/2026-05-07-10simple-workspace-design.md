@@ -34,21 +34,49 @@ BCV sync across all panels already works via the main app toolbar — no new wor
 
 ---
 
-## Section 2 — Column 1: Model Text Panel
+## Section 2 — Shared Resource Picker Dialog
+
+A `ResourcePickerDialog` React component shared by the Model Text Panel (Section 3), the Bible texts tab (Section 5), and the Commentaries tab (Section 5). It replaces per-panel picker implementations with a single consistent component.
+
+**UI:** Modeled on the `platform-get-resources` visual design:
+
+- Search bar
+- Type filter — pre-selected by the caller (e.g. the Commentaries tab passes `'commentary'`); locked so the user cannot change it
+- Language filter
+- Resource list showing only already-downloaded resources; each entry has a **"Use"** button instead of Install/Installed
+- Resources already selected in the calling panel are excluded from the list
+
+**Props:**
+
+```ts
+interface ResourcePickerDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  resourceType?: 'modelText' | 'bibleText' | 'commentary';
+  excludedResources?: ResourceReference[];
+  onSelect: (resource: ResourceReference) => void;
+}
+```
+
+The caller passes its current selections as `excludedResources`. When the user clicks "Use", `onSelect` fires and the caller writes the entry via the data provider (which handles routing per T3).
+
+**Nice-to-have:** Ability to reveal projects (hidden by default).
+
+---
+
+## Section 3 — Column 1: Model Text Panel
 
 Reuses the existing scripture editor/reader component in read-only mode.
 
 **Data:** The panel merges entries from two sources:
 
 - **Admin entries:** read from the project's main `ModelTexts` project setting. Only admins (Donna) write to this setting.
-- **User entries:** read from `ParatextStudio/UserSettings-{userId}.xml` in the project folder. Regular users (Saroj) write their selections here instead of the main setting. This file is local-only for now; future work will S/R it to the registry so selections follow the user across machines.
+- **User entries:** read from `Studio/UserSettings-{userId}.xml` in the project folder. Regular users (Saroj) write their selections here instead of the main setting. This file is local-only for now; future work will S/R it to the registry so selections follow the user across machines.
 
 **Zero state:**
 
 - Both admin and user see a prompt with a "Select model text" action.
-- Selection UI follows the same pattern as the project-open picker: search, recently opened items, full list.
-- Resources already associated with the project are shown first.
-- Projects are hidden by default; an extra deliberate step reveals them (only projects where the user is a named team member are shown).
+- Clicking the prompt opens the shared `ResourcePickerDialog` (Section 2) with `resourceType='modelText'` and current selections passed as `excludedResources`.
 - When an admin selects, the entry is written to the main `ModelTexts` setting. When a regular user selects, the entry is written to their personal `UserSettings-{userId}.xml`.
 
 **Display:** The data provider returns a merged list where each entry has a `source: 'admin' | 'user'` tag. The panel shows all entries (`source === 'admin'` entries come from Donna's selection; `source === 'user'` entries come from the current user's personal file). Entries from other users' personal files are never included in the merged list.
@@ -59,13 +87,13 @@ Reuses the existing scripture editor/reader component in read-only mode.
 
 ---
 
-## Section 3 — Column 2: Scripture Editor
+## Section 4 — Column 2: Scripture Editor
 
 The existing scripture editor is used as-is. The only change is removing the per-panel BCV control from its toolbar (see Section 1).
 
 ---
 
-## Section 4 — Column 3: Resources & Tools Panel
+## Section 5 — Column 3: Resources & Tools Panel
 
 Two tabs using the existing docking tab system: **Bible texts** and **Commentaries**.
 
@@ -73,7 +101,7 @@ Two tabs using the existing docking tab system: **Bible texts** and **Commentari
 
 The project settings data provider must be updated before either tab's UI is built. The new behavior:
 
-- **Writes:** when a non-admin user writes to `ModelTexts` or `ReferencedProjectsAndResources`, the data provider routes the write to `ParatextStudio/UserSettings-{userId}.xml` in the project folder. Admin writes continue to go to the main project settings file.
+- **Writes:** when a non-admin user writes to `ModelTexts` or `ReferencedProjectsAndResources`, the data provider routes the write to `Studio/UserSettings-{userId}.xml` in the project folder. Admin writes continue to go to the main project settings file.
 - **Reads:** the data provider merges entries from both sources and returns a single list. Each entry in the merged list carries a runtime `source: 'admin' | 'user'` tag computed from which file the entry came from. This tag is not stored on disk — it is derived at read time from file provenance.
 
 No changes to the `ResourceReferenceList` or `ResourceReference` types are required. The UI uses the `source` tag for display filtering and remove-button behavior (T9).
@@ -82,21 +110,21 @@ No changes to the `ResourceReferenceList` or `ResourceReference` types are requi
 
 - Reads `ReferencedProjectsAndResources` filtered to Bible text resources, merging entries from the main project setting (admin) and the current user's personal `UserSettings-{userId}.xml`.
 - Admin writes go to the main project setting; regular user writes go to their personal file. The display shows all admin entries plus the current user's own entries — no entries from other users are shown.
-- **Zero state:** prompt to select preferred Bible texts, opens the same resource picker pattern.
+- **Zero state:** prompt to select preferred Bible texts; clicking it opens the shared `ResourcePickerDialog` (Section 2) with `resourceType='bibleText'` and current selections as `excludedResources`.
 - **Daily use:** selector UI to choose which downloaded text to display; "Download resources" action opens `platform-get-resources`.
 - **DBL licensing:** downloadable Bible texts from DBL are filtered by the user's DBL licensing permissions.
-- **Remove behavior (nice-to-have, see T9):** entries with `source === 'admin'` show a disabled remove button with a tooltip; entries with `source === 'user'` can be removed by the user.
+- **Remove behavior (nice-to-have, see T10):** entries with `source === 'admin'` show a disabled remove button with a tooltip; entries with `source === 'user'` can be removed by the user.
 
 ### Commentaries tab
 
-- Same structure as Bible texts tab, filtered to commentaries. The data provider returns the same merged list with `source` tags; entries from other users are never included. Remove behavior is a nice-to-have (see T9).
+- Same structure as Bible texts tab, filtered to commentaries; zero state opens the shared `ResourcePickerDialog` with `resourceType='commentary'`. The data provider returns the same merged list with `source` tags; entries from other users are never included. Remove behavior is a nice-to-have (see T10).
 - Only specific titles are downloadable: UBS Handbook and SIL TNN/TND in English.
 - "Download commentaries" opens `platform-get-resources` with a commentaries-type filter so it lands directly on that resource type.
 - Language variants of UBS Handbook and SIL TNN/TND are a **nice-to-have**.
 
 ---
 
-## Section 5 — `platform-get-resources` Extension Changes
+## Section 6 — `platform-get-resources` Extension Changes
 
 **New commentaries resource type:** A curated commentaries type is added to the `platform-get-resources` UI. The available list is limited: UBS Handbook and SIL TNN/TND in English initially. The download flow reuses existing infrastructure; only the resource type definition and its filtered list view are new.
 
@@ -114,7 +142,7 @@ No changes to the `ResourceReferenceList` or `ResourceReference` types are requi
 
 **2. S/R for personal settings file** _(impacts future cross-machine sync)_
 
-When will `ParatextStudio/UserSettings-{userId}.xml` be added to S/R? Needs a follow-on ticket outside this appetite.
+When will `Studio/UserSettings-{userId}.xml` be added to S/R? Needs a follow-on ticket outside this appetite.
 
 ---
 
@@ -125,26 +153,27 @@ Work is organized as a **foundation-first, then parallel** delivery:
 ```
 [T1: Configure platform-dock-layout with 3-column layout driven by platform.interfaceMode]  ← lands first, unblocks parallel work
 [T2: Remove BCV from editor toolbar]  ← parallel-safe, small
-         │
-    ┌────┴─────────────────────────────────┐
-    ▼                                      ▼
-[T3: Route non-admin writes to ParatextStudio/UserSettings-{userId}.xml]   [T4: Model text panel]
-         │
-    ┌────┴───────────────────────┐
-    ▼                            ▼
-[T5: Bible texts tab]     [T6: Commentaries tab]
-                          [T7: Commentaries type in platform-get-resources]
+[T3: Route non-admin writes to Studio/UserSettings-{userId}.xml]  ← parallel-safe
+[T4: ResourcePickerDialog shared component]  ← parallel-safe
+    │
+    ├──────────────────────────────────────────────┐
+    ▼                                              ▼
+[T5: Model text panel]                 ┌───────────┴────────────┐
+(depends on T4)                        ▼                        ▼
+                              [T6: Bible texts tab]  [T7: Commentaries tab]
+                              (depends on T3, T4)    (depends on T3, T4)
+[T8: Commentaries type in platform-get-resources]  ← independent
 
-[T8: Nice-to-have — prevent column move/close]
-[T9: Nice-to-have — resource removal with admin-lock enforcement (depends on T3, T5, T6)]
+[T9: Nice-to-have — prevent column move/close]
+[T10: Nice-to-have — resource removal with admin-lock enforcement (depends on T3, T6, T7)]
 ```
 
 ---
 
 ## Nice-to-haves (cut list, in priority order)
 
-1. Prevent columns from being moved or closed (T8)
-2. Resource removal with admin-lock enforcement — Bible texts and Commentaries tabs (T9)
+1. Prevent columns from being moved or closed (T9)
+2. Resource removal with admin-lock enforcement — Bible texts and Commentaries tabs (T10)
 3. Language variants of UBS Handbook and SIL TNN/TND in Commentaries
 4. Tab headers use icons instead of text in Column 3
 5. Tab headers styled so they don't look like draggable 10Power tabs
