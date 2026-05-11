@@ -1130,6 +1130,155 @@ namespace TestParanextDataProvider.ManageBooks
             );
         }
 
+        // =====================================================================
+        // ImportBooks — replaceEntireBook=false chapter-merge branch
+        // (Stage 7 / Sebastian #15 — port of PT9 ImportSfmText.WriteChaptersToBook)
+        // =====================================================================
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode: when dest book doesn't exist, the orchestrator takes the "
+                + "whole-book PutText fast path (mirrors PT9 ImportSfmText.cs:261-269)."
+        )]
+        public void ImportBooks_MergeMode_DestBookMissing_WritesWholeFile()
+        {
+            const string content = "\\id GEN\n\\c 1\n\\v 1 First.";
+            ImportFileEntry[] files = new[]
+            {
+                new ImportFileEntry(FileName: "gen.sfm", Content: content, Included: true),
+            };
+
+            ImportBooksResult result = ImportBooksOrchestrator.ImportBooks(
+                _scrText,
+                files,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(
+                _scrText.BooksPresentSet.IsSelected(1),
+                Is.True,
+                "GEN must be created via the dest-missing fast path"
+            );
+            VerifyUsfmSame(content, _scrText.GetText(1), _scrText, bookNum: 1);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode: source chapters overwrite their dest counterparts; dest "
+                + "chapters NOT present in source survive (port of PT9 "
+                + "WriteChaptersToBook semantic, ImportSfmText.cs:270-285)."
+        )]
+        public void ImportBooks_MergeMode_OverwritesOverlapping_PreservesNonOverlap()
+        {
+            // Arrange: dest has GEN with chapters 1-3
+            _scrText.PutText(
+                1,
+                0,
+                false,
+                "\\id GEN\n\\c 1\n\\v 1 dest-ch1\n\\c 2\n\\v 1 dest-ch2\n\\c 3\n\\v 1 dest-ch3",
+                null
+            );
+            Assert.That(
+                _scrText.BooksPresentSet.IsSelected(1),
+                Is.True,
+                "precondition: GEN present in dest with chapters 1-3"
+            );
+
+            // Source has only chapters 1-2 with new content
+            ImportFileEntry[] files = new[]
+            {
+                new ImportFileEntry(
+                    FileName: "gen.sfm",
+                    Content: "\\id GEN\n\\c 1\n\\v 1 source-ch1\n\\c 2\n\\v 1 source-ch2",
+                    Included: true
+                ),
+            };
+
+            ImportBooksResult result = ImportBooksOrchestrator.ImportBooks(
+                _scrText,
+                files,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.ImportedCount, Is.EqualTo(1));
+
+            string finalText = _scrText.GetText(1);
+            // Source chapters overwrite dest counterparts (collision behavior)
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch1"),
+                "Chapter 1 should reflect source content after merge"
+            );
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch2"),
+                "Chapter 2 should reflect source content after merge"
+            );
+            // Dest chapter 3 was not in source → must survive (the key merge property)
+            Assert.That(
+                finalText,
+                Does.Contain("dest-ch3"),
+                "Chapter 3 was not in source and must survive the merge"
+            );
+            // Dest chapter 1/2 content should NOT survive (overwritten by source)
+            Assert.That(
+                finalText,
+                Does.Not.Contain("dest-ch1"),
+                "Chapter 1 source content must replace dest content"
+            );
+            Assert.That(
+                finalText,
+                Does.Not.Contain("dest-ch2"),
+                "Chapter 2 source content must replace dest content"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-010")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode wrapper: BooksPresentSet remains stable for an existing "
+                + "book that's being merged into — no spurious add/remove churn."
+        )]
+        public void ImportBooks_MergeMode_ExistingBook_BooksPresentSetStable()
+        {
+            // Arrange: dest already has GEN
+            _scrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 existing", null);
+            int booksBefore = _scrText.BooksPresentSet.Count;
+
+            ImportFileEntry[] files = new[]
+            {
+                new ImportFileEntry(
+                    FileName: "gen.sfm",
+                    Content: "\\id GEN\n\\c 1\n\\v 1 updated",
+                    Included: true
+                ),
+            };
+
+            ImportBooksResult result = ImportBooksOrchestrator.ImportBooks(
+                _scrText,
+                files,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(
+                _scrText.BooksPresentSet.Count,
+                Is.EqualTo(booksBefore),
+                "Merge into existing book must not add/remove anything from BooksPresentSet"
+            );
+            Assert.That(_scrText.BooksPresentSet.IsSelected(1), Is.True);
+        }
+
         // -------------------------------------------------------------------
         // LockNotObtainedScrText marker — same seam as CopyBooksOrchestrator /
         // DeleteBooksOrchestrator. The orchestrator recognises the type name

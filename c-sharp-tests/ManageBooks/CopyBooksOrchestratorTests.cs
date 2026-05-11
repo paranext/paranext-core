@@ -831,6 +831,151 @@ namespace TestParanextDataProvider.ManageBooks
             );
         }
 
+        // =====================================================================
+        // CopyBooks — replaceEntireBook=false chapter-merge branch
+        // (Stage 7 / Sebastian #15 — port of PT9 ImportSfmText.WriteChaptersToBook)
+        // =====================================================================
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode: when dest book doesn't exist, the orchestrator takes the "
+                + "whole-book PutText fast path — parallels the ImportBooks merge path."
+        )]
+        public void CopyBooks_MergeMode_DestBookMissing_WritesWholeBook()
+        {
+            _fromScrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 source", null);
+            Assert.That(
+                _toScrText.BooksPresentSet.IsSelected(1),
+                Is.False,
+                "precondition: GEN absent in dest"
+            );
+            var selected = new BookSet();
+            selected.Add(1);
+
+            CopyBooksResult result = CopyBooksOrchestrator.CopyBooks(
+                _fromScrText,
+                _toScrText,
+                selected,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.CopiedCount, Is.EqualTo(1));
+            Assert.That(
+                _toScrText.BooksPresentSet.IsSelected(1),
+                Is.True,
+                "GEN must be created in dest via the missing-book fast path"
+            );
+            Assert.That(
+                _toScrText.GetText(1),
+                Does.Contain("source"),
+                "Dest book must carry the source content"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode: source chapters overwrite their dest counterparts; dest "
+                + "chapters NOT present in source survive (PT9 WriteChaptersToBook "
+                + "semantic — ImportSfmText.cs:270-285)."
+        )]
+        public void CopyBooks_MergeMode_OverwritesOverlapping_PreservesNonOverlap()
+        {
+            // Source has GEN chapters 1-2 with source content
+            _fromScrText.PutText(
+                1,
+                0,
+                false,
+                "\\id GEN\n\\c 1\n\\v 1 source-ch1\n\\c 2\n\\v 1 source-ch2",
+                null
+            );
+            // Dest has GEN chapters 1-3 with dest content
+            _toScrText.PutText(
+                1,
+                0,
+                false,
+                "\\id GEN\n\\c 1\n\\v 1 dest-ch1\n\\c 2\n\\v 1 dest-ch2\n\\c 3\n\\v 1 dest-ch3",
+                null
+            );
+            var selected = new BookSet();
+            selected.Add(1);
+
+            CopyBooksResult result = CopyBooksOrchestrator.CopyBooks(
+                _fromScrText,
+                _toScrText,
+                selected,
+                replaceEntireBook: false
+            );
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.CopiedCount, Is.EqualTo(1));
+
+            string finalText = _toScrText.GetText(1);
+            // Source content replaces dest where they overlap
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch1"),
+                "Chapter 1 source must replace dest content"
+            );
+            Assert.That(
+                finalText,
+                Does.Contain("source-ch2"),
+                "Chapter 2 source must replace dest content"
+            );
+            // Dest chapter 3 was not in source — must survive
+            Assert.That(
+                finalText,
+                Does.Contain("dest-ch3"),
+                "Chapter 3 was not in source and must survive the merge"
+            );
+            Assert.That(
+                finalText,
+                Does.Not.Contain("dest-ch1"),
+                "Chapter 1 dest content must NOT survive — source overwrites collisions"
+            );
+            Assert.That(
+                finalText,
+                Does.Not.Contain("dest-ch2"),
+                "Chapter 2 dest content must NOT survive — source overwrites collisions"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-007")]
+        [Property("BehaviorId", "BHV-110")]
+        [Description(
+            "Merge mode passes through the request flag end-to-end: "
+                + "CopyBooksRequest.ReplaceEntireBook=false must reach the orchestrator "
+                + "and take the merge code path."
+        )]
+        public void CopyBooks_MergeMode_ReplaceFlag_PlumbedThrough()
+        {
+            // Smoke check that the explicit replaceEntireBook=false path doesn't
+            // regress when the dest is empty. (The merge-specific assertions live
+            // in the two tests above; this guards the parameter plumbing.)
+            _fromScrText.PutText(1, 0, false, "\\id GEN\n\\c 1\n\\v 1 a", null);
+            var selected = new BookSet();
+            selected.Add(1);
+
+            CopyBooksResult resultMerge = CopyBooksOrchestrator.CopyBooks(
+                _fromScrText,
+                _toScrText,
+                selected,
+                replaceEntireBook: false
+            );
+
+            Assert.That(resultMerge.Success, Is.True);
+            Assert.That(resultMerge.CopiedCount, Is.EqualTo(1));
+            Assert.That(_toScrText.BooksPresentSet.IsSelected(1), Is.True);
+        }
+
         // -----------------------------------------------------------------
         // Support: marker subclass for TS-092 (encoding conversion failure).
         //

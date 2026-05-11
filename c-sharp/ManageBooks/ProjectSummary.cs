@@ -26,5 +26,5 @@ public record ProjectSummary(
     string Name,
     string ProjectType,
     bool IsEditable,
-    bool IsResource
+    bool IsResource = false
 );
