@@ -1831,21 +1831,13 @@ declare module 'platform-scripture' {
     markerFilter: string;
   };
 
-  /** Identifies a comparative text (a second project) to include alongside the main project. */
+  /**
+   * Identifies a comparative text (a second project) to include alongside the main project.
+   * Resolution is GUID-only — projects are always identified by their canonical GUID.
+   */
   export type ChecklistComparativeTextRef = {
-    /**
-     * GUID of the comparative text (preferred resolution method). When this GUID identifies a
-     * registered project, the `name` field is ignored.
-     */
+    /** GUID of the comparative text. */
     id: string;
-    /**
-     * Short project name, used as a fallback when the GUID does not resolve. This fallback covers
-     * three real cases: (a) legacy PT9 mementos that pre-date GUID assignment and only stored
-     * names; (b) malformed/empty GUID strings on a request; (c) disambiguating multiple projects
-     * with identical short names (PTX-23529) — the GUID breaks the tie when both fields are
-     * supplied. Pass the empty string if no name is available.
-     */
-    name: string;
   };
 
   /** Primary input for {@link IChecklistService.buildChecklistData}. */
@@ -1963,9 +1955,10 @@ declare module 'platform-scripture' {
      */
     validateMarkerSettings(equivalentMarkers: string): Promise<MarkerSettingsValidationResult>;
     /**
-     * Resolve comparative-text references for a given active project. Each reference is resolved
-     * GUID-first with a name fallback (see {@link ChecklistComparativeTextRef}). Returns one entry
-     * per requested reference, in the same order.
+     * Resolve comparative-text references for a given active project. Each reference is resolved by
+     * GUID against the registered project collection (see {@link ChecklistComparativeTextRef}).
+     * Returns one entry per requested reference, in the same order; the active project is excluded;
+     * entries whose GUID does not resolve are returned with `available: false`.
      */
     resolveComparativeTexts(
       activeProjectId: string,
