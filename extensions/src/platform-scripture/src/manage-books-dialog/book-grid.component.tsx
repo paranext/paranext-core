@@ -46,6 +46,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { getSectionForBook, Section } from 'platform-bible-utils';
+import { fmtTemplate } from './manage-books-dialog.utils';
 
 /* ------------------------------------------------------------------ */
 /* Public types                                                       */
@@ -60,6 +61,14 @@ export type BookGridTone = 'neutral' | 'older' | 'newer' | 'new' | 'same';
 /** Grouping mode for the pill grid. */
 export type BookGridGroupBy = 'canon' | 'status' | 'none';
 
+/**
+ * Locale-stable identifier for a Status-grouping bucket. Drives both group ordering (via
+ * `STATUS_GROUP_PRIORITY`) and group collapse-state in a way that does NOT depend on the
+ * (localized) display label. Producers MUST set this in lock-step with `statusLabel`; the grid
+ * groups by key and renders the label.
+ */
+export type BookGridStatusGroup = 'inProject' | 'notInProject' | 'newer' | 'older' | 'new' | 'same';
+
 /** A single book entry rendered as a pill in the grid. */
 export type BookGridItem = {
   /** USFM 3-letter book id (`'GEN'`, `'EXO'`, …). */
@@ -72,8 +81,14 @@ export type BookGridItem = {
   /** Drives the comparison-badge variant (none if `'neutral'`). */
   tone: Exclude<BookGridTone, 'hidden'>;
   /**
-   * Used as the section header when grouping by Status, AND as the badge text (or part of it).
-   * Pre-localized by the caller.
+   * Locale-stable group identifier. Used for grouping books and ordering groups when grouping by
+   * Status. Pair this with a `statusLabel` for display.
+   */
+  statusGroupKey: BookGridStatusGroup;
+  /**
+   * Display text for the status badge AND the group header when grouping by Status. Pre-localized
+   * by the caller. Grouping itself uses `statusGroupKey` (locale-stable) so this label may vary
+   * across locales without affecting group ordering.
    */
   statusLabel: string;
   /**
@@ -153,35 +168,24 @@ const STATUS_BADGE_VARIANT: Record<
 };
 
 /**
- * Group-priority table mirroring the source story's `STATUS_GROUP_PRIORITY`. Lower numbers appear
- * first when grouping by status. Labels not present here default to 50 and keep first-encountered
- * order. The keys match the orchestrator's pre-localized `statusLabel` values.
+ * Group-priority table keyed by the locale-stable `BookGridStatusGroup` identifier. Lower numbers
+ * appear first when grouping by status. Keys not present here default to 50 and keep
+ * first-encountered order.
+ *
+ * Sebastian/Vladimir Minor (2026-05-11): previously keyed on English `statusLabel` values, which
+ * silently broke section ordering under any non-English locale because the lookup would always miss
+ * and every group would tie at 50.
  */
-const STATUS_GROUP_PRIORITY: Record<string, number> = {
-  // English
-  'In project, tracked': 0,
-  'In project, untracked': 1,
-  'In project': 2,
-  Tracked: 3,
-  Untracked: 4,
-  'In scope': 5,
-  'New - in scope': 10,
-  'New - out of scope': 11,
-  New: 12,
-  Newer: 20,
-  Same: 21,
-  Older: 22,
-  'Out of scope': 80,
-  'Not in project': 100,
+const STATUS_GROUP_PRIORITY: Record<BookGridStatusGroup, number> = {
+  inProject: 2,
+  new: 12,
+  newer: 20,
+  same: 21,
+  older: 22,
+  notInProject: 100,
 };
 
-/**
- * Status group labels that should default to collapsed. Mirrors the source story so destructive /
- * risky groups stay tucked away until the user opens them.
- */
-const DEFAULT_COLLAPSED_STATUS_GROUPS: ReadonlySet<string> = new Set(['New - out of scope']);
-
-const statusGroupPriority = (label: string): number => STATUS_GROUP_PRIORITY[label] ?? 50;
+const statusGroupPriority = (key: BookGridStatusGroup): number => STATUS_GROUP_PRIORITY[key] ?? 50;
 
 /**
  * Helper for callers that want to convert a comparison state into a pill tone directly. Mirrors the
@@ -247,12 +251,6 @@ export type BookGridLocalizedStrings = {
   /** Filter-input placeholder. */
   filterPlaceholder?: string;
 };
-
-const fmt = (template: string, ...values: ReadonlyArray<string | number>): string =>
-  template.replace(/\{(\d+)\}/g, (_, idx) => {
-    const v = values[Number(idx)];
-    return v === undefined ? '' : String(v);
-  });
 
 /* ------------------------------------------------------------------ */
 /* Group-by toggle (radio)                                            */
@@ -398,45 +396,45 @@ export function BookGridSelector({
         { label: localizedStrings?.canonGroupExtra ?? 'Extra', items: extra },
       ].filter((g) => g.items.length > 0);
     }
-    // status grouping
-    const order: string[] = [];
-    const byLabel = new Map<string, BookGridItem[]>();
+    // status grouping — bucket by locale-stable `statusGroupKey` and use the
+    // first item's (localized) `statusLabel` as the display label.
+    const order: BookGridStatusGroup[] = [];
+    const byKey = new Map<BookGridStatusGroup, BookGridItem[]>();
+    const labelByKey = new Map<BookGridStatusGroup, string>();
     items.forEach((it) => {
-      const bucket = byLabel.get(it.statusLabel);
+      const bucket = byKey.get(it.statusGroupKey);
       if (bucket) {
         bucket.push(it);
       } else {
-        byLabel.set(it.statusLabel, [it]);
-        order.push(it.statusLabel);
+        byKey.set(it.statusGroupKey, [it]);
+        labelByKey.set(it.statusGroupKey, it.statusLabel);
+        order.push(it.statusGroupKey);
       }
     });
     const sortedOrder = order
-      .map((label, idx) => ({ label, idx }))
+      .map((key, idx) => ({ key, idx }))
       .sort((a, b) => {
-        const pa = statusGroupPriority(a.label);
-        const pb = statusGroupPriority(b.label);
+        const pa = statusGroupPriority(a.key);
+        const pb = statusGroupPriority(b.key);
         return pa === pb ? a.idx - b.idx : pa - pb;
       })
-      .map((entry) => entry.label);
-    return sortedOrder.map((label) => ({ label, items: byLabel.get(label) ?? [] }));
+      .map((entry) => entry.key);
+    return sortedOrder.map((key) => ({
+      label: labelByKey.get(key),
+      items: byKey.get(key) ?? [],
+    }));
   }, [items, groupBy, localizedStrings]);
 
   // -- collapse state -----------------------------------------------------
+  //
+  // No groups default-collapse today. The historical `DEFAULT_COLLAPSED_STATUS_GROUPS`
+  // (with a single entry 'New - out of scope') is dead code — no current producer
+  // emits that status — and was flagged by the Sebastian/Vladimir 2026-05-11
+  // follow-up because it was keyed by English label and would silently break under
+  // any non-English locale. Removed entirely. If a future producer needs a
+  // default-collapsed group, reintroduce as `ReadonlySet<BookGridStatusGroup>`
+  // keyed by the locale-stable group key and check it in `isCollapsed` below.
   const [userCollapsedGroups, setUserCollapsedGroups] = useState<Set<string>>(() => new Set());
-  const [seenGroups, setSeenGroups] = useState<Set<string>>(() => new Set());
-  useEffect(() => {
-    setSeenGroups((prev) => {
-      const next = new Set(prev);
-      let changed = false;
-      groups.forEach((g) => {
-        if (g.label && !next.has(g.label)) {
-          next.add(g.label);
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
-  }, [groups]);
   const toggleCollapsed = (label: string) =>
     setUserCollapsedGroups((prev) => {
       const next = new Set(prev);
@@ -446,21 +444,16 @@ export function BookGridSelector({
     });
   const isCollapsed = (label?: string) => {
     if (!label) return false;
-    if (seenGroups.has(label)) {
-      const defaultCollapsed = DEFAULT_COLLAPSED_STATUS_GROUPS.has(label);
-      const userToggled = userCollapsedGroups.has(label);
-      return defaultCollapsed !== userToggled;
-    }
-    return DEFAULT_COLLAPSED_STATUS_GROUPS.has(label);
+    return userCollapsedGroups.has(label);
   };
 
   // Books participating in keyboard navigation = expanded groups only.
   const flatBooks = useMemo(
     () => groups.flatMap((g) => (isCollapsed(g.label) ? [] : g.items)),
-    // `isCollapsed` is a closure over userCollapsedGroups + seenGroups; the
-    // hooks-deps rule cannot follow it, so we list those deps explicitly.
+    // `isCollapsed` is a closure over userCollapsedGroups; the hooks-deps rule
+    // cannot follow it, so we list that dep explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [groups, userCollapsedGroups, seenGroups],
+    [groups, userCollapsedGroups],
   );
   const groupStarts = useMemo(() => {
     const starts: number[] = [];
@@ -470,10 +463,10 @@ export function BookGridSelector({
       if (!isCollapsed(g.label)) sum += g.items.length;
     });
     return starts;
-    // `isCollapsed` is closed over groups + userCollapsedGroups + seenGroups; the
-    // hooks rule cannot resolve that, so we list those deps manually here.
+    // `isCollapsed` is closed over groups + userCollapsedGroups; the hooks
+    // rule cannot resolve that, so we list those deps manually here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, userCollapsedGroups, seenGroups]);
+  }, [groups, userCollapsedGroups]);
 
   // Using null for React ref compatibility
   // eslint-disable-next-line no-null/no-null
@@ -805,7 +798,7 @@ export function BookGridSelector({
         // measurement / nav code has something to point at, but the header is
         // skipped entirely when grouping is `'none'`.
         const showHeader = !!group.label;
-        const selectAllAria = group.label ? fmt(selectAllTemplate, group.label) : '';
+        const selectAllAria = group.label ? fmtTemplate(selectAllTemplate, group.label) : '';
         return (
           <section
             key={group.label ?? 'all'}

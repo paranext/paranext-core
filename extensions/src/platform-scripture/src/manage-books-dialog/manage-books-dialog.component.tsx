@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { type ReactElement, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   BookPlus,
   Copy,
@@ -47,6 +47,7 @@ import {
   BookGridItem,
   BookGridLocalizedStrings,
   BookGridSelector,
+  type BookGridStatusGroup,
   toneForComparisonState,
 } from './book-grid.component';
 import {
@@ -307,6 +308,53 @@ const isCreateMethod = (v: string): v is ManageBooksCreateMethod =>
 
 type ViewPresenceFilter = 'all' | 'new' | 'existing';
 
+/**
+ * A3: minimum on-screen lifetime of the spinner / disabled-buttons state, in milliseconds. PAPI
+ * mutations frequently complete in well under 100 ms when called against a local data provider;
+ * without a floor, the spinner and mid-mutation button-disabled affordances would flicker for a
+ * single render frame and never be perceptible to either users (UX problem) or assistive tech / e2e
+ * tests asserting the contract (testability problem). The 1500 ms floor sits comfortably above the
+ * 500 ms perceptual flicker threshold (Nielsen 1993) and is wide enough that sequential Playwright
+ * assertions (e.g. assert apply disabled, then assert cancel disabled) both land inside the same
+ * disabled-window even with the back-to-back polling and locator-resolution overhead Electron + CDP
+ * introduces. Co-locates with runCreate/runDelete/runCopy/runImport so all four paths get the same
+ * treatment.
+ */
+const MIN_SUBMITTING_VISIBLE_MS = 1500;
+
+/**
+ * Tooltip wrapper for a disabled "stub" button (View-mode cross-launches whose target action is not
+ * yet wired up). Renders an sr-only hint span (referenced by the disabled button's
+ * `aria-describedby`) plus a hover-tooltip wrapping the button. Three near-identical instances
+ * collapsed into one helper to keep the View-mode JSX scannable.
+ *
+ * The disabled `<Button>` itself does not accept pointer events, so the tooltip needs an
+ * intermediate `<span>` as the `TooltipTrigger` target — Radix Tooltip's standard pattern.
+ */
+function DisabledStubButtonTooltip({
+  hintId,
+  tooltipText,
+  children,
+}: {
+  hintId: string;
+  tooltipText: string;
+  children: ReactElement;
+}) {
+  return (
+    <>
+      <span id={hintId} className="tw-sr-only">
+        {tooltipText}
+      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span>{children}</span>
+        </TooltipTrigger>
+        <TooltipContent>{tooltipText}</TooltipContent>
+      </Tooltip>
+    </>
+  );
+}
+
 // Sebastian review item 8 (2026-05-06): the Copy-mode comparison-state filter (New/Newer/Older/
 // Same/Undetermined) was removed entirely — the New/Newer/Older/Same options didn't actually
 // filter anything (the chip selection was decorative without a backing state-set), and the
@@ -535,10 +583,8 @@ export function ManageBooksDialog({
   const [overlapError, setOverlapError] = useState<
     { book: string; existingFile: string; newFile: string } | undefined
   >(undefined);
-  const [importPresenceFilter, setImportPresenceFilter] = useState<'all' | 'new' | 'existing'>(
-    'all',
-  );
-  const [viewPresenceFilter, setViewPresenceFilter] = useState<'all' | 'new' | 'existing'>('all');
+  const [importPresenceFilter, setImportPresenceFilter] = useState<ViewPresenceFilter>('all');
+  const [viewPresenceFilter, setViewPresenceFilter] = useState<ViewPresenceFilter>('all');
   // BookGridSelector grouping state. Initial mount defaults to canon grouping
   // (the dialog opens in View mode where "OT / NT / DC" reads naturally). Per
   // Sebastian item 10 (2026-05-06) the user's choice is preserved across
@@ -1062,19 +1108,6 @@ export function ManageBooksDialog({
     });
   };
 
-  /**
-   * A3: minimum on-screen lifetime of the spinner / disabled-buttons state, in milliseconds. PAPI
-   * mutations frequently complete in well under 100 ms when called against a local data provider;
-   * without a floor, the spinner and mid-mutation button-disabled affordances would flicker for a
-   * single render frame and never be perceptible to either users (UX problem) or assistive tech /
-   * e2e tests asserting the contract (testability problem). The 1500 ms floor sits comfortably
-   * above the 500 ms perceptual flicker threshold (Nielsen 1993) and is wide enough that sequential
-   * Playwright assertions (e.g. assert apply disabled, then assert cancel disabled) both land
-   * inside the same disabled-window even with the back-to-back polling and locator-resolution
-   * overhead Electron + CDP introduces. Co-locates with runCreate/runDelete/runCopy/runImport so
-   * all four paths get the same treatment.
-   */
-  const MIN_SUBMITTING_VISIBLE_MS = 1500;
   const minDelay = (ms: number) =>
     new Promise<void>((resolve) => {
       setTimeout(resolve, ms);
@@ -1322,7 +1355,7 @@ export function ManageBooksDialog({
   // group-header strings — "Not in project" / "In project" rather than "New" / "Existing".
   // Stage 6 will add the new/newer/older/same labels for Copy/Import once the status-
   // comparison backend is in place.
-  const presenceFilterLabel = (s: 'all' | 'new' | 'existing'): string => {
+  const presenceFilterLabel = (s: ViewPresenceFilter): string => {
     switch (s) {
       case 'all':
         return t('%manageBooks_filter_state_all%', 'All');
@@ -1408,10 +1441,34 @@ export function ManageBooksDialog({
     const newLabel = t('%manageBooks_grid_statusGroup_new%', 'New');
     const sameLabel = t('%manageBooks_grid_statusGroup_same%', 'Same');
 
+    // Map a (compareState, present) tuple to the locale-stable group key + display label pair.
+    // Used by both copy and import branches so the two paths can't drift.
+    const compStateToGroup = (
+      compState: ManageBooksComparisonState,
+      isPresent: boolean,
+    ): { key: BookGridStatusGroup; label: string } => {
+      switch (compState) {
+        case 'sourceIsNewer':
+          return { key: 'newer', label: newerLabel };
+        case 'sourceIsOlder':
+          return { key: 'older', label: olderLabel };
+        case 'destDoesNotExist':
+          return { key: 'new', label: newLabel };
+        case 'filesAreSame':
+          return { key: 'same', label: sameLabel };
+        default:
+          // sourceDoesNotExist / undetermined keep the present/absent label.
+          return isPresent
+            ? { key: 'inProject', label: inProjectLabel }
+            : { key: 'notInProject', label: notInProjectLabel };
+      }
+    };
+
     return visibleBooks.map<BookGridItem>((book) => {
       const present = current.present.has(book);
       const destDate = current.dates[book];
       let tone: BookGridItem['tone'] = 'neutral';
+      let statusGroupKey: BookGridStatusGroup = present ? 'inProject' : 'notInProject';
       let statusLabel: string = present ? inProjectLabel : notInProjectLabel;
       let primaryDate: string | undefined;
       let secondaryDate: string | undefined;
@@ -1421,24 +1478,9 @@ export function ManageBooksDialog({
         const compState = computeCompareState(sourceDate, present ? destDate : undefined);
         const t1 = toneForComparisonState(compState);
         if (t1 !== 'hidden') tone = t1;
-        switch (compState) {
-          case 'sourceIsNewer':
-            statusLabel = newerLabel;
-            break;
-          case 'sourceIsOlder':
-            statusLabel = olderLabel;
-            break;
-          case 'destDoesNotExist':
-            statusLabel = newLabel;
-            break;
-          case 'filesAreSame':
-            statusLabel = sameLabel;
-            break;
-          default:
-            // sourceDoesNotExist / undetermined keep the present/absent label
-            statusLabel = present ? inProjectLabel : notInProjectLabel;
-            break;
-        }
+        const group = compStateToGroup(compState, present);
+        statusGroupKey = group.key;
+        statusLabel = group.label;
         primaryDate = present ? destDate : undefined;
         secondaryDate = sourceDate;
       } else if (action === 'import') {
@@ -1447,29 +1489,16 @@ export function ManageBooksDialog({
           const compState = computeCompareState(pick.date, present ? destDate : undefined);
           const t1 = toneForComparisonState(compState);
           if (t1 !== 'hidden') tone = t1;
-          switch (compState) {
-            case 'sourceIsNewer':
-              statusLabel = newerLabel;
-              break;
-            case 'sourceIsOlder':
-              statusLabel = olderLabel;
-              break;
-            case 'destDoesNotExist':
-              statusLabel = newLabel;
-              break;
-            case 'filesAreSame':
-              statusLabel = sameLabel;
-              break;
-            default:
-              statusLabel = present ? inProjectLabel : notInProjectLabel;
-              break;
-          }
+          const group = compStateToGroup(compState, present);
+          statusGroupKey = group.key;
+          statusLabel = group.label;
           primaryDate = present ? destDate : undefined;
           secondaryDate = pick.date;
         } else {
           primaryDate = present ? destDate : undefined;
         }
       } else if (action === 'create') {
+        statusGroupKey = 'new';
         statusLabel = newLabel;
         primaryDate = undefined;
       } else {
@@ -1503,6 +1532,7 @@ export function ManageBooksDialog({
         book,
         present,
         tone,
+        statusGroupKey,
         statusLabel,
         primaryDate,
         secondaryDate,
@@ -1847,44 +1877,31 @@ export function ManageBooksDialog({
                     return (
                       <>
                         {!enableProjectCanons ? (
-                          <>
-                            <span id={projectCanonsDisabledHintId} className="tw:sr-only">
-                              {stubTooltip}
-                            </span>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span>{projectCanonsButton}</span>
-                              </TooltipTrigger>
-                              <TooltipContent>{stubTooltip}</TooltipContent>
-                            </Tooltip>
-                          </>
+                          <DisabledStubButtonTooltip
+                            hintId={projectCanonsDisabledHintId}
+                            tooltipText={stubTooltip}
+                          >
+                            {projectCanonsButton}
+                          </DisabledStubButtonTooltip>
                         ) : (
                           projectCanonsButton
                         )}
                         {!enableRegistry ? (
-                          <>
-                            <span id={registryDisabledHintId} className="tw:sr-only">
-                              {stubTooltip}
-                            </span>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span>{registryButton}</span>
-                              </TooltipTrigger>
-                              <TooltipContent>{stubTooltip}</TooltipContent>
-                            </Tooltip>
-                          </>
+                          <DisabledStubButtonTooltip
+                            hintId={registryDisabledHintId}
+                            tooltipText={stubTooltip}
+                          >
+                            {registryButton}
+                          </DisabledStubButtonTooltip>
                         ) : (
                           registryButton
                         )}
-                        <span id={viewDiffDisabledHintId} className="tw:sr-only">
-                          {stubTooltip}
-                        </span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>{viewDiffButton}</span>
-                          </TooltipTrigger>
-                          <TooltipContent>{stubTooltip}</TooltipContent>
-                        </Tooltip>
+                        <DisabledStubButtonTooltip
+                          hintId={viewDiffDisabledHintId}
+                          tooltipText={stubTooltip}
+                        >
+                          {viewDiffButton}
+                        </DisabledStubButtonTooltip>
                       </>
                     );
                   })()}
