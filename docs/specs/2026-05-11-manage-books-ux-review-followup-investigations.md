@@ -236,3 +236,61 @@ Choose **Option 1** — frontend gets the extra info and can apply per-context f
 ### Decision (filled after user checkpoint)
 
 User authorized autonomous advancement. Proceeding.
+
+## Stage 5 — Investigation (2026-05-11)
+
+### What I looked at
+
+- All ProjectSelector consumers (`grep` for the symbol across the repo):
+  - `lib/platform-bible-react/src/components/advanced/settings-components/settings-sidebar.component.tsx` — settings UI
+  - `extensions/src/platform-scripture/src/checklist.web-view.tsx` — markers-checklist comparative-texts picker (multi-select)
+  - `extensions/src/platform-scripture/src/checks-side-panel.web-view.tsx` — checks side panel
+  - `extensions/src/platform-scripture/src/components/checklist.component.tsx` — embedded selector in checklist
+  - `extensions/src/platform-scripture/src/manage-books-dialog/*` — sidebar + Copy "From" + Create "Based on" pickers (this round's main change)
+- `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx` — full component read
+  - Line 485: `query` state held with `useState('')`; no reset on close — that's the source of the "filter doesn't clear on reopen" bug
+  - Line 723: `<Popover open={open} onOpenChange={setOpen}>` — close fires `setOpen(false)` only
+  - No scroll-to-selected logic anywhere; `partitionAndSort`'s float-to-top is the entire "show me the current selection" affordance
+- `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.rows.ts:308–318` (`compareRows`) — `if (a.isSelected !== b.isSelected) return a.isSelected ? -1 : 1` is the float-to-top
+- `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.rows.test.ts:295–311` — there's an EXISTING characterization test asserting "selected rows float to the top of their section." That test now serves as the pre-change pin; my change updates it to assert the new (alphabetical) order.
+
+### Findings vs the spec
+
+✅ Spec is correct: #5 is two distinct changes — kill float-to-top + scroll-to-selected on open + clear filter on close.
+
+⚠️ The existing test (`project-selector.rows.test.ts:295`) already pins the current behavior; that satisfies the characterization-test requirement for Stage 5. I'll update it in 5.1 to assert the new alphabetical-only order, which makes the behavior change visible in the diff.
+
+⚠️ Markers-checklist multi-select also uses this same compareRows path; the float-to-top change affects its UX too. User has previously accepted this cross-feature implication.
+
+For BookChapter scroll-to-selected pattern: not strictly needed — `<CommandList>` is the scrolling container; I can use a ref on the selected `<CommandItem>` and call `el.scrollIntoView({ block: 'nearest' })` after the popover opens (with a microtask delay so the DOM has rendered).
+
+### #35 (separated short/long name layout) — proposal
+
+Current row layout (line 343–346):
+
+```
+<span ref={labelRef} className="tw-min-w-0 tw-flex-1 tw-truncate tw-text-start">
+  <span>{row.shortName}</span>
+  <span className="tw-text-muted-foreground"> • {row.fullName}</span>
+</span>
+```
+
+Proposed 2-line layout:
+
+```
+<span ref={labelRef} className="tw-min-w-0 tw-flex-1 tw-flex tw-flex-col tw-items-start tw-overflow-hidden">
+  <span className="tw-truncate tw-font-medium">{row.shortName}</span>
+  <span className="tw-truncate tw-text-xs tw-text-muted-foreground">{row.fullName}</span>
+</span>
+```
+
+Truncation still works (each line truncates independently). Tooltip-on-clip still works because we keep the labelRef on the wrapping span; `scrollWidth > clientWidth` will fire if either line clips. Marked TBD for Sebastian/UX reviewer confirmation in PR description.
+
+### Proposed deviation from spec (if any)
+
+- The existing test in `project-selector.rows.test.ts:295` IS the characterization — no separate test file needed
+- Scroll-to-selected uses `scrollIntoView({ block: 'nearest' })` on the selected `<CommandItem>` ref, NOT the BookChapter selector's specific approach (different component shape)
+
+### Decision (filled after user checkpoint)
+
+User authorized autonomous advancement. Proceeding.
