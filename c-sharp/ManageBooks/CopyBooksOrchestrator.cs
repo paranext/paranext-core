@@ -194,28 +194,50 @@ public static class CopyBooksOrchestrator
         DateTime destModified
     )
     {
+        // Sebastian/Vladimir review items #14 + #44 (2026-05-11): surface both
+        // modification timestamps on the wire entry so the Copy/Import UI can
+        // show them in pill tooltips. `DateTime.MinValue` (the absent-file
+        // sentinel from SafeGetBookModified) maps to null on the wire so the
+        // frontend can distinguish "no date" from "epoch".
+        string? sourceIso = ToIsoOrNull(sourceModified, sourceText);
+        string? destIso = ToIsoOrNull(destModified, destText);
+
         // 1. Identical texts (and dest is non-empty) → FilesAreSame.
         if (!string.IsNullOrEmpty(destText) && sourceText == destText)
-            return FilesAreSameEntry(bookNum, bookName);
+            return FilesAreSameEntry(bookNum, bookName, sourceIso, destIso);
 
         // 2. Source missing → SourceDoesNotExist (Selectable=false). Also
         // covers the both-empty case (LoadBooks_BothProjectsEmpty).
         if (string.IsNullOrEmpty(sourceText))
-            return SourceDoesNotExistEntry(bookNum, bookName);
+            return SourceDoesNotExistEntry(bookNum, bookName, sourceIso, destIso);
 
         // 3. Dest missing → DestDoesNotExist (include=true per INV-C07).
         if (string.IsNullOrEmpty(destText))
-            return DestDoesNotExistEntry(bookNum, bookName);
+            return DestDoesNotExistEntry(bookNum, bookName, sourceIso, destIso);
 
         // 4. Both texts present and different → compare modification times.
         if (sourceModified > destModified)
-            return SourceIsNewerEntry(bookNum, bookName);
+            return SourceIsNewerEntry(bookNum, bookName, sourceIso, destIso);
 
         if (sourceModified < destModified)
-            return SourceIsOlderEntry(bookNum, bookName);
+            return SourceIsOlderEntry(bookNum, bookName, sourceIso, destIso);
 
         // 5. Same timestamp, different text → Undetermined (TS-027).
-        return UndeterminedEntry(bookNum, bookName);
+        return UndeterminedEntry(bookNum, bookName, sourceIso, destIso);
+    }
+
+    /// <summary>
+    /// Maps a DateTime + text pair to an ISO-8601 string for the wire, or null when the
+    /// underlying side has no meaningful date (file missing or empty text).
+    /// </summary>
+    private static string? ToIsoOrNull(DateTime when, string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return null;
+        if (when == DateTime.MinValue)
+            return null;
+        return when.ToUniversalTime()
+            .ToString("o", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     // -----------------------------------------------------------------------
@@ -230,69 +252,111 @@ public static class CopyBooksOrchestrator
     // -----------------------------------------------------------------------
 
     /// <summary>INV-C06: FilesAreSame → pre-select=false, selectable=true.</summary>
-    private static BookComparisonEntry FilesAreSameEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry FilesAreSameEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.FilesAreSame,
             defaultIncluded: false,
             selectable: true,
-            tooltip: FilesAreSameTooltipKey
+            tooltip: FilesAreSameTooltipKey,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>SourceDoesNotExist is the only state with Selectable=false (TS-090).</summary>
-    private static BookComparisonEntry SourceDoesNotExistEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry SourceDoesNotExistEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.SourceDoesNotExist,
             defaultIncluded: false,
             selectable: false,
-            tooltip: SourceDoesNotExistTooltipKey
+            tooltip: SourceDoesNotExistTooltipKey,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>INV-C07: DestDoesNotExist → pre-select=true (corrects PT9 FB 29809).</summary>
-    private static BookComparisonEntry DestDoesNotExistEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry DestDoesNotExistEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.DestDoesNotExist,
             defaultIncluded: true,
             selectable: true,
-            tooltip: DestDoesNotExistTooltipKey
+            tooltip: DestDoesNotExistTooltipKey,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>SourceIsNewer → pre-select=true (corrects PT9 FB 29809; TS-025).</summary>
-    private static BookComparisonEntry SourceIsNewerEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry SourceIsNewerEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.SourceIsNewer,
             defaultIncluded: true,
             selectable: true,
-            tooltip: SourceIsNewerTooltipKey
+            tooltip: SourceIsNewerTooltipKey,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>SourceIsOlder → pre-select=false (TS-026).</summary>
-    private static BookComparisonEntry SourceIsOlderEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry SourceIsOlderEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.SourceIsOlder,
             defaultIncluded: false,
             selectable: true,
-            tooltip: SourceIsOlderTooltipKey
+            tooltip: SourceIsOlderTooltipKey,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>Undetermined (same timestamp, different text) → pre-select=false, empty tooltip (TS-027).</summary>
-    private static BookComparisonEntry UndeterminedEntry(int bookNum, string bookName) =>
+    private static BookComparisonEntry UndeterminedEntry(
+        int bookNum,
+        string bookName,
+        string? sourceIso,
+        string? destIso
+    ) =>
         BuildEntry(
             bookNum,
             bookName,
             ComparisonState.Undetermined,
             defaultIncluded: false,
             selectable: true,
-            tooltip: UndeterminedTooltip
+            tooltip: UndeterminedTooltip,
+            sourceIso: sourceIso,
+            destIso: destIso
         );
 
     /// <summary>Positional-to-record adapter so each per-state factory above is a one-liner.</summary>
@@ -302,8 +366,10 @@ public static class CopyBooksOrchestrator
         ComparisonState state,
         bool defaultIncluded,
         bool selectable,
-        string tooltip
-    ) => new(bookNum, bookName, state, defaultIncluded, selectable, tooltip);
+        string tooltip,
+        string? sourceIso,
+        string? destIso
+    ) => new(bookNum, bookName, state, defaultIncluded, selectable, tooltip, sourceIso, destIso);
 
     // === NEW IN PT10 ===
     // Reason: PT9 read text via PtwFileInfo, which gracefully handles missing

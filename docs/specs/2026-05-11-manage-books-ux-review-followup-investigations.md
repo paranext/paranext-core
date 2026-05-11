@@ -235,7 +235,7 @@ Choose **Option 1** — frontend gets the extra info and can apply per-context f
 
 ### Decision (filled after user checkpoint)
 
-User authorized autonomous advancement. Proceeding.
+User authorized autonomous advancement. Proceeding (Stage 4).
 
 ## Stage 5 — Investigation (2026-05-11)
 
@@ -290,6 +290,54 @@ Truncation still works (each line truncates independently). Tooltip-on-clip stil
 
 - The existing test in `project-selector.rows.test.ts:295` IS the characterization — no separate test file needed
 - Scroll-to-selected uses `scrollIntoView({ block: 'nearest' })` on the selected `<CommandItem>` ref, NOT the BookChapter selector's specific approach (different component shape)
+
+### Decision (filled after user checkpoint)
+
+User authorized autonomous advancement. Proceeding (Stage 5).
+
+## Stage 6 — Investigation (2026-05-11)
+
+### What I looked at
+
+- `c-sharp/ManageBooks/BookComparisonEntry.cs` — record fields: `BookNum`, `BookName`, `ComparisonState`, `DefaultIncluded`, `Selectable`, `TooltipInfo`. **No date fields.**
+- `c-sharp/ManageBooks/ComparisonState.cs` — enum has all six states (FilesAreSame, DestDoesNotExist, SourceIsNewer, SourceIsOlder, Undetermined, SourceDoesNotExist) — exactly what #44 needs
+- `c-sharp/ManageBooks/ManageBooksService.cs:199-200` — `getBookComparison` PAPI method **already exists** (CopyBooksOrchestrator → BookComparisonEntry per book)
+- `c-sharp/ManageBooks/ManageBooksService.cs:219-220` — `parseImportFiles` PAPI method **already exists** (same wire shape, for Import mode)
+- `c-sharp/ManageBooks/ImportBooksOrchestrator.cs:507–531` — `BuildComparisonEntry` already computes `destModified` and a `preflightSourceTimestamp` for comparison; the dates are USED locally but not surfaced on the wire entry
+- `c-sharp/ManageBooks/ImportBooksOrchestrator.cs:560–582` — `SafeGetBookModified` reads `scrText.FileManager.GetLastWriteTime`. Identical helper duplicated in `CopyBooksOrchestrator.cs`
+- `extensions/src/platform-scripture/src/manage-books.web-view.tsx:135–145` — `decodeBooksPresent` decodes the booksPresent bitstring into `ManageBooksDialogBookInfo[]`. **`lastModified` is never populated** — the function pushes `{ id: bookId }` only
+- `extensions/src/platform-scripture/src/manage-books-dialog/manage-books-dialog.utils.ts:46–59` — `computeCompareState` is the frontend heuristic that USED to drive Copy/Import state. Returns 'undetermined' when dates are missing — which is always
+- `extensions/src/platform-scripture/src/manage-books-dialog/manage-books-dialog.component.tsx:1386–1438` — Copy/Import gridItems uses `computeCompareState(sourceDate, destDate)`. Sources: `copySource.dates[book]` (always undefined per above) and `current.dates[book]` (also always undefined)
+- Frontend network object interface at `manage-books.web-view.tsx:103–127` does NOT list `getBookComparison` or `parseImportFiles` — those methods are exposed by the backend but never wired in TS
+
+### Findings vs the spec
+
+✅ Spec was right about the bug location: frontend wiring exists for the comparison labels, but `lastModified` is never populated end-to-end. CSV note for #14 was already accurate.
+
+⚠️ Spec said "extend BookComparisonResult to include `lastModified`" — slightly inaccurate. The proper extension is on `BookComparisonEntry` (the per-book record), not `BookComparisonResult` (the wrapping list). I'll add `SourceLastModified` and `DestLastModified` (string?, ISO format) to the entry.
+
+⚠️ Spec said "new PAPI method `compareBooks`" — **the method already exists** as `getBookComparison`, and a parallel `parseImportFiles` exists for Import. Scope shrinks: no new PAPI method; just extend the entry shape + wire the existing methods in TS.
+
+### Plan
+
+**Backend:**
+
+1. Add `SourceLastModified` (string?) and `DestLastModified` (string?) to `BookComparisonEntry` (ISO format, nullable for missing files)
+2. Populate from `destModified`/`sourceTimestamp` already computed in `BuildComparisonEntry` (Import) and `SetDefaultEligibility` (Copy)
+
+**Frontend:** 3. Add `getBookComparison` and `parseImportFiles` to the `ManageBooksNetworkObject` TS interface 4. Add a hook `useBookComparison(sourceProjectId, targetProjectId)` that caches the Copy-mode comparison result 5. In Copy mode: replace `computeCompareState(sourceDate, destDate)` with a per-book lookup against the cached BookComparisonEntry 6. In Import mode: similar — call `parseImportFiles` when files change, cache the result, use for grouping/labels 7. Tooltips: pass `entry.SourceLastModified` / `entry.DestLastModified` through to BookGridItem's `primaryDate`/`secondaryDate`
+
+**Characterization** (per Stage 5+6+7 requirement):
+
+- Existing tests in `c-sharp-tests/ManageBooks/` already pin `BookComparisonEntry` shape; adding new optional fields is backward-compatible (no test changes needed for the addition)
+- Frontend characterization: the current `computeCompareState`-based state (where dates aren't populated → 'undetermined' or just present/absent labels) IS the bug. No test exists explicitly pinning this; the diff after replacement IS the characterization
+
+### Proposed deviation from spec (if any)
+
+- No new PAPI method (existing `getBookComparison` + `parseImportFiles` are sufficient)
+- Field placement: `BookComparisonEntry` not `BookComparisonResult`
+- Naming: `SourceLastModified` / `DestLastModified` (matches existing PascalCase wire field convention)
+- `parseImportFiles` was already in scope per CSV's `lastModified` mention but the spec didn't explicitly list it
 
 ### Decision (filled after user checkpoint)
 
