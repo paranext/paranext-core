@@ -26,7 +26,6 @@ import {
   useProjectSetting,
   useRecentScriptureRefs,
 } from '@papi/frontend/react';
-import type { IVersificationService } from 'platform-scripture';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { CommandHandlers, CommandNames } from 'papi-shared-types';
 import {
@@ -349,21 +348,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // verse selection. When the book changes we refetch; for books other than the current one we do
   // not offer verse selection (the picker falls back to chapter-level submission).
   const currentBookNum = useMemo(() => Canon.bookIdToNumber(scrRef.book), [scrRef.book]);
+  const versificationPdp = useProjectDataProvider('platformScripture.Versification', projectId);
   const fetchLastVersesInCurrentBook = useCallback(async (): Promise<number[] | undefined> => {
-    if (!projectId || currentBookNum <= 0) return undefined;
+    if (!versificationPdp || currentBookNum <= 0) return undefined;
     try {
-      const versificationService = await papi.networkObjects.get<IVersificationService>(
-        'platformScripture.versificationService',
-      );
-      if (!versificationService) return undefined;
-      return await versificationService.lookupFinalVerseNumbersInBook(projectId, currentBookNum);
+      return await versificationPdp.lookupFinalVerseNumbersInBook(currentBookNum);
     } catch (err) {
       logger.debug(
         `Failed to fetch verse counts for book ${currentBookNum}: ${getErrorMessage(err)}`,
       );
       return undefined;
     }
-  }, [projectId, currentBookNum]);
+  }, [versificationPdp, currentBookNum]);
   const [lastVersesInCurrentBook] = usePromise(fetchLastVersesInCurrentBook, undefined);
   const getEndVerse = useCallback(
     (bookId: string, chapterNum: number): number => {

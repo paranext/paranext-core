@@ -80,7 +80,6 @@ public static class Program
             var dblResources = new DblResourcesDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
             var checklistNetworkObject = new ChecklistNetworkObject(papi);
-            var versificationService = new VersificationService(papi);
             var manageBooksService = new ManageBooksService(
                 papi,
                 paratextProjects,
@@ -93,7 +92,6 @@ public static class Program
                 dblResources.RegisterDataProviderAsync(),
                 paratextRegistrationService.InitializeAsync(),
                 checklistNetworkObject.InitializeAsync(),
-                versificationService.InitializeAsync(),
                 manageBooksService.RegisterNetworkObjectAsync()
             );
 

@@ -5,42 +5,42 @@ using Paratext.Data;
 namespace TestParanextDataProvider.Projects
 {
     /// <summary>
-    /// Unit tests for <see cref="VersificationService"/>.
+    /// Unit tests for the <see cref="ParatextProjectDataProvider"/> versification methods
+    /// — i.e. the methods registered under the <c>platformScripture.Versification</c>
+    /// projectInterface:
     ///
-    /// <para>
-    /// The service exposes three RPC functions that delegate to libpalaso's
-    /// <c>ScrVers</c> via <c>ScrText.Settings.Versification</c>:
-    /// </para>
     /// <list type="bullet">
-    ///   <item><c>LookupFinalVerseNumber</c> — passthrough.</item>
-    ///   <item><c>LookupFinalChapter</c> — passthrough.</item>
-    ///   <item><c>LookupFinalVerseNumbersInBook</c> — passthrough plus
-    ///     bookkeeping: returns <c>int[lastChapter + 1]</c> with index 0 unused
-    ///     and indices <c>1..lastChapter</c> populated. The off-by-one boundary
-    ///     is the most worth testing.</item>
+    ///   <item><c>LookupFinalVerseNumber(bookNum, chapterNum)</c> — passthrough to
+    ///     <c>ScrText.Settings.Versification.GetLastVerse</c>.</item>
+    ///   <item><c>LookupFinalChapter(bookNum)</c> — passthrough to
+    ///     <c>ScrText.Settings.Versification.GetLastChapter</c>.</item>
+    ///   <item><c>LookupFinalVerseNumbersInBook(bookNum)</c> — passthrough plus bookkeeping:
+    ///     returns <c>int[lastChapter + 1]</c> with index 0 a filler <c>0</c> and indices
+    ///     <c>1..lastChapter</c> populated for ergonomic <c>result[chapterNum]</c> access.
+    ///     The off-by-one boundary is the most worth testing.</item>
     /// </list>
     ///
     /// <para>
-    /// Setup follows the existing <see cref="PapiTestBase"/> pattern: a
-    /// <see cref="DummyScrText"/> is created and registered via
-    /// <c>ParatextProjects.FakeAddProject</c>, then resolved through the
-    /// production <c>LocalParatextProjects.GetParatextProject</c> static
-    /// lookup that <see cref="VersificationService"/> uses internally. Each
-    /// test compares the service result against the underlying versification
-    /// lookups directly so the assertions remain valid regardless of whether
-    /// the project's default versification is English, Original, etc.
+    /// Setup follows the same pattern used by <see cref="ParatextProjectDataProviderCommentTests"/>:
+    /// a <see cref="DummyScrText"/> is created and registered via
+    /// <c>ParatextProjects.FakeAddProject</c>, then we construct a
+    /// <see cref="DummyParatextProjectDataProvider"/> that subclasses the real PDP and gives
+    /// us direct in-process access to the registered methods. Each test compares the PDP
+    /// result against the underlying versification lookups directly so the assertions stay
+    /// valid regardless of which versification scheme the dummy project happens to default to.
     /// </para>
     /// </summary>
     [ExcludeFromCodeCoverage]
     [TestFixture]
-    internal class VersificationServiceTests : PapiTestBase
+    internal class ParatextProjectDataProviderVersificationTests : PapiTestBase
     {
+        private const string PdpName = "versificationTestProject";
         private const int GenesisBookNum = 1;
         private const int PhilemonBookNum = 57;
 
         private ScrText _scrText = null!;
         private ProjectDetails _projectDetails = null!;
-        private VersificationService _service = null!;
+        private DummyParatextProjectDataProvider _provider = null!;
 
         [SetUp]
         public override async Task TestSetupAsync()
@@ -51,7 +51,12 @@ namespace TestParanextDataProvider.Projects
             _projectDetails = CreateProjectDetails(_scrText);
             ParatextProjects.FakeAddProject(_projectDetails, _scrText);
 
-            _service = new VersificationService(Client);
+            _provider = new DummyParatextProjectDataProvider(
+                PdpName,
+                Client,
+                _projectDetails,
+                ParatextProjects
+            );
         }
 
         [TearDown]
@@ -68,7 +73,8 @@ namespace TestParanextDataProvider.Projects
         [Test]
         [Description(
             "For a multi-chapter book (Genesis, 50 chapters), the returned array length "
-                + "must be lastChapter + 1 — index 0 reserved as 'unused'."
+                + "must be lastChapter + 1 — index 0 reserved as a filler so consumers can "
+                + "index by 1-based chapter number directly."
         )]
         public void LookupFinalVerseNumbersInBook_Genesis_ReturnsArrayOfLengthLastChapterPlusOne()
         {
@@ -76,16 +82,13 @@ namespace TestParanextDataProvider.Projects
                 GenesisBookNum
             );
 
-            var result = _service.LookupFinalVerseNumbersInBook(
-                _projectDetails.Metadata.Id,
-                GenesisBookNum
-            );
+            var result = _provider.LookupFinalVerseNumbersInBook(GenesisBookNum);
 
             Assert.That(result, Is.Not.Null);
             Assert.That(
                 result.Length,
                 Is.EqualTo(expectedLastChapter + 1),
-                "array length must be lastChapter + 1 (index 0 reserved as unused)"
+                "array length must be lastChapter + 1 (index 0 reserved as filler)"
             );
         }
 
@@ -95,10 +98,7 @@ namespace TestParanextDataProvider.Projects
         )]
         public void LookupFinalVerseNumbersInBook_Genesis_IndexZeroIsUnusedAndDefaults()
         {
-            var result = _service.LookupFinalVerseNumbersInBook(
-                _projectDetails.Metadata.Id,
-                GenesisBookNum
-            );
+            var result = _provider.LookupFinalVerseNumbersInBook(GenesisBookNum);
 
             Assert.That(result[0], Is.EqualTo(0), "index 0 is unused — must be default(int)");
         }
@@ -112,10 +112,7 @@ namespace TestParanextDataProvider.Projects
         {
             int expected = _scrText.Settings.Versification.GetLastVerse(GenesisBookNum, 1);
 
-            var result = _service.LookupFinalVerseNumbersInBook(
-                _projectDetails.Metadata.Id,
-                GenesisBookNum
-            );
+            var result = _provider.LookupFinalVerseNumbersInBook(GenesisBookNum);
 
             Assert.That(
                 result[1],
@@ -137,10 +134,7 @@ namespace TestParanextDataProvider.Projects
                 lastChapter
             );
 
-            var result = _service.LookupFinalVerseNumbersInBook(
-                _projectDetails.Metadata.Id,
-                GenesisBookNum
-            );
+            var result = _provider.LookupFinalVerseNumbersInBook(GenesisBookNum);
 
             Assert.That(
                 result[lastChapter],
@@ -160,10 +154,7 @@ namespace TestParanextDataProvider.Projects
             var versification = _scrText.Settings.Versification;
             int lastChapter = versification.GetLastChapter(GenesisBookNum);
 
-            var result = _service.LookupFinalVerseNumbersInBook(
-                _projectDetails.Metadata.Id,
-                GenesisBookNum
-            );
+            var result = _provider.LookupFinalVerseNumbersInBook(GenesisBookNum);
 
             for (int chapter = 1; chapter <= lastChapter; chapter++)
             {
@@ -178,7 +169,7 @@ namespace TestParanextDataProvider.Projects
         [Test]
         [Description(
             "For a single-chapter book (Philemon), the returned array length must be 2 "
-                + "(index 0 unused, index 1 = last verse of chapter 1)."
+                + "(index 0 filler, index 1 = last verse of chapter 1)."
         )]
         public void LookupFinalVerseNumbersInBook_Philemon_ReturnsArrayOfLengthTwo()
         {
@@ -193,13 +184,10 @@ namespace TestParanextDataProvider.Projects
                 1
             );
 
-            var result = _service.LookupFinalVerseNumbersInBook(
-                _projectDetails.Metadata.Id,
-                PhilemonBookNum
-            );
+            var result = _provider.LookupFinalVerseNumbersInBook(PhilemonBookNum);
 
             Assert.That(result.Length, Is.EqualTo(2), "single-chapter book -> length 2");
-            Assert.That(result[0], Is.EqualTo(0), "index 0 is unused");
+            Assert.That(result[0], Is.EqualTo(0), "index 0 is filler");
             Assert.That(
                 result[1],
                 Is.EqualTo(expectedLastVerse),
@@ -211,8 +199,8 @@ namespace TestParanextDataProvider.Projects
         // LookupFinalVerseNumber & LookupFinalChapter — passthrough wiring.
         //
         // These methods delegate directly to libpalaso. The tests below are
-        // sanity checks confirming the wiring (project lookup -> versification
-        // -> result) is intact, not re-tests of libpalaso.
+        // sanity checks confirming the wiring (PDP -> project lookup ->
+        // versification -> result) is intact, not re-tests of libpalaso.
         // =====================================================================
 
         [Test]
@@ -224,11 +212,7 @@ namespace TestParanextDataProvider.Projects
         {
             int expected = _scrText.Settings.Versification.GetLastVerse(GenesisBookNum, 1);
 
-            int actual = _service.LookupFinalVerseNumber(
-                _projectDetails.Metadata.Id,
-                GenesisBookNum,
-                1
-            );
+            int actual = _provider.LookupFinalVerseNumber(GenesisBookNum, 1);
 
             Assert.That(actual, Is.EqualTo(expected));
         }
@@ -242,35 +226,9 @@ namespace TestParanextDataProvider.Projects
         {
             int expected = _scrText.Settings.Versification.GetLastChapter(GenesisBookNum);
 
-            int actual = _service.LookupFinalChapter(_projectDetails.Metadata.Id, GenesisBookNum);
+            int actual = _provider.LookupFinalChapter(GenesisBookNum);
 
             Assert.That(actual, Is.EqualTo(expected));
-        }
-
-        // =====================================================================
-        // Unknown projectId — error propagation.
-        //
-        // LocalParatextProjects.GetParatextProject delegates to
-        // ScrTextCollection.GetById which throws ProjectNotFoundException for
-        // an id with no matching project. The service does not catch it, so it
-        // must propagate to the caller. (See ParatextProjectDataProviderFactoryTests
-        // for the same pattern at the factory layer.)
-        // =====================================================================
-
-        [Test]
-        [Description(
-            "An unknown projectId propagates ProjectNotFoundException from "
-                + "LocalParatextProjects.GetParatextProject."
-        )]
-        public void LookupFinalVerseNumbersInBook_UnknownProjectId_ThrowsProjectNotFoundException()
-        {
-            // "00" is the canonical 'no such project' id used in the existing
-            // ParatextProjectDataProviderFactoryTests fixture.
-            const string unknownProjectId = "00";
-
-            Assert.Throws<ProjectNotFoundException>(
-                () => _service.LookupFinalVerseNumbersInBook(unknownProjectId, GenesisBookNum)
-            );
         }
     }
 }

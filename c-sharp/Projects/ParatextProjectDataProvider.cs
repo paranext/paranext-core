@@ -110,6 +110,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
 
+        retVal.Add(("lookupFinalVerseNumber", LookupFinalVerseNumber));
+        retVal.Add(("lookupFinalChapter", LookupFinalChapter));
+        retVal.Add(("lookupFinalVerseNumbersInBook", LookupFinalVerseNumbersInBook));
+
         return retVal;
     }
 
@@ -1352,6 +1356,48 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             scrText.ScrStylesheet(bookNum)
             ?? throw new InvalidDataException($"ScrStylesheet for book number '{bookNum}' is null");
         return scrStylesheet.Tags.Where(tag => tag != null).Select(tag => tag.Name).ToArray();
+    }
+
+    #endregion
+
+    #region Versification (platformScripture.Versification)
+
+    /// <summary>
+    /// Returns the final verse number in the specified book and chapter using the project's
+    /// versification. Each call reads <c>ScrText.Settings.Versification</c> fresh, so results
+    /// reflect any in-session changes to the project's versification setting.
+    /// </summary>
+    public int LookupFinalVerseNumber(int bookNum, int chapterNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        return scrText.Settings.Versification.GetLastVerse(bookNum, chapterNum);
+    }
+
+    /// <summary>
+    /// Returns the final chapter number in the specified book using the project's versification.
+    /// </summary>
+    public int LookupFinalChapter(int bookNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        return scrText.Settings.Versification.GetLastChapter(bookNum);
+    }
+
+    /// <summary>
+    /// Returns the final verse number for each chapter in the specified book using the project's
+    /// versification. Index <c>n</c> is the last verse number in chapter <c>n</c> (1-based);
+    /// index 0 is a filler <c>0</c> so callers can use <c>result[chapterNum]</c> without
+    /// off-by-one. The returned array has length <c>lastChapter + 1</c>. Useful for pre-fetching
+    /// a whole book in one round trip.
+    /// </summary>
+    public int[] LookupFinalVerseNumbersInBook(int bookNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        var versification = scrText.Settings.Versification;
+        int lastChapter = versification.GetLastChapter(bookNum);
+        int[] result = new int[lastChapter + 1];
+        for (int chapter = 1; chapter <= lastChapter; chapter++)
+            result[chapter] = versification.GetLastVerse(bookNum, chapter);
+        return result;
     }
 
     #endregion
