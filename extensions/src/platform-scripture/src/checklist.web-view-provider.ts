@@ -8,6 +8,11 @@ import {
 import { formatReplacementString } from 'platform-bible-utils';
 import checklistWebView from './checklist.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
+// USFM character-style classes (UX-2 finding #19). Mirrors the character-style
+// subset of `_usj-nodes.scss` from platform-scripture-editor so the checklist
+// renders `\nd`, `\wj`, `\em`, `\w`, etc. as styled text rather than literal
+// `(\nd Lord)`. See the SCSS file for the rationale and TODO-promote note.
+import checklistUsfmStyles from './components/checklist-usfm-styles.scss?inline';
 
 export const markersChecklistWebViewType = 'platformScripture.markersChecklist';
 
@@ -56,7 +61,7 @@ export class ChecklistWebViewProvider implements IWebViewProvider {
       title,
       projectId,
       content: checklistWebView,
-      styles: tailwindStyles,
+      styles: `${tailwindStyles}\n${checklistUsfmStyles}`,
       state: {
         ...savedWebView.state,
         webViewType: markersChecklistWebViewType,

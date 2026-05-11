@@ -187,16 +187,35 @@ export function MarkerSettingsDialog({
     errorMessage: undefined,
   });
 
+  // UX-2 finding #17: Radix Dialog's focus scope activates AFTER `autoFocus` has run on the
+  // input, so the autoFocus prop alone doesn't reliably land focus inside the dialog (the trap
+  // can yank focus back to the Dialog root on mount). Hold a ref to the equivalent-markers
+  // input and focus it from the open-transition effect on the next animation frame, by which
+  // time Radix's focus trap is active.
+  // React's ref API expects `null` as the initial value (ref.current is typed `T | null`), so
+  // the no-null rule must be suppressed for the ref initializer specifically.
+  // eslint-disable-next-line no-null/no-null
+  const equivalentMarkersInputRef = useRef<HTMLInputElement>(null);
+
   // Re-seed inputs whenever the dialog re-opens so stale values from a previous session don't
   // leak through (the component is mounted for the entire parent lifetime; `open` flips it on/off).
   const previousOpenRef = useRef<boolean>(open);
   useEffect(() => {
-    if (open && !previousOpenRef.current) {
+    const wasOpening = open && !previousOpenRef.current;
+    if (wasOpening) {
       setEquivalentMarkers(initialEquivalentMarkers);
       setMarkerFilter(initialMarkerFilter);
       setValidationResult({ valid: true, parsedPairs: undefined, errorMessage: undefined });
     }
     previousOpenRef.current = open;
+    if (!wasOpening) return undefined;
+    // UX-2 finding #17: focus the equivalent-markers input on the next animation frame so the
+    // Radix focus trap is active by the time we focus. Without this, Tab navigates outside
+    // the dialog (because focus is still on the trigger when the trap mounts).
+    const frameId = requestAnimationFrame(() => {
+      equivalentMarkersInputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frameId);
   }, [open, initialEquivalentMarkers, initialMarkerFilter]);
 
   // Stable ids so Label→Input associations survive re-renders and avoid collisions when multiple
@@ -318,6 +337,7 @@ export function MarkerSettingsDialog({
               </div>
               <Input
                 id={equivalentMarkersInputId}
+                ref={equivalentMarkersInputRef}
                 data-testid="marker-settings-equivalent-markers"
                 value={equivalentMarkers}
                 onChange={(event) => setEquivalentMarkers(event.target.value)}
@@ -328,7 +348,6 @@ export function MarkerSettingsDialog({
                 className={
                   isInvalid ? 'tw:border-destructive tw:focus-visible:ring-destructive' : undefined
                 }
-                autoFocus
               />
               {isInvalid && (
                 <span

@@ -17,6 +17,7 @@ import {
 import { AlertTriangle, Book, BookOpen, Eye, EyeOff, Pencil, X } from 'lucide-react';
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
+import type { ScriptureRange } from 'platform-scripture';
 import { formatScrRef } from 'platform-bible-utils';
 import type {
   ChecklistCell,
@@ -93,13 +94,47 @@ type ParagraphRowProps = {
   showVerseText: boolean;
   /**
    * Localized template for the marker aria-label, with `{marker}` placeholder. The parent resolves
-   * this once via `getLocalizedString('%markersChecklist_marker_aria%')` and passes it down so the
+   * this once via `getLocalizedString(markersChecklist_marker_aria)` and passes it down so the
    * sub-component (defined at module scope) doesn't need access to the localization helper.
    */
   markerAriaTemplate: string;
+  /**
+   * Localized template for the goto-link aria-label / tooltip, with `{ref}` placeholder. Passed
+   * down so per-verse goto buttons (UX-2 finding #16) can announce the destination reference.
+   */
+  gotoAriaTemplate: string;
+  /**
+   * Owning cell's anchor reference — provides the book + chapter context for wrapping individual
+   * verse-number items into goto links (UX-2 finding #16). When undefined, verse-number items
+   * fall back to the plain-superscript rendering (no goto button) regardless of
+   * `onGotoVerseClick`.
+   */
+  cellReference?: ScriptureRange | undefined;
+  /**
+   * Optional goto callback. When provided (and `cellReference` is defined), verse-number items
+   * render as click-to-navigate buttons. When absent (read-only contexts), verse numbers render
+   * as plain superscripts.
+   */
+  onGotoVerseClick?: (verseRef: SerializedVerseRef) => void;
 };
 
-function ParagraphRow({ paragraph, showVerseText, markerAriaTemplate }: ParagraphRowProps) {
+function ParagraphRow({
+  paragraph,
+  showVerseText,
+  markerAriaTemplate,
+  gotoAriaTemplate,
+  cellReference,
+  onGotoVerseClick,
+}: ParagraphRowProps) {
+  // UX-2 finding #16: derive the book + chapter prefix from the owning cell's structured
+  // reference so each verse-item button can announce/navigate to its own
+  // `{book} {chapter}:{verseNumber}`. `cellReference.start` is the cell's anchor verse (e.g.
+  // `LUK 1:0`); we reuse `formatScrRef` for the display prefix and reuse the start's `bookID`
+  // and `chapterNum` to build the per-verse `SerializedVerseRef` we pass back to the parent.
+  const cellRefStart = cellReference?.start;
+  const cellRefPrefix = cellRefStart
+    ? formatScrRef({ ...cellRefStart, verseNum: cellRefStart.verseNum }).split(':')[0]
+    : '';
   return (
     <div
       className="tw:flex tw:flex-row tw:flex-wrap tw:items-baseline tw:gap-1"
@@ -121,14 +156,18 @@ function ParagraphRow({ paragraph, showVerseText, markerAriaTemplate }: Paragrap
           // eslint-disable-next-line react/no-array-index-key
           const itemKey = `${paragraph.marker}-item-${itemIndex}`;
           if (item.type === 'text') {
+            // UX-2 finding #19: previously rendered `(\nd Lord)` literally for any item with a
+            // character style. Now use the scripture-editor's CSS class convention
+            // (`usfm_{marker}`) so styling is driven by CSS — see checklist-usfm-styles.scss
+            // for the class catalogue. Items without a character style render as plain text.
             if (item.characterStyle) {
               return (
                 <span
                   key={itemKey}
-                  className="tw:italic tw:text-muted-foreground"
+                  className={`usfm_${item.characterStyle}`}
                   data-character-style={item.characterStyle}
                 >
-                  {`(\\${item.characterStyle} ${item.text.trim()})`}
+                  {item.text}
                 </span>
               );
             }
@@ -139,6 +178,33 @@ function ParagraphRow({ paragraph, showVerseText, markerAriaTemplate }: Paragrap
             );
           }
           if (item.type === 'verse') {
+            // UX-2 finding #16: when a goto handler is provided AND the owning cell carries a
+            // structured reference, render each verse number as a click-to-navigate link. The
+            // serialized verseRef passed back to the parent reuses the cell-start's book +
+            // chapter, with the item's parsed verseNumber for the verse component. Without a
+            // handler (or without a cell reference) we keep the plain superscript fallback
+            // (read-only contexts, e.g. Storybook stories without a goto callback wired).
+            if (onGotoVerseClick && cellRefStart) {
+              const parsedVerseNum = Number.parseInt(item.verseNumber, 10);
+              const verseGotoRef: SerializedVerseRef = {
+                ...cellRefStart,
+                verseNum: Number.isNaN(parsedVerseNum) ? cellRefStart.verseNum : parsedVerseNum,
+              };
+              const verseRefDisplay = `${cellRefPrefix}:${item.verseNumber}`;
+              return (
+                <button
+                  key={itemKey}
+                  type="button"
+                  className="tw-cursor-pointer tw-bg-transparent tw-p-0 tw-text-primary hover:tw-underline focus-visible:tw-outline focus-visible:tw-outline-2 focus-visible:tw-outline-ring"
+                  onClick={() => onGotoVerseClick(verseGotoRef)}
+                  aria-label={gotoAriaTemplate.replace('{ref}', verseRefDisplay)}
+                  title={gotoAriaTemplate.replace('{ref}', verseRefDisplay)}
+                  data-testid="checklist-verse-goto"
+                >
+                  <sup className="tw-font-semibold">{item.verseNumber}</sup>
+                </button>
+              );
+            }
             return (
               <sup key={itemKey} className="tw:font-semibold tw:text-muted-foreground">
                 {item.verseNumber}
@@ -190,9 +256,20 @@ type CellContentProps = {
   dir?: 'ltr' | 'rtl' | undefined;
   /** Localized template for the per-paragraph marker aria-label (with `{marker}` placeholder). */
   markerAriaTemplate: string;
+  /** Localized template for the per-verse-number goto link (with `{ref}` placeholder). */
+  gotoAriaTemplate: string;
+  /** Optional verse-number goto callback (UX-2 #16). */
+  onGotoVerseClick?: (verseRef: SerializedVerseRef) => void;
 };
 
-function CellContent({ cell, showVerseText, dir, markerAriaTemplate }: CellContentProps) {
+function CellContent({
+  cell,
+  showVerseText,
+  dir,
+  markerAriaTemplate,
+  gotoAriaTemplate,
+  onGotoVerseClick,
+}: CellContentProps) {
   if (cell.error) {
     return <span className="tw:italic tw:text-destructive">{cell.error}</span>;
   }
@@ -204,8 +281,11 @@ function CellContent({ cell, showVerseText, dir, markerAriaTemplate }: CellConte
     );
   }
   const cellRefKey = cell.reference ? formatScrRef(cell.reference.start) : '';
+  // The outer `checklist-formatted-font` class is the parent selector for the `.usfm_{marker}`
+  // character-style rules defined in `checklist-usfm-styles.scss` (UX-2 finding #19). Without
+  // it, the character-style rules don't match and items would render unstyled.
   return (
-    <div className="tw:flex tw:flex-col tw:gap-1" dir={dir}>
+    <div className="checklist-formatted-font tw-flex tw-flex-col tw-gap-1" dir={dir}>
       {cell.paragraphs.map((paragraph, paragraphIndex) => (
         <ParagraphRow
           // Paragraph markers may repeat within a single cell (e.g. two consecutive `\p`s), so the
@@ -216,6 +296,9 @@ function CellContent({ cell, showVerseText, dir, markerAriaTemplate }: CellConte
           paragraph={paragraph}
           showVerseText={showVerseText}
           markerAriaTemplate={markerAriaTemplate}
+          gotoAriaTemplate={gotoAriaTemplate}
+          cellReference={cell.reference}
+          onGotoVerseClick={onGotoVerseClick}
         />
       ))}
     </div>
@@ -364,13 +447,18 @@ export function ChecklistTool({
         const rowData = tableRow.original;
         const { firstRef } = rowData;
         const refLabel = firstRef ? formatScrRef(firstRef.start) : '';
+        // UX-2 finding #15: match rows get a primary-color treatment on every cell (ref + project)
+        // so users can scan past them. Buttons inside inherit `tw-text-primary-foreground` via the
+        // outer span color cascade for affordances that don't set their own color explicitly.
+        const matchClasses = rowData.isMatch ? 'tw-bg-primary tw-text-primary-foreground' : '';
+        const containerClass = `tw-block tw-px-2 tw-py-2 ${matchClasses}`.trim();
         // Sebastian PR #2219 #3137366113: "Make the scripture reference in the first column a
         // link button with the tooltip 'Go to {scrRef}' instead of the goto button". When a
         // goto callback is provided, render the ref as a `LinkedScrRefButton`; otherwise fall
         // back to plain text (read-only contexts).
         if (refLabel && firstRef && onGotoLinkClick) {
           return (
-            <span data-testid="checklist-reference-cell">
+            <span className={containerClass} data-testid="checklist-reference-cell">
               <LinkedScrRefButton
                 scrRef={refLabel}
                 onClick={() => onGotoLinkClick(rowData, firstRef.start)}
@@ -388,7 +476,10 @@ export function ChecklistTool({
           );
         }
         return (
-          <span className="tw:font-mono tw:text-sm" data-testid="checklist-reference-cell">
+          <span
+            className={`tw-font-mono tw-text-sm ${containerClass}`.trim()}
+            data-testid="checklist-reference-cell"
+          >
             {refLabel}
           </span>
         );
@@ -425,13 +516,23 @@ export function ChecklistTool({
                 </span>
               );
             }
+            // UX-2 finding #15: match rows get the primary-color treatment so users can scan past
+            // them. Buttons inside (goto/edit) inherit tw-text-primary-foreground via the outer
+            // div's color cascade for affordances that don't set their own color explicitly.
+            const matchClasses = rowData.isMatch ? 'tw-bg-primary tw-text-primary-foreground' : '';
             return (
-              <div className="tw:flex tw:flex-col tw:gap-1 tw:px-2 tw:py-2">
+              <div
+                className={`tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-py-2 ${matchClasses}`.trim()}
+              >
                 <CellContent
                   cell={cell}
                   showVerseText={showVerseText}
                   dir={columnDirections[projectId]}
                   markerAriaTemplate={getLocalizedString('%markersChecklist_marker_aria%')}
+                  gotoAriaTemplate={getLocalizedString('%markersChecklist_goto_aria%')}
+                  onGotoVerseClick={
+                    onGotoLinkClick ? (verseRef) => onGotoLinkClick(rowData, verseRef) : undefined
+                  }
                 />
                 {/*
                  * Edit link: per Sebastian PR #2219 #3137862427 ("we are here to design a

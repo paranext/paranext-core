@@ -1,0 +1,135 @@
+/* stylelint-disable selector-class-pattern, rule-empty-line-before */
+/* USFM character-style classes used by the Markers Checklist when "Show verse
+ * text" is on. These mirror the character-style subset of
+ * `extensions/src/platform-scripture-editor/src/_usj-nodes.scss` so we render
+ * `\nd`, `\wj`, `\em`, `\w`, etc. with sensible styling instead of literal
+ * `(\nd Lord)` text.
+ *
+ * TODO(post-merge): promote `_usj-nodes.scss` (or its character-style subset)
+ * to `lib/platform-bible-react/src/styles/` so both extensions consume one
+ * source of truth. Tracked in markers-checklist UX-2 design.
+ *
+ * Scope: only character-style classes from _usj-nodes.scss. Paragraph indent
+ * classes (q1, q2, ...) live in checklist.component.tsx's marker-indent helper
+ * because _usj-nodes.scss uses viewport-relative `vw` units that don't
+ * transfer cleanly to a table cell context (see existing comment in
+ * checklist.component.tsx).
+ *
+ * Loading: this file is imported via `?inline` in `checklist.web-view-provider.ts`
+ * and concatenated with the tailwind styles passed to PAPI. The extension's
+ * webpack rule for `*.scss` uses sass-loader + postcss-loader only (no
+ * style-loader), so a bare `import './file.scss'` in the component would NOT
+ * inject styles into the DOM.
+ */
+
+.checklist-formatted-font .usfm_nd {
+  font-size: 100%;
+  text-decoration: underline;
+}
+.checklist-formatted-font .usfm_tl {
+  font-size: 100%;
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_dc {
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_bk {
+  font-size: 100%;
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_sig {
+  font-size: 100%;
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_pn {
+  font-weight: bold;
+  font-size: 100%;
+  text-decoration: underline;
+}
+.checklist-formatted-font .usfm_png {
+  font-size: 100%;
+  text-decoration: underline;
+}
+.checklist-formatted-font .usfm_addpn {
+  font-weight: bold;
+  font-size: 100%;
+  font-style: italic;
+  text-decoration: underline;
+}
+.checklist-formatted-font .usfm_wj {
+  color: #d43128;
+  font-size: 100%;
+}
+.checklist-formatted-font .usfm_k {
+  font-weight: bold;
+  font-size: 100%;
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_sls {
+  font-size: 100%;
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_ord {
+  vertical-align: text-top;
+  font-size: 66%;
+}
+.checklist-formatted-font .usfm_add {
+  font-weight: bold;
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_no {
+  font-size: 100%;
+}
+.checklist-formatted-font .usfm_it {
+  font-size: 100%;
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_bd {
+  font-weight: bold;
+  font-size: 100%;
+}
+.checklist-formatted-font .usfm_bdit {
+  font-weight: bold;
+  font-size: 100%;
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_em {
+  font-size: 100%;
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_sc {
+  font-size: 100%;
+  font-variant: small-caps;
+}
+.checklist-formatted-font .usfm_sup {
+  vertical-align: text-top;
+  font-size: 66%;
+}
+.checklist-formatted-font .usfm_jmp {
+  color: #003380;
+  text-decoration: underline;
+}
+.checklist-formatted-font .usfm_pro {
+  font-size: 83%;
+}
+/* Word-list family (\w, \wh, \wg, \wa) — neutral by default; the dotted
+ * underline cue is added here so users recognise tagged words at a glance. */
+.checklist-formatted-font .usfm_w,
+.checklist-formatted-font .usfm_wh,
+.checklist-formatted-font .usfm_wg,
+.checklist-formatted-font .usfm_wa {
+  font-size: 100%;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.checklist-formatted-font .usfm_qt {
+  font-size: 100%;
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_qac {
+  font-style: italic;
+}
+.checklist-formatted-font .usfm_qs {
+  font-style: italic;
+}
