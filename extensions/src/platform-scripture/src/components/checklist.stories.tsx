@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { useMemo, useState } from 'react';
 import { Button } from 'platform-bible-react';
-import type { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import {
   CHECKLIST_STORY_COLUMN_PROJECT_FULL_NAMES,
@@ -76,45 +75,10 @@ const localizedStringsForStories: ChecklistLocalizedStrings =
     return accumulator;
   }, {});
 
-/**
- * A minimal localized `MultiColumnMenu` that shows the project-menu (left hamburger) items per
- * Sebastian's PR #2219 #3137366113. Mirrors the production menu contribution in
- * `extensions/src/platform-scripture/contributions/menus.json` (Copy + Settings) — the real menu
- * data is supplied by the wiring phase via `useData(papi.menuData.dataProviderName).WebViewMenu`.
- */
-const projectMenuData: Localized<MultiColumnMenu> = {
-  columns: {
-    'platformScripture.markersChecklist.view': {
-      label: 'View',
-      order: 1,
-    },
-    // The localized `MultiColumnMenu` requires the `isExtensible` discriminator on the index
-    // signature — include it on the single column entry so the narrow shape typechecks.
-    isExtensible: true,
-  },
-  groups: {
-    'platformScripture.markersChecklist.export': {
-      column: 'platformScripture.markersChecklist.view',
-      order: 1,
-    },
-  },
-  items: [
-    {
-      label: 'Copy',
-      localizeNotes: 'Copies the visible checklist rows to the clipboard',
-      group: 'platformScripture.markersChecklist.export',
-      order: 1,
-      command: 'platformScripture.copyMarkersChecklist',
-    },
-    {
-      label: 'Settings...',
-      localizeNotes: 'Opens the Marker Settings dialog',
-      group: 'platformScripture.markersChecklist.export',
-      order: 2,
-      command: 'platformScripture.openMarkersChecklistSettings',
-    },
-  ],
-};
+// UX-2 finding #1 (WP3): the inner TabToolbar was removed, so the `ChecklistTool`
+// no longer accepts `projectMenuData` / `onSelectProjectMenuItem`. The outer
+// Platform.Bible tab chrome's hamburger hosts the menu items via WebViewMenu
+// contributions (see WP6). The stories therefore no longer need a stub menu.
 
 const baseArgs: Partial<ChecklistToolProps> = {
   localizedStringsWithLoadingState: [localizedStringsForStories, false],
@@ -127,7 +91,6 @@ const baseArgs: Partial<ChecklistToolProps> = {
   error: undefined,
   helpText: undefined,
   matchCountLabel: undefined,
-  projectMenuData,
   columnProjectFullNames: CHECKLIST_STORY_COLUMN_PROJECT_FULL_NAMES,
 };
 
@@ -297,7 +260,7 @@ export const Empty: Story = {
 
 /**
  * Error state — the backend rejected the `buildChecklistData` call. The component renders a shadcn
- * `Alert variant="destructive"` between the `TabToolbar` and the `DataTable` with a Retry action.
+ * `Alert variant="destructive"` between the toolbar row and the `DataTable` with a Retry action.
  * Per `ui-state-contracts.md` T-R-2, the error banner suppresses the helptext banner until the next
  * successful refresh.
  */
