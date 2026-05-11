@@ -49,6 +49,7 @@
     --accent-foreground: 222.2 47.4% 11.2%; /* slate-900 */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%; /* slate-50 */
+    --success: 142 70% 36%; /* green-600; lightness raised to 50% in dark theme for contrast */
     --border: 214.3 31.8% 91.4%; /* slate-200 */
     --input: 214.3 31.8% 91.4%; /* slate-200 */
     --ring: 222.2 84% 4.9%; /* slate-950 */
@@ -82,6 +83,7 @@
     --accent-foreground: 210 40% 98%; /* slate-50 */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%; /* slate-50 */
+    --success: 142 70% 50%; /* green-600 with lightness raised from 36% for contrast on dark backgrounds */
     --border: 215.3 19.3% 34.5%; /* slate-600 */
     --input: 215.3 19.3% 34.5%; /* slate-600 */
     --ring: 212.7 26.8% 83.9%; /* slate-300 */
@@ -116,6 +118,7 @@
     --accent-foreground: 0 0% 12.549%;
     --destructive: 10.1639 77.8723% 53.9216%;
     --destructive-foreground: 0 0% 100%;
+    --success: 142 70% 36%;
     --ring: 16.6667 21.9512% 32.1569%;
 
     /* WARN: in Shadcn files, `--sidebar-background` is `--sidebar`
@@ -150,6 +153,7 @@
     --accent-foreground: 0 0% 93.3333%;
     --destructive: 10.1639 77.8723% 53.9216%;
     --destructive-foreground: 0 0% 100%;
+    --success: 142 70% 50%;
     --ring: 29.5082 100% 88.0392%;
 
     --sidebar-background: 240 5.8824% 10%;

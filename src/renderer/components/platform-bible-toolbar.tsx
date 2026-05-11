@@ -45,6 +45,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
+// Heuristic delay before retrying the send/receive availability check on startup. The extension
+// host may not be ready when the toolbar first mounts. onDidReloadExtensions handles recovery
+// after that initial window, so a single retry here is sufficient.
+const SEND_RECEIVE_AVAILABILITY_STARTUP_RETRY_MS = 2000;
+
 /** Placeholder theme to detect when we are loading */
 const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
   themeFamilyId: '',
@@ -182,7 +187,10 @@ export function PlatformBibleToolbar() {
       // Don't set false — a throw means the extension host wasn't ready yet (startup race), not
       // that the extension is absent. Schedule a retry so the button isn't permanently hidden.
       logger.warn(`Toolbar could not determine send/receive availability: ${getErrorMessage(e)}`);
-      retryTimeoutRef.current = setTimeout(checkIfSendReceiveAvailable, 2000);
+      retryTimeoutRef.current = setTimeout(
+        checkIfSendReceiveAvailable,
+        SEND_RECEIVE_AVAILABILITY_STARTUP_RETRY_MS,
+      );
     }
   }, []);
 
@@ -275,7 +283,9 @@ export function PlatformBibleToolbar() {
                     }}
                   >
                     {syncState === 'syncing' && <Spinner className="tw-h-4 tw-w-4" />}
-                    {syncState === 'synced' && <CircleCheck className="tw-h-4 tw-w-4" />}
+                    {syncState === 'synced' && (
+                      <CircleCheck className="tw-h-4 tw-w-4 tw-text-success" />
+                    )}
                     {
                       {
                         idle: localizedStrings['%toolbar_sync%'],
