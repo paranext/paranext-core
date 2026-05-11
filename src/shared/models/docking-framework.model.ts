@@ -22,7 +22,7 @@ export type SavedTabInfo = {
 };
 
 /**
- * Information that Paranext uses to create a tab in the dock layout.
+ * Information that Platform.Bible uses to create a tab in the dock layout.
  *
  * - {@link TabLoader} loads {@link SavedTabInfo} into this
  * - {@link TabSaver} saves this into {@link SavedTabInfo}
@@ -54,20 +54,20 @@ export type TabInfo = SavedTabInfo & {
 };
 
 /**
- * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
- * must provide a {@link TabLoader}.
+ * Function that takes a {@link SavedTabInfo} and creates a Platform.Bible tab out of it. Each type
+ * of tab must provide a {@link TabLoader}.
  *
  * For now all tab creators must do their own data type verification
  */
 export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
 
 /**
- * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
+ * Function that takes a Platform.Bible tab and creates a saved tab out of it. Each type of tab can
  * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
  * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
  *
- * @param tabInfo The Paranext tab to save
- * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
+ * @param tabInfo The Platform.Bible tab to save
+ * @returns The saved tab info for Platform.Bible to persist. If `undefined`, does not save the tab
  */
 export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
 
@@ -177,7 +177,7 @@ interface ReplaceTabLayout {
   targetTabId: string;
 }
 
-/** Information about how a Paranext tab fits into the dock layout */
+/** Information about how a Platform.Bible tab fits into the dock layout */
 export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
 
 /** Props that are passed to the web view tab component */
