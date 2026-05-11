@@ -438,6 +438,28 @@ export function ManageBooksDialog({
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
 
+  // Sebastian #6 + #42 (2026-05-11): JS-driven responsive collapse. We observe the
+  // dialog root's width and flip `dialogIsNarrow` when it crosses ~28rem (448px) — the
+  // breakpoint matches the originally-attempted `@md/dialog:` container query. React
+  // refs are typed `MutableRefObject<HTMLDivElement | null>` (null is the canonical
+  // initial value for DOM refs).
+  // eslint-disable-next-line no-null/no-null
+  const dialogRootRef = useRef<HTMLDivElement | null>(null);
+  const [dialogIsNarrow, setDialogIsNarrow] = useState(false);
+  useEffect(() => {
+    const el = dialogRootRef.current;
+    if (!el) return undefined;
+    const NARROW_BREAKPOINT_PX = 448;
+    const measure = () => {
+      const next = el.getBoundingClientRect().width < NARROW_BREAKPOINT_PX;
+      setDialogIsNarrow((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [open]);
+
   const t = useCallback(
     (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) =>
       localizedStrings[key] ?? fallback,
@@ -1702,15 +1724,20 @@ export function ManageBooksDialog({
   }
   return (
     <>
-      {/* Sebastian review items 6 + 42 (2026-05-11): outer dialog wrapper becomes a
-          container so responsive rules can react to the floating panel's width rather
-          than the viewport. Mirrors PR #2224's `@container/actions` pattern but at the
-          dialog level — narrow widths hide the header subtitle and collapse the sidebar
-          to an icon-only rail. */}
+      {/* Sebastian review items 6 + 42 (2026-05-11): outer dialog wrapper drives the
+          responsive collapse. At narrow widths the sidebar drops to an icon-only rail
+          and the header subtitle hides. Originally tried Tailwind's container queries
+          (`@md/dialog:` variants), but those utility classes weren't reaching the
+          webview's iframe stylesheets despite being emitted in the dist. Switched to a
+          JS-driven approach with ResizeObserver — fewer moving parts, no CSS-loader
+          surprises. The `dialogIsNarrow` flag is forwarded to ManageBooksSidebar where
+          it conditionally swaps class sets. */}
       <div
-        className="tw-flex tw-h-full tw-min-h-0 tw-@container/dialog"
+        ref={dialogRootRef}
+        className="tw-flex tw-h-full tw-min-h-0"
         data-testid="manage-books-dialog"
         data-action={action}
+        data-narrow={dialogIsNarrow ? 'true' : undefined}
       >
         <TooltipProvider delayDuration={200}>
           <ManageBooksSidebar
@@ -1727,6 +1754,7 @@ export function ManageBooksDialog({
             targetShortName={project.shortName}
             t={t}
             projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
+            isNarrow={dialogIsNarrow}
           />
           <div className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
             <header className="tw:flex tw:items-center tw:gap-3 tw:border-b tw:px-6 tw:py-4">
@@ -1734,12 +1762,11 @@ export function ManageBooksDialog({
                 <h2 className="tw:text-lg tw:font-semibold">
                   {t('%manageBooks_dialog_title%', 'Manage books')}
                 </h2>
-                {/* Header subtitle ("66 of 92 canonical books in ESVUS16 ⋅ English Versification")
-                    hides at narrow dialog widths so the project name + title still fit. The full
-                    info remains accessible via the sidebar's project tooltip (#30). */}
-                <p className="tw-text-xs tw-text-muted-foreground @max-md/dialog:tw-hidden">
-                  {headerSubtitle}
-                </p>
+                {/* Header subtitle hides when the dialog is narrow (Sebastian #6/#42).
+                    Driven by the JS-resize-observer flag on the dialog root. */}
+                {!dialogIsNarrow && (
+                  <p className="tw-text-xs tw-text-muted-foreground">{headerSubtitle}</p>
+                )}
               </div>
             </header>
 

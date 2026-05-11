@@ -192,6 +192,13 @@ export type ManageBooksSidebarProps = {
    * popover. Forwarded from the dialog via the same prop name.
    */
   projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
+
+  /**
+   * Sebastian #6 + #42 (2026-05-11): drives the icon-only collapse. When true, the sidebar renders
+   * as a narrow rail (w-14) with hidden labels + group headings. When false, the full w-64 rail.
+   * Sourced from the dialog's ResizeObserver on its own width.
+   */
+  isNarrow?: boolean;
 };
 
 /** Map sidebar section id → ManageBooksAction (only valid for the 5 in-scope sections). */
@@ -250,6 +257,7 @@ export function ManageBooksSidebar({
   targetShortName,
   t,
   projectSelectorLocalizedStrings,
+  isNarrow = false,
 }: ManageBooksSidebarProps) {
   const activeSectionId = actionToSectionId(active);
   // Read-only target → block mutating actions. `undefined` means "still loading", so we leave
@@ -264,22 +272,30 @@ export function ManageBooksSidebar({
   return (
     <nav
       aria-label={t('%manageBooks_sidebar_heading%', 'Manage books')}
-      // Sebastian review items 6 + 42 (2026-05-11): when the dialog container is narrow
-      // (below `md` per the `@container/dialog` set up by the dialog wrapper), collapse
-      // the sidebar to an icon-only rail. Width drops from w-64 to w-14, gap tightens,
-      // and the project label + section labels hide via `@max-md/dialog:tw-hidden`
-      // selectors on those individual elements below. Tooltips on every section
-      // surface the labels on hover.
-      className="tw-flex tw-w-64 tw-shrink-0 tw-flex-col tw-gap-1 tw-overflow-y-auto tw-border-r tw-bg-muted/40 tw-p-3 @max-md/dialog:tw-w-14 @max-md/dialog:tw-p-1"
+      // Sebastian #6 + #42 (2026-05-11): JS-driven responsive collapse. `isNarrow` is
+      // sourced from the dialog's ResizeObserver. Avoids Tailwind container-queries
+      // because the `@md/dialog:` variants weren't reaching the iframe stylesheets in
+      // testing — see the dialog wrapper's comment for full background.
+      className={cn(
+        'tw-flex tw-shrink-0 tw-flex-col tw-gap-1 tw-overflow-y-auto tw-border-r tw-bg-muted/40',
+        isNarrow ? 'tw-w-14 tw-p-1' : 'tw-w-64 tw-p-3',
+      )}
       data-testid="manage-books-sidebar"
     >
-      <div className="tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-pt-2 tw-pb-3 @max-md/dialog:tw-px-0">
-        <Label
-          htmlFor="manage-books-sidebar-project"
-          className="tw-text-xs tw-text-muted-foreground @max-md/dialog:tw-hidden"
-        >
-          {t('%manageBooks_header_projectLabel%', 'Project')}
-        </Label>
+      <div
+        className={cn(
+          'tw-flex tw-flex-col tw-gap-1 tw-pt-2 tw-pb-3',
+          isNarrow ? 'tw-px-0' : 'tw-px-2',
+        )}
+      >
+        {!isNarrow && (
+          <Label
+            htmlFor="manage-books-sidebar-project"
+            className="tw-text-xs tw-text-muted-foreground"
+          >
+            {t('%manageBooks_header_projectLabel%', 'Project')}
+          </Label>
+        )}
         {/* Sebastian review item 30 (2026-05-11): the ProjectSelector trigger shows the
             active project's shortName, which is opaque to anyone who doesn't already know
             the abbreviation. Wrap the trigger in a tooltip surfacing the fullName so the
@@ -355,11 +371,10 @@ export function ManageBooksSidebar({
             data-testid={`manage-books-sidebar-section-${id}`}
             data-active={isActive ? 'true' : undefined}
             data-read-only-disabled={isReadOnlyDisabled ? 'true' : undefined}
-            // At narrow widths (icon-only mode), drop gap + horizontal padding and center
-            // the icon. The label `<span>` below also hides via `@max-md/dialog:tw-hidden`.
+            // JS-driven (isNarrow) collapse — see <nav>'s comment above.
             className={cn(
-              'tw-flex tw-items-start tw-gap-3 tw-rounded-md tw-px-3 tw-py-2 tw-text-start tw-text-sm tw-transition-colors',
-              '@max-md/dialog:tw-gap-0 @max-md/dialog:tw-justify-center @max-md/dialog:tw-px-2',
+              'tw-flex tw-items-start tw-rounded-md tw-py-2 tw-text-start tw-text-sm tw-transition-colors',
+              isNarrow ? 'tw-justify-center tw-gap-0 tw-px-2' : 'tw-justify-start tw-gap-3 tw-px-3',
               !disabled && 'hover:tw-bg-accent hover:tw-text-accent-foreground',
               !disabled &&
                 'tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring',
@@ -369,14 +384,16 @@ export function ManageBooksSidebar({
             aria-label={labels.label}
           >
             <Icon className="tw-mt-0.5 tw-h-4 tw-w-4 tw-shrink-0" aria-hidden />
-            <span className="tw-flex tw-flex-col @max-md/dialog:tw-hidden">
-              <span>{labels.label}</span>
-              {labels.subtitle && (
-                <span className="tw-text-xs tw-font-normal tw-text-muted-foreground">
-                  {labels.subtitle}
-                </span>
-              )}
-            </span>
+            {!isNarrow && (
+              <span className="tw-flex tw-flex-col">
+                <span>{labels.label}</span>
+                {labels.subtitle && (
+                  <span className="tw-text-xs tw-font-normal tw-text-muted-foreground">
+                    {labels.subtitle}
+                  </span>
+                )}
+              </span>
+            )}
           </button>
         );
 
@@ -388,9 +405,9 @@ export function ManageBooksSidebar({
         const tooltipText = tooltip ?? labels.label;
         return (
           <Fragment key={id}>
-            {showSeparator && <Separator className="tw:my-1" />}
-            {groupHeading && (
-              <div className="tw-mt-1 tw-px-3 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground @max-md/dialog:tw-hidden">
+            {showSeparator && <Separator className="tw-my-1" />}
+            {groupHeading && !isNarrow && (
+              <div className="tw-mt-1 tw-px-3 tw-text-[11px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground">
                 {groupHeading}
               </div>
             )}
