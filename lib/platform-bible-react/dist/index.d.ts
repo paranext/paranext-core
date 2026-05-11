@@ -1472,17 +1472,17 @@ interface ScopeSelectorProps {
 	 */
 	variant?: ScopeSelectorVariant;
 	/**
-	 * Explicit start of the verse range — only meaningful when `scope === 'range'`. When omitted,
-	 * the range UI seeds its start from `currentScrRef` (if provided) or falls back to GEN 1:1.
-	 * Provide this when the consumer is tracking range state independently of "the user's current
-	 * scripture reference" — e.g. the markers-checklist's persisted range bounds.
+	 * Explicit start of the verse range — only meaningful when `scope === 'range'`. When omitted, the
+	 * range UI seeds its start from `currentScrRef` (if provided) or falls back to GEN 1:1. Provide
+	 * this when the consumer is tracking range state independently of "the user's current scripture
+	 * reference" — e.g. the markers-checklist's persisted range bounds.
 	 */
 	rangeStart?: SerializedVerseRef;
 	/**
 	 * Explicit end of the verse range — only meaningful when `scope === 'range'`. Fallback chain
 	 * matches `rangeStart` (then `currentScrRef`, then GEN 1:1). Every time the user submits a new
-	 * `rangeStart`, `onRangeEndChange` is also fired with that same reference so the end mirrors
-	 * the start; the user is free to narrow the end afterward.
+	 * `rangeStart`, `onRangeEndChange` is also fired with that same reference so the end mirrors the
+	 * start; the user is free to narrow the end afterward.
 	 */
 	rangeEnd?: SerializedVerseRef;
 	/** Callback when the range start reference changes. Required to make the range UI functional. */
@@ -1495,7 +1495,7 @@ interface ScopeSelectorProps {
 	 * - **Display**: shown as the muted secondary text on `'verse'` / `'chapter'` / `'book'` scope
 	 *   triggers in the dropdown variant (e.g. "Current verse — GEN 1:1").
 	 * - **Range-mode fallback**: seeds `rangeStart` and `rangeEnd` when those are not explicitly
-	 *   supplied. `rangeStart` / `rangeEnd` always win when present — `currentScrRef` is *not* a
+	 *   supplied. `rangeStart` / `rangeEnd` always win when present — `currentScrRef` is _not_ a
 	 *   duplicate, it is the next-step fallback before the GEN 1:1 default.
 	 *
 	 * Also drives the "Navigate" footer in the dropdown variant when paired with
