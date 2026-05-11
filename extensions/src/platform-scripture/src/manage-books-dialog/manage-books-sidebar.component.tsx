@@ -78,31 +78,36 @@ function getSectionLabels(
   id: ManageBooksSidebarSectionId,
   t: (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) => string,
 ): { label: string; subtitle: string; tooltip?: string } {
+  // Sebastian review item 33 (2026-05-11): drop subtitles from the five action sections
+  // (show / create / copy / import / delete) — their labels are self-explanatory and the
+  // subtitle row added visual noise without information. Keep subtitles on the workflow
+  // rows below (progress-tracking / book-names / introductions) where the label alone
+  // doesn't convey what the row does.
   switch (id) {
     case 'show':
       return {
         label: t('%manageBooks_sidebar_show_label%', 'Show books'),
-        subtitle: t('%manageBooks_sidebar_show_subtitle%', 'View books in this project'),
+        subtitle: '',
       };
     case 'create':
       return {
         label: t('%manageBooks_sidebar_create_label%', 'Create books'),
-        subtitle: t('%manageBooks_sidebar_create_subtitle%', 'Add new books'),
+        subtitle: '',
       };
     case 'copy':
       return {
         label: t('%manageBooks_sidebar_copy_label%', 'Copy books'),
-        subtitle: t('%manageBooks_sidebar_copy_subtitle%', 'Copy between projects'),
+        subtitle: '',
       };
     case 'import':
       return {
         label: t('%manageBooks_sidebar_import_label%', 'Import books'),
-        subtitle: t('%manageBooks_sidebar_import_subtitle%', 'Import from files'),
+        subtitle: '',
       };
     case 'delete':
       return {
         label: t('%manageBooks_sidebar_delete_label%', 'Delete books'),
-        subtitle: t('%manageBooks_sidebar_delete_subtitle%', 'Remove books'),
+        subtitle: '',
       };
     case 'progress-tracking':
       return {
@@ -261,27 +266,47 @@ export function ManageBooksSidebar({
         >
           {t('%manageBooks_header_projectLabel%', 'Project')}
         </Label>
-        <div data-testid="manage-books-sidebar-project-trigger">
-          <ProjectSelector
-            mode="project"
-            projects={projects}
-            openTabs={openTabs ?? []}
-            selection={{ projectId }}
-            onChangeSelection={({ projectId: nextId }) => {
-              if (nextId) onProjectIdChange(nextId);
-            }}
-            buttonClassName="tw:h-8 tw:w-full tw:font-normal"
-            isDisabled={isSubmitting}
-            ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
-            // Fallback when the project list is still loading or the active projectId hasn't
-            // landed in the list yet. We deliberately do NOT echo `projectId` here — projectIds
-            // are GUIDs and would render as a 32-char hex string in the trigger, which the
-            // verifier flagged as unreadable. The localized "Select project" string is the
-            // correct momentary fallback; once `projects` resolves and contains `projectId`,
-            // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16") in the trigger.
-            buttonPlaceholder={t('%manageBooks_sidebar_projectPlaceholder%', 'Select project')}
-          />
-        </div>
+        {/* Sebastian review item 30 (2026-05-11): the ProjectSelector trigger shows the
+            active project's shortName, which is opaque to anyone who doesn't already know
+            the abbreviation. Wrap the trigger in a tooltip surfacing the fullName so the
+            user can hover to disambiguate. Tooltip is suppressed when fullName equals the
+            shortName (no extra info) or when projects haven't resolved yet. */}
+        {(() => {
+          const activeProject = projects.find((p) => p.id === projectId);
+          const fullName = activeProject?.fullName;
+          const shortName = activeProject?.shortName;
+          const showTooltip = !!fullName && fullName !== shortName;
+          const selectorElement = (
+            <div data-testid="manage-books-sidebar-project-trigger">
+              <ProjectSelector
+                mode="project"
+                projects={projects}
+                openTabs={openTabs ?? []}
+                selection={{ projectId }}
+                onChangeSelection={({ projectId: nextId }) => {
+                  if (nextId) onProjectIdChange(nextId);
+                }}
+                buttonClassName="tw-h-8 tw-w-full tw-font-normal"
+                isDisabled={isSubmitting}
+                ariaLabel={t('%manageBooks_header_projectLabel%', 'Project')}
+                // Fallback when the project list is still loading or the active projectId hasn't
+                // landed in the list yet. We deliberately do NOT echo `projectId` here — projectIds
+                // are GUIDs and would render as a 32-char hex string in the trigger, which the
+                // verifier flagged as unreadable. The localized "Select project" string is the
+                // correct momentary fallback; once `projects` resolves and contains `projectId`,
+                // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16") in the trigger.
+                buttonPlaceholder={t('%manageBooks_sidebar_projectPlaceholder%', 'Select project')}
+              />
+            </div>
+          );
+          if (!showTooltip) return selectorElement;
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>{selectorElement}</TooltipTrigger>
+              <TooltipContent side="top">{fullName}</TooltipContent>
+            </Tooltip>
+          );
+        })()}
       </div>
       {SECTIONS.map(({ id, groupStart, disabled: defDisabled, Icon }, index) => {
         // A section is disabled at runtime if either:
@@ -327,9 +352,11 @@ export function ManageBooksSidebar({
             <Icon className="tw:mt-0.5 tw:h-4 tw:w-4 tw:shrink-0" aria-hidden />
             <span className="tw:flex tw:flex-col">
               <span>{labels.label}</span>
-              <span className="tw:text-xs tw:font-normal tw:text-muted-foreground">
-                {labels.subtitle}
-              </span>
+              {labels.subtitle && (
+                <span className="tw-text-xs tw-font-normal tw-text-muted-foreground">
+                  {labels.subtitle}
+                </span>
+              )}
             </span>
           </button>
         );
@@ -348,7 +375,10 @@ export function ManageBooksSidebar({
                   {/* Wrapper span so the tooltip works on a disabled button */}
                   <span>{buttonElement}</span>
                 </TooltipTrigger>
-                <TooltipContent side="right">{tooltip}</TooltipContent>
+                {/* Sebastian review item 41 (2026-05-11): show sidebar tooltips above
+                    (or below on collision) rather than to the right, which collides with
+                    the dialog body content. */}
+                <TooltipContent side="top">{tooltip}</TooltipContent>
               </Tooltip>
             ) : (
               buttonElement

@@ -1279,15 +1279,19 @@ export function ManageBooksDialog({
   // newer/older/same/undetermined chip-label localized strings are still consumed by the per-row
   // status section headers in the BookGrid (see `gridItems` above) — leave them in
   // localizedStrings.json untouched.
+  // Sebastian review item 43 (2026-05-11): align filter dropdown labels with the grid's
+  // group-header strings — "Not in project" / "In project" rather than "New" / "Existing".
+  // Stage 6 will add the new/newer/older/same labels for Copy/Import once the status-
+  // comparison backend is in place.
   const presenceFilterLabel = (s: 'all' | 'new' | 'existing'): string => {
     switch (s) {
       case 'all':
         return t('%manageBooks_filter_state_all%', 'All');
       case 'new':
-        return t('%manageBooks_filter_state_new%', 'New');
+        return t('%manageBooks_grid_statusGroup_notInProject%', 'Not in project');
       case 'existing':
       default:
-        return t('%manageBooks_filter_state_existing%', 'Existing');
+        return t('%manageBooks_grid_statusGroup_inProject%', 'In project');
     }
   };
 
@@ -1952,7 +1956,13 @@ export function ManageBooksDialog({
                 value={filter}
                 onSearch={setFilter}
                 placeholder={t('%manageBooks_filter_placeholder%', 'Filter books…')}
-                className="tw:h-8 tw:min-w-0 tw:max-w-xs tw:flex-1 tw:basis-24"
+                // Sebastian review item 37 (2026-05-11): SearchBar's inner shadcn Input
+                // defaults to tw-h-10, making the search component visibly taller than its
+                // siblings (BookGridGroupByToggle, PresenceFilterMenu — all tw-h-8). The
+                // wrapper className already sets tw-h-8 but the Input's intrinsic height
+                // wins; use Tailwind's arbitrary descendant selector to push the height
+                // into the Input itself.
+                className="tw-h-8 tw-min-w-0 tw-max-w-xs tw-flex-1 tw-basis-24 [&_input]:tw-h-8"
                 isDisabled={isSubmitting}
               />
               <span
@@ -2038,7 +2048,10 @@ export function ManageBooksDialog({
                   interactive={action !== 'view'}
                   localizedStrings={bookGridStrings}
                   getRowAriaLabel={gridRowAriaLabel}
-                  contentClassName="tw:px-0 tw:py-0"
+                  // Sebastian review item 34 (2026-05-11): leave BookGridSelector's
+                  // default tw-p-1 in place so the first pill checkbox horizontally
+                  // aligns with the toolbar's select-all checkbox. The prior tw-px-0
+                  // override moved the grid 4px left of the toolbar items.
                 />
               )}
             </div>
