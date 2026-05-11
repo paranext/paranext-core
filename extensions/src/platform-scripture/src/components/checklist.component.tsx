@@ -312,13 +312,21 @@ function ColumnHeaderWithTooltip({
     <TooltipProvider delayDuration={0}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span
-            className="tw-font-semibold"
+          {/*
+           * UX-2 finding #4: the entire header cell is the hover/tooltip target now
+           * (was just the text span). Cursor stays as the default arrow — neither
+           * pointer nor text — and a subtle bg-accent on hover makes the hoverable
+           * area discoverable. The column-width hints live as Tailwind arbitrary
+           * variants on the <section> wrapper below, applied to <th> directly so the
+           * table-fixed layout honors them.
+           */}
+          <div
+            className="tw-flex tw-w-full tw-cursor-default tw-items-center tw-justify-start tw-px-2 tw-py-1 tw-font-semibold hover:tw-bg-accent/50"
             aria-label={ariaLabel}
             data-testid="checklist-column-header"
           >
             {shortName}
-          </span>
+          </div>
         </TooltipTrigger>
         <TooltipContent>{displayFullName}</TooltipContent>
       </Tooltip>
@@ -417,7 +425,10 @@ export function ChecklistTool({
       // `.claude/rules/code-quality/eslint-disable-discipline.md`.
       // eslint-disable-next-line react/no-unstable-nested-components
       header: () => (
-        <span className="tw-px-2 tw-py-1 tw-font-semibold" data-testid="checklist-column-headers">
+        <span
+          className="tw-block tw-px-2 tw-py-1 tw-font-semibold"
+          data-testid="checklist-column-headers"
+        >
           {/* The Ref column header is intentionally unlabeled in the spec — it's axis metadata
               rather than a project column — so we render a visually-hidden label for accessibility.
               BHV-111 requires every row to carry a firstRef, which doubles as the row header.     */}
@@ -477,13 +488,11 @@ export function ChecklistTool({
           // TanStack Table `header` render fn — not a React component; see rationale above.
           // eslint-disable-next-line react/no-unstable-nested-components
           header: () => (
-            <div className="tw-px-2 tw-py-1">
-              <ColumnHeaderWithTooltip
-                shortName={shortName}
-                fullName={fullName}
-                ariaLabelTemplate={getLocalizedString('%markersChecklist_columnHeader_aria%')}
-              />
-            </div>
+            <ColumnHeaderWithTooltip
+              shortName={shortName}
+              fullName={fullName}
+              ariaLabelTemplate={getLocalizedString('%markersChecklist_columnHeader_aria%')}
+            />
           ),
           // TanStack Table `cell` render fn — not a React component; see rationale above.
           // eslint-disable-next-line react/no-unstable-nested-components
@@ -767,10 +776,28 @@ export function ChecklistTool({
 
       {renderBanners()}
 
+      {/*
+       * UX-2 finding #11: wrap the table section in `tw-relative tw-z-0` so the sticky
+       * <thead>'s internal z-20 (set by shadcn-ui Table with stickyHeader) lives inside
+       * a new stacking context here and can never out-stack the toolbar above (which
+       * uses `tw-sticky tw-top-0 tw-z-10`). Without this wrapper the thead's z-20 wins
+       * over the toolbar's z-10 and the column headers scroll OVER the toolbar.
+       *
+       * UX-2 finding #10: enforce equal column widths via Tailwind arbitrary variants
+       * applied to the inner <table>:
+       *   - `[&_table]:tw-table-fixed [&_table]:tw-w-full` — switch to fixed layout so
+       *     columns honor explicit widths on <th> instead of widest-content auto-sizing.
+       *   - `[&_thead_th:first-child]:tw-w-24` — Ref column is a fixed 96px (`w-24`),
+       *     enough for "GEN 1:1" etc.
+       * Under table-fixed, the remaining N project columns (all with implicit
+       * `width: auto`) share the remaining horizontal space equally — the browser
+       * distributes whatever is left after the fixed column. Inline widths on inner
+       * divs would have no effect here; widths must live on the <th>.
+       */}
       <section
         aria-label={getLocalizedString('%markersChecklist_table_aria%')}
         aria-busy={isLoading}
-        className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border"
+        className="tw-relative tw-z-0 tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border [&_table]:tw-table-fixed [&_table]:tw-w-full [&_thead_th:first-child]:tw-w-24"
         data-testid="checklist-data-table"
       >
         <DataTable
