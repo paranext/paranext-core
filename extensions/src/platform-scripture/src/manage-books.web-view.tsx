@@ -143,6 +143,13 @@ interface ManageBooksNetworkObject {
     fromProjectId: string;
     toProjectId: string;
     bookNumbers: number[];
+    /**
+     * Sebastian review item #15 (2026-05-11): when true (default), each book is written via
+     * `PutText(bookNum, 0, ...)` — destination replaced. When false, the orchestrator runs the
+     * chapter-merge path (port of PT9 `WriteChaptersToBook`): source chapters overwrite dest
+     * counterparts; dest chapters not in source survive. Optional + backwards-compatible.
+     */
+    replaceEntireBook?: boolean;
   }) => Promise<MutationResult>;
   importBooks: (input: {
     projectId: string;
@@ -757,22 +764,16 @@ global.webViewComponent = function ManageBooksWebView({
       strategy?: ManageBooksCopyStrategy;
     }): Promise<MutationResult | undefined> => {
       if (!manageBooksApi) return undefined;
-      // TODO (Vladimir #16 follow-up / parallel to Sebastian #15): the C#
-      // `copyBooks` PAPI method has no strategy parameter — `CopyBooksOrchestrator.CopyBooks`
-      // unconditionally writes the whole book via `PutText(bookNum, 0, false, ...)`.
-      // The dialog now lets the user pick `replaceEntireBooks` vs
-      // `nonExistingChapters`, and we forward `args.strategy` here for parity
-      // with `onImportBooks`, but until the backend honors a strategy flag both
-      // choices currently behave as `replaceEntireBooks`. Mirrors Sebastian's
-      // note about Import's `replaceEntireBook` flag being a no-op today.
-      // When the backend lands a real merge path, add `replaceEntireBook:
-      // args.strategy !== 'nonExistingChapters'` to the payload below and
-      // update `CopyBooksRequest` / `CopyBooksOrchestrator.CopyBooks`
-      // accordingly.
+      // Sebastian review item #15 + Vladimir #16 (2026-05-11): the backend now
+      // honors `replaceEntireBook`. `strategy === 'nonExistingChapters'` routes
+      // through PT9's WriteChaptersToBook semantic (chapter-by-chapter merge,
+      // source overwrites collisions, dest chapters not in source survive). The
+      // default + `replaceEntireBooks` route through whole-book replacement.
       return manageBooksApi.copyBooks({
         fromProjectId: args.sourceProjectId,
         toProjectId: args.destProjectId,
         bookNumbers: booksToNumbers(args.books),
+        replaceEntireBook: args.strategy !== 'nonExistingChapters',
       });
     },
     [manageBooksApi],
