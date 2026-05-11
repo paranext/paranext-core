@@ -201,6 +201,7 @@
       "%manageBooks_delete_emptyState_noBooks%": "This project has no books to delete.",
       "%manageBooks_dialog_title%": "Manage books",
       "%manageBooks_filter_books%": "Filter books",
+      "%manageBooks_genericError%": "An unexpected error occurred.",
       "%manageBooks_filter_buttonAriaLabel%": "Filter",
       "%manageBooks_filter_clearButton%": "Clear filter",
       "%manageBooks_filter_menuLabel%": "Show",

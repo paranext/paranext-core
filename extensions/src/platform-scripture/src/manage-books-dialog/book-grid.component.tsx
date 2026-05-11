@@ -31,7 +31,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { AlertTriangle, Ban, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { AlertTriangle, Ban, Check, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Canon } from '@sillsdev/scripture';
 import {
   Badge,
@@ -615,12 +615,22 @@ export function BookGridSelector({
     const body = (
       <>
         {interactive && (
-          <Checkbox
-            checked={isSelected}
-            tabIndex={-1}
+          // Sebastian review item 46 (2026-05-11): the pill is an outer <button> (line ~688
+          // below). Using shadcn's <Checkbox> here renders a Radix Checkbox.Root <button>,
+          // which yields a console warning: "<button> cannot appear as a descendant of
+          // <button>". The visual is purely decorative — the outer <button> handles all
+          // interaction and we set aria-hidden + tabIndex={-1} previously to confirm it.
+          // Swap to a presentational <span> that mirrors the Checkbox look so DOM nesting is
+          // valid. Mirrors lib/platform-bible-react/src/components/shadcn-ui/checkbox.tsx.
+          <span
             aria-hidden
-            className="tw:pointer-events-none tw:shrink-0"
-          />
+            className={cn(
+              'tw-flex tw-h-4 tw-w-4 tw-shrink-0 tw-items-center tw-justify-center tw-rounded-sm tw-border tw-border-primary',
+              isSelected && 'tw-bg-primary tw-text-primary-foreground',
+            )}
+          >
+            {isSelected && <Check className="tw-h-4 tw-w-4" />}
+          </span>
         )}
         {dot}
         <span className="tw:shrink-0 tw:font-medium">{item.book}</span>
