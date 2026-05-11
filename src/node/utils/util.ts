@@ -62,7 +62,7 @@ export function resolveHtmlPath(htmlFileName: string) {
  *
  * When running in development: `<repo_directory>/dev-appdata`
  *
- * When packaged: `<user_home_directory>/.platform.bible`
+ * When packaged: `<user_home_directory>/.{{ productInfo.name }}`
  */
 export const getAppDir = memoizeOne((): string => {
   return globalThis.isPackaged
