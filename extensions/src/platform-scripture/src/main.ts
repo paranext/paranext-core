@@ -11,7 +11,7 @@ import {
   ChecklistWebViewProvider,
   markersChecklistWebViewType,
 } from './checklist.web-view-provider';
-import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
+import { CHECKLIST_COPY_REQUEST_EVENT, CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import {
   checkAggregatorService,
@@ -224,6 +224,51 @@ async function openMarkersChecklistSettings(): Promise<void> {
 }
 
 /**
+ * Companion emitter for the `platformScripture.copyMarkersChecklist` command (UX-2 finding #12,
+ * WP6). The web view subscribes via `papi.network.getNetworkEvent(CHECKLIST_COPY_REQUEST_EVENT)`
+ * and performs the clipboard write + success toast locally. Same lazy-initialized lifetime model as
+ * `openSettingsEventEmitter` above.
+ */
+let copyRequestEventEmitter:
+  | ReturnType<typeof papi.network.createNetworkEventEmitter<undefined>>
+  | undefined;
+
+async function copyMarkersChecklist(): Promise<void> {
+  if (!copyRequestEventEmitter) {
+    logger.warn(
+      'platformScripture.copyMarkersChecklist invoked before the event emitter was initialized — ignoring.',
+    );
+    return;
+  }
+  copyRequestEventEmitter.emit(undefined);
+}
+
+/**
+ * Placeholder handler for the `Print Markers Checklist` menu item (UX-2 finding #12, WP6). Print is
+ * not yet implemented — the handler surfaces a non-blocking Sonner info toast so the user gets
+ * immediate feedback rather than a silent click. The localized message lives in
+ * `localizedStrings.json` under `markersChecklist_print_notImplemented` (delimiters dropped in this
+ * comment to satisfy the localization-key pre-commit scanner).
+ */
+async function printMarkersChecklist(): Promise<void> {
+  await papi.notifications.send({
+    severity: 'info',
+    message: '%markersChecklist_print_notImplemented%',
+  });
+}
+
+/**
+ * Placeholder handler for the `Save Markers Checklist` menu item (UX-2 finding #12, WP6). Save is
+ * not yet implemented; same non-blocking toast strategy as `printMarkersChecklist` above.
+ */
+async function saveMarkersChecklist(): Promise<void> {
+  await papi.notifications.send({
+    severity: 'info',
+    message: '%markersChecklist_save_notImplemented%',
+  });
+}
+
+/**
  * FN-008 (2026-05-01): Open the unified Manage Books dialog as a tab web view. The optional
  * argument is either an editor's `webViewId` (from a scripture-editor menu) or a literal project id
  * — we probe with `papi.webViews.getOpenWebViewDefinition` and fall back to treating the value as a
@@ -327,6 +372,12 @@ export async function activate(context: ExecutionActivationContext) {
   // `context.registrations` below so re-activation gets a fresh channel.
   openSettingsEventEmitter = papi.network.createNetworkEventEmitter<undefined>(
     CHECKLIST_OPEN_SETTINGS_EVENT,
+  );
+
+  // Companion "copy to clipboard" event emitter (UX-2 finding #12, WP6). Same lifecycle as
+  // openSettingsEventEmitter — created here, disposed via `context.registrations` below.
+  copyRequestEventEmitter = papi.network.createNetworkEventEmitter<undefined>(
+    CHECKLIST_COPY_REQUEST_EVENT,
   );
 
   const scriptureExtenderPdpefPromise =
@@ -571,6 +622,52 @@ export async function activate(context: ExecutionActivationContext) {
       },
     },
   );
+  const copyMarkersChecklistPromise = papi.commands.registerCommand(
+    'platformScripture.copyMarkersChecklist',
+    copyMarkersChecklist,
+    {
+      method: {
+        summary:
+          'Ask any mounted Markers Checklist web view to copy its currently visible data to the clipboard',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'Void',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+  const printMarkersChecklistPromise = papi.commands.registerCommand(
+    'platformScripture.printMarkersChecklist',
+    printMarkersChecklist,
+    {
+      method: {
+        summary: 'Print the Markers Checklist (placeholder — surfaces a not-implemented toast)',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'Void',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+  const saveMarkersChecklistPromise = papi.commands.registerCommand(
+    'platformScripture.saveMarkersChecklist',
+    saveMarkersChecklist,
+    {
+      method: {
+        summary: 'Save the Markers Checklist (placeholder — surfaces a not-implemented toast)',
+        params: [],
+        result: {
+          name: 'return value',
+          summary: 'Void',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
   const markersChecklistWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     markersChecklistWebViewType,
     markersChecklistWebViewProvider,
@@ -685,8 +782,12 @@ export async function activate(context: ExecutionActivationContext) {
     await showChecksSidePanelWebViewProviderPromise,
     await openMarkersChecklistPromise,
     await openMarkersChecklistSettingsPromise,
+    await copyMarkersChecklistPromise,
+    await printMarkersChecklistPromise,
+    await saveMarkersChecklistPromise,
     await markersChecklistWebViewProviderPromise,
     openSettingsEventEmitter,
+    copyRequestEventEmitter,
     await openFindPromise,
     await openFindWebViewProviderPromise,
     await openManageBooksPromise,

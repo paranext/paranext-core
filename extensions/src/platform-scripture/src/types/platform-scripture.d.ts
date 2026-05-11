@@ -2067,6 +2067,26 @@ declare module 'papi-shared-types' {
     'platformScripture.openMarkersChecklistSettings': () => Promise<void>;
 
     /**
+     * Ask any mounted Markers Checklist web view to copy its currently visible data to the user's
+     * clipboard (UX-2 finding #12, WP6). The handler emits a broadcast network event; the web view
+     * performs the actual clipboard write and surfaces a Sonner success toast. Takes no arguments —
+     * the web view holds the live visible-data snapshot.
+     */
+    'platformScripture.copyMarkersChecklist': () => Promise<void>;
+
+    /**
+     * Placeholder handler for the Markers Checklist "Print" menu item (UX-2 finding #12, WP6).
+     * Print is not yet implemented; the handler surfaces a non-blocking Sonner info toast.
+     */
+    'platformScripture.printMarkersChecklist': () => Promise<void>;
+
+    /**
+     * Placeholder handler for the Markers Checklist "Save" menu item (UX-2 finding #12, WP6). Save
+     * is not yet implemented; the handler surfaces a non-blocking Sonner info toast.
+     */
+    'platformScripture.saveMarkersChecklist': () => Promise<void>;
+
+    /**
      * Open the unified Manage Books dialog (FN-008, 2026-05-01) for the active scripture project.
      * Opens the dialog as a tab web view; the dialog itself supports View / Create / Delete / Copy
      * / Import action modes and an inline book-chooser grid.
