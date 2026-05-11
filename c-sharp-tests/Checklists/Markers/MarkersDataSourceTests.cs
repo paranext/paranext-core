@@ -182,10 +182,12 @@ internal class MarkersDataSourceTests
     [Property("ScenarioId", "TS-009")]
     [Property("BehaviorId", "BHV-103")]
     [Property("InvariantId", "INV-004")]
-    public void PostProcessParagraph_ShowVerseTextFalse_ClearsItemsAndInsertsMarkerOnly()
+    public void PostProcessParagraph_ShowVerseTextFalse_DropsAllItems()
     {
-        // BHV-103 / INV-004: with showVerseText=false, existing items are cleared
-        // and a single TextItem("\\" + marker) is inserted at position 0.
+        // BHV-103 / INV-004 (revised post-UX-2): with showVerseText=false, the
+        // paragraph items list is emptied. The marker itself is rendered by the
+        // UI via paragraph.Marker (the marker is no longer prepended as a
+        // TextItem — see markers-checklist follow-up finding #13).
         var input = new ChecklistParagraph(
             "p",
             new List<ChecklistContentItem>
@@ -199,9 +201,7 @@ internal class MarkersDataSourceTests
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Marker, Is.EqualTo("p"));
-        Assert.That(result.Items.Count, Is.EqualTo(1));
-        Assert.That(result.Items[0], Is.InstanceOf<TextItem>());
-        Assert.That(((TextItem)result.Items[0]).Text, Is.EqualTo("\\p"));
+        Assert.That(result.Items, Is.Empty);
     }
 
     [Test]
@@ -211,10 +211,11 @@ internal class MarkersDataSourceTests
     [Property("ScenarioId", "TS-010")]
     [Property("BehaviorId", "BHV-103")]
     [Property("InvariantId", "INV-004")]
-    public void PostProcessParagraph_ShowVerseTextTrue_PrependsMarkerBeforeText()
+    public void PostProcessParagraph_ShowVerseTextTrue_PreservesOriginalItems()
     {
-        // BHV-103: with showVerseText=true, marker text is inserted at index 0
-        // and the original items are preserved at positions 1..N.
+        // BHV-103 (revised post-UX-2): with showVerseText=true, the original
+        // items are preserved verbatim. The marker is NOT prepended (the UI
+        // renders it from paragraph.Marker).
         var input = new ChecklistParagraph(
             "q2",
             new List<ChecklistContentItem>
@@ -226,11 +227,10 @@ internal class MarkersDataSourceTests
 
         var result = MarkersDataSource.PostProcessParagraph(input, showVerseText: true);
 
-        Assert.That(result.Items.Count, Is.EqualTo(3));
-        Assert.That(result.Items[0], Is.InstanceOf<TextItem>());
-        Assert.That(((TextItem)result.Items[0]).Text, Is.EqualTo("\\q2"));
-        Assert.That(((TextItem)result.Items[1]).Text, Is.EqualTo("indented "));
-        Assert.That(((TextItem)result.Items[2]).Text, Is.EqualTo("poetry"));
+        Assert.That(result.Marker, Is.EqualTo("q2"));
+        Assert.That(result.Items.Count, Is.EqualTo(2));
+        Assert.That(((TextItem)result.Items[0]).Text, Is.EqualTo("indented "));
+        Assert.That(((TextItem)result.Items[1]).Text, Is.EqualTo("poetry"));
     }
 
     [Test]
@@ -239,9 +239,10 @@ internal class MarkersDataSourceTests
     [Property("Contract", "PostProcessParagraph")]
     [Property("ScenarioId", "TS-067")]
     [Property("BehaviorId", "BHV-103")]
-    public void PostProcessParagraph_ShowVerseTextFalse_WithMarkerQ1_DisplaysBackslashQ1Only()
+    public void PostProcessParagraph_ShowVerseTextFalse_WithMarkerQ1_DropsAllItems()
     {
-        // TS-067: q1 marker with showVerseText=false displays exactly "\q1".
+        // TS-067 (revised post-UX-2): q1 marker with showVerseText=false ->
+        // items emptied. UI renders "\q1" from paragraph.Marker.
         var input = new ChecklistParagraph(
             "q1",
             new List<ChecklistContentItem> { new TextItem("some content", null) }
@@ -249,8 +250,8 @@ internal class MarkersDataSourceTests
 
         var result = MarkersDataSource.PostProcessParagraph(input, showVerseText: false);
 
-        Assert.That(result.Items.Count, Is.EqualTo(1));
-        Assert.That(((TextItem)result.Items[0]).Text, Is.EqualTo("\\q1"));
+        Assert.That(result.Marker, Is.EqualTo("q1"));
+        Assert.That(result.Items, Is.Empty);
     }
 
     // =====================================================================
@@ -652,18 +653,27 @@ internal class MarkersDataSourceTests
     [Property("InvariantId", "INV-008")]
     public void PostProcessRows_EmptyRowsNoFilter_ReturnsIdenticalMarkersMessage()
     {
-        // TS-021 / INV-008: with no rows and no filter active, the service
-        // returns an EmptyResultMessage with variant="identical" and the
-        // paranext-core localize key for the PT9 message. Per the
+        // TS-021 / INV-008: with no rows and no filter active AND at least
+        // one comparative configured, the service returns an
+        // EmptyResultMessage with variant="identical" and the paranext-core
+        // localize key for the PT9 message. Per the
         // patterns.errorHandling.backendLocalization registry entry, the
         // static service returns the KEY; the wrapping ChecklistNetworkObject
         // resolves it via LocalizationService.GetLocalizedString before the
         // wire response is serialized. Maps to PT9 CLParagraphCellsDataSource_1.
+        // Post-UX-2 finding #3: this case is gated on hasComparativeTexts:true
+        // — see PostProcessRows_EmptyRowsNoFilter_NoComparatives_ReturnsNoResults
+        // for the no-comparatives counterpart.
         var emptyRows = new List<ChecklistRow>();
         var emptyFilter = new HashSet<string>();
         var books = new List<string> { "GEN" };
 
-        var result = MarkersDataSource.PostProcessRows(emptyRows, emptyFilter, books);
+        var result = MarkersDataSource.PostProcessRows(
+            emptyRows,
+            emptyFilter,
+            books,
+            hasComparativeTexts: true
+        );
 
         Assert.That(result, Is.Not.Null, "empty results must always produce a message (INV-008)");
         Assert.That(result!.Variant, Is.EqualTo("identical"));
@@ -694,7 +704,12 @@ internal class MarkersDataSourceTests
         var filter = new HashSet<string> { "p", "q1" };
         var books = new List<string> { "GEN", "EXO" };
 
-        var result = MarkersDataSource.PostProcessRows(emptyRows, filter, books);
+        var result = MarkersDataSource.PostProcessRows(
+            emptyRows,
+            filter,
+            books,
+            hasComparativeTexts: true
+        );
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Variant, Is.EqualTo("noResults"));
@@ -715,7 +730,12 @@ internal class MarkersDataSourceTests
         var filter = new HashSet<string> { "p", "q1" };
         var books = new List<string> { "GEN", "EXO" };
 
-        var result = MarkersDataSource.PostProcessRows(emptyRows, filter, books);
+        var result = MarkersDataSource.PostProcessRows(
+            emptyRows,
+            filter,
+            books,
+            hasComparativeTexts: true
+        );
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.SearchedMarkers, Is.Not.Null);
@@ -738,9 +758,66 @@ internal class MarkersDataSourceTests
         var emptyFilter = new HashSet<string>();
         var books = new List<string> { "GEN" };
 
-        var result = MarkersDataSource.PostProcessRows(rows, emptyFilter, books);
+        var result = MarkersDataSource.PostProcessRows(
+            rows,
+            emptyFilter,
+            books,
+            hasComparativeTexts: true
+        );
 
         Assert.That(result, Is.Null, "non-empty rows must not produce an EmptyResultMessage");
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("Contract", "PostProcessRows")]
+    [Property("ScenarioId", "TS-UX2-003")]
+    [Property("BehaviorId", "BHV-106")]
+    public void PostProcessRows_EmptyRowsNoFilter_NoComparatives_ReturnsNoResults()
+    {
+        // UX-2 finding #3: the "Comparative texts have identical markers."
+        // message must NOT fire when there are no comparatives configured.
+        // It only makes sense when at least one comparative is in play.
+        var emptyRows = new List<ChecklistRow>();
+        var emptyFilter = new HashSet<string>();
+        var books = new List<string> { "GEN" };
+
+        var result = MarkersDataSource.PostProcessRows(
+            emptyRows,
+            emptyFilter,
+            books,
+            hasComparativeTexts: false
+        );
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Variant, Is.EqualTo(EmptyResultMessageVariant.NoResults));
+    }
+
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-007")]
+    [Property("Contract", "PostProcessRows")]
+    [Property("ScenarioId", "TS-UX2-003b")]
+    [Property("BehaviorId", "BHV-106")]
+    public void PostProcessRows_EmptyRowsNoFilter_WithComparatives_ReturnsIdenticalMarkers()
+    {
+        // Regression guard for the original positive case: when comparatives
+        // ARE in play and rows still came back empty with no filter, the
+        // identical-markers message is the correct one.
+        var emptyRows = new List<ChecklistRow>();
+        var emptyFilter = new HashSet<string>();
+        var books = new List<string> { "GEN" };
+
+        var result = MarkersDataSource.PostProcessRows(
+            emptyRows,
+            emptyFilter,
+            books,
+            hasComparativeTexts: true
+        );
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Variant, Is.EqualTo(EmptyResultMessageVariant.Identical));
     }
 
     // =====================================================================

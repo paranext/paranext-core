@@ -168,7 +168,8 @@ internal static class ChecklistService
         EmptyResultMessage? emptyResultMessage = MarkersDataSource.PostProcessRows(
             rows,
             markerFilter,
-            searchedBookNames
+            searchedBookNames,
+            hasComparativeTexts: request.ComparativeTextIds.Count > 0
         );
 
         // Step 10: parallel ColumnHeaders / ColumnProjectIds (INV-C15).

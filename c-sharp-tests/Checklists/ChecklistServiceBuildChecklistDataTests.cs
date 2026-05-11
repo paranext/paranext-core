@@ -674,12 +674,20 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
     [Property("BehaviorId", "BHV-100")]
     public void BuildChecklistData_ChecklistTypeMarkers_ComposesMarkersPipeline()
     {
-        // TS-053: the Markers pipeline is composed under the hood. Indirect
-        // observation via BHV-103 — MarkersDataSource.PostProcessParagraph
-        // prepends a backslash-prefixed marker TextItem at position 0 of
-        // every paragraph's Items (INV-004). If the service did NOT route
-        // through MarkersDataSource, the first item of each paragraph would
-        // not be a TextItem with text "\p" / "\q" / "\q2".
+        // TS-053 (revised post-UX-2 finding #13): the Markers pipeline is
+        // composed under the hood. We observe BHV-103 indirectly: with
+        // showVerseText=true, the original verse-text Items (verse markers
+        // and text fragments produced by the cell builder) flow through
+        // MarkersDataSource.PostProcessParagraph unchanged — they are NOT
+        // dropped, and they are NOT prefixed with a redundant `\marker`
+        // TextItem (the UI renders the marker from paragraph.Marker).
+        //
+        // If the service did NOT route through MarkersDataSource, the
+        // showVerseText flag would have no effect; the paragraph items
+        // would always be present. With showVerseText=true that's
+        // indistinguishable, so instead we assert the new INV-004 contract:
+        // paragraph.Marker is set and Items contain only content items
+        // (verse markers / text), never the prepended `\marker` TextItem.
         var scrText = RegisterDummyProject(Gm001ExoUsfm);
         var request = BuildRequest(activeProjectId: scrText.Guid.ToString(), showVerseText: true);
 
@@ -693,23 +701,26 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         foreach (var cell in row.Cells)
         foreach (var paragraph in cell.Paragraphs)
         {
-            Assume.That(
-                paragraph.Items,
-                Is.Not.Empty,
-                $"precondition — paragraph {paragraph.Marker} has items"
-            );
-            var first = paragraph.Items[0];
             Assert.That(
-                first,
-                Is.InstanceOf<TextItem>(),
-                "BHV-103 / INV-004 — first item must be TextItem carrying backslash-prefixed marker"
+                paragraph.Marker,
+                Is.Not.Null.And.Not.Empty,
+                "INV-004 — paragraph.Marker carries the marker name (UI renders the backslash prefix)"
             );
-            var firstText = (TextItem)first;
-            Assert.That(
-                firstText.Text,
-                Is.EqualTo("\\" + paragraph.Marker),
-                $"BHV-103 / INV-004 — first TextItem.Text must equal \\{paragraph.Marker}"
-            );
+            // INV-004 (revised): the redundant "\\" + Marker TextItem is no
+            // longer prepended. Verify no item in the list starts with the
+            // backslash-prefix marker as its sole text payload.
+            var backslashMarker = "\\" + paragraph.Marker;
+            foreach (var item in paragraph.Items)
+            {
+                if (item is TextItem text)
+                {
+                    Assert.That(
+                        text.Text,
+                        Is.Not.EqualTo(backslashMarker),
+                        $"INV-004 (revised) — Items must not contain the prepended marker TextItem '{backslashMarker}'"
+                    );
+                }
+            }
         }
     }
 
@@ -1205,14 +1216,19 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
     [Property("GoldenMaster", "gm-018")]
     [Property("BehaviorId", "BHV-103")]
     [Property("Invariant", "INV-004")]
-    public void Gm018_MarkerDisplayFormat_Replay_ProducesBackslashPrefixedMarkerItems()
+    public void Gm018_MarkerDisplayFormat_Replay_ProducesMarkerOnRecordOnly()
     {
-        // gm-018 exercises INV-004 (backslash-prefixed marker display) via the
-        // BuildChecklistData pipeline. Same USFM as gm-001 but with
-        // showVerseText=false so the only text item emitted per paragraph is
-        // the backslash-marker name. Expected (per gm-018/expected-output.json):
-        // rowCount=2, excludedCount=0, every paragraph's first content item is
-        // a TextItem whose Text starts with "\".
+        // gm-018 (revised post-UX-2 finding #13): exercises INV-004 (marker
+        // display) via the BuildChecklistData pipeline. Same USFM as gm-001
+        // but with showVerseText=false so the paragraph items list is
+        // emptied. The marker is reported via paragraph.Marker only; the UI
+        // renders the backslash prefix.
+        //
+        // The gm-018 expected-output.json was captured before this revision;
+        // its "items[0].text = \\p / \\q / \\q2" rows reflect the now-defunct
+        // pre-UX-2 contract. The PT9 byte-for-byte fidelity is preserved
+        // semantically (showVerseText=false drops verse text) — only the
+        // PT10 wire shape changed: paragraph.Marker is now authoritative.
         var active = RegisterDummyProject(Gm001ExoUsfm);
         var request = BuildRequest(
             activeProjectId: active.Guid.ToString(),
@@ -1237,12 +1253,13 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
             "gm-018 — excludedCount=0 (hideMatches=false)"
         );
 
-        // INV-004: every paragraph's first content item (the marker name item)
-        // must carry the backslash-prefixed marker as its Text. The gm-018
-        // expected-output shows "\\p", "\\q", "\\q2" as the Text value of the
-        // CLText item at position 0 in each paragraph. PostProcessParagraph
-        // prepends this; when showVerseText=false the following text items
-        // are dropped (BHV-103), so the marker item is often the ONLY item.
+        // INV-004 (revised post-UX-2): paragraph.Marker is the single
+        // source of truth for the marker display. With showVerseText=false,
+        // the verse-text items are dropped by PostProcessParagraph; the
+        // only items that remain are downstream additions (e.g. CAP-012's
+        // EditLinkItem appended to the last paragraph of each cell). What
+        // is forbidden is the now-deprecated prepended "\\" + Marker
+        // TextItem (markers-checklist follow-up finding #13).
         foreach (var row in result.Rows)
         {
             foreach (var cell in row.Cells)
@@ -1250,26 +1267,25 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
                 foreach (var paragraph in cell.Paragraphs)
                 {
                     Assert.That(
-                        paragraph.Items,
-                        Is.Not.Empty,
-                        "INV-004 — every paragraph has at least the marker-name item"
+                        paragraph.Marker,
+                        Is.Not.Null.And.Not.Empty,
+                        "INV-004 — paragraph.Marker carries the marker name (UI renders the backslash prefix)"
                     );
-                    Assert.That(
-                        paragraph.Items[0],
-                        Is.InstanceOf<TextItem>(),
-                        $"INV-004 — first item of paragraph '{paragraph.Marker}' must be the marker-name TextItem"
-                    );
-                    var markerItem = (TextItem)paragraph.Items[0];
-                    Assert.That(
-                        markerItem.Text,
-                        Does.StartWith(@"\"),
-                        $"INV-004 — marker-name TextItem must start with '\\' for paragraph '{paragraph.Marker}'"
-                    );
-                    Assert.That(
-                        markerItem.Text,
-                        Is.EqualTo(@"\" + paragraph.Marker),
-                        $"INV-004 — marker-name text is '\\{paragraph.Marker}'"
-                    );
+                    // No TextItem in Items may carry the deprecated
+                    // "\\" + Marker payload — the UI sources that from
+                    // paragraph.Marker now.
+                    var backslashMarker = "\\" + paragraph.Marker;
+                    foreach (var item in paragraph.Items)
+                    {
+                        if (item is TextItem text)
+                        {
+                            Assert.That(
+                                text.Text,
+                                Is.Not.EqualTo(backslashMarker),
+                                $"INV-004 (revised) — Items must not contain the prepended marker TextItem '{backslashMarker}'"
+                            );
+                        }
+                    }
                 }
             }
         }

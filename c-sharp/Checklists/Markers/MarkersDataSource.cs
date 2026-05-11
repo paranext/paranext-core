@@ -45,37 +45,47 @@ internal static class MarkersDataSource
                 && (markerFilter.Count == 0 || markerFilter.Contains(tag.Marker))
         );
 
-    // === PORTED FROM PT9 ===
+    // === PORTED FROM PT9 (REVISED post-UX-2 review) ===
     // Source: PT9/Paratext/Checklists/CLParagraphCellsDataSource.cs:221-226
     // Method: CLMarkersDataSource.PostProcessParagraph(CLCell, VerseRef, CLParagraph)
     // Maps to: EXT-004 / BHV-103 / INV-004
     //
     // EXPLANATION:
-    // PT9 mutated `paragraph.Items` in place: if ShowReferencedVerseText was
-    // false it cleared the list first, then inserted `new CLText("\\"+Marker)`
-    // at position 0. PT10 records are immutable (CAP-001 decision), so we
-    // return a NEW ChecklistParagraph via the record's `with` expression with
-    // a freshly built Items list. The backslash-prefix TextItem at index 0
-    // is INV-004; showVerseText controls whether the original items follow.
+    // PT9 emitted the backslash-prefix marker as a CLText at index 0 because
+    // its renderer (XSLT) didn't carry a separate marker slot — everything
+    // had to come through the Items list.
+    //
+    // PT10's `ChecklistTool` React component renders the marker from the
+    // separate `paragraph.Marker` property (its dedicated `<span>`). Emitting
+    // it again as a TextItem caused visible duplication (`\rem \rem ADAPTED…`)
+    // — see markers-checklist follow-up finding #13.
+    //
+    // Revised behaviour:
+    //   - showVerseText=false  -> Items is empty. The UI renders `\marker` from
+    //                            paragraph.Marker only.
+    //   - showVerseText=true   -> Items contains the original verse-text items
+    //                            unchanged. The UI renders `\marker` from
+    //                            paragraph.Marker AND each item beside it.
+    //
+    // INV-004 (revised): paragraph.Marker is the single source of truth for
+    // the marker display. The Items list never contains a redundant
+    // `"\\" + Marker` TextItem.
     /// <summary>
-    /// Returns a new paragraph with a backslash-prefixed marker
-    /// <see cref="TextItem"/> at position 0 (INV-004). When
-    /// <paramref name="showVerseText"/> is false, the remainder of the
-    /// original items is dropped; when true, they are preserved after the
-    /// marker item (BHV-103).
+    /// Returns a new paragraph whose Items list is the original Items when
+    /// <paramref name="showVerseText"/> is true, or an empty list when false.
+    /// The backslash-prefix marker is rendered by the UI from
+    /// <c>paragraph.Marker</c>; this method no longer prepends a marker
+    /// TextItem (BHV-103 / INV-004 revision per UX-2 finding #13).
     /// </summary>
     public static ChecklistParagraph PostProcessParagraph(
         ChecklistParagraph paragraph,
         bool showVerseText
     )
     {
-        var newItems = new List<ChecklistContentItem>
+        return paragraph with
         {
-            new TextItem("\\" + paragraph.Marker, null),
+            Items = showVerseText ? paragraph.Items : new List<ChecklistContentItem>(),
         };
-        if (showVerseText)
-            newItems.AddRange(paragraph.Items);
-        return paragraph with { Items = newItems };
     }
 
     // === PORTED FROM PT9 ===
@@ -275,20 +285,25 @@ internal static class MarkersDataSource
     public static EmptyResultMessage? PostProcessRows(
         IReadOnlyList<ChecklistRow> rows,
         HashSet<string> markerFilter,
-        IReadOnlyList<string> searchedBookNames
+        IReadOnlyList<string> searchedBookNames,
+        bool hasComparativeTexts
     )
     {
         if (rows.Count > 0)
             return null; // INV-008 inverse — non-empty results carry no message.
 
-        if (markerFilter.Count == 0)
+        // UX-2 finding #3: only the comparative-driven "identical markers"
+        // result variant makes sense when at least one comparative text is in
+        // play. When no comparatives are configured, an empty result simply
+        // means "no markers found in this range" — emit the structured
+        // NoResults variant so the UI can render the right (generic) message.
+        if (markerFilter.Count == 0 && hasComparativeTexts)
         {
-            // gm-002 localized message. We return the paranext-core localize key —
-            // the wrapping NetworkObject resolves it via LocalizationService.GetLocalizedString
-            // before sending over the wire (see patterns.errorHandling.backendLocalization).
-            // Maps to PT9 CLParagraphCellsDataSource_1. PT9 displayed this wrapped in "*** ... ***"
-            // as a UI decoration added outside the localized string (CLParagraphCellsDataSource.cs:313);
-            // we deliberately drop that wrapping so the UI can decorate as it sees fit.
+            // gm-002 localized message. We return the paranext-core localize
+            // key — the wrapping NetworkObject resolves it via
+            // LocalizationService.GetLocalizedString before sending over the
+            // wire (see patterns.errorHandling.backendLocalization).
+            // Maps to PT9 CLParagraphCellsDataSource_1.
             return new EmptyResultMessage(
                 Variant: EmptyResultMessageVariant.Identical,
                 Message: IdenticalMarkersMessageKey,
@@ -298,12 +313,12 @@ internal static class MarkersDataSource
         }
 
         // "noResults" variant — structured fields drive the UI's localized
-        // rendering (see data-contracts.md §3.8). Tests assert only on
-        // Variant + SearchedMarkers + SearchedBooks.
+        // rendering. Used both for filter-active empty results and for
+        // no-comparative empty results.
         return new EmptyResultMessage(
             Variant: EmptyResultMessageVariant.NoResults,
             Message: string.Empty,
-            SearchedMarkers: markerFilter.ToList(),
+            SearchedMarkers: markerFilter.Count > 0 ? markerFilter.ToList() : null,
             SearchedBooks: searchedBookNames
         );
     }

@@ -485,6 +485,8 @@
       "%webview_checksSidePanel_checkTypeFilter_setUp%": "Set up",
       "%markersChecklist_errorInvalidMarkerPair%": "Equivalent markers need to be entered in the form: p/q",
       "%markersChecklist_emptyResult_identicalMarkers%": "Comparative texts have identical markers.",
+      "%markersChecklist_emptyResult_noResults%": "No markers found.",
+      "%markersChecklist_emptyResult_selectProject%": "Select a project to view its paragraph markers.",
       "%markersChecklist_settings_title%": "Marker Settings",
       "%markersChecklist_settings_description%": "Configure the equivalent markers and marker filter used when building the checklist.",
       "%markersChecklist_settings_equivalentMarkersLabel%": "Equivalent marker mappings",
