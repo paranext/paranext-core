@@ -4,8 +4,8 @@
   "supportUrl": "",
   "localizedDisplayInfo": {
     "en": {
-      "displayName": "Platform.Bible Extension Template",
-      "shortSummary": "Base template for a Platform.Bible Extension",
+      "displayName": "Legacy Comment Manager",
+      "shortSummary": "The legacy Platform.Bible Comment Manager extension",
       "description": "assets/descriptions/description-en.md"
     }
   }
