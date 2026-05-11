@@ -390,4 +390,33 @@ None on the backend. UI label change matches design §6.1 decision.
 
 ### Decision (filled after user checkpoint)
 
+User authorized autonomous advancement. Proceeding (Stage 7).
+
+## Stage 8 — Investigation (2026-05-11)
+
+### What I looked at
+
+- `.eslintrc.ai.js:55` — `paranext/no-hardcoded-jsx-strings` is active at `warn` globally and at `error` for some subdirs
+- `npm run lint` for the whole repo — **passes** with only one pre-existing warning unrelated to localization
+- Greps for hardcoded English strings in `extensions/src/platform-scripture/src/manage-books-dialog/` and `manage-books.web-view.tsx` — every occurrence is either a `t('%manageBooks_...%', 'English fallback')` call (correct pattern), a fallback assignment (`localizedStrings?.X ?? 'default'`), or a string literal inside a switch/comment
+- `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx:107–122` — `ProjectSelector` has its own `ProjectSelectorLocalizedStrings` prop with 12 defaultable strings (searchPlaceholder, filterAriaLabel, groupSectionLabel, filterSectionLabel, filterGroupByOpenTabs, filterShowSelectedOnly, openTabsSectionHeading, otherProjectsSectionHeading, boundButClosedTooltip, openButtonLabel, selectAll, clearAll)
+- All 3 manage-books `<ProjectSelector>` usages pass `ariaLabel` and `buttonPlaceholder` but **do not pass `localizedStrings`** — so the popover's internal strings (Search placeholder, Filter, Group by open tabs section headings) all fall back to the English defaults
+
+### Findings vs the spec
+
+✅ Spec is correct: localization is missing on the ProjectSelector's internal popover strings (search/filter/group). The body of the dialog itself is already fully localized.
+
+⚠️ The lint rule passes for the dialog body — that part is already done. The only meaningful localization gap is the ProjectSelector's internal strings.
+
+### Proposed scope
+
+Add 12 new `manageBooks_projectSelector_*` localize keys in `localizedStrings.json` + the type union. Build a `ProjectSelectorLocalizedStrings` object in the webview from the resolved strings and pass it to all 3 `<ProjectSelector>` instances (sidebar, Copy "From", Create "Based on").
+
+### Proposed deviation from spec (if any)
+
+- Spec said "grep the four target areas (sidebar, project-selector, header & footer)" — empirically only the project-selector area had real gaps. The other three are already localized
+- Adding `ProjectSelector` localization is the highest-impact piece of #45
+
+### Decision (filled after user checkpoint)
+
 User authorized autonomous advancement. Proceeding.

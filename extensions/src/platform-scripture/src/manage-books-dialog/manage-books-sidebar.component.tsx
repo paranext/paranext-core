@@ -28,6 +28,7 @@ import {
   ProjectSelectorOpenTab,
   ProjectSelector,
   ProjectSelectorProject,
+  type ProjectSelectorLocalizedStrings,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -185,6 +186,12 @@ export type ManageBooksSidebarProps = {
 
   /** Localized strings (forwarded from the orchestrator). */
   t: (key: keyof ManageBooksDialogLocalizedStrings, fallback: string) => string;
+
+  /**
+   * Sebastian review item #45 (2026-05-11): localized strings for the embedded `<ProjectSelector>`
+   * popover. Forwarded from the dialog via the same prop name.
+   */
+  projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
 };
 
 /** Map sidebar section id → ManageBooksAction (only valid for the 5 in-scope sections). */
@@ -242,6 +249,7 @@ export function ManageBooksSidebar({
   isTargetEditable,
   targetShortName,
   t,
+  projectSelectorLocalizedStrings,
 }: ManageBooksSidebarProps) {
   const activeSectionId = actionToSectionId(active);
   // Read-only target → block mutating actions. `undefined` means "still loading", so we leave
@@ -302,6 +310,7 @@ export function ManageBooksSidebar({
                 // correct momentary fallback; once `projects` resolves and contains `projectId`,
                 // ProjectSelector renders the matching `shortName` (e.g. "ESVUS16") in the trigger.
                 buttonPlaceholder={t('%manageBooks_sidebar_projectPlaceholder%', 'Select project')}
+                localizedStrings={projectSelectorLocalizedStrings}
               />
             </div>
           );

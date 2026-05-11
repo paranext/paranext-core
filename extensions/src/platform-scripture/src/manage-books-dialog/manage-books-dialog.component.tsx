@@ -24,6 +24,7 @@ import {
   Label,
   ProjectSelectorOpenTab,
   ProjectSelector,
+  ProjectSelectorLocalizedStrings,
   ProjectSelectorProject,
   SearchBar,
   Select,
@@ -231,6 +232,15 @@ export type ManageBooksDialogProps = {
    * default) is fine — the section just won't render.
    */
   openTabs?: readonly ProjectSelectorOpenTab[];
+
+  /**
+   * Sebastian review item #45 (2026-05-11): localized strings for the popover internals of every
+   * `<ProjectSelector>` inside the dialog (sidebar / Copy "From" / Create "Based on"). Optional —
+   * each picker falls back to ProjectSelector's English defaults when omitted, but the wiring layer
+   * typically passes a fully-populated object sourced from `manageBooks_projectSelector_*` localize
+   * keys.
+   */
+  projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
 };
 
 // --------------------------------------------------------------------------
@@ -424,6 +434,7 @@ export function ManageBooksDialog({
   localizedStrings = {},
   sidebarProjects = [],
   openTabs,
+  projectSelectorLocalizedStrings,
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
 
@@ -1715,6 +1726,7 @@ export function ManageBooksDialog({
             isTargetEditable={project.isEditable}
             targetShortName={project.shortName}
             t={t}
+            projectSelectorLocalizedStrings={projectSelectorLocalizedStrings}
           />
           <div className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
             <header className="tw:flex tw:items-center tw:gap-3 tw:border-b tw:px-6 tw:py-4">
@@ -1872,6 +1884,7 @@ export function ManageBooksDialog({
                         '%manageBooks_copy_sourcePlaceholder%',
                         'Select project',
                       )}
+                      localizedStrings={projectSelectorLocalizedStrings}
                       // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
                       // the picker reads as a call-to-action until a source project is set.
                       buttonClassName={cn(
@@ -2152,6 +2165,7 @@ export function ManageBooksDialog({
                         '%manageBooks_create_referenceProjectPlaceholder%',
                         'Select reference project',
                       )}
+                      localizedStrings={projectSelectorLocalizedStrings}
                       // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
                       // the picker reads as a call-to-action until a reference project is set.
                       buttonClassName={cn(

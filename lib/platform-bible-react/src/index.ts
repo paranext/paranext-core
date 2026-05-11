@@ -46,6 +46,7 @@ export {
   type ProjectSelectorProject,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
+  type ProjectSelectorLocalizedStrings,
 } from './components/advanced/project-selector/project-selector.component';
 export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
 export {
