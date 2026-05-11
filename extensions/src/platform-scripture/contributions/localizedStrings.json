@@ -530,6 +530,10 @@
       "%markersChecklist_save_notImplemented%": "Save is not yet implemented.",
       "%webView_platformScripture_markersChecklist_viewColumn%": "View",
       "%webView_platformScripture_markersChecklist_settings%": "Settings",
+      "%settings_markersChecklist_group_label%": "Markers Checklist",
+      "%settings_markersChecklist_group_description%": "Settings for the Markers Checklist tool",
+      "%settings_markersChecklist_userDefaults_label%": "Markers Checklist defaults",
+      "%settings_markersChecklist_userDefaults_description%": "Per-user defaults the Markers Checklist seeds into each new tab: comparative projects, Hide Matches and Show Verse Text toggles, and the equivalent-markers/marker-filter values from the settings dialog. Scope and verse range are intentionally not persisted.",
       "%manageBooks_openMenuItem%": "Manage books…",
       "%manageBooks_sidebar_projectPlaceholder%": "Select project"
     },

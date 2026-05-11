@@ -2034,4 +2034,21 @@ declare module 'papi-shared-types' {
      */
     'platformScripture.allowInvisibleCharacters': boolean;
   }
+
+  export interface SettingTypes {
+    /**
+     * Per-user defaults for the Markers Checklist tool (UX-2 follow-up finding #22). The Markers
+     * Checklist web view reads this on mount to seed its per-tab `useWebViewState` slots so a new
+     * checklist tab inherits the user's last-committed choices, and writes back whenever any
+     * persisted field changes. Scope and verse range are intentionally NOT persisted (matches PT9
+     * memento behaviour: scope/verse range reset per open). Cross-tab races are last-write-wins.
+     */
+    'platformScripture.markersChecklistDefaults': {
+      comparativeTextIds: string[];
+      hideMatches: boolean;
+      showVerseText: boolean;
+      equivalentMarkers: string;
+      markerFilter: string;
+    };
+  }
 }
