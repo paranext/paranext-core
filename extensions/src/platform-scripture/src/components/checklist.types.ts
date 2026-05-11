@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Localized, LocalizedStringValue, MultiColumnMenu } from 'platform-bible-utils';
+import type { LocalizedStringValue } from 'platform-bible-utils';
 
 /**
  * Localization keys consumed by `ChecklistTool` and its Storybook stories.
@@ -16,6 +16,8 @@ export const CHECKLIST_STRING_KEYS = Object.freeze([
   // Toolbar — selector trigger labels (aria-label on the outline-button stand-ins)
   '%markersChecklist_toolbar_primaryProject%',
   '%markersChecklist_toolbar_comparativeTexts%',
+  // UX-2 finding #6: placeholder shown on the comparative-texts trigger when empty.
+  '%markersChecklist_toolbar_comparativeTextsPlaceholder%',
   '%markersChecklist_toolbar_verseRange%',
   // Toolbar — action buttons + view dropdown
   '%markersChecklist_toolbar_copy%',
@@ -245,31 +247,10 @@ export type ChecklistToolProps = {
   /** Retry button click handler (shown inside the error Alert). */
   onRetry?: () => void;
 
-  // ----- Project menu (TabToolbar left hamburger) -----
-  //
-  // Per Sebastian PR #2219 #3137366113 ("Settings should be coming from the hamburger menu of the
-  // TabToolbar, not from ellipsis button"), the menu data flows to the LEFT-side hamburger menu
-  // (`projectMenuData` on TabToolbar) rather than the RIGHT-side ellipsis (`tabViewMenuData`).
-  // The Copy action is also surfaced as a menu item (intercepted by the wiring layer's command
-  // dispatcher) rather than a standalone toolbar button.
-
-  /**
-   * Localized menu data for the TabToolbar's project menu (left hamburger). In the wiring phase
-   * this comes from `useData(papi.menuData.dataProviderName).WebViewMenu(...)`. Stories may pass a
-   * minimal stub. Currently contains: Copy, Settings.
-   */
-  projectMenuData?: Localized<MultiColumnMenu> | undefined;
-
-  /**
-   * Called when the user selects an item in the project menu. The wiring layer dispatches the
-   * selected command — typically via `papi.commands.sendCommand`, but it may intercept commands
-   * locally (e.g., `platformScripture.copyMarkersChecklist` triggers the local clipboard handler
-   * without a PAPI roundtrip).
-   */
-  onSelectProjectMenuItem?: (selectedMenuItem: {
-    [key: string]: unknown;
-    command: string;
-  }) => void | Promise<void>;
+  // UX-2 finding #1 (WP3): the inner TabToolbar was removed because the outer Platform.Bible
+  // tab chrome already surfaces the hamburger. Menu items (Open Project Settings, Copy,
+  // Settings) reach the outer chrome via `WebViewMenu.topMenu` contributions wired in
+  // `main.ts` — they no longer flow through this component as props.
 
   // ----- Row-level handlers -----
   //

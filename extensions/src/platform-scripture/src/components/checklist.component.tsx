@@ -6,7 +6,6 @@ import {
   ColumnDef,
   DataTable,
   LinkedScrRefButton,
-  TabToolbar,
   ToggleGroup,
   ToggleGroupItem,
   Tooltip,
@@ -330,10 +329,12 @@ function ColumnHeaderWithTooltip({
 /**
  * Pure presentational Markers Checklist tool (SCR-001).
  *
- * Composes a `TabToolbar` (with three selector-trigger stand-ins, an eye-icon ToggleGroup for the
- * view toggles, a match-count live region, and the project menu hamburger hosting Copy + Settings)
- * above a shared `DataTable` rendered with dynamic columns. A destructive-variant `Alert` replaces
- * the help-text banner when `error` is non-null (T-R-2).
+ * Composes a single sticky toolbar row (with three selector-trigger stand-ins, an eye-icon
+ * ToggleGroup for the view toggles, and a match-count live region) above a shared `DataTable`
+ * rendered with dynamic columns. The outer Platform tab chrome's hamburger hosts our menu items
+ * (Open Project Settings, Copy, Settings) via WebViewMenu contributions — see WP6 (UX-2 finding #1:
+ * dropped the inner duplicate TabToolbar that previously surfaced the same hamburger items). A
+ * destructive-variant `Alert` replaces the help-text banner when `error` is non-null (T-R-2).
  *
  * **Architecture**: zero PAPI coupling. All data flows through props; the component never touches
  * `useWebViewState`, `useData`, `useDataProvider`, or any `papi.*` API. Visibility, loading, error,
@@ -365,8 +366,6 @@ export function ChecklistTool({
   onShowVerseTextChange,
   matchCountLabel,
   onRetry,
-  projectMenuData,
-  onSelectProjectMenuItem,
   onEditLinkClick,
   onGotoLinkClick,
 }: ChecklistToolProps) {
@@ -565,16 +564,6 @@ export function ChecklistTool({
       onShowVerseTextChange?.(next);
     },
     [onShowVerseTextChange],
-  );
-
-  const handleProjectMenuSelect = useCallback<NonNullable<typeof onSelectProjectMenuItem>>(
-    (selectedMenuItem) => {
-      if (onSelectProjectMenuItem) {
-        return onSelectProjectMenuItem(selectedMenuItem);
-      }
-      return undefined;
-    },
-    [onSelectProjectMenuItem],
   );
 
   // ----- Render helpers -----
@@ -783,18 +772,24 @@ export function ChecklistTool({
       className="pr-twp tw-flex tw-h-full tw-flex-col"
       aria-label={getLocalizedString('%markersChecklist_toolbar_aria%')}
     >
-      <div className="tw-sticky tw-top-0 tw-z-10 tw-flex tw-items-center tw-bg-background">
-        <TabToolbar
-          onSelectProjectMenuItem={handleProjectMenuSelect}
-          // Per Sebastian PR #2219 #3137366113, the tool's menu items (Settings, Copy, etc.) live
-          // on the LEFT-side hamburger (project menu) — the right-side ellipsis (tab view info
-          // menu) is intentionally empty. TabToolbar requires `onSelectViewInfoMenuItem` to be
-          // present even when no view-info menu renders, so pass a no-op.
-          onSelectViewInfoMenuItem={() => undefined}
-          projectMenuData={projectMenuData}
-          startAreaChildren={renderToolbarStart()}
-          endAreaChildren={renderToolbarEnd()}
-        />
+      {/*
+       * UX-2 finding #1: dropped the inner TabToolbar. Both the outer Platform tab
+       * chrome AND our inner toolbar showed the same hamburger menu items
+       * (Open Project Settings, Copy, Settings). The outer tab chromes hamburger
+       * now hosts our menu items via WebViewMenu.topMenu contributions (see WP6).
+       * Selectors and view toggles render here in a single sticky row.
+       *
+       * `projectMenuData` / `onSelectProjectMenuItem` props are kept on the
+       * component for now; WP6 wires them to the outer toolbar via menu
+       * contributions and removes the now-unused handler.
+       */}
+      <div
+        className="tw-sticky tw-top-0 tw-z-10 tw-flex tw-items-center tw-gap-2 tw-border-b tw-bg-background tw-px-2 tw-py-1"
+        data-testid="checklist-toolbar"
+      >
+        {renderToolbarStart()}
+        <div className="tw-flex-1" />
+        {renderToolbarEnd()}
       </div>
 
       {renderBanners()}

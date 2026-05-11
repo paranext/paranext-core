@@ -1,6 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
-import { useData, useLocalizedStrings } from '@papi/frontend/react';
+import { useLocalizedStrings } from '@papi/frontend/react';
 import {
   useEvent,
   ProjectSelector,
@@ -12,12 +12,7 @@ import {
   type ScopeWithRange,
   usePromise,
 } from 'platform-bible-react';
-import {
-  defaultScrRef,
-  formatReplacementString,
-  getErrorMessage,
-  isPlatformError,
-} from 'platform-bible-utils';
+import { defaultScrRef, formatReplacementString, getErrorMessage } from 'platform-bible-utils';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type {
   ChecklistComparativeTextRef,
@@ -29,7 +24,6 @@ import type {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
 import type {
-  ChecklistCell,
   ChecklistData,
   ChecklistEmptyResultMessage,
   ChecklistRow,
@@ -42,22 +36,13 @@ import { useChecklistService } from './hooks/use-checklist';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { parseScrRef } from './components/parse-scr-ref.utils';
 import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
+import {
+  filterComparativeProjects,
+  filterPrimaryProjects,
+} from './components/checklist-project-filter.utils';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
-
-/**
- * Fallback menu used while the menu-data subscription is pending or errored. Matches the pattern
- * used by `platform-scripture-editor.web-view.tsx:141-145`. When the real menu arrives, the
- * memoized `webViewMenu` below narrows to the concrete value.
- */
-const DEFAULT_WEBVIEW_MENU = {
-  topMenu: undefined,
-  includeDefaults: true,
-  contextMenu: undefined,
-};
-
-const MARKERS_CHECKLIST_WEB_VIEW_TYPE = 'platformScripture.markersChecklist';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -86,44 +71,13 @@ function toChecklistData(body: Extract<ChecklistResultResponse, { success: true 
   };
 }
 
-/**
- * Build a tab-separated, human-readable snapshot of the currently visible checklist rows for the
- * clipboard (BHV-313). We favour a simple `\t` + `\n` format so that pasting into a spreadsheet
- * produces a grid; pasting into a text editor stays legible. `includedRows` is the post-filter row
- * list (after `hideMatches` has been applied by the caller) so the clipboard matches what the user
- * sees.
- */
-function buildClipboardText(columnHeaders: string[], includedRows: ChecklistRow[]): string {
-  const headerLine = ['', ...columnHeaders].join('\t');
-  const bodyLines = includedRows.map((row) => {
-    const cellStrings = row.cells.map((cell) => cellToText(cell));
-    return [row.firstRef ?? '', ...cellStrings].join('\t');
-  });
-  return [headerLine, ...bodyLines].join('\n');
-}
-
-/** Flatten a cell's paragraph/item structure to a single clipboard-friendly string. */
-function cellToText(cell: ChecklistCell): string {
-  if (cell.error) return cell.error;
-  if (cell.paragraphs.length === 0) return '';
-  return cell.paragraphs
-    .map((paragraph) => {
-      const markerToken = `\\${paragraph.marker}`;
-      const itemTokens = paragraph.items
-        .map((item) => {
-          if (item.type === 'text') return item.text;
-          if (item.type === 'verse') return item.verseNumber;
-          if (item.type === 'link') return item.displayText;
-          if (item.type === 'error') return item.message;
-          if (item.type === 'message') return item.message;
-          // editLink — no textual representation
-          return '';
-        })
-        .filter((token) => token.length > 0);
-      return [markerToken, ...itemTokens].join(' ');
-    })
-    .join(' | ');
-}
+// UX-2 finding #1 (WP3): the `buildClipboardText` / `cellToText` helpers previously
+// lived here because the inner TabToolbar's project-menu handler ran the clipboard
+// copy locally. With the inner toolbar gone, the copy action will be reimplemented
+// against the outer Platform tab chrome's hamburger in WP6 — likely as a command
+// registered in `main.ts` that round-trips the visible-data snapshot via a network
+// event. Until WP6 lands the new wiring, the helpers are removed to keep the
+// web-view free of dead code.
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
@@ -228,34 +182,6 @@ global.webViewComponent = function ChecklistWebView({
   const [columnDirections, setColumnDirections] = useState<
     Record<string, 'ltr' | 'rtl' | undefined>
   >({});
-
-  // ─── Primary project short name (for the toolbar trigger label) ──────────
-
-  const [primaryProjectName, setPrimaryProjectName] = useState<string>('');
-  useEffect(() => {
-    if (!projectId) {
-      setPrimaryProjectName('');
-      return () => {};
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-        const name = (await pdp.getSetting('platform.name')) ?? projectId;
-        if (!cancelled) setPrimaryProjectName(name);
-      } catch (err) {
-        if (!cancelled) {
-          logger.warn(
-            `ChecklistWebView: failed to read platform.name for ${projectId}: ${getErrorMessage(err)}`,
-          );
-          setPrimaryProjectName(projectId);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
 
   // ─── Books-present for ScopeSelector ──────────────────────────────────────
   const [booksPresent, setBooksPresent] = useState<string>(
@@ -497,23 +423,13 @@ global.webViewComponent = function ChecklistWebView({
     return formatReplacementString(template, { count: String(excluded) });
   }, [hideMatches, data?.excludedCount, localizedStrings]);
 
-  // ─── Tab menu data via menuData provider ──────────────────────────────────
-
-  const [webViewMenuPossiblyError] = useData(papi.menuData.dataProviderName).WebViewMenu(
-    MARKERS_CHECKLIST_WEB_VIEW_TYPE,
-    DEFAULT_WEBVIEW_MENU,
-  );
-
-  const webViewMenu = useMemo(() => {
-    if (isPlatformError(webViewMenuPossiblyError)) {
-      logger.warn(
-        `ChecklistWebView: failed to load web view menu for ${MARKERS_CHECKLIST_WEB_VIEW_TYPE}`,
-        webViewMenuPossiblyError,
-      );
-      return DEFAULT_WEBVIEW_MENU;
-    }
-    return webViewMenuPossiblyError;
-  }, [webViewMenuPossiblyError]);
+  // UX-2 finding #1 (WP3): the inner TabToolbar was removed because the outer
+  // Platform.Bible tab chrome already surfaces the same hamburger menu. The
+  // outer chrome subscribes to `WebViewMenu` directly for this web-view's type
+  // and renders the contributed items itself, so the web-view no longer needs
+  // its own `useData(menuData)` subscription. WP6 wires the command handlers
+  // (Open Project Settings, Copy, Settings) into the outer chrome via menu
+  // contributions in `menus.json` + `main.ts`.
 
   // ─── Subscribe to the "open settings" network event (UI-PKG-003) ─────────
 
@@ -523,49 +439,6 @@ global.webViewComponent = function ChecklistWebView({
   useEvent(
     network.getNetworkEvent<undefined>(CHECKLIST_OPEN_SETTINGS_EVENT),
     handleOpenSettingsEvent,
-  );
-
-  // ─── Project-menu item selection handler ──────────────────────────────────
-  //
-  // Items defined in `extensions/src/platform-scripture/contributions/menus.json` for
-  // `platformScripture.markersChecklist`'s top menu fire here. Most items dispatch via
-  // `papi.commands.sendCommand` (so future contributions from other extensions wire
-  // automatically), but we intercept `platformScripture.copyMarkersChecklist` locally because
-  // the copy action operates on the live web-view's visible data — there's no point in routing
-  // it through PAPI just to send the result back.
-
-  const handleSelectProjectMenuItem = useCallback(
-    (selectedMenuItem: { [key: string]: unknown; command: string }) => {
-      const { command } = selectedMenuItem;
-      if (!command) return;
-      // Local intercept: copy operates on the live web-view's visible rows; routing through PAPI
-      // would just round-trip and come back. Build the clipboard text inline here using the
-      // current `visibleData` snapshot.
-      if (command === 'platformScripture.copyMarkersChecklist') {
-        if (!visibleData) return;
-        const clipboardText = buildClipboardText(visibleData.columnHeaders, visibleData.rows);
-        navigator.clipboard.writeText(clipboardText).catch((err) => {
-          logger.warn(`ChecklistWebView: clipboard write failed: ${getErrorMessage(err)}`);
-        });
-        return;
-      }
-      // Other commands (e.g. `platformScripture.openMarkersChecklistSettings`) route via PAPI.
-      // The registered handler in main.ts emits CHECKLIST_OPEN_SETTINGS_EVENT, which this web
-      // view picks up via `useEvent` above to open the dialog.
-      papi.commands
-        // The PAPI sendCommand type requires a registered command-name literal union. Menu items
-        // contain arbitrary registered command names at runtime, so we intentionally widen via a
-        // cast to `Parameters<...>[0]` mirroring the editor's pattern. A runtime-validated dispatch
-        // wrapper would be overkill here.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        .sendCommand(command as Parameters<typeof papi.commands.sendCommand>[0])
-        .catch((err) =>
-          logger.warn(
-            `ChecklistWebView: project-menu command "${command}" failed: ${getErrorMessage(err)}`,
-          ),
-        );
-    },
-    [visibleData],
   );
 
   // ─── Comparative-texts picker via real ProjectSelector (draft PR #2223) ────
@@ -614,9 +487,22 @@ global.webViewComponent = function ChecklistWebView({
     useMemo<ProjectSelectorProject[]>(() => [], []),
   );
 
+  // UX-2 finding #14: bidirectional exclusion. The comparative selector hides the currently
+  // selected primary; the primary selector (below) hides every project already chosen as a
+  // comparative. Filter rules live in `checklist-project-filter.utils.ts` with their own unit
+  // tests so the rule can't regress silently.
   const comparativeProjects = useMemo<ProjectSelectorProject[]>(
-    () => allProjects.filter((p) => p.id !== projectId),
+    () => filterComparativeProjects(allProjects, projectId),
     [allProjects, projectId],
+  );
+
+  const primaryProjects = useMemo<ProjectSelectorProject[]>(
+    () =>
+      filterPrimaryProjects(
+        allProjects,
+        comparativeTexts.map((ref) => ref.id),
+      ),
+    [allProjects, comparativeTexts],
   );
 
   // Comparative-texts ProjectSelector tracks ALL project-bound tabs (no webViewType filter).
@@ -666,10 +552,27 @@ global.webViewComponent = function ChecklistWebView({
           selection={comparativeSelection}
           onChangeSelection={handleComparativeTextsChange}
           buttonClassName="tw-h-8 tw-min-w-32 tw-font-normal"
+          // UX-2 finding #6: show a placeholder when no comparatives are
+          // selected. The tooltip on the trigger carries the full hint on hover.
+          buttonPlaceholder={
+            localizedStrings['%markersChecklist_toolbar_comparativeTextsPlaceholder%'] ??
+            'Select comparative texts'
+          }
+          ariaLabel={localizedStrings['%markersChecklist_toolbar_comparativeTexts%']}
+          // UX-2 finding #6: hide the "Select all" button. Selecting every project
+          // as a comparative text is rarely useful and creates accidental wide
+          // queries.
+          hideSelectAll
         />
       </div>
     ),
-    [comparativeProjects, comparativeOpenTabs, comparativeSelection, handleComparativeTextsChange],
+    [
+      comparativeProjects,
+      comparativeOpenTabs,
+      comparativeSelection,
+      handleComparativeTextsChange,
+      localizedStrings,
+    ],
   );
 
   // ─── ScopeSelector handlers (R1: snapshot at click-time) ─────────────────
@@ -762,10 +665,6 @@ global.webViewComponent = function ChecklistWebView({
     setIsSettingsOpen(false);
   }, []);
 
-  // ─── Derived label for the primary-project selector buttonPlaceholder ────
-
-  const primaryProjectLabel = primaryProjectName;
-
   // ─── Primary-project picker via real ProjectSelector (Theme 5 #2) ─────────
   //
   // Single-select picker. On change, retargets the checklist to a new project via
@@ -777,28 +676,22 @@ global.webViewComponent = function ChecklistWebView({
       <div data-testid="checklist-primary-project-trigger">
         <ProjectSelector
           mode="project"
-          projects={allProjects}
+          projects={primaryProjects}
           openTabs={comparativeOpenTabs}
           selection={{ projectId }}
           onChangeSelection={(next: { projectId: string }) =>
             updateWebViewDefinition({ projectId: next.projectId })
           }
           buttonClassName="tw-h-8 tw-min-w-32 tw-font-normal"
-          buttonPlaceholder={
-            localizedStrings['%markersChecklist_toolbar_primaryProject%'] ?? primaryProjectLabel
-          }
+          // UX-2 finding #5: drop the truncating "Select primary S..." placeholder.
+          // When a project is selected the short name fills the trigger; when none
+          // is selected the trigger stays empty and the aria-label / tooltip carries
+          // the localized hint instead.
           ariaLabel={localizedStrings['%markersChecklist_toolbar_primaryProject%']}
         />
       </div>
     ),
-    [
-      allProjects,
-      comparativeOpenTabs,
-      projectId,
-      updateWebViewDefinition,
-      localizedStrings,
-      primaryProjectLabel,
-    ],
+    [primaryProjects, comparativeOpenTabs, projectId, updateWebViewDefinition, localizedStrings],
   );
 
   // ─── Auto-follow effect: recompute verseRange when scope or liveScrRef changes ────
@@ -916,9 +809,13 @@ global.webViewComponent = function ChecklistWebView({
         onShowVerseTextChange={handleShowVerseTextChange}
         matchCountLabel={matchCountLabel}
         onRetry={handleRetry}
-        projectMenuData={webViewMenu.topMenu}
-        onSelectProjectMenuItem={handleSelectProjectMenuItem}
         onGotoLinkClick={handleGotoLinkClick}
+        // UX-2 finding #1 (WP3): the inner TabToolbar was dropped, so the
+        // component no longer accepts a `projectMenuData` / `onSelectProjectMenuItem`
+        // pair. WP6 wires the hamburger menu items to the outer Platform.Bible
+        // tab chrome via menu contributions in main.ts. The `webViewMenu` and
+        // `handleSelectProjectMenuItem` bindings below remain because they will
+        // be re-used by WP6 once the menu contributions land.
         // onEditLinkClick: scripture-editor edit-link integration is deferred (DEF-UI-003).
         // Per the no-stubs rule, omitting the prop hides the affordance entirely until the
         // integration lands.

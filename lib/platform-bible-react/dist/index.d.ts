@@ -576,6 +576,13 @@ type ProjectSelectorProps = (CommonProps & {
 		project: ProjectSelectorProject;
 		scrollGroupId?: ScrollGroupId;
 	}>) => string;
+	/**
+	 * When true, hides the "Select all" affordance from the multi-select popover. Useful when
+	 * "Select all" is rarely what the user wants (e.g. the markers-checklist comparative-texts
+	 * picker, where selecting every project as a comparative produces a wide, unhelpful query).
+	 * Defaults to `false` (Select all visible).
+	 */
+	hideSelectAll?: boolean;
 }) | (CommonProps & {
 	mode: "projectScrollGroup";
 	selection: ProjectScrollGroupSelection;

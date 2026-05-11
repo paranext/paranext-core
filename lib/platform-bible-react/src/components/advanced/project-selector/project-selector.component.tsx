@@ -185,6 +185,13 @@ export type ProjectSelectorProps =
           scrollGroupId?: ScrollGroupId;
         }>,
       ) => string;
+      /**
+       * When true, hides the "Select all" affordance from the multi-select popover. Useful when
+       * "Select all" is rarely what the user wants (e.g. the markers-checklist comparative-texts
+       * picker, where selecting every project as a comparative produces a wide, unhelpful query).
+       * Defaults to `false` (Select all visible).
+       */
+      hideSelectAll?: boolean;
     })
   | (CommonProps & {
       mode: 'projectScrollGroup';
@@ -772,9 +779,16 @@ export function ProjectSelector(props: ProjectSelectorProps) {
             </div>
             {props.mode === 'project-multi' && (
               <div className="tw-flex tw-justify-between tw-border-b tw-py-2 tw-pe-4 tw-ps-2">
-                <Button variant="ghost" size="sm" onClick={handleSelectAll}>
-                  {`${strings.selectAll} (${allPairs.length.toString()})`}
-                </Button>
+                {/* UX-2 finding #6 (markers-checklist): callers can opt out of the "Select all"
+                    affordance via the `hideSelectAll` prop. When hidden, the row keeps a spacer
+                    on the left so "Clear all" remains right-aligned. */}
+                {props.hideSelectAll ? (
+                  <span aria-hidden />
+                ) : (
+                  <Button variant="ghost" size="sm" onClick={handleSelectAll}>
+                    {`${strings.selectAll} (${allPairs.length.toString()})`}
+                  </Button>
+                )}
                 <Button variant="ghost" size="sm" onClick={handleClearAll}>
                   {`${strings.clearAll} (${props.selection.pairs.length.toString()})`}
                 </Button>
