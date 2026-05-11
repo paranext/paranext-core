@@ -569,7 +569,9 @@ public static class CopyBooksOrchestrator
             ProjectId: scrText.Guid.ToString(),
             Name: scrText.Name,
             ProjectType: scrText.Settings.TranslationInfo.Type.InternalValue,
-            IsEditable: scrText.Settings.IsEditableText
+            IsEditable: scrText.Settings.IsEditableText,
+            // #29 (2026-05-11): see ProjectFilterService.ToSummary for rationale.
+            IsResource: scrText.IsResourceProject
         );
 
     // =====================================================================

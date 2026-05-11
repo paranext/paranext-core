@@ -197,3 +197,42 @@ User authorized autonomous advancement. Proceeding with implementations includin
 ### Decision (filled after user checkpoint)
 
 User authorized autonomous advancement. Proceeding with plugin enablement + sidebar icon-only collapse + dialog-level container query for header subtitle hiding.
+
+## Stage 4 — Investigation (2026-05-11)
+
+### What I looked at
+
+- `c-sharp/ManageBooks/ProjectFilterService.cs:63–148` — current `FilterProjects` uses `IncludeProjects.ScriptureOnly` which is `Default | Resources | Limited` (per PT9 `ScrTextCollection.cs:62`). **Resources are currently included.**
+- `c-sharp/ManageBooks/ProjectSummary.cs` — record has `(ProjectId, Name, ProjectType, IsEditable)` — **no `IsResource` field**
+- `PT9 ParatextData/ScrText.cs:385` — `IsResourceProject` virtual property on `ScrText`; overridden by `ResourceScrText` and `JoinedScrText` returning `true`. Authoritative source for resource-ness.
+- `manage-books-dialog.types.ts:66–86` — `ManageBooksDialogProject` TS shape — no `isResource` field
+- `manage-books-dialog.component.tsx:575–589` — `otherProjects` filters out the active target; `otherProjectsAsPS` maps to `ProjectSelectorProject` for the Copy "From" and Create "Based on" pickers (both at lines 1857 and 2134)
+- `manage-books.web-view.tsx:438–483` (`loadProjects`) and `:514–550` (`sidebarProjects`) — both call `manageBooksApi.filterProjects({ purpose: 'AllScripture' })` and map the response
+
+### Findings vs the spec
+
+✅ Mike's spec is correct: resources currently appear in both pickers (`IncludeProjects.ScriptureOnly` includes resources).
+
+⚠️ `ProjectSummary` doesn't carry `IsResource`. Two implementation paths:
+
+1. Add `IsResource` to `ProjectSummary` + frontend per-row filter (cleaner; gives UI more info for future stages like #35's selector layout)
+2. Add a new `ProjectFilterPurpose.AllScriptureNoResources` enum value (backend-only, smaller wire change)
+
+Choose **Option 1** — frontend gets the extra info and can apply per-context filtering without round-tripping new API purposes.
+
+⚠️ Mike's reference to "#18 suggests to include resources (do not distinguish resources from projects)" reads ambiguously, but cross-referencing the suggested fix: resources at the _header picker_ are fine because they trigger the existing read-only disablement (the `isEditable === false` flow from #18). Resources at the _Copy/Create source_ picker must be excluded for copyright reasons.
+
+### Proposed implementation plan
+
+1. C#: add `IsResource` to `ProjectSummary` record; populate from `ScrText.IsResourceProject` in `ProjectFilterService.ToSummary`
+2. TS: add `isResource?: boolean` to `ManageBooksDialogProject`; forward through `loadProjects` mapping in `manage-books.web-view.tsx`; same for `sidebarProjects` (so the type is consistent, even though the header picker doesn't filter)
+3. TS: filter `otherProjectsAsPS` to `!p.isResource` so Copy "From" and Create "Based on" only see editable + read-only non-resource projects
+
+### Proposed deviation from spec (if any)
+
+- Spec mentioned a possible "client-side filter on isResource" — that's exactly what we do, but it requires the small `ProjectSummary` extension first
+- Header picker is left explicitly unchanged (no filter applied)
+
+### Decision (filled after user checkpoint)
+
+User authorized autonomous advancement. Proceeding.
