@@ -24,6 +24,7 @@ import type {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
 import type {
+  ChecklistCell,
   ChecklistData,
   ChecklistEmptyResultMessage,
   ChecklistRow,
@@ -40,7 +41,7 @@ import {
   filterComparativeProjects,
   filterPrimaryProjects,
 } from './components/checklist-project-filter.utils';
-import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
+import { CHECKLIST_COPY_REQUEST_EVENT, CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -71,13 +72,50 @@ function toChecklistData(body: Extract<ChecklistResultResponse, { success: true 
   };
 }
 
-// UX-2 finding #1 (WP3): the `buildClipboardText` / `cellToText` helpers previously
-// lived here because the inner TabToolbar's project-menu handler ran the clipboard
-// copy locally. With the inner toolbar gone, the copy action will be reimplemented
-// against the outer Platform tab chrome's hamburger in WP6 — likely as a command
-// registered in `main.ts` that round-trips the visible-data snapshot via a network
-// event. Until WP6 lands the new wiring, the helpers are removed to keep the
-// web-view free of dead code.
+/**
+ * Build a tab-separated, human-readable snapshot of the currently visible checklist rows for the
+ * clipboard (BHV-313). We favour a simple `\t` + `\n` format so that pasting into a spreadsheet
+ * produces a grid; pasting into a text editor stays legible. `includedRows` is the post-filter row
+ * list (after `hideMatches` has been applied by the caller) so the clipboard matches what the user
+ * sees.
+ *
+ * UX-2 finding #12 (WP6): the menu item that triggers this helper is dispatched by the outer
+ * Platform.Bible tab chrome through `papi.commands.sendCommand`. The command handler in `main.ts`
+ * emits a CHECKLIST_COPY_REQUEST_EVENT network event (delimiters dropped to avoid the
+ * localization-key scanner); this web view subscribes to that event and runs the helper locally so
+ * the live `visibleData` snapshot doesn't have to round-trip the process boundary.
+ */
+function buildClipboardText(columnHeaders: string[], includedRows: ChecklistRow[]): string {
+  const headerLine = ['', ...columnHeaders].join('\t');
+  const bodyLines = includedRows.map((row) => {
+    const cellStrings = row.cells.map((cell) => cellToText(cell));
+    return [row.firstRef ?? '', ...cellStrings].join('\t');
+  });
+  return [headerLine, ...bodyLines].join('\n');
+}
+
+/** Flatten a cell's paragraph/item structure to a single clipboard-friendly string. */
+function cellToText(cell: ChecklistCell): string {
+  if (cell.error) return cell.error;
+  if (cell.paragraphs.length === 0) return '';
+  return cell.paragraphs
+    .map((paragraph) => {
+      const markerToken = `\\${paragraph.marker}`;
+      const itemTokens = paragraph.items
+        .map((item) => {
+          if (item.type === 'text') return item.text;
+          if (item.type === 'verse') return item.verseNumber;
+          if (item.type === 'link') return item.displayText;
+          if (item.type === 'error') return item.message;
+          if (item.type === 'message') return item.message;
+          // editLink — no textual representation
+          return '';
+        })
+        .filter((token) => token.length > 0);
+      return [markerToken, ...itemTokens].join(' ');
+    })
+    .join(' | ');
+}
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
@@ -85,12 +123,15 @@ function toChecklistData(body: Extract<ChecklistResultResponse, { success: true 
  * Fully-wired Markers Checklist web view (UI-PKG-002 + UI-PKG-003 + UI-PKG-004).
  *
  * - **UI-PKG-002** — wires the `ChecklistTool` presentational component to the
- *   `platformScripture.checklistService` NetworkObject (via `useChecklistService`), the tab-menu
- *   data provider, the platform base PDP (for column full-name tooltips), and the browser
- *   clipboard. A `try/catch` around `buildChecklistData` feeds the ChecklistTool's destructive
- *   Alert + Retry affordance (T-R-2 contract).
+ *   `platformScripture.checklistService` NetworkObject (via `useChecklistService`), the platform
+ *   base PDP (for column full-name tooltips), and the browser clipboard. Hamburger menu items live
+ *   on the outer tab chrome and dispatch through registered commands in `main.ts`; the Copy command
+ *   emits the `CHECKLIST_COPY_REQUEST_EVENT` network event so the live `visibleData` snapshot can
+ *   drive the clipboard write locally (UX-2 finding #12, WP6). A `try/catch` around
+ *   `buildChecklistData` feeds the ChecklistTool's destructive Alert + Retry affordance (T-R-2
+ *   contract).
  * - **UI-PKG-003** — composes `MarkerSettingsDialog` adjacent to `ChecklistTool` and opens it in
- *   response to the `CHECKLIST_OPEN_SETTINGS_EVENT` network event emitted by the tab-menu
+ *   response to the `CHECKLIST_OPEN_SETTINGS_EVENT` network event emitted by the outer-chrome
  *   `Settings…` command handler in `main.ts`. Submitted values are normalized inside the dialog
  *   (see `marker-settings-dialog.component.tsx`) before being written back to the parent state.
  * - **UI-PKG-004** — six adjacent `useWebViewState<T>(key, default)` slots declared at the top of the
@@ -423,13 +464,12 @@ global.webViewComponent = function ChecklistWebView({
     return formatReplacementString(template, { count: String(excluded) });
   }, [hideMatches, data?.excludedCount, localizedStrings]);
 
-  // UX-2 finding #1 (WP3): the inner TabToolbar was removed because the outer
-  // Platform.Bible tab chrome already surfaces the same hamburger menu. The
-  // outer chrome subscribes to `WebViewMenu` directly for this web-view's type
-  // and renders the contributed items itself, so the web-view no longer needs
-  // its own `useData(menuData)` subscription. WP6 wires the command handlers
-  // (Open Project Settings, Copy, Settings) into the outer chrome via menu
-  // contributions in `menus.json` + `main.ts`.
+  // UX-2 finding #1 (WP3) + #12 (WP6): the inner TabToolbar was removed because the outer
+  // Platform.Bible tab chrome already surfaces the same hamburger menu. The outer chrome
+  // subscribes to `WebViewMenu` directly for this web-view's type and dispatches contributed
+  // items via `papi.commands.sendCommand(command, tabId)`. The Copy / Print / Save / Settings
+  // commands are registered in `main.ts`; Copy + Settings emit network events that this web
+  // view subscribes to below (so live `visibleData` / dialog state stays inside the renderer).
 
   // ─── Subscribe to the "open settings" network event (UI-PKG-003) ─────────
 
@@ -439,6 +479,80 @@ global.webViewComponent = function ChecklistWebView({
   useEvent(
     network.getNetworkEvent<undefined>(CHECKLIST_OPEN_SETTINGS_EVENT),
     handleOpenSettingsEvent,
+  );
+
+  // ─── Subscribe to the "copy to clipboard" network event (UX-2 #12, WP6) ───
+  //
+  // Outer-chrome menu dispatch passes only the command name + tab id, so the live `visibleData`
+  // never crosses the process boundary. Keeping the clipboard write here means the snapshot
+  // matches exactly what the user sees (post-`hideMatches` filter), and the navigator.clipboard
+  // call runs in the renderer where it's allowed.
+
+  const handleCopyRequestEvent = useCallback(() => {
+    if (!visibleData) return;
+    const clipboardText = buildClipboardText(visibleData.columnHeaders, visibleData.rows);
+    (async () => {
+      let didWrite = false;
+      try {
+        // Outer-chrome menu dispatch leaves focus on the main-frame menu, not on this iframe, so
+        // `navigator.clipboard.writeText` rejects with "Document is not focused". Pulling focus
+        // back to the iframe's window first lets the async-clipboard path succeed.
+        window.focus();
+        await navigator.clipboard.writeText(clipboardText);
+        didWrite = true;
+      } catch (err) {
+        logger.debug(
+          `ChecklistWebView: async clipboard write failed (${getErrorMessage(err)}); falling back to execCommand`,
+        );
+      }
+      if (!didWrite) {
+        // Fallback for environments where the iframe still can't take focus in time (older
+        // Chromium, headless test harness): drop into the synchronous selection-based copy path.
+        // `execCommand('copy')` works as long as a selection is active, so we create a hidden
+        // textarea, select it, copy, and tear it down. Synchronous + side-effect-free.
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = clipboardText;
+          textarea.setAttribute('readonly', '');
+          textarea.style.position = 'fixed';
+          textarea.style.top = '0';
+          textarea.style.left = '0';
+          textarea.style.opacity = '0';
+          textarea.style.pointerEvents = 'none';
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          // execCommand('copy') is deprecated but remains the only synchronous fallback for
+          // cross-frame copies when the async clipboard API is unreachable (focus issues). The
+          // deprecation guidance is "use the async API where possible" — which is exactly what
+          // we tried in the primary path above.
+          didWrite = document.execCommand('copy');
+          document.body.removeChild(textarea);
+        } catch (err) {
+          logger.warn(
+            `ChecklistWebView: execCommand clipboard fallback failed: ${getErrorMessage(err)}`,
+          );
+        }
+      }
+      if (!didWrite) {
+        logger.warn('ChecklistWebView: clipboard write failed via both async and fallback paths');
+        return;
+      }
+      try {
+        // Severity `info` triggers a non-blocking Sonner toast in the renderer's mounted
+        // <Toaster />. The message is a localize-key — NotificationService auto-localizes it.
+        await papi.notifications.send({
+          severity: 'info',
+          message: '%markersChecklist_copy_success%',
+        });
+      } catch (err) {
+        logger.debug(`ChecklistWebView: copy-success notification failed: ${getErrorMessage(err)}`);
+      }
+    })();
+  }, [visibleData]);
+  useEvent(
+    network.getNetworkEvent<undefined>(CHECKLIST_COPY_REQUEST_EVENT),
+    handleCopyRequestEvent,
   );
 
   // ─── Comparative-texts picker via real ProjectSelector (draft PR #2223) ────
@@ -810,12 +924,10 @@ global.webViewComponent = function ChecklistWebView({
         matchCountLabel={matchCountLabel}
         onRetry={handleRetry}
         onGotoLinkClick={handleGotoLinkClick}
-        // UX-2 finding #1 (WP3): the inner TabToolbar was dropped, so the
-        // component no longer accepts a `projectMenuData` / `onSelectProjectMenuItem`
-        // pair. WP6 wires the hamburger menu items to the outer Platform.Bible
-        // tab chrome via menu contributions in main.ts. The `webViewMenu` and
-        // `handleSelectProjectMenuItem` bindings below remain because they will
-        // be re-used by WP6 once the menu contributions land.
+        // UX-2 finding #1 (WP3) + #12 (WP6): the inner TabToolbar was dropped, so the
+        // component no longer accepts a `projectMenuData` / `onSelectProjectMenuItem` pair.
+        // Hamburger menu items are surfaced by the outer Platform.Bible tab chrome via menu
+        // contributions in `menus.json` and dispatched as commands registered in `main.ts`.
         // onEditLinkClick: scripture-editor edit-link integration is deferred (DEF-UI-003).
         // Per the no-stubs rule, omitting the prop hides the affordance entirely until the
         // integration lands.

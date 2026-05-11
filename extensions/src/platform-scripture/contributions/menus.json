@@ -63,9 +63,27 @@
             "command": "platformScripture.copyMarkersChecklist"
           },
           {
-            "label": "%markersChecklist_menu_settings%",
+            "label": "%markersChecklist_menu_print%",
             "group": "platformScripture.markersChecklistExport",
             "order": 2,
+            "command": "platformScripture.printMarkersChecklist"
+          },
+          {
+            "label": "%markersChecklist_menu_save%",
+            "group": "platformScripture.markersChecklistExport",
+            "order": 3,
+            "command": "platformScripture.saveMarkersChecklist"
+          },
+          {
+            "label": "%markersChecklist_menu_markersInventory%",
+            "group": "platformScripture.markersChecklistExport",
+            "order": 4,
+            "command": "platformScripture.openMarkersInventory"
+          },
+          {
+            "label": "%markersChecklist_menu_settings%",
+            "group": "platformScripture.markersChecklistExport",
+            "order": 5,
             "command": "platformScripture.openMarkersChecklistSettings"
           }
         ]

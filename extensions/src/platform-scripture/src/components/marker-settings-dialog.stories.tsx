@@ -14,7 +14,7 @@ import {
  * also match what PT9's `MarkerSettingsForm` showed).
  */
 const englishFallbacks: MarkerSettingsLocalizedStrings = {
-  '%markersChecklist_settings_title%': 'Marker Settings',
+  '%markersChecklist_settings_title%': 'Markers Checklist Settings',
   '%markersChecklist_settings_description%':
     'Configure equivalent marker mappings and the marker filter for the Markers checklist.',
   '%markersChecklist_settings_equivalentMarkersLabel%': 'Equivalent marker mappings',
