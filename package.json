@@ -1,6 +1,4 @@
 {
-  "name": "platform-bible",
-  "productName": "Platform.Bible",
   "description": "Extensible Bible translation software",
   "keywords": [
     "electron",
