@@ -50,6 +50,17 @@ let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | u
 
 // #endregion Editor Selection Tracking
 
+/**
+ * Tab/webView id of the Scripture Editor pre-allocated by the renderer's `simpleLayout` in column
+ * 2. When `openScriptureEditor` is invoked and this editor exists with no `projectId`, we open the
+ * new project-bound editor via `openWebView` with `{ type: 'replace-tab', targetTabId }` so it
+ * takes the empty editor's slot instead of opening as a sibling tab.
+ *
+ * Must match `simple-layout.data.ts`'s hardcoded id. Two source files hold the same UUID because
+ * cross-package imports (renderer → extensions) aren't supported here.
+ */
+const SIMPLE_LAYOUT_SCRIPTURE_EDITOR_TAB_ID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
+
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   isReadOnly: boolean;
@@ -185,6 +196,22 @@ async function open(
     projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
   if (projectForWebView.projectId) {
+    // If the caller didn't ask for a specific tab to replace, check whether the simple-layout
+    // pre-allocated an empty Scripture Editor (no projectId). If so, target that tab so the
+    // new project-bound editor takes its slot, rather than opening as a sibling tab.
+    let tabIdToReplace = existingTabIdToReplace;
+    if (!tabIdToReplace) {
+      const existingDef = await papi.webViews.getOpenWebViewDefinition(
+        SIMPLE_LAYOUT_SCRIPTURE_EDITOR_TAB_ID,
+      );
+      if (
+        existingDef &&
+        existingDef.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE &&
+        !existingDef.projectId
+      ) {
+        tabIdToReplace = SIMPLE_LAYOUT_SCRIPTURE_EDITOR_TAB_ID;
+      }
+    }
     const openWebViewOptions: PlatformScriptureEditorOptions = {
       projectId: projectForWebView.projectId,
       isReadOnly: !projectForWebView.isEditable,
@@ -194,9 +221,7 @@ async function open(
     // This matches the current behavior in P9, though it might not be what we want long-term.
     return papi.webViews.openWebView(
       SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-      existingTabIdToReplace
-        ? { type: 'replace-tab', targetTabId: existingTabIdToReplace }
-        : undefined,
+      tabIdToReplace ? { type: 'replace-tab', targetTabId: tabIdToReplace } : undefined,
       openWebViewOptions,
     );
   }
@@ -384,9 +409,16 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
      * selection.
      */
     let currentSelection: ScriptureRangeUsjVerseRefChapterLocation | undefined;
-    /** Variable we will use to wait to get the first selection reported from the editor */
-    const firstSelectionAsync: AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined> =
-      new AsyncVariable(`platformScriptureEditor.selection.${currentWebViewDefinition.id}`);
+    /**
+     * Variable used to block `getSelection()` callers until the editor reports its first selection.
+     * Constructed lazily on the first `getSelection()` call so its internal 10s timeout timer never
+     * starts if nobody is waiting. If a selection arrives before any `getSelection()` call,
+     * `currentSelection` populates and this variable is never constructed at all — which is the
+     * common case in Platform.Bible when the editor is opened without a `projectId`.
+     */
+    let firstSelectionAsync:
+      | AsyncVariable<ScriptureRangeUsjVerseRefChapterLocation | undefined>
+      | undefined;
     return {
       async selectRange(range) {
         try {
@@ -639,10 +671,16 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
         }
       },
       async getSelection() {
-        // If we haven't yet received the first selection, wait for it
-        if (!firstSelectionAsync.hasSettled) {
-          return firstSelectionAsync.promise;
+        // If we already have a selection, return it directly.
+        if (currentSelection !== undefined) return currentSelection;
+        // Otherwise lazy-construct the AsyncVariable so its 10s timer only starts when a caller
+        // is actually waiting. Subsequent callers reuse the same promise.
+        if (!firstSelectionAsync) {
+          firstSelectionAsync = new AsyncVariable(
+            `platformScriptureEditor.selection.${currentWebViewDefinition.id}`,
+          );
         }
+        if (!firstSelectionAsync.hasSettled) return firstSelectionAsync.promise;
         return currentSelection;
       },
       async updateSelectionInternal(selection) {
@@ -652,14 +690,21 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
         if (deepEqual(currentSelection, selection)) return;
 
         currentSelection = selection;
-        // Resolve the first selection async variable with the first selection we get
-        if (!firstSelectionAsync.hasSettled) firstSelectionAsync.resolveToValue(selection);
+        // Resolve the first selection async variable IF it was lazy-constructed by a caller.
+        // If no caller has called getSelection() yet, firstSelectionAsync is still undefined and
+        // there is nothing to resolve — `currentSelection` is the source of truth from here.
+        if (firstSelectionAsync && !firstSelectionAsync.hasSettled) {
+          firstSelectionAsync.resolveToValue(selection);
+        }
         selectionChangedEventEmitter?.emit({ webViewId, selection });
       },
       async dispose() {
         currentSelection = undefined;
-        // If we never got a selection, reject the first selection promise
-        firstSelectionAsync.rejectWithReason('Disposed before first selection received');
+        // If a caller lazy-constructed the AsyncVariable and it hasn't settled, reject it so
+        // any pending `getSelection()` callers fail fast rather than waiting for the 10s timeout.
+        if (firstSelectionAsync && !firstSelectionAsync.hasSettled) {
+          firstSelectionAsync.rejectWithReason('Disposed before first selection received');
+        }
         return unsubFromWebViewUpdates();
       },
     };

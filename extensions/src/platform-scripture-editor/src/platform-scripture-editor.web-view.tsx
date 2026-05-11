@@ -124,6 +124,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%versionHistoryCommit_beforeInsertCrossReference%',
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
+  '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_permissions_format%',
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
@@ -1593,6 +1594,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // When not rendering the editor component itself, make sure not to try to apply the scripture-font
     // in the useEffect above
 
+    // No project selected — render an empty state instead of the loading spinner. Without this
+    // branch the editor would stay on the spinner forever in Platform.Bible's simple mode when
+    // started without a pre-selected project.
+    if (!projectId) {
+      return (
+        <div className="tw-flex tw-items-center tw-justify-center tw-h-full tw-px-4">
+          {workaround}
+          {localizedStrings['%webView_platformScriptureEditor_emptyState_noProject%']}
+        </div>
+      );
+    }
     if (!bookExists) {
       return (
         <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
