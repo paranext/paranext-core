@@ -645,14 +645,12 @@ global.webViewComponent = function ChecklistWebView({
 
   const handleComparativeTextsChange = useCallback(
     (selection: { pairs: ProjectSelectorProjectPair[] }) => {
-      const projectIdToName = new Map(allProjects.map((p) => [p.id, p.shortName]));
       const nextRefs: ChecklistComparativeTextRef[] = selection.pairs.map((pair) => ({
         id: pair.projectId,
-        name: projectIdToName.get(pair.projectId) ?? pair.projectId,
       }));
       setComparativeTexts(nextRefs);
     },
-    [allProjects, setComparativeTexts],
+    [setComparativeTexts],
   );
 
   const comparativeTextsSelectorNode = useMemo(

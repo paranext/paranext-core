@@ -190,19 +190,14 @@ internal class ChecklistDataModelTests
     [Property("Contract", "ComparativeTextRef")]
     public void ComparativeTextRef_RoundTripsThroughJson()
     {
-        var refItem = new ComparativeTextRef(
-            Id: "11111111-2222-3333-4444-555555555555",
-            Name: "ESV"
-        );
+        var refItem = new ComparativeTextRef(Id: "11111111-2222-3333-4444-555555555555");
 
         var json = JsonSerializer.Serialize(refItem, _options);
         var actual = JsonSerializer.Deserialize<ComparativeTextRef>(json, _options);
 
         Assert.That(actual, Is.Not.Null);
         Assert.That(actual!.Id, Is.EqualTo("11111111-2222-3333-4444-555555555555"));
-        Assert.That(actual.Name, Is.EqualTo("ESV"));
         Assert.That(json, Does.Contain("\"id\""));
-        Assert.That(json, Does.Contain("\"name\""));
     }
 
     // ---------------------------------------------------------------------
@@ -642,12 +637,11 @@ internal class ChecklistDataModelTests
     {
         // `with` is the canonical way to "update" a positional record.
         // This test confirms the record supports non-destructive mutation.
-        var original = new ComparativeTextRef("guid-1", "Old Name");
-        var updated = original with { Name = "New Name" };
+        var original = new ComparativeTextRef("guid-1");
+        var updated = original with { Id = "guid-2" };
 
-        Assert.That(original.Name, Is.EqualTo("Old Name"));
-        Assert.That(updated.Name, Is.EqualTo("New Name"));
-        Assert.That(updated.Id, Is.EqualTo("guid-1"));
+        Assert.That(original.Id, Is.EqualTo("guid-1"));
+        Assert.That(updated.Id, Is.EqualTo("guid-2"));
         Assert.That(original, Is.Not.EqualTo(updated));
     }
 
