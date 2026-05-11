@@ -398,6 +398,152 @@ namespace TestParanextDataProvider.ManageBooks
         }
 
         // =====================================================================
+        // Sebastian/Vladimir review items #14 + #44 (2026-05-11) — wire-shape
+        // for SourceLastModified / DestLastModified.
+        //
+        // ToIsoOrNull (private) is exercised indirectly through the public
+        // SetDefaultEligibility entry point. The contract these tests pin:
+        //   - ISO-8601 UTC string when the side has text AND a real timestamp.
+        //   - null when the side's text is empty (no meaningful date).
+        //   - null when the timestamp is DateTime.MinValue (the absent-file
+        //     sentinel from SafeGetBookModified) — even if text is present.
+        // The frontend's whole status-comparison heuristic depends on this
+        // shape; a regression here would silently revert all Copy/Import
+        // pills to "Undetermined".
+        // =====================================================================
+
+        // Regex (ECMAScript-style) matching the ISO-8601 UTC prefix produced by
+        // `DateTime.ToString("o", InvariantCulture)`. We anchor only on the
+        // "date T time" body and ignore the trailing fractional seconds + "Z"
+        // — that's a Round-trip-format implementation detail and not part of
+        // the contract the frontend reads.
+        private static readonly System.Text.RegularExpressions.Regex IsoBodyRegex =
+            new(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}");
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-006")]
+        [Property("BehaviorId", "BHV-109")]
+        [Description(
+            "Both source and dest present with distinct timestamps: SourceLastModified "
+                + "and DestLastModified are both populated with ISO-8601 strings and "
+                + "match the chosen comparison state."
+        )]
+        public void SetDefaultEligibility_BothTimestampsPresent_BothPopulated()
+        {
+            var sourceMod = new DateTime(2026, 3, 10, 12, 0, 0, DateTimeKind.Utc);
+            var destMod = new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc);
+
+            BookComparisonEntry entry = CopyBooksOrchestrator.SetDefaultEligibility(
+                bookNum: 40,
+                bookName: "Matthew",
+                sourceText: "\\id MAT newer\r\n",
+                destText: "\\id MAT older\r\n",
+                sourceModified: sourceMod,
+                destModified: destMod
+            );
+
+            Assert.That(entry.ComparisonState, Is.EqualTo(ComparisonState.SourceIsNewer));
+            Assert.That(
+                entry.SourceLastModified,
+                Is.Not.Null,
+                "Source text is non-empty AND timestamp is not MinValue → SourceLastModified populated"
+            );
+            Assert.That(
+                entry.DestLastModified,
+                Is.Not.Null,
+                "Dest text is non-empty AND timestamp is not MinValue → DestLastModified populated"
+            );
+            Assert.That(IsoBodyRegex.IsMatch(entry.SourceLastModified!), Is.True);
+            Assert.That(IsoBodyRegex.IsMatch(entry.DestLastModified!), Is.True);
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-006")]
+        [Property("BehaviorId", "BHV-109")]
+        [Description(
+            "Source text empty: SourceLastModified must be null regardless of the "
+                + "sourceModified DateTime value (ToIsoOrNull short-circuits on empty text)."
+        )]
+        public void SetDefaultEligibility_SourceTextEmpty_SourceLastModifiedNull()
+        {
+            BookComparisonEntry entry = CopyBooksOrchestrator.SetDefaultEligibility(
+                bookNum: 2,
+                bookName: "Exodus",
+                sourceText: "",
+                destText: "\\id EXO content\r\n",
+                // Intentionally pass a non-MinValue DateTime so the only reason
+                // SourceLastModified could be null is the empty-text branch.
+                sourceModified: new DateTime(2026, 3, 10, 12, 0, 0, DateTimeKind.Utc),
+                destModified: new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc)
+            );
+
+            Assert.That(entry.SourceLastModified, Is.Null);
+            Assert.That(
+                entry.DestLastModified,
+                Is.Not.Null,
+                "Dest side still populated when its text is non-empty"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-006")]
+        [Property("BehaviorId", "BHV-109")]
+        [Description(
+            "Dest text empty: DestLastModified must be null regardless of the "
+                + "destModified DateTime value."
+        )]
+        public void SetDefaultEligibility_DestTextEmpty_DestLastModifiedNull()
+        {
+            BookComparisonEntry entry = CopyBooksOrchestrator.SetDefaultEligibility(
+                bookNum: 3,
+                bookName: "Leviticus",
+                sourceText: "\\id LEV content\r\n",
+                destText: "",
+                sourceModified: new DateTime(2026, 3, 10, 12, 0, 0, DateTimeKind.Utc),
+                destModified: new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc)
+            );
+
+            Assert.That(entry.DestLastModified, Is.Null);
+            Assert.That(
+                entry.SourceLastModified,
+                Is.Not.Null,
+                "Source side still populated when its text is non-empty"
+            );
+        }
+
+        [Test]
+        [Category("Contract")]
+        [Property("CapabilityId", "CAP-006")]
+        [Property("BehaviorId", "BHV-109")]
+        [Description(
+            "Both texts present but DateTime.MinValue on one side (sentinel from "
+                + "SafeGetBookModified when the read failed) → that side's "
+                + "*LastModified maps to null. Frontend distinguishes 'no date' "
+                + "from 'epoch' on this null."
+        )]
+        public void SetDefaultEligibility_MinValueTimestamp_MapsToNull()
+        {
+            BookComparisonEntry entry = CopyBooksOrchestrator.SetDefaultEligibility(
+                bookNum: 40,
+                bookName: "Matthew",
+                sourceText: "\\id MAT content\r\n",
+                destText: "\\id MAT different content\r\n",
+                sourceModified: DateTime.MinValue,
+                destModified: new DateTime(2026, 3, 5, 12, 0, 0, DateTimeKind.Utc)
+            );
+
+            Assert.That(
+                entry.SourceLastModified,
+                Is.Null,
+                "DateTime.MinValue must map to null even when text is non-empty"
+            );
+            Assert.That(entry.DestLastModified, Is.Not.Null);
+        }
+
+        // =====================================================================
         // LoadBooks — comparison pair construction (EXT-007)
         //
         // BHV-313: enumerates Canon.AllBooks, filters by destination-project

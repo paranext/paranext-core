@@ -421,11 +421,16 @@ Add 12 new `manageBooks_projectSelector_*` localize keys in `localizedStrings.js
 
 User authorized autonomous advancement. Proceeding.
 
-## Review-paratext follow-ups — pending work for a fresh session (2026-05-11)
+## Review-paratext follow-ups — all 9 Important findings addressed (2026-05-11)
 
-The `/review-paratext` pass on PR #2255 surfaced 9 Important findings. Six were addressed in commit `[P3] review-paratext fixes` (ProjectSummary.IsResource default, localize-key rename to new keys, Import "Merge from files" parallelism, narrow-sidebar tooltip side + icon-only project trigger, C# chapter-merge tests). Three remain — they're isolated, well-scoped test additions, and a fresh session can pick them up from this note alone.
+The `/review-paratext` pass on PR #2255 surfaced 9 Important findings. All are now addressed across two commits:
 
-### Pending #44 — `ProjectSummary.IsResource` C# contract test
+1. **`[P3] manage-books: Address /review-paratext Important findings (6 of 9)`** — `ProjectSummary.IsResource` default, localize-key renames to new keys (`manageBooks_copy_confirmMergeFromSource`, `manageBooks_import_mergeFromFiles`), Import "Merge from files" parallelism, narrow-sidebar tooltip side + icon-only project trigger, C# chapter-merge tests for Import and Copy.
+2. **`[P3] manage-books: Add review-paratext test coverage (#44 #45 #46)`** — the three remaining items, all isolated test additions, summarized below.
+
+The original "pending" sub-sections are retained beneath this summary as the as-built reference for each test.
+
+### Done #44 — `ProjectSummary.IsResource` C# contract test
 
 **Where**: `c-sharp-tests/ManageBooks/ProjectFilterServiceTests.cs`
 **Why**: The new `IsResource` field on `ProjectSummary` is the basis for #29's Copy/Create source filtering. No test currently asserts it; a regression silently re-includes resources in those pickers.
@@ -447,7 +452,7 @@ private sealed class ResourceDummyScrText : DummyScrText
 
 Then `CreateScrText` won't help — the fixture's local helper always creates a plain `DummyScrText`. Build the resource project inline in the new test, register it via `AddProject(...)`, run `ProjectFilterService.FilterProjects(...)`, assert the returned `ProjectSummary.IsResource == true`.
 
-### Pending #45 — `BookComparisonEntry` dates + `ToIsoOrNull` tests
+### Done #45 — `BookComparisonEntry` dates + `ToIsoOrNull` tests
 
 **Where**: `c-sharp-tests/ManageBooks/CopyBooksOrchestratorTests.cs` (or a new `BookComparisonServiceTests.cs` extension) and `c-sharp-tests/ManageBooks/ImportBooksOrchestratorTests.cs`.
 **Why**: The frontend's whole status-comparison heuristic depends on `SourceLastModified` / `DestLastModified` being correctly populated and shaped (ISO-8601 UTC, `null` for empty/missing). Untested today; regression would silently revert all Copy/Import pills to "Undetermined".
@@ -464,7 +469,7 @@ Then `CreateScrText` won't help — the fixture's local helper always creates a 
 
 For Import (`ImportBooksOrchestrator.ParseImportFiles`): use the existing test fixture pattern; the source timestamp comes from `preflightSourceTimestamp = DateTime.UtcNow`, so just assert the value is a valid recent ISO string (not null when source text is present).
 
-### Pending #46 — Frontend tests for new ProjectSelector behaviors
+### Done #46 — Frontend tests for new ProjectSelector behaviors
 
 **Where**: `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.rows.test.ts` (already covers `partitionAndSort`) — add a sibling `project-selector.component.test.tsx` if one doesn't exist, or extend the rows test if it's the right home.
 **Why**: The `partitionAndSort` ordering change is already covered. Two NEW behaviors are not:
@@ -480,10 +485,11 @@ For Import (`ImportBooksOrchestrator.ParseImportFiles`): use the existing test f
 
 If you'd rather skip jsdom-fragile scroll testing, just cover the search-clear case (the more important and reliably-testable behavior). A Storybook play function is the other option but `/review-paratext` flagged stories as a separate item (also unaddressed in this round).
 
-### Context for resumption
+### As-built notes
 
 - **Branch**: `ai/feature/manage-books-rolf-05-11-2026`
 - **PR**: paranext-core#2255
-- **Working tree state at the end of this session**: clean (all review-fix changes already committed)
-- **Test pattern source-of-truth**: `c-sharp-tests/ManageBooks/CopyBooksOrchestratorTests.cs` (mature C# test patterns) and `project-selector.rows.test.ts` (frontend pattern for this component)
-- **Existing review-paratext findings reference**: presented inline in the original session; the three above are the only ones still open. The 6 fixed findings already have commits on the branch.
+- **#44 implementation**: `c-sharp-tests/ManageBooks/ProjectFilterServiceTests.cs` — added a `ResourceDummyScrText` nested subclass (parallels `EncodingConversionFailingScrText` in `CopyBooksOrchestratorTests.cs`), seeded a `_resource` project as a scripture-typed resource, extended `FilterProjects_Summary_PopulatesAllFieldsFromScrText` to assert `IsResource == false` on the non-resource summaries, and added a new test `FilterProjects_Summary_ResourceProject_IsResourceTrue` that asserts the plumbing.
+- **#45 implementation**: 4 new tests in `CopyBooksOrchestratorTests.cs` exercising `SetDefaultEligibility` (both timestamps present, source empty, dest empty, MinValue mapping) and 1 integration test in `ImportBooksOrchestratorTests.cs` asserting `ParseImportFiles` surfaces a recent ISO-shaped `SourceLastModified`.
+- **#46 implementation**: new `lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.test.tsx` (React Testing Library + userEvent + jsdom). Covers (a) search-clear-on-close via type-then-Escape-then-reopen and (b) scroll-to-selected on open via a `scrollIntoView` spy filtered by `{ behavior: 'auto' }` to distinguish ProjectSelector's call from cmdk's own focus-management call.
+- **Verification**: all 246 ManageBooks tests + 3 new frontend tests pass.
