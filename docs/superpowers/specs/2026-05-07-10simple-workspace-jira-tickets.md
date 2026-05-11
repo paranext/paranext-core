@@ -27,9 +27,10 @@ The following requirements are drawn from the PRD. Each ticket below references 
 13. Column 3 Commentaries daily use: selector UI to choose which downloaded commentary to display; "Download commentaries" action available.
 14. Only specific commentaries available for download: UBS Handbook and SIL TNN/TND in English.
 
-**Nice-to-have (moved from must-haves):**
+**Nice-to-haves:**
 
-- Removing resources: both Donna and Saroj can remove items they added; Saroj cannot remove items Donna added (UI disabled with explanation).
+- Removing resources: both Donna and Saroj can remove items they added; Saroj cannot remove items Donna added (UI disabled with explanation). (T9)
+- Prevent columns from being moved or closed in the 10Simple layout. (T8)
 
 ---
 
@@ -271,7 +272,7 @@ When `platform.interfaceMode` is `'simple'`, disable the drag handles and close 
 
 ### Description
 
-Both Donna and Saroj should be able to remove resources they have added from the Bible texts and Commentaries tabs in Column 3. However, Saroj cannot remove resources that Donna (the project admin) added — the remove button for those entries is disabled and displays an explanation tooltip. This ticket depends on T3 (`addedByRole`/`addedByUser` metadata) being complete.
+Both Donna and Saroj should be able to remove resources they have added from the Bible texts and Commentaries tabs in Column 3. However, Saroj cannot remove resources that Donna (the project admin) added — the remove button for those entries is disabled and displays an explanation tooltip. This ticket depends on T3 (data provider routing and `source` tag) being complete.
 
 ### Implementation Ideas
 
