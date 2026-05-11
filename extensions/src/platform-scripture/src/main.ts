@@ -236,17 +236,28 @@ async function openManageBooks(
   // Reuse the existing Manage Books tab if one is already open (per FN-003 — only one
   // Manage Books dialog at a time). `existingId: '?'` matches any open instance of this
   // web-view-type; if none is found we fall through and create a new one.
-  const existingId = await papi.webViews.openWebView(
-    MANAGE_BOOKS_WEB_VIEW_TYPE,
-    { type: 'tab' },
-    { ...options, existingId: '?', createNewIfNotFound: false },
-  );
+  //
+  // Sebastian review item 28 (2026-05-11): open as a floating panel rather than a docked
+  // tab so the user gets a properly-sized window from the start. Mirrors the Settings
+  // pattern at src/renderer/services/web-view.service-host.ts:1805. We keep the existing-
+  // tab reuse path so an already-floating Manage Books window is brought to the front
+  // instead of opening a new one.
+  const floatingLayout = {
+    type: 'float',
+    position: 'center',
+    floatSize: { width: 1100, height: 720 },
+  } as const;
+  const existingId = await papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, floatingLayout, {
+    ...options,
+    existingId: '?',
+    createNewIfNotFound: false,
+  });
   if (existingId) {
     // Bring the existing tab to the front and update it with the new project context.
     await papi.webViews.reloadWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, existingId, options);
     return existingId;
   }
-  return papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, { type: 'tab' }, options);
+  return papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, floatingLayout, options);
 }
 
 async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
