@@ -23,8 +23,8 @@ import type {
   ChecklistComparativeTextRef,
   ChecklistRequest,
   ChecklistResultResponse,
-  ChecklistScriptureRange,
   IVersificationService,
+  ScriptureRange,
 } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChecklistTool, CHECKLIST_STRING_KEYS } from './components/checklist.component';
@@ -187,7 +187,7 @@ global.webViewComponent = function ChecklistWebView({
     'checklistRangeEnd',
     defaultScrRef,
   );
-  const [verseRange, setVerseRange] = useWebViewState<ChecklistScriptureRange | undefined>(
+  const [verseRange, setVerseRange] = useWebViewState<ScriptureRange | undefined>(
     'checklistVerseRange',
     undefined,
   );
@@ -831,7 +831,7 @@ global.webViewComponent = function ChecklistWebView({
   // Auto-follow semantics: the displayed scripture reference tracks `liveScrRef` directly;
   // verseRange is derived from {scope, liveScrRef, rangeStart, rangeEnd} via the effect above.
   // `availableScopes` excludes `selectedBooks` and `selectedText` because the backend's
-  // `ChecklistScriptureRange` contract only models contiguous start/end ranges.
+  // `ScriptureRange` contract only models contiguous start/end ranges.
   // `getEndVerse` enables verse-grid selection in the BCV pickers used by `range` mode (Theme 6).
 
   const verseRangeSelectorNode = useMemo(

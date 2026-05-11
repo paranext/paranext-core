@@ -151,15 +151,17 @@ interface ScopeSelectorProps {
   variant?: ScopeSelectorVariant;
 
   /**
-   * The start of the verse range. Only used when `scope === 'range'`. Defaults to `defaultScrRef`
-   * (GEN 1:1) if neither this nor `currentScrRef` is provided.
+   * Explicit start of the verse range — only meaningful when `scope === 'range'`. When omitted,
+   * the range UI seeds its start from `currentScrRef` (if provided) or falls back to GEN 1:1.
+   * Provide this when the consumer is tracking range state independently of "the user's current
+   * scripture reference" — e.g. the markers-checklist's persisted range bounds.
    */
   rangeStart?: SerializedVerseRef;
   /**
-   * The end of the verse range. Only used when `scope === 'range'`. Every time the user submits a
-   * new `rangeStart`, `onRangeEndChange` is also fired with that same reference so the end mirrors
-   * the start; the user is free to narrow the end afterward. Defaults to `defaultScrRef` (GEN 1:1)
-   * if neither this nor `currentScrRef` is provided.
+   * Explicit end of the verse range — only meaningful when `scope === 'range'`. Fallback chain
+   * matches `rangeStart` (then `currentScrRef`, then GEN 1:1). Every time the user submits a new
+   * `rangeStart`, `onRangeEndChange` is also fired with that same reference so the end mirrors
+   * the start; the user is free to narrow the end afterward.
    */
   rangeEnd?: SerializedVerseRef;
   /** Callback when the range start reference changes. Required to make the range UI functional. */
@@ -167,8 +169,16 @@ interface ScopeSelectorProps {
   /** Callback when the range end reference changes. Required to make the range UI functional. */
   onRangeEndChange?: (scrRef: SerializedVerseRef) => void;
   /**
-   * Optional current scripture reference. When provided and no explicit `rangeStart` or `rangeEnd`
-   * is supplied, it is used as the initial value for the range controls.
+   * The user's current scripture reference (typically the active editor's BCV). Serves two roles:
+   *
+   * - **Display**: shown as the muted secondary text on `'verse'` / `'chapter'` / `'book'` scope
+   *   triggers in the dropdown variant (e.g. "Current verse — GEN 1:1").
+   * - **Range-mode fallback**: seeds `rangeStart` and `rangeEnd` when those are not explicitly
+   *   supplied. `rangeStart` / `rangeEnd` always win when present — `currentScrRef` is *not* a
+   *   duplicate, it is the next-step fallback before the GEN 1:1 default.
+   *
+   * Also drives the "Navigate" footer in the dropdown variant when paired with
+   * `onCurrentScrRefChange`.
    */
   currentScrRef?: SerializedVerseRef;
   /**
