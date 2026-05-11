@@ -211,6 +211,7 @@ export const MANAGE_BOOKS_DIALOG_STRING_KEYS = Object.freeze([
   // Filter bar
   '%manageBooks_filter_placeholder%',
   '%manageBooks_filter_books%',
+  '%manageBooks_genericError%',
   '%manageBooks_filter_count%',
   '%manageBooks_filter_zero%',
   '%manageBooks_filter_state_all%',

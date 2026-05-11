@@ -951,9 +951,16 @@ export function ManageBooksDialog({
     }
   }, [action, createMethod, cvAllowed]);
 
+  // Sebastian review item 36 (2026-05-11, belt-and-suspenders): the
+  // `project.isEditable === false` redirect at line ~659 switches to `view`
+  // when the target becomes read-only, but the state update has a render-frame
+  // gap. Block apply explicitly so the orchestrator is never invoked on a
+  // read-only target, even mid-redirect. Sidebar disablement (#18) covers
+  // entry; this covers the dialog body's submit path.
   const canApply =
     action !== 'view' &&
     selectedArr.length > 0 &&
+    project.isEditable !== false &&
     (action !== 'copy' || !!copySourceId) &&
     !(action === 'create' && createMethod === 'fromTemplate' && !createReferenceId) &&
     !isSubmitting;
@@ -964,6 +971,44 @@ export function ManageBooksDialog({
   // so the wiring layer's toast surface can render it consistently with the
   // orchestrator-returned warnings/errors. Using a helper keeps the four
   // run* paths uniform.
+  //
+  // Sebastian review item 36 (2026-05-11): the previous implementation used
+  // `String(e)` as the non-Error fallback, which renders `"[object Object]"`
+  // when the backend rejects with a structured object (typical for PAPI /
+  // JSON-RPC rejections — the C# data provider doesn't throw Error instances).
+  // Extract a sensible message from common rejection shapes before falling back
+  // to JSON stringification.
+  const extractErrorMessage = (e: unknown): string => {
+    if (e instanceof Error) return e.message;
+    if (typeof e === 'string') return e;
+    if (e && typeof e === 'object') {
+      // Use `in` narrowing rather than type assertions; this preserves
+      // type-safety while letting us probe common JSON-RPC / PAPI rejection
+      // shapes ({ message }, { error: { message } }, { data: { text|message } }).
+      if ('message' in e && typeof e.message === 'string') return e.message;
+      if (
+        'error' in e &&
+        e.error &&
+        typeof e.error === 'object' &&
+        'message' in e.error &&
+        typeof e.error.message === 'string'
+      ) {
+        return e.error.message;
+      }
+      if ('data' in e && e.data && typeof e.data === 'object') {
+        if ('text' in e.data && typeof e.data.text === 'string') return e.data.text;
+        if ('message' in e.data && typeof e.data.message === 'string') return e.data.message;
+      }
+      // Last-resort: JSON stringify; never let "[object Object]" leak through.
+      try {
+        return JSON.stringify(e);
+      } catch {
+        // circular ref or BigInt — fall through to generic
+      }
+    }
+    return t('%manageBooks_genericError%', 'An unexpected error occurred.');
+  };
+
   const emitThrownError = (e: unknown) => {
     emitResult({
       success: false,
@@ -972,7 +1017,7 @@ export function ManageBooksDialog({
         {
           level: 'error',
           caption: '',
-          text: e instanceof Error ? e.message : String(e),
+          text: extractErrorMessage(e),
         },
       ],
     });
@@ -1787,96 +1832,6 @@ export function ManageBooksDialog({
                 </div>
               )}
 
-              {action === 'create' && (
-                <div className="tw:flex tw:w-full tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2">
-                  <Select
-                    value={createMethod}
-                    onValueChange={(v) => {
-                      if (isCreateMethod(v)) setCreateMethod(v);
-                    }}
-                    disabled={isSubmitting}
-                  >
-                    <SelectTrigger
-                      id="af-method"
-                      className="tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="empty">
-                        {t('%manageBooks_create_method_empty%', 'Create empty book')}
-                      </SelectItem>
-                      <SelectItem
-                        value="chapterVerse"
-                        disabled={!cvAllowed}
-                        aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
-                      >
-                        {t(
-                          '%manageBooks_create_method_chapterVerse%',
-                          'Create with all chapter and verse numbers',
-                        )}
-                      </SelectItem>
-                      <SelectItem value="fromTemplate">
-                        {t('%manageBooks_create_method_referenceText%', 'Create based on')}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {!cvAllowed && (
-                    <span id={cvDisabledHintId} className="tw:sr-only">
-                      {t(
-                        '%manageBooks_create_method_chapterVerse_disabledTooltip%',
-                        'Disabled because the selection contains only non-canonical books.',
-                      )}
-                    </span>
-                  )}
-                  {createMethod === 'fromTemplate' && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info
-                          className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground"
-                          aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {t(
-                          '%manageBooks_create_basedOnInfo%',
-                          'Prefill with the same markers as a selected project',
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {createMethod === 'fromTemplate' && (
-                    <div id="af-reference" data-testid="manage-books-create-reference-trigger">
-                      <ProjectSelector
-                        mode="project"
-                        projects={otherProjectsAsPS}
-                        openTabs={openTabs ?? []}
-                        selection={{ projectId: createReferenceId }}
-                        onChangeSelection={({ projectId: nextId }) =>
-                          setCreateReferenceId(nextId || undefined)
-                        }
-                        isDisabled={isSubmitting}
-                        ariaLabel={t(
-                          '%manageBooks_create_referenceProjectPlaceholder%',
-                          'Select reference project',
-                        )}
-                        buttonPlaceholder={t(
-                          '%manageBooks_create_referenceProjectPlaceholder%',
-                          'Select reference project',
-                        )}
-                        // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
-                        // the picker reads as a call-to-action until a reference project is set.
-                        buttonClassName={cn(
-                          'tw:h-8 tw:min-w-0 tw:flex-1 tw:basis-48',
-                          !createReferenceId &&
-                            'tw:border-primary tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90',
-                        )}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
               {action === 'copy' && (
                 <div className="tw:flex tw:items-center tw:gap-2">
                   <Label htmlFor="af-source" className="tw:text-xs tw:text-muted-foreground">
@@ -2087,6 +2042,99 @@ export function ManageBooksDialog({
                 />
               )}
             </div>
+
+            {/* Sebastian review item 38 (2026-05-11, CSV row #11 amended fix): the create-mode
+                method picker + reference-project picker live between the book grid and the
+                footer so the user sees the grid first and configures the create method just
+                before applying. Previously these controls sat in the action row at the top of
+                the dialog (alongside the action toggle group); review #11 only landed the
+                label-prefix + default-method changes from that round. */}
+            {action === 'create' && (
+              <div className="tw-flex tw-w-full tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-2 tw-border-t tw-px-6 tw-py-2">
+                <Select
+                  value={createMethod}
+                  onValueChange={(v) => {
+                    if (isCreateMethod(v)) setCreateMethod(v);
+                  }}
+                  disabled={isSubmitting}
+                >
+                  <SelectTrigger id="af-method" className="tw-h-8 tw-min-w-0 tw-flex-1 tw-basis-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="empty">
+                      {t('%manageBooks_create_method_empty%', 'Create empty book')}
+                    </SelectItem>
+                    <SelectItem
+                      value="chapterVerse"
+                      disabled={!cvAllowed}
+                      aria-describedby={!cvAllowed ? cvDisabledHintId : undefined}
+                    >
+                      {t(
+                        '%manageBooks_create_method_chapterVerse%',
+                        'Create with all chapter and verse numbers',
+                      )}
+                    </SelectItem>
+                    <SelectItem value="fromTemplate">
+                      {t('%manageBooks_create_method_referenceText%', 'Create based on')}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {!cvAllowed && (
+                  <span id={cvDisabledHintId} className="tw-sr-only">
+                    {t(
+                      '%manageBooks_create_method_chapterVerse_disabledTooltip%',
+                      'Disabled because the selection contains only non-canonical books.',
+                    )}
+                  </span>
+                )}
+                {createMethod === 'fromTemplate' && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info
+                        className="tw-h-4 tw-w-4 tw-shrink-0 tw-text-muted-foreground"
+                        aria-label={t('%manageBooks_create_basedOnInfo%', 'Based on info')}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {t(
+                        '%manageBooks_create_basedOnInfo%',
+                        'Prefill with the same markers as a selected project',
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {createMethod === 'fromTemplate' && (
+                  <div id="af-reference" data-testid="manage-books-create-reference-trigger">
+                    <ProjectSelector
+                      mode="project"
+                      projects={otherProjectsAsPS}
+                      openTabs={openTabs ?? []}
+                      selection={{ projectId: createReferenceId }}
+                      onChangeSelection={({ projectId: nextId }) =>
+                        setCreateReferenceId(nextId || undefined)
+                      }
+                      isDisabled={isSubmitting}
+                      ariaLabel={t(
+                        '%manageBooks_create_referenceProjectPlaceholder%',
+                        'Select reference project',
+                      )}
+                      buttonPlaceholder={t(
+                        '%manageBooks_create_referenceProjectPlaceholder%',
+                        'Select reference project',
+                      )}
+                      // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
+                      // the picker reads as a call-to-action until a reference project is set.
+                      buttonClassName={cn(
+                        'tw-h-8 tw-min-w-0 tw-flex-1 tw-basis-48',
+                        !createReferenceId &&
+                          'tw-border-primary tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90',
+                      )}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Theme C1 (FN-008 v2.6.0+, 2026-05-01): the in-dialog
                   role="alert" result panel was removed. AlertEntry warnings
