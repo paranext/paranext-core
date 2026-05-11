@@ -100,6 +100,31 @@ type SidebarProject = ProjectSelectorProject & { isEditable: boolean };
  * are the ones we actually call in this wiring pass — not all 13 backend methods need a TS
  * signature for the dialog to function.
  */
+/**
+ * Wire-shape of a single book's comparison entry returned by `getBookComparison` /
+ * `parseImportFiles`. Mirrors C# `BookComparisonEntry` (see ManageBooks/BookComparisonEntry.cs).
+ * `SourceLastModified` / `DestLastModified` are ISO-8601 strings or null when the side has no date
+ * (file missing or empty text). Added Sebastian/Vladimir #14 + #44 (2026-05-11).
+ */
+type BookComparisonEntry = {
+  bookNum: number;
+  bookName: string;
+  comparisonState:
+    | 'FilesAreSame'
+    | 'DestDoesNotExist'
+    | 'SourceIsNewer'
+    | 'SourceIsOlder'
+    | 'Undetermined'
+    | 'SourceDoesNotExist';
+  defaultIncluded: boolean;
+  selectable: boolean;
+  tooltipInfo: string;
+  sourceLastModified: string | null;
+  destLastModified: string | null;
+};
+
+type BookComparisonResult = { entries: BookComparisonEntry[] };
+
 interface ManageBooksNetworkObject {
   filterProjects: (input: {
     purpose: string;
@@ -124,6 +149,16 @@ interface ManageBooksNetworkObject {
     files: ImportFileEntry[];
     replaceEntireBook: boolean;
   }) => Promise<MutationResult>;
+  /** #14 + #44 (2026-05-11): per-book Copy comparison; was always available but never wired. */
+  getBookComparison: (input: {
+    fromProjectId: string;
+    toProjectId: string;
+  }) => Promise<BookComparisonResult>;
+  /** #14 + #44 (2026-05-11): per-book Import comparison; same wire shape. */
+  parseImportFiles: (input: {
+    projectId: string;
+    files: ImportFileEntry[];
+  }) => Promise<BookComparisonResult>;
 }
 
 // ===== Adapter helpers =====================================================
@@ -399,20 +434,37 @@ global.webViewComponent = function ManageBooksWebView({
     return [];
   }, [booksPresentRaw]);
 
+  // Sebastian/Vladimir review items #14 + #44 (2026-05-11): per-project per-book
+  // lastModified dates sourced from manageBooksApi.getBookComparison. The dialog asks
+  // for books via loadBooks(pid) and the result is a ManageBooksDialogBookInfo[] with
+  // an optional `lastModified` field. We collect dates as comparison calls land and
+  // merge them into the response on the fly, so Copy/Import mode's
+  // computeCompareState heuristic (already wired in the dialog) starts producing
+  // real `sourceIsNewer`/`sourceIsOlder`/`same`/`new` states.
+  const [datesByProject, setDatesByProject] = useState<Record<string, Record<string, string>>>({});
+
   // Cache books for OTHER projects the dialog asks about (e.g. Copy source,
   // Create model). The dialog's loadBooks is called eagerly on project
   // change; we delegate to a per-project getProjectSetting fetch.
   const [bookCache, setBookCache] = useState<Record<string, ManageBooksDialogBookInfo[]>>({});
+  const decorateWithDates = useCallback(
+    (pid: string, books: ManageBooksDialogBookInfo[]): ManageBooksDialogBookInfo[] => {
+      const dates = datesByProject[pid];
+      if (!dates) return books;
+      return books.map((b) => (dates[b.id] ? { ...b, lastModified: dates[b.id] } : b));
+    },
+    [datesByProject],
+  );
   const loadBooks = useCallback(
     async (pid: string): Promise<ManageBooksDialogBookInfo[]> => {
-      if (pid === projectId) return activeBooks;
-      if (bookCache[pid]) return bookCache[pid];
+      if (pid === projectId) return decorateWithDates(pid, activeBooks);
+      if (bookCache[pid]) return decorateWithDates(pid, bookCache[pid]);
       try {
         const pdp = await papi.projectDataProviders.get('platform.base', pid);
         const bp = await pdp.getSetting('platformScripture.booksPresent');
         const decoded = decodeBooksPresent(typeof bp === 'string' ? bp : BOOKS_PRESENT_DEFAULT);
         setBookCache((prev) => ({ ...prev, [pid]: decoded }));
-        return decoded;
+        return decorateWithDates(pid, decoded);
       } catch (e) {
         logger.warn(
           `manage-books: loadBooks(${pid}) failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -420,8 +472,77 @@ global.webViewComponent = function ManageBooksWebView({
         return [];
       }
     },
-    [projectId, activeBooks, bookCache],
+    [projectId, activeBooks, bookCache, decorateWithDates],
   );
+
+  // Side-channel: whenever the dialog asks about a non-active project (Copy source,
+  // Create reference), also fire a getBookComparison(from=other, to=active) so we
+  // can populate lastModified for both sides. The dialog's gridItems heuristic
+  // (computeCompareState) consumes those dates and produces correct new/newer/
+  // older/same labels. See review items #14 + #44.
+  useEffect(() => {
+    if (!manageBooksApi || !projectId) return undefined;
+    const otherIds = Object.keys(bookCache);
+    if (otherIds.length === 0) return undefined;
+    let cancelled = false;
+    Promise.all(
+      otherIds.map(async (otherId) => {
+        try {
+          const result = await manageBooksApi.getBookComparison({
+            fromProjectId: otherId,
+            toProjectId: projectId,
+          });
+          if (cancelled) return undefined;
+          const fromDates: Record<string, string> = {};
+          const toDates: Record<string, string> = {};
+          result.entries.forEach((e) => {
+            const bookId = Canon.bookNumberToId(e.bookNum);
+            if (!bookId) return;
+            if (e.sourceLastModified) fromDates[bookId] = e.sourceLastModified;
+            if (e.destLastModified) toDates[bookId] = e.destLastModified;
+          });
+          return { otherId, fromDates, toDates };
+        } catch (err) {
+          logger.warn(
+            `manage-books: getBookComparison(${otherId}, ${projectId}) failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+          return undefined;
+        }
+      }),
+    )
+      .then((results) => {
+        if (cancelled) return undefined;
+        const next: Record<string, Record<string, string>> = {};
+        let touchedAny = false;
+        results.forEach((r) => {
+          if (!r) return;
+          touchedAny = true;
+          next[r.otherId] = r.fromDates;
+          next[projectId] = { ...(next[projectId] ?? {}), ...r.toDates };
+        });
+        if (!touchedAny) return undefined;
+        setDatesByProject((prev) => {
+          const merged = { ...prev };
+          Object.entries(next).forEach(([pid, dates]) => {
+            merged[pid] = { ...merged[pid], ...dates };
+          });
+          return merged;
+        });
+        return undefined;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // datesByProject deliberately omitted from deps — listing it would re-fire the
+    // effect on every comparison response, causing an infinite loop. We accept that
+    // the cache check above is a soft-skip; the worst case is one redundant API
+    // call per (other, active) pair, which the backend short-circuits via its own
+    // caching.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manageBooksApi, projectId, bookCache]);
 
   // ===== Versification (per-project) =========================================
   const loadVersification = useCallback(
