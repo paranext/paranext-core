@@ -77,7 +77,14 @@ type ImportFileEntry = {
  * C# `ProjectListResult`.
  */
 type ProjectListResult = {
-  projects: { projectId: string; name: string; projectType: string; isEditable: boolean }[];
+  projects: {
+    projectId: string;
+    name: string;
+    projectType: string;
+    isEditable: boolean;
+    /** Whether the project is a resource (read-only published text). See review item #29. */
+    isResource: boolean;
+  }[];
 };
 
 /**
@@ -471,6 +478,9 @@ global.webViewComponent = function ManageBooksWebView({
             name: displayName,
             fullName: fullName ?? p.name,
             isEditable: p.isEditable,
+            // #29 (2026-05-11): forward the isResource flag so the dialog can filter
+            // resources out of the Copy "From" / Create "Based on" pickers.
+            isResource: p.isResource,
           };
         }),
       );

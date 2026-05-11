@@ -578,13 +578,19 @@ export function ManageBooksDialog({
   // `ManageBooksDialogProject` to that shape — `p.fullName` (sourced from `platform.fullName`
   // upstream) becomes the secondary label, falling back to `shortName` when no fullName is
   // configured. The target project itself is filtered out (already done in `otherProjects`).
+  //
+  // Mike review item #29 (2026-05-11): exclude resource projects from the Copy "From" and
+  // Create "Based on" source pickers (copyright reasons). Read-only non-resource projects
+  // remain valid sources. The header project picker continues to include resources.
   const otherProjectsAsPS = useMemo<ProjectSelectorProject[]>(
     () =>
-      otherProjects.map((p) => ({
-        id: p.id,
-        shortName: p.shortName,
-        fullName: p.fullName ?? p.shortName,
-      })),
+      otherProjects
+        .filter((p) => !p.isResource)
+        .map((p) => ({
+          id: p.id,
+          shortName: p.shortName,
+          fullName: p.fullName ?? p.shortName,
+        })),
     [otherProjects],
   );
   const copySourceProject = copySourceId ? projects.find((p) => p.id === copySourceId) : undefined;
