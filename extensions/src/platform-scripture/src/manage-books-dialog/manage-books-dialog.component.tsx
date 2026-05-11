@@ -1685,8 +1685,13 @@ export function ManageBooksDialog({
   }
   return (
     <>
+      {/* Sebastian review items 6 + 42 (2026-05-11): outer dialog wrapper becomes a
+          container so responsive rules can react to the floating panel's width rather
+          than the viewport. Mirrors PR #2224's `@container/actions` pattern but at the
+          dialog level — narrow widths hide the header subtitle and collapse the sidebar
+          to an icon-only rail. */}
       <div
-        className="tw:flex tw:h-full tw:min-h-0"
+        className="tw-flex tw-h-full tw-min-h-0 tw-@container/dialog"
         data-testid="manage-books-dialog"
         data-action={action}
       >
@@ -1711,7 +1716,12 @@ export function ManageBooksDialog({
                 <h2 className="tw:text-lg tw:font-semibold">
                   {t('%manageBooks_dialog_title%', 'Manage books')}
                 </h2>
-                <p className="tw:text-xs tw:text-muted-foreground">{headerSubtitle}</p>
+                {/* Header subtitle ("66 of 92 canonical books in ESVUS16 ⋅ English Versification")
+                    hides at narrow dialog widths so the project name + title still fit. The full
+                    info remains accessible via the sidebar's project tooltip (#30). */}
+                <p className="tw-text-xs tw-text-muted-foreground @max-md/dialog:tw-hidden">
+                  {headerSubtitle}
+                </p>
               </div>
             </header>
 
