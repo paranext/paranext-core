@@ -877,29 +877,50 @@ declare module 'platform-scripture' {
   // #region Versification Types
 
   /**
-   * Read-only lookups for a project's versification — final chapter per book, final verse per
-   * chapter. Consumers (e.g. reference pickers) use these to constrain selection to valid
-   * references for a given project. This is a network object (not a project data provider):
-   * versification is fixed at project open and does not change at runtime, so there is no
-   * subscription semantics.
-   *
-   * Obtain via
-   * `papi.networkObjects.get<IVersificationService>('platformScripture.versificationService')`.
+   * Data types the versification projectInterface exposes via its base {@link IProjectDataProvider}
+   * — currently empty. The interface is auxiliary-only (no `get*` / `set*` / `subscribe*` data
+   * types). Consumers that need to react to versification changes should subscribe to the
+   * `'platformScripture.versification'` project setting on the same PDP via the base
+   * setting-subscription methods.
    */
-  export type IVersificationService = {
-    /**
-     * Returns the final verse number in the specified book and chapter using the project's
-     * versification.
-     */
-    lookupFinalVerseNumber(projectId: string, bookNum: number, chapterNum: number): Promise<number>;
-    /** Returns the final chapter number in the specified book using the project's versification. */
-    lookupFinalChapter(projectId: string, bookNum: number): Promise<number>;
-    /**
-     * Returns an array where index `n` is the last verse number in chapter `n` (1-based). Index 0
-     * is unused. Useful for pre-fetching all verse counts for a book in a single round trip.
-     */
-    lookupFinalVerseNumbersInBook(projectId: string, bookNum: number): Promise<number[]>;
-  };
+  export type VersificationProjectInterfaceDataTypes = Record<string, never>;
+
+  /**
+   * Project-scoped read-only versification lookups — final chapter per book, final verse per
+   * chapter. Consumers (e.g. reference pickers, range validators) use these to constrain selection
+   * to valid references for the project.
+   *
+   * Each call reads the project's _current_ versification fresh, so results reflect any in-session
+   * changes to the `platformScripture.versification` project setting. Consumers that cache results
+   * across calls should invalidate their cache when that setting changes.
+   *
+   * Acquire via `papi.projectDataProviders.get('platformScripture.Versification', projectId)`
+   * (backend) or the `useProjectDataProvider('platformScripture.Versification', projectId)` React
+   * hook (frontend).
+   */
+  export type IVersificationProjectDataProvider =
+    IProjectDataProvider<VersificationProjectInterfaceDataTypes> & {
+      /**
+       * Returns the final verse number in the specified book and chapter using the project's
+       * versification.
+       */
+      lookupFinalVerseNumber(bookNum: number, chapterNum: number): Promise<number>;
+      /** Returns the final chapter number in the specified book using the project's versification. */
+      lookupFinalChapter(bookNum: number): Promise<number>;
+      /**
+       * Returns an array of final verse numbers for every chapter in a book, indexed 1-based for
+       * ergonomic `result[chapterNum]` access (no off-by-one). Index 0 is a filler `0` — it is not
+       * a valid chapter. The returned array has length `lastChapter + 1`.
+       *
+       * Useful for pre-fetching all verse counts for a book in a single round trip — preferable to
+       * `lookupFinalVerseNumber` in a loop when the caller needs many chapters of the same book.
+       *
+       * @example Const finalVerses = await pdp.lookupFinalVerseNumbersInBook(1); // Genesis
+       * finalVerses[1]; // → 31 (last verse of Genesis 1) finalVerses[50]; // → 26 (last verse of
+       * Genesis 50) finalVerses[0]; // → 0 (filler; chapter 0 does not exist)
+       */
+      lookupFinalVerseNumbersInBook(bookNum: number): Promise<number[]>;
+    };
 
   // #endregion Versification Types
 
@@ -1905,6 +1926,7 @@ declare module 'papi-shared-types' {
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
     IMarkerNamesProjectDataProvider,
+    IVersificationProjectDataProvider,
     IFindInScriptureProjectDataProvider,
     IReplaceWithUsfmProjectDataProvider,
     IUserTextConnectionSettingsProjectDataProvider,
@@ -1929,6 +1951,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
+    'platformScripture.Versification': IVersificationProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
     'platformScripture.userTextConnectionSettings': IUserTextConnectionSettingsProjectDataProvider;
