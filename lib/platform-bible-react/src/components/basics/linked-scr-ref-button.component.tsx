@@ -15,11 +15,13 @@ import {
  * `link`, wrapped in a tooltip. Used when a scripture reference should double as a navigation
  * affordance — clicking the reference text takes the user to that location in scripture.
  *
- * NOTE: This is a small, intentionally narrow primitive. PR #1949 introduces a richer
- * `LinkedScrRefDisplay` component built around `SerializedVerseRef` and the formatted-range
- * utilities in `platform-bible-utils`. When that PR merges, consumers that already have structured
- * `SerializedVerseRef` data should prefer `LinkedScrRefDisplay`. This button is for cases where the
- * reference is already rendered as a string and only the link affordance is needed.
+ * @experimental This component is expected to be removed once
+ *   [`LinkedScrRefDisplay`](https://github.com/paranext/paranext-core/pull/1949) lands. That
+ *   richer component is built around `SerializedVerseRef` and the formatted-range utilities in
+ *   `platform-bible-utils` and supersedes this button for consumers that have structured
+ *   `SerializedVerseRef` data. Until PR #1949 merges, this button covers the
+ *   "string-already-formatted" case (e.g. the markers-checklist Reference column). **Do not depend
+ *   on this component long-term — migrate to `LinkedScrRefDisplay` as soon as it is available.**
  */
 export type LinkedScrRefButtonProps = {
   /**

@@ -878,13 +878,19 @@ declare module 'platform-scripture' {
 
   /**
    * Read-only lookups for a project's versification — final chapter per book, final verse per
-   * chapter. Consumers (e.g. reference pickers) use these to constrain selection to valid
-   * references for a given project. This is a network object (not a project data provider):
-   * versification is fixed at project open and does not change at runtime, so there is no
-   * subscription semantics.
+   * chapter. Consumers (e.g. reference pickers, range validators) use these to constrain selection
+   * to valid references for a given project.
+   *
+   * Each call reads the project's _current_ versification fresh, so results reflect any in-session
+   * changes to the `platformScripture.versification` project setting. Consumers that cache results
+   * across calls should invalidate their cache on project-settings change events.
    *
    * Obtain via
    * `papi.networkObjects.get<IVersificationService>('platformScripture.versificationService')`.
+   *
+   * NOTE: This service is a candidate for conversion to a `projectInterface` on the existing
+   * scripture PDPs (every method takes `projectId` first). See follow-up tracked in the
+   * markers-checklist post-merge review.
    */
   export type IVersificationService = {
     /**
@@ -895,8 +901,16 @@ declare module 'platform-scripture' {
     /** Returns the final chapter number in the specified book using the project's versification. */
     lookupFinalChapter(projectId: string, bookNum: number): Promise<number>;
     /**
-     * Returns an array where index `n` is the last verse number in chapter `n` (1-based). Index 0
-     * is unused. Useful for pre-fetching all verse counts for a book in a single round trip.
+     * Returns an array of final verse numbers for every chapter in a book, indexed 1-based for
+     * ergonomic `result[chapterNum]` access (no off-by-one). Index 0 is a filler `0` — it is not a
+     * valid chapter. The returned array has length `lastChapter + 1`.
+     *
+     * Useful for pre-fetching all verse counts for a book in a single round trip — preferable to
+     * `lookupFinalVerseNumber` in a loop when the caller needs many chapters of the same book.
+     *
+     * @example Const finalVerses = await svc.lookupFinalVerseNumbersInBook('proj-1', 1); // Genesis
+     * finalVerses[1]; // → 31 (last verse of Genesis 1) finalVerses[50]; // → 26 (last verse of
+     * Genesis 50) finalVerses[0]; // → 0 (filler; chapter 0 does not exist)
      */
     lookupFinalVerseNumbersInBook(projectId: string, bookNum: number): Promise<number[]>;
   };
@@ -1801,101 +1815,158 @@ declare module 'platform-scripture' {
   // #endregion Resource Reference Types
 
   // #region Markers Checklist Types
-  //
-  // Surface mirrors `data-contracts.md` §§2.1/2.2/2.4/4.1/4.2/4.5. `IChecklistService` is a plain
-  // NetworkObject interface — NOT added to `papi-shared-types` `DataProviders` (see
-  // `.context/features/markers-checklist/implementation/ui-alignment.md` §"Network Object
-  // Connection"). The web view acquires a typed proxy via
-  // `papi.networkObjects.get<IChecklistService>('platformScripture.checklistService')`.
 
-  /** A 3-letter book code + chapter + verse, matching the platform's `SerializedVerseRef`. */
-  export type ChecklistScriptureVerseRef = {
-    book: string;
-    chapterNum: number;
-    verseNum: number;
-  };
-
-  /**
-   * Inclusive Scripture range used by {@link ChecklistRequest}. Mirrors the platform's
-   * `ScriptureRange`.
-   */
-  export type ChecklistScriptureRange = {
-    start: ChecklistScriptureVerseRef;
-    end: ChecklistScriptureVerseRef;
-  };
-
-  /** Configuration for equivalent marker pairs and marker filter (data-contracts.md §2.2). */
+  /** Configuration for the Markers Checklist's "equivalent markers" and marker-filter inputs. */
   export type ChecklistMarkerSettings = {
-    /** Space-separated marker pairs in "marker1/marker2" format. */
+    /**
+     * Space-separated marker pairs in `"marker1/marker2"` format identifying markers that should be
+     * treated as equivalent when "Hide matches" is enabled. For example, `"p/q s/s1"` declares two
+     * pairs (`p`↔`q` and `s`↔`s1`). An empty string declares no equivalents.
+     */
     equivalentMarkers: string;
-    /** Space-separated marker names to include; empty means all paragraph markers. */
+    /**
+     * Space-separated USFM marker names to include in the checklist (e.g. `"p q m"`). When empty,
+     * all paragraph markers in the project are included.
+     */
     markerFilter: string;
   };
 
-  /** Identifies a comparative text for resolution (data-contracts.md §2.4). */
+  /** Identifies a comparative text (a second project) to include alongside the main project. */
   export type ChecklistComparativeTextRef = {
-    /** GUID of the comparative text (preferred resolution method). */
+    /**
+     * GUID of the comparative text (preferred resolution method). When this GUID identifies a
+     * registered project, the `name` field is ignored.
+     */
     id: string;
-    /** Display name of the comparative text (fallback resolution method). */
+    /**
+     * Short project name, used as a fallback when the GUID does not resolve. This fallback covers
+     * three real cases: (a) legacy PT9 mementos that pre-date GUID assignment and only stored
+     * names; (b) malformed/empty GUID strings on a request; (c) disambiguating multiple projects
+     * with identical short names (PTX-23529) — the GUID breaks the tie when both fields are
+     * supplied. Pass the empty string if no name is available.
+     */
     name: string;
   };
 
-  /** Primary input for `buildChecklistData` (data-contracts.md §2.1). */
+  /** Primary input for {@link IChecklistService.buildChecklistData}. */
   export type ChecklistRequest = {
+    /** Project ID of the main (active) project the checklist is built for. */
     projectId: string;
+    /**
+     * GUIDs of any comparative texts to render as additional columns alongside the main project.
+     * Empty array means single-column mode.
+     */
     comparativeTextIds: string[];
+    /** Marker settings — see {@link ChecklistMarkerSettings}. */
     markerSettings: ChecklistMarkerSettings;
-    verseRange: ChecklistScriptureRange | undefined;
+    /**
+     * Inclusive verse range to limit the checklist to. When `undefined`, the entire project is
+     * scanned. When the range omits `end`, only the verse at `start` is included.
+     */
+    verseRange: ScriptureRange | undefined;
+    /** When true, rows whose cells all match (per `equivalentMarkers`) are omitted from output. */
     hideMatches: boolean;
+    /** When true, the full verse text is included alongside each marker occurrence. */
     showVerseText: boolean;
   };
 
-  /** Discriminated-union response wrapper for `buildChecklistData` (data-contracts.md §3.1). */
+  /**
+   * Discriminated-union response wrapper for {@link IChecklistService.buildChecklistData}. The
+   * `success` field distinguishes a successful payload from a structured error. Row shape (the
+   * `unknown[]` payload) is intentionally untyped at the wire boundary because it carries TanStack
+   * Table-ready render data that the web view casts to its local row type; consumers should not
+   * rely on the row's internal structure across major versions.
+   */
   export type ChecklistResultResponse =
     | {
         success: true;
+        /** TanStack-Table-ready row objects. Consumers cast to their local row type. */
         rows: unknown[];
+        /** One header label per column (main project first, then each comparative text). */
         columnHeaders: string[];
+        /** Project ID per column, parallel to `columnHeaders`. */
         columnProjectIds: string[];
+        /**
+         * Number of rows the engine produced but suppressed (e.g. matches hidden by `hideMatches`).
+         * Surface to the user so they understand why some content is missing.
+         */
         excludedCount: number;
+        /** Optional contextual help text rendered above the table. */
         helpText: string | undefined;
+        /** True when the result was truncated at the engine's maximum row cap. */
         truncated: boolean;
+        /**
+         * Present only when `rows` is empty: a structured description of _why_ (e.g. "identical
+         * markers" vs "no results"). The web view renders this in a localized empty state. Shape
+         * mirrors the C# `EmptyResultMessage` DTO; the field is `unknown` at the wire boundary.
+         */
         emptyResultMessage: unknown | undefined;
       }
     | {
         success: false;
+        /** Stable error code (e.g. `"PROJECT_NOT_FOUND"`). */
         code: string;
+        /** Already-localized error message safe to display to users. */
         message: string;
       };
 
-  /** Parsed/validated equivalent-marker settings (data-contracts.md §4.2). */
+  /** Parsed/validated equivalent-markers string, used by the Marker Settings dialog. */
   export type MarkerSettingsValidationResult = {
+    /** True when the string is well-formed; false when `errorMessage` is set. */
     valid: boolean;
+    /**
+     * Parsed pairs when `valid` is true; `undefined` otherwise. Each entry is one marker pair as `{
+     * marker1, marker2 }` (e.g. `{ marker1: 'p', marker2: 'q' }`).
+     */
     parsedPairs: { marker1: string; marker2: string }[] | undefined;
+    /**
+     * Already-localized error message when `valid` is false; `undefined` otherwise. The message
+     * describes the first parse failure encountered.
+     */
     errorMessage: string | undefined;
   };
 
-  /** Resolved comparative-text payload (data-contracts.md §4.5). */
+  /** Resolved comparative-text payload returned by {@link IChecklistService.resolveComparativeTexts}. */
   export type ResolvedComparativeTexts = {
+    /** Resolution result per requested reference, parallel to the request array. */
     texts: {
+      /** GUID of the resolved project (or the original requested id if resolution failed). */
       id: string;
+      /** Short name of the resolved project. */
       name: string;
+      /** Full descriptive name of the resolved project. */
       fullName: string;
+      /** True when the project was successfully resolved and is currently registered. */
       available: boolean;
     }[];
   };
 
   /**
-   * Typed proxy for the `platformScripture.checklistService` NetworkObject. Methods mirror
-   * data-contracts.md §§4.1 / 4.2 / 4.5. Acquired via
-   * `papi.networkObjects.get<IChecklistService>(...)`.
+   * Typed proxy for the `platformScripture.checklistService` NetworkObject. Provides on-demand
+   * computation for the Markers Checklist web view: building checklist data over a given project +
+   * scope, validating the user's equivalent-markers string, and resolving comparative-text refs.
+   *
+   * The service is stateless RPC — no internal cache, no update notifications. Consumers re-call
+   * `buildChecklistData` when their inputs change (project, scope, settings, comparative texts).
+   *
+   * Acquire via `papi.networkObjects.get<IChecklistService>('platformScripture.checklistService')`.
    */
   export interface IChecklistService {
-    /** Generate checklist data for the supplied request (data-contracts.md §4.1). */
+    /**
+     * Build the checklist row data for the supplied request. Resolves comparative-text projects
+     * internally. The response is a discriminated union of success/error.
+     */
     buildChecklistData(request: ChecklistRequest): Promise<ChecklistResultResponse>;
-    /** Validate an equivalent-markers string (data-contracts.md §4.2). */
+    /**
+     * Validate an equivalent-markers configuration string (e.g. `"p/q s/s1"`). Returns parsed pairs
+     * on success or a localized error message on failure. Pure function — no project access.
+     */
     validateMarkerSettings(equivalentMarkers: string): Promise<MarkerSettingsValidationResult>;
-    /** Resolve comparative-text references (data-contracts.md §4.5). */
+    /**
+     * Resolve comparative-text references for a given active project. Each reference is resolved
+     * GUID-first with a name fallback (see {@link ChecklistComparativeTextRef}). Returns one entry
+     * per requested reference, in the same order.
+     */
     resolveComparativeTexts(
       activeProjectId: string,
       requestedTexts: ChecklistComparativeTextRef[],
@@ -2019,8 +2090,10 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Open the Marker Settings dialog for the Markers Checklist. Wired as a stub in UI-PKG-001 and
-     * replaced with the real dialog launcher in UI-PKG-003.
+     * Open the Marker Settings dialog for the Markers Checklist, which configures the
+     * equivalent-markers and marker-filter inputs used by the checklist's "Hide matches" mode and
+     * marker-name filter. The dialog operates on the active project — it has no parameter because
+     * the active project is resolved internally.
      */
     'platformScripture.openMarkersChecklistSettings': () => Promise<void>;
 
