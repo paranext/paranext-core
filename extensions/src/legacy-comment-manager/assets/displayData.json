@@ -5,8 +5,13 @@
   "localizedDisplayInfo": {
     "en": {
       "displayName": "Legacy Comment Manager",
-      "shortSummary": "Manage comments from Paratext 9 projects",
+      "shortSummary": "Manage comments for Paratext projects",
       "description": "assets/descriptions/description-en.md"
+    },
+    "es": {
+      "displayName": "Legacy Comment Manager",
+      "shortSummary": "Administrar comentarios de los proyectos",
+      "description": "assets/descriptions/description-es.md"
     }
   }
 }
