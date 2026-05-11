@@ -684,12 +684,18 @@ export function ChecklistTool({
     return undefined;
   };
 
-  // Backend-supplied empty-result message is preferred over the generic no-results string — e.g.
-  // gm-002 emits "Comparative texts have identical markers." (BHV-600).
+  // Empty-results message selection (UX-2 finding #3):
+  //   - If the backend supplied an emptyResultMessage, prefer it (BHV-600).
+  //   - Otherwise, if data has loaded with zero rows, show generic noResults.
+  //   - Otherwise (no data yet — no primary selected), show selectProject.
+  // The previous fallback chained the "identical markers" string here, which
+  // surfaced "Comparative texts have identical markers." on first load before
+  // any primary project was chosen.
   const noResultsMessage =
     data?.emptyResultMessage?.message ??
-    getLocalizedString('%markersChecklist_emptyResult_identicalMarkers%') ??
-    getLocalizedString('%markersChecklist_noResults%');
+    (data
+      ? getLocalizedString('%markersChecklist_emptyResult_noResults%')
+      : getLocalizedString('%markersChecklist_emptyResult_selectProject%'));
 
   return (
     <div

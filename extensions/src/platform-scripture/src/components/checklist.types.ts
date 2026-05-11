@@ -34,6 +34,11 @@ export const CHECKLIST_STRING_KEYS = Object.freeze([
   '%markersChecklist_helptext%',
   // Empty result — reuse the existing key so we don't duplicate the translation
   '%markersChecklist_emptyResult_identicalMarkers%',
+  // Empty-result fallbacks (UX-2 finding #3): generic "no markers" message when
+  // data is loaded but rows is empty AND no comparatives — replaces the
+  // misleading "identical markers" fallback that surfaced on first load.
+  '%markersChecklist_emptyResult_noResults%',
+  '%markersChecklist_emptyResult_selectProject%',
   // Error banner + retry (T-R-2 rendering contract)
   '%markersChecklist_errorTitle%',
   '%markersChecklist_errorRetry%',
