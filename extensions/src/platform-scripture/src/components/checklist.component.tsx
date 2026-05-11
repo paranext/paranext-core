@@ -5,15 +5,17 @@ import {
   Button,
   ColumnDef,
   DataTable,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
   LinkedScrRefButton,
-  ToggleGroup,
-  ToggleGroupItem,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { AlertTriangle, Book, BookOpen, Eye, EyeOff, Pencil, X } from 'lucide-react';
+import { AlertTriangle, Eye, Pencil, X } from 'lucide-react';
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import type { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ScriptureRange } from 'platform-scripture';
@@ -599,78 +601,49 @@ export function ChecklistTool({
   const renderToolbarEnd = () => (
     <>
       {/*
-       * View toggles as inline ToggleGroup (per Sebastian PR #2219 #3137366113: "View menu should
-       * be an eye icon toggle group button"). Each toggle uses a distinct icon family so the two
-       * buttons are recognizable at a glance, and each swaps between an "on" and "off" variant so
-       * the current state is legible even before the active-background highlight is read:
-       *  - Hide Matches uses `Eye` (matches visible) ↔ `EyeOff` (matches hidden).
-       *  - Show Verse Text uses `BookOpen` (text visible) ↔ `Book` (text hidden — closed book).
-       * Tooltips supply the accessible label/description without crowding the toolbar with text.
-       *
-       * `type="multiple"` allows both toggles to be active independently. The
-       * `value` array reflects which toggles are currently on; we map onValueChange to two
-       * distinct handlers so each persisted slot is updated correctly.
+       * UX-2 finding #8: View toggles now live behind a single eye-icon
+       * DropdownMenu button. Two checkbox items: Hide matches (disabled when
+       * <=1 column) + Show verse text. The icon does not change with state —
+       * the checkbox marks inside the menu show current state. Tooltip names
+       * the button "View" for the accessible label.
        */}
       <TooltipProvider delayDuration={0}>
-        <ToggleGroup
-          type="multiple"
-          value={[
-            ...(isHideMatchesEnabled && hideMatches ? ['hideMatches'] : []),
-            ...(showVerseText ? ['showVerseText'] : []),
-          ]}
-          onValueChange={(next) => {
-            const nextHide = isHideMatchesEnabled && next.includes('hideMatches');
-            const nextShow = next.includes('showVerseText');
-            if (nextHide !== hideMatches) handleHideMatchesChange(nextHide);
-            if (nextShow !== showVerseText) handleShowVerseTextChange(nextShow);
-          }}
-          variant="outline"
-          aria-label={getLocalizedString('%markersChecklist_toolbar_view%')}
-        >
+        <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
-              <ToggleGroupItem
-                value="hideMatches"
-                size="sm"
-                className="tw:h-8 tw:w-8 tw:p-0"
-                disabled={!isHideMatchesEnabled}
-                aria-label={getLocalizedString('%markersChecklist_toolbar_hideMatches%')}
-                data-testid="checklist-hide-matches-item"
-              >
-                {/* Icon swaps with state: when matches are hidden, show EyeOff (slashed);
-                    when visible, show Eye. Pairs with the data-[state=on] background highlight. */}
-                {isHideMatchesEnabled && hideMatches ? (
-                  <EyeOff className="tw:h-4 tw:w-4" aria-hidden="true" />
-                ) : (
-                  <Eye className="tw:h-4 tw:w-4" aria-hidden="true" />
-                )}
-              </ToggleGroupItem>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="tw-h-8 tw-w-8 tw-p-0"
+                  aria-label={getLocalizedString('%markersChecklist_toolbar_view%')}
+                  data-testid="checklist-view-menu-trigger"
+                >
+                  <Eye className="tw-h-4 tw-w-4" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
             </TooltipTrigger>
-            <TooltipContent>
+            <TooltipContent>{getLocalizedString('%markersChecklist_toolbar_view%')}</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end">
+            <DropdownMenuCheckboxItem
+              checked={isHideMatchesEnabled && hideMatches}
+              disabled={!isHideMatchesEnabled}
+              onCheckedChange={(checked) => handleHideMatchesChange(Boolean(checked))}
+              data-testid="checklist-hide-matches-item"
+            >
               {getLocalizedString('%markersChecklist_toolbar_hideMatches%')}
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ToggleGroupItem
-                value="showVerseText"
-                size="sm"
-                className="tw:h-8 tw:w-8 tw:p-0"
-                aria-label={getLocalizedString('%markersChecklist_toolbar_showVerseText%')}
-                data-testid="checklist-show-verse-text-item"
-              >
-                {showVerseText ? (
-                  <BookOpen className="tw:h-4 tw:w-4" aria-hidden="true" />
-                ) : (
-                  <Book className="tw:h-4 tw:w-4" aria-hidden="true" />
-                )}
-              </ToggleGroupItem>
-            </TooltipTrigger>
-            <TooltipContent>
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={showVerseText}
+              onCheckedChange={(checked) => handleShowVerseTextChange(Boolean(checked))}
+              data-testid="checklist-show-verse-text-item"
+            >
               {getLocalizedString('%markersChecklist_toolbar_showVerseText%')}
-            </TooltipContent>
-          </Tooltip>
-        </ToggleGroup>
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </TooltipProvider>
 
       {matchCountLabel !== undefined && matchCountLabel !== '' && (
