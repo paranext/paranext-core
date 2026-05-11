@@ -1,3 +1,3 @@
-Legacy Comment Manager extension for Platform.Bible. Powered by webpack.
+Legacy Comment Manager extension for Platform.Bible.
 
-This Platform.Bible extension for managing comments is the legacy extension.
+Manage comments from Paratext 9 projects.

@@ -5,7 +5,7 @@
   "localizedDisplayInfo": {
     "en": {
       "displayName": "Legacy Comment Manager",
-      "shortSummary": "The legacy Platform.Bible Comment Manager extension",
+      "shortSummary": "Manage comments from Paratext 9 projects",
       "description": "assets/descriptions/description-en.md"
     }
   }
