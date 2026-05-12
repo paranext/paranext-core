@@ -73,7 +73,7 @@ export const Default: Story = {
           <TableHead className="w-[100px]">Invoice</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Method</TableHead>
-          <TableHead className="tw-text-end">Amount</TableHead>
+          <TableHead className="tw:text-end">Amount</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -82,7 +82,7 @@ export const Default: Story = {
             <TableCell className="font-medium">{invoice.invoice}</TableCell>
             <TableCell>{invoice.paymentStatus}</TableCell>
             <TableCell>{invoice.paymentMethod}</TableCell>
-            <TableCell className="tw-text-end">{invoice.totalAmount}</TableCell>
+            <TableCell className="tw:text-end">{invoice.totalAmount}</TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -99,14 +99,14 @@ export const Default: Story = {
 
 export const WithBorder: Story = {
   render: () => (
-    <Table className="tw-border">
+    <Table className="tw:border">
       <TableCaption>A list of your recent invoices.</TableCaption>
       <TableHeader>
         <TableRow>
           <TableHead className="w-[100px]">Invoice</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Method</TableHead>
-          <TableHead className="tw-text-end">Amount</TableHead>
+          <TableHead className="tw:text-end">Amount</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -118,14 +118,14 @@ export const WithBorder: Story = {
             <TableCell className="font-medium">{invoice.invoice}</TableCell>
             <TableCell>{invoice.paymentStatus}</TableCell>
             <TableCell>{invoice.paymentMethod}</TableCell>
-            <TableCell className="tw-text-end">{invoice.totalAmount}</TableCell>
+            <TableCell className="tw:text-end">{invoice.totalAmount}</TableCell>
           </TableRow>
         ))}
       </TableBody>
       <TableFooter>
         <TableRow>
           <TableCell colSpan={3}>Total</TableCell>
-          <TableCell className="tw-text-end">$750.00</TableCell>
+          <TableCell className="tw:text-end">$750.00</TableCell>
         </TableRow>
       </TableFooter>
     </Table>
@@ -146,14 +146,14 @@ export const StickyHeader: Story = {
     const lotsOfInvoices = Array(15).fill(invoices).flat() as typeof invoices;
 
     return (
-      <div className="tw-relative tw-max-h-80 tw-overflow-auto">
-        <Table stickyHeader className="tw-border">
+      <div className="tw:relative tw:max-h-80 tw:overflow-auto">
+        <Table stickyHeader className="tw:border">
           <TableHeader stickyHeader>
             <TableRow>
               <TableHead className="w-[100px]">Invoice</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Method</TableHead>
-              <TableHead className="tw-text-end">Amount</TableHead>
+              <TableHead className="tw:text-end">Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -167,14 +167,14 @@ export const StickyHeader: Story = {
                 <TableCell className="font-medium">{invoice.invoice}</TableCell>
                 <TableCell>{invoice.paymentStatus}</TableCell>
                 <TableCell>{invoice.paymentMethod}</TableCell>
-                <TableCell className="tw-text-end">{invoice.totalAmount}</TableCell>
+                <TableCell className="tw:text-end">{invoice.totalAmount}</TableCell>
               </TableRow>
             ))}
           </TableBody>
           <TableFooter>
             <TableRow>
               <TableCell colSpan={3}>Total</TableCell>
-              <TableCell className="tw-text-end">$12,750.00</TableCell>
+              <TableCell className="tw:text-end">$12,750.00</TableCell>
             </TableRow>
           </TableFooter>
         </Table>
@@ -236,7 +236,7 @@ export const WithActions: Story = {
           <TableHead>Product</TableHead>
           <TableHead>Price</TableHead>
           <TableHead>Stock</TableHead>
-          <TableHead className="tw-text-end">Actions</TableHead>
+          <TableHead className="tw:text-end">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -244,11 +244,11 @@ export const WithActions: Story = {
           <TableCell className="font-medium">Laptop</TableCell>
           <TableCell>$999.00</TableCell>
           <TableCell>5</TableCell>
-          <TableCell className="tw-text-end">
-            <button type="button" className="tw-mr-2 tw-text-blue-600 hover:tw-underline">
+          <TableCell className="tw:text-end">
+            <button type="button" className="tw:mr-2 tw:text-blue-600 tw:hover:underline">
               Edit
             </button>
-            <button type="button" className="tw-text-red-600 hover:tw-underline">
+            <button type="button" className="tw:text-red-600 tw:hover:underline">
               Delete
             </button>
           </TableCell>
@@ -257,11 +257,11 @@ export const WithActions: Story = {
           <TableCell className="font-medium">Phone</TableCell>
           <TableCell>$699.00</TableCell>
           <TableCell>12</TableCell>
-          <TableCell className="tw-text-end">
-            <button type="button" className="tw-mr-2 tw-text-blue-600 hover:tw-underline">
+          <TableCell className="tw:text-end">
+            <button type="button" className="tw:mr-2 tw:text-blue-600 tw:hover:underline">
               Edit
             </button>
-            <button type="button" className="tw-text-red-600 hover:tw-underline">
+            <button type="button" className="tw:text-red-600 tw:hover:underline">
               Delete
             </button>
           </TableCell>
@@ -270,11 +270,11 @@ export const WithActions: Story = {
           <TableCell className="font-medium">Tablet</TableCell>
           <TableCell>$399.00</TableCell>
           <TableCell>8</TableCell>
-          <TableCell className="tw-text-end">
-            <button type="button" className="tw-mr-2 tw-text-blue-600 hover:tw-underline">
+          <TableCell className="tw:text-end">
+            <button type="button" className="tw:mr-2 tw:text-blue-600 tw:hover:underline">
               Edit
             </button>
-            <button type="button" className="tw-text-red-600 hover:tw-underline">
+            <button type="button" className="tw:text-red-600 tw:hover:underline">
               Delete
             </button>
           </TableCell>
@@ -300,7 +300,7 @@ export const Interactive: Story = {
           <TableHead>ID</TableHead>
           <TableHead>Name</TableHead>
           <TableHead>Status</TableHead>
-          <TableHead className="tw-text-end">Value</TableHead>
+          <TableHead className="tw:text-end">Value</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -308,19 +308,19 @@ export const Interactive: Story = {
           <TableCell>1</TableCell>
           <TableCell>Item A</TableCell>
           <TableCell>Active</TableCell>
-          <TableCell className="tw-text-end">$100</TableCell>
+          <TableCell className="tw:text-end">$100</TableCell>
         </TableRow>
         <TableRow data-state="selected">
           <TableCell>2</TableCell>
           <TableCell>Item B</TableCell>
           <TableCell>Selected</TableCell>
-          <TableCell className="tw-text-end">$200</TableCell>
+          <TableCell className="tw:text-end">$200</TableCell>
         </TableRow>
         <TableRow>
           <TableCell>3</TableCell>
           <TableCell>Item C</TableCell>
           <TableCell>Inactive</TableCell>
-          <TableCell className="tw-text-end">$150</TableCell>
+          <TableCell className="tw:text-end">$150</TableCell>
         </TableRow>
       </TableBody>
     </Table>

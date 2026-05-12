@@ -1,5 +1,5 @@
 import { PropsWithChildren, useState } from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { ErrorDump, ErrorDumpProps, ERROR_DUMP_STRING_KEYS } from '../basics/error-dump.component';
 import { Popover, PopoverContent, PopoverTrigger } from '../shadcn-ui/popover';
 import { Label } from '../shadcn-ui/label';
@@ -60,7 +60,7 @@ export function ErrorPopover({
   return (
     <Popover onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent id={id} className={cn('tw-min-w-80 tw-max-w-96', className)}>
+      <PopoverContent id={id} className={cn('tw:min-w-80 tw:max-w-96', className)}>
         {isCopySuccess && localizedStrings['%webView_error_dump_copied_message%'] && (
           <Label>{localizedStrings['%webView_error_dump_copied_message%']}</Label>
         )}

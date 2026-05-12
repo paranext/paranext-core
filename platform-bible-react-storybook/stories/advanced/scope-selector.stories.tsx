@@ -27,7 +27,7 @@ const meta: Meta<typeof ScopeSelector> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-md tw-p-4">
+        <div className="tw:max-w-md tw:p-4">
           <Story />
         </div>
       </ThemeProvider>

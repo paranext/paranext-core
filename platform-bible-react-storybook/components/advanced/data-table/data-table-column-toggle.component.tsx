@@ -1,4 +1,3 @@
-import { DropdownMenuTrigger } from '@radix-ui/react-dropdown-menu';
 import { FilterIcon } from 'lucide-react';
 import { Table } from '@tanstack/react-table';
 
@@ -9,6 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 
 interface DataTableViewOptionsProps<TData> {
@@ -19,12 +19,12 @@ export function DataTableViewOptions<TData>({ table }: DataTableViewOptionsProps
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="tw-ml-auto tw-hidden tw-h-8 lg:tw-flex">
-          <FilterIcon className="tw-mr-2 tw-h-4 tw-w-4" />
+        <Button variant="outline" size="sm" className="tw:ml-auto tw:hidden tw:h-8 tw:lg:flex">
+          <FilterIcon className="tw:mr-2 tw:h-4 tw:w-4" />
           View
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="tw-w-[150px]">
+      <DropdownMenuContent align="end" className="tw:w-[150px]">
         <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {table
@@ -34,7 +34,7 @@ export function DataTableViewOptions<TData>({ table }: DataTableViewOptionsProps
             return (
               <DropdownMenuCheckboxItem
                 key={column.id}
-                className="tw-capitalize"
+                className="tw:capitalize"
                 checked={column.getIsVisible()}
                 onCheckedChange={(value) => column.toggleVisibility(!!value)}
               >

@@ -1,0 +1,1 @@
+function n(e,t){return e===""?t["%comment_assign_unassigned%"]??"Unassigned":e==="Team"?t["%comment_assign_team%"]??"Team":e}function r(e){const t=/Macintosh/i.test(navigator.userAgent);return e.key==="Enter"&&(t&&e.metaKey||!t&&e.ctrlKey)}export{r as d,n as g};

@@ -1,31 +1,45 @@
 import React from 'react';
-import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '@/utils/shadcn-ui.util';
+import { Slot } from 'radix-ui';
+
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * Style variants for the Button component.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
-export const buttonVariants = cva(
-  'pr-twp tw-inline-flex tw-items-center tw-justify-center tw-gap-2 tw-whitespace-nowrap tw-rounded-md tw-text-sm tw-font-medium tw-ring-offset-background tw-transition-colors focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50 [&_svg]:tw-pointer-events-none [&_svg]:tw-size-4 [&_svg]:tw-shrink-0',
+// CUSTOM: Added TSDoc comment with link to upstream shadcn/ui documentation.
+const buttonVariants = cva(
+  // CUSTOM: Added 'pr-twp' at the front of the base class string to apply Platform.Bible's
+  // Tailwind CSS scope isolation. All Button instances inherit this via buttonVariants.
+  'pr-twp tw:group/button tw:inline-flex tw:shrink-0 tw:items-center tw:justify-center tw:rounded-lg tw:border tw:border-transparent tw:bg-clip-padding tw:text-sm tw:font-medium tw:whitespace-nowrap tw:transition-all tw:outline-none tw:select-none tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:active:not-aria-[haspopup]:translate-y-px tw:disabled:pointer-events-none tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
   {
     variants: {
       variant: {
-        default: 'tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90',
-        destructive: 'tw-bg-destructive tw-text-destructive-foreground hover:tw-bg-destructive/90',
+        default: 'tw:bg-primary tw:text-primary-foreground tw:[a]:hover:bg-primary/80',
         outline:
-          'tw-border tw-border-input tw-bg-background hover:tw-bg-accent hover:tw-text-accent-foreground',
-        secondary: 'tw-bg-secondary tw-text-secondary-foreground hover:tw-bg-secondary/80',
-        ghost: 'hover:tw-bg-accent hover:tw-text-accent-foreground',
-        link: 'tw-text-primary tw-underline-offset-4 hover:tw-underline',
+          'tw:border-border tw:bg-background tw:hover:bg-muted tw:hover:text-foreground tw:aria-expanded:bg-muted tw:aria-expanded:text-foreground tw:dark:border-input tw:dark:bg-input/30 tw:dark:hover:bg-input/50',
+        secondary:
+          'tw:bg-secondary tw:text-secondary-foreground tw:hover:bg-secondary/80 tw:aria-expanded:bg-secondary tw:aria-expanded:text-secondary-foreground',
+        ghost:
+          'tw:hover:bg-muted tw:hover:text-foreground tw:aria-expanded:bg-muted tw:aria-expanded:text-foreground tw:dark:hover:bg-muted/50',
+        destructive:
+          'tw:bg-destructive/10 tw:text-destructive tw:hover:bg-destructive/20 tw:focus-visible:border-destructive/40 tw:focus-visible:ring-destructive/20 tw:dark:bg-destructive/20 tw:dark:hover:bg-destructive/30 tw:dark:focus-visible:ring-destructive/40',
+        link: 'tw:text-primary tw:underline-offset-4 tw:hover:underline',
       },
       size: {
-        default: 'tw-h-10 tw-px-4 tw-py-2',
-        sm: 'tw-h-9 tw-rounded-md tw-px-3',
-        lg: 'tw-h-11 tw-rounded-md tw-px-8',
-        icon: 'tw-h-10 tw-w-10',
+        default:
+          'tw:h-8 tw:gap-1.5 tw:px-2.5 tw:has-data-[icon=inline-end]:pe-2 tw:has-data-[icon=inline-start]:ps-2',
+        xs: 'tw:h-6 tw:gap-1 tw:rounded-[min(var(--tw-radius-md),10px)] tw:px-2 tw:text-xs tw:in-data-[slot=button-group]:rounded-lg tw:has-data-[icon=inline-end]:pe-1.5 tw:has-data-[icon=inline-start]:ps-1.5 tw:[&_svg:not([class*=size-])]:size-3',
+        sm: 'tw:h-7 tw:gap-1 tw:rounded-[min(var(--tw-radius-md),12px)] tw:px-2.5 tw:text-[0.8rem] tw:in-data-[slot=button-group]:rounded-lg tw:has-data-[icon=inline-end]:pe-1.5 tw:has-data-[icon=inline-start]:ps-1.5 tw:[&_svg:not([class*=size-])]:size-3.5',
+        lg: 'tw:h-9 tw:gap-1.5 tw:px-2.5 tw:has-data-[icon=inline-end]:pe-2 tw:has-data-[icon=inline-start]:ps-2',
+        icon: 'tw:size-8',
+        'icon-xs':
+          'tw:size-6 tw:rounded-[min(var(--tw-radius-md),10px)] tw:in-data-[slot=button-group]:rounded-lg tw:[&_svg:not([class*=size-])]:size-3',
+        'icon-sm':
+          'tw:size-7 tw:rounded-[min(var(--tw-radius-md),12px)] tw:in-data-[slot=button-group]:rounded-lg',
+        'icon-lg': 'tw:size-9',
       },
     },
     defaultVariants: {
@@ -36,12 +50,14 @@ export const buttonVariants = cva(
 );
 
 /**
- * Props for Button component
+ * Props for the Button component.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
+// CUSTOM: Added ButtonProps interface exporting the combined props type so callers can type
+// button-related props without importing VariantProps directly.
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+  extends React.ComponentProps<'button'>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
 }
@@ -50,15 +66,27 @@ export interface ButtonProps
  * The Button component displays a button or a component that looks like a button. The component is
  * built and styled by Shadcn UI.
  *
- * @param ButtonProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : 'button';
-    return (
-      <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
-    );
-  },
-);
-Button.displayName = 'Button';
+// CUSTOM: Added TSDoc comment with link to upstream shadcn/ui documentation.
+function Button({
+  className,
+  variant = 'default',
+  size = 'default',
+  asChild = false,
+  ...props
+}: ButtonProps) {
+  const Comp = asChild ? Slot.Root : 'button';
+
+  return (
+    <Comp
+      data-slot="button"
+      data-variant={variant}
+      data-size={size}
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  );
+}
+
+export { Button, buttonVariants };

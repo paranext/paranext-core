@@ -508,9 +508,9 @@ export default function FootnoteEditor({
 
   return (
     <>
-      <div ref={containerRef} className="footnote-editor tw-grid tw-gap-[12px]">
-        <div className="tw-flex">
-          <div className="tw-flex tw-gap-4">
+      <div ref={containerRef} className="footnote-editor tw:grid tw:gap-[12px]">
+        <div className="tw:flex">
+          <div className="tw:flex tw:gap-4">
             <FootnoteTypeDropdown
               isTypeSwitchable={isTypeSwitchable}
               noteType={noteType}
@@ -525,7 +525,7 @@ export default function FootnoteEditor({
               localizedStrings={localizedStrings}
             />
           </div>
-          <div className="tw-flex tw-w-full tw-justify-end">
+          <div className="tw:flex tw:w-full tw:justify-end">
             <ButtonGroup>
               <UndoRedoButtons
                 onUndoClick={() => editorRef.current?.undo()}
@@ -550,7 +550,7 @@ export default function FootnoteEditor({
         </div>
         <div
           ref={editorParentRef}
-          className="tw-relative tw-rounded-[6px] tw-border-2 tw-border-ring"
+          className="tw:relative tw:rounded-[6px] tw:border-2 tw:border-ring"
         >
           <div className={classNameForEditor}>
             <EditorKeyboardShortcuts
@@ -569,14 +569,14 @@ export default function FootnoteEditor({
               />
             </EditorKeyboardShortcuts>
           </div>
-          <div className="tw-absolute tw-bottom-0 tw-right-0">
+          <div className="tw:absolute tw:bottom-0 tw:right-0">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     aria-label={copyButtonTooltip}
                     onClick={handleCopy}
-                    className="tw-h-6 tw-w-6"
+                    className="tw:h-6 tw:w-6"
                     variant="ghost"
                     size="icon"
                   >
@@ -592,14 +592,14 @@ export default function FootnoteEditor({
         </div>
       </div>
       <div
-        className="tw-absolute"
+        className="tw:absolute"
         ref={outerBorderRef}
         style={{ top: 0, left: 0, height: 0, width: 0 }}
       />
       {/** Inline markers menu components */}
       <Popover open={showMarkersMenu}>
         <PopoverAnchor
-          className="tw-absolute"
+          className="tw:absolute"
           style={{
             top: markersMenuAnchorY,
             left: markersMenuAnchorX,
@@ -609,7 +609,7 @@ export default function FootnoteEditor({
           }}
         />
         <PopoverContent
-          className="tw-w-[500px] tw-p-0"
+          className="tw:w-[500px] tw:p-0"
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();

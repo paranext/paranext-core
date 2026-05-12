@@ -24,7 +24,7 @@ const meta: Meta<typeof Sidebar> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-h-96">
+        <div className="tw:h-96">
           <Story />
         </div>
       </ThemeProvider>
@@ -81,8 +81,8 @@ export const Default: Story = {
       </Sidebar>
       <SidebarInset>
         <SidebarTrigger />
-        <div className="tw-p-4">
-          <h1 className="tw-text-2xl tw-font-bold">Main Content</h1>
+        <div className="tw:p-4">
+          <h1 className="tw:text-2xl tw:font-bold">Main Content</h1>
           <p>This is the main content area.</p>
         </div>
       </SidebarInset>
@@ -208,8 +208,8 @@ export const WithGroups: Story = {
       </Sidebar>
       <SidebarInset>
         <SidebarTrigger />
-        <div className="tw-p-4">
-          <h1 className="tw-text-2xl tw-font-bold">Dashboard</h1>
+        <div className="tw:p-4">
+          <h1 className="tw:text-2xl tw:font-bold">Dashboard</h1>
           <p>Welcome to your dashboard!</p>
         </div>
       </SidebarInset>
@@ -253,8 +253,8 @@ export const Variants: Story = {
       </Sidebar>
       <SidebarInset>
         <SidebarTrigger />
-        <div className="tw-p-4">
-          <h1 className="tw-text-2xl tw-font-bold">Content</h1>
+        <div className="tw:p-4">
+          <h1 className="tw:text-2xl tw:font-bold">Content</h1>
           <p>Use the controls to experiment with different sidebar variants.</p>
         </div>
       </SidebarInset>
@@ -324,8 +324,8 @@ export const Interactive: Story = {
         </Sidebar>
         <SidebarInset>
           <SidebarTrigger />
-          <div className="tw-p-4">
-            <h1 className="tw-text-2xl tw-font-bold">{sidebarSelection}</h1>
+          <div className="tw:p-4">
+            <h1 className="tw:text-2xl tw:font-bold">{sidebarSelection}</h1>
             <p>{sidebarItems[sidebarSelection]}</p>
             {!sidebarItems[sidebarSelection] && (
               <p>If you can&apos;t see a sidebar, the screen is too narrow</p>

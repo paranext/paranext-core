@@ -50,7 +50,7 @@ export const InCard: Story = {
 
     return (
       <Card>
-        <CardContent className="tw-h-64 tw-w-full tw-overflow-auto tw-p-4">
+        <CardContent className="tw:h-64 tw:w-full tw:overflow-auto tw:p-4">
           <Checklist
             {...args}
             selectedListItems={selectedItems}
@@ -88,7 +88,7 @@ export const ManyItems: Story = {
     };
 
     return (
-      <div className="tw-h-96 tw-w-80">
+      <div className="tw:h-96 tw:w-80">
         <Checklist
           {...args}
           selectedListItems={selectedItems}

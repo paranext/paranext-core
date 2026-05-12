@@ -52,17 +52,17 @@ export function Plugins({
   };
 
   return (
-    <div className="tw-relative">
+    <div className="tw:relative">
       {/* toolbar plugins */}
       <ToolbarPlugin>
         {() => (
-          <div className="tw-sticky tw-top-0 tw-z-10 tw-flex tw-gap-2 tw-overflow-auto tw-border-b tw-p-1">
+          <div className="tw:sticky tw:top-0 tw:z-10 tw:flex tw:gap-2 tw:overflow-auto tw:border-b tw:p-1">
             <FontFormatToolbarPlugin />
           </div>
         )}
       </ToolbarPlugin>
 
-      <div className="tw-relative">
+      <div className="tw:relative">
         <RichTextPlugin
           contentEditable={
             <div ref={onRef}>
