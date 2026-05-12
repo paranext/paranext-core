@@ -98,7 +98,7 @@ The project settings data provider must be updated to route writes and reads for
 - **Writes:** admin users write to the main project settings file as before. Non-admin users write to `Studio/UserSettings-{userId}.xml` in the project folder (created on first write if it doesn't exist).
 - **Reads:** the data provider merges entries from both sources and returns a single list. Each entry in the merged list carries a runtime `source: 'admin' | 'user'` tag derived from which file it came from. This tag is not stored on disk — it is computed at read time.
 
-No changes to the `ResourceReferenceList` or `ResourceReference` types are required. The `Studio/UserSettings-{userId}.xml` file is local-only for now; S/R support will be a follow-on ticket.
+No changes to the `DblResourceDataList` or `DblResourceData` types are required. The `Studio/UserSettings-{userId}.xml` file is local-only for now; S/R support will be a follow-on ticket.
 
 ### Implementation Ideas
 
@@ -110,12 +110,12 @@ In the project settings data provider, intercept write calls for `modelTexts` an
 - Admin writes continue to go to the main project settings file.
 - Reads return a merged list where each entry has a `source: 'admin' | 'user'` tag.
 - `Studio/UserSettings-{userId}.xml` is created automatically on first non-admin write.
-- No changes to `ResourceReferenceList` or `ResourceReference` types.
+- No changes to `DblResourceDataList` or `DblResourceData` types.
 - TypeScript compilation passes with no errors.
 
 ---
 
-## T4 — Shared `ResourcePickerDialog` component
+## T4 — Shared `ResourcePickerDialog` component in `platform-bible-react`
 
 **Addresses requirements:**
 
@@ -125,32 +125,40 @@ In the project settings data provider, intercept write calls for `modelTexts` an
 
 ### Description
 
-A shared `ResourcePickerDialog` React component used by the Model Text Panel (T5), the Bible texts tab (T6), and the Commentaries tab (T7). It provides a consistent resource-selection UI across all three panels, modeled on the `platform-get-resources` visual design.
+A shared `ResourcePickerDialog` React component exported from `lib/platform-bible-react` so it is available to any extension developer, not just the 10Simple panels. It is consumed by the Model Text Panel (T5), the Bible texts tab (T6), and the Commentaries tab (T7). It provides a consistent resource-selection UI across all three panels, modeled on the `platform-get-resources` visual design.
 
-The dialog shows only already-downloaded resources. It accepts a `resourceType` prop to pre-select and lock the type filter, and an `excludedResources` prop to hide resources already selected in the calling panel. When the user clicks "Use", the `onSelect` callback fires and the caller writes the selection via the data provider.
+The dialog presents resources in three labelled sections:
+
+1. **Already Selected** — resources the caller has already added (passed via `selectedResourceIds`). Shown at the top for reference; entries here are not selectable again.
+2. **Installed** — resources downloaded and available locally that are not yet selected.
+3. **Available to Download** — resources available from DBL (filtered by the user's DBL licensing permissions) that are not yet installed. Clicking "Download" on an entry triggers the download flow; once downloaded the entry moves to the "Installed" section.
+
+Because `platform-bible-react` has no direct access to PAPI commands, the caller is responsible for fetching the full resource list from DBL and passing it in via the `allResources` prop. The component is purely presentational with respect to data — it derives the three sections from the data it receives. The dialog accepts a `resourceType` prop to pre-select and lock the type filter. When the user clicks "Use" on an installed entry, the `onSelect` callback fires and the caller writes the selection via the data provider.
 
 ### Implementation Ideas
 
-Build a modal dialog component with search, type filter (locked to the caller-provided `resourceType`), language filter, and a resource list. Base the visual design on `platform-get-resources`. Replace the Install/Installed button with a "Use" button. Filter out entries in `excludedResources` before rendering the list.
+Add the component to `lib/platform-bible-react` and export it from the package's public index. Build a modal dialog component with search, type filter (locked to the caller-provided `resourceType`), and language filter. Render the resource list in three visually distinct sections: "Already Selected", "Installed", and "Available to Download". Derive sections from `allResources` using `selectedResourceIds` and each entry's installed state: entries whose ID is in `selectedResourceIds` appear in the first section with no action button; installed entries not in `selectedResourceIds` appear in the second section with a "Use" button; uninstalled entries appear in the third section with a "Download" button. For the commentaries `resourceType`, the "Available to Download" section shows only UBS Handbook and SIL TNN/TND in English.
 
 ```ts
 interface ResourcePickerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  allResources: DblResourceData[];
   resourceType?: 'modelText' | 'bibleText' | 'commentary';
-  excludedResources?: ResourceReference[];
-  onSelect: (resource: ResourceReference) => void;
+  selectedResourceIds?: string[];
+  onSelect: (resource: DblResourceData) => void;
 }
 ```
 
 ### Definition of Done
 
-- `ResourcePickerDialog` renders a modal with search, type filter (locked to `resourceType` prop), language filter, and resource list.
-- Only already-downloaded resources are shown.
-- Resources in `excludedResources` are not shown in the list.
-- Each resource entry has a "Use" button; clicking it calls `onSelect` and closes the dialog.
-- The component is consumed by T5 (Model Text Panel), T6 (Bible texts tab), and T7 (Commentaries tab).
-- TypeScript compilation passes with no errors.
+- `ResourcePickerDialog` renders a modal with search, type filter (locked to `resourceType` prop), language filter, and a three-section resource list.
+- The caller fetches `allResources` from DBL via PAPI and passes the full list in; the component derives all three sections from this prop.
+- Section 1 ("Already Selected"): shows entries whose ID is in `selectedResourceIds` with no action button.
+- Section 2 ("Installed"): shows locally installed resources whose ID is not in `selectedResourceIds`; each entry has a "Use" button that calls `onSelect` and closes the dialog.
+- Section 3 ("Available to Download"): shows uninstalled DBL resources; each entry has a "Download" button that triggers the download flow and moves the entry to "Installed" on completion.
+- For `resourceType='commentary'`, the "Available to Download" section is limited to UBS Handbook and SIL TNN/TND in English.
+- The component lives in `lib/platform-bible-react` and is exported from the package's public index.
 
 ---
 
@@ -173,7 +181,7 @@ Reuse the existing scripture editor/reader component in read-only mode inside th
 
 - Displays all entries returned by the data provider's merged read (both `source === 'admin'` and `source === 'user'` entries).
 - Allows the user to switch between multiple available model texts.
-- Shows a zero-state prompt ("Select a model text") when the merged list is empty, which opens the shared `ResourcePickerDialog` (T4) with `resourceType='modelText'` and current selections as `excludedResources`.
+- Shows a zero-state prompt ("Select a model text") when the merged list is empty, which opens the shared `ResourcePickerDialog` (T4) with `resourceType='modelText'` and current selection IDs as `selectedResourceIds`.
 
 When a user makes a selection, write the entry to `modelTexts` — the data provider handles routing it to the correct file based on the user's role.
 
@@ -208,7 +216,7 @@ Add a "Bible texts" tab to the Column 3 panel using the existing docking tab sys
 - Display all entries from the data provider's merged read filtered to Bible text types (both `source === 'admin'` and `source === 'user'` entries).
 - Show the selected resource text content synchronized to the main app toolbar BCV, reusing the existing scripture reader.
 - Provide a selector to switch between available Bible texts.
-- Zero state: prompt to select a preferred Bible text, opening the shared `ResourcePickerDialog` (T4) with `resourceType='bibleText'` and current selections as `excludedResources`.
+- Zero state: prompt to select a preferred Bible text, opening the shared `ResourcePickerDialog` (T4) with `resourceType='bibleText'` and current selection IDs as `selectedResourceIds`.
 - "Download resources" button opens `platform-get-resources`.
 
 When a user adds a Bible text, write the entry to `referencedProjectsAndResources` — the data provider routes it to the correct file based on the user's role.
