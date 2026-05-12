@@ -75,7 +75,7 @@ describe('ResourcePickerDialog', () => {
     const { onSelect } = renderDialog();
     // Find the Use button next to ESV (installed, not selected)
     const esvText = screen.getByText('ESV');
-    const esvRow = esvText.closest('div[class*="resource-row"], div')!;
+    const esvRow = esvText.closest('tr')!;
     const useBtn = esvRow.querySelector('button');
     fireEvent.click(useBtn!);
     expect(onSelect).toHaveBeenCalledTimes(1);
@@ -86,7 +86,7 @@ describe('ResourcePickerDialog', () => {
     const { onSelect } = renderDialog();
     // Find the Use button next to NLT (uninstalled)
     const nltText = screen.getByText('NLT');
-    const nltRow = nltText.closest('div[class*="resource-row"], div')!;
+    const nltRow = nltText.closest('tr')!;
     const useBtn = nltRow.querySelector('button');
     fireEvent.click(useBtn!);
     expect(onSelect).toHaveBeenCalledTimes(1);
