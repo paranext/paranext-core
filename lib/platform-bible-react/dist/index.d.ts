@@ -451,12 +451,20 @@ interface DataTableProps<TData, TValue> {
 	id?: string;
 	isLoading?: boolean;
 	noResultsMessage: string;
+	/**
+	 * Optional callback to provide additional CSS class names for each `<tr>` based on its row data.
+	 * The returned string is merged into the row's className, allowing per-row visual treatments
+	 * (e.g., highlighting rows that share a value across columns). Background colors applied via this
+	 * callback paint the full row — every `<td>` shows the tint because the row's background paints
+	 * underneath each cell's transparent background.
+	 */
+	getRowClassName?: (row: RowContents<TData>) => string | undefined;
 }
 /**
  * Feature-rich table component that infuses our basic shadcn-based Table component with features
  * from TanStack's React Table library
  */
-export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, id, isLoading, noResultsMessage, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, id, isLoading, noResultsMessage, getRowClassName, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 /** Minimal project metadata fed to the selector. */
 export type ProjectSelectorProject = {
 	id: string;

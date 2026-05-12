@@ -47,6 +47,14 @@ interface DataTableProps<TData, TValue> {
   id?: string;
   isLoading?: boolean;
   noResultsMessage: string;
+  /**
+   * Optional callback to provide additional CSS class names for each `<tr>` based on its row data.
+   * The returned string is merged into the row's className, allowing per-row visual treatments
+   * (e.g., highlighting rows that share a value across columns). Background colors applied via this
+   * callback paint the full row — every `<td>` shows the tint because the row's background paints
+   * underneath each cell's transparent background.
+   */
+  getRowClassName?: (row: RowContents<TData>) => string | undefined;
 }
 
 /**
@@ -64,6 +72,7 @@ export function DataTable<TData, TValue>({
   id,
   isLoading = false,
   noResultsMessage,
+  getRowClassName,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -112,6 +121,7 @@ export function DataTable<TData, TValue>({
         onClick={() => onRowClickHandler(row, table)}
         key={row.id}
         data-state={row.getIsSelected() && 'selected'}
+        className={getRowClassName?.(row)}
       >
         {row.getVisibleCells().map((cell) => (
           <TableCell key={cell.id}>

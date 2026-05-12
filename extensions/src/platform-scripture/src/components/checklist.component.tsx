@@ -80,6 +80,17 @@ function getMarkerIndentStyle(marker: string): CSSProperties {
   return { marginInlineStart: `${(level - 1) * MARKER_INDENT_REM_PER_LEVEL}rem` };
 }
 
+// ---------- Match-row visual treatment ----------
+//
+// UX-2 finding #15: rows whose cells share a value across all projects ("matches") get a subtle
+// primary-color background tint so users can quickly scan past them. The tint is applied to the
+// `<tr>` itself via DataTable's `getRowClassName` prop — this paints the bg behind every `<td>`
+// in the row, so the colored region truly fills each cell from edge to edge. (The earlier
+// per-cell approach with `-tw-m-4 tw-px-6 tw-py-6` only colored the content area, not the full
+// cell rectangle — see commit 3b8b99b8c2.) The 30% opacity proved too loud; 20% reads as a hint
+// without competing with the content.
+const MATCH_ROW_BG_CLASS = 'tw-bg-primary/20';
+
 // ---------- Small presentational sub-components ----------
 
 /**
@@ -442,20 +453,11 @@ export function ChecklistTool({
       cell: ({ row: tableRow }) => {
         const rowData = tableRow.original;
         const ref = rowData.firstRef ?? '';
-        // UX-2 finding #15 (follow-up): match rows get a subtle `tw-bg-primary/30` tint so users
-        // can scan past them. The original WP2 implementation used `tw-bg-primary
-        // tw-text-primary-foreground`, but inner spans hardcode their own text colors
-        // (`tw-text-foreground`, `tw-text-primary`, `tw-text-muted-foreground`) which override
-        // the outer text-color cascade — producing same-color-on-same-color (invisible content)
-        // in both light AND dark modes. The 30% opacity tint stays distinguishable while letting
-        // inner spans' default colors stay readable. The negative margin (`-tw-m-4`) +
-        // compensating padding (`tw-px-6 tw-py-6`) bleeds the tint past TableCell's built-in
-        // `tw-p-4` so the colored region reaches the cell borders (Rolf: "the colored region
-        // should reach the cell borders"). Non-match cells keep their original `tw-px-2 tw-py-2`
-        // since they have no bg color to extend.
-        const containerClass = rowData.isMatch
-          ? 'tw-block -tw-m-4 tw-px-6 tw-py-6 tw-bg-primary/30'
-          : 'tw-block tw-px-2 tw-py-2';
+        // UX-2 finding #15: match rows receive a subtle primary-color tint at the row level
+        // (applied via DataTable's `getRowClassName` prop below — see `MATCH_ROW_BG_CLASS`).
+        // The row-level bg paints behind every `<td>` in the row, so the colored region fills
+        // each cell edge-to-edge. Cell content here keeps its default padding/typography.
+        const containerClass = 'tw-block tw-px-2 tw-py-2';
         // Sebastian PR #2219 #3137366113: "Make the scripture reference in the first column a
         // link button with the tooltip 'Go to {scrRef}' instead of the goto button". When a
         // goto callback is provided, render the ref as a `LinkedScrRefButton`; otherwise fall
@@ -515,16 +517,11 @@ export function ChecklistTool({
                 </span>
               );
             }
-            // UX-2 finding #15 (follow-up): match rows get a subtle `tw-bg-primary/30` tint that
-            // covers the full cell. See the ref column for the detailed rationale (same fix
-            // pattern: negative margin to bleed past TableCell's `tw-p-4`, compensating padding
-            // to restore content offset, and 30% opacity so inner spans' hardcoded colors stay
-            // readable in both light and dark modes).
-            const cellContainerClass = rowData.isMatch
-              ? 'tw-flex tw-flex-col tw-gap-1 -tw-m-4 tw-px-6 tw-py-6 tw-bg-primary/30'
-              : 'tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-py-2';
+            // UX-2 finding #15: match rows receive a subtle primary-color tint at the row level
+            // (see `MATCH_ROW_BG_CLASS` and the `getRowClassName` prop on DataTable). The row-
+            // level bg paints behind every `<td>`, so cell content keeps its default classes.
             return (
-              <div className={cellContainerClass}>
+              <div className="tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-py-2">
                 <CellContent
                   cell={cell}
                   showVerseText={showVerseText}
@@ -817,6 +814,7 @@ export function ChecklistTool({
           stickyHeader
           isLoading={isLoading}
           noResultsMessage={noResultsMessage}
+          getRowClassName={(row) => (row.original.isMatch ? MATCH_ROW_BG_CLASS : undefined)}
         />
       </section>
     </div>
