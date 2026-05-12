@@ -431,9 +431,9 @@ global.webViewComponent = function ChecklistWebView({
 
   // ─── Versification lookups (Theme 6) ──────────────────────────────────────
   //
-  // Mirrors platform-scripture-editor.web-view.tsx:351-377. Uses the per-project Versification
-  // PDP for current-book verse counts; other books would need their own fetch/cache (matches the
-  // scripture-editor's existing limitation).
+  // Mirrors the versification-PDP block in platform-scripture-editor.web-view.tsx. Uses the
+  // per-project Versification PDP for current-book verse counts; other books would need their own
+  // fetch/cache (matches the scripture-editor's existing limitation).
 
   const currentBookNum = useMemo(() => Canon.bookIdToNumber(liveScrRef.book), [liveScrRef.book]);
 
@@ -459,10 +459,10 @@ global.webViewComponent = function ChecklistWebView({
   );
 
   // Last-chapter lookup derived from the same per-book array as getEndVerse.
-  // The verses array is 1-indexed (matches scripture-editor.web-view.tsx:374's
-  // `[chapterNum]` access pattern), so length - 1 yields the highest chapter number.
-  // Returns 0 for non-current books — computeRangeFromScope tolerates 0 by falling back
-  // to the documented 999 sentinel (FALLBACK_END_CHAPTER).
+  // The verses array is 1-indexed (matches the `[chapterNum]` access in getEndVerse above), so
+  // length - 1 yields the highest chapter number. Returns 0 for non-current books —
+  // computeRangeFromScope tolerates 0 by falling back to the documented 999 sentinel
+  // (FALLBACK_END_CHAPTER).
   const getLastChapter = useCallback(
     (bookId: string): number => {
       if (Canon.bookIdToNumber(bookId) !== currentBookNum) return 0;
