@@ -3,13 +3,18 @@ import { Button } from '@/components/shadcn-ui/button';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Label } from '@/components/shadcn-ui/label';
 import { Table, TableBody, TableCell, TableRow } from '@/components/shadcn-ui/table';
-import MultiSelectComboBox, {
+import {
+  MultiSelectComboBox,
   MultiSelectComboBoxEntry,
 } from '@/components/advanced/multi-select-combo-box.component';
-import SearchBar from '@/components/basics/search-bar.component';
+import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
 
+/**
+ * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
+ * the result as the `localizedStrings` prop.
+ */
 export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_title%',
   '%resourcePicker_section_already_selected%',
@@ -22,6 +27,10 @@ export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_showing_count%',
 ] as const);
 
+/**
+ * Map of localized strings required by {@link ResourcePickerDialog}. Derive from
+ * {@link RESOURCE_PICKER_DIALOG_STRING_KEYS}.
+ */
 export type ResourcePickerDialogLocalizedStrings = {
   [key in (typeof RESOURCE_PICKER_DIALOG_STRING_KEYS)[number]]?: string;
 };
@@ -31,6 +40,7 @@ const localizeString = (
   key: keyof ResourcePickerDialogLocalizedStrings,
 ) => strings[key] ?? key;
 
+/** Props for {@link ResourcePickerDialog} */
 export interface ResourcePickerDialogProps {
   /** Full list of DBL resources fetched by the caller via PAPI */
   allResources: DblResourceData[];
@@ -54,6 +64,19 @@ function matchesSearch(resource: DblResourceData, searchText: string): boolean {
   );
 }
 
+/**
+ * Presentational dialog content for picking a DBL resource. Renders three sections — Already
+ * Selected, Installed, and Available to Download — derived from `allResources` and
+ * `selectedResourceIds`. Supports text search and language filtering.
+ *
+ * Does not include an outer `Dialog` or `DialogContent` wrapper; the host (paranext-core dialog
+ * infrastructure or a Storybook decorator) is responsible for providing that context.
+ *
+ * Obtain localized strings by passing {@link RESOURCE_PICKER_DIALOG_STRING_KEYS} to
+ * `useLocalizedStrings` and forwarding the result as `localizedStrings`.
+ *
+ * @param props See {@link ResourcePickerDialogProps}
+ */
 export default function ResourcePickerDialog({
   allResources,
   resourceType,
@@ -70,8 +93,7 @@ export default function ResourcePickerDialog({
         .filter((r) => !resourceType || r.type === resourceType)
         .filter((r) => matchesSearch(r, searchText))
         .filter(
-          (r) =>
-            selectedLanguages.length === 0 || selectedLanguages.includes(r.bestLanguageName),
+          (r) => selectedLanguages.length === 0 || selectedLanguages.includes(r.bestLanguageName),
         ),
     [allResources, resourceType, searchText, selectedLanguages],
   );
@@ -83,9 +105,7 @@ export default function ResourcePickerDialog({
 
   const installed = useMemo(
     () =>
-      filteredResources.filter(
-        (r) => r.installed && !selectedResourceIds?.includes(r.dblEntryUid),
-      ),
+      filteredResources.filter((r) => r.installed && !selectedResourceIds?.includes(r.dblEntryUid)),
     [filteredResources, selectedResourceIds],
   );
 
@@ -129,7 +149,7 @@ export default function ResourcePickerDialog({
 
   return (
     <>
-      <DialogHeader>
+      <DialogHeader className="tw-px-4 tw-pt-4">
         <DialogTitle>{titleText}</DialogTitle>
       </DialogHeader>
       <div className="tw-flex tw-gap-2 tw-p-4">
@@ -144,10 +164,11 @@ export default function ResourcePickerDialog({
           selected={selectedLanguages}
           onChange={setSelectedLanguages}
           placeholder={anyLanguageText}
+          variant="outline"
         />
       </div>
       {isFiltered && (
-        <p className="tw-px-4 tw-pb-1 tw-text-xs tw-text-right tw-text-muted-foreground">
+        <p className="tw-px-4 tw-pb-1 tw-text-right tw-text-xs tw-text-muted-foreground">
           {formatReplacementString(showingCountTemplate, {
             filtered: filteredResources.length,
             total: allResources.length,
@@ -156,11 +177,11 @@ export default function ResourcePickerDialog({
       )}
       <div className="tw-flex-1 tw-overflow-y-auto tw-px-4 tw-pb-4">
         {hasNoResults ? (
-          <p className="tw-text-center tw-text-muted-foreground tw-py-8">{noResultsText}</p>
+          <p className="tw-py-8 tw-text-center tw-text-muted-foreground">{noResultsText}</p>
         ) : (
           <>
             {alreadySelected.length > 0 && (
-              <section>
+              <>
                 <Label className="tw-text-xs tw-uppercase tw-tracking-wider tw-text-muted-foreground">
                   {alreadySelectedLabel}
                 </Label>
@@ -168,12 +189,11 @@ export default function ResourcePickerDialog({
                   <TableBody>
                     {alreadySelected.map((r) => (
                       <TableRow key={r.dblEntryUid}>
-                        <TableCell>
+                        <TableCell className="tw-border-0 hover:tw-bg-transparent">
                           <div>
                             <span className="tw-font-medium">{r.fullName}</span>
                             {' ('}
-                            <span>{r.displayName}</span>
-                            {')'}
+                            <span>{r.displayName}</span>)
                             <Badge variant="secondary" className="tw-ml-2">
                               {r.bestLanguageName}
                             </Badge>
@@ -183,10 +203,10 @@ export default function ResourcePickerDialog({
                     ))}
                   </TableBody>
                 </Table>
-              </section>
+              </>
             )}
             {installed.length > 0 && (
-              <section>
+              <>
                 <Label className="tw-text-xs tw-uppercase tw-tracking-wider tw-text-muted-foreground">
                   {installedLabel}
                 </Label>
@@ -194,18 +214,17 @@ export default function ResourcePickerDialog({
                   <TableBody>
                     {installed.map((r) => (
                       <TableRow key={r.dblEntryUid}>
-                        <TableCell>
+                        <TableCell className="tw-border-0 hover:tw-bg-transparent">
                           <div>
                             <span className="tw-font-medium">{r.fullName}</span>
                             {' ('}
-                            <span>{r.displayName}</span>
-                            {')'}
+                            <span>{r.displayName}</span>)
                             <Badge variant="secondary" className="tw-ml-2">
                               {r.bestLanguageName}
                             </Badge>
                           </div>
                         </TableCell>
-                        <TableCell className="tw-text-right">
+                        <TableCell className="tw-border-0 tw-text-right hover:tw-bg-transparent">
                           <Button variant="outline" onClick={() => onSelect(r)}>
                             {useLabel}
                           </Button>
@@ -214,10 +233,10 @@ export default function ResourcePickerDialog({
                     ))}
                   </TableBody>
                 </Table>
-              </section>
+              </>
             )}
             {toDownload.length > 0 && (
-              <section>
+              <>
                 <Label className="tw-text-xs tw-uppercase tw-tracking-wider tw-text-muted-foreground">
                   {toDownloadLabel}
                 </Label>
@@ -225,18 +244,17 @@ export default function ResourcePickerDialog({
                   <TableBody>
                     {toDownload.map((r) => (
                       <TableRow key={r.dblEntryUid}>
-                        <TableCell>
+                        <TableCell className="tw-border-0 hover:tw-bg-transparent">
                           <div>
                             <span className="tw-font-medium">{r.fullName}</span>
                             {' ('}
-                            <span>{r.displayName}</span>
-                            {')'}
+                            <span>{r.displayName}</span>)
                             <Badge variant="secondary" className="tw-ml-2">
                               {r.bestLanguageName}
                             </Badge>
                           </div>
                         </TableCell>
-                        <TableCell className="tw-text-right">
+                        <TableCell className="tw-border-0 tw-text-right hover:tw-bg-transparent">
                           <Button variant="outline" onClick={() => onSelect(r)}>
                             {useLabel}
                           </Button>
@@ -245,7 +263,7 @@ export default function ResourcePickerDialog({
                     ))}
                   </TableBody>
                 </Table>
-              </section>
+              </>
             )}
           </>
         )}

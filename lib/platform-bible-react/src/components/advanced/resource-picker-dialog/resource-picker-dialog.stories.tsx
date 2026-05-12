@@ -1,5 +1,5 @@
-import type { Meta, StoryObj } from '@storybook/react';
-import { Dialog, DialogContent } from '@/components/shadcn-ui/dialog';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { Dialog } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
 } from './resource-picker-dialog.component';
@@ -23,10 +23,10 @@ const meta: Meta<typeof ResourcePickerDialog> = {
   tags: ['autodocs', 'test'],
   decorators: [
     (Story) => (
-      <Dialog open>
-        <DialogContent className="tw-max-w-lg tw-h-[600px] tw-flex tw-flex-col">
+      <Dialog open modal={false}>
+        <div className="tw-flex tw-h-[600px] tw-w-[560px] tw-flex-col tw-rounded-lg tw-border tw-bg-background tw-shadow-xl">
           <Story />
-        </DialogContent>
+        </div>
       </Dialog>
     ),
   ],
@@ -51,7 +51,12 @@ export const WithResourceTypeFilter: Story = {
 
 export const NoResults: Story = {
   args: {
-    allResources: SAMPLE_RESOURCES.map((r) => ({ ...r, displayName: 'Foo', fullName: 'Foo Bar', bestLanguageName: 'Foo' })),
+    allResources: SAMPLE_RESOURCES.map((r) => ({
+      ...r,
+      displayName: 'Foo',
+      fullName: 'Foo Bar',
+      bestLanguageName: 'Foo',
+    })),
   },
 };
 

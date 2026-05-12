@@ -75,9 +75,11 @@ describe('ResourcePickerDialog', () => {
     const { onSelect } = renderDialog();
     // Find the Use button next to ESV (installed, not selected)
     const esvText = screen.getByText('ESV');
-    const esvRow = esvText.closest('tr')!;
+    const esvRow = esvText.closest('tr');
+    if (!esvRow) throw new Error('ESV row not found');
     const useBtn = esvRow.querySelector('button');
-    fireEvent.click(useBtn!);
+    if (!useBtn) throw new Error('Use button not found in ESV row');
+    fireEvent.click(useBtn);
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'installed-1' }));
   });
@@ -86,9 +88,11 @@ describe('ResourcePickerDialog', () => {
     const { onSelect } = renderDialog();
     // Find the Use button next to NLT (uninstalled)
     const nltText = screen.getByText('NLT');
-    const nltRow = nltText.closest('tr')!;
+    const nltRow = nltText.closest('tr');
+    if (!nltRow) throw new Error('NLT row not found');
     const useBtn = nltRow.querySelector('button');
-    fireEvent.click(useBtn!);
+    if (!useBtn) throw new Error('Use button not found in NLT row');
+    fireEvent.click(useBtn);
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'download-1' }));
   });

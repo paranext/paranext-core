@@ -189,6 +189,7 @@ export const Default: Story = {
       <div className="tw:flex tw:flex-col tw:gap-4">
         <div className="tw:w-[300px]">
           <MultiSelectComboBox
+            className="tw-z-[200]"
             entries={types}
             selected={selectedTypes}
             onChange={setSelectedTypes}
