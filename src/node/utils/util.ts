@@ -64,9 +64,11 @@ export function resolveHtmlPath(htmlFileName: string) {
  *
  * When packaged: `<user_home_directory>/.{{ productInfo.name }}`
  */
+export const PRODUCT_FOLDER_NAME = 'platform.bible';
+
 export const getAppDir = memoizeOne((): string => {
   return globalThis.isPackaged
-    ? path.join(os.homedir(), '/.platform.bible')
+    ? path.join(os.homedir(), `/.${PRODUCT_FOLDER_NAME}`)
     : path.join(globalThis.resourcesPath, 'dev-appdata');
 });
 
