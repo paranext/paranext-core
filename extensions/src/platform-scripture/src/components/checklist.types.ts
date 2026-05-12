@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { LocalizedStringValue } from 'platform-bible-utils';
+import type { Localized, LocalizedStringValue, MultiColumnMenu } from 'platform-bible-utils';
 
 /**
  * Localization keys consumed by `ChecklistTool` and its Storybook stories.
@@ -247,10 +247,32 @@ export type ChecklistToolProps = {
   /** Retry button click handler (shown inside the error Alert). */
   onRetry?: () => void;
 
-  // UX-2 finding #1 (WP3): the inner TabToolbar was removed because the outer Platform.Bible
-  // tab chrome already surfaces the hamburger. Menu items (Open Project Settings, Copy,
-  // Settings) reach the outer chrome via `WebViewMenu.topMenu` contributions wired in
-  // `main.ts` — they no longer flow through this component as props.
+  // ----- Project menu (TabToolbar left hamburger) -----
+  //
+  // The outer Platform.Bible tab chrome is suppressed for this web view
+  // (shouldShowToolbar=false) so its hamburger is no longer available — the menu items
+  // (Open Project Settings, Copy, Print, Save, Markers Inventory, Settings) live on the
+  // inner TabToolbar inside ChecklistTool. WP3 originally dropped these props on the
+  // assumption that the outer chrome would host the menu; that decision is reversed now
+  // that we hide the outer chrome.
+
+  /**
+   * Localized menu data for the inner TabToolbar's project menu (left hamburger). The wiring layer
+   * reads this from `useData(papi.menuData.dataProviderName).WebViewMenu(...)` for the
+   * markers-checklist web-view type so contributed menu items from menus.json appear here. Stories
+   * may pass a minimal stub or leave it undefined to suppress the hamburger.
+   */
+  projectMenuData?: Localized<MultiColumnMenu> | undefined;
+
+  /**
+   * Called when the user selects an item in the project menu. The wiring layer typically dispatches
+   * the selected command via `papi.commands.sendCommand`, which routes through the commands
+   * registered in `main.ts` (Copy → emits CHECKLIST_COPY_REQUEST_EVENT, etc.).
+   */
+  onSelectProjectMenuItem?: (selectedMenuItem: {
+    [key: string]: unknown;
+    command: string;
+  }) => void | Promise<void>;
 
   // ----- Row-level handlers -----
   //

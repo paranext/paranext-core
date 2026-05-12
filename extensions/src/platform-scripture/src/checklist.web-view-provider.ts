@@ -66,7 +66,10 @@ export class ChecklistWebViewProvider implements IWebViewProvider {
         ...savedWebView.state,
         webViewType: markersChecklistWebViewType,
       },
-      shouldShowToolbar: true,
+      // The outer Platform.Bible tab chrome is suppressed for the markers checklist —
+      // its hamburger/BCV/scroll-group controls now live on the inner TabToolbar inside
+      // ChecklistTool, so we don't want a duplicate chrome above the inner toolbar.
+      shouldShowToolbar: false,
     };
   }
 }
