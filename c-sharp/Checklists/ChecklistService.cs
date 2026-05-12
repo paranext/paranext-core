@@ -327,10 +327,13 @@ internal static class ChecklistService
     // EXPLANATION:
     // Mirrors PT9's pre-flight that converts the optional ScriptureRange
     // carried on the request into a concrete [startRef, endRef] pair,
-    // falling back to mainScrText.FirstVerseRef() / LastVerseRef() when
-    // the request's bounds are null or default. `FirstVerseRef` returns
-    // "GEN 1:0" (intro verse) and `LastVerseRef` returns the final verse
-    // of the final book of the versification.
+    // honoring the platform ScriptureRange contract:
+    //   - range == null              ⇒ whole project (FirstVerseRef..LastVerseRef)
+    //   - range.End == null          ⇒ single-verse range at Start
+    //   - range.{Start,End}.IsDefault ⇒ defensive fallback to the project bounds
+    //                                   for malformed wire payloads (defaulted VerseRef)
+    // `FirstVerseRef` returns "GEN 1:0" (intro verse) and `LastVerseRef`
+    // returns the final verse of the final book of the versification.
     private static (VerseRef start, VerseRef end) ResolveVerseRange(
         ScrText mainScrText,
         ScriptureRange? range
@@ -353,8 +356,15 @@ internal static class ChecklistService
             return (firstDefault, lastDefault);
 
         VerseRef start = range.Start.IsDefault ? firstDefault : range.Start;
-        VerseRef end =
-            range.End == null || range.End.Value.IsDefault ? lastDefault : range.End.Value;
+        // Platform ScriptureRange contract: End omitted ⇒ single-verse range at Start.
+        // A defaulted End (malformed wire payload) falls back to the project bounds.
+        VerseRef end;
+        if (range.End == null)
+            end = start;
+        else if (range.End.Value.IsDefault)
+            end = lastDefault;
+        else
+            end = range.End.Value;
         return (start, end);
     }
 

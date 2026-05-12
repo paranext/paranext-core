@@ -1853,7 +1853,8 @@ declare module 'platform-scripture' {
     markerSettings: ChecklistMarkerSettings;
     /**
      * Inclusive verse range to limit the checklist to. When `undefined`, the entire project is
-     * scanned. When the range omits `end`, only the verse at `start` is included.
+     * scanned. Otherwise the standard {@link ScriptureRange} semantics apply: an omitted `end`
+     * narrows the request to the single verse at `start`.
      */
     verseRange: ScriptureRange | undefined;
     /** When true, rows whose cells all match (per `equivalentMarkers`) are omitted from output. */
@@ -1924,9 +1925,9 @@ declare module 'platform-scripture' {
     texts: {
       /** GUID of the resolved project (or the original requested id if resolution failed). */
       id: string;
-      /** Short name of the resolved project. */
+      /** Short name of the resolved project, or `''` when `available` is `false`. */
       name: string;
-      /** Full descriptive name of the resolved project. */
+      /** Full descriptive name of the resolved project, or `''` when `available` is `false`. */
       fullName: string;
       /** True when the project was successfully resolved and is currently registered. */
       available: boolean;

@@ -2161,6 +2161,10 @@ export type LinkedScrRefButtonProps = {
  *
  * If no `onClick` is provided, the button is disabled and the tooltip still surfaces (useful for
  * read-only contexts where the reference should not be navigable but should still be readable).
+ *
+ * @experimental This component is expected to be removed once
+ *   [`LinkedScrRefDisplay`](https://github.com/paranext/paranext-core/pull/1949) lands. See
+ *   {@link LinkedScrRefButtonProps} for the migration plan.
  */
 export declare function LinkedScrRefButton({ scrRef, onClick, tooltipContent, ariaLabel, className, testId, }: LinkedScrRefButtonProps): import("react/jsx-runtime").JSX.Element | undefined;
 /**
@@ -2550,13 +2554,11 @@ export declare const PopoverAnchor: React$1.ForwardRefExoticComponent<PopoverPri
  * rendered as React children. It does not retroactively re-portal already-mounted popovers, and it
  * does not affect popovers in sibling subtrees.
  *
- * Initial-mount behavior: pass `null` for `container` (the initial value of a `useState<HTMLElement
- *
- * | null>(null)` paired with a ref callback on the ancestor) to keep Radix's default
- *
- * `document.body` behavior until the ancestor mounts. Once the element exists, future popover opens
- * portal into it. The triggering ancestor (the trap owner) must wrap, not be wrapped by, this
- * provider.
+ * Initial-mount behavior: pass `null` for `container` to keep Radix's default `document.body`
+ * behavior until the ancestor mounts. The typical pattern is to hold the ancestor element in
+ * `useState<HTMLElement | null>(null)` paired with a ref callback on the ancestor — once the
+ * element exists, future popover opens portal into it. The triggering ancestor (the trap owner)
+ * must wrap, not be wrapped by, this provider.
  * @example
  *
  * ```tsx
