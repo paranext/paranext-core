@@ -18,10 +18,10 @@ describe('getAppDir', () => {
     globalThis.resourcesPath = originalResourcesPath;
   });
 
-  it('returns .{{ productInfo.name }} in home directory when packaged', async () => {
+  it('returns .<PRODUCT_FOLDER_NAME> in home directory when packaged', async () => {
     globalThis.isPackaged = true;
-    const { getAppDir } = await import('./util');
-    expect(getAppDir()).toBe(path.join(os.homedir(), '/.{{ productInfo.name }}'));
+    const { getAppDir, PRODUCT_FOLDER_NAME } = await import('./util');
+    expect(getAppDir()).toBe(path.join(os.homedir(), `/.${PRODUCT_FOLDER_NAME}`));
   });
 
   it('returns resourcesPath/dev-appdata when not packaged', async () => {
