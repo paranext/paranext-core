@@ -103,7 +103,7 @@ const meta: Meta<typeof Inventory> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-4">
+        <div className="tw:p-4">
           <Story />
         </div>
       </ThemeProvider>

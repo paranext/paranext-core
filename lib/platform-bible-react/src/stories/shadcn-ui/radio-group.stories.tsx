@@ -35,15 +35,15 @@ export const Default: Story = {
   },
   render: (args) => (
     <RadioGroup {...args}>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="default" id="r1" />
         <Label htmlFor="r1">Default</Label>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="comfortable" id="r2" />
         <Label htmlFor="r2">Comfortable</Label>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="compact" id="r3" />
         <Label htmlFor="r3">Compact</Label>
       </div>
@@ -60,16 +60,16 @@ export const Default: Story = {
 
 export const Horizontal: Story = {
   render: () => (
-    <RadioGroup defaultValue="option-one" className="tw-flex tw-gap-4">
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+    <RadioGroup defaultValue="option-one" className="tw:flex tw:gap-4">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="option-one" id="option-one" />
         <Label htmlFor="option-one">Option One</Label>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="option-two" id="option-two" />
         <Label htmlFor="option-two">Option Two</Label>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="option-three" id="option-three" />
         <Label htmlFor="option-three">Option Three</Label>
       </div>
@@ -87,11 +87,11 @@ export const Horizontal: Story = {
 export const Disabled: Story = {
   render: () => (
     <RadioGroup defaultValue="option-one" disabled>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="option-one" id="disabled-one" />
         <Label htmlFor="disabled-one">Option One</Label>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="option-two" id="disabled-two" />
         <Label htmlFor="disabled-two">Option Two</Label>
       </div>
@@ -109,15 +109,15 @@ export const Disabled: Story = {
 export const WithoutDefaultValue: Story = {
   render: () => (
     <RadioGroup>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="option-one" id="no-default-one" />
         <Label htmlFor="no-default-one">Option One</Label>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="option-two" id="no-default-two" />
         <Label htmlFor="no-default-two">Option Two</Label>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="option-three" id="no-default-three" />
         <Label htmlFor="no-default-three">Option Three</Label>
       </div>
@@ -137,22 +137,22 @@ export const Controlled: Story = {
     const [value, setValue] = useState('option-two');
 
     return (
-      <div className="tw-space-y-4">
+      <div className="tw:space-y-4">
         <RadioGroup value={value} onValueChange={setValue}>
-          <div className="tw-flex tw-items-center tw-gap-x-2">
+          <div className="tw:flex tw:items-center tw:gap-x-2">
             <RadioGroupItem value="option-one" id="controlled-one" />
             <Label htmlFor="controlled-one">Option One</Label>
           </div>
-          <div className="tw-flex tw-items-center tw-gap-x-2">
+          <div className="tw:flex tw:items-center tw:gap-x-2">
             <RadioGroupItem value="option-two" id="controlled-two" />
             <Label htmlFor="controlled-two">Option Two</Label>
           </div>
-          <div className="tw-flex tw-items-center tw-gap-x-2">
+          <div className="tw:flex tw:items-center tw:gap-x-2">
             <RadioGroupItem value="option-three" id="controlled-three" />
             <Label htmlFor="controlled-three">Option Three</Label>
           </div>
         </RadioGroup>
-        <div className="tw-text-sm tw-text-muted-foreground">
+        <div className="tw:text-sm tw:text-muted-foreground">
           Selected: <code>{value}</code>
         </div>
       </div>
@@ -170,15 +170,15 @@ export const Controlled: Story = {
 export const Interactive: Story = {
   render: (args) => (
     <RadioGroup {...args}>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="option-1" id="interactive-1" />
         <Label htmlFor="interactive-1">Option 1</Label>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="option-2" id="interactive-2" />
         <Label htmlFor="interactive-2">Option 2</Label>
       </div>
-      <div className="tw-flex tw-items-center tw-gap-x-2">
+      <div className="tw:flex tw:items-center tw:gap-x-2">
         <RadioGroupItem value="option-3" id="interactive-3" />
         <Label htmlFor="interactive-3">Option 3</Label>
       </div>

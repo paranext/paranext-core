@@ -193,6 +193,14 @@ module.exports = {
       },
     },
     {
+      // Playwright e2e test fixtures use a `use()` callback that is Playwright's fixture API,
+      // not a React hook. react-hooks/rules-of-hooks v5 incorrectly flags these calls.
+      files: ['e2e-tests/**/*.ts', 'e2e-tests/**/*.tsx'],
+      rules: {
+        'react-hooks/rules-of-hooks': 'off',
+      },
+    },
+    {
       // Vitest test rules and globals (replaces eslint-plugin-jest that was previously bundled in erb)
       files: ['*.test.ts', '*.test.tsx', '*.spec.ts', '*.spec.tsx'],
       extends: ['plugin:vitest/legacy-recommended'],

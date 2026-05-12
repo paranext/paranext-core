@@ -9,7 +9,7 @@ import {
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { formatScrRef, getSectionForBook, Section } from 'platform-bible-utils';
@@ -507,14 +507,14 @@ export function BookChapterControl({
           role="combobox"
           aria-expanded={isCommandOpen}
           className={cn(
-            'tw-h-8 tw-w-full tw-min-w-16 tw-max-w-48 tw-overflow-hidden tw-px-1',
+            'tw:h-8 tw:w-full tw:min-w-16 tw:max-w-48 tw:overflow-hidden tw:px-1',
             className,
           )}
         >
-          <span className="tw-truncate">{currentDisplayValue}</span>
+          <span className="tw:truncate">{currentDisplayValue}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent id={id} forceMount className="tw-w-[280px] tw-p-0" align="center">
+      <PopoverContent id={id} forceMount className="tw:w-[280px] tw:p-0" align="center">
         <Command
           ref={commandRef}
           onKeyDown={handleCommandKeyDown}
@@ -525,15 +525,15 @@ export function BookChapterControl({
         >
           {/* Header: Input (with quick nav buttons) for book view, fixed header for chapter view */}
           {viewMode === 'books' ? (
-            <div className="tw-flex tw-items-end">
-              <div className="tw-relative tw-flex-1">
+            <div className="tw:flex tw:items-end">
+              <div className="tw:relative tw:flex-1">
                 <CommandInput
                   ref={commandInputRef}
                   value={inputValue}
                   onValueChange={setInputValue}
                   onKeyDown={handleInputKeyDown}
                   onFocus={() => setIsCommandListHidden(false)}
-                  className={recentSearches && recentSearches.length > 0 ? '!tw-pr-10' : ''}
+                  className={recentSearches && recentSearches.length > 0 ? 'tw:!pr-10' : ''}
                 />
                 {recentSearches && recentSearches.length > 0 && (
                   <RecentSearches
@@ -549,7 +549,7 @@ export function BookChapterControl({
                 )}
               </div>
               {/* Navigation buttons for previous/next chapter/book */}
-              <div className="tw-flex tw-items-center tw-gap-1 tw-border-b tw-pe-2">
+              <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:pe-2">
                 {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }) => (
                   <Button
                     key={title}
@@ -560,7 +560,7 @@ export function BookChapterControl({
                       onClick();
                     }}
                     disabled={disabled}
-                    className="tw-h-10 tw-w-4 tw-p-0"
+                    className="tw:h-10 tw:w-4 tw:p-0"
                     title={title}
                     onKeyDown={handleQuickNavButtonKeyDown}
                   >
@@ -570,22 +570,22 @@ export function BookChapterControl({
               </div>
             </div>
           ) : (
-            <div className="tw-flex tw-items-center tw-border-b tw-px-3 tw-py-2">
+            <div className="tw:flex tw:items-center tw:border-b tw:px-3 tw:py-2">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleBackToBooks}
-                className="tw-mr-2 tw-h-6 tw-w-6 tw-p-0"
+                className="tw:mr-2 tw:h-6 tw:w-6 tw:p-0"
                 tabIndex={-1}
               >
                 {direction === 'ltr' ? (
-                  <ArrowLeft className="tw-h-4 tw-w-4" />
+                  <ArrowLeft className="tw:h-4 tw:w-4" />
                 ) : (
-                  <ArrowRight className="tw-h-4 tw-w-4" />
+                  <ArrowRight className="tw:h-4 tw:w-4" />
                 )}
               </Button>
               {selectedBookForChaptersView && (
-                <span tabIndex={-1} className="tw-text-sm tw-font-medium">
+                <span tabIndex={-1} className="tw:text-sm tw:font-medium">
                   {getLocalizedBookName(selectedBookForChaptersView, localizedBookNames)}
                 </span>
               )}
@@ -633,7 +633,7 @@ export function BookChapterControl({
                           topMatch.chapterNum || ''
                         }:${topMatch.verseNum || ''})}`}
                         onSelect={handleTopMatchSelect}
-                        className="tw-font-semibold tw-text-primary"
+                        className="tw:font-semibold tw:text-primary"
                       >
                         {formatScrRef(
                           {
@@ -652,7 +652,7 @@ export function BookChapterControl({
                   {/* Chapter Selector - Show when we have a top match */}
                   {topMatch && fetchEndChapter(topMatch.book) > 1 && (
                     <>
-                      <div className="tw-mb-2 tw-px-3 tw-text-sm tw-font-medium tw-text-muted-foreground">
+                      <div className="tw:mb-2 tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
                         {getLocalizedBookName(topMatch.book, localizedBookNames)}
                       </div>
                       <ChapterGrid
@@ -661,7 +661,7 @@ export function BookChapterControl({
                         onChapterSelect={handleChapterSelect}
                         setChapterRef={setChapterRef}
                         isChapterDimmed={doesChapterMatch}
-                        className="tw-px-4 tw-pb-4"
+                        className="tw:px-4 tw:pb-4"
                       />
                     </>
                   )}
@@ -675,7 +675,7 @@ export function BookChapterControl({
                   scrRef={scrRef}
                   onChapterSelect={handleChapterSelect}
                   setChapterRef={setChapterRef}
-                  className="tw-p-4"
+                  className="tw:p-4"
                 />
               )}
             </CommandList>

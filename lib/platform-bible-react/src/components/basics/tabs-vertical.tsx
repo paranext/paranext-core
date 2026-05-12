@@ -4,11 +4,11 @@
 
 import { TabsContentProps, TabsListProps, TabsTriggerProps } from '@/components/shadcn-ui/tabs';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
-import { cn } from '@/utils/shadcn-ui.util';
-import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { cn } from '@/utils/shadcn-ui/utils';
+import { Tabs as RadixTabs } from 'radix-ui';
 import React from 'react';
 
-export type VerticalTabsProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root> & {
+export type VerticalTabsProps = React.ComponentPropsWithoutRef<typeof RadixTabs.Root> & {
   className?: string;
 };
 
@@ -24,49 +24,49 @@ export type LeftTabsTriggerProps = TabsTriggerProps & {
  * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
  */
 export const VerticalTabs = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.Root>,
+  React.ElementRef<typeof RadixTabs.Root>,
   VerticalTabsProps
 >(({ className, ...props }, ref) => {
   const dir: Direction = readDirection();
   return (
-    <TabsPrimitive.Root
+    <RadixTabs.Root
       orientation="vertical"
       ref={ref}
-      className={cn('tw-flex tw-gap-1 tw-rounded-md tw-text-muted-foreground', className)}
+      className={cn('tw:flex tw:gap-1 tw:rounded-md tw:text-muted-foreground', className)}
       {...props}
       dir={dir}
     />
   );
 });
 
-VerticalTabs.displayName = TabsPrimitive.List.displayName;
+VerticalTabs.displayName = RadixTabs.List.displayName;
 
 /** @inheritdoc VerticalTabs */
 export const VerticalTabsList = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.List>,
+  React.ElementRef<typeof RadixTabs.List>,
   TabsListProps
 >(({ className, ...props }, ref) => (
-  <TabsPrimitive.List
+  <RadixTabs.List
     ref={ref}
     className={cn(
-      'tw-flex-fit tw-mlk-items-center tw-w-[124px] tw-justify-center tw-rounded-md tw-bg-muted tw-p-1 tw-text-muted-foreground',
+      'tw:flex tw:items-center tw:w-[124px] tw:justify-center tw:rounded-md tw:bg-muted tw:p-1 tw:text-muted-foreground',
       className,
     )}
     {...props}
   />
 ));
-VerticalTabsList.displayName = TabsPrimitive.List.displayName;
+VerticalTabsList.displayName = RadixTabs.List.displayName;
 
 /** @inheritdoc VerticalTabs */
 export const VerticalTabsTrigger = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.Trigger>,
+  React.ElementRef<typeof RadixTabs.Trigger>,
   LeftTabsTriggerProps
 >(({ className, ...props }, ref) => (
-  <TabsPrimitive.Trigger
+  <RadixTabs.Trigger
     ref={ref}
     {...props}
     className={cn(
-      'overflow-clip tw-inline-flex tw-w-[116px] tw-cursor-pointer tw-items-center tw-justify-center tw-break-words tw-rounded-sm tw-border-0 tw-bg-muted tw-px-3 tw-py-1.5 tw-text-sm tw-font-medium tw-text-inherit tw-ring-offset-background tw-transition-all hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50 data-[state=active]:tw-bg-background data-[state=active]:tw-text-foreground data-[state=active]:tw-shadow-sm',
+      'tw:inline-flex tw:w-[116px] tw:cursor-pointer tw:items-center tw:justify-center tw:break-words tw:rounded-sm tw:border-0 tw:bg-muted tw:px-3 tw:py-1.5 tw:text-sm tw:font-medium tw:text-inherit tw:ring-offset-background tw:transition-all tw:hover:text-foreground tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:disabled:pointer-events-none tw:disabled:opacity-50 tw:data-[state=active]:bg-background tw:data-[state=active]:text-foreground tw:data-[state=active]:shadow-sm tw:overflow-clip',
       className,
     )}
   />
@@ -74,17 +74,17 @@ export const VerticalTabsTrigger = React.forwardRef<
 
 /** @inheritdoc VerticalTabs */
 export const VerticalTabsContent = React.forwardRef<
-  React.ElementRef<typeof TabsPrimitive.Content>,
+  React.ElementRef<typeof RadixTabs.Content>,
   TabsContentProps
 >(({ className, ...props }, ref) => (
-  <TabsPrimitive.Content
+  <RadixTabs.Content
     ref={ref}
     className={cn(
-      // Removed tw-mt-2 because Sebastian said so
-      'tw-ms-5 tw-flex-grow tw-text-foreground tw-ring-offset-background focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2',
+      // Removed tw:mt-2 because Sebastian said so
+      'tw:ms-5 tw:flex-grow tw:text-foreground tw:ring-offset-background tw:focus-visible:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2',
       className,
     )}
     {...props}
   />
 ));
-VerticalTabsContent.displayName = TabsPrimitive.Content.displayName;
+VerticalTabsContent.displayName = RadixTabs.Content.displayName;

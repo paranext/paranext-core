@@ -47,7 +47,7 @@ export const Default: Story = {
             This is a drawer description explaining what this drawer is for.
           </DrawerDescription>
         </DrawerHeader>
-        <div className="tw-p-4">
+        <div className="tw:p-4">
           <p>This is the main content of the drawer.</p>
         </div>
         <DrawerFooter>
@@ -70,7 +70,7 @@ export const Default: Story = {
 
 export const Directions: Story = {
   render: () => (
-    <div className="tw-flex tw-flex-col tw-items-start tw-gap-4">
+    <div className="tw:flex tw:flex-col tw:items-start tw:gap-4">
       <Drawer direction="top">
         <DrawerTrigger asChild>
           <Button variant="outline">Open Drawer (Top)</Button>
@@ -168,20 +168,20 @@ export const WithForm: Story = {
             Make changes to your profile here. Click save when you&apos;re done.
           </DrawerDescription>
         </DrawerHeader>
-        <div className="tw-space-y-4 tw-p-4">
-          <div className="tw-space-y-2">
+        <div className="tw:space-y-4 tw:p-4">
+          <div className="tw:space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input id="name" placeholder="Your name" />
           </div>
-          <div className="tw-space-y-2">
+          <div className="tw:space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" placeholder="Your email" />
           </div>
-          <div className="tw-space-y-2">
+          <div className="tw:space-y-2">
             <Label htmlFor="bio">Bio</Label>
             <textarea
               id="bio"
-              className="tw-w-full tw-rounded tw-border tw-p-2"
+              className="tw:w-full tw:rounded tw:border tw:p-2"
               rows={3}
               placeholder="Tell us about yourself"
             />
@@ -211,19 +211,19 @@ export const Responsive: Story = {
       <DrawerTrigger asChild>
         <Button variant="outline">Open Responsive Drawer</Button>
       </DrawerTrigger>
-      <DrawerContent className="tw-max-h-[96%]">
+      <DrawerContent className="tw:max-h-[96%]">
         <DrawerHeader>
           <DrawerTitle>Responsive Drawer</DrawerTitle>
           <DrawerDescription>
             This drawer adapts to different screen sizes and has a max height.
           </DrawerDescription>
         </DrawerHeader>
-        <div className="tw-overflow-y-auto tw-p-4">
-          <div className="tw-space-y-4">
+        <div className="tw:overflow-y-auto tw:p-4">
+          <div className="tw:space-y-4">
             {Array.from({ length: 20 }, (_, i) => (
-              <div key={i} className="tw-rounded tw-border tw-p-3">
-                <h4 className="tw-font-medium">Item {i + 1}</h4>
-                <p className="tw-text-sm tw-text-muted-foreground">
+              <div key={i} className="tw:rounded tw:border tw:p-3">
+                <h4 className="tw:font-medium">Item {i + 1}</h4>
+                <p className="tw:text-sm tw:text-muted-foreground">
                   This is item {i + 1} in the scrollable content area.
                 </p>
               </div>
@@ -261,7 +261,7 @@ export const Interactive: Story = {
             Use the controls to experiment with different drawer properties.
           </DrawerDescription>
         </DrawerHeader>
-        <div className="tw-p-4">
+        <div className="tw:p-4">
           <p>This drawer&apos;s behavior can be controlled via the Storybook controls.</p>
         </div>
         <DrawerFooter>

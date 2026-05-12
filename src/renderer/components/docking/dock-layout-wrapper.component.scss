@@ -7,14 +7,19 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 
 /* I tried assigning these custom properties at :root, but I wasn't able to use them. I chose to put them in `.dock-style-platform-bible` even though it isn't at the topmost level of the rc-dock components. It's more like the tab-group level. It is like a theme that we created and own (in contrast to .dock-style-card). */
 .dock-style-platform-bible {
-  --tab-front-blur: hsl(var(--background));
-  --tab-front-focus-within: hsl(var(--primary));
-  --tab-highlight: hsl(var(--primary) / 0.3);
+  --tab-front-blur: var(--background);
+  --tab-front-focus-within: var(--primary);
+  --tab-highlight: var(--primary);
   --tab-header-to-content-gap: 6px;
+}
+@supports (color: color-mix(in lab, red, red)) {
+  .dock-style-platform-bible {
+    --tab-highlight: color-mix(in oklab, var(--primary) 30%, transparent);
+  }
 }
 
 .dock {
-  color: hsl(var(--foreground));
+  color: var(--foreground);
   container-type: size;
 }
 
@@ -40,7 +45,7 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 
   // When a tab is the has focus within it, it gets a prominent color.
   &.platform-dock-tabpane-window-focus {
-    --tab-background: hsl(var(--primary));
+    --tab-background: var(--primary);
   }
 }
 
@@ -49,21 +54,26 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 .dock-dropdown,
 .dock-dropdown-menu,
 .dock-dropdown-menu-item {
-  background-color: hsl(var(--popover));
-  color: hsl(var(--popover-foreground));
+  background-color: var(--popover);
+  color: var(--popover-foreground);
 }
 
 .dock-dropdown-menu {
-  border: 1px solid hsl(var(--border));
-  border-radius: calc(var(--radius) - 2px); // tw-rounded-md
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px); // tw:rounded-md
 }
 
 .dock-dropdown-menu-item:hover {
-  background-color: hsl(var(--accent));
+  background-color: var(--accent);
 }
 // reduce background color when hovering over the close button
 .dock-dropdown-menu-item:hover:has(.dock-tab-close-btn:hover) {
-  background-color: hsl(var(--accent) / 0.3);
+  background-color: var(--accent);
+}
+@supports (color: color-mix(in lab, red, red)) {
+  .dock-dropdown-menu-item:hover:has(.dock-tab-close-btn:hover) {
+    background-color: color-mix(in oklab, var(--accent) 30%, transparent);
+  }
 }
 
 // Ensure the close button and title button are on the same row
@@ -107,11 +117,16 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 /* While dragging a tab, shows where it will go when user releases. */
 .dock-layout > .dock-drop-indicator {
   --ring-offset-width: 3px;
-  --ring-color: hsl(var(--ring));
+  --ring-color: var(--ring);
   opacity: 100%; // reset rc-dock
-  background: hsl(var(--primary) / 0.5);
+  background: var(--primary);
   box-shadow: 0 0 0 calc(3px + var(--ring-offset-width)) var(--ring-color, currentcolor); // copied from Shadcn focus ring
   border-radius: var(--radius);
+}
+@supports (color: color-mix(in lab, red, red)) {
+  .dock-layout > .dock-drop-indicator {
+    background: color-mix(in oklab, var(--primary) 50%, transparent);
+  }
 }
 // #endregion GENERAL ///////////////////////////////////////////////////
 
@@ -120,7 +135,7 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 .dock-panel {
   padding: 6px;
   padding-block-start: 0;
-  background-color: hsl(var(--muted));
+  background-color: var(--muted);
 
   //   Copied shadows from Tailwind shadow-sm
   --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -129,7 +144,16 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
     var(--tw-ring-offset-shadow, 0 0 #0000),
     var(--tw-ring-shadow, 0 0 #0000),
     var(--tw-shadow),
-    inset 0 0 10px hsl(var(--border) / 0.1); // Added inset shadow to distinguish dock panel from background
+    inset 0 0 10px var(--border); // Added inset shadow to distinguish dock panel from background
+}
+@supports (color: color-mix(in lab, red, red)) {
+  .dock-panel {
+    box-shadow:
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      var(--tw-shadow),
+      inset 0 0 10px color-mix(in oklab, var(--border) 10%, transparent); // Added inset shadow to distinguish dock panel from background
+  }
 }
 
 .dock-top {
@@ -278,7 +302,7 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   &.platform-dock-tab-window-focus {
     // TODO these two properties should get the same level of abstraction
     --tab-background: var(--tab-front-focus-within);
-    color: hsl(var(--primary-foreground));
+    color: var(--primary-foreground);
 
     outline: none;
 
@@ -293,7 +317,7 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
       width: 100%;
       height: 2px;
       border-radius: var(--radius);
-      background-color: hsl(var(--ring));
+      background-color: var(--ring);
     }
   }
 }
@@ -329,7 +353,7 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
     content: '';
     width: 2.2px;
     height: 100%;
-    background-color: hsl(var(--border));
+    background-color: var(--border);
     position: absolute;
     right: 0;
   }
@@ -483,8 +507,8 @@ $tab-bottom-rounding: vars.$space--sm;
 .dock-tab .dock-tab-close-btn:hover,
 .dock-tab .dock-tab-close-btn:focus,
 .dock-dropdown-menu-item .dock-tab-close-btn:hover {
-  color: hsl(var(--accent-foreground));
-  background-color: hsl(var(--accent));
+  color: var(--accent-foreground);
+  background-color: var(--accent);
   transform: none;
 }
 

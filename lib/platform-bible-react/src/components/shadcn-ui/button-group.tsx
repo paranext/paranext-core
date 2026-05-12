@@ -1,20 +1,27 @@
+// CUSTOM: Added React import - file uses React.ComponentProps which requires the React namespace
 import React from 'react';
-import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { Slot } from 'radix-ui';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { Separator } from '@/components/shadcn-ui/separator';
 
-/** CVA variants for ButtonGroup — controls horizontal vs. vertical orientation styling. */
+/**
+ * Style variants for the ButtonGroup component — controls horizontal vs. vertical orientation
+ * styling.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+// CUSTOM: Added TSDoc comment for documentation purposes.
 const buttonGroupVariants = cva(
-  'tw-flex tw-w-fit tw-items-stretch has-[>[data-slot=button-group]]:tw-gap-2 [&>*]:focus-visible:tw-relative [&>*]:focus-visible:tw-z-10 has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:tw-rounded-r-md [&>[data-slot=select-trigger]:not([class*=w-])]:tw-w-fit [&>input]:tw-flex-1',
+  'tw:group/button-group tw:flex tw:w-fit tw:items-stretch tw:*:focus-visible:relative tw:*:focus-visible:z-10 tw:has-[>[data-slot=button-group]]:gap-2 tw:has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-e-lg tw:[&>[data-slot=select-trigger]:not([class*=w-])]:w-fit tw:[&>input]:flex-1',
   {
     variants: {
       orientation: {
         horizontal:
-          '[&>*:not(:first-child)]:tw-rounded-l-none [&>*:not(:first-child)]:tw-border-l-0 [&>*:not(:last-child)]:tw-rounded-r-none',
+          'tw:[&>*:not(:first-child)]:rounded-s-none tw:[&>*:not(:first-child)]:border-s-0 tw:[&>*:not(:last-child)]:rounded-e-none tw:[&>[data-slot]:not(:has(~[data-slot]))]:rounded-e-lg!',
         vertical:
-          'tw-flex-col [&>*:not(:first-child)]:tw-rounded-t-none [&>*:not(:first-child)]:tw-border-t-0 [&>*:not(:last-child)]:tw-rounded-b-none',
+          'tw:flex-col tw:[&>*:not(:first-child)]:rounded-t-none tw:[&>*:not(:first-child)]:border-t-0 tw:[&>*:not(:last-child)]:rounded-b-none tw:[&>[data-slot]:not(:has(~[data-slot]))]:rounded-b-lg!',
       },
     },
     defaultVariants: {
@@ -24,10 +31,13 @@ const buttonGroupVariants = cva(
 );
 
 /**
- * Groups a set of buttons (or other form controls) with shared borders and rounded corners, making
+ * ButtonGroup groups multiple buttons together with merged borders and consistent sizing, making
  * them appear as a single cohesive unit. Use `orientation` to switch between horizontal (default)
- * and vertical layouts.
+ * and vertical layouts. Built and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
+// CUSTOM: Added TSDoc comment for documentation purposes.
 function ButtonGroup({
   className,
   orientation,
@@ -38,29 +48,10 @@ function ButtonGroup({
       role="group"
       data-slot="button-group"
       data-orientation={orientation}
-      className={cn('pr-twp', buttonGroupVariants({ orientation }), className)}
-      {...props}
-    />
-  );
-}
-
-/**
- * Renders a non-interactive text label (or arbitrary content via `asChild`) inside a `ButtonGroup`,
- * styled to match the height and border of adjacent buttons.
- */
-function ButtonGroupText({
-  className,
-  asChild = false,
-  ...props
-}: React.ComponentProps<'div'> & {
-  asChild?: boolean;
-}) {
-  const Comp = asChild ? Slot : 'div';
-
-  return (
-    <Comp
       className={cn(
-        'tw-shadow-xs tw-flex tw-items-center tw-gap-2 tw-rounded-md tw-border tw-bg-muted tw-px-4 tw-text-sm tw-font-medium [&_svg:not([class*=size-])]:tw-size-4 [&_svg]:tw-pointer-events-none',
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp',
+        buttonGroupVariants({ orientation }),
         className,
       )}
       {...props}
@@ -69,9 +60,39 @@ function ButtonGroupText({
 }
 
 /**
- * A thin visual divider between items inside a `ButtonGroup`. Defaults to vertical orientation and
- * stretches to fill the group's cross-axis height automatically.
+ * ButtonGroupText renders a non-interactive text/label element styled to fit inside a ButtonGroup,
+ * styled to match the height and border of adjacent buttons.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
+// CUSTOM: Added TSDoc comment for documentation purposes.
+function ButtonGroupText({
+  className,
+  asChild = false,
+  ...props
+}: React.ComponentProps<'div'> & {
+  asChild?: boolean;
+}) {
+  const Comp = asChild ? Slot.Root : 'div';
+
+  return (
+    <Comp
+      className={cn(
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:flex tw:items-center tw:gap-2 tw:rounded-lg tw:border tw:bg-muted tw:px-2.5 tw:text-sm tw:font-medium tw:[&_svg]:pointer-events-none tw:[&_svg:not([class*=size-])]:size-4',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/**
+ * ButtonGroupSeparator renders a visual separator between items in a ButtonGroup.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/separator}
+ */
+// CUSTOM: Added TSDoc comment for documentation purposes.
 function ButtonGroupSeparator({
   className,
   orientation = 'vertical',
@@ -82,7 +103,8 @@ function ButtonGroupSeparator({
       data-slot="button-group-separator"
       orientation={orientation}
       className={cn(
-        'tw-!m-0 tw-relative tw-self-stretch tw-bg-input data-[orientation=vertical]:tw-h-auto',
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:relative tw:self-stretch tw:bg-input tw:data-horizontal:mx-px tw:data-horizontal:w-auto tw:data-vertical:my-px tw:data-vertical:h-auto',
         className,
       )}
       {...props}

@@ -92,7 +92,7 @@ export default class WebViewResolveWebpackPlugin {
 
           // Get the path to the relevant file in the temp dir
           // Note: this path must keep the ./ at the start, or webpack won't resolve it correctly
-          let tempViewPath = getWebViewTempPath(requestPath, resolver.join);
+          let tempViewPath = getWebViewTempPath(requestPath, resolver.join.bind(resolver));
           // Add the query back onto the request path if it was originally there
           if (!request.query) tempViewPath += resourceQuery;
 

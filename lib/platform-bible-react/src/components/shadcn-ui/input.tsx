@@ -1,35 +1,28 @@
 import React from 'react';
-import { cn } from '@/utils/shadcn-ui.util';
+
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
- * Props for Input component
+ * Input component displays a form input field or a component that looks like an input field. Built
+ * and styled with Shadcn UI.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
  */
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
+  return (
+    <input
+      type={type}
+      data-slot="input"
+      className={cn(
+        // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+        // CUSTOM: Removed tw:w-full to give callers control over width
+        // CUSTOM: Added tw:file:text-foreground so the file-picker button text matches the foreground design token
+        'pr-twp tw:h-8 tw:min-w-0 tw:rounded-lg tw:border tw:border-input tw:bg-transparent tw:px-2.5 tw:py-1 tw:text-base tw:transition-colors tw:outline-none tw:file:inline-flex tw:file:h-6 tw:file:border-0 tw:file:bg-transparent tw:file:text-sm tw:file:font-medium tw:file:text-foreground tw:placeholder:text-muted-foreground tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:disabled:pointer-events-none tw:disabled:cursor-not-allowed tw:disabled:bg-input/50 tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:md:text-sm tw:dark:bg-input/30 tw:dark:disabled:bg-input/80 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
-/**
- * Input component displays a form input field or a component that looks like an input field. This
- * components is built and styled with Shadcn UI.
- *
- * @param InputProps
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
- */
-export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
-    return (
-      <input
-        type={type}
-        className={cn(
-          'pr-twp tw-flex tw-h-10 tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-sm tw-ring-offset-background file:tw-border-0 file:tw-bg-transparent file:tw-text-sm file:tw-font-medium file:tw-text-foreground placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
-          className,
-        )}
-        ref={ref}
-        // Shadcn UI pattern: spreading props onto the element is necessary to forward all HTML attributes
-        // eslint-disable-next-line react/jsx-props-no-spreading
-        {...props}
-      />
-    );
-  },
-);
-Input.displayName = 'Input';
+export { Input };

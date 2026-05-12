@@ -43,7 +43,7 @@ export const WithCustomSize: Story = {
         {...args}
         scrollGroupId={selected}
         onChangeScrollGroupId={setSelected}
-        size="lg"
+        size="default"
       />
     );
   },
@@ -62,7 +62,7 @@ export const WithCustomClass: Story = {
         {...args}
         scrollGroupId={selected}
         onChangeScrollGroupId={setSelected}
-        className="tw-bg-yellow-100"
+        className="tw:bg-yellow-100"
         size="sm"
       />
     );

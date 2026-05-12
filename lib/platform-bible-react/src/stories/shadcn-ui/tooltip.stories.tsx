@@ -21,7 +21,7 @@ const meta: Meta<typeof Tooltip> = {
     (Story) => (
       <ThemeProvider>
         <TooltipProvider>
-          <div className="tw-flex tw-justify-center tw-p-8">
+          <div className="tw:flex tw:justify-center tw:p-8">
             <Story />
           </div>
         </TooltipProvider>
@@ -61,9 +61,9 @@ export const WithCustomContent: Story = {
         <Button variant="default">Rich Content</Button>
       </TooltipTrigger>
       <TooltipContent>
-        <div className="tw-space-y-1">
-          <p className="tw-font-semibold">Custom Tooltip</p>
-          <p className="tw-text-sm">You can put any content here</p>
+        <div className="tw:space-y-1">
+          <p className="tw:font-semibold">Custom Tooltip</p>
+          <p className="tw:text-sm">You can put any content here</p>
         </div>
       </TooltipContent>
     </Tooltip>
@@ -79,7 +79,7 @@ export const WithCustomContent: Story = {
 
 export const WithDifferentTriggers: Story = {
   render: (args) => (
-    <div className="tw-flex tw-gap-4">
+    <div className="tw:flex tw:gap-4">
       <Tooltip {...args}>
         <TooltipTrigger asChild>
           <Button variant="outline">Outline Button</Button>

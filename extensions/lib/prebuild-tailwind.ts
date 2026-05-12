@@ -21,8 +21,7 @@
 import fs from 'fs';
 import path from 'path';
 import postcss from 'postcss';
-import tailwindcss from 'tailwindcss';
-import autoprefixer from 'autoprefixer';
+import tailwindcssPostcss from '@tailwindcss/postcss';
 
 const rootDir = path.resolve(__dirname, '..');
 const srcDir = path.resolve(rootDir, 'src');
@@ -107,13 +106,8 @@ export async function prebuildTailwind(): Promise<void> {
     `Found ${tailwindFiles.length} tailwind.css file(s), all identical. Using: ${firstFile}`,
   );
 
-  // Process with PostCSS + Tailwind (firstContent was already read above for comparison)
-  const result = await postcss([
-    tailwindcss({
-      config: path.resolve(rootDir, 'tailwind.config.ts'),
-    }),
-    autoprefixer,
-  ]).process(firstContent, {
+  // Process with PostCSS + TW4 (firstContent was already read above for comparison)
+  const result = await postcss([tailwindcssPostcss()]).process(firstContent, {
     from: firstFile,
     to: tailwindPrebuiltPath,
   });

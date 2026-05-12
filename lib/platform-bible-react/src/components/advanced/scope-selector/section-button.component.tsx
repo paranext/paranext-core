@@ -1,5 +1,5 @@
 import { Button } from '@/components/shadcn-ui/button';
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { LanguageStrings, Section } from 'platform-bible-utils';
 import { getSectionShortName } from '@/components/shared/book.utils';
 import { getBooksForSection, isSectionFullySelected } from './scope-selector.utils';
@@ -37,7 +37,7 @@ function SectionButton({
       className={cn(
         isSectionFullySelected(availableBookIds, section, selectedBookIds) &&
           !isDisabled &&
-          'tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/70 hover:tw-text-primary-foreground',
+          'tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/70 tw:hover:text-primary-foreground',
       )}
       disabled={isDisabled}
     >

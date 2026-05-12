@@ -3,12 +3,20 @@
 // a shared file.
 // TODO: please move these utility functions with #203
 
-import DockLayout, { BoxData, FloatPosition, PanelData, TabData } from 'rc-dock';
+import DockLayout, { BoxData, FloatPosition, LayoutBase, PanelData, TabData } from 'rc-dock';
 
 import { LogError } from '@shared/log-error.model';
 import {
+  DIRECTION_NEAR_TAB_OR_NEXT_GROUP,
+  DIRECTION_NEXT_TAB,
+  DIRECTION_NEXT_TAB_GROUP,
+  DIRECTION_NEXT_TAB_OR_GROUP,
+  DIRECTION_PREVIOUS_TAB,
+  DIRECTION_PREVIOUS_TAB_OR_GROUP,
   DirectionFromTab,
+  DirectionFromTabAdjacent,
   Layout,
+  LayoutInfo,
   SavedTabInfo,
   TabInfo,
   TabLoader,
@@ -259,12 +267,7 @@ export function getTabInfoByElement(
 function getAdjacentTabInfoInDirectionWithinTabGroup(
   sourceTabGroup: PanelData,
   sourceTabId: string,
-  direction:
-    | 'nextTab'
-    | 'previousTab'
-    | 'nextTabOrGroup'
-    | 'previousTabOrGroup'
-    | 'nearTabOrNextGroup',
+  direction: DirectionFromTabAdjacent,
 ): RCDockTabInfo | undefined {
   // Get the index of the current tab
   const sourceTabIndex = sourceTabGroup.tabs.findIndex((tab) => tab.id === sourceTabId);
@@ -282,7 +285,7 @@ function getAdjacentTabInfoInDirectionWithinTabGroup(
 
   // Figure out the index of the tab we want to go to
   let destinationIndex = -1;
-  if (direction === 'nearTabOrNextGroup') {
+  if (direction === DIRECTION_NEAR_TAB_OR_NEXT_GROUP) {
     // One tab over forward or backward in the current tab group or forward a tab group depending on what is available
     if (sourceTabIndex < sourceTabGroup.tabs.length - 1)
       // There is a next tab in the current tab group, so go to it
@@ -292,7 +295,7 @@ function getAdjacentTabInfoInDirectionWithinTabGroup(
       destinationIndex = sourceTabIndex - 1;
   } else {
     // One tab over forward or backward in the current tab group
-    const isForward = direction === 'nextTab' || direction === 'nextTabOrGroup';
+    const isForward = direction === DIRECTION_NEXT_TAB || direction === DIRECTION_NEXT_TAB_OR_GROUP;
 
     // Simply move forward or backward in the current group if there is a tab there
     if (
@@ -508,11 +511,11 @@ export function getTabInfoByDirectionFromTab(
 
   // Go forward or backward a tab
   if (
-    direction === 'nextTab' ||
-    direction === 'previousTab' ||
-    direction === 'nextTabOrGroup' ||
-    direction === 'previousTabOrGroup' ||
-    direction === 'nearTabOrNextGroup'
+    direction === DIRECTION_NEXT_TAB ||
+    direction === DIRECTION_PREVIOUS_TAB ||
+    direction === DIRECTION_NEXT_TAB_OR_GROUP ||
+    direction === DIRECTION_PREVIOUS_TAB_OR_GROUP ||
+    direction === DIRECTION_NEAR_TAB_OR_NEXT_GROUP
   ) {
     // If there is another tab in this tab group in the right direction, go to it
     if (sourceTabGroup.tabs.length > 1) {
@@ -526,29 +529,32 @@ export function getTabInfoByDirectionFromTab(
 
     // Need to jump tab groups
     // Jump to left-most tab in next tab group
-    if (direction === 'nextTab') {
+    if (direction === DIRECTION_NEXT_TAB) {
       return getStartTabInfoInNextTabGroup(dockLayout, sourceTabId);
     }
     // Jump to right-most tab in last tab group
-    if (direction === 'previousTab') {
+    if (direction === DIRECTION_PREVIOUS_TAB) {
       return getEndTabInfoInPreviousTabGroup(dockLayout, sourceTabId);
     }
     // Jump to active tab in next tab group
-    if (direction === 'nextTabOrGroup' || direction === 'nearTabOrNextGroup') {
+    if (
+      direction === DIRECTION_NEXT_TAB_OR_GROUP ||
+      direction === DIRECTION_NEAR_TAB_OR_NEXT_GROUP
+    ) {
       return getActiveTabInfoInNextTabGroup(dockLayout, sourceTabGroup);
     }
     // Jump to active tab in previous tab group
-    // Don't need to check if (direction === 'previousTabOrGroup') because that's the only option left
+    // Don't need to check if (direction === DIRECTION_PREVIOUS_TAB_OR_GROUP) because that's the only option left
     return getActiveTabInfoInPreviousTabGroup(dockLayout, sourceTabGroup);
   }
 
   // One tab group over in either direction
   // Jump to active tab in next tab group
-  if (direction === 'nextTabGroup') {
+  if (direction === DIRECTION_NEXT_TAB_GROUP) {
     return getActiveTabInfoInNextTabGroup(dockLayout, sourceTabGroup);
   }
   // Jump to active tab in previous tab group
-  // Don't need to check if (direction === 'previousTabGroup') because that's the only option left
+  // Don't need to check if (direction === DIRECTION_PREVIOUS_TAB_GROUP) because that's the only option left
   return getActiveTabInfoInPreviousTabGroup(dockLayout, sourceTabGroup);
 }
 
@@ -556,7 +562,7 @@ export function getTabInfoByDirectionFromTab(
 
 // #endregion
 
-// #region webview storage
+// #region finding WebViews and getting their definitions
 /**
  * Gets the WebView definition from a tab, asserting its type
  *
@@ -660,6 +666,48 @@ export function getWebViewDefinition(
 }
 
 /**
+ * Find the WebViewDefinition of the first open web view whose `webViewType` matches the supplied
+ * type.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref
+ * @param webViewType The web view type to search for
+ * @returns The WebViewDefinition of a matching web view, or `undefined` if no web view of that type
+ *   is open
+ */
+export function findFirstWebViewDefinitionByType(
+  dockLayout: DockLayout,
+  webViewType: string,
+): WebViewDefinition | undefined {
+  const found = dockLayout.find((item) => {
+    // Still have to check isTab because of a bug https://github.com/ticlo/rc-dock/pull/253
+    if (!isTab(item)) return false;
+
+    // Only tabs carry web view data
+    if (!('data' in item)) return false;
+    // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const tabInfo = item as RCDockTabInfo;
+    if (tabInfo.tabType !== TAB_TYPE_WEBVIEW) return false;
+
+    return (
+      getWebViewDefinitionFromTab(tabInfo, 'findFirstWebViewDefinitionByType').webViewType ===
+      webViewType
+    );
+  }, Filter.AnyTab);
+
+  if (!found || !isTab(found)) return undefined;
+
+  // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+  // Type assert the webview data in the web view tab
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return getWebViewDefinitionFromTab(found as RCDockTabInfo, 'findFirstWebViewDefinitionByType2');
+}
+
+// #endregion
+
+// #region updating tabs and web views
+
+/**
  * Updates the tab with the specified id with the specified properties. No need to have all the tab
  * info; just specify the properties you want to update.
  *
@@ -748,6 +796,22 @@ export function updateWebViewDefinition(
 // #endregion
 
 // #region update layout
+
+/**
+ * Load a saved layout into the dock. Until we improve the separation between rc-dock and services
+ * as mentioned in {@link LayoutInfo}, should actually pass in an rc-dock layout {@link LayoutBase}.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref
+ * @param layout Saved layout to apply, as previously persisted via `LayoutInfo`
+ */
+export function loadLayout(dockLayout: DockLayout, layout: LayoutInfo): void {
+  // `LayoutInfo` is intentionally opaque in the shared model. rc-dock's `loadLayout` expects a
+  // `LayoutBase`, and any layout that round-trips through `serialize`/`deserialize` from rc-dock
+  // satisfies that shape.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  dockLayout.loadLayout(layout as unknown as LayoutBase);
+}
+
 let previousTabId: string | undefined;
 let previousFloatPosition: FloatPosition = { left: 0, top: 0, width: 0, height: 0 };
 

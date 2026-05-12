@@ -1,54 +1,121 @@
 import React from 'react';
-import * as AvatarPrimitive from '@radix-ui/react-avatar';
+import { Avatar as AvatarPrimitive } from 'radix-ui';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import { cn } from '@/utils/shadcn-ui/utils';
 
 /**
  * The Avatar component displays a user's profile picture or initials. The component is built and
- * styled by Shadcn UI. See Shadcn UI Documentation https://ui.shadcn.com/docs/components/avatar
+ * styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/avatar}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/avatar}
  */
-const Avatar = React.forwardRef<
-  React.ElementRef<typeof AvatarPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
->(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Root
-    ref={ref}
-    className={cn(
-      'pr-twp tw-relative tw-flex tw-h-10 tw-w-10 tw-shrink-0 tw-overflow-hidden tw-rounded-full',
-      className,
-    )}
-    {...props}
-  />
-));
-Avatar.displayName = AvatarPrimitive.Root.displayName;
+// CUSTOM: Added TSDoc comment with links to upstream shadcn/ui and Radix UI documentation.
+function Avatar({
+  className,
+  size = 'default',
+  ...props
+}: React.ComponentProps<typeof AvatarPrimitive.Root> & {
+  size?: 'default' | 'sm' | 'lg';
+}) {
+  return (
+    <AvatarPrimitive.Root
+      data-slot="avatar"
+      data-size={size}
+      className={cn(
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:group/avatar tw:relative tw:flex tw:size-8 tw:shrink-0 tw:rounded-full tw:select-none tw:after:absolute tw:after:inset-0 tw:after:rounded-full tw:after:border tw:after:border-border tw:after:mix-blend-darken tw:data-[size=lg]:size-10 tw:data-[size=sm]:size-6 tw:dark:after:mix-blend-lighten',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Avatar */
-const AvatarImage = React.forwardRef<
-  React.ElementRef<typeof AvatarPrimitive.Image>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
->(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Image
-    ref={ref}
-    className={cn('pr-twp tw-aspect-square tw-h-full tw-w-full', className)}
-    {...props}
-  />
-));
-AvatarImage.displayName = AvatarPrimitive.Image.displayName;
+// CUSTOM: Added @inheritdoc TSDoc referencing Avatar for documentation inheritance.
+function AvatarImage({ className, ...props }: React.ComponentProps<typeof AvatarPrimitive.Image>) {
+  return (
+    <AvatarPrimitive.Image
+      data-slot="avatar-image"
+      className={cn(
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:aspect-square tw:size-full tw:rounded-full tw:object-cover',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 /** @inheritdoc Avatar */
-const AvatarFallback = React.forwardRef<
-  React.ElementRef<typeof AvatarPrimitive.Fallback>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
->(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Fallback
-    ref={ref}
-    className={cn(
-      'pr-twp tw-flex tw-h-full tw-w-full tw-items-center tw-justify-center tw-rounded-full tw-bg-muted',
-      className,
-    )}
-    {...props}
-  />
-));
-AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName;
+// CUSTOM: Added @inheritdoc TSDoc referencing Avatar for documentation inheritance.
+function AvatarFallback({
+  className,
+  ...props
+}: React.ComponentProps<typeof AvatarPrimitive.Fallback>) {
+  return (
+    <AvatarPrimitive.Fallback
+      data-slot="avatar-fallback"
+      className={cn(
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:flex tw:size-full tw:items-center tw:justify-center tw:rounded-full tw:bg-muted tw:text-sm tw:text-muted-foreground tw:group-data-[size=sm]/avatar:text-xs',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
-export { Avatar, AvatarImage, AvatarFallback };
+/** @inheritdoc Avatar */
+// CUSTOM: Added @inheritdoc TSDoc referencing Avatar for documentation inheritance.
+function AvatarBadge({ className, ...props }: React.ComponentProps<'span'>) {
+  return (
+    <span
+      data-slot="avatar-badge"
+      className={cn(
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:absolute tw:end-0 tw:bottom-0 tw:z-10 tw:inline-flex tw:items-center tw:justify-center tw:rounded-full tw:bg-primary tw:text-primary-foreground tw:bg-blend-color tw:ring-2 tw:ring-background tw:select-none',
+        'tw:group-data-[size=sm]/avatar:size-2 tw:group-data-[size=sm]/avatar:[&>svg]:hidden',
+        'tw:group-data-[size=default]/avatar:size-2.5 tw:group-data-[size=default]/avatar:[&>svg]:size-2',
+        'tw:group-data-[size=lg]/avatar:size-3 tw:group-data-[size=lg]/avatar:[&>svg]:size-2',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/** @inheritdoc Avatar */
+// CUSTOM: Added @inheritdoc TSDoc referencing Avatar for documentation inheritance.
+function AvatarGroup({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="avatar-group"
+      className={cn(
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:group/avatar-group tw:flex tw:-space-x-2 tw:*:data-[slot=avatar]:ring-2 tw:*:data-[slot=avatar]:ring-background',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/** @inheritdoc Avatar */
+// CUSTOM: Added @inheritdoc TSDoc referencing Avatar for documentation inheritance.
+function AvatarGroupCount({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="avatar-group-count"
+      className={cn(
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp tw:relative tw:flex tw:size-8 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-full tw:bg-muted tw:text-sm tw:text-muted-foreground tw:ring-2 tw:ring-background tw:group-has-data-[size=lg]/avatar-group:size-10 tw:group-has-data-[size=sm]/avatar-group:size-6 tw:[&>svg]:size-4 tw:group-has-data-[size=lg]/avatar-group:[&>svg]:size-5 tw:group-has-data-[size=sm]/avatar-group:[&>svg]:size-3',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export { Avatar, AvatarImage, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarBadge };
