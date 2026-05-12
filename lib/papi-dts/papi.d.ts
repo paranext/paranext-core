@@ -5405,7 +5405,7 @@ declare module 'node/utils/util' {
    *
    * When running in development: `<repo_directory>/dev-appdata`
    *
-   * When packaged: `<user_home_directory>/.platform.bible`
+   * When packaged: `<user_home_directory>/.{{ productInfo.name }}`
    */
   export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
   /**
