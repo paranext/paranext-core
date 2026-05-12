@@ -8,13 +8,13 @@ import ResourcePickerDialog, {
 import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker-dialog.data';
 
 const STRINGS: ResourcePickerDialogLocalizedStrings = {
-  '%resourcePicker_title%': 'Resource Picker',
-  '%resourcePicker_section_already_selected%': 'Already Selected',
+  '%resourcePicker_title%': 'Resource picker',
+  '%resourcePicker_section_already_selected%': 'Already selected',
   '%resourcePicker_section_installed%': 'Installed',
-  '%resourcePicker_section_available_to_download%': 'Available to Download',
+  '%resourcePicker_section_available_to_download%': 'Available to download',
   '%resourcePicker_button_use%': 'Use',
   '%resourcePicker_no_results%': 'No results found',
-  '%resourcePicker_search_placeholder%': 'Search resources...',
+  '%resourcePicker_search_placeholder%': 'Search resources…',
   '%resourcePicker_language_filter_any%': 'Any language',
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
 };
@@ -38,7 +38,7 @@ function renderDialog(overrides: Partial<Parameters<typeof ResourcePickerDialog>
 describe('ResourcePickerDialog', () => {
   it('shows "Already Selected" section heading with selected resource names', () => {
     renderDialog();
-    expect(screen.getByText('Already Selected')).toBeInTheDocument();
+    expect(screen.getByText('Already selected')).toBeInTheDocument();
     expect(screen.getByText('NIV')).toBeInTheDocument();
     expect(screen.getByText('RVR60')).toBeInTheDocument();
   });
@@ -64,7 +64,7 @@ describe('ResourcePickerDialog', () => {
 
   it('shows "Available to Download" section with Use buttons for uninstalled resources', () => {
     renderDialog();
-    expect(screen.getByText('Available to Download')).toBeInTheDocument();
+    expect(screen.getByText('Available to download')).toBeInTheDocument();
     expect(screen.getByText('NLT')).toBeInTheDocument();
     // All action buttons (installed + to-download) use the same "Use" label
     const useButtons = screen.getAllByRole('button', { name: 'Use' });
@@ -99,17 +99,17 @@ describe('ResourcePickerDialog', () => {
 
   it('shows "No results found" when search matches nothing', () => {
     renderDialog();
-    const searchInput = screen.getByPlaceholderText('Search resources...');
+    const searchInput = screen.getByPlaceholderText('Search resources…');
     fireEvent.change(searchInput, { target: { value: 'zzznomatch' } });
     expect(screen.getByText('No results found')).toBeInTheDocument();
-    expect(screen.queryByText('Already Selected')).not.toBeInTheDocument();
+    expect(screen.queryByText('Already selected')).not.toBeInTheDocument();
     expect(screen.queryByText('Installed')).not.toBeInTheDocument();
-    expect(screen.queryByText('Available to Download')).not.toBeInTheDocument();
+    expect(screen.queryByText('Available to download')).not.toBeInTheDocument();
   });
 
   it('filters all sections by search text', () => {
     renderDialog();
-    const searchInput = screen.getByPlaceholderText('Search resources...');
+    const searchInput = screen.getByPlaceholderText('Search resources…');
     // "ESV" should only match the ESV resource
     fireEvent.change(searchInput, { target: { value: 'ESV' } });
     expect(screen.getByText('ESV')).toBeInTheDocument();
@@ -135,6 +135,6 @@ describe('ResourcePickerDialog', () => {
 
   it('shows no Already Selected section when selectedResourceIds is empty', () => {
     renderDialog({ selectedResourceIds: [] });
-    expect(screen.queryByText('Already Selected')).not.toBeInTheDocument();
+    expect(screen.queryByText('Already selected')).not.toBeInTheDocument();
   });
 });

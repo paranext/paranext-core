@@ -54,6 +54,57 @@ export interface ResourcePickerDialogProps {
   onSelect: (resource: DblResourceData) => void;
 }
 
+/**
+ * Component to list filtered resources entries for one of the resource picker sections. Optionally
+ * shows a `Use` button when both `useLabel` and `onSelect` are not undefined for the cases that the
+ * resource can be picked and is not already picked.
+ */
+function ResourceSection({
+  label,
+  resources,
+  useLabel,
+  onSelect,
+}: {
+  label: string;
+  resources: DblResourceData[];
+  useLabel?: string;
+  onSelect?: (resource: DblResourceData) => void;
+}) {
+  if (resources.length === 0) return undefined;
+  return (
+    <>
+      <Label className="tw-text-xs tw-uppercase tw-tracking-wider tw-text-muted-foreground">
+        {label}
+      </Label>
+      <Table>
+        <TableBody>
+          {resources.map((r) => (
+            <TableRow key={r.dblEntryUid}>
+              <TableCell className="tw-border-0">
+                <div>
+                  <span className="tw-font-medium">{r.fullName}</span>
+                  {' ('}
+                  <span>{r.displayName}</span>)
+                  <Badge variant="secondary" className="tw-ml-2">
+                    {r.bestLanguageName}
+                  </Badge>
+                </div>
+              </TableCell>
+              {onSelect && useLabel && (
+                <TableCell className="tw-border-0 tw-text-right">
+                  <Button variant="outline" onClick={() => onSelect(r)}>
+                    {useLabel}
+                  </Button>
+                </TableCell>
+              )}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </>
+  );
+}
+
 function matchesSearch(resource: DblResourceData, searchText: string): boolean {
   if (!searchText) return true;
   const lower = searchText.toLowerCase();
@@ -180,91 +231,19 @@ export default function ResourcePickerDialog({
           <p className="tw-py-8 tw-text-center tw-text-muted-foreground">{noResultsText}</p>
         ) : (
           <>
-            {alreadySelected.length > 0 && (
-              <>
-                <Label className="tw-text-xs tw-uppercase tw-tracking-wider tw-text-muted-foreground">
-                  {alreadySelectedLabel}
-                </Label>
-                <Table>
-                  <TableBody>
-                    {alreadySelected.map((r) => (
-                      <TableRow key={r.dblEntryUid}>
-                        <TableCell className="tw-border-0 hover:tw-bg-transparent">
-                          <div>
-                            <span className="tw-font-medium">{r.fullName}</span>
-                            {' ('}
-                            <span>{r.displayName}</span>)
-                            <Badge variant="secondary" className="tw-ml-2">
-                              {r.bestLanguageName}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </>
-            )}
-            {installed.length > 0 && (
-              <>
-                <Label className="tw-text-xs tw-uppercase tw-tracking-wider tw-text-muted-foreground">
-                  {installedLabel}
-                </Label>
-                <Table>
-                  <TableBody>
-                    {installed.map((r) => (
-                      <TableRow key={r.dblEntryUid}>
-                        <TableCell className="tw-border-0 hover:tw-bg-transparent">
-                          <div>
-                            <span className="tw-font-medium">{r.fullName}</span>
-                            {' ('}
-                            <span>{r.displayName}</span>)
-                            <Badge variant="secondary" className="tw-ml-2">
-                              {r.bestLanguageName}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="tw-border-0 tw-text-right hover:tw-bg-transparent">
-                          <Button variant="outline" onClick={() => onSelect(r)}>
-                            {useLabel}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </>
-            )}
-            {toDownload.length > 0 && (
-              <>
-                <Label className="tw-text-xs tw-uppercase tw-tracking-wider tw-text-muted-foreground">
-                  {toDownloadLabel}
-                </Label>
-                <Table>
-                  <TableBody>
-                    {toDownload.map((r) => (
-                      <TableRow key={r.dblEntryUid}>
-                        <TableCell className="tw-border-0 hover:tw-bg-transparent">
-                          <div>
-                            <span className="tw-font-medium">{r.fullName}</span>
-                            {' ('}
-                            <span>{r.displayName}</span>)
-                            <Badge variant="secondary" className="tw-ml-2">
-                              {r.bestLanguageName}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="tw-border-0 tw-text-right hover:tw-bg-transparent">
-                          <Button variant="outline" onClick={() => onSelect(r)}>
-                            {useLabel}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </>
-            )}
+            <ResourceSection label={alreadySelectedLabel} resources={alreadySelected} />
+            <ResourceSection
+              label={installedLabel}
+              resources={installed}
+              useLabel={useLabel}
+              onSelect={onSelect}
+            />
+            <ResourceSection
+              label={toDownloadLabel}
+              resources={toDownload}
+              useLabel={useLabel}
+              onSelect={onSelect}
+            />
           </>
         )}
       </div>

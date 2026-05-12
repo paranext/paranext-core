@@ -6,13 +6,13 @@ import ResourcePickerDialog, {
 import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker-dialog.data';
 
 const STRINGS: ResourcePickerDialogLocalizedStrings = {
-  '%resourcePicker_title%': 'Resource Picker',
-  '%resourcePicker_section_already_selected%': 'Already Selected',
+  '%resourcePicker_title%': 'Resource picker',
+  '%resourcePicker_section_already_selected%': 'Already selected',
   '%resourcePicker_section_installed%': 'Installed',
-  '%resourcePicker_section_available_to_download%': 'Available to Download',
+  '%resourcePicker_section_available_to_download%': 'Available to download',
   '%resourcePicker_button_use%': 'Use',
   '%resourcePicker_no_results%': 'No results found',
-  '%resourcePicker_search_placeholder%': 'Search resources...',
+  '%resourcePicker_search_placeholder%': 'Search resources…',
   '%resourcePicker_language_filter_any%': 'Any language',
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
 };
@@ -51,12 +51,7 @@ export const WithResourceTypeFilter: Story = {
 
 export const NoResults: Story = {
   args: {
-    allResources: SAMPLE_RESOURCES.map((r) => ({
-      ...r,
-      displayName: 'Foo',
-      fullName: 'Foo Bar',
-      bestLanguageName: 'Foo',
-    })),
+    allResources: [],
   },
 };
 
