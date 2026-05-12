@@ -99,13 +99,14 @@ describe('ChecklistTool — character-style rendering (UX-2 #19)', () => {
 });
 
 describe('ChecklistTool — match-row coloring (UX-2 #15)', () => {
-  it('applies a subtle tw-bg-primary/30 tint to the reference cell when row.isMatch is true', () => {
-    // Follow-up to WP2: the original `tw-bg-primary tw-text-primary-foreground` rendered as
-    // unreadable solid blocks (inner spans hardcode their own colors — `tw-text-foreground`,
-    // `tw-text-primary`, `tw-text-muted-foreground` — overriding the outer text-color cascade).
-    // Net effect: same color on same color = invisible content. The new contract is a 30%
-    // opacity tint (`tw-bg-primary/30`) with NO text-color override, so inner spans render in
-    // their default colors and stay readable in both light and dark modes.
+  it('applies a subtle tw-bg-primary/20 tint to the row <tr> when row.isMatch is true', () => {
+    // The first fix attempt (3b8b99b8c2) put the bg on inner cell containers and tried to bleed
+    // it past TableCell's `tw-p-4` with negative margins — visually the bg only covered the
+    // text area, not the full cell rectangle (Rolf-reported). This iteration applies the bg
+    // class to the `<tr>` via DataTable's `getRowClassName` prop, so every `<td>` inherits the
+    // tint via the row-level paint. tw-bg-primary/20 (down from /30) reads as a subtle hint
+    // without competing with content. No text-color override — inner spans keep their default
+    // colors so contrast stays readable in both light and dark modes.
     const matchRowData: ChecklistData = {
       ...baseData,
       rows: [makeRow({ isMatch: true })],
@@ -122,15 +123,20 @@ describe('ChecklistTool — match-row coloring (UX-2 #15)', () => {
       />,
     );
 
-    // Reference cell wraps either a LinkedScrRefButton (when onGotoLinkClick is supplied) or
-    // plain text. Either way, the outer container should carry the subtle tint and NOT the
-    // obsolete `tw-text-primary-foreground` override.
+    // The bg is on the `<tr>` itself (via DataTable's getRowClassName). We locate the row by
+    // walking up from the reference cell's testid (the cell content lives inside that row).
     const refCell = screen.getByTestId('checklist-reference-cell');
-    expect(refCell.className).toContain('tw-bg-primary/30');
+    const row = refCell.closest('tr');
+    expect(row).not.toBeNull();
+    expect(row?.className).toContain('tw-bg-primary/20');
+    // The inner cell content should NOT carry the bg (single source of truth — the row).
+    expect(refCell.className).not.toContain('tw-bg-primary');
+    // And the obsolete text-color override from WP2 should be absent everywhere.
+    expect(row?.className).not.toContain('tw-text-primary-foreground');
     expect(refCell.className).not.toContain('tw-text-primary-foreground');
   });
 
-  it('does NOT apply tw-bg-primary/30 when row.isMatch is false', () => {
+  it('does NOT apply tw-bg-primary/20 to the row <tr> when row.isMatch is false', () => {
     render(
       <ChecklistTool
         data={baseData}
@@ -144,6 +150,9 @@ describe('ChecklistTool — match-row coloring (UX-2 #15)', () => {
     );
 
     const refCell = screen.getByTestId('checklist-reference-cell');
+    const row = refCell.closest('tr');
+    expect(row).not.toBeNull();
+    expect(row?.className).not.toContain('tw-bg-primary');
     expect(refCell.className).not.toContain('tw-bg-primary');
   });
 });
