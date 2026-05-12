@@ -1,4 +1,4 @@
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { ResourcePickerDialog, RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react';
 import { DIALOG_BASE } from '@renderer/components/dialogs/dialog-base.data';
 import {
