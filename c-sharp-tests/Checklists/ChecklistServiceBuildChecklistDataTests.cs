@@ -542,6 +542,65 @@ internal class ChecklistServiceBuildChecklistDataTests : PapiTestBase
         );
     }
 
+    [Test]
+    [Category("Contract")]
+    [Property("CapabilityId", "CAP-006")]
+    [Property("Contract", "BuildChecklistData")]
+    public void BuildChecklistData_VerseRangeEndOmitted_ScansSingleVerseAtStart()
+    {
+        // Platform ScriptureRange contract (lib/papi-dts):
+        //   "If not provided, then only the verse indicated by start is included."
+        // Verify the checklist honors that contract — passing { Start, End: null }
+        // must narrow to a single-verse range, NOT fall back to the project bounds.
+        const string usfm = @"\id GEN \c 1 \v 1 alpha \p \v 2 bravo \p \v 3 charlie \p \v 4 delta";
+        var scrText = RegisterDummyProject(usfm, bookNum: 1);
+
+        var request = BuildRequest(
+            activeProjectId: scrText.Guid.ToString(),
+            verseRange: new ScriptureRange(
+                Start: new VerseRef("GEN", "1", "2", ScrVers.English),
+                End: null
+            ),
+            showVerseText: true
+        );
+
+        ChecklistResult result = ChecklistService.BuildChecklistData(
+            request,
+            CancellationToken.None
+        );
+
+        var verseTexts = result
+            .Rows.SelectMany(r => r.Cells)
+            .SelectMany(c => c.Paragraphs)
+            .SelectMany(p => p.Items)
+            .OfType<TextItem>()
+            .Select(t => t.Text.Trim())
+            .Where(t => !string.IsNullOrEmpty(t))
+            .ToList();
+
+        // Only verse 2 should appear; verses 1, 3, 4 must be excluded.
+        Assert.That(
+            verseTexts,
+            Has.Some.Contains("bravo"),
+            "End == null must include the verse at Start (GEN 1:2)"
+        );
+        Assert.That(
+            verseTexts,
+            Has.None.Contains("alpha"),
+            "End == null must NOT scan the whole project (verse 1 should be excluded)"
+        );
+        Assert.That(
+            verseTexts,
+            Has.None.Contains("charlie"),
+            "End == null must NOT scan past the Start verse (verse 3 should be excluded)"
+        );
+        Assert.That(
+            verseTexts,
+            Has.None.Contains("delta"),
+            "End == null must NOT scan past the Start verse (verse 4 should be excluded)"
+        );
+    }
+
     // =====================================================================
     // Group D — Max rows truncation (TS-049, INV-012)
     // =====================================================================

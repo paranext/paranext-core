@@ -16,7 +16,7 @@ namespace TestParanextDataProvider.Checklists;
 /// <para>
 /// Per strategic-plan-backend.md §CAP-009, this capability uses
 /// <b>Outside-In TDD</b>: the outer acceptance test
-/// (<see cref="ResolveComparativeTexts_MixedResolutionPaths_PreservesOrderAndCorrectlyFlagsAvailability"/>)
+/// (<see cref="ResolveComparativeTexts_MixedAvailability_PreservesOrderAndCorrectlyFlagsAvailability"/>)
 /// drives the full INV-014 contract; focused tests pin individual cases
 /// (TS-048 / PTX-23529 duplicate short names resolved by GUID,
 /// active-project exclusion).
@@ -97,7 +97,7 @@ internal class ChecklistServiceResolveComparativeTextsTests : PapiTestBase
     [Property("Contract", "ResolveComparativeTexts")]
     [Property("BehaviorId", "BHV-605")]
     [Property("Invariant", "INV-014")]
-    public void ResolveComparativeTexts_MixedResolutionPaths_PreservesOrderAndCorrectlyFlagsAvailability()
+    public void ResolveComparativeTexts_MixedAvailability_PreservesOrderAndCorrectlyFlagsAvailability()
     {
         // Arrange: register 3 projects in the shared ScrTextCollection.
         //   - active  : the "active" project (self-reference target)
