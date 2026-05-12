@@ -5407,6 +5407,7 @@ declare module 'node/utils/util' {
    *
    * When packaged: `<user_home_directory>/.{{ productInfo.name }}`
    */
+  export const PRODUCT_FOLDER_NAME = 'platform.bible';
   export const getAppDir: import('memoize-one').MemoizedFn<() => string>;
   /**
    * Resolves the uri to a path
