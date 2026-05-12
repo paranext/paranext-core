@@ -62,6 +62,10 @@ export type LinkedScrRefButtonProps = {
  *
  * If no `onClick` is provided, the button is disabled and the tooltip still surfaces (useful for
  * read-only contexts where the reference should not be navigable but should still be readable).
+ *
+ * @experimental This component is expected to be removed once
+ *   [`LinkedScrRefDisplay`](https://github.com/paranext/paranext-core/pull/1949) lands. See
+ *   {@link LinkedScrRefButtonProps} for the migration plan.
  */
 export function LinkedScrRefButton({
   scrRef,
