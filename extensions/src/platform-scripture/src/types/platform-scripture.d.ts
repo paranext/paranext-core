@@ -840,9 +840,14 @@ declare module 'platform-scripture' {
        * Useful for pre-fetching all verse counts for a book in a single round trip — preferable to
        * `lookupFinalVerseNumber` in a loop when the caller needs many chapters of the same book.
        *
-       * @example Const finalVerses = await pdp.lookupFinalVerseNumbersInBook(1); // Genesis
-       * finalVerses[1]; // → 31 (last verse of Genesis 1) finalVerses[50]; // → 26 (last verse of
-       * Genesis 50) finalVerses[0]; // → 0 (filler; chapter 0 does not exist)
+       * @example
+       *
+       * ```typescript
+       * const finalVerses = await pdp.lookupFinalVerseNumbersInBook(1); // Genesis
+       * finalVerses[1]; // → 31 (last verse of Genesis 1)
+       * finalVerses[50]; // → 26 (last verse of Genesis 50)
+       * finalVerses[0]; // → 0 (filler; chapter 0 does not exist)
+       * ```
        */
       lookupFinalVerseNumbersInBook(bookNum: number): Promise<number[]>;
     };
