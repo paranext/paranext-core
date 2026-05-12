@@ -1,6 +1,7 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger, network } from '@papi/frontend';
 import {
+  useData,
   useLocalizedStrings,
   useProjectDataProvider,
   useProjectSetting,
@@ -66,6 +67,19 @@ import { CHECKLIST_COPY_REQUEST_EVENT, CHECKLIST_OPEN_SETTINGS_EVENT } from './c
 type ComparativeTextRef = { id: string };
 
 // ─── Constants ─────────────────────────────────────────────────────────────
+
+/**
+ * Fallback menu used while the menu-data subscription is pending or errored. Matches the pattern
+ * used by `platform-scripture-editor.web-view.tsx`. When the real menu arrives, the memoized
+ * `webViewMenu` below narrows to the concrete value.
+ */
+const DEFAULT_WEBVIEW_MENU = {
+  topMenu: undefined,
+  includeDefaults: true,
+  contextMenu: undefined,
+};
+
+const MARKERS_CHECKLIST_WEB_VIEW_TYPE = 'platformScripture.markersChecklist';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -598,11 +612,59 @@ function ChecklistContent({
   }, [hideMatches, data?.excludedCount, localizedStrings]);
 
   // UX-2 finding #1 (WP3) + #12 (WP6): the inner TabToolbar was removed because the outer
-  // Platform.Bible tab chrome already surfaces the same hamburger menu. The outer chrome
-  // subscribes to `WebViewMenu` directly for this web-view's type and dispatches contributed
-  // items via `papi.commands.sendCommand(command, tabId)`. The Copy / Print / Save / Settings
-  // commands are registered in `main.ts`; Copy + Settings emit network events that this web
-  // view subscribes to below (so live `visibleData` / dialog state stays inside the renderer).
+  // The outer Platform.Bible tab chrome is hidden for this web view (shouldShowToolbar=false
+  // on the provider), so the inner TabToolbar inside ChecklistTool hosts the hamburger menu
+  // directly. We fetch its menu data here and dispatch selected items through PAPI; the
+  // command handlers in main.ts emit the same CHECKLIST_COPY_REQUEST_EVENT /
+  // CHECKLIST_OPEN_SETTINGS_EVENT network events that the renderer subscribes to below — so
+  // dispatch from inside the web view goes through the same plumbing the outer chrome would
+  // have used.
+
+  // ─── Tab menu data via menuData provider ─────────────────────────────────
+
+  const [webViewMenuPossiblyError] = useData(papi.menuData.dataProviderName).WebViewMenu(
+    MARKERS_CHECKLIST_WEB_VIEW_TYPE,
+    DEFAULT_WEBVIEW_MENU,
+  );
+
+  const webViewMenu = useMemo(() => {
+    if (isPlatformError(webViewMenuPossiblyError)) {
+      logger.warn(
+        `ChecklistWebView: failed to load web view menu for ${MARKERS_CHECKLIST_WEB_VIEW_TYPE}`,
+        webViewMenuPossiblyError,
+      );
+      return DEFAULT_WEBVIEW_MENU;
+    }
+    return webViewMenuPossiblyError;
+  }, [webViewMenuPossiblyError]);
+
+  // ─── Project-menu item dispatch ──────────────────────────────────────────
+  //
+  // Items defined in `extensions/src/platform-scripture/contributions/menus.json` for
+  // `platformScripture.markersChecklist`'s top menu fire here. All dispatch via
+  // `papi.commands.sendCommand` (no local intercepts) — the Copy command in main.ts emits
+  // CHECKLIST_COPY_REQUEST_EVENT, which this web view subscribes to below for the actual
+  // clipboard write. Settings, Print, Save, Markers Inventory route through their registered
+  // command handlers unchanged.
+
+  const handleSelectProjectMenuItem = useCallback(
+    (selectedMenuItem: { [key: string]: unknown; command: string }) => {
+      const { command } = selectedMenuItem;
+      if (!command) return;
+      papi.commands
+        // The PAPI sendCommand type requires a registered command-name literal union. Menu items
+        // carry arbitrary registered command names at runtime, so we intentionally widen via the
+        // editor's pattern. A runtime-validated dispatch wrapper would be overkill here.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        .sendCommand(command as Parameters<typeof papi.commands.sendCommand>[0])
+        .catch((err) =>
+          logger.warn(
+            `ChecklistWebView: project-menu command "${command}" failed: ${getErrorMessage(err)}`,
+          ),
+        );
+    },
+    [],
+  );
 
   // ─── Subscribe to the "open settings" network event (UI-PKG-003) ─────────
 
@@ -1065,10 +1127,8 @@ function ChecklistContent({
         matchCountLabel={matchCountLabel}
         onRetry={handleRetry}
         onGotoLinkClick={handleGotoLinkClick}
-        // UX-2 finding #1 (WP3) + #12 (WP6): the inner TabToolbar was dropped, so the
-        // component no longer accepts a `projectMenuData` / `onSelectProjectMenuItem` pair.
-        // Hamburger menu items are surfaced by the outer Platform.Bible tab chrome via menu
-        // contributions in `menus.json` and dispatched as commands registered in `main.ts`.
+        projectMenuData={webViewMenu.topMenu}
+        onSelectProjectMenuItem={handleSelectProjectMenuItem}
         // onEditLinkClick: scripture-editor edit-link integration is deferred (DEF-UI-003).
         // Per the no-stubs rule, omitting the prop hides the affordance entirely until the
         // integration lands.

@@ -10,6 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   LinkedScrRefButton,
+  TabToolbar,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -403,6 +404,8 @@ export function ChecklistTool({
   onShowVerseTextChange,
   matchCountLabel,
   onRetry,
+  projectMenuData,
+  onSelectProjectMenuItem,
   onEditLinkClick,
   onGotoLinkClick,
 }: ChecklistToolProps) {
@@ -607,16 +610,22 @@ export function ChecklistTool({
 
   // ----- Render helpers -----
 
+  // TabToolbar's start/end area divs use `tw-items-start`, which top-aligns children — while the
+  // container itself uses `tw-items-center`. The hamburger (a direct container child) is therefore
+  // vertically centered against the 56px toolbar height, but our selectors / view-menu trigger
+  // (children of the area divs) end up top-aligned, creating a visible misalignment. Wrapping each
+  // render in our own `tw-h-full tw-items-center` flex restores horizontal alignment across the
+  // hamburger + selectors + view-menu trigger without touching the shared TabToolbar component.
   const renderToolbarStart = () => (
-    <>
+    <div className="tw-flex tw-h-full tw-flex-row tw-items-center tw-gap-1">
       {primaryProjectSelector}
       {comparativeTextsSelector}
       {verseRangeSelector}
-    </>
+    </div>
   );
 
   const renderToolbarEnd = () => (
-    <>
+    <div className="tw-flex tw-h-full tw-flex-row tw-items-center tw-gap-1">
       {/*
        * UX-2 finding #8: View toggles now live behind a single eye-icon
        * DropdownMenu button. Two checkbox items: Hide matches (disabled when
@@ -673,7 +682,7 @@ export function ChecklistTool({
           {matchCountLabel}
         </span>
       )}
-    </>
+    </div>
   );
 
   // Per Sebastian PR #2219 #3137366113: error and truncated/helpText banners use the SAME
@@ -783,23 +792,28 @@ export function ChecklistTool({
       aria-label={getLocalizedString('%markersChecklist_toolbar_aria%')}
     >
       {/*
-       * UX-2 finding #1: dropped the inner TabToolbar. Both the outer Platform tab
-       * chrome AND our inner toolbar showed the same hamburger menu items
-       * (Open Project Settings, Copy, Settings). The outer tab chromes hamburger
-       * now hosts our menu items via WebViewMenu.topMenu contributions (see WP6).
-       * Selectors and view toggles render here in a single sticky row.
+       * The outer Platform.Bible tab chrome is suppressed for this web view
+       * (shouldShowToolbar=false on the WebViewProvider), so the hamburger
+       * menu — Copy / Print / Save / Markers Inventory / Settings — is hosted
+       * directly on this inner TabToolbar. Menu items come from the
+       * `markersChecklist` WebViewMenu contribution (see menus.json) via the
+       * wiring layer's `useData(papi.menuData.dataProviderName).WebViewMenu`
+       * call, dispatched through `papi.commands.sendCommand` so WP6's
+       * CHECKLIST_COPY_REQUEST_EVENT plumbing remains the same regardless of
+       * whether dispatch originates from outside or inside the web view.
        *
-       * `projectMenuData` / `onSelectProjectMenuItem` props are kept on the
-       * component for now; WP6 wires them to the outer toolbar via menu
-       * contributions and removes the now-unused handler.
+       * (WP3 originally dropped this TabToolbar on the assumption the outer
+       * chrome would host the hamburger; reversing now that the outer chrome
+       * is hidden.)
        */}
-      <div
-        className="tw-sticky tw-top-0 tw-z-10 tw-flex tw-items-center tw-gap-2 tw-border-b tw-bg-background tw-px-2 tw-py-1"
-        data-testid="checklist-toolbar"
-      >
-        {renderToolbarStart()}
-        <div className="tw-flex-1" />
-        {renderToolbarEnd()}
+      <div className="tw-sticky tw-top-0 tw-z-10 tw-bg-background" data-testid="checklist-toolbar">
+        <TabToolbar
+          onSelectProjectMenuItem={onSelectProjectMenuItem ?? (() => undefined)}
+          onSelectViewInfoMenuItem={() => undefined}
+          projectMenuData={projectMenuData}
+          startAreaChildren={renderToolbarStart()}
+          endAreaChildren={renderToolbarEnd()}
+        />
       </div>
 
       {renderBanners()}
