@@ -90,7 +90,13 @@ describe('ChecklistTool — character-style rendering (UX-2 #19)', () => {
 });
 
 describe('ChecklistTool — match-row coloring (UX-2 #15)', () => {
-  it('applies tw-bg-primary to the reference cell when row.isMatch is true', () => {
+  it('applies a subtle tw-bg-primary/30 tint to the reference cell when row.isMatch is true', () => {
+    // Follow-up to WP2: the original `tw-bg-primary tw-text-primary-foreground` rendered as
+    // unreadable solid blocks (inner spans hardcode their own colors — `tw-text-foreground`,
+    // `tw-text-primary`, `tw-text-muted-foreground` — overriding the outer text-color cascade).
+    // Net effect: same color on same color = invisible content. The new contract is a 30%
+    // opacity tint (`tw-bg-primary/30`) with NO text-color override, so inner spans render in
+    // their default colors and stay readable in both light and dark modes.
     const matchRowData: ChecklistData = {
       ...baseData,
       rows: [makeRow({ isMatch: true })],
@@ -108,13 +114,14 @@ describe('ChecklistTool — match-row coloring (UX-2 #15)', () => {
     );
 
     // Reference cell wraps either a LinkedScrRefButton (when onGotoLinkClick is supplied) or
-    // plain text. Either way, the outer container should carry the match-color classes.
+    // plain text. Either way, the outer container should carry the subtle tint and NOT the
+    // obsolete `tw-text-primary-foreground` override.
     const refCell = screen.getByTestId('checklist-reference-cell');
-    expect(refCell.className).toContain('tw-bg-primary');
-    expect(refCell.className).toContain('tw-text-primary-foreground');
+    expect(refCell.className).toContain('tw-bg-primary/30');
+    expect(refCell.className).not.toContain('tw-text-primary-foreground');
   });
 
-  it('does NOT apply tw-bg-primary when row.isMatch is false', () => {
+  it('does NOT apply tw-bg-primary/30 when row.isMatch is false', () => {
     render(
       <ChecklistTool
         data={baseData}

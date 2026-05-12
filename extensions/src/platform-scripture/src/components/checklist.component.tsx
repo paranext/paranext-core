@@ -442,11 +442,20 @@ export function ChecklistTool({
       cell: ({ row: tableRow }) => {
         const rowData = tableRow.original;
         const ref = rowData.firstRef ?? '';
-        // UX-2 finding #15: match rows get a primary-color treatment on every cell (ref + project)
-        // so users can scan past them. Buttons inside inherit `tw-text-primary-foreground` via the
-        // outer span color cascade for affordances that don't set their own color explicitly.
-        const matchClasses = rowData.isMatch ? 'tw-bg-primary tw-text-primary-foreground' : '';
-        const containerClass = `tw-block tw-px-2 tw-py-2 ${matchClasses}`.trim();
+        // UX-2 finding #15 (follow-up): match rows get a subtle `tw-bg-primary/30` tint so users
+        // can scan past them. The original WP2 implementation used `tw-bg-primary
+        // tw-text-primary-foreground`, but inner spans hardcode their own text colors
+        // (`tw-text-foreground`, `tw-text-primary`, `tw-text-muted-foreground`) which override
+        // the outer text-color cascade — producing same-color-on-same-color (invisible content)
+        // in both light AND dark modes. The 30% opacity tint stays distinguishable while letting
+        // inner spans' default colors stay readable. The negative margin (`-tw-m-4`) +
+        // compensating padding (`tw-px-6 tw-py-6`) bleeds the tint past TableCell's built-in
+        // `tw-p-4` so the colored region reaches the cell borders (Rolf: "the colored region
+        // should reach the cell borders"). Non-match cells keep their original `tw-px-2 tw-py-2`
+        // since they have no bg color to extend.
+        const containerClass = rowData.isMatch
+          ? 'tw-block -tw-m-4 tw-px-6 tw-py-6 tw-bg-primary/30'
+          : 'tw-block tw-px-2 tw-py-2';
         // Sebastian PR #2219 #3137366113: "Make the scripture reference in the first column a
         // link button with the tooltip 'Go to {scrRef}' instead of the goto button". When a
         // goto callback is provided, render the ref as a `LinkedScrRefButton`; otherwise fall
@@ -506,14 +515,16 @@ export function ChecklistTool({
                 </span>
               );
             }
-            // UX-2 finding #15: match rows get the primary-color treatment so users can scan past
-            // them. Buttons inside (goto/edit) inherit tw-text-primary-foreground via the outer
-            // div's color cascade for affordances that don't set their own color explicitly.
-            const matchClasses = rowData.isMatch ? 'tw-bg-primary tw-text-primary-foreground' : '';
+            // UX-2 finding #15 (follow-up): match rows get a subtle `tw-bg-primary/30` tint that
+            // covers the full cell. See the ref column for the detailed rationale (same fix
+            // pattern: negative margin to bleed past TableCell's `tw-p-4`, compensating padding
+            // to restore content offset, and 30% opacity so inner spans' hardcoded colors stay
+            // readable in both light and dark modes).
+            const cellContainerClass = rowData.isMatch
+              ? 'tw-flex tw-flex-col tw-gap-1 -tw-m-4 tw-px-6 tw-py-6 tw-bg-primary/30'
+              : 'tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-py-2';
             return (
-              <div
-                className={`tw-flex tw-flex-col tw-gap-1 tw-px-2 tw-py-2 ${matchClasses}`.trim()}
-              >
+              <div className={cellContainerClass}>
                 <CellContent
                   cell={cell}
                   showVerseText={showVerseText}
