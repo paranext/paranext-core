@@ -25,6 +25,7 @@ import {
   useProjectDataProvider,
   useProjectSetting,
   useRecentScriptureRefs,
+  useSetting,
 } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { CommandHandlers, CommandNames } from 'papi-shared-types';
@@ -336,6 +337,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // Using || to make sure we get default if it is an empty string or if it is undefined
     return textDirectionPossiblyError || defaultTextDirection;
   }, [textDirectionPossiblyError]);
+
+  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
+
+  const isPowerMode = useMemo(() => {
+    if (isPlatformError(interfaceModePossiblyError)) return false;
+    return interfaceModePossiblyError === 'power';
+  }, [interfaceModePossiblyError]);
 
   const textDirectionEffective = useMemo(() => {
     // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
@@ -1627,6 +1635,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     );
   }
 
+  const bcvControls = isPowerMode ? (
+    <BookChapterControl
+      scrRef={scrRef}
+      handleSubmit={setScrRefWithScroll}
+      getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+      recentSearches={recentScriptureRefs}
+      onAddRecentSearch={addRecentScriptureRef}
+    />
+  ) : undefined;
+
   return (
     <div className="tw-flex tw-flex-col tw-h-screen">
       <TabToolbar
@@ -1636,13 +1654,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         className="scripture-editor-tab-nav tw-block tw-z-10"
         startAreaChildren={
           <>
-            <BookChapterControl
-              scrRef={scrRef}
-              handleSubmit={setScrRefWithScroll}
-              getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
-              recentSearches={recentScriptureRefs}
-              onAddRecentSearch={addRecentScriptureRef}
-            />
+            {bcvControls}
             {!isReadOnlyEffective && (
               <>
                 <UndoRedoButtons
