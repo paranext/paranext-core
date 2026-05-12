@@ -782,7 +782,13 @@ export function ScopeSelector({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               ref={setDropdownContentEl}
-              className="tw-w-[var(--radix-dropdown-menu-trigger-width)] tw-min-w-[12rem]"
+              // `tw-min-w-[14rem]` (224px) keeps the dropdown above the
+              // `DROPDOWN_NARROW_THRESHOLD_PX` (200) — accounting for the inner `tw-p-1`
+              // padding the content rect lands at ~216px, comfortably wider than 200. This
+              // ensures dropdown items show their scrRef suffixes (e.g. "Chapter: MAT 5") even
+              // when the trigger is sized down for a compact toolbar. Previously `12rem` (192px)
+              // sat below the threshold, hiding the suffixes.
+              className="tw-w-[var(--radix-dropdown-menu-trigger-width)] tw-min-w-[14rem]"
               align="start"
             >
               <PopoverPortalContainerProvider container={dropdownContentEl}>
