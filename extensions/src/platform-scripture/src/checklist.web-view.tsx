@@ -888,6 +888,22 @@ function ChecklistContent({
 
   const handleScopeChange = useCallback(
     (newScope: ScopeWithRange) => {
+      // The "Choose specific books" scope (selectedBooks) is surfaced in the dropdown to match
+      // PR #2212's Dropdown Variant design, but the backend's ChecklistRequest.verseRange only
+      // models a contiguous start/end ScriptureRange — non-contiguous book sets aren't yet
+      // supported end-to-end. Surface a Sonner toast and DON'T commit the scope change so the
+      // checklist falls back to whatever scope was previously active.
+      if (newScope === 'selectedBooks') {
+        papi.notifications
+          .send({
+            severity: 'info',
+            message: '%markersChecklist_selectedBooks_notImplemented%',
+          })
+          .catch((err) =>
+            logger.debug(`ChecklistWebView: selectedBooks toast failed: ${getErrorMessage(err)}`),
+          );
+        return;
+      }
       // Auto-follow: verseRange is derived via the effect below from {scope, liveScrRef,
       // rangeStart, rangeEnd}. handleScopeChange just commits the new mode.
       setScope(newScope);
@@ -1053,13 +1069,23 @@ function ChecklistContent({
         <ScopeSelector
           variant="dropdown"
           scope={scope}
-          availableScopes={['verse', 'chapter', 'book', 'range']}
+          // `selectedBooks` is surfaced for UI parity with the PR #2212 Dropdown Variant, but
+          // intercepted in handleScopeChange with a "not yet supported" toast (the backend's
+          // verseRange contract only supports contiguous start/end ranges).
+          availableScopes={['verse', 'chapter', 'book', 'selectedBooks', 'range']}
           onScopeChange={handleScopeChange}
           availableBookInfo={booksPresent}
           selectedBookIds={selectedBookIds}
           onSelectedBookIdsChange={setSelectedBookIds}
           localizedStrings={scopeSelectorLocalizedStrings}
           currentScrRef={liveScrRef}
+          // Wiring the "Navigate" footer in the dropdown variant. The ScopeSelector renders
+          // the footer only when this callback is supplied; broadcasting through
+          // setLiveScrRef updates everything bound to the scroll group (the checklist tracks
+          // its own currentScrRef via useWebViewScrollGroupScrRef). We deliberately do NOT
+          // also raise the editor tab here (unlike handleGotoLinkClick below) — that would
+          // steal focus from the checklist on every Navigate-footer interaction.
+          onCurrentScrRefChange={setLiveScrRef}
           rangeStart={rangeStart}
           rangeEnd={rangeEnd}
           onRangeStartChange={handleRangeStartChange}
@@ -1078,6 +1104,7 @@ function ChecklistContent({
       setSelectedBookIds,
       scopeSelectorLocalizedStrings,
       liveScrRef,
+      setLiveScrRef,
       rangeStart,
       rangeEnd,
       handleRangeStartChange,
