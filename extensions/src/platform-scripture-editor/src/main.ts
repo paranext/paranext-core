@@ -50,17 +50,6 @@ let selectionChangedEventEmitter: PlatformEventEmitter<SelectionChangeEvent> | u
 
 // #endregion Editor Selection Tracking
 
-/**
- * Tab/webView id of the Scripture Editor pre-allocated by the renderer's `simpleLayout` in column
- * 2. When `openScriptureEditor` is invoked and this editor exists with no `projectId`, we open the
- * new project-bound editor via `openWebView` with `{ type: 'replace-tab', targetTabId }` so it
- * takes the empty editor's slot instead of opening as a sibling tab.
- *
- * Must match `simple-layout.data.ts`'s hardcoded id. Two source files hold the same UUID because
- * cross-package imports (renderer → extensions) aren't supported here.
- */
-const SIMPLE_LAYOUT_SCRIPTURE_EDITOR_TAB_ID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
-
 interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   isReadOnly: boolean;
@@ -196,21 +185,16 @@ async function open(
     projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
   if (projectForWebView.projectId) {
-    // If the caller didn't ask for a specific tab to replace, check whether the simple-layout
-    // pre-allocated an empty Scripture Editor (no projectId). If so, target that tab so the
-    // new project-bound editor takes its slot, rather than opening as a sibling tab.
+    // If the caller didn't ask for a specific tab to replace, check whether any Scripture Editor
+    // is already open with no project. If so, replace it rather than opening a sibling tab —
+    // this prevents project opens from accumulating extra tabs when an empty editor slot exists.
     let tabIdToReplace = existingTabIdToReplace;
     if (!tabIdToReplace) {
-      const existingDef = await papi.webViews.getOpenWebViewDefinition(
-        SIMPLE_LAYOUT_SCRIPTURE_EDITOR_TAB_ID,
+      const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+      const emptyEditor = allOpenDefs.find(
+        (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.projectId,
       );
-      if (
-        existingDef &&
-        existingDef.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE &&
-        !existingDef.projectId
-      ) {
-        tabIdToReplace = SIMPLE_LAYOUT_SCRIPTURE_EDITOR_TAB_ID;
-      }
+      if (emptyEditor) tabIdToReplace = emptyEditor.id;
     }
     const openWebViewOptions: PlatformScriptureEditorOptions = {
       projectId: projectForWebView.projectId,
