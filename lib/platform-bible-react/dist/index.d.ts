@@ -1748,6 +1748,10 @@ export type UiLanguageSelectorProps = {
  * @param {UiLanguageSelectorProps} props - The props for the component.
  */
 export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * @deprecated Use {@link CheckboxGroupProps} instead. `ChecklistProps` is kept as the existing
+ *   export for backward compatibility and will be removed in a future release.
+ */
 export type ChecklistProps = {
 	/** Optional string representing the id attribute of the Checklist */
 	id?: string;
@@ -1781,8 +1785,17 @@ export type ChecklistProps = {
 	 */
 	createComplexLabel?: (item: string) => React$1.ReactNode;
 };
-/** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
+/**
+ * Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array.
+ *
+ * @deprecated Use {@link CheckboxGroup} instead. `Checklist` is kept as the existing export for
+ *   backward compatibility and will be removed in a future release.
+ */
 export declare function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+/** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
+export declare const CheckboxGroup: typeof Checklist;
+/** Props for {@link CheckboxGroup}. */
+export type CheckboxGroupProps = ChecklistProps;
 /**
  * The Popover component displays rich content in a portal, triggered by a button. This component is
  * built on Radix UI's Popover component and styled by Shadcn UI.

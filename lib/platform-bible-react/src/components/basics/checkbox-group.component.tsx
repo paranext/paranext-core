@@ -2,6 +2,10 @@ import { Checkbox } from '@/components/shadcn-ui/checkbox';
 import { ReactNode } from 'react';
 import SmartLabel from './smart-label.component';
 
+/**
+ * @deprecated Use {@link CheckboxGroupProps} instead. `ChecklistProps` is kept as the existing
+ *   export for backward compatibility and will be removed in a future release.
+ */
 export type ChecklistProps = {
   /** Optional string representing the id attribute of the Checklist */
   id?: string;
@@ -38,7 +42,12 @@ export type ChecklistProps = {
   createComplexLabel?: (item: string) => ReactNode;
 };
 
-/** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
+/**
+ * Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array.
+ *
+ * @deprecated Use {@link CheckboxGroup} instead. `Checklist` is kept as the existing export for
+ *   backward compatibility and will be removed in a future release.
+ */
 export function Checklist({
   id,
   className,
@@ -69,3 +78,9 @@ export function Checklist({
 }
 
 export default Checklist;
+
+/** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
+export const CheckboxGroup = Checklist;
+
+/** Props for {@link CheckboxGroup}. */
+export type CheckboxGroupProps = ChecklistProps;
