@@ -1,4 +1,4 @@
-import { DblResourceData } from 'platform-bible-utils';
+import { DblResourceData, ResourceType } from 'platform-bible-utils';
 
 export const SAMPLE_RESOURCES: DblResourceData[] = [
   // Already Selected (IDs match SAMPLE_SELECTED_IDS)
@@ -106,3 +106,37 @@ export const SAMPLE_RESOURCES: DblResourceData[] = [
 ];
 
 export const SAMPLE_SELECTED_IDS: string[] = ['selected-1', 'selected-2'];
+
+const GENERATED_LANGUAGES = [
+  'English',
+  'Spanish',
+  'French',
+  'Arabic',
+  'Hindi',
+  'Portuguese',
+  'Swahili',
+  'Mandarin',
+  'Russian',
+  'German',
+];
+const GENERATED_TYPES: ResourceType[] = [
+  'ScriptureResource',
+  'SourceLanguageResource',
+  'XmlResource',
+];
+
+function generateResources(count: number): DblResourceData[] {
+  return Array.from({ length: count }, (_, i) => ({
+    dblEntryUid: `gen-${i}`,
+    displayName: `RES-${i}`,
+    fullName: `Generated Resource ${i}`,
+    bestLanguageName: GENERATED_LANGUAGES[i % GENERATED_LANGUAGES.length],
+    type: GENERATED_TYPES[i % GENERATED_TYPES.length],
+    size: 5_000_000 + i * 1000,
+    installed: false,
+    updateAvailable: false,
+    projectId: `prj-gen-${i}`,
+  }));
+}
+
+export const LARGE_SAMPLE_RESOURCES: DblResourceData[] = generateResources(2500);

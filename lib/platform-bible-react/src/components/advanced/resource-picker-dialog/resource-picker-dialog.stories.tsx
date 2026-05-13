@@ -3,7 +3,7 @@ import { Dialog } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
 } from './resource-picker-dialog.component';
-import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker-dialog.data';
+import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS, LARGE_SAMPLE_RESOURCES } from './resource-picker-dialog.data';
 
 const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_title%': 'Resource picker',
@@ -57,6 +57,13 @@ export const NoResults: Story = {
 
 export const EmptyAlreadySelected: Story = {
   args: {
+    selectedResourceIds: [],
+  },
+};
+
+export const LargeResourceList: Story = {
+  args: {
+    allResources: LARGE_SAMPLE_RESOURCES,
     selectedResourceIds: [],
   },
 };
