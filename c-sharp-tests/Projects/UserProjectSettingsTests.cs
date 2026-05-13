@@ -25,8 +25,7 @@ public class UserProjectSettingsTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private UserProjectSettings CreateSettings(string userId = "TestUser") =>
-        new(_tempDir, userId);
+    private UserProjectSettings CreateSettings(string userId = "TestUser") => new(_tempDir, userId);
 
     // --- GetSetting: file absent ---
 
@@ -70,11 +69,15 @@ public class UserProjectSettingsTests
     public void SetThenGet_RoundTripsVersionAndContent()
     {
         var settings = CreateSettings();
-        var content = new XElement("Items",
-            new XElement("Item",
+        var content = new XElement(
+            "Items",
+            new XElement(
+                "Item",
                 new XAttribute("type", "project"),
                 new XAttribute("name", "ESV"),
-                new XAttribute("id", "aabb")));
+                new XAttribute("id", "aabb")
+            )
+        );
 
         settings.SetSetting("ModelTexts", "1.0.0", content);
         var (version, retrieved) = settings.GetSetting("ModelTexts");
@@ -82,7 +85,10 @@ public class UserProjectSettingsTests
         Assert.That(version, Is.EqualTo("1.0.0"));
         Assert.That(retrieved, Is.Not.Null);
         Assert.That(retrieved!.Elements("Item").Count(), Is.EqualTo(1));
-        Assert.That(retrieved.Elements("Item").Single().Attribute("name")?.Value, Is.EqualTo("ESV"));
+        Assert.That(
+            retrieved.Elements("Item").Single().Attribute("name")?.Value,
+            Is.EqualTo("ESV")
+        );
     }
 
     // --- SetSetting: updates existing element ---
@@ -91,13 +97,38 @@ public class UserProjectSettingsTests
     public void SetSetting_CalledTwice_UpdatesElement()
     {
         var settings = CreateSettings();
-        settings.SetSetting("ModelTexts", "1.0.0", new XElement("Items",
-            new XElement("Item", new XAttribute("type", "project"), new XAttribute("name", "First"), new XAttribute("id", "111"))));
-        settings.SetSetting("ModelTexts", "1.0.0", new XElement("Items",
-            new XElement("Item", new XAttribute("type", "project"), new XAttribute("name", "Second"), new XAttribute("id", "222"))));
+        settings.SetSetting(
+            "ModelTexts",
+            "1.0.0",
+            new XElement(
+                "Items",
+                new XElement(
+                    "Item",
+                    new XAttribute("type", "project"),
+                    new XAttribute("name", "First"),
+                    new XAttribute("id", "111")
+                )
+            )
+        );
+        settings.SetSetting(
+            "ModelTexts",
+            "1.0.0",
+            new XElement(
+                "Items",
+                new XElement(
+                    "Item",
+                    new XAttribute("type", "project"),
+                    new XAttribute("name", "Second"),
+                    new XAttribute("id", "222")
+                )
+            )
+        );
 
         var (_, content) = settings.GetSetting("ModelTexts");
-        Assert.That(content!.Elements("Item").Single().Attribute("name")?.Value, Is.EqualTo("Second"));
+        Assert.That(
+            content!.Elements("Item").Single().Attribute("name")?.Value,
+            Is.EqualTo("Second")
+        );
     }
 
     // --- Multiple settings coexist ---
@@ -106,16 +137,72 @@ public class UserProjectSettingsTests
     public void SetSetting_TwoDistinctSettings_BothPersistedIndependently()
     {
         var settings = CreateSettings();
-        settings.SetSetting("ModelTexts", "1.0.0", new XElement("Items",
-            new XElement("Item", new XAttribute("type", "project"), new XAttribute("name", "A"), new XAttribute("id", "aaa"))));
-        settings.SetSetting("ReferencedProjectsAndResources", "1.0.0", new XElement("Items",
-            new XElement("Item", new XAttribute("type", "project"), new XAttribute("name", "B"), new XAttribute("id", "bbb"))));
+        settings.SetSetting(
+            "ModelTexts",
+            "1.0.0",
+            new XElement(
+                "Items",
+                new XElement(
+                    "Item",
+                    new XAttribute("type", "project"),
+                    new XAttribute("name", "A"),
+                    new XAttribute("id", "aaa")
+                )
+            )
+        );
+        settings.SetSetting(
+            "ReferencedProjectsAndResources",
+            "1.0.0",
+            new XElement(
+                "Items",
+                new XElement(
+                    "Item",
+                    new XAttribute("type", "project"),
+                    new XAttribute("name", "B"),
+                    new XAttribute("id", "bbb")
+                )
+            )
+        );
 
         var (_, modelContent) = settings.GetSetting("ModelTexts");
         var (_, refContent) = settings.GetSetting("ReferencedProjectsAndResources");
 
-        Assert.That(modelContent!.Elements("Item").Single().Attribute("name")?.Value, Is.EqualTo("A"));
-        Assert.That(refContent!.Elements("Item").Single().Attribute("name")?.Value, Is.EqualTo("B"));
+        Assert.That(
+            modelContent!.Elements("Item").Single().Attribute("name")?.Value,
+            Is.EqualTo("A")
+        );
+        Assert.That(
+            refContent!.Elements("Item").Single().Attribute("name")?.Value,
+            Is.EqualTo("B")
+        );
+    }
+
+    // --- Persistence across instances ---
+
+    [Test]
+    public void GetSetting_FreshInstance_ReadsPersistedDataFromDisk()
+    {
+        var first = CreateSettings();
+        first.SetSetting(
+            "ModelTexts",
+            "1.0.0",
+            new XElement(
+                "Items",
+                new XElement(
+                    "Item",
+                    new XAttribute("type", "project"),
+                    new XAttribute("name", "ESV"),
+                    new XAttribute("id", "aabb")
+                )
+            )
+        );
+
+        var second = CreateSettings();
+        var (version, content) = second.GetSetting("ModelTexts");
+
+        Assert.That(version, Is.EqualTo("1.0.0"));
+        Assert.That(content, Is.Not.Null);
+        Assert.That(content!.Elements("Item").Single().Attribute("name")?.Value, Is.EqualTo("ESV"));
     }
 
     // --- Different users have separate files ---
@@ -126,15 +213,43 @@ public class UserProjectSettingsTests
         var alice = new UserProjectSettings(_tempDir, "Alice");
         var bob = new UserProjectSettings(_tempDir, "Bob");
 
-        alice.SetSetting("ModelTexts", "1.0.0", new XElement("Items",
-            new XElement("Item", new XAttribute("type", "project"), new XAttribute("name", "AliceProj"), new XAttribute("id", "aaa"))));
-        bob.SetSetting("ModelTexts", "1.0.0", new XElement("Items",
-            new XElement("Item", new XAttribute("type", "project"), new XAttribute("name", "BobProj"), new XAttribute("id", "bbb"))));
+        alice.SetSetting(
+            "ModelTexts",
+            "1.0.0",
+            new XElement(
+                "Items",
+                new XElement(
+                    "Item",
+                    new XAttribute("type", "project"),
+                    new XAttribute("name", "AliceProj"),
+                    new XAttribute("id", "aaa")
+                )
+            )
+        );
+        bob.SetSetting(
+            "ModelTexts",
+            "1.0.0",
+            new XElement(
+                "Items",
+                new XElement(
+                    "Item",
+                    new XAttribute("type", "project"),
+                    new XAttribute("name", "BobProj"),
+                    new XAttribute("id", "bbb")
+                )
+            )
+        );
 
         var (_, aliceContent) = alice.GetSetting("ModelTexts");
         var (_, bobContent) = bob.GetSetting("ModelTexts");
 
-        Assert.That(aliceContent!.Elements("Item").Single().Attribute("name")?.Value, Is.EqualTo("AliceProj"));
-        Assert.That(bobContent!.Elements("Item").Single().Attribute("name")?.Value, Is.EqualTo("BobProj"));
+        Assert.That(
+            aliceContent!.Elements("Item").Single().Attribute("name")?.Value,
+            Is.EqualTo("AliceProj")
+        );
+        Assert.That(
+            bobContent!.Elements("Item").Single().Attribute("name")?.Value,
+            Is.EqualTo("BobProj")
+        );
     }
 }

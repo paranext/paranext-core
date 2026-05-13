@@ -8,14 +8,12 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 internal sealed class UserProjectSettings
 {
-    private readonly string _userId;
     private readonly string _filePath;
     private XDocument? _document;
     private readonly object _lock = new();
 
     public UserProjectSettings(string projectDirectory, string userId)
     {
-        _userId = userId;
         _filePath = Path.Combine(projectDirectory, "Extensions", $"UserSettings-{userId}.xml");
     }
 
@@ -34,8 +32,8 @@ internal sealed class UserProjectSettings
                 return (null, null);
 
             string? version = settingEl.Attribute("dataSchemaVersion")?.Value;
-            XElement? content = settingEl.Element("Items");
-            return (version, content);
+            XElement? contentEl = settingEl.Element("Items");
+            return (version, contentEl is not null ? new XElement(contentEl) : null);
         }
     }
 
