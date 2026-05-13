@@ -73,4 +73,15 @@ describe('useProgressiveList', () => {
     expect(result.current.visibleItems).toHaveLength(20);
     expect(result.current.hasMore).toBe(false);
   });
+
+  it('does not advance the page when the sentinel fires with isIntersecting false', () => {
+    const items = makeItems(120);
+    const { result } = renderHook(() => useProgressiveList(items, 50));
+
+    act(() => {
+      ioCallback([{ isIntersecting: false } as IntersectionObserverEntry]);
+    });
+
+    expect(result.current.visibleItems).toHaveLength(50);
+  });
 });
