@@ -1,4 +1,14 @@
-import { createElement, CSSProperties, ReactNode } from 'react';
+import {
+  createContext,
+  createElement,
+  CSSProperties,
+  ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import DockLayout, { DockMode, LayoutData, TabData, TabGroup } from 'rc-dock';
 import {
   ArrowLeft,
@@ -26,16 +36,59 @@ import {
   User,
 } from 'lucide-react';
 import {
+  BookChapterControl,
   Button,
   Input,
+  ScrollGroupSelector,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  TabToolbar,
+  Toolbar,
 } from 'platform-bible-react';
+import {
+  defaultScrRef,
+  getLocalizeKeyForScrollGroupId,
+  Localized,
+  MultiColumnMenu,
+  ScrollGroupId,
+} from 'platform-bible-utils';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Editorial } from '@eten-tech-foundation/platform-editor';
+import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import 'rc-dock/dist/rc-dock.css';
 import '../../renderer/components/docking/dock-layout-wrapper.component.scss';
+// Bring in the same USJ node + nodes-menu styling used by the editorial stories
+// in platform-bible-react. We skip `editor.css` and `editor-overrides.css`
+// because they reference toolbar icon SVGs via absolute URLs (e.g.
+// `/assets/images/icons/…`) that paranext-core's webpack css-loader can't
+// resolve. Those icons are only used by the built-in editor toolbar, which we
+// aren't rendering. The minimal editor wrapper styles those files would have
+// provided are inlined below in `EDITOR_WRAPPER_STYLE`.
+import '../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css';
+import '../../../lib/platform-bible-react/src/components/demo/scripture-editor/nodes-menu.css';
+
+/* Equivalent to the safe (icon-free) subset of editor.css copied from
+ * https://github.com/eten-tech-foundation/scripture-editors/blob/platform_v0.8.1/packages/platform/src/editor/editor.css
+ * — enough to give the Lexical editor a readable layout without depending on
+ * the toolbar icons. */
+const EDITOR_WRAPPER_STYLE = `
+  .editor-container { color: #000; position: relative; line-height: 20px; font-weight: 400; text-align: start; }
+  .editor-toolbar-container-readonly { display: none; }
+  .editor-toolbar-container-editable { display: inline; }
+  .editor-inner { background: #fff; position: relative; }
+  .editor-input { min-height: 150px; font-size: 15px; position: relative; tab-size: 1; outline: 0; padding: 15px 10px; flex: auto; }
+  .editor-input > p { direction: inherit; margin-top: 0; margin-bottom: 0; line-height: 1.5; }
+  .editor-text-bold { font-weight: bold; }
+  .editor-text-italic { font-style: italic; }
+  .editor-text-underline { text-decoration: underline; }
+  .editor-text-strikethrough { text-decoration: line-through; }
+  .editor-text-underlineStrikethrough { text-decoration: underline line-through; }
+  .editor-text-code { background-color: rgb(240, 242, 245); padding: 1px 0.25rem; font-family: Menlo, Consolas, Monaco, monospace; font-size: 94%; }
+  .editor-link { color: rgb(33, 111, 219); text-decoration: none; }
+`;
 
 /* ============================================================================
  * Constants — group names mirror `TAB_GROUP` in
@@ -114,6 +167,61 @@ export const SIMPLE_GROUPS: { [key: string]: TabGroup } = {
 export const dockStyle: CSSProperties = { flex: 1, minHeight: 0 };
 
 /* ============================================================================
+ * Interactive context — when present, mock pills (Genesis 1:0 / A ▾) and the
+ * mock chrome bar render their interactive component equivalents
+ * (BookChapterControl, ScrollGroupSelector, Toolbar-with-menubar). The
+ * Default/NoPadding stories don't provide this, so they keep the static UI.
+ * ========================================================================== */
+
+type InteractiveState = {
+  scrRef: SerializedVerseRef;
+  setScrRef: (scrRef: SerializedVerseRef) => void;
+  scrollGroupId: ScrollGroupId | undefined;
+  setScrollGroupId: (id: ScrollGroupId | undefined) => void;
+};
+
+const InteractiveContext = createContext<InteractiveState | undefined>(undefined);
+
+function InteractiveStateProvider({ children }: { children: ReactNode }) {
+  const [scrRef, setScrRef] = useState<SerializedVerseRef>(defaultScrRef);
+  const [scrollGroupId, setScrollGroupId] = useState<ScrollGroupId | undefined>(0);
+  const value = useMemo<InteractiveState>(
+    () => ({ scrRef, setScrRef, scrollGroupId, setScrollGroupId }),
+    [scrRef, scrollGroupId],
+  );
+  return <InteractiveContext.Provider value={value}>{children}</InteractiveContext.Provider>;
+}
+
+const SCROLL_GROUP_LOCALIZED_STRINGS = {
+  [getLocalizeKeyForScrollGroupId('undefined')]: 'Ø',
+  [getLocalizeKeyForScrollGroupId(0)]: 'A',
+  [getLocalizeKeyForScrollGroupId(1)]: 'B',
+  [getLocalizeKeyForScrollGroupId(2)]: 'C',
+  [getLocalizeKeyForScrollGroupId(3)]: 'D',
+  [getLocalizeKeyForScrollGroupId(4)]: 'E',
+};
+
+function InteractiveChapterAndScopeRow({
+  scrRef,
+  setScrRef,
+  scrollGroupId,
+  setScrollGroupId,
+}: InteractiveState) {
+  return (
+    <div className="tw:flex tw:items-center tw:gap-2 tw:px-1 tw:pb-2">
+      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+      <ScrollGroupSelector
+        availableScrollGroupIds={[undefined, 0, 1, 2, 3, 4]}
+        localizedStrings={SCROLL_GROUP_LOCALIZED_STRINGS}
+        scrollGroupId={scrollGroupId}
+        onChangeScrollGroupId={setScrollGroupId}
+        size="sm"
+      />
+    </div>
+  );
+}
+
+/* ============================================================================
  * Reusable building blocks
  * ========================================================================== */
 
@@ -146,6 +254,8 @@ function PillButton({ children }: { children: ReactNode }) {
 }
 
 function ChapterAndScopeRow() {
+  const interactive = useContext(InteractiveContext);
+  if (interactive) return <InteractiveChapterAndScopeRow {...interactive} />;
   return (
     <div className="tw:flex tw:items-center tw:gap-2 tw:px-1 tw:pb-2">
       <PillButton>Genesis 1:0</PillButton>
@@ -958,6 +1068,157 @@ function ChecksTabContent() {
 }
 
 /* ============================================================================
+ * Interactive scripture editor panels — replace the two left OHEB/OGRK mock
+ * panels in the Interactive story. Both editors share scrRef with the chrome
+ * bar via `InteractiveContext`.
+ * ========================================================================== */
+
+/** Minimal USJ sample shared by both editor panels (Genesis 1, two verses). */
+const SAMPLE_USJ: Usj = {
+  type: USJ_TYPE,
+  version: USJ_VERSION,
+  content: [
+    { type: 'book', marker: 'id', code: 'GEN', content: ['Genesis'] },
+    { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [
+        { type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' },
+        'In the beginning, God created the heavens and the earth.',
+        { type: 'verse', marker: 'v', number: '2', sid: 'GEN 1:2' },
+        'The earth was without form and void, and darkness was over the face of the deep.',
+      ],
+    },
+  ],
+};
+
+const EDITOR_READONLY = { isReadonly: true };
+const EDITOR_EDITABLE = { isReadonly: false };
+
+function useInteractiveOrThrow(): InteractiveState {
+  const ctx = useContext(InteractiveContext);
+  if (!ctx) throw new Error('Interactive editor panels require InteractiveStateProvider');
+  return ctx;
+}
+
+/**
+ * Force `contenteditable="false"` on every editable element inside the given container, and keep it
+ * that way via a MutationObserver. Needed because `Editorial` mutates a module-level
+ * `editorConfig.editable` shared between all instances — so when a read-only and an editable editor
+ * coexist in the same JS context (as we do in this story), the editable one wins.
+ */
+function useEnforceReadonly(containerRef: { current: HTMLDivElement | undefined }) {
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return undefined;
+    const forceReadonly = () => {
+      container.querySelectorAll('[contenteditable="true"]').forEach((el) => {
+        el.setAttribute('contenteditable', 'false');
+      });
+    };
+    forceReadonly();
+    const observer = new MutationObserver(forceReadonly);
+    observer.observe(container, {
+      attributes: true,
+      attributeFilter: ['contenteditable'],
+      subtree: true,
+      childList: true,
+    });
+    return () => observer.disconnect();
+  }, [containerRef]);
+}
+
+function ReadOnlyScripturePanel() {
+  const { scrRef, setScrRef } = useInteractiveOrThrow();
+  // Following the project pattern in platform-tab-title.component.tsx: non-null
+  // assertion on `undefined` so the ref types align with the DOM ref expectations
+  // without using `null`.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const containerRef = useRef<HTMLDivElement>(undefined!);
+  useEnforceReadonly(containerRef);
+  return (
+    <div className="tw:flex tw:h-full tw:flex-col">
+      <ChapterAndScopeRow />
+      <div ref={containerRef} className="tw:flex-1 tw:overflow-auto tw:rounded-md tw:bg-background">
+        <Editorial
+          defaultUsj={SAMPLE_USJ}
+          scrRef={scrRef}
+          onScrRefChange={setScrRef}
+          options={EDITOR_READONLY}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* Minimal TabToolbar menu data — just enough to make the toolbar render.
+ * Menu keys must use the `namespace.id` dotted format required by
+ * `MultiColumnMenu` (template literal type). */
+const tabProjectMenuData: Localized<MultiColumnMenu> = {
+  columns: { 'exampl.project': { label: 'Project', order: 1 } },
+  groups: { 'exampl.projectGeneral': { column: 'exampl.project', order: 1 } },
+  items: [
+    {
+      label: 'Project Settings',
+      group: 'exampl.projectGeneral',
+      order: 1,
+      command: 'exampl.openProjectSettings',
+      localizeNotes: '',
+    },
+  ],
+};
+
+const tabViewMenuData: Localized<MultiColumnMenu> = {
+  columns: { 'exampl.view': { label: 'View', order: 1 } },
+  groups: { 'exampl.viewOptions': { column: 'exampl.view', order: 1 } },
+  items: [
+    {
+      label: 'Toggle Markers',
+      group: 'exampl.viewOptions',
+      order: 1,
+      command: 'exampl.toggleMarkers',
+      localizeNotes: '',
+    },
+  ],
+};
+
+function ExamplProjectPanel() {
+  const { scrRef, setScrRef, scrollGroupId, setScrollGroupId } = useInteractiveOrThrow();
+  return (
+    <div className="tw:flex tw:h-full tw:flex-col">
+      <div className="tw:flex tw:items-center tw:gap-2 tw:px-1 tw:pb-1 tw:text-xs tw:font-semibold tw:tracking-wide tw:text-muted-foreground tw:uppercase">
+        EXAMPL · Example Project
+      </div>
+      <TabToolbar
+        projectMenuData={tabProjectMenuData}
+        tabViewMenuData={tabViewMenuData}
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        startAreaChildren={<BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />}
+        endAreaChildren={
+          <ScrollGroupSelector
+            availableScrollGroupIds={[undefined, 0, 1, 2, 3, 4]}
+            localizedStrings={SCROLL_GROUP_LOCALIZED_STRINGS}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+            size="sm"
+          />
+        }
+      />
+      <div className="tw:mt-2 tw:flex-1 tw:overflow-auto tw:rounded-md tw:bg-background">
+        <Editorial
+          defaultUsj={SAMPLE_USJ}
+          scrRef={scrRef}
+          onScrRefChange={setScrRef}
+          options={EDITOR_EDITABLE}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
  * Chrome bars
  * ========================================================================== */
 
@@ -1325,7 +1586,197 @@ export const SIMPLE_LAYOUT: LayoutData = {
   },
 };
 
+/* Interactive layout = same shape as POWER_LAYOUT but the two left OHEB/OGRK
+ * panels are replaced with real scripture editors (read-only on top, editable
+ * with TabToolbar on the bottom for the EXAMPL project). The other three
+ * columns reuse the same mock panels — they pick up the interactive chapter
+ * row automatically via `InteractiveContext`. */
+export const POWER_INTERACTIVE_LAYOUT: LayoutData = {
+  dockbox: {
+    mode: 'horizontal' as DockMode,
+    children: [
+      {
+        mode: 'vertical',
+        size: 360,
+        children: [
+          {
+            group: TAB_GROUP,
+            tabs: [
+              {
+                id: 'oheb-ogrk-readonly',
+                title: 'OHEB/OGRK',
+                content: <ReadOnlyScripturePanel />,
+                group: TAB_GROUP,
+              },
+            ] as TabData[],
+          },
+          {
+            group: TAB_GROUP,
+            tabs: [
+              {
+                id: 'exampl-project',
+                title: 'EXAMPL',
+                content: <ExamplProjectPanel />,
+                group: TAB_GROUP,
+              },
+            ] as TabData[],
+          },
+        ],
+      },
+      {
+        mode: 'vertical',
+        size: 280,
+        children: [
+          {
+            group: TAB_GROUP,
+            tabs: [
+              {
+                id: 'checks-empty',
+                title: 'Checks',
+                content: <ChecksPanelEmpty />,
+                group: TAB_GROUP,
+              },
+            ] as TabData[],
+          },
+          {
+            group: TAB_GROUP,
+            tabs: [
+              {
+                id: 'checks-results',
+                title: 'Checks',
+                content: <ChecksPanelWithResults />,
+                group: TAB_GROUP,
+              },
+            ] as TabData[],
+          },
+        ],
+      },
+      {
+        mode: 'vertical',
+        size: 540,
+        children: [
+          {
+            group: TAB_GROUP,
+            tabs: [
+              {
+                id: 'parallel-resources',
+                title: 'BDS, DBL_MB1840, DBLP_SCHLA2000, DBLR_GNB_NR_2000',
+                content: <ParallelResourcesPanel />,
+                group: TAB_GROUP,
+              },
+            ] as TabData[],
+          },
+          {
+            group: TAB_GROUP,
+            tabs: [
+              {
+                id: 'markers-inventory',
+                title: 'Markers Inventory: HPUXK',
+                content: <MarkersInventoryPanel />,
+                group: TAB_GROUP,
+              },
+            ] as TabData[],
+          },
+        ],
+      },
+      {
+        group: TAB_GROUP,
+        size: 360,
+        tabs: [
+          {
+            id: 'dictionary',
+            title: 'Dictionary: SDBH/SDBG',
+            content: <DictionaryPanel />,
+            group: TAB_GROUP,
+          },
+        ] as TabData[],
+      },
+    ],
+  },
+};
+
 /* eslint-enable no-type-assertion/no-type-assertion */
+
+/* ============================================================================
+ * Interactive chrome bar — uses `Toolbar` from platform-bible-react which
+ * provides a real PlatformMenubar in place of the "Paratext"/"Help" text.
+ * The chrome's BCV + scroll group selector share state with all interactive
+ * ChapterAndScopeRows via `InteractiveContext`.
+ * ========================================================================== */
+
+const mainMenuData: Localized<MultiColumnMenu> = {
+  columns: {
+    'platform.app': { label: 'Paratext', order: 1 },
+    'platform.help': { label: 'Help', order: 2 },
+  },
+  groups: {
+    'platform.appGeneral': { column: 'platform.app', order: 1 },
+    'platform.helpGeneral': { column: 'platform.help', order: 1 },
+  },
+  items: [
+    {
+      label: 'Open Home…',
+      group: 'platform.appGeneral',
+      order: 1,
+      command: 'platform.openHome',
+      localizeNotes: '',
+    },
+    {
+      label: 'Settings',
+      group: 'platform.appGeneral',
+      order: 2,
+      command: 'platform.openSettings',
+      localizeNotes: '',
+    },
+    {
+      label: 'About Platform.Bible',
+      group: 'platform.helpGeneral',
+      order: 1,
+      command: 'platform.about',
+      localizeNotes: '',
+    },
+  ],
+};
+
+function PowerInteractiveChromeBar() {
+  const { scrRef, setScrRef, scrollGroupId, setScrollGroupId } = useInteractiveOrThrow();
+  return (
+    <Toolbar
+      className="tw:h-10 tw:border-0"
+      menuData={mainMenuData}
+      onSelectMenuItem={() => {}}
+      appMenuAreaChildren={
+        <div className="tw:flex tw:size-6 tw:items-center tw:justify-center tw:rounded tw:bg-primary tw:text-primary-foreground">
+          <span className="tw:text-xs tw:font-bold">P</span>
+        </div>
+      }
+      configAreaChildren={
+        <>
+          <Button variant="ghost" size="icon" className="tw:size-7">
+            <Home className="tw:size-4" />
+          </Button>
+          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+          <ScrollGroupSelector
+            availableScrollGroupIds={[undefined, 0, 1, 2, 3, 4]}
+            localizedStrings={SCROLL_GROUP_LOCALIZED_STRINGS}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+            size="sm"
+          />
+          <Button variant="ghost" size="icon" className="tw:size-7">
+            <Moon className="tw:size-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="tw:size-7">
+            <Network className="tw:size-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="tw:size-7">
+            <User className="tw:size-4" />
+          </Button>
+        </>
+      }
+    />
+  );
+}
 
 /* ============================================================================
  * Assembled views — stories choose one and optionally wrap with padding.
@@ -1348,6 +1799,25 @@ export function TenPowerView({ paddedDock = true }: { paddedDock?: boolean }) {
         />
       </div>
     </div>
+  );
+}
+
+export function TenPowerInteractiveView({ paddedDock = true }: { paddedDock?: boolean }) {
+  return (
+    <InteractiveStateProvider>
+      <style>{EDITOR_WRAPPER_STYLE}</style>
+      <div className="tw:flex tw:h-full tw:w-full tw:flex-col tw:bg-background tw:text-foreground">
+        <PowerInteractiveChromeBar />
+        <div className={`tw:flex tw:min-h-0 tw:flex-1 ${paddedDock ? 'tw:px-2 tw:pb-2' : ''}`}>
+          <DockLayout
+            defaultLayout={POWER_INTERACTIVE_LAYOUT}
+            groups={POWER_GROUPS}
+            style={dockStyle}
+            dropMode="edge"
+          />
+        </div>
+      </div>
+    </InteractiveStateProvider>
   );
 }
 
