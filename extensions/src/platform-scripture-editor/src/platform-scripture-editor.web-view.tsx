@@ -1599,7 +1599,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // started without a pre-selected project.
     if (!projectId) {
       return (
-        <div className="tw-flex tw-items-center tw-justify-center tw-h-full tw-px-4">
+        <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
           {workaround}
           {localizedStrings['%webView_platformScriptureEditor_emptyState_noProject%']}
         </div>
