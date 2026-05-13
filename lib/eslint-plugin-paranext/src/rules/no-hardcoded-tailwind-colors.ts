@@ -46,14 +46,15 @@ const ALLOWED_THEME_TOKENS = [...loadThemeTokens(), ...CSS_BUILTIN_COLORS];
  * Patterns that indicate hardcoded colors:
  *
  * - Tw-bg-black, tw-bg-white, tw-bg-slate-100, tw-text-red-500, etc.
- * - Tw-*-[color]/[opacity] patterns like tw-bg-black/50
+ * - Tw:bg-black, tw:text-white, tw:bg-slate-100, tw:text-red-500, etc.
+ * - Tw-*-[color]/[opacity] patterns like tw-bg-black/50 or tw:bg-black/50
  * - Hex colors, rgb(), hsl() in className
  */
 const HARDCODED_COLOR_PATTERNS = [
-  // Named colors: tw-bg-black, tw-text-white, tw-border-gray-500
-  /tw-(bg|text|border|ring|outline|divide|from|via|to|placeholder|caret|fill|stroke)-(black|white|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(-\d+)?(\/\d+)?/,
-  // Opacity modifiers on any color: tw-bg-[color]/50
-  /tw-(bg|text|border)-.+\/\d+/,
+  // Named colors: tw-bg-black, tw-text-white, tw-border-gray-500, tw:bg-black, tw:text-white
+  /tw[:-](bg|text|border|ring|outline|divide|from|via|to|placeholder|caret|fill|stroke)-(black|white|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(-\d+)?(\/\d+)?/,
+  // Opacity modifiers on any color: tw-bg-[color]/50 or tw:bg-[color]/50
+  /tw[:-](bg|text|border)-.+\/\d+/,
 ];
 
 /** Check if a class string contains hardcoded colors */
@@ -67,7 +68,10 @@ function findHardcodedColors(classString: string): string[] {
         cls.includes(`-${token}`) ||
         cls === `tw-bg-${token}` ||
         cls === `tw-text-${token}` ||
-        cls === `tw-border-${token}`,
+        cls === `tw-border-${token}` ||
+        cls === `tw:bg-${token}` ||
+        cls === `tw:text-${token}` ||
+        cls === `tw:border-${token}`,
     );
     if (isThemeToken) return false;
 

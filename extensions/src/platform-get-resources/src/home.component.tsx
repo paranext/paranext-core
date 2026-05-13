@@ -304,15 +304,15 @@ export function Home({
   };
 
   const buildTableHead = (key: SortConfig['key'], label: string, className?: string) => (
-    <TableHead onClick={() => handleSort(key)} className={cn('tw-px-2', className)}>
-      <Button className="tw-flex tw-items-center tw-px-2" variant="ghost">
-        <div className="tw-font-normal">{label}</div>
-        {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
+    <TableHead onClick={() => handleSort(key)} className={cn('tw:px-2', className)}>
+      <Button className="tw:flex tw:items-center tw:px-2" variant="ghost">
+        <div className="tw:font-normal">{label}</div>
+        {sortConfig.key !== key && <ChevronsUpDown className="tw:pl-1" size={16} />}
         {sortConfig.key === key &&
           (sortConfig.direction === 'ascending' ? (
-            <ChevronUp className="tw-pl-1" size={16} />
+            <ChevronUp className="tw:pl-1" size={16} />
           ) : (
-            <ChevronDown className="tw-pl-1" size={16} />
+            <ChevronDown className="tw:pl-1" size={16} />
           ))}
       </Button>
     </TableHead>
@@ -324,7 +324,7 @@ export function Home({
 
   const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
     if (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)) {
-      return <Spinner className="tw-h-5 tw-py-[1px]" />;
+      return <Spinner className="tw:h-5 tw:py-[1px]" />;
     }
 
     return project.isLocallyAvailable ? syncText : getText;
@@ -362,23 +362,23 @@ export function Home({
   };
 
   return (
-    <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
+    <Card className="tw:flex tw:h-screen tw:flex-col tw:rounded-none tw:border-0">
       <CardHeader
         className={cn(
-          'tw-flex-shrink-0 [@media(max-height:28rem)]:!tw-pb-2 [@media(max-height:28rem)]:!tw-pt-4 max-[300px]:!tw-pb-0',
-          { 'max-[300px]:!tw-pb-2': showGetResourcesButton },
+          'tw:shrink-0 tw:[@media(max-height:28rem)]:!pb-2 tw:[@media(max-height:28rem)]:!pt-4 tw:max-[300px]:!pb-0',
+          { 'tw:max-[300px]:!pb-2': showGetResourcesButton },
         )}
       >
-        <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
-          <div className="tw-flex tw-flex-col tw-gap-4 tw-max-w-72 tw-w-full">
-            <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:28rem)]:!tw-hidden max-[300px]:!tw-hidden">
+        <div className="tw:flex tw:flex-wrap tw:justify-between tw:gap-4">
+          <div className="tw:flex tw:flex-col tw:gap-4 tw:max-w-72 tw:w-full">
+            <div className="tw:flex tw:gap-4 tw:items-center tw:[@media(max-height:28rem)]:!hidden tw:max-[300px]:!hidden">
               {headerContent}
             </div>
             <SearchBar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
           </div>
           {showGetResourcesButton && (
-            <div className="tw-self-end">
-              <Button onClick={onOpenGetResources} className="tw-bg-muted" variant="ghost">
+            <div className="tw:self-end">
+              <Button onClick={onOpenGetResources} className="tw:bg-muted" variant="ghost">
                 {`+ ${getResourcesText}`}
               </Button>
             </div>
@@ -386,35 +386,35 @@ export function Home({
         </div>
       </CardHeader>
       {isLoadingLocalProjects || isLoadingRemoteProjects ? (
-        <CardContent className="tw-flex tw-flex-grow tw-flex-col tw-items-center tw-justify-center tw-gap-2">
+        <CardContent className="tw:flex tw:flex-grow tw:flex-col tw:items-center tw:justify-center tw:gap-2">
           <Spinner />
         </CardContent>
       ) : (
-        <CardContent className="tw-flex-grow tw-overflow-auto tw-min-h-32 tw-px-0">
-          <div className="tw-flex tw-flex-col tw-gap-4">
+        <CardContent className="tw:flex-grow tw:overflow-auto tw:min-h-32 tw:px-0">
+          <div className="tw:flex tw:flex-col tw:gap-4">
             {!localProjectsInfo ? (
-              <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
-                <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
-                <Label className="tw-text-muted-foreground tw-font-normal">
+              <div className="tw:flex-grow tw:h-full tw:border tw:border-muted tw:rounded-lg tw:p-6 tw:text-center tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-1">
+                <Label className="tw:text-muted-foreground">{noProjectsText}</Label>
+                <Label className="tw:text-muted-foreground tw:font-normal">
                   {noProjectsInstructionText}
                 </Label>
 
                 {showGetResourcesButton && (
                   <Button
                     onClick={onOpenGetResources}
-                    className="tw-mt-4"
+                    className="tw:mt-4"
                   >{`+ ${getResourcesText}`}</Button>
                 )}
               </div>
             ) : (
-              <div className="tw-flex-grow tw-h-full">
+              <div className="tw:flex-grow tw:h-full">
                 {filteredAndSortedProjects.length === 0 ? (
-                  <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
-                    <Label className="tw-text-muted-foreground">{noSearchResultsText}</Label>
-                    <Label className="tw-text-muted-foreground tw-font-normal">
+                  <div className="tw:flex-grow tw:h-full tw:border tw:border-muted tw:rounded-lg tw:p-6 tw:text-center tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-1">
+                    <Label className="tw:text-muted-foreground">{noSearchResultsText}</Label>
+                    <Label className="tw:text-muted-foreground tw:font-normal">
                       {`${searchedForText} "${textFilter}".`}
                     </Label>
-                    <div className="tw-flex tw-gap-1  tw-mt-4">
+                    <div className="tw:flex tw:gap-1  tw:mt-4">
                       <Button
                         variant="ghost"
                         onClick={() => {
@@ -427,7 +427,7 @@ export function Home({
                         <Button
                           onClick={onOpenGetResources}
                           variant="ghost"
-                          className="tw-bg-muted"
+                          className="tw:bg-muted"
                         >
                           {`+ ${getResourcesText}`}
                         </Button>
@@ -436,13 +436,13 @@ export function Home({
                   </div>
                 ) : (
                   <Table stickyHeader>
-                    <TableHeader className="tw-bg-none max-[300px]:tw-hidden" stickyHeader>
-                      <TableRow className="tw-rounded-sm">
-                        {buildTableHead('shortName', shortNameText, 'tw-ps-4')}
-                        {buildTableHead('fullName', fullNameText, 'tw-hidden md:!tw-table-cell')}
-                        {buildTableHead('language', languageText, 'tw-hidden sm:!tw-table-cell')}
+                    <TableHeader className="tw:bg-none tw:max-[300px]:hidden" stickyHeader>
+                      <TableRow className="tw:rounded-sm">
+                        {buildTableHead('shortName', shortNameText, 'tw:ps-4')}
+                        {buildTableHead('fullName', fullNameText, 'tw:hidden tw:md:!table-cell')}
+                        {buildTableHead('language', languageText, 'tw:hidden tw:sm:!table-cell')}
                         {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
-                          buildTableHead('activity', activityText, 'tw-hidden sm:!tw-table-cell')}
+                          buildTableHead('activity', activityText, 'tw:hidden tw:sm:!table-cell')}
                         {buildTableHead('action', actionText)}
                       </TableRow>
                     </TableHeader>
@@ -459,37 +459,37 @@ export function Home({
                               : !isSendReceiveInProgress && onSendReceiveProject(project.projectId)
                           }
                           key={project.projectId}
-                          className={cn('tw-rounded-sm', {
-                            'tw-text-muted-foreground/70': !project.isLocallyAvailable,
+                          className={cn('tw:rounded-sm', {
+                            'tw:text-muted-foreground/70': !project.isLocallyAvailable,
                           })}
                         >
                           <TableCell
-                            className={cn({ 'tw-ps-2': project.editedStatus === 'edited' })}
+                            className={cn({ 'tw:ps-2': project.editedStatus === 'edited' })}
                           >
                             <div
                               className={cn(
-                                'tw-flex tw-flex-row tw-items-center tw-gap-4 tw-ps-2',
-                                { 'tw-ps-0': project.editedStatus === 'edited' },
+                                'tw:flex tw:flex-row tw:items-center tw:gap-4 tw:ps-2',
+                                { 'tw:ps-0': project.editedStatus === 'edited' },
                               )}
                             >
-                              <div className="tw-flex tw-flex-row tw-items-center tw-gap-2">
+                              <div className="tw:flex tw:flex-row tw:items-center tw:gap-2">
                                 {project.editedStatus === 'edited' && (
-                                  <div className="tw-rounded-full tw-bg-primary tw-h-2 tw-w-2 tw-ms-[-8px]" />
+                                  <div className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
                                 )}
                                 {project.isEditable ? (
-                                  <ScrollText className="tw-pr-0" size={18} />
+                                  <ScrollText className="tw:pr-0" size={18} />
                                 ) : (
-                                  <BookOpen className="tw-pr-0" size={18} />
+                                  <BookOpen className="tw:pr-0" size={18} />
                                 )}
                               </div>
 
-                              <div className="tw-whitespace-nowrap tw-cursor-default">
+                              <div className="tw:whitespace-nowrap tw:cursor-default">
                                 {project.name}
                               </div>
 
-                              <div className="tw-grow tw-hidden max-[300px]:!tw-flex">
-                                <div className="tw-grow" />
-                                <HomeItemDropdownMenu ellipsisButtonClassName="tw-h-6">
+                              <div className="tw:grow tw:hidden tw:max-[300px]:!flex">
+                                <div className="tw:grow" />
+                                <HomeItemDropdownMenu ellipsisButtonClassName="tw:h-6">
                                   {(!project.isLocallyAvailable ||
                                     project.editedStatus === 'edited') && (
                                     <DropdownMenuItem asChild>
@@ -505,14 +505,14 @@ export function Home({
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="tw-hidden md:!tw-table-cell tw-font-medium tw-break-words tw-cursor-default tw-break-all">
+                          <TableCell className="tw:hidden tw:md:!table-cell tw:font-medium tw:break-words tw:cursor-default tw:break-all">
                             {project.fullName}
                           </TableCell>
-                          <TableCell className="tw-hidden sm:!tw-table-cell tw-cursor-default">
+                          <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">
                             {project.language}
                           </TableCell>
                           {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
-                            <TableCell className="tw-hidden sm:!tw-table-cell tw-cursor-default">
+                            <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">
                               {project.lastSendReceiveDate &&
                                 formatTimeSpan(
                                   relativeTimeFormatter,
@@ -520,8 +520,8 @@ export function Home({
                                 )}
                             </TableCell>
                           )}
-                          <TableCell className="max-[300px]:tw-hidden">
-                            <div className="tw-flex tw-justify-between tw-items-center">
+                          <TableCell className="tw:max-[300px]:hidden">
+                            <div className="tw:flex tw:justify-between tw:items-center">
                               {project.isSendReceivable &&
                               (!project.isLocallyAvailable || project.editedStatus === 'edited')
                                 ? syncOrGetButton(project)
@@ -545,8 +545,8 @@ export function Home({
               </div>
             )}
             {mergedProjectInfo.length === 1 && mergedProjectInfo[0].name === 'WEB' && (
-              <div className="tw-flex tw-flex-col tw-gap-4 tw-items-center tw-w-auto">
-                <p className="tw-text-muted-foreground tw-font-normal">
+              <div className="tw:flex tw:flex-col tw:gap-4 tw:items-center tw:w-auto">
+                <p className="tw:text-muted-foreground tw:font-normal">
                   {getStartedDescriptionText}
                 </p>
                 <Button onClick={onGetStarted}>{getStartedText}</Button>
@@ -555,7 +555,7 @@ export function Home({
           </div>
         </CardContent>
       )}
-      <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2 [@media(max-height:32rem)]:!tw-hidden">
+      <CardFooter className="tw:shrink-0 tw:flex-col tw:justify-center tw:p-4 tw:border-t tw:gap-2 tw:[@media(max-height:32rem)]:!hidden">
         <Label>{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
       </CardFooter>
     </Card>

@@ -14,6 +14,7 @@ import path from 'path';
 import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
+import chroma from 'chroma-js';
 import {
   APP_NAME,
   APP_URI_SCHEME,
@@ -490,14 +491,20 @@ async function main() {
                 return;
               }
 
-              // Need to put commas between the numbers for it to work here
-              const newThemePrimaryString = newTheme.cssVariables.primary.split(' ').join(', ');
+              // Convert oklch color to hex format for Electron compatibility
+              try {
+                const symbolColorHex = chroma(newTheme.cssVariables.primary).hex();
 
-              mainWindow?.setTitleBarOverlay({
-                color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
-                symbolColor: `hsl(${newThemePrimaryString})`,
-                height: TITLE_BAR_BUTTON_HEIGHT,
-              });
+                mainWindow?.setTitleBarOverlay({
+                  color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
+                  symbolColor: symbolColorHex,
+                  height: TITLE_BAR_BUTTON_HEIGHT,
+                });
+              } catch (e) {
+                logger.warn(
+                  `Failed to set title bar window button colors: Could not convert primary color '${newTheme.cssVariables.primary}' to hex: ${getErrorMessage(e)}`,
+                );
+              }
             }),
           );
         } catch (e) {
@@ -939,8 +946,7 @@ async function main() {
     },
   );
 
-  const liveDocsUrl =
-    'https://playground.open-rpc.org/?transport=websocket&schemaUrl=ws%3A%2F%2Flocalhost%3A8876%0A&uiSchema[appBar][ui:splitView]=false&uiSchema[appBar][ui:input]=false&uiSchema[appBar][ui:examplesDropdown]=false&uiSchema[appBar][ui:transports]=false&uiSchema[appBar][ui:darkMode]=true&uiSchema[appBar][ui:title]=PAPI';
+  const liveDocsUrl = `https://playground.open-rpc.org/?transport=websocket&schemaUrl=${encodeURIComponent('ws://localhost:8876\n')}&uiSchema[appBar][ui:splitView]=false&uiSchema[appBar][ui:input]=false&uiSchema[appBar][ui:examplesDropdown]=false&uiSchema[appBar][ui:transports]=false&uiSchema[appBar][ui:darkMode]=true&uiSchema[appBar][ui:title]=PAPI`;
   commandService.registerCommand(
     'platform.openDeveloperDocumentationUrl',
     async () => {

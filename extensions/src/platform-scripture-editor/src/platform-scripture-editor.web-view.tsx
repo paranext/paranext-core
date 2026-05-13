@@ -228,8 +228,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
 
-  const editingNoteKey = useRef<string>();
-  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+  const editingNoteKey = useRef<string | undefined>(undefined);
+  const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[] | undefined>(undefined);
   /** True when the footnote editor was opened for a newly inserted note (not an existing one) */
   const editingNoteIsNew = useRef(false);
 
@@ -479,7 +479,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           class:
             // We don't want this `div` in our document flow, so we functionally get rid of it with
             // `display: contents`
-            'tw-contents',
+            'tw:contents',
         },
       }),
     [],
@@ -1588,14 +1588,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   function renderEditor() {
     /* Workaround to pull in platform-bible-react styles into the editor */
-    const workaround = <Button className="tw-hidden" />;
+    const workaround = <Button className="tw:hidden" />;
 
     // When not rendering the editor component itself, make sure not to try to apply the scripture-font
     // in the useEffect above
 
     if (!bookExists) {
       return (
-        <div className="tw-flex tw-items-center tw-justify-center tw-h-full tw-px-4">
+        <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
           {workaround}
           {isReadOnly
             ? localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
@@ -1605,7 +1605,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
     if (!usjFromPdp || usjFromPdp === defaultUsj) {
       return (
-        <div className="tw-flex tw-items-center tw-justify-center tw-h-full">
+        <div className="tw:flex tw:items-center tw:justify-center tw:h-full">
           <Spinner />
         </div>
       );
@@ -1646,19 +1646,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   ) : undefined;
 
   return (
-    <div className="tw-flex tw-flex-col tw-h-screen">
+    <div className="tw:flex tw:flex-col tw:h-screen">
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
         projectMenuData={webViewMenu.topMenu}
-        className="scripture-editor-tab-nav tw-block tw-z-10"
+        className="scripture-editor-tab-nav tw:block tw:z-10"
         startAreaChildren={
           <>
             {bcvControls}
             {!isReadOnlyEffective && (
               <>
                 <UndoRedoButtons
-                  className="tw-h-8"
+                  className="tw:h-8"
                   onUndoClick={() => editorRef.current?.undo()}
                   onRedoClick={() => editorRef.current?.redo()}
                   canUndo={canUndo}
@@ -1670,7 +1670,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
-                        className="tw-h-8"
+                        className="tw:h-8"
                         aria-label="Paragraph Selection"
                         title="Paragraph Selection"
                         variant="outline"
@@ -1685,7 +1685,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                         <ChevronDown />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="tw-p-0 tw-w-96">
+                    <PopoverContent className="tw:p-0 tw:w-96">
                       <MarkerMenu
                         localizedStrings={localizedStrings}
                         markerMenuItems={paragraphSwitcherMenuItems}
@@ -1710,14 +1710,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
       <div
         ref={editorContainerRef}
-        className="tw-h-auto tw-flex-1 tw-min-h-0 tw-overflow-auto"
+        className="tw:h-auto tw:flex-1 tw:min-h-0 tw:overflow-auto"
         dir={options.textDirection}
       >
         {/* Containers */}
         {Object.entries(decorations.containers ?? {}).reduce(
           (children, [id, decoration]) => (
             <div
-              className="tw-h-full"
+              className="tw:h-full"
               data-container-id={id}
               key={`container-${id}`}
               style={decoration.style}
@@ -1725,8 +1725,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               {children}
             </div>
           ),
-          <div className="tw-flex tw-flex-col tw-h-full">
-            <div className="tw-flex-grow tw-min-h-0 tw-m-1 tw-flex tw-flex-col tw-gap-1">
+          <div className="tw:flex tw:flex-col tw:h-full">
+            <div className="tw:flex-grow tw:min-h-0 tw:m-1 tw:flex tw:flex-col tw:gap-1">
               {Object.entries(decorations.headers ?? {}).map(([id, header]) => (
                 // Headers
                 <Alert
@@ -1739,7 +1739,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 >
                   {header.iconUrl && (
                     <img
-                      className="tw-h-4 tw-w-4"
+                      className="tw:h-4 tw:w-4"
                       src={header.iconUrl}
                       alt={
                         header.iconAltText
@@ -1755,7 +1755,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                     <AlertDescription>
                       <MarkdownRenderer
                         anchorTarget="_blank"
-                        className="tw-max-w-none tw-text-sm"
+                        className="tw:max-w-none tw:text-sm"
                         markdown={decorationsLocalizedStrings[header.descriptionMd]}
                       />
                     </AlertDescription>
@@ -1786,7 +1786,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/** Inline markers menu components */}
       <Popover open={showMarkersMenu}>
         <PopoverAnchor
-          className="tw-absolute"
+          className="tw:absolute"
           style={{
             top: markersMenuAnchorY,
             left: markersMenuAnchorX,
@@ -1796,7 +1796,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }}
         />
         <PopoverContent
-          className="tw-w-[500px] tw-p-0"
+          className="tw:w-[500px] tw:p-0"
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -1812,7 +1812,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/** Footnote editor components */}
       <Popover open={showFootnoteEditor}>
         <PopoverAnchor
-          className="tw-absolute"
+          className="tw:absolute"
           style={{
             top: notePopoverAnchorY,
             left: notePopoverAnchorX,
@@ -1822,7 +1822,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             pointerEvents: 'none',
           }}
         />
-        <PopoverContent className="tw-w-max tw-min-w-[500px] tw-p-[10px]">
+        <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
           <FootnoteEditor
             classNameForEditor="scripture-font"
             noteOps={editingNoteOps.current}
@@ -1839,7 +1839,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       {/** Comment editor for creating new comment threads */}
       <Popover open={showCommentEditor}>
         <PopoverAnchor
-          className="tw-absolute"
+          className="tw:absolute"
           style={{
             top: commentPopoverAnchorY,
             left: commentPopoverAnchorX,
@@ -1848,7 +1848,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             pointerEvents: 'none',
           }}
         />
-        <PopoverContent className="tw-w-[400px] tw-p-[10px]">
+        <PopoverContent className="tw:w-[400px] tw:p-[10px]">
           <CommentEditor
             assignableUsers={commentEditorAssignableUsers}
             onSave={onCommentEditorSave}

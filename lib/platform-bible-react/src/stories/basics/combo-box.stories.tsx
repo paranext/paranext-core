@@ -59,7 +59,7 @@ const meta: Meta<typeof ComboBox<string>> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-lg tw-p-4">
+        <div className="tw:max-w-lg tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -96,7 +96,7 @@ export const WithLongText: Story = {
     const [value, setValue] = useState<string | undefined>(undefined);
     return (
       <div>
-        <p className="tw-mb-2 tw-text-sm tw-text-muted-foreground">
+        <p className="tw:mb-2 tw:text-sm tw:text-muted-foreground">
           Combobox with long text options that will truncate - using ghost variant here
         </p>
         <ComboBox<string> {...args} value={value} onChange={setValue} />
@@ -124,7 +124,7 @@ export const WithIcon: Story = {
     const [value, setValue] = useState<string | undefined>(undefined);
     return (
       <div>
-        <p className="tw-mb-2 tw-text-sm tw-text-muted-foreground">
+        <p className="tw:mb-2 tw:text-sm tw:text-muted-foreground">
           An icon can be shown on the trigger button
         </p>
         <ComboBox<string>
@@ -158,7 +158,7 @@ export const CustomAlignment: Story = {
     const [value, setValue] = useState<string | undefined>(undefined);
     return (
       <div>
-        <p className="tw-mb-2 tw-text-sm tw-text-muted-foreground">
+        <p className="tw:mb-2 tw:text-sm tw:text-muted-foreground">
           Alignment of dropdown menu can be controlled
         </p>
         <ComboBox<string> {...args} value={value} onChange={setValue} />
@@ -170,7 +170,7 @@ export const CustomAlignment: Story = {
     textPlaceholder: 'Select revision ...',
     buttonPlaceholder: 'Select revision ...',
     commandEmptyMessage: 'No revisions found',
-    className: 'tw-w-[400px]',
+    className: 'tw:w-[400px]',
     alignDropDown: 'end',
   },
   parameters: {
@@ -189,9 +189,9 @@ export const DifferentVariants: Story = {
     const [value3, setValue3] = useState<string | undefined>(undefined);
 
     return (
-      <div className="tw-space-y-4">
+      <div className="tw:space-y-4">
         <div>
-          <p className="tw-mb-2 tw-text-sm tw-font-medium">Default Variant</p>
+          <p className="tw:mb-2 tw:text-sm tw:font-medium">Default Variant</p>
           <ComboBox<string>
             options={bookOptions}
             textPlaceholder="Search books..."
@@ -204,7 +204,7 @@ export const DifferentVariants: Story = {
         </div>
 
         <div>
-          <p className="tw-mb-2 tw-text-sm tw-font-medium">Outline Variant</p>
+          <p className="tw:mb-2 tw:text-sm tw:font-medium">Outline Variant</p>
           <ComboBox<string>
             options={bookOptions}
             textPlaceholder="Search books..."
@@ -217,7 +217,7 @@ export const DifferentVariants: Story = {
         </div>
 
         <div>
-          <p className="tw-mb-2 tw-text-sm tw-font-medium">Ghost Variant</p>
+          <p className="tw:mb-2 tw:text-sm tw:font-medium">Ghost Variant</p>
           <ComboBox<string>
             options={bookOptions}
             textPlaceholder="Search books..."
@@ -247,9 +247,9 @@ export const WithDifferentIcons: Story = {
     const [value3, setValue3] = useState<string | undefined>(undefined);
 
     return (
-      <div className="tw-space-y-4">
+      <div className="tw:space-y-4">
         <div>
-          <p className="tw-mb-2 tw-text-sm tw-font-medium">Calendar Icon</p>
+          <p className="tw:mb-2 tw:text-sm tw:font-medium">Calendar Icon</p>
           <ComboBox<string>
             options={['Today', 'Tomorrow', 'Next Week']}
             textPlaceholder="Select date..."
@@ -263,7 +263,7 @@ export const WithDifferentIcons: Story = {
         </div>
 
         <div>
-          <p className="tw-mb-2 tw-text-sm tw-font-medium">User Icon</p>
+          <p className="tw:mb-2 tw:text-sm tw:font-medium">User Icon</p>
           <ComboBox<string>
             options={['John Doe', 'Jane Smith', 'Bob Wilson']}
             textPlaceholder="Search users..."
@@ -277,7 +277,7 @@ export const WithDifferentIcons: Story = {
         </div>
 
         <div>
-          <p className="tw-mb-2 tw-text-sm tw-font-medium">Settings Icon</p>
+          <p className="tw:mb-2 tw:text-sm tw:font-medium">Settings Icon</p>
           <ComboBox<string>
             options={['Theme', 'Language', 'Notifications']}
             textPlaceholder="Search settings..."
@@ -326,7 +326,7 @@ export const WithMultipleGroups: Story = {
 
     return (
       <div>
-        <p className="tw-mb-2 tw-text-sm tw-text-muted-foreground">
+        <p className="tw:mb-2 tw:text-sm tw:text-muted-foreground">
           Combo box with multiple groups and headings
         </p>
         <ComboBox<string>
@@ -358,7 +358,7 @@ export const WithSecondaryLabel: Story = {
 
     return (
       <div>
-        <p className="tw-mb-2 tw-text-sm tw-text-muted-foreground">
+        <p className="tw:mb-2 tw:text-sm tw:text-muted-foreground">
           Combo box with primary and secondary labels - short name in normal text, full name in
           muted text
         </p>
@@ -374,7 +374,7 @@ export const WithSecondaryLabel: Story = {
           icon={<Folder />}
         />
         {value && (
-          <p className="tw-mt-2 tw-text-sm tw-text-muted-foreground">
+          <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">
             Selected: {value.label} - {value.secondaryLabel}
           </p>
         )}
@@ -437,7 +437,7 @@ export const WithSecondaryLabelGrouped: StoryProject = {
 
     return (
       <div>
-        <p className="tw-mb-2 tw-text-sm tw-text-muted-foreground">
+        <p className="tw:mb-2 tw:text-sm tw:text-muted-foreground">
           Grouped combo box with secondary labels - demonstrating project selector with recent and
           all projects
         </p>
@@ -453,7 +453,7 @@ export const WithSecondaryLabelGrouped: StoryProject = {
           icon={<Folder />}
         />
         {value && (
-          <p className="tw-mt-2 tw-text-sm tw-text-muted-foreground">
+          <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">
             Selected: {value.label} - {value.secondaryLabel}
           </p>
         )}
@@ -509,13 +509,13 @@ export const ResizableContainer: Story = {
     );
 
     return (
-      <div className="tw-flex tw-flex-col tw-gap-4">
-        <p className="tw-text-sm tw-text-muted-foreground">
+      <div className="tw:flex tw:flex-col tw:gap-4">
+        <p className="tw:text-sm tw:text-muted-foreground">
           Resize the container below to test overflow behavior. The text should truncate with
           ellipsis when the container becomes too narrow.
         </p>
         <div
-          className="tw-resize tw-overflow-auto tw-rounded tw-border-2 tw-border-dashed tw-border-muted-foreground tw-p-4"
+          className="tw:resize tw:overflow-auto tw:rounded tw:border-2 tw:border-dashed tw:border-muted-foreground tw:p-4"
           style={{ minWidth: '150px', width: '300px', maxWidth: '600px' }}
         >
           <ComboBox<string>
@@ -526,12 +526,12 @@ export const ResizableContainer: Story = {
             value={value}
             onChange={setValue}
             buttonVariant="outline"
-            buttonClassName="tw-w-full"
+            buttonClassName="tw:w-full"
           />
         </div>
-        <div className="tw-mt-4">
-          <p className="tw-font-semibold">Selected value:</p>
-          <p className="tw-text-sm">{value || 'None'}</p>
+        <div className="tw:mt-4">
+          <p className="tw:font-semibold">Selected value:</p>
+          <p className="tw:text-sm">{value || 'None'}</p>
         </div>
       </div>
     );

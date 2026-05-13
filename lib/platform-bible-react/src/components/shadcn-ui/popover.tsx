@@ -1,49 +1,109 @@
-import React from 'react';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { Direction, readDirection } from '@/utils/dir-helper.util';
+'use client';
 
-import { cn } from '@/utils/shadcn-ui.util';
+import React from 'react';
+import { Popover as PopoverPrimitive } from 'radix-ui';
+
+import { cn } from '@/utils/shadcn-ui/utils';
+// CUSTOM: Import direction helper for RTL support
+import { Direction, readDirection } from '@/utils/dir-helper.util';
+// CUSTOM: Import shared z-index constant to ensure popovers stack above the dock
 import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 
 /**
- * The Popover component displays rich content in a portal, triggered by a button. This popover is
+ * The Popover component displays rich content in a portal, triggered by a button. This component is
  * built on Radix UI's Popover component and styled by Shadcn UI.
  *
- * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/popover See Radix UI
- * Documentation https://www.radix-ui.com/docs/primitives/components/popover
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/popover}
  */
-const Popover = PopoverPrimitive.Root;
+function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
+  return <PopoverPrimitive.Root data-slot="popover" {...props} />;
+}
 
 /** @inheritdoc Popover */
-const PopoverTrigger = PopoverPrimitive.Trigger;
+function PopoverTrigger({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
+  return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
+}
 
 /** @inheritdoc Popover */
-const PopoverAnchor = PopoverPrimitive.Anchor;
-
-/** @inheritdoc Popover */
-const PopoverContent = React.forwardRef<
-  React.ElementRef<typeof PopoverPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = 'center', sideOffset = 4, style, ...props }, ref) => {
+function PopoverContent({
+  className,
+  align = 'center',
+  sideOffset = 4,
+  // CUSTOM: Destructure style so we can merge the shared z-index constant into it
+  style,
+  ...props
+}: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+  // CUSTOM: Read document direction to support RTL layouts
   const dir: Direction = readDirection();
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
-        ref={ref}
+        data-slot="popover-content"
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          'pr-twp tw-w-72 tw-rounded-md tw-border tw-bg-popover tw-p-4 tw-text-popover-foreground tw-shadow-md tw-outline-none data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
+          // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation; removed tw:z-50 to use shared constant below
+          'pr-twp tw:flex tw:w-72 tw:origin-(--radix-popover-content-transform-origin) tw:flex-col tw:gap-2.5 tw:rounded-lg tw:bg-popover tw:p-2.5 tw:text-sm tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:outline-hidden tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95',
           className,
         )}
-        // CUSTOM z-index uses shared constant instead of default tw-z-50
+        // CUSTOM: z-index uses shared constant instead of default tw:z-50, ensuring popover renders above the dock
         style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
-        {...props}
+        // CUSTOM: Apply document direction for RTL layout support
         dir={dir}
+        {...props}
       />
     </PopoverPrimitive.Portal>
   );
-});
-PopoverContent.displayName = PopoverPrimitive.Content.displayName;
+}
 
-export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor };
+/** @inheritdoc Popover */
+function PopoverAnchor({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Anchor>) {
+  return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />;
+}
+
+/** @inheritdoc Popover */
+function PopoverHeader({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="popover-header"
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+      className={cn('pr-twp tw:flex tw:flex-col tw:gap-0.5 tw:text-sm', className)}
+      {...props}
+    />
+  );
+}
+
+/** @inheritdoc Popover */
+function PopoverTitle({ className, ...props }: React.ComponentProps<'h2'>) {
+  return (
+    <div
+      data-slot="popover-title"
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+      className={cn('pr-twp tw:font-medium', className)}
+      {...props}
+    />
+  );
+}
+
+/** @inheritdoc Popover */
+function PopoverDescription({ className, ...props }: React.ComponentProps<'p'>) {
+  return (
+    <p
+      data-slot="popover-description"
+      // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation
+      className={cn('pr-twp tw:text-muted-foreground', className)}
+      {...props}
+    />
+  );
+}
+
+export {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+};

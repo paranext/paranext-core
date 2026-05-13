@@ -131,7 +131,7 @@ export function PlatformToolbar({
       className="toolbar"
       startAreaChildren={
         <>
-          <div className="tw-flex tw-h-full tw-items-center">
+          <div className="tw:flex tw:h-full tw:items-center">
             <BookChapterControl scrRef={scrRef} handleSubmit={onScrRefChange} />
           </div>
           {!isReadonly && (

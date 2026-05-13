@@ -9,7 +9,7 @@ const meta: Meta<typeof Kbd> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-p-4">
+        <div className="tw:p-4">
           <Story />
         </div>
       </ThemeProvider>
@@ -34,7 +34,7 @@ export const Default: Story = {
 
 export const KeyboardShortcut: Story = {
   render: () => (
-    <span className="tw-flex tw-items-center tw-gap-1 tw-text-sm">
+    <span className="tw:flex tw:items-center tw:gap-1 tw:text-sm">
       <Kbd>Ctrl</Kbd>+<Kbd>Z</Kbd>
     </span>
   ),

@@ -14,9 +14,17 @@ const workspace = defineConfig({
         test: {
           name: 'unit',
           include: ['src/**/*.{test,spec}.{js,ts,jsx,tsx}'],
-          exclude: ['src/**/*.stories.{js,ts,jsx,tsx}'],
+          exclude: ['src/**/*.stories.{js,ts,jsx,tsx}', 'src/components/shadcn-ui-old/*'],
           globals: true,
           environment: 'jsdom',
+        },
+      },
+      // Node.js tests for build scripts
+      {
+        test: {
+          name: 'scripts',
+          include: ['scripts/**/*.test.ts'],
+          environment: 'node',
         },
       },
       // Browser tests for Storybook

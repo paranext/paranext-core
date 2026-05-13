@@ -304,8 +304,8 @@ export const FootnoteEditorView: FootnoteEditorViewStory = {
     // eslint-disable-next-line no-null/no-null
     const editorRef = useRef<EditorRef | null>(null);
 
-    const noteKey = useRef<string>();
-    const noteOps = useRef<DeltaOpInsertNoteEmbed[]>();
+    const noteKey = useRef<string | undefined>(undefined);
+    const noteOps = useRef<DeltaOpInsertNoteEmbed[] | undefined>(undefined);
 
     const [popoverX, setPopoverX] = useState<number>();
     const [popoverY, setPopoverY] = useState<number>();
@@ -418,10 +418,10 @@ export const FootnoteEditorView: FootnoteEditorViewStory = {
         />
         <Popover open={showFootnoteEditor}>
           <PopoverAnchor
-            className="tw-absolute"
+            className="tw:absolute"
             style={{ top: popoverY ?? 0, left: popoverX ?? 0, height: popoverHeight, width: 0 }}
           />
-          <PopoverContent className="tw-w-max tw-min-w-[500px] tw-p-[10px]">
+          <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
             <FootnoteEditor
               noteKey={noteKey.current}
               noteOps={noteOps.current}
@@ -463,19 +463,23 @@ export const EditorViewOptions: ViewOptionsStory = {
     // Destructure flattened view options from args
     const { markerMode, noteMode, hasSpacing, isFormattedFont } = args;
 
-    // Reconstruct the args with the options.view settings
-    const mergedArgs = {
-      defaultUsj: usjWeb,
-      options: {
-        hasExternalUI: true,
-        view: {
-          markerMode,
-          noteMode,
-          hasSpacing,
-          isFormattedFont,
+    // Memoize to avoid passing a new options object reference on every render, which would cause
+    // Editorial to re-initialize in a loop via its options useEffect → onStateChange → re-render.
+    const mergedArgs = useMemo(
+      () => ({
+        defaultUsj: usjWeb,
+        options: {
+          hasExternalUI: true,
+          view: {
+            markerMode,
+            noteMode,
+            hasSpacing,
+            isFormattedFont,
+          },
         },
-      },
-    };
+      }),
+      [markerMode, noteMode, hasSpacing, isFormattedFont],
+    );
 
     return renderEditorialWithToolbar(mergedArgs, context, defaultScrRef);
   },

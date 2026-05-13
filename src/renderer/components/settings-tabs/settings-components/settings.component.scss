@@ -1,6 +1,6 @@
 .setting-container {
   --spacing: 0.25rem;
-  gap: calc(var(--spacing) * 2); // tw-gap-2
+  gap: calc(var(--spacing) * 2); // tw:gap-2
   display: flex;
   flex-direction: column;
   width: 50%;
@@ -12,7 +12,7 @@
 }
 
 .error-label {
-  color: hsl(var(--destructive)); // tw-text-destructive
+  color: var(--destructive); // tw:text-destructive
 }
 
 .loading-label {

@@ -197,7 +197,7 @@ function MenuDemo({ variant }: { variant?: 'default' | 'muted' }) {
   };
 
   return (
-    <div className="tw-space-y-4">
+    <div className="tw:space-y-4">
       <PlatformMenubar
         menuData={createSampleMenuData()}
         onSelectMenuItem={handleSelectMenuItem}
@@ -205,14 +205,14 @@ function MenuDemo({ variant }: { variant?: 'default' | 'muted' }) {
         variant={variant}
       />
 
-      <div className="tw-space-y-2 tw-rounded tw-border tw-bg-gray-50 tw-p-4">
-        <div className="tw-text-sm">
+      <div className="tw:space-y-2 tw:rounded tw:border tw:bg-gray-50 tw:p-4">
+        <div className="tw:text-sm">
           <strong>Menu Status:</strong> {menuOpen ? 'Open' : 'Closed'}
         </div>
-        <div className="tw-text-sm">
+        <div className="tw:text-sm">
           <strong>Last Command:</strong> {lastCommand || 'None'}
         </div>
-        <div className="tw-text-xs tw-text-muted-foreground">
+        <div className="tw:text-xs tw:text-muted-foreground">
           <strong>Keyboard shortcuts:</strong> Alt+P (Project), Alt+L (Layout), Alt+N (Navigate),
           Alt+H (Help)
         </div>
@@ -296,14 +296,14 @@ export const WithSubmenus: Story = {
     };
 
     return (
-      <div className="tw-space-y-4">
+      <div className="tw:space-y-4">
         <PlatformMenubar menuData={menuDataWithSubmenus} onSelectMenuItem={handleSelectMenuItem} />
 
-        <div className="tw-rounded tw-border tw-bg-gray-50 tw-p-4">
-          <div className="tw-text-sm">
+        <div className="tw:rounded tw:border tw:bg-gray-50 tw:p-4">
+          <div className="tw:text-sm">
             <strong>Last Command:</strong> {lastCommand || 'None'}
           </div>
-          <p className="tw-mt-2 tw-text-xs tw-text-muted-foreground">
+          <p className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
             Try the &quot;Project&quot; menu and look for the &quot;Export As...&quot; submenu.
           </p>
         </div>
@@ -377,14 +377,14 @@ export const MinimalMenu: Story = {
     };
 
     return (
-      <div className="tw-space-y-4">
+      <div className="tw:space-y-4">
         <PlatformMenubar menuData={minimalMenuData} onSelectMenuItem={handleSelectMenuItem} />
 
-        <div className="tw-rounded tw-border tw-bg-gray-50 tw-p-4">
-          <div className="tw-text-sm">
+        <div className="tw:rounded tw:border tw:bg-gray-50 tw:p-4">
+          <div className="tw:text-sm">
             <strong>Last Command:</strong> {lastCommand || 'None'}
           </div>
-          <p className="tw-mt-2 tw-text-xs tw-text-muted-foreground">
+          <p className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
             Minimal menubar with just File and Help menus.
           </p>
         </div>

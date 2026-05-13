@@ -46,7 +46,7 @@ export type UndoRedoButtonsProps = {
    * shortcuts functional.
    */
   showKeyboardShortcuts?: boolean;
-  /** CSS class name for the buttons. Defaults to "tw-h-6 tw-w-6". */
+  /** CSS class name for the buttons. Defaults to "tw:h-6 tw:w-6". */
   className?: string;
   /** Variant for the buttons. Defaults to "ghost". */
   variant?: ButtonProps['variant'];
@@ -66,7 +66,7 @@ export function UndoRedoButtons({
   canRedo = true,
   localizedStrings = {},
   showKeyboardShortcuts = true,
-  className = 'tw-h-6 tw-w-6',
+  className = 'tw:h-6 tw:w-6',
   variant = 'ghost',
 }: UndoRedoButtonsProps) {
   const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);

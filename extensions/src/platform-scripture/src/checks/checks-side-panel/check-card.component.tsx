@@ -50,9 +50,9 @@ function CheckStateBadge({ state }: CheckStateBadgeProps) {
   const isOutlineVariant = state === CheckStates.Fixed || state === CheckStates.Denied;
 
   return (
-    <Badge variant={isOutlineVariant ? 'outline' : undefined} className="tw-rounded-md">
+    <Badge variant={isOutlineVariant ? 'outline' : undefined} className="tw:rounded-md">
       <span
-        className={`tw-text-xs tw-font-medium ${isOutlineVariant ? 'tw-text-muted-foreground' : ''}`}
+        className={`tw:text-xs tw:font-medium ${isOutlineVariant ? 'tw:text-muted-foreground' : ''}`}
       >
         {localizedStrings[localizationKeys[state]]}
       </span>
@@ -130,7 +130,7 @@ export function CheckCard({
   const dropdownContent = (
     <>
       <DropdownMenuItem
-        className="tw-flex tw-flex-row"
+        className="tw:flex tw:flex-row"
         onClick={(event) => {
           event.stopPropagation();
           if (checkResult.isDenied) handleAllowCheck(checkResult);
@@ -138,9 +138,9 @@ export function CheckCard({
         }}
       >
         {checkResult.isDenied ? (
-          <Check className="tw-mr-2 tw-h-4 tw-w-4" />
+          <Check className="tw:mr-2 tw:h-4 tw:w-4" />
         ) : (
-          <X className="tw-mr-2 tw-h-4 tw-w-4" />
+          <X className="tw:mr-2 tw:h-4 tw:w-4" />
         )}
         <span>
           {
@@ -157,13 +157,13 @@ export function CheckCard({
          * This menu item is hidden until https://paratextstudio.atlassian.net/browse/PT-3309 gets
          * implemented
          */
-        className="tw-hidden"
+        className="tw:hidden"
         onClick={(event) => {
           event.stopPropagation();
           handleOpenSettingsAndInventories();
         }}
       >
-        <Settings className="tw-mr-2 tw-h-4 tw-w-4" />
+        <Settings className="tw:mr-2 tw:h-4 tw:w-4" />
         <span>
           {localizedStrings['%webView_checksSidePanel_focusedCheckDropdown_settingsItem%']}
         </span>
@@ -173,7 +173,7 @@ export function CheckCard({
 
   const additionalSelectedContent = useMemo(
     () => (
-      <Badge className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md tw-bg-blue-500">
+      <Badge className="tw:block tw:min-w-0 tw:max-w-full tw:truncate tw:rounded-md tw:bg-blue-500">
         {checkName}
       </Badge>
     ),
@@ -181,9 +181,9 @@ export function CheckCard({
   );
 
   const cardContent = (
-    <div className={cn('tw-flex tw-flex-col tw-gap-2', className)}>
-      <div className="tw-flex tw-items-center tw-gap-2 tw-overflow-hidden">
-        <span className="tw-shrink-0 tw-text-nowrap tw-text-xs tw-font-medium">
+    <div className={cn('tw:flex tw:flex-col tw:gap-2', className)}>
+      <div className="tw:flex tw:items-center tw:gap-2 tw:overflow-hidden">
+        <span className="tw:shrink-0 tw:text-nowrap tw:text-xs tw:font-medium">
           {formatScrRef(checkResult.verseRef)}{' '}
           <span className="scripture-font">{checkResult.itemText}</span>
         </span>
@@ -197,14 +197,14 @@ export function CheckCard({
               <TooltipTrigger asChild>
                 <Badge
                   key={`${checkId}-requires-setup-badge`}
-                  className="tw-block tw-min-w-0 tw-max-w-full tw-truncate tw-rounded-md"
+                  className="tw:block tw:min-w-0 tw:max-w-full tw:truncate tw:rounded-md"
                   variant="secondary"
                 >
                   {localizedStrings['%webView_checksSidePanel_checkRequiresSetup%']}
                 </Badge>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="tw-font-light">
+                <p className="tw:font-light">
                   {localizedStrings['%webView_checksSidePanel_checkRequiresSetup_tooltip%']}
                 </p>
               </TooltipContent>
@@ -212,7 +212,7 @@ export function CheckCard({
           </TooltipProvider>
         )}
       </div>
-      <span className="tw-font-regular tw-overflow-hidden tw-text-ellipsis tw-text-xs tw-text-muted-foreground">
+      <span className="tw:font-regular tw:overflow-hidden tw:text-ellipsis tw:text-xs tw:text-muted-foreground">
         {checkCardDescription}
       </span>
     </div>

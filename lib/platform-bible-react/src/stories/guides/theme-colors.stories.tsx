@@ -4,14 +4,12 @@ import { Input } from '@/components/shadcn-ui/input';
 
 function createColorCells(color: string, invert: boolean = false) {
   const colorString = getComputedStyle(document.documentElement).getPropertyValue(`--${color}`);
+  let foregroundColor = invert ? color.replace('-foreground', '') : 'foreground';
+  if (foregroundColor === color && foregroundColor === 'foreground') foregroundColor = 'background';
   return (
     <>
       {invert ? '' : <td>{color}</td>}
-      {createPreviewCell(
-        color,
-        colorString.split(', ')[2] === '0%' ? 'white' : 'inherit',
-        colorString,
-      )}
+      {createPreviewCell(color, foregroundColor, colorString)}
       {invert ? <td>{color}</td> : ''}
     </>
   );
@@ -21,7 +19,7 @@ function createPreviewCell(color: string, foreground: string, text: string) {
   return (
     <td>
       <Input
-        className={`tw-bg-${color} tw-border-2 tw-text-${foreground}`}
+        className={`tw:bg-${color} tw:dark:bg-${color} tw:border-2 tw:text-${foreground}`}
         value={text}
         aria-label={`${color} color preview showing value ${text}`}
         readOnly
@@ -36,7 +34,7 @@ function ThemeColorDisplay() {
       <p>
         Color variables are defined in{' '}
         <a
-          className="tw-text-blue-600 hover:tw-underline"
+          className="tw:text-blue-600 tw:hover:underline"
           href="https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css"
         >
           index.css
@@ -52,7 +50,11 @@ function ThemeColorDisplay() {
           uses the Zinc theme (with a deviating --ring 240 5% 64.9%). So be aware of the slight
           differences of grayish / blueish tones.
           <br />
-          <br />
+          {/**
+           * Adding classes that are not spelled out explicitly so they still apply from our generated color
+           * classes. Would probably be nicer to just unwrap them some day.
+           */}
+          <br className="tw:bg-card-foreground tw:bg-popover-foreground tw:bg-accent-foreground tw:bg-muted-foreground tw:bg-destructive-foreground tw:bg-secondary-foreground tw:text-destructive-foreground tw:text-accent-foreground tw:text-secondary tw:text-muted tw:text-accent tw:text-popover tw:text-card" />
         </p>
       )}
       <p>Following colors are defined by the current theme:</p>
@@ -86,7 +88,7 @@ function ThemeColorDisplay() {
           {['border', 'input', 'ring'].map((color) => {
             return (
               <tr key={color}>
-                <td className="tw-text-center">—</td>
+                <td className="tw:text-center">—</td>
                 {createColorCells(color)}
               </tr>
             );
@@ -104,7 +106,7 @@ const meta: Meta<typeof ThemeColorDisplay> = {
   decorators: [
     (Story) => (
       <ThemeProvider>
-        <div className="tw-max-w-6xl tw-p-6">
+        <div className="tw:max-w-6xl tw:p-6">
           <Story />
         </div>
       </ThemeProvider>

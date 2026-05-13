@@ -129,6 +129,52 @@ function constructErrorNotification(exception: unknown): PlatformNotification | 
 }
 
 /**
+ * Handles errors encountered during data provider subscription in createDataProviderSubscriber.
+ * Used for both data retrieval failures and callback execution failures.
+ *
+ * @param error The error that occurred
+ * @param callback Function to call with the error
+ * @param dataType Name of the data type for logging
+ * @param selector Selector used for logging
+ * @param context Describes what failed: 'retrieve' for data retrieval, 'callback' for callback
+ *   execution
+ */
+function handleDataProviderSubscriptionError(
+  error: unknown,
+  callback: (data: unknown) => void,
+  dataType: string,
+  selector: unknown,
+  context: 'retrieve-after-update' | 'retrieve-immediate' | 'callback',
+): void {
+  const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
+  let message: string;
+  switch (context) {
+    case 'callback':
+      message = `Callback for subscription to ${dataType} with selector ${selectorDetails.substring(0, 120)} threw. ${getErrorMessage(error)}`;
+      break;
+    case 'retrieve-after-update':
+      message = `Tried to retrieve data after an update event for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(error)}`;
+      break;
+    case 'retrieve-immediate':
+      message = `Tried to retrieve data immediately for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(error)}`;
+      break;
+    default:
+      context satisfies never;
+      message = `Subscription to ${dataType} with selector ${selectorDetails.substring(0, 120)} threw. ${getErrorMessage(error)}`;
+  }
+  logger.warn(message);
+  try {
+    callback(newPlatformError(error));
+  } catch (callbackError) {
+    logger.warn(
+      `handleDataProviderSubscriptionError: callback threw while reporting error for ${dataType}. ${getErrorMessage(callbackError)}`,
+    );
+  }
+  const notification = constructErrorNotification(error);
+  if (notification) notificationService.send(notification);
+}
+
+/**
  * Creates a subscribe function for a data provider to allow subscribing to updates on the data
  *
  * @param dataProviderPromise Promise to the data provider's network object
@@ -228,16 +274,20 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
           !deepEqual(dataPrevious, data)
         ) {
           dataPrevious = data;
-          callback(data);
+          try {
+            callback(data);
+          } catch (e) {
+            handleDataProviderSubscriptionError(e, callback, dataType, selector, 'callback');
+          }
         }
       } catch (e) {
-        const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
-        logger.warn(
-          `Tried to retrieve data after an update event for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(e)}`,
+        handleDataProviderSubscriptionError(
+          e,
+          callback,
+          dataType,
+          selector,
+          'retrieve-after-update',
         );
-        callback(newPlatformError(e));
-        const notification = constructErrorNotification(e);
-        if (notification) notificationService.send(notification);
       }
     };
 
@@ -265,16 +315,20 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
           if (!receivedUpdate && isSubscribed) {
             receivedUpdate = true;
             dataPrevious = data;
-            callback(data);
+            try {
+              callback(data);
+            } catch (e) {
+              handleDataProviderSubscriptionError(e, callback, dataType, selector, 'callback');
+            }
           }
         } catch (e) {
-          const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
-          logger.warn(
-            `Tried to retrieve data immediately for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(e)}`,
+          handleDataProviderSubscriptionError(
+            e,
+            callback,
+            dataType,
+            selector,
+            'retrieve-immediate',
           );
-          callback(newPlatformError(e));
-          const notification = constructErrorNotification(e);
-          if (notification) notificationService.send(notification);
         }
       })();
     }

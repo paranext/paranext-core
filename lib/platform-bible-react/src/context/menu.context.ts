@@ -21,7 +21,7 @@ export const menuVariants = cva('', {
     variant: {
       default: '',
       muted:
-        'hover:tw-bg-muted hover:tw-text-foreground focus:tw-bg-muted focus:tw-text-foreground data-[state=open]:tw-bg-muted data-[state=open]:tw-text-foreground',
+        'tw:hover:bg-muted tw:hover:text-foreground tw:focus:bg-muted tw:focus:text-foreground tw:data-[state=open]:bg-muted tw:data-[state=open]:text-foreground',
     },
   },
   defaultVariants: {

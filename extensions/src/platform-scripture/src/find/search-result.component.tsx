@@ -173,7 +173,7 @@ export default function SearchResult({
     return (
       <>
         {beforeText}
-        <mark className="tw-bg-amber-100 tw-ring-2 tw-rounded-sm tw-ring-offset-1 tw-ring-amber-400">
+        <mark className="tw:bg-amber-100 tw:ring-2 tw:rounded-sm tw:ring-offset-1 tw:ring-amber-400">
           {text}
         </mark>
         {afterText}
@@ -208,7 +208,7 @@ export default function SearchResult({
 
   const replaceButton = (
     <Button
-      className="tw-m-1 tw-h-6 tw-text-foreground"
+      className="tw:m-1 tw:h-6 tw:text-foreground"
       variant="outline"
       size="sm"
       disabled={isReplacing}
@@ -223,28 +223,28 @@ export default function SearchResult({
 
   const dropdownContent = (
     <>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyReference}>
-        <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
+      <DropdownMenuItem className="tw:flex tw:flex-row" onClick={handleCopyReference}>
+        <Copy className="tw:mr-2 tw:h-4 tw:w-4" />
         <span>{localizedStrings['%webView_find_copyReference%']}</span>
       </DropdownMenuItem>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyVerseText}>
-        <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
+      <DropdownMenuItem className="tw:flex tw:flex-row" onClick={handleCopyVerseText}>
+        <Copy className="tw:mr-2 tw:h-4 tw:w-4" />
         <span>{localizedStrings['%webView_find_copyVerseText%']}</span>
       </DropdownMenuItem>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleCopyReferenceAndVerseText}>
-        <Copy className="tw-mr-2 tw-h-4 tw-w-4" />
+      <DropdownMenuItem className="tw:flex tw:flex-row" onClick={handleCopyReferenceAndVerseText}>
+        <Copy className="tw:mr-2 tw:h-4 tw:w-4" />
         <span>{localizedStrings['%webView_find_copyReferenceAndVerseText%']}</span>
       </DropdownMenuItem>
-      <DropdownMenuItem className="tw-flex tw-flex-row" onClick={handleDismiss}>
-        <X className="tw-mr-2 tw-h-4 tw-w-4" />
+      <DropdownMenuItem className="tw:flex tw:flex-row" onClick={handleDismiss}>
+        <X className="tw:mr-2 tw:h-4 tw:w-4" />
         <span>{localizedStrings['%webView_find_dismiss%']}</span>
       </DropdownMenuItem>
     </>
   );
 
   const cardContent = (
-    <div className="tw-text-xs tw-font-medium tw-flex tw-items-center tw-gap-2 tw-min-h-8">
-      <div className="tw-shrink-0">
+    <div className="tw:text-xs tw:font-medium tw:flex tw:items-center tw:gap-2 tw:min-h-8">
+      <div className="tw:shrink-0">
         {localizedBookData.get(searchResult.start.verseRef.book)?.localizedId ??
           searchResult.start.verseRef.book}{' '}
         {searchResult.start.verseRef.chapterNum}:
@@ -253,12 +253,12 @@ export default function SearchResult({
       </div>
       {searchResult.isReplaced && (
         <>
-          <span className="tw-text-red-500 tw-font-semibold tw-shrink-0">
+          <span className="tw:text-red-500 tw:font-semibold tw:shrink-0">
             {localizedStrings['%webView_find_replaced%']}
           </span>
-          <div className="tw-flex-1 tw-h-1.5 tw-bg-red-200 tw-rounded-full tw-overflow-hidden">
+          <div className="tw:flex-1 tw:h-1.5 tw:bg-red-200 tw:rounded-full tw:overflow-hidden">
             <div
-              className="tw-h-full tw-bg-red-500 tw-rounded-full tw-transition-all tw-ease-linear tw-duration-1000"
+              className="tw:h-full tw:bg-red-500 tw:rounded-full tw:transition-all tw:ease-linear tw:duration-1000"
               style={{ width: isProgressAnimating ? '100%' : '0%' }}
             />
           </div>
@@ -266,7 +266,7 @@ export default function SearchResult({
             <Button
               variant="outline"
               size="sm"
-              className="tw-h-6 tw-shrink-0 tw-mr-10 tw-border-red-300 tw-text-red-500 hover:tw-border-red-500 hover:tw-text-red-700"
+              className="tw:h-6 tw:shrink-0 tw:mr-10 tw:border-red-300 tw:text-red-500 tw:hover:border-red-500 tw:hover:text-red-700"
               onClick={(e) => {
                 e.stopPropagation();
                 onCancelReplace();
@@ -281,7 +281,7 @@ export default function SearchResult({
   );
 
   const additionalSelectedContent = (
-    <div className="tw-text-xs tw-m-1 tw-font-normal tw-text-muted-foreground scripture-font">
+    <div className="tw:text-xs tw:m-1 tw:font-normal tw:text-muted-foreground scripture-font">
       {getFocusedVerseText()}
     </div>
   );
@@ -294,7 +294,7 @@ export default function SearchResult({
         }${searchResult.text}${globalResultsIndex}`}
         isHidden={searchResult.isHidden}
         isSelected={isSelected}
-        className={searchResult.isReplaced ? '!tw-bg-red-100 dark:!tw-bg-red-950' : undefined}
+        className={searchResult.isReplaced ? 'tw:!bg-red-100 tw:dark:!bg-red-950' : undefined}
         onSelect={() => onResultClick(searchResult, globalResultsIndex)}
         selectedButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
         hoverButtons={isReplaceMode && !searchResult.isReplaced ? replaceButton : undefined}
