@@ -14,6 +14,13 @@ namespace Paranext.DataProvider.Projects.DigitalBibleLibrary;
 internal class DblResourcesDataProvider(PapiClient papiClient)
     : NetworkObjects.DataProvider("platformGetResources.dblResourcesProvider", papiClient)
 {
+    private static readonly HashSet<string> CommentariesWhiteList =
+    [
+        "97196133a859179b", // HBKENG
+        "090f7cbf7924b245", // TNN
+        "b58b80b798e22be6", // TND
+    ];
+
     #region Internal classes
 
     private class DblResourceData(
@@ -33,7 +40,9 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         public string FullName { get; set; } = FullName;
         public string BestLanguageName { get; set; } = BestLanguageName;
         public string Type { get; set; } =
-            Type.ToString() == "DBL" ? "ScriptureResource" : Type.ToString();
+            CommentariesWhiteList.Contains(DblEntryUid) ? "CommentaryResource"
+            : Type.ToString() == "DBL" ? "ScriptureResource"
+            : Type.ToString();
         public long Size { get; set; } = Size;
         public bool Installed { get; set; } = Installed;
         public bool UpdateAvailable { get; set; } = UpdateAvailable;
