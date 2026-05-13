@@ -7,13 +7,15 @@ import {
   RESOURCE_PICKER_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
 
+const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
+
 function ResourcePickerDialogWrapper({
   allResources = [],
   resourceType,
   selectedResourceIds,
   submitDialog,
 }: DialogTypes[typeof RESOURCE_PICKER_DIALOG_TYPE]['props']) {
-  const [localizedStrings] = useLocalizedStrings([...RESOURCE_PICKER_DIALOG_STRING_KEYS]);
+  const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
   return (
     <ResourcePickerDialog
