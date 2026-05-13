@@ -10,6 +10,7 @@ import {
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
+import { useProgressiveList } from './resource-picker-dialog.utils';
 
 /**
  * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
@@ -168,6 +169,8 @@ export default function ResourcePickerDialog({
     [filteredResources, selectedResourceIds],
   );
 
+  const { visibleItems: visibleToDownload, sentinelRef, hasMore } = useProgressiveList(toDownload);
+
   const languageOptions: MultiSelectComboBoxEntry[] = useMemo(
     () =>
       Array.from(new Set(allResources.map((r) => r.bestLanguageName))).map((lang) => ({
@@ -240,10 +243,11 @@ export default function ResourcePickerDialog({
             />
             <ResourceSection
               label={toDownloadLabel}
-              resources={toDownload}
+              resources={visibleToDownload}
               useLabel={useLabel}
               onSelect={onSelect}
             />
+            {hasMore && <div ref={sentinelRef} />}
           </>
         )}
       </div>
