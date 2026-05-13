@@ -14,7 +14,7 @@ function getDeduplicationKey(item: ResourceReference): string {
   const name = (item as { name?: unknown }).name;
   if (typeof name === 'string') return `name:${name}`;
   // Unknown type with no string name: use type + stringified name to avoid false dedup
-  return `type:${item.type}:${String((item as { name?: unknown }).name ?? '')}`;
+  return `type:${item.type}:${String(name ?? '')}`;
 }
 
 function mergeResourceReferenceLists(
