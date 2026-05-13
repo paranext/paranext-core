@@ -157,8 +157,16 @@ export {
 
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
-export { default as Checklist } from './components/basics/checklist.component';
-export type { ChecklistProps } from './components/basics/checklist.component';
+export {
+  default as CheckboxGroup,
+  /** @deprecated Use {@link CheckboxGroup} instead. */
+  Checklist,
+} from './components/basics/checkbox-group.component';
+export type {
+  CheckboxGroupProps,
+  /** @deprecated Use {@link CheckboxGroupProps} instead. */
+  ChecklistProps,
+} from './components/basics/checkbox-group.component';
 export { default as ComboBox } from './components/basics/combo-box.component';
 export type {
   ComboBoxLabelOption,
