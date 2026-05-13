@@ -69,6 +69,12 @@ public record ResourceReferenceList
     }
 
     /// <summary>Deserializes a <see cref="ResourceReferenceList"/> from an <c>&lt;Items&gt;</c> XElement.</summary>
+    /// <remarks>
+    /// Unknown item attributes are stored in <see cref="UnknownResourceReference.ExtraData"/> as
+    /// <c>string</c>-kind <see cref="System.Text.Json.JsonElement"/>s, since XML attributes have no
+    /// type information. Round-tripping through XML is therefore lossless only for string-valued
+    /// properties — numeric or boolean JSON values become strings after an XML round-trip.
+    /// </remarks>
     public static ResourceReferenceList FromXml(XElement itemsElement)
     {
         var items = itemsElement

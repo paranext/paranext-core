@@ -182,8 +182,10 @@ public class ResourceReferenceListXmlTests
         );
         ResourceReferenceList parsed = ResourceReferenceList.FromXml(original);
         XElement roundTripped = ResourceReferenceList.ToXml(parsed);
-        // The extra attribute must survive the round-trip
+        // All original attributes must survive the round-trip
         XElement item = roundTripped.Elements("Item").Single();
+        Assert.That(item.Attribute("type")?.Value, Is.EqualTo("futureType"));
+        Assert.That(item.Attribute("name")?.Value, Is.EqualTo("Future"));
         Assert.That(item.Attribute("extraField")?.Value, Is.EqualTo("preserved"));
     }
 }
