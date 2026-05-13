@@ -1655,8 +1655,8 @@ export type UiLanguageSelectorProps = {
  * @param {UiLanguageSelectorProps} props - The props for the component.
  */
 export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
-export type ChecklistProps = {
-	/** Optional string representing the id attribute of the Checklist */
+export type CheckboxGroupProps = {
+	/** Optional string representing the id attribute of the CheckboxGroup */
 	id?: string;
 	/** Optional string representing CSS class name(s) for styling */
 	className?: string;
@@ -1689,7 +1689,19 @@ export type ChecklistProps = {
 	createComplexLabel?: (item: string) => React$1.ReactNode;
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
-export declare function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+export declare function CheckboxGroup({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: CheckboxGroupProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array.
+ *
+ * @deprecated Use {@link CheckboxGroup} instead. `Checklist` is kept as a backward-compatible alias
+ *   for existing consumers and will be removed in a future release.
+ */
+export declare const Checklist: typeof CheckboxGroup;
+/**
+ * @deprecated Use {@link CheckboxGroupProps} instead. `ChecklistProps` is kept as a
+ *   backward-compatible alias for existing consumers and will be removed in a future release.
+ */
+export type ChecklistProps = CheckboxGroupProps;
 /**
  * The Popover component displays rich content in a portal, triggered by a button. This component is
  * built on Radix UI's Popover component and styled by Shadcn UI.
