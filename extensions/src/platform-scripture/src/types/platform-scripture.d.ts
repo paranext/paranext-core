@@ -758,6 +758,26 @@ declare module 'platform-scripture' {
 
   // #endregion Replace Types
 
+  // #region User Text Connection Settings Types
+
+  /** Provides user-specific text connection settings (model texts and referenced projects/resources) */
+  export type IUserTextConnectionSettingsProjectDataProvider = {
+    /** Gets the list of model texts for this project */
+    getUserModelTexts(): Promise<ResourceReferenceList>;
+    /** Sets the list of model texts for this project */
+    setUserModelTexts(value: ResourceReferenceList): Promise<boolean>;
+    /** Resets the list of model texts to the project default */
+    resetUserModelTexts(): Promise<boolean>;
+    /** Gets the list of referenced projects and resources for this project */
+    getUserReferencedProjectsAndResources(): Promise<ResourceReferenceList>;
+    /** Sets the list of referenced projects and resources for this project */
+    setUserReferencedProjectsAndResources(value: ResourceReferenceList): Promise<boolean>;
+    /** Resets the list of referenced projects and resources to the project default */
+    resetUserReferencedProjectsAndResources(): Promise<boolean>;
+  };
+
+  // #endregion User Text Connection Settings Types
+
   // #region Marker Types
 
   /** Provides information about markers */
@@ -1690,6 +1710,7 @@ declare module 'papi-shared-types' {
     IMarkerNamesProjectDataProvider,
     IFindInScriptureProjectDataProvider,
     IReplaceWithUsfmProjectDataProvider,
+    IUserTextConnectionSettingsProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     IInventoryDataProvider,
@@ -1713,6 +1734,7 @@ declare module 'papi-shared-types' {
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
+    'platformScripture.userTextConnectionSettings': IUserTextConnectionSettingsProjectDataProvider;
   }
 
   export interface DataProviders {
