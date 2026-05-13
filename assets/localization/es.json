@@ -424,6 +424,7 @@
   "%redoButton_tooltip%": "Rehacer",
   "%resourcePicker_button_use%": "Usar",
   "%resourcePicker_language_filter_any%": "Cualquier idioma",
+  "%resourcePicker_language_filter_multipleSelected%": "{selectCount} idiomas",
   "%resourcePicker_no_results%": "No se encontraron resultados",
   "%resourcePicker_search_placeholder%": "Buscar recursos…",
   "%resourcePicker_section_already_selected%": "Ya seleccionado",

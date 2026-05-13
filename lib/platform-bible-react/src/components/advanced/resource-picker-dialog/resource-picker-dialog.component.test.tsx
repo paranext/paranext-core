@@ -9,7 +9,10 @@ import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker-dialog.
 
 // jsdom does not implement IntersectionObserver — stub it so the hook can mount
 beforeAll(() => {
-  vi.stubGlobal('IntersectionObserver', vi.fn(() => ({ observe: vi.fn(), disconnect: vi.fn() })));
+  vi.stubGlobal(
+    'IntersectionObserver',
+    vi.fn(() => ({ observe: vi.fn(), disconnect: vi.fn() })),
+  );
 });
 afterAll(() => {
   vi.unstubAllGlobals();

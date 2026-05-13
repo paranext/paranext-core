@@ -1033,6 +1033,7 @@ export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_no_results%",
 	"%resourcePicker_search_placeholder%",
 	"%resourcePicker_language_filter_any%",
+	"%resourcePicker_language_filter_multipleSelected%",
 	"%resourcePicker_showing_count%"
 ];
 /**

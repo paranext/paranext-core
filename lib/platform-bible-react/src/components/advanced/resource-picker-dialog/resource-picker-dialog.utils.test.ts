@@ -40,7 +40,7 @@ describe('useProgressiveList', () => {
     const { result } = renderHook(() => useProgressiveList(items, 50));
 
     act(() => {
-      ioCallback([{ isIntersecting: true } as IntersectionObserverEntry]);
+      ioCallback([{ isIntersecting: true }]);
     });
 
     expect(result.current.visibleItems).toHaveLength(100);
@@ -55,7 +55,7 @@ describe('useProgressiveList', () => {
 
     // Scroll to page 2
     act(() => {
-      ioCallback([{ isIntersecting: true } as IntersectionObserverEntry]);
+      ioCallback([{ isIntersecting: true }]);
     });
     expect(result.current.visibleItems).toHaveLength(100);
 
@@ -79,7 +79,7 @@ describe('useProgressiveList', () => {
     const { result } = renderHook(() => useProgressiveList(items, 50));
 
     act(() => {
-      ioCallback([{ isIntersecting: false } as IntersectionObserverEntry]);
+      ioCallback([{ isIntersecting: false }]);
     });
 
     expect(result.current.visibleItems).toHaveLength(50);

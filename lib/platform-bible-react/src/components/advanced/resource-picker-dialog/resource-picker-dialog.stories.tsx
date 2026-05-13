@@ -67,6 +67,7 @@ export const EmptyAlreadySelected: Story = {
 };
 
 export const LargeResourceList: Story = {
+  name: 'Large Resource List (2500 entries)',
   args: {
     allResources: LARGE_SAMPLE_RESOURCES,
     selectedResourceIds: [],

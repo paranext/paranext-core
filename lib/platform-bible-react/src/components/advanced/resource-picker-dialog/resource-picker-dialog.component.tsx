@@ -213,7 +213,7 @@ export default function ResourcePickerDialog({
         selectCount: selectedLanguages.length,
       },
     );
-  }, [selectedLanguages, languageOptions]);
+  }, [selectedLanguages, languageOptions, anyLanguageText, localizedStrings]);
 
   const isFiltered = searchText.length > 0 || selectedLanguages.length > 0;
 
@@ -264,7 +264,7 @@ export default function ResourcePickerDialog({
               useLabel={useLabel}
               onSelect={onSelect}
             />
-            {hasMore && <div ref={sentinelRef} />}
+            {hasMore && <div ref={sentinelRef} aria-hidden />}
           </>
         )}
       </div>
