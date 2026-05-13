@@ -248,14 +248,14 @@ export function TestButtonsPanel() {
           className="test-button"
           onClick={async () => {
             const start = performance.now();
-            const result = await runPromise(() => helloSomeone('Paranext user'));
+            const result = await runPromise(() => helloSomeone('Platform.Bible user'));
             logger.debug(
               `command:helloSomeone.helloSomeone ${result} took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {
             e.preventDefault();
-            executeMany(() => helloSomeone('Paranext user'));
+            executeMany(() => helloSomeone('Platform.Bible user'));
           }}
         >
           Hello Someone (Extension)

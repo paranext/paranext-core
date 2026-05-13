@@ -74,13 +74,15 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     appSupportDir = process.env.APPDATA || '';
   }
 
-  ['Electron', 'paratext-10-studio', 'platform-bible', 'Paranext'].forEach((dir) => {
-    const lockPath = path.join(appSupportDir, dir, 'SingletonLock');
-    if (fs.existsSync(lockPath)) {
-      console.log(`Removing stale singleton lock: ${lockPath}`);
-      fs.unlinkSync(lockPath);
-    }
-  });
+  ['Electron', 'paratext-10-studio', 'platform-bible', 'Paranext', 'Platform.Bible'].forEach(
+    (dir) => {
+      const lockPath = path.join(appSupportDir, dir, 'SingletonLock');
+      if (fs.existsSync(lockPath)) {
+        console.log(`Removing stale singleton lock: ${lockPath}`);
+        fs.unlinkSync(lockPath);
+      }
+    },
+  );
 
   // Ensure the dev main bundle exists
   const devMainPath = path.join(rootDir, '.erb/dll/main.bundle.dev.js');

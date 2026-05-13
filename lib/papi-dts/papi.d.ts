@@ -673,8 +673,8 @@ declare module 'shared/global-this.model' {
     /** How much logging should be recorded. Defaults to 'debug' if not packaged, 'info' if packaged */
     var logLevel: LogLevel;
     /**
-     * A function that each React WebView extension must provide for Paranext to display it. Only used
-     * in WebView iframes.
+     * A function that each React WebView extension must provide for Platform.Bible to display it.
+     * Only used in WebView iframes.
      */
     var webViewComponent: FunctionComponent<WebViewProps>;
     /** The id of the current web view. Only used in WebView iframes. */
@@ -791,7 +791,7 @@ declare module 'shared/global-this.model' {
     /** Indicates whether test code meant just for developers to see should be run */
     var isNoisyDevModeEnabled: boolean;
   }
-  /** Type of Paranext process */
+  /** Type of Platform.Bible process */
   export enum ProcessType {
     Main = 'main',
     Renderer = 'renderer',
@@ -2746,7 +2746,7 @@ declare module 'shared/models/docking-framework.model' {
     data?: unknown;
   };
   /**
-   * Information that Paranext uses to create a tab in the dock layout.
+   * Information that Platform.Bible uses to create a tab in the dock layout.
    *
    * - {@link TabLoader} loads {@link SavedTabInfo} into this
    * - {@link TabSaver} saves this into {@link SavedTabInfo}
@@ -2777,19 +2777,19 @@ declare module 'shared/models/docking-framework.model' {
     lastFocusedElement?: HTMLElement;
   };
   /**
-   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
-   * must provide a {@link TabLoader}.
+   * Function that takes a {@link SavedTabInfo} and creates a Platform.Bible tab out of it. Each type
+   * of tab must provide a {@link TabLoader}.
    *
    * For now all tab creators must do their own data type verification
    */
   export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
   /**
-   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
+   * Function that takes a Platform.Bible tab and creates a saved tab out of it. Each type of tab can
    * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
    * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
    *
-   * @param tabInfo The Paranext tab to save
-   * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
+   * @param tabInfo The Platform.Bible tab to save
+   * @returns The saved tab info for Platform.Bible to persist. If `undefined`, does not save the tab
    */
   export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
   export const DIRECTION_NEXT_TAB: 'nextTab';
@@ -2951,7 +2951,7 @@ declare module 'shared/models/docking-framework.model' {
     /** The ID of the tab to replace */
     targetTabId: string;
   }
-  /** Information about how a Paranext tab fits into the dock layout */
+  /** Information about how a Platform.Bible tab fits into the dock layout */
   export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
