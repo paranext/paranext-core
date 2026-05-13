@@ -761,20 +761,75 @@ declare module 'platform-scripture' {
   // #region User Text Connection Settings Types
 
   /** Provides user-specific text connection settings (model texts and referenced projects/resources) */
-  export type IUserTextConnectionSettingsProjectDataProvider = {
-    /** Gets the list of model texts for this project */
-    getUserModelTexts(): Promise<ResourceReferenceList>;
-    /** Sets the list of model texts for this project */
-    setUserModelTexts(value: ResourceReferenceList): Promise<boolean>;
-    /** Resets the list of model texts to the project default */
-    resetUserModelTexts(): Promise<boolean>;
-    /** Gets the list of referenced projects and resources for this project */
-    getUserReferencedProjectsAndResources(): Promise<ResourceReferenceList>;
-    /** Sets the list of referenced projects and resources for this project */
-    setUserReferencedProjectsAndResources(value: ResourceReferenceList): Promise<boolean>;
-    /** Resets the list of referenced projects and resources to the project default */
-    resetUserReferencedProjectsAndResources(): Promise<boolean>;
+  export type UserTextConnectionSettingsProjectInterfaceDataTypes = {
+    /** Gets/sets the list of model texts for this project */
+    UserModelTexts: DataProviderDataType<undefined, ResourceReferenceList, ResourceReferenceList>;
+    /** Gets/sets the list of referenced projects and resources for this project */
+    UserReferencedProjectsAndResources: DataProviderDataType<
+      undefined,
+      ResourceReferenceList,
+      ResourceReferenceList
+    >;
   };
+
+  /** Provides user-specific text connection settings (model texts and referenced projects/resources) */
+  export type IUserTextConnectionSettingsProjectDataProvider =
+    IProjectDataProvider<UserTextConnectionSettingsProjectInterfaceDataTypes> & {
+      /** Gets the list of model texts for this project */
+      getUserModelTexts(): Promise<ResourceReferenceList>;
+      /** Sets the list of model texts for this project */
+      setUserModelTexts(
+        value: ResourceReferenceList,
+      ): Promise<
+        DataProviderUpdateInstructions<UserTextConnectionSettingsProjectInterfaceDataTypes>
+      >;
+      /** Resets the list of model texts to the project default */
+      resetUserModelTexts(): Promise<boolean>;
+      /**
+       * Subscribe to run a callback function when the list of model texts changes
+       *
+       * @param selector Tells the provider what changes to listen for
+       * @param callback Function to run with the updated model texts. If there is an error while
+       *   retrieving the updated data, the function will run with a {@link PlatformError} instead of
+       *   the data. You can call {@link isPlatformError} on this value to check if it is an error.
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeUserModelTexts(
+        selector: undefined,
+        callback: (modelTexts: ResourceReferenceList | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+      /** Gets the list of referenced projects and resources for this project */
+      getUserReferencedProjectsAndResources(): Promise<ResourceReferenceList>;
+      /** Sets the list of referenced projects and resources for this project */
+      setUserReferencedProjectsAndResources(
+        value: ResourceReferenceList,
+      ): Promise<
+        DataProviderUpdateInstructions<UserTextConnectionSettingsProjectInterfaceDataTypes>
+      >;
+      /** Resets the list of referenced projects and resources to the project default */
+      resetUserReferencedProjectsAndResources(): Promise<boolean>;
+      /**
+       * Subscribe to run a callback function when the list of referenced projects and resources
+       * changes
+       *
+       * @param selector Tells the provider what changes to listen for
+       * @param callback Function to run with the updated referenced projects and resources. If
+       *   there is an error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeUserReferencedProjectsAndResources(
+        selector: undefined,
+        callback: (
+          referencedProjectsAndResources: ResourceReferenceList | undefined | PlatformError,
+        ) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
 
   // #endregion User Text Connection Settings Types
 
