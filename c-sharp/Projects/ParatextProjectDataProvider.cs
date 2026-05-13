@@ -49,6 +49,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private readonly CommentManager _commentManager;
 
+    private UserProjectSettings? _userProjectSettings;
+    private string? _cachedUserId;
+
     #endregion
 
     #region Constructors
@@ -107,6 +110,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("setSetting", SetProjectSetting));
 
         retVal.Add(("resetSetting", ResetProjectSetting));
+
+        retVal.Add(("getUserModelTexts", GetUserModelTexts));
+        retVal.Add(("setUserModelTexts", SetUserModelTexts));
+        retVal.Add(("resetUserModelTexts", ResetUserModelTexts));
+        retVal.Add(
+            ("getUserReferencedProjectsAndResources", GetUserReferencedProjectsAndResources)
+        );
+        retVal.Add(
+            ("setUserReferencedProjectsAndResources", SetUserReferencedProjectsAndResources)
+        );
+        retVal.Add(
+            ("resetUserReferencedProjectsAndResources", ResetUserReferencedProjectsAndResources)
+        );
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
 
@@ -1314,6 +1330,101 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettingsService.GetDefault(PapiClient, settingName)
             ?? throw new InvalidDataException($"Default value for {settingName} was null");
         return SetProjectSetting(settingName, defaultValue);
+    }
+
+    public ResourceReferenceList GetUserModelTexts()
+    {
+        var (schemaVersion, content) = GetUserProjectSettings().GetSetting("ModelTexts");
+        if (content == null)
+            return new ResourceReferenceList();
+
+        ValidateUserSettingVersion(schemaVersion, "ModelTexts");
+        return ResourceReferenceList.FromXml(content);
+    }
+
+    public bool SetUserModelTexts(object? value)
+    {
+        var list = DeserializeResourceReferenceList(value, "ModelTexts");
+        var itemsElement = ResourceReferenceList.ToXml(list);
+        GetUserProjectSettings().SetSetting("ModelTexts", list.DataVersion, itemsElement);
+        SendDataUpdateEvent(ProjectDataType.USER_SETTING, "user model texts update event");
+        return true;
+    }
+
+    public bool ResetUserModelTexts()
+    {
+        GetUserProjectSettings().RemoveSetting("ModelTexts");
+        SendDataUpdateEvent(ProjectDataType.USER_SETTING, "user model texts reset event");
+        return true;
+    }
+
+    public ResourceReferenceList GetUserReferencedProjectsAndResources()
+    {
+        var (schemaVersion, content) = GetUserProjectSettings()
+            .GetSetting("ReferencedProjectsAndResources");
+        if (content == null)
+            return new ResourceReferenceList();
+
+        ValidateUserSettingVersion(schemaVersion, "ReferencedProjectsAndResources");
+        return ResourceReferenceList.FromXml(content);
+    }
+
+    public bool SetUserReferencedProjectsAndResources(object? value)
+    {
+        var list = DeserializeResourceReferenceList(value, "ReferencedProjectsAndResources");
+        var itemsElement = ResourceReferenceList.ToXml(list);
+        GetUserProjectSettings()
+            .SetSetting("ReferencedProjectsAndResources", list.DataVersion, itemsElement);
+        SendDataUpdateEvent(ProjectDataType.USER_SETTING, "user referenced projects update event");
+        return true;
+    }
+
+    public bool ResetUserReferencedProjectsAndResources()
+    {
+        GetUserProjectSettings().RemoveSetting("ReferencedProjectsAndResources");
+        SendDataUpdateEvent(ProjectDataType.USER_SETTING, "user referenced projects reset event");
+        return true;
+    }
+
+    private UserProjectSettings GetUserProjectSettings()
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        var currentUserId = scrText.User.Name;
+        if (_userProjectSettings == null || _cachedUserId != currentUserId)
+        {
+            _userProjectSettings = new UserProjectSettings(scrText.Directory, currentUserId);
+            _cachedUserId = currentUserId;
+        }
+        return _userProjectSettings;
+    }
+
+    private static void ValidateUserSettingVersion(string? schemaVersion, string settingName)
+    {
+        if (!Version.TryParse(schemaVersion, out Version? parsed))
+            throw new InvalidDataException(
+                $"User setting '{settingName}' has invalid version format: '{schemaVersion}'"
+            );
+        if (parsed.Major != ResourceReferenceList.CurrentMajorVersion)
+            throw new InvalidDataException(
+                $"User setting '{settingName}' has incompatible major version {parsed.Major}; "
+                    + $"expected {ResourceReferenceList.CurrentMajorVersion}"
+            );
+    }
+
+    private static ResourceReferenceList DeserializeResourceReferenceList(
+        object? value,
+        string settingName
+    )
+    {
+        string? json = value?.ToString();
+        if (string.IsNullOrEmpty(json))
+            return new ResourceReferenceList();
+        ResourceReferenceList? list = json.DeserializeFromJson<ResourceReferenceList>();
+        if (list is null)
+            throw new InvalidDataException(
+                $"Could not deserialize value for user setting '{settingName}'"
+            );
+        return list;
     }
 
     #endregion
