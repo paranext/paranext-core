@@ -1,39 +1,7 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Xml.Linq;
 
 namespace Paranext.DataProvider.Projects;
-
-[JsonConverter(typeof(ResourceReferenceConverter))]
-public abstract record ResourceReference
-{
-    public string Name { get; init; } = string.Empty;
-}
-
-public record ProjectReference : ResourceReference
-{
-    public string Id { get; init; } = string.Empty;
-}
-
-public record DblResourceReference : ResourceReference
-{
-    public string Id { get; init; } = string.Empty;
-}
-
-public record EnhancedResourceReference : ResourceReference { }
-
-public record XmlResourceReference : ResourceReference { }
-
-public record SourceLanguageResourceReference : ResourceReference { }
-
-/// <summary>
-/// Catch-all for resource references whose type discriminant is not recognized by this version
-/// of the software. All JSON properties are preserved via <c>ExtraData</c> so the item
-/// can be round-tripped back to storage without data loss.
-/// </summary>
-public record UnknownResourceReference : ResourceReference
-{
-    public Dictionary<string, JsonElement>? ExtraData { get; init; }
-}
 
 public record ResourceReferenceList
 {
@@ -63,108 +31,97 @@ public record ResourceReferenceList
 
     [JsonPropertyName("items")]
     public List<ResourceReference> Items { get; init; } = [];
-}
 
-internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReference>
-{
-    public override ResourceReference? Read(
-        ref Utf8JsonReader reader,
-        Type typeToConvert,
-        JsonSerializerOptions options
-    )
+    /// <summary>Serializes a <see cref="ResourceReferenceList"/> to an <c>&lt;Items&gt;</c> XElement.</summary>
+    public static XElement ToXml(ResourceReferenceList list)
     {
-        if (reader.TokenType == JsonTokenType.Null)
-            return null;
-
-        using var doc = JsonDocument.ParseValue(ref reader);
-        var root = doc.RootElement;
-
-        string? type =
-            root.TryGetProperty("type", out var typeEl) && typeEl.ValueKind == JsonValueKind.String
-                ? typeEl.GetString()
-                : null;
-
-        return type switch
-        {
-            "project" => new ProjectReference
+        return new XElement(
+            "Items",
+            list.Items.Select(item =>
             {
-                Name = GetString(root, "name"),
-                Id = GetString(root, "id"),
-            },
-            "dblResource" => new DblResourceReference
-            {
-                Name = GetString(root, "name"),
-                Id = GetString(root, "id"),
-            },
-            "enhancedResource" => new EnhancedResourceReference { Name = GetString(root, "name") },
-            "xmlResource" => new XmlResourceReference { Name = GetString(root, "name") },
-            "sourceLanguageResource" => new SourceLanguageResourceReference
-            {
-                Name = GetString(root, "name"),
-            },
-            _ => CreateUnknown(root),
-        };
-    }
-
-    private static string GetString(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String
-            ? prop.GetString() ?? ""
-            : "";
-
-    private static UnknownResourceReference CreateUnknown(JsonElement root)
-    {
-        var extraData = new Dictionary<string, JsonElement>();
-        foreach (var prop in root.EnumerateObject())
-            extraData[prop.Name] = prop.Value.Clone();
-        return new UnknownResourceReference
-        {
-            Name = GetString(root, "name"),
-            ExtraData = extraData.Count > 0 ? extraData : null,
-        };
-    }
-
-    public override void Write(
-        Utf8JsonWriter writer,
-        ResourceReference value,
-        JsonSerializerOptions options
-    )
-    {
-        writer.WriteStartObject();
-
-        if (value is UnknownResourceReference unknown)
-        {
-            // ExtraData holds all original properties; write them back verbatim to avoid
-            // injecting properties (e.g. "name":"") that were absent in the original JSON.
-            if (unknown.ExtraData is not null)
-            {
-                foreach (var kvp in unknown.ExtraData)
+                if (item is UnknownResourceReference unknown)
                 {
-                    writer.WritePropertyName(kvp.Key);
-                    kvp.Value.WriteTo(writer);
+                    // Rebuild all original attributes from ExtraData to avoid data loss
+                    var attrs =
+                        unknown.ExtraData?.Select(kvp => new XAttribute(
+                            kvp.Key,
+                            kvp.Value.ToString() ?? ""
+                        )) ?? [];
+                    return new XElement("Item", attrs);
                 }
-            }
-        }
-        else
-        {
-            string discriminant = value switch
-            {
-                ProjectReference => "project",
-                DblResourceReference => "dblResource",
-                EnhancedResourceReference => "enhancedResource",
-                XmlResourceReference => "xmlResource",
-                SourceLanguageResourceReference => "sourceLanguageResource",
-                _ => throw new JsonException(
-                    $"Unhandled ResourceReference type: {value.GetType().Name}"
-                ),
-            };
-            writer.WriteString("type", discriminant);
-            writer.WriteString("name", value.Name);
-            if (value is ProjectReference proj)
-                writer.WriteString("id", proj.Id);
-            else if (value is DblResourceReference dbl)
-                writer.WriteString("id", dbl.Id);
-        }
 
-        writer.WriteEndObject();
+                string type = GetXmlType(item);
+
+                var element = new XElement(
+                    "Item",
+                    new XAttribute("type", type),
+                    new XAttribute("name", item.Name)
+                );
+
+                if (item is ProjectReference proj)
+                    element.Add(new XAttribute("id", proj.Id));
+                else if (item is DblResourceReference dbl)
+                    element.Add(new XAttribute("id", dbl.Id));
+
+                return element;
+            })
+        );
     }
+
+    /// <summary>Deserializes a <see cref="ResourceReferenceList"/> from an <c>&lt;Items&gt;</c> XElement.</summary>
+    public static ResourceReferenceList FromXml(XElement itemsElement)
+    {
+        var items = itemsElement
+            .Elements("Item")
+            .Select(el =>
+            {
+                string type = el.Attribute("type")?.Value ?? "";
+                string name = el.Attribute("name")?.Value ?? "";
+
+                return (ResourceReference)(
+                    type switch
+                    {
+                        "project" => new ProjectReference
+                        {
+                            Name = name,
+                            Id = el.Attribute("id")?.Value ?? "",
+                        },
+                        "dblResource" => new DblResourceReference
+                        {
+                            Name = name,
+                            Id = el.Attribute("id")?.Value ?? "",
+                        },
+                        "enhancedResource" => new EnhancedResourceReference { Name = name },
+                        "xmlResource" => new XmlResourceReference { Name = name },
+                        "sourceLanguageResource" => new SourceLanguageResourceReference
+                        {
+                            Name = name,
+                        },
+                        _ => new UnknownResourceReference
+                        {
+                            Name = name,
+                            ExtraData = el.Attributes()
+                                .ToDictionary(
+                                    a => a.Name.LocalName,
+                                    a => System.Text.Json.JsonSerializer.SerializeToElement(a.Value)
+                                ),
+                        },
+                    }
+                );
+            })
+            .ToList();
+
+        return new ResourceReferenceList { Items = items };
+    }
+
+    private static string GetXmlType(ResourceReference item) =>
+        item switch
+        {
+            ProjectReference => "project",
+            DblResourceReference => "dblResource",
+            EnhancedResourceReference => "enhancedResource",
+            XmlResourceReference => "xmlResource",
+            SourceLanguageResourceReference => "sourceLanguageResource",
+            _ => throw new InvalidOperationException($"Unhandled type: {item.GetType().Name}"),
+        };
 }
