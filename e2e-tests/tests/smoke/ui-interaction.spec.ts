@@ -1,7 +1,7 @@
 // SMOKE TEST ONLY — uses papi.fixture for CI smoke testing.
 // Per-feature E2E tests MUST use cdp.fixture instead. See e2e-tests/tests/_example/.
 import { test, expect } from '../../fixtures/papi.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { sendPapiRequestOnce, waitForAppReady } from '../../fixtures/helpers';
 
 test.describe('UI Interaction', () => {
   test.beforeAll(async ({ electronApp }) => {
@@ -11,6 +11,17 @@ test.describe('UI Interaction', () => {
     await electronApp.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0].maximize();
     });
+
+    // Force the interface language to English so menu-item text matchers
+    // (e.g. /Help/i) are deterministic regardless of the developer's saved
+    // platform.interfaceLanguage setting in dev-appdata. The settings service
+    // is exposed as a data-provider network object — data providers append a
+    // `-data` suffix to the provider name, so the JSON-RPC method is
+    // `object:<providerName>-data.set`.
+    await sendPapiRequestOnce('object:platform.settingsServiceDataProvider-data.set', [
+      'platform.interfaceLanguage',
+      ['en'],
+    ]);
   });
 
   test('should open the About dialog from the Help menu', async ({ mainPage }) => {
